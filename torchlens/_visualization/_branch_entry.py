@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -30,9 +32,9 @@ def _bool_kinds(trace: Trace) -> dict[str, str]:
             bool_layer = trace.layers[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
             context_kinds = (
-                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
+                {record_member(op, "conditional_context_kind", None) for op in bool_ops}
                 if bool_ops
-                else {getattr(bool_layer, "conditional_context_kind", None)}
+                else {record_member(bool_layer, "conditional_context_kind", None)}
             )
             bool_kind[bool_label.split(":", 1)[0]] = (
                 "ELIF" if context_kinds == {"elif_test"} else "IF"

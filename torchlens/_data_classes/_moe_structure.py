@@ -53,7 +53,7 @@ def _ancestors(ops: dict[str, Op], label: str) -> set[str]:
 
 def _last_axis(op: Op, position: int, default: int | None, rank: int | None = None) -> bool:
     """Require a statically recorded expert-axis reduction/selection."""
-    template = op.args_template
+    template = op.call.args_template
     if template is None:
         return False
     args = template.args
@@ -70,7 +70,7 @@ def _selected_outputs(ops: dict[str, Op]) -> list[tuple[Op, Op]]:
     calls: dict[Any, dict[int, Op]] = {}
     for op in ops.values():
         if op.func_name == "topk" and _last_axis(op, 2, -1):
-            calls.setdefault(op.func_call_id, {})[op.multi_output_index] = op
+            calls.setdefault(op.call.call_id, {})[op.multi_output_index] = op
     pairs = [(rows[0], rows[1]) for rows in calls.values() if 0 in rows and 1 in rows]
     for indices in ops.values():
         input_rank = max(

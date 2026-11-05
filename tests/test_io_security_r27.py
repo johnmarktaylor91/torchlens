@@ -34,9 +34,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens.intervention._save import load_intervention_spec
+from torchlens.intervention._types import InterventionSpec
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.save import load_intervention_spec
-from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword

@@ -35,7 +35,7 @@ from .._ir.distribution_container import (
 from .._selection.errors import SiteResolutionError
 
 if TYPE_CHECKING:
-    from .spec import Recipe, Rule
+    from ._spec import Recipe, Rule
 
 __all__ = (
     "DEFAULT_ZERO_FIRE_POLICY",

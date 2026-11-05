@@ -27,6 +27,7 @@ from .._data_classes._lookup_kinds import _record_view
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._utils._multipass_access import get_multipass_attr
+from .._utils._record_group_table import record_member
 from ..dataset_extraction import LoadedExtraction, load_extraction
 from ..errors._base import ConfigurationError, TorchLensError
 from ..features import SHAPING_OP, as_matrix, site_matrix
@@ -438,14 +439,13 @@ def _record_site_key(record: Any) -> str:
     Returns
     -------
     str
-        The ``site_key`` value, or ``"unavailable(<reason>)"`` -- keyless
-        legacy artifacts and within-call-recurrence layer ambiguity refuse
-        typed upstream, and the handoff records the fact instead of
-        fabricating an identity.
+        The ``site_key`` value, or ``"unavailable(<reason>)"`` -- keyless legacy artifacts
+        and within-call-recurrence layer ambiguity refuse typed upstream, and the handoff
+        records the fact instead of fabricating an identity.
     """
 
     try:
-        value = getattr(record, "site_key", None)
+        value = record_member(record, "site_key", None)
     except (TorchLensError, AttributeError, ValueError) as exc:
         return f"unavailable({getattr(exc, 'fields', {}).get('code', type(exc).__name__)})"
     return str(value) if value else "unavailable(site_key_missing)"

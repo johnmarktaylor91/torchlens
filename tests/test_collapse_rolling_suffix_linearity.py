@@ -36,7 +36,10 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._data_classes.layer import Layer
-from torchlens._visualization import _render_leaf
+
+# ``_render_entrypoints`` star-imports ``_render_leaf``; import it before any patch so its
+# copies are the real helpers and monkeypatch teardown leaves no patched function behind.
+from torchlens._visualization import _render_entrypoints, _render_leaf  # noqa: F401
 
 # ``_render_entrypoints`` star-imports the render modules. Loaded for the first time inside a test
 # that has patched one of their names, it copies the patch, and ``monkeypatch`` never restores

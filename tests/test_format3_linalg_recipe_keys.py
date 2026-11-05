@@ -33,8 +33,8 @@ from torchlens._utils._torch_symbols import (
     torch_namespace,
 )
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 
 _RECIPE_FILE = "intervention.json"
 

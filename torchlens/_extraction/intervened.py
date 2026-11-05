@@ -28,9 +28,9 @@ from typing import Any
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import selector_contains_kind
 from .._utils.hashing import sha256_canonical_json
-from ..intervention.audit import site_keys_for_labels
-from ..intervention.spec import Recipe
-from ..intervention.types import Edit, InterventionDecision
+from ..intervention._audit import site_keys_for_labels
+from ..intervention._spec import Recipe
+from ..intervention._types import Edit, InterventionDecision
 from .harvest_schema import (
     ADDRESS_CLASSES,
     HarvestSpec,
@@ -72,7 +72,7 @@ class InterventionPlan:
     Attributes
     ----------
     spec:
-        The caller's :class:`~torchlens.intervention.spec.InterventionSpec`.
+        The caller's :class:`~torchlens.intervention._spec.InterventionSpec`.
     address_class:
         The harvest address class (the finest any rule addresses).
     spec_digest:
@@ -111,7 +111,7 @@ def _rule_address_class(rule: Any) -> str:
     Parameters
     ----------
     rule:
-        One :class:`~torchlens.intervention.spec.InterventionRule`.
+        One :class:`~torchlens.intervention._spec.InterventionRule`.
 
     Returns
     -------
@@ -189,7 +189,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
     ----------
     intervene:
         ``None`` (clean extraction) or an
-        :class:`~torchlens.intervention.spec.InterventionSpec` (the
+        :class:`~torchlens.intervention._spec.InterventionSpec` (the
         ``tl.when(...)`` product).
 
     Returns

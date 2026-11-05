@@ -16,6 +16,7 @@ from .._data_classes.aten_op import (
 )
 from .._ir.events import _AtenCallEvent, _ModePausedInteriorEvent
 from .._trace_core.record_rows import adopt_records, adopt_rows
+from .._utils._record_group_table import record_member
 
 
 def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
@@ -34,7 +35,7 @@ def _op_refs_by_func_call_id(trace: Any) -> dict[int, tuple[OpRef, ...]]:
 
     grouped: dict[int, list[OpRef]] = defaultdict(list)
     for row_index, op in enumerate(trace._layer_list):
-        func_call_id = getattr(op, "func_call_id", None)
+        func_call_id = record_member(op, "func_call_id", None)
         label = getattr(op, "layer_label", None)
         if isinstance(func_call_id, int) and isinstance(label, str):
             grouped[func_call_id].append(
@@ -298,7 +299,7 @@ def _link_forward_grad_fn_rows(trace: Any, profile: _PrimitiveOpProfile) -> None
             partitions[row.owner_func_call_id].append(row)
     for rows in partitions.values():
         grad_fn_ids = {
-            getattr(ops[ref.op_row_index], "grad_fn_object_id", None)
+            record_member(ops[ref.op_row_index], "grad_fn_object_id", None)
             for row in rows
             for ref in row.parent_op_refs
             if 0 <= ref.op_row_index < len(ops)

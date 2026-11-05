@@ -66,7 +66,7 @@ trace = tl.trace(
     ),
 )
 trace["tanh_6"].out.norm().backward()                 # train on any function of saved activations
-trace["tanh_6"].transformed_out                       # the saved average across token positions, shape (1, 3072)
+trace["tanh_6"].payload.transformed_out                       # the saved average across token positions, shape (1, 3072)
 trace["tanh_6"].aten_ops[0].out                       # output of the first ATen call beneath tanh_6
 ```
 
@@ -80,7 +80,7 @@ trace = tl.trace(
 loss = trace["lm_head"].out[0, -1].max()                 # any scalar can serve as the loss; here, the top next-word score
 trace.backward(loss)                                     # run the backward pass from the loss
 trace["tanh_6"].grad.shape                               # torch.Size([1, 5, 3072]): the gradient at tanh_6's output
-trace["tanh_6"].grad_fn.calls[0].grad_inputs[0].shape    # torch.Size([1, 5, 3072]): the gradient passed back to tanh_6's input
+trace["tanh_6"].autograd.grad_fn.calls[0].grad_inputs[0].shape    # torch.Size([1, 5, 3072]): the gradient passed back to tanh_6's input
 ```
 
 **Inspect** every part of a network in exhaustive detail. Every operation, module, parameter, buffer, and `grad_fn` node gets its own data structure, as does the trace itself, with [800+ metadata attributes](docs/reference/glossary.md) in all, covering everything from each operation's output shape and FLOPs to the line of code that ran it, whether it was inside an `if` branch, and the random number state when it ran. You can summarize this metadata in a readable table, or export it to pandas (one row per operation, module, parameter, etc.).
@@ -96,7 +96,7 @@ print(trace["tanh_6"])                       # everything TorchLens knows about 
 #   function  tanh, gradient TanhBackward0, 151 us
 #   source    transformers/activations.py:66 in forward
 #   more      .ops  .parents  .children  .to_pandas()
-trace["tanh_6"].code_context[-1].call_line   # the exact line of source code that called tanh_6
+trace["tanh_6"].source.frames[-1].call_line   # the exact line of source code that called tanh_6
 # 'return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))'
 trace.params["lm_head.weight"].all_module_addresses   # GPT-2 reuses its embedding weights as its output layer
 # ['transformer.wte', 'lm_head']

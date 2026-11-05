@@ -61,7 +61,7 @@ def _eager(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
 
 
 def _buffer_addresses(trace: Any) -> list[str]:
-    return [trace._layer_dict_all_keys[label].address for label in trace.buffer_layers]
+    return [trace._layer_dict_all_keys[label].buffer_address for label in trace.buffer_layers]
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
@@ -372,12 +372,13 @@ class _VocabThenCache(nn.Module):
 def test_missed_held_tensor_is_disclosed_and_fails_forward_validation(
     model_cls: type[nn.Module], cut_note: str
 ) -> None:
-    """A read held tensor the scan missed is disclosed AND fails forward validation.
+    """A scan cut is disclosed AND fails forward validation, though the read is sourced.
 
-    The coded scan warning names the cut and the generic no-provenance warning fires;
-    the graph shows the read without the held tensor (no buffer source). Forward
-    validation fails on the ``source_provenance`` check, naming both the source-less
-    argument and the persisted scan-cut advisory.
+    The coded scan warning names the cut. The read tensor past the cut is still
+    pre-forward model state, so the late index gives it a buffer source at first use
+    (no source-less argument, no generic no-provenance warning). The persisted
+    scan-cut advisory still fails forward validation on the ``source_provenance``
+    check.
     """
 
     from torchlens.validation import last_validation_failure
@@ -392,17 +393,16 @@ def test_missed_held_tensor_is_disclosed_and_fails_forward_validation(
     assert len(scan) == 1
     assert getattr(scan[0], "fields", {}).get("code") == "held_tensor_scan_truncated"
     assert cut_note in str(scan[0])
-    assert any("no graph/source provenance" in str(w.message) for w in record)
-    assert list(trace.buffer_layers) == []
-    assert [op.type for op in trace._layer_list] == ["input", "add", "relu", "output"]
+    assert not any("no graph/source provenance" in str(w.message) for w in record)
+    assert _buffer_addresses(trace) == ["cache['cpu']"]
+    assert [op.type for op in trace._layer_list] == ["input", "buffer", "add", "relu", "output"]
     assert torch.equal(trace[trace.output_layers[0]].out, _eager(model, x))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(copy.deepcopy(model), x, scope="forward") is False
     failure = last_validation_failure()
     assert failure is not None and failure.check_name == "source_provenance"
-    assert failure.op_label is not None and failure.op_label.startswith("add")
-    assert failure.extra["reasons"] == ["held_tensor_scan_truncated", "unattributed_tensor_args"]
+    assert failure.extra["reasons"] == ["held_tensor_scan_truncated"]
     assert cut_note in failure.message
 
 

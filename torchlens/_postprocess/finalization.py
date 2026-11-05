@@ -54,19 +54,26 @@ from .._ir.container_registry import _iter_tensor_leaves
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._quantities import Bytes, Duration, Flops
 from .._utils._display_constructor import bind_template_keys
+from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
 from .._utils._tensor_label import clear_meta
 from .._utils.hashing import sha256_file
 from . import _column_passes_finalize
-from ._column_passes_finalize import _strip_pass_suffix
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
     _make_public_conditional_ids,
     _merge_conditional_role_labels,
+    _ordered_branch_kinds,
     _resolve_conditional_bool_op,
     _roles_by_label,
     roles_held_by_pass,
 )
-from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
+from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
+from ._module_census import (
+    _call_io_layers,
+    bind_layer_conditional_roles,
+    op_space_labels,
+    uncalled_module_addresses,
+)
 from ._multipass_params import pass_param_addresses, union_multipass_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
 from ._root_module_log import (
@@ -96,13 +103,13 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
-        if getattr(layer_entry, "transformed_out", None) is not None:
-            tensors_to_undecorate.append(layer_entry.transformed_out)
+        if record_member(layer_entry, "transformed_out", None) is not None:
+            tensors_to_undecorate.append(layer_entry._payload_transformed_out)
 
-        if layer_entry.saved_args:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_args))
-        if layer_entry.saved_kwargs:
-            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry.saved_kwargs))
+        if layer_entry._call_saved_args:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_args))
+        if layer_entry._call_saved_kwargs:
+            tensors_to_undecorate.extend(_iter_tensor_leaves(layer_entry._call_saved_kwargs))
 
     for t in tensors_to_undecorate:
         clear_meta(t)
@@ -192,7 +199,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self._layer_list:
-        layer_entry.parent_params = []
+        layer_entry._graph_parent_params = []
 
 
 def _build_root_module_log(
@@ -445,61 +452,6 @@ def _assign_output_roles(
             parent_layer.multi_output_name = output.multi_output_name
 
 
-def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
-    """Recompute rolled conditional edge-pass metadata from arm-entry edges.
-
-    Parameters
-    ----------
-    self:
-        Model log being finalized.
-    """
-    if self._graph_conditional_edge_call_indices:
-        self._graph_conditional_edge_call_indices = {
-            edge_key: sorted(dict.fromkeys(call_indexs))
-            for edge_key, call_indexs in self._graph_conditional_edge_call_indices.items()
-        }
-        return
-
-    conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self._graph_conditional_arm_entry_edges.items():
-        for parent_label, child_label in edge_list:
-            parent_no_pass = _strip_pass_suffix(parent_label)
-            child_no_pass = _strip_pass_suffix(child_label)
-            child_call_index = _get_label_call_index(child_label)
-            edge_key = (
-                parent_no_pass,
-                child_no_pass,
-                conditional_id,
-                branch_kind,
-            )
-            if child_call_index not in conditional_edge_call_indices[edge_key]:
-                conditional_edge_call_indices[edge_key].append(child_call_index)
-
-    self._graph_conditional_edge_call_indices = {
-        edge_key: sorted(call_indexs)
-        for edge_key, call_indexs in conditional_edge_call_indices.items()
-    }
-
-
-def _get_label_call_index(layer_label: str) -> int:
-    """Extract the pass number encoded in a layer label.
-
-    Parameters
-    ----------
-    layer_label:
-        Layer label that may include a ``:call_index`` suffix.
-
-    Returns
-    -------
-    int
-        Parsed pass number, or ``1`` for pass-free labels.
-    """
-    label_parts = layer_label.rsplit(":", 1)
-    if len(label_parts) == 2 and label_parts[1].isdigit():
-        return int(label_parts[1])
-    return 1
-
-
 def _build_submodule_call_logs(
     self: "Trace",
     address: str,
@@ -528,27 +480,9 @@ def _build_submodule_call_logs(
         pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
         # Derive input/output layers per pass from Op fields
-        pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
-        pass_output_layers = []
-        pass_output_ops = []
-        pass_outputs = []
-        for op_label in pass_layers:
-            try:
-                te = self.ops[op_label]
-            except (KeyError, TypeError):
-                continue
-            # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
-            # fed-call fact. The old ``len(module_call_stack) > 0`` companion
-            # test was a proxy for the same thing only while the enter lane
-            # wrote both together; under containment semantics it would drop
-            # top-level-created inputs (e.g. the model input) from the call's
-            # input roster.
-            if call_label in te.input_to_module_calls and te.layer_label not in pass_input_layers:
-                pass_input_layers.append(te.layer_label)
-            if te.is_module_output and call_label in te.output_of_module_calls:
-                pass_output_layers.append(te.layer_label)
-                pass_output_ops.append(te.label)
-                pass_outputs.append(te)
+        pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs = _call_io_layers(
+            self, call_label, pass_layers, pass_input_layers_by_call
+        )
 
         role_hints = role_hints_for_module_class(module_class)
         _assign_output_roles(pass_outputs, hints=role_hints)
@@ -681,9 +615,9 @@ def _build_module_param_info(
             bl
             for bl in self.buffer_layers
             if bl in self._layer_dict_all_keys
-            and hasattr(self._layer_dict_all_keys[bl], "address")
-            and self._layer_dict_all_keys[bl].address is not None
-            and self._layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
+            and hasattr(self._layer_dict_all_keys[bl], "buffer_address")
+            and self._layer_dict_all_keys[bl].buffer_address is not None
+            and self._layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
         ]
 
     return ModuleParamInfo(
@@ -725,7 +659,7 @@ def _build_module_logs(self: "Trace") -> None:
     for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
-        for call_label in te.input_to_module_calls:
+        for call_label in te._module_context_input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build root Module ("self") ---
@@ -752,8 +686,8 @@ def _build_module_logs(self: "Trace") -> None:
     for bl in self.buffer_layers:
         if bl in self._layer_dict_all_keys:
             bl_entry = self._layer_dict_all_keys[bl]
-            if hasattr(bl_entry, "address") and bl_entry.address is not None:
-                module_addr = bl_entry.address.rsplit(".", 1)[0]
+            if hasattr(bl_entry, "buffer_address") and bl_entry.buffer_address is not None:
+                module_addr = bl_entry.buffer_address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # --- Build ModuleLogs for each submodule ---
@@ -998,7 +932,7 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer", read: Any = getattr) -
     for field_name in _MULTIPASS_SHAPE_FIELDS:
         values = [read(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
-            setattr(layer_log, field_name, _honest_multipass_shape(values))
+            setattr(layer_log, layer_attr(field_name), _honest_multipass_shape(values))
 
     for field_name, quantity_type in (
         *((name, Bytes) for name in _MULTIPASS_BYTES_FIELDS),
@@ -1008,7 +942,7 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer", read: Any = getattr) -
         if record_if_varying(field_name, values):
             numeric = [value for value in values if isinstance(value, (int, float))]
             if numeric and len(numeric) == len(values):
-                setattr(layer_log, field_name, quantity_type(int(max(numeric))))
+                setattr(layer_log, layer_attr(field_name), quantity_type(int(max(numeric))))
 
     for field_name in _MULTIPASS_MARKER_ONLY_FIELDS:
         record_if_varying(field_name, [read(op, field_name, None) for op in pass_ops])
@@ -1069,15 +1003,7 @@ def _build_conditional_records(self: "Trace") -> None:
         conditional_id = conditional_id_by_event_id[event.id]
         # AST-derived branch_ranges materialize every static arm regardless of which
         # fired at runtime; fired-vs-not is captured per-arm via ConditionalArm.fired.
-        ast_branch_kinds = list(event.branch_ranges)
-        ordered_branch_kinds = ["then"]
-        ordered_branch_kinds.extend(
-            sorted(
-                (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
-                key=lambda kind: int(kind.split("_", 1)[1]),
-            )
-        )
-        ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
+        ordered_branch_kinds = _ordered_branch_kinds(event)
 
         # Per-arm test identity: phase 5c stashes ``_arm_bool_indices``
         # (branch kind -> indices into ``bool_layers`` for bools whose runtime
@@ -1139,7 +1065,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 value_op = _resolve_conditional_bool_op(
                     self, terminal_bool, witnessed_indices, bool_layers_raw
                 )
-                raw_bool_value = getattr(value_op, "bool_value", None)
+                raw_bool_value = record_member(value_op, "bool_value", None)
                 # ``bool_value_at_run`` must never contradict ``fired``: apply
                 # the test expression's statically-known polarity, and refuse a
                 # single-bool value for compound (``and``/``or``) tests where
@@ -1195,16 +1121,19 @@ def _build_conditional_records(self: "Trace") -> None:
 
     roles_by_label = _roles_by_label(conditionals, role_labels_by_cond_arm, ConditionalRoleRef)
     for layer in self._layer_list:
-        layer.in_conditionals = roles_held_by_pass(
+        layer._control_flow_in_conditionals = roles_held_by_pass(
             layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
         )
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id
         ):
-            layer.terminal_bool_for = (conditional_id_by_event_id[layer.terminal_conditional_id], 0)
+            layer._control_flow_terminal_bool_for = (
+                conditional_id_by_event_id[layer.terminal_conditional_id],
+                0,
+            )
         else:
-            layer.terminal_bool_for = None
+            layer._control_flow_terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)
 
     self._graph_conditionals = ConditionalAccessor(conditionals)
@@ -1220,8 +1149,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     for layer_label in self._layer_dict_main_keys:
         tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
-        bind_template_keys(tensor.args_template, self._layer_dict_all_keys)
-        bind_template_keys(tensor.kwargs_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor._call_args_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor._call_kwargs_template, self._layer_dict_all_keys)
     self._tracing_finished = True
 
 
@@ -1250,7 +1179,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     if writer is None:
         return
 
-    from ..intervention.injection import refuse_injection_logged_stream_finalize
+    from ..intervention._injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer skips the save door that appends the injected family.
     refuse_injection_logged_stream_finalize(self)
@@ -1347,7 +1276,7 @@ def _evict_streamed_outs(self: "Trace") -> None:
     """
 
     for layer_entry in self._layer_list:
-        if getattr(layer_entry, "out_ref", None) is not None:
+        if record_member(layer_entry, "out_ref", None) is not None:
             layer_entry._internal_set("out", None)
         if getattr(layer_entry, "_pending_transformed_out_blob_id", None) is not None:
             layer_entry._internal_set("transformed_out", None)
@@ -1363,7 +1292,7 @@ def _evict_streamed_grads(self: "Trace") -> None:
     """
 
     for layer_entry in self._layer_list:
-        if getattr(layer_entry, "grad_ref", None) is not None:
+        if record_member(layer_entry, "grad_ref", None) is not None:
             layer_entry._internal_set("grad", None)
         if getattr(layer_entry, "_pending_transformed_grad_blob_id", None) is not None:
             layer_entry._internal_set("transformed_grad", None)
@@ -1427,7 +1356,7 @@ def _reuse_streamed_blob_ids(
             if not isinstance(tensor_blob, BlobRef):
                 setattr(
                     scrubbed_layer,
-                    tensor_field,
+                    op_attr(tensor_field),
                     BlobRef(blob_id=pending_blob_id, kind=tensor_field),
                 )
                 writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
@@ -1435,7 +1364,7 @@ def _reuse_streamed_blob_ids(
             skipped_blob_ids.add(tensor_blob.blob_id)
             setattr(
                 scrubbed_layer,
-                tensor_field,
+                op_attr(tensor_field),
                 BlobRef(blob_id=pending_blob_id, kind=tensor_blob.kind),
             )
             writer.relabel_blob(pending_blob_id, live_layer._streaming_label)
@@ -1535,7 +1464,7 @@ def _attach_streamed_tensor_refs(
             manifest_entry, key = _streamed_entry(writer, tensor_blob.blob_id)
             setattr(
                 live_layer,
-                ref_field,
+                record_storage_attr(live_layer, ref_field),
                 LazyActivationRef(
                     blob_id=manifest_entry.blob_id,
                     shape=tuple(manifest_entry.shape),

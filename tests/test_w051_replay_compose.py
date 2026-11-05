@@ -80,7 +80,7 @@ def test_two_edge_edits_on_one_child_both_hold(two) -> None:
     fork.do(_edge(trace, 1).__selection__(), tl.zero_ablate())
     add = fork[_add(trace).label]
     assert bool((add.out == 0).all())
-    assert len(add.edge_substitutions) == 2
+    assert len(add.graph.edge_substitutions) == 2
     assert _validate(fork, torch.zeros(2, 4)) is True
 
 
@@ -122,7 +122,7 @@ def test_same_edge_edited_twice_composes_and_keeps_both_fires(two) -> None:
     assert torch.allclose(add.out, 0.25 * a + b, atol=ATOL)
     fires = [r for r in add.edits if r.edge_address is not None]
     assert len(fires) == 2
-    store_value = add.edge_substitutions[(edge.arg_kind, edge.arg_path)]["value"]
+    store_value = add.graph.edge_substitutions[(edge.arg_kind, edge.arg_path)]["value"]
     assert torch.allclose(store_value, 0.25 * a, atol=ATOL)
     assert _validate(fork, 2.0 * (0.25 * a + b)) is True
 

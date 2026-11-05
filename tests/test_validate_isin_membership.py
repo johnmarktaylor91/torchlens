@@ -115,7 +115,7 @@ def _plant_isin_func(
 
     def validate_with_planted_isin(trace: Trace, *args: Any, **kwargs: Any) -> Any:
         for op in _isin_ops(trace):
-            replayed = planted(*op.saved_args, **(op.saved_kwargs or {}))
+            replayed = planted(*op.call.saved_args, **(op.call.saved_kwargs or {}))
             if torch.equal(replayed, op.out):
                 op.func = planted
                 planted_labels.append(op.label)

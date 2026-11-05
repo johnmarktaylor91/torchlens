@@ -66,7 +66,7 @@ opts = tl.options.CaptureOptions(save_grads=True, grad_transform=lambda g: g.abs
 trace = tl.trace(model, x, capture=opts)
 trace.backward(trace[trace.output_layers[0]].out.sum())
 op = trace.ops["relu_1_2"]
-print("transformed", round(op.transformed_grad.item(), 3))
+print("transformed", round(op.payload.transformed_grad.item(), 3))
 print("raw kept", op.grad is not None)
 # Output:
 # transformed 4.051
@@ -86,7 +86,7 @@ Store a reduced activation (here the mean) instead of the raw tensor.
 opts = tl.options.CaptureOptions(activation_transform=lambda t: t.mean(), save_raw_activations=False)
 trace = tl.trace(model, x, capture=opts)
 op = trace.ops["relu_1_2"]
-print("transformed", round(op.transformed_out.item(), 3))
+print("transformed", round(op.payload.transformed_out.item(), 3))
 print("raw kept", op.out is not None)
 # Output:
 # transformed 0.271

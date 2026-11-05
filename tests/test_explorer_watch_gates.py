@@ -163,7 +163,11 @@ class TestCudaGateRows:
     )
     def test_module_tier_overhead_gates(self, sketch_cadence: int | None, threshold: float) -> None:
         transformers = pytest.importorskip("transformers")
-        from torchlens._observability import WatchSettings, measure_ab, measure_noise_band
+        from torchlens._observability import (
+            WatchSettings,
+            measure_ab,
+            measure_noise_band,
+        )
 
         torch.manual_seed(0)
         device = "cuda"

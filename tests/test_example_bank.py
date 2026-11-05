@@ -68,7 +68,7 @@ EXCLUDED: dict[str, str] = {
         "finding F-5: never written (no differentiates= writer in the package), so it is "
         "None even when op_label is set (addmm_back_1_3 pairs linear_2_3)"
     ),
-    "Layer.terminal_bool_for": (
+    "Layer.control_flow.terminal_bool_for": (
         "finding F-4: None on the branch fixture gt layer while its single op reports "
         "(cond_gt_1_3, 0)"
     ),
@@ -93,9 +93,9 @@ EXCLUDED: dict[str, str] = {
         "call; only the root call gives it"
     ),
     "ModuleCall.cls": "finding F-1: ModuleCall.cls is always None, even while the model object is alive",
-    "Op.is_in_conditional_body": (
+    "Op.control_flow.is_in_conditional_body": (
         "finding F-3: on the branch fixture it is False for the then-arm relu and True "
-        "for the if-test sum, the reverse of Layer.is_in_conditional_body and the "
+        "for the if-test sum, the reverse of Layer.control_flow.is_in_conditional_body and the "
         "glossary meaning"
     ),
     "Param.device_ref": (

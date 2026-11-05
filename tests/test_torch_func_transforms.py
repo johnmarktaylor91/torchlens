@@ -309,14 +309,28 @@ class FunctionalCallBufferModel(nn.Module):
         return torch.func.functional_call(self.inner, buffers, (x,))
 
 
+_FOREIGN_STORE: dict[str, torch.Tensor] = {}
+
+
+def _foreign_tensor() -> torch.Tensor:
+    """Return the test-supplied tensor from a store no model state or forward reaches."""
+
+    return _FOREIGN_STORE["tensor"]
+
+
 class ForeignArgTensorModel(nn.Module):
-    """Consume a tensor held outside the module as an op argument."""
+    """Consume a tensor held outside the module as an op argument.
+
+    The tensor lives in a module-level store read through a helper function, so it
+    is neither model state (any module attribute, private ones included, is) nor a
+    global the forward references directly (a closure constant).
+    """
 
     def __init__(self, foreign: torch.Tensor) -> None:
-        """Store a foreign tensor supplied by the test."""
+        """Store a foreign tensor supplied by the test outside the module."""
 
         super().__init__()
-        self._foreign = foreign
+        _FOREIGN_STORE["tensor"] = foreign
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Add the foreign tensor to the input.
@@ -332,7 +346,7 @@ class ForeignArgTensorModel(nn.Module):
             Shifted tensor.
         """
 
-        return x + self._foreign
+        return x + _foreign_tensor()
 
 
 class ModuleAttrTensorModel(nn.Module):
@@ -545,12 +559,12 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert len(vmap_ops) == 1
     assert vmap_ops[0].label == "vmap_1_1:1"
     assert vmap_ops[0].parents == ("input_1",)
-    assert vmap_ops[0].is_transform is True
-    assert vmap_ops[0].transform_kind == "vmap"
-    assert vmap_ops[0].transform_chain == ("vmap",)
-    assert vmap_ops[0].transform_config["in_dims"] == 0
-    assert vmap_ops[0].transform_fn_name == "<lambda>"
-    assert vmap_ops[0].transform_fn_source is not None
+    assert vmap_ops[0].call.is_func_transform is True
+    assert vmap_ops[0].call.func_transform_kind == "vmap"
+    assert vmap_ops[0].call.func_transform_chain == ("vmap",)
+    assert vmap_ops[0].call.func_transform_config["in_dims"] == 0
+    assert vmap_ops[0].call.func_transform_fn_name == "<lambda>"
+    assert vmap_ops[0].call.func_transform_fn_source is not None
     assert log.transforms == (vmap_ops[0],)
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
@@ -566,10 +580,10 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
 
     assert len(grad_ops) == 1
     assert grad_ops[0].parents == ("input_1",)
-    assert grad_ops[0].is_transform is True
-    assert grad_ops[0].transform_kind == "grad"
-    assert grad_ops[0].transform_chain == ("grad",)
-    assert grad_ops[0].transform_config["argnums"] == 0
+    assert grad_ops[0].call.is_func_transform is True
+    assert grad_ops[0].call.func_transform_kind == "grad"
+    assert grad_ops[0].call.func_transform_chain == ("grad",)
+    assert grad_ops[0].call.func_transform_config["argnums"] == 0
     assert any(op.type == "add" and "grad_1_1" in op.parents for op in log.ops)
 
 
@@ -634,8 +648,8 @@ def test_autograd_functional_direct_call_boundary(
 
     assert len(transform_ops) == 1
     assert transform_ops[0].parents == ("input_1",)
-    assert transform_ops[0].is_transform is True
-    assert transform_ops[0].transform_kind == kind
+    assert transform_ops[0].call.is_func_transform is True
+    assert transform_ops[0].call.func_transform_kind == kind
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_session_forwards.py.
@@ -666,7 +680,7 @@ def test_transform_selector_sanitized_spelling_matches_live_hooks() -> None:
     assert torch.equal(log[log.output_layers[0]].out, x)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/selector_eval.py, intervention/_resolver_registry.py, intervention/save.py ....
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/selector_eval.py, intervention/_resolver_registry.py, intervention/_save.py ....
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Path) -> None:
     """Loaded transform selector hook specs execute on a fresh trace."""
@@ -707,7 +721,7 @@ def test_provenance_warning_foreign_tensor_contract() -> None:
     assert len(caught) == 1
     assert "arg1" in str(caught[0].message)
     add_op = next(op for op in foreign_log.ops if op.type == "add")
-    assert add_op.unattributed_tensor_args == ("arg1",)
+    assert add_op.call.unattributed_tensor_args == ("arg1",)
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
@@ -718,7 +732,7 @@ def test_provenance_warning_foreign_tensor_contract() -> None:
     ]
     assert provenance_warnings == []
     module_add = next(op for op in module_log.ops if op.type == "add")
-    assert module_add.unattributed_tensor_args == ()
+    assert module_add.call.unattributed_tensor_args == ()
 
 
 def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
@@ -780,11 +794,11 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
     op = next(op for op in trace.ops if op.type == "polygamma")
     multiply = next(other for other in trace.ops if other.type == "mul")
     assert op.parents == (multiply.layer_label,)
-    assert op.unattributed_tensor_args == ()
-    assert op.dropped_edge_tensor_args == ()
+    assert op.call.unattributed_tensor_args == ()
+    assert op.call.dropped_edge_tensor_args == ()
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_completeness_finalize.py, validation/_saved_outs_steps.py, validation/core.py ....
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_completeness_finalize.py, validation/_saved_outs_steps.py, validation/_core.py ....
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> None:
     """Replay validation fails when raw transform escape leaves no output boundary."""
@@ -836,4 +850,4 @@ def test_raising_inner_transform_cleans_up_logging_state() -> None:
 
     assert _state._logging_enabled is False
     log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
+    assert [op.call.func_transform_kind for op in log.transforms] == ["vmap"]

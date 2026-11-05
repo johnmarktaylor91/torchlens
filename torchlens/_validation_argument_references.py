@@ -538,7 +538,7 @@ def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:
 def _record_fallback(trace: Any, reason: str) -> None:
     """Record on the rerun's trace that validation used copied arguments throughout."""
 
-    from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+    from .validation._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
     record_validation_diagnostic(
         trace,

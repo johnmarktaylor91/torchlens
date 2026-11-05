@@ -33,7 +33,9 @@ from torchlens._capture.arg_positions import (
     _schema_tensor_arg_kind,
 )
 from torchlens._constants import get_orig_torch_funcs
-from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
+from torchlens.backends.torch._ops_predicate_events import (
+    _extract_arg_tensors_and_params,
+)
 
 _PROVENANCE_MATCH = "no graph/source provenance"
 
@@ -351,8 +353,8 @@ def test_cosine_similarity_kwarg_spelling_parity() -> None:
 
     assert len(positional_op.parents) == 2
     assert len(kwarg_op.parents) == 2
-    assert kwarg_op.has_input_ancestor
-    assert kwarg_op.unattributed_tensor_args == ()
+    assert kwarg_op.graph.has_input_ancestor
+    assert kwarg_op.call.unattributed_tensor_args == ()
 
 
 # ---------------------------------------------------------------------------

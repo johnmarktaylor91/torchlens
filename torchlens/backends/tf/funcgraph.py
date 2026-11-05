@@ -27,7 +27,7 @@ from ..._validation_status import (
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
 )
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
 from ..registry import BackendUnsupportedError
 from .op_callback_capture import (
     _MAX_SNAPSHOT_BYTES,

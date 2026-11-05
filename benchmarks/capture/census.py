@@ -44,6 +44,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from benchmarks.capture import schema  # noqa: E402
 from benchmarks.host_label import redact_local_paths  # noqa: E402
+from torchlens._utils._record_group_table import record_member  # noqa: E402
 
 FAMILY_ORDER = ("attention", "recurrent", "convolutional", "dense", "other")
 ATTENTION_MODULES = {
@@ -109,12 +110,12 @@ def classify_reachability(op: Any) -> dict[str, bool]:
     computation = not (
         getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
-    output_hook = bool(getattr(op, "is_module_output", False)) or bool(
-        getattr(op, "is_output_parent", False)
+    output_hook = bool(record_member(op, "is_module_output", False)) or bool(
+        record_member(op, "is_output_parent", False)
     )
-    pre_hook = bool(getattr(op, "input_to_module_calls", None))
+    pre_hook = bool(record_member(op, "input_to_module_calls", None))
     return {
         "computation": computation,
         "output_hook": output_hook,
@@ -207,7 +208,7 @@ def _opaque_calls(ops: Iterable[Any]) -> dict[str, int]:
 
     opaque: Counter[str] = Counter()
     for op in ops:
-        qual = str(getattr(op, "func_qualname", "") or "")
+        qual = str(record_member(op, "func_qualname", "") or "")
         name = str(getattr(op, "func_name", "") or "")
         if name == "apply" or "Function.apply" in qual or qual.startswith("torch.ops."):
             opaque[qual or name] += 1

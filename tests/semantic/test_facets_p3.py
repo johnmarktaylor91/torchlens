@@ -106,9 +106,9 @@ def _sdpa_op(log: Any) -> Any:
 def _manual_pattern(op: Any) -> torch.Tensor:
     """Return a manual attention pattern from an SDPA op's actual saved inputs."""
 
-    q, k, _v = op.saved_args[:3]
+    q, k, _v = op.call.saved_args[:3]
     scores = torch.matmul(q, k.transpose(-2, -1)) / (q.shape[-1] ** 0.5)
-    if op.saved_kwargs.get("is_causal", False):
+    if op.call.saved_kwargs.get("is_causal", False):
         seq = scores.shape[-1]
         mask = torch.ones(seq, seq, dtype=torch.bool, device=scores.device).tril()
         scores = scores.masked_fill(~mask, float("-inf"))
@@ -151,7 +151,7 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
         save="all",
     )
     op = _sdpa_op(log)
-    op.saved_args[0] = op.saved_args[0] + 10.0
+    op.call.saved_args[0] = op.call.saved_args[0] + 10.0
     log.modules["attn"].facets.invalidate()
 
     value = log.modules["attn"].facets.pattern.value
@@ -251,7 +251,7 @@ def test_default_capture_reconstructs_sdpa_facets_without_capture_options() -> N
     plain = tl.trace(model, x)
     ready = tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))
     op = _sdpa_op(plain)
-    assert op.saved_args is None, "premise: a default capture saves no argument copies"
+    assert op.call.saved_args is None, "premise: a default capture saves no argument copies"
 
     view = plain.modules["attn"].facets
     assert view.declared()["pattern"].status == "available_now"

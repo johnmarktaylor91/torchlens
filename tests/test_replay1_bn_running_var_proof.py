@@ -18,7 +18,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils._torch_compat import get_eval_batch_norm_mean_residual_support
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
     _execute_func_with_restored_state,
     _prepare_input_args_for_validating_layer,
@@ -45,7 +45,7 @@ def _bn_op(trace: Any) -> Any:
 
 
 def _edge(trace: Any, op: Any, slot: int) -> Any:
-    parent = op.parent_arg_positions["args"][slot]
+    parent = op.call.parent_arg_positions["args"][slot]
     return _check_whether_func_on_saved_parents_yields_saved_tensor(
         trace, op.label, perturb=True, layers_to_perturb=[parent]
     )
@@ -68,7 +68,7 @@ CASES = [
 def test_running_var_edge_is_exempted_by_the_value_proof(make, shape) -> None:
     trace = _capture(make().eval(), torch.zeros(shape))
     op = _bn_op(trace)
-    assert op.saved_args[5] is False
+    assert op.call.saved_args[5] is False
     result = _edge(trace, op, 4)
     assert result.decision == "exempted", (result.decision, result.reason)
 
@@ -233,7 +233,7 @@ def test_dead_running_var_edge_a_live_edge_would_expose_still_fails(make) -> Non
     model, x = make()
     trace = _capture(model, x)
     op = _bn_op(trace)
-    label = op.parent_arg_positions["args"][4]
+    label = op.call.parent_arg_positions["args"][4]
     live_edge_expected = (
         make not in KERNEL_RESIDUAL_CASES or get_eval_batch_norm_mean_residual_support()
     )
@@ -276,6 +276,6 @@ def test_every_exempted_case_is_unchanged_under_each_validation_strategy(make) -
     model, x = make()
     trace = _capture(model, x)
     op = _bn_op(trace)
-    label = op.parent_arg_positions["args"][4]
+    label = op.call.parent_arg_positions["args"][4]
     assert _edge(trace, op, 4).decision == "exempted"
     assert _live_edge_changes(trace, op, label) == []

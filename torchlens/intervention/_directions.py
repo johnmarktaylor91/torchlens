@@ -40,9 +40,10 @@ import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._selection.subspace import BasisProvenance, _basis_digest
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
-    from .types import Edit
+    from ._types import Edit
 
 METHODS = ("mean_diff", "pca", "logistic")
 _LOGISTIC_MAX_ITER = 100
@@ -115,7 +116,7 @@ class Direction:
             with ``tl.when(tl.module(direction.site), ...)``.
         """
 
-        from .helpers import steer
+        from ._helpers import steer
 
         return steer(self.vector, strength, dim=-1)
 
@@ -210,13 +211,13 @@ class Direction:
             ``neuronpedia_upload_argument_invalid`` for a missing key or a
             field the endpoint refuses; ``neuronpedia_upload_http_error`` and
             ``neuronpedia_upload_response_invalid`` as for
-            ``tl.attribution.graph.upload_to_neuronpedia``.
+            ``tl.attribution.upload_to_neuronpedia``.
         InvalidArgumentError
             As :meth:`library_layer`, when ``layer`` is ``None`` and the site
             label ends in no index.
         """
 
-        from ..attribution.graph._neuronpedia_upload import upload_vector
+        from ..attribution._graph._neuronpedia_upload import upload_vector
 
         return upload_vector(
             self.vector,
@@ -452,7 +453,7 @@ def _captured_mask(trace: Any) -> torch.Tensor | None:
     """Return the saved ``attention_mask`` input of a trace, if any."""
 
     for layer in trace._layer_list:
-        role = getattr(layer, "io_role", None)
+        role = record_member(layer, "io_role", None)
         if not getattr(layer, "is_input", False) or not isinstance(role, str):
             continue
         out = getattr(layer, "out", None)

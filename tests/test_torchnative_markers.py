@@ -54,7 +54,7 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
         ),
     )
     has_grad_fn = all(
-        op.grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
+        op._grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
     )
     log.cleanup()
     assert has_grad_fn, "backward_ready capture recorded no grad_fn on its linear ops"
@@ -106,7 +106,7 @@ def test_session_records_op_join_markers() -> None:
     ]
     assert key_markers, "no torchlens::op:: markers reached the owned profiler"
     marker_ids = {int(e.name.rsplit("::", 1)[-1]) for e in key_markers}
-    op_ids = {int(op.func_call_id) for op in log.ops if op.func_call_id is not None}
+    op_ids = {int(op.call.call_id) for op in log.ops if op.call.call_id is not None}
     assert marker_ids & op_ids, "marker keys do not intersect captured op func_call_ids"
     log.cleanup()
 

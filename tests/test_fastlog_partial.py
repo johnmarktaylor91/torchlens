@@ -16,7 +16,7 @@ from torchlens import Recording
 from torchlens.backends.torch.backend import TorchBackend
 from torchlens.errors import PredicateError, RecorderStateError, TraceCaptureError
 from torchlens.recording import RecordContext, Recorder
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording._options import RecordingOptions
 
 
 class FailingAfterOps(nn.Module):

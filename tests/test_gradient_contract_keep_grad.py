@@ -21,7 +21,7 @@ from torchlens.intervention import (
     compose,
     keep_grad,
 )
-from torchlens.intervention.types import InterventionDecision
+from torchlens.intervention._types import InterventionDecision
 
 _SITE = "linear_1_1"
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(0), dtype=torch.float64)

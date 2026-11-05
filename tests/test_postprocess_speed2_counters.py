@@ -33,7 +33,7 @@ from torchlens._data_classes import cleanup, op as op_module
 from torchlens._data_classes._op_container_census import _count_container_ids
 from torchlens._data_classes._template_walk import map_template_leaves
 from torchlens._postprocess import labeling
-from torchlens.intervention.types import ParentRef
+from torchlens.intervention._types import ParentRef
 
 
 class _Chain(torch.nn.Module):
@@ -148,7 +148,7 @@ def test_rename_builds_parent_refs_without_dataclasses_replace(
     trace, counts, seen = _count_in_step(monkeypatch, 4)
     assert counts["replace"] > 0, "the sweep must rebuild dataclass template nodes"
     assert ParentRef not in {cls for name, cls in seen if name == "replace"}
-    refs = [ref for op in trace.ops for ref in _parent_refs(op.args_template)]
+    refs = [ref for op in trace.ops for ref in _parent_refs(op.call.args_template)]
     assert len(refs) >= len(trace.ops) // 2
     # Renamed: each ref resolves as a final lookup key (as replay resolves it), none is raw.
     assert all(ref.parent_label in trace._layer_dict_all_keys for ref in refs)

@@ -46,7 +46,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._fed_by import (
     EARNED_BASES,
     FED_BY_KIND,

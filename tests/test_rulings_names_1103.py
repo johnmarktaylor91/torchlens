@@ -24,7 +24,7 @@ from torchlens._semantic.logit_lens import LogitLensError
 from torchlens.bundle._aligned_sites import site_row_key
 from torchlens.options import CaptureOptions
 from torchlens.recording import Recorder
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording._options import RecordingOptions
 
 
 class _Blocks(nn.Module):
@@ -138,7 +138,9 @@ def test_names6_rank_changes_by_module_names_modules() -> None:
     scores = [score for _, score in module_rows]
     assert scores == sorted(scores, reverse=True)
     # The module's score is its most changed site's score (site rows are keyed by op label).
-    dec_keys = {site_row_key(op) for op in trace.ops if op.atomic_module_address == "dec.0"}
+    dec_keys = {
+        site_row_key(op) for op in trace.ops if op.module_context.atomic_module_address == "dec.0"
+    }
     dec_sites = [score for key, score in site_rows if key in dec_keys]
     assert dec_sites
     assert dict(module_rows)["dec.0"] == pytest.approx(max(dec_sites))

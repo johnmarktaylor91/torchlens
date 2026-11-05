@@ -67,7 +67,7 @@ def test_intervention_save_overwrite_false_does_not_destroy_concurrent(
 ) -> None:
     """The intervention-spec writer refuses a concurrently-published target."""
 
-    from torchlens.intervention import save as intervention_save
+    from torchlens.intervention import _save as intervention_save
 
     target = tmp_path / "spec.tlspec"
     # The staged directory's fsync is the last step before the swap-time check.

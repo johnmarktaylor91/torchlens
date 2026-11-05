@@ -629,7 +629,7 @@ _GENERATOR_EQ_SCRIPT = textwrap.dedent(
 
     torch.manual_seed(0)
     trace = tl.trace(GenModel(), torch.randn(2, 4))
-    print(trace["randn_1_1"].equivalence_class)
+    print(trace["randn_1_1"].graph.equivalence_class)
     """
 )
 

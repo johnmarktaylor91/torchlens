@@ -56,8 +56,8 @@ class TestTraceTrainModeCarveOut:
         )
         op = log["linear_1_1"]
         assert op.out is None
-        assert op.transformed_out.dtype == torch.int64
-        assert int(op.transformed_out.sum()) == 8  # every element binned
+        assert op.payload.transformed_out.dtype == torch.int64
+        assert int(op.payload.transformed_out.sum()) == 8  # every element binned
 
     def test_undeclared_detached_transform_still_refuses(self) -> None:
         model = _model()
@@ -89,8 +89,8 @@ class TestTraceTrainModeCarveOut:
         )
         log.backward(log[log.output_layers[0]].out.sum())
         op = log["linear_1_1"]
-        assert op.transformed_grad is not None
-        assert op.transformed_grad.dtype == torch.int64
+        assert op.payload.transformed_grad is not None
+        assert op.payload.transformed_grad.dtype == torch.int64
 
 
 class TestFastlogCarveOut:

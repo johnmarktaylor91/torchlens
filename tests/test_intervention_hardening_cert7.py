@@ -25,13 +25,13 @@ from __future__ import annotations
 import torch
 
 from torchlens.bundle import _distance_value
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
     _deserialize_value,
     _is_reserved_wrapper_key,
     _serialize_value,
     _SerializedState,
 )
-from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:

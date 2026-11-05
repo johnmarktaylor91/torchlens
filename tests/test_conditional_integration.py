@@ -806,7 +806,11 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     list[Op]
         Terminal scalar bool layers in execution order.
     """
-    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [
+        layer
+        for layer in trace._layer_list
+        if layer.control_flow.is_terminal_bool and layer.control_flow.is_scalar_bool
+    ]
 
 
 def _find_only_layer(
@@ -835,7 +839,7 @@ def _find_only_layer(
         matching_layers = [
             layer
             for layer in matching_layers
-            if list(layer.conditional_branch_stack) == list(branch_stack)
+            if list(layer.control_flow.branch_stack) == list(branch_stack)
         ]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer for stack {branch_stack}, found {len(matching_layers)}"
@@ -916,8 +920,8 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
         event for event in root_events if "<locals>.helper" in event.function_qualname
     )
     method_event = next(event for event in root_events if "<locals>" not in event.function_qualname)
-    assert relu_layer.conditional_branch_stack == ((nested_event.id, "then"),)
-    assert tanh_layer.conditional_branch_stack == ((method_event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((nested_event.id, "then"),)
+    assert tanh_layer.control_flow.branch_stack == ((method_event.id, "then"),)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py.
@@ -962,7 +966,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     trace = _log_model(SameLineNestedDefModel(), torch.ones(2, 2))
     relu_layer = _find_only_layer(trace, "relu")
 
-    assert relu_layer.conditional_branch_stack == ()
+    assert relu_layer.control_flow.branch_stack == ()
     assert trace.graph.conditional_arm_entry_edges == {}
 
 
@@ -977,9 +981,9 @@ def test_ternary_ifexp_model_attributes_then_arm_as_ifexp() -> None:
 
     assert event.kind == "ifexp"
     assert set(event.branch_ranges) == {"then", "else"}
-    assert bool_layer.conditional_context_kind == "ifexp"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert bool_layer.control_flow.context_kind == "ifexp"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert linear_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py.
@@ -1017,8 +1021,8 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
     trace = _log_model(model, torch.ones(2, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert bool_layer.conditional_context_kind == "match_guard"
-    assert bool_layer.is_terminal_conditional_bool is False
+    assert bool_layer.control_flow.context_kind == "match_guard"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is False
     _assert_branchless_log(trace)
 
 
@@ -1030,7 +1034,7 @@ def test_ternary_py311_records_non_none_column_offsets_for_ifexp_frames() -> Non
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert any(frame.col_offset is not None for frame in bool_layer.code_context)
+    assert any(frame.col_offset is not None for frame in bool_layer.source.frames)
     assert trace.graph.conditional_arm_entry_edges
 
 
@@ -1048,7 +1052,7 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     negative_div = _find_only_layer_any_name(negative_log, ("div", "__truediv__"))
     negative_sub = _find_only_layer_any_name(negative_log, ("sub", "__sub__"))
 
-    assert positive_mul.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert positive_add.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert negative_div.conditional_branch_stack == ((negative_event.id, "else"),)
-    assert negative_sub.conditional_branch_stack == ((negative_event.id, "else"),)
+    assert positive_mul.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert positive_add.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert negative_div.control_flow.branch_stack == ((negative_event.id, "else"),)
+    assert negative_sub.control_flow.branch_stack == ((negative_event.id, "else"),)

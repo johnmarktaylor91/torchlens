@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .._utils._multipass_access import get_multipass_attr
+from .._utils._record_group_table import record_member
 
 __all__ = (
     "pass_mark_suffix",
@@ -59,7 +60,7 @@ def pass_mark_suffix(
         return f":{layer_log.pass_number}"
     if vis_mode != "rolled":
         return ""
-    if module_row and getattr(layer_log, "is_atomic_module", False) and ":" in node_address:
+    if module_row and record_member(layer_log, "is_atomic_module", False) and ":" in node_address:
         return ""
     return rolled_mark(layer_log, vis_mode)
 

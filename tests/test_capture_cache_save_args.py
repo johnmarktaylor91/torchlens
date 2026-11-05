@@ -98,13 +98,15 @@ def test_save_args_cache_round_trip_loads_equal_args_and_outputs(
     for fresh_op, loaded_op in zip(fresh._layer_list, loaded._layer_list, strict=True):
         label = str(fresh_op.label)
         assert str(loaded_op.label) == label
-        _assert_same(fresh_op.saved_args, loaded_op.saved_args, f"{label}.saved_args")
-        _assert_same(fresh_op.saved_kwargs, loaded_op.saved_kwargs, f"{label}.saved_kwargs")
+        _assert_same(fresh_op.call.saved_args, loaded_op.call.saved_args, f"{label}.saved_args")
+        _assert_same(
+            fresh_op.call.saved_kwargs, loaded_op.call.saved_kwargs, f"{label}.saved_kwargs"
+        )
         _assert_same(fresh_op.out, loaded_op.out, f"{label}.out")
     stored_storages = [
         arg
         for op in loaded._layer_list
-        for arg in (op.saved_args or ())
+        for arg in (op.call.saved_args or ())
         if isinstance(arg, torch.UntypedStorage)
     ]
     assert bool(stored_storages) is saves_storage

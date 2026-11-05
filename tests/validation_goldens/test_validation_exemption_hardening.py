@@ -11,21 +11,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._record_fakes import FlatNamespace
 from torchlens._validation_status import ValidationStatus
-from torchlens.validation import backward as backward_validation, core
+from torchlens.validation import _backward as backward_validation, _core as core
 from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
-from torchlens.validation._invariants_conditional_base import _check_branching_invariants
-from torchlens.validation._invariants_conditional_modules import (
-    _check_layer_pass_to_layer_log_xrefs,
-    _check_pass_count_consistency,
-)
-from torchlens.validation._invariants_entry import (
-    _check_non_torch_backward_inert,
-    _check_receptive_field_metadata_invariants,
-)
-from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
-from torchlens.validation.diagnostics import get_validation_failure
-from torchlens.validation.exemptions import (
+from torchlens.validation._diagnostics import get_validation_failure
+from torchlens.validation._exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
     _check_getitem_exempt,
@@ -37,12 +28,22 @@ from torchlens.validation.exemptions import (
     _posthoc_overwrite_decision,
     perturbed_layer_at_structural_position,
 )
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants import (
     MetadataInvariantError,
     _check_non_torch_primitive_op_inert,
     _check_site_key_invariants,
     check_metadata_invariants,
 )
+from torchlens.validation._invariants_conditional_base import _check_branching_invariants
+from torchlens.validation._invariants_conditional_modules import (
+    _check_layer_pass_to_layer_log_xrefs,
+    _check_pass_count_consistency,
+)
+from torchlens.validation._invariants_entry import (
+    _check_non_torch_backward_inert,
+    _check_receptive_field_metadata_invariants,
+)
+from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
 
 
 def _trace_saving_args(model: Any, inputs: Any) -> Any:
@@ -65,7 +66,7 @@ def _fake_layer(**kwargs: Any) -> Any:
         Layer-like namespace.
     """
 
-    return SimpleNamespace(**kwargs)
+    return FlatNamespace(**kwargs)
 
 
 def test_structural_arg_exemption_uses_parent_position_not_equal_value() -> None:
@@ -203,7 +204,7 @@ def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
 
     trace = _trace_saving_args(PartialSetitemDestinationModel(), torch.randn(4, 2))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
-    destination_label = setitem_op.parent_arg_positions["args"][0]
+    destination_label = setitem_op.call.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
 
@@ -224,7 +225,7 @@ def test_setitem_duplicate_advanced_index_destination_is_not_exempt() -> None:
 
     trace = _trace_saving_args(DuplicateIndexSetitemDestinationModel(), torch.tensor([3.0, 4.0]))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
-    destination_label = setitem_op.parent_arg_positions["args"][0]
+    destination_label = setitem_op.call.parent_arg_positions["args"][0]
 
     assert not _check_setitem_exempt(trace, setitem_op, [destination_label])
 
@@ -1024,7 +1025,7 @@ def test_setitem_overwrite_proof_rejects_negative_index_aliasing() -> None:
     indexing semantics normalize negatives, slices, and masks exactly.
     """
 
-    from torchlens.validation.exemptions import _setitem_destination_coverage_is_total
+    from torchlens.validation._exemptions import _setitem_destination_coverage_is_total
 
     dest = torch.tensor([10.0, 20.0])
     aliasing = (dest, torch.tensor([0, -2]), torch.tensor([1.0, 2.0]))
@@ -1116,16 +1117,16 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     # The vacuousness precondition: the suffixed per-op key misses the
     # pre-suffix trace-dict keys, while membership still resolves the group.
     assert all(
-        op.equivalence_class not in trace.graph.op_equivalence_classes for op in linear_ops
+        op.graph.equivalence_class not in trace.graph.op_equivalence_classes for op in linear_ops
     ), "suffix mismatch precondition gone -- update or retire this regression test"
     expected_group = {op.label for op in linear_ops}
     assert any(group == expected_group for group in trace.graph.op_equivalence_classes.values())
 
     wrong_group = {linear_ops[0].label}
     for op in linear_ops:
-        op.equivalent_ops = set(wrong_group)
+        op._graph_equivalent_ops = set(wrong_group)
     layer = trace._layer_logs[linear_ops[0].layer_label]
-    layer.equivalent_ops = set(wrong_group)
+    layer._graph_equivalent_ops = set(wrong_group)
 
     with pytest.raises(MetadataInvariantError, match="equivalent_ops"):
         check_metadata_invariants(trace)
@@ -1211,7 +1212,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
     object.__setattr__(relu_op, "is_edited", True)
-    object.__setattr__(relu_op, "func_call_id", None)
+    object.__setattr__(relu_op, "_call_call_id", None)
 
     with pytest.raises(MetadataInvariantError, match="func_call_id"):
         check_func_call_id_invariant(trace)
@@ -1272,7 +1273,7 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     the F2 ``*_like`` template-slot tightening.
     """
 
-    from torchlens.validation.exemptions import _posthoc_structural_output_decision
+    from torchlens.validation._exemptions import _posthoc_structural_output_decision
 
     layer = _fake_layer(
         func_name="to",
@@ -1287,12 +1288,12 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     )
 
     source_decision = _posthoc_structural_output_decision(
-        layer, layer.saved_args, ["source_parent"]
+        layer, layer.call.saved_args, ["source_parent"]
     )
     assert not source_decision.exempt
 
     template_decision = _posthoc_structural_output_decision(
-        layer, layer.saved_args, ["template_parent"]
+        layer, layer.call.saved_args, ["template_parent"]
     )
     assert template_decision.exempt
     assert template_decision.reason == "type_template_output"
@@ -1300,7 +1301,7 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     # Missing position metadata fails closed, like the *_like template proof.
     unmapped = _fake_layer(
         func_name="to",
-        saved_args=layer.saved_args,
+        saved_args=layer.call.saved_args,
         saved_kwargs={},
         parent_arg_positions={"args": {}, "kwargs": {}},
         out=layer.out,
@@ -1330,10 +1331,10 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     check_metadata_invariants(trace)
 
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
-    object.__setattr__(relu_op, "func_call_id", None)
+    object.__setattr__(relu_op, "_call_call_id", None)
     object.__setattr__(relu_op, "func_name", "none")
     assert callable(relu_op.func)
-    assert not relu_op.is_internal_source
+    assert not relu_op.graph.is_internal_source
 
     with pytest.raises(MetadataInvariantError):
         check_func_call_id_invariant(trace)
@@ -1911,7 +1912,7 @@ def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
 
     assert result is True
     cross_entropy_op = next(op for op in trace._layer_list if op.func_name == "cross_entropy")
-    assert cross_entropy_op.parent_arg_positions["kwargs"]["target"]
+    assert cross_entropy_op.call.parent_arg_positions["kwargs"]["target"]
     perturbation_decisions = [
         decision
         for decision in trace.validation_replay_status.decisions
@@ -2008,7 +2009,9 @@ def test_selective_save_interior_gap_is_unverified() -> None:
     assert "not_saved_by_user" not in status.exempted_reason_counts
     computational_ops = [op for op in trace._layer_list if op.func is not None]
     assert computational_ops
-    assert all(op.has_saved_args and op.saved_args is not None for op in computational_ops)
+    assert all(
+        op.call.has_saved_args and op.call.saved_args is not None for op in computational_ops
+    )
 
 
 def test_not_saved_by_user_requires_exact_negative_predicate_decision() -> None:
@@ -2248,7 +2251,7 @@ def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> No
     """
 
     trace = _trace_saving_args(BufferOwnerModel(), torch.randn(3, 4))
-    buffer_op = next(layer for layer in trace._layer_list if layer.is_buffer)
+    buffer_op = next(layer for layer in trace._layer_list if layer.graph.is_buffer)
     buffer_op._internal_set("modules", ["self:1"])  # noqa: SLF001
     buffer_op._internal_set("module", "self:1")  # noqa: SLF001
 
@@ -2490,8 +2493,8 @@ def test_norm_running_stat_exemption_uses_position_and_training_flag() -> None:
     assert not _check_norm_running_stat_exempt(None, layer, ["input"])  # type: ignore[arg-type]
 
     eval_layer = _fake_layer(
-        saved_args=layer.saved_args[:5] + (False,),
-        parent_arg_positions=layer.parent_arg_positions,
+        saved_args=layer.call.saved_args[:5] + (False,),
+        parent_arg_positions=layer.call.parent_arg_positions,
     )
     assert not _check_norm_running_stat_exempt(  # type: ignore[arg-type]
         None, eval_layer, ["running_mean"]

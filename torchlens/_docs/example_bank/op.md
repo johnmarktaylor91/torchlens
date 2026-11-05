@@ -42,7 +42,7 @@ print("step_index", op.step_index)
 ### op-pass-facts
 Each pass of a looped module is its own op with its own pass number (per op).
 
-- covers: `Op.pass_number`, `Op.num_passes`, `Op.step_index`, `Op.recurrent_ops`, `Op.equivalent_ops`, `Op.equivalence_class`
+- covers: `Op.pass_number`, `Op.num_passes`, `Op.step_index`, `Op.graph.recurrent_ops`, `Op.graph.equivalent_ops`, `Op.graph.equivalence_class`
 - tasks: loops, multi-pass, inspect-op
 - fixture: loop
 
@@ -52,9 +52,9 @@ op = trace.ops["tanh_1_2:2"]
 print("pass_number", op.pass_number)
 print("num_passes", op.num_passes)
 print("step_index", op.step_index)
-print("recurrent_ops", sorted(op.recurrent_ops))
-print("equivalent_ops", sorted(op.equivalent_ops))
-print("equivalence_class", op.equivalence_class)
+print("recurrent_ops", sorted(op.graph.recurrent_ops))
+print("equivalent_ops", sorted(op.graph.equivalent_ops))
+print("equivalence_class", op.graph.equivalence_class)
 # Output:
 # pass_number 2
 # num_passes 3
@@ -67,7 +67,7 @@ print("equivalence_class", op.equivalence_class)
 ### op-lookup-keys
 Every key that finds this op in `trace.ops`, and its addresses (per op).
 
-- covers: `Op.lookup_keys`, `Op.address`, `Op.backend_address`, `Op.resolver_status`, `Op.site_key`, `Op.fx_label`, `Op.fx_qualpath`, `Op.fx_call_index`
+- covers: `Op.lookup_keys`, `Op.buffer_address`, `Op.backend_address`, `Op.resolver_status`, `Op.graph.site_key`, `Op.fx_label`, `Op.source.fx_path`, `Op.source.fx_call_index`
 - tasks: labels, lookup
 - fixture: toy
 
@@ -75,13 +75,13 @@ Every key that finds this op in `trace.ops`, and its addresses (per op).
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
 print("lookup_keys", sorted(map(str, op.lookup_keys)))
-print("address", op.address)
+print("address", op.buffer_address)
 print("backend_address", op.backend_address)
 print("resolver_status", op.resolver_status)
-print("site_key", op.site_key)
+print("site_key", op.graph.site_key)
 print("fx_label", op.fx_label)
-print("fx_qualpath", op.fx_qualpath)
-print("fx_call_index", op.fx_call_index)
+print("fx_qualpath", op.source.fx_path)
+print("fx_call_index", op.source.fx_call_index)
 # Output:
 # lookup_keys ['-4', '1', 'fc1', 'fc1:1', 'fc1_linear_0', 'linear_1', 'linear_1:1', 'linear_1_1', 'linear_1_1:1', 'linear_1_2', 'linear_1_2_raw']
 # address fc1
@@ -117,7 +117,7 @@ print("source_trace", op.source_trace is trace)
 ### op-out-facts
 The saved output tensor of one op and its description (per op).
 
-- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.output_device`, `Op.has_saved_activation`, `Op.detach_saved_activations`, `Op.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
+- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.has_saved_activation`, `Op.cost.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
 - tasks: inspect-op, read-activation
 - fixture: toy
 
@@ -127,19 +127,15 @@ op = trace.ops["relu_1_2"]
 print("out", tuple(op.out.shape), bool((op.out >= 0).all()))
 print("shape", tuple(op.shape))
 print("dtype", op.dtype)
-print("output_device", op.output_device)
 print("has_saved_activation", op.has_saved_activation)
-print("detach_saved_activations", op.detach_saved_activations)
-print("activation_memory", op.activation_memory)
+print("activation_memory", op.cost.activation_memory)
 print("device_ref", op.device_ref)
 print("dtype_ref", op.dtype_ref)
 # Output:
 # out (3, 8) True
 # shape (3, 8)
 # dtype torch.float32
-# output_device same
 # has_saved_activation True
-# detach_saved_activations False
 # activation_memory 96 B
 # device_ref cpu
 # dtype_ref torch.float32
@@ -148,15 +144,15 @@ print("dtype_ref", op.dtype_ref)
 ### op-autograd-memory
 Memory the autograd graph keeps for this op's call (per op).
 
-- covers: `Op.autograd_memory`, `Op.num_autograd_tensors`
+- covers: `Op.cost.autograd_memory`, `Op.autograd.num_autograd_tensors`
 - tasks: memory
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
-print("autograd_memory", op.autograd_memory)
-print("num_autograd_tensors", op.num_autograd_tensors)
+print("autograd_memory", op.cost.autograd_memory)
+print("num_autograd_tensors", op.autograd.num_autograd_tensors)
 # Output:
 # autograd_memory 48 B
 # num_autograd_tensors 1
@@ -165,7 +161,7 @@ print("num_autograd_tensors", op.num_autograd_tensors)
 ### op-activation-transform
 An activation transform stores a changed copy beside the raw output (per op).
 
-- covers: `Op.activation_transform`, `Op.transformed_out`, `Op.transformed_out_shape`, `Op.transformed_out_dtype`, `Op.transformed_activation_memory`
+- covers: `Op.payload.transformed_out`, `Op.payload.transformed_out_shape`, `Op.payload.transformed_out_dtype`, `Op.cost.transformed_activation_memory`
 - tasks: transform-activations
 - fixture: toy
 
@@ -173,13 +169,11 @@ An activation transform stores a changed copy beside the raw output (per op).
 opts = tl.options.CaptureOptions(activation_transform=lambda t: t.mean(dim=0))
 trace = tl.trace(model, x, capture=opts)
 op = trace.ops["relu_1_2"]
-print("activation_transform", callable(op.activation_transform))
-print("transformed_out", tuple(op.transformed_out.shape))
-print("transformed_out_shape", tuple(op.transformed_out_shape))
-print("transformed_out_dtype", op.transformed_out_dtype)
-print("transformed_activation_memory", op.transformed_activation_memory)
+print("transformed_out", tuple(op.payload.transformed_out.shape))
+print("transformed_out_shape", tuple(op.payload.transformed_out_shape))
+print("transformed_out_dtype", op.payload.transformed_out_dtype)
+print("transformed_activation_memory", op.cost.transformed_activation_memory)
 # Output:
-# activation_transform True
 # transformed_out (8,)
 # transformed_out_shape (8,)
 # transformed_out_dtype torch.float32
@@ -189,7 +183,7 @@ print("transformed_activation_memory", op.transformed_activation_memory)
 ### op-lazy-out
 A lazy load keeps outputs on disk until you ask for one.
 
-- covers: `Op.out_ref`, `Op.materialize_out`
+- covers: `Op.payload.materialize_out`
 - tasks: save-load, lazy
 - fixture: toy
 
@@ -198,10 +192,8 @@ trace = tl.trace(model, x)
 trace.save("run.tlspec")
 lazy = tl.load("run.tlspec", lazy=True)
 op = lazy.ops["relu_1_2"]
-print("out_ref", op.out_ref is not None)
-print("materialize_out", tuple(op.materialize_out().shape))
+print("materialize_out", tuple(op.payload.materialize_out().shape))
 # Output:
-# out_ref True
 # materialize_out (3, 8)
 ```
 
@@ -210,7 +202,7 @@ print("materialize_out", tuple(op.materialize_out().shape))
 ### op-func-facts
 Which function an op ran and its non-tensor settings (per op).
 
-- covers: `Op.func`, `Op.func_name`, `Op.func_qualname`, `Op.func_config`, `Op.func_call_id`, `Op.func_id`, `Op.func_non_tensor_args`, `Op.non_tensor_pos_args`, `Op.non_tensor_kwargs`, `Op.is_inplace`
+- covers: `Op.func`, `Op.func_name`, `Op.source.func_qualname`, `Op.call.config`, `Op.call.call_id`, `Op.call.func_id`, `Op.call.non_tensor_args`, `Op.call.non_tensor_pos_args`, `Op.call.non_tensor_kwargs`, `Op.is_inplace`
 - tasks: inspect-op, function
 - fixture: cnn
 
@@ -219,13 +211,13 @@ trace = tl.trace(model, x)
 op = trace.ops["conv2d_1_1"]
 print("func", op.func.__name__)
 print("func_name", op.func_name)
-print("func_qualname", op.func_qualname)
-print("func_config", op.func_config)
-print("func_call_id", op.func_call_id)
-print("func_id", op.func_id)
-print("func_non_tensor_args", op.func_non_tensor_args)
-print("non_tensor_pos_args", op.non_tensor_pos_args)
-print("non_tensor_kwargs", op.non_tensor_kwargs)
+print("func_qualname", op.source.func_qualname)
+print("func_config", op.call.config)
+print("func_call_id", op.call.call_id)
+print("func_id", op.call.func_id)
+print("func_non_tensor_args", op.call.non_tensor_args)
+print("non_tensor_pos_args", op.call.non_tensor_pos_args)
+print("non_tensor_kwargs", op.call.non_tensor_kwargs)
 print("is_inplace", op.is_inplace)
 # Output:
 # func conv2d
@@ -243,7 +235,7 @@ print("is_inplace", op.is_inplace)
 ### op-args-facts
 How an op's call arguments were spelled and counted (per op).
 
-- covers: `Op.arg_names`, `Op.num_args_total`, `Op.num_pos_args`, `Op.num_kwargs`, `Op.args_summary`, `Op.kwargs_summary`, `Op.arg_expressions`, `Op.var_names`, `Op.parent_arg_positions`
+- covers: `Op.call.arg_names`, `Op.call.num_args_total`, `Op.call.num_pos_args`, `Op.call.num_kwargs`, `Op.args_summary`, `Op.kwargs_summary`, `Op.source.arg_expressions`, `Op.source.var_names`, `Op.call.parent_arg_positions`
 - tasks: inspect-op, function
 - fixture: none
 
@@ -254,15 +246,15 @@ class Scale(torch.nn.Module):
         return torch.clamp(y, min=-1.0)
 trace = tl.trace(Scale(), torch.randn(2, 3))
 op = trace.ops["clamp_1_2"]
-print("arg_names", op.arg_names)
-print("num_args_total", op.num_args_total)
-print("num_pos_args", op.num_pos_args)
-print("num_kwargs", op.num_kwargs)
+print("arg_names", op.call.arg_names)
+print("num_args_total", op.call.num_args_total)
+print("num_pos_args", op.call.num_pos_args)
+print("num_kwargs", op.call.num_kwargs)
 print("args_summary", trace.ops["mul_1_1"].args_summary)
 print("kwargs_summary", op.kwargs_summary)
-print("arg_expressions", op.arg_expressions)
-print("var_names", trace.ops["mul_1_1"].var_names)
-print("parent_arg_positions", op.parent_arg_positions)
+print("arg_expressions", op.source.arg_expressions)
+print("var_names", trace.ops["mul_1_1"].source.var_names)
+print("parent_arg_positions", op.call.parent_arg_positions)
 # Output:
 # arg_names ('input', 'min', 'max', 'out')
 # num_args_total 2
@@ -278,15 +270,15 @@ print("parent_arg_positions", op.parent_arg_positions)
 ### op-arg-templates
 The structural templates TorchLens keeps to rebuild an op's call.
 
-- covers: `Op.args_template`, `Op.kwargs_template`
+- covers: `Op.call.args_template`, `Op.call.kwargs_template`
 - tasks: replay, function
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
-print("args_template", type(op.args_template).__name__, len(op.args_template.args))
-print("kwargs_template", type(op.kwargs_template).__name__)
+print("args_template", type(op.call.args_template).__name__, len(op.call.args_template.args))
+print("kwargs_template", type(op.call.kwargs_template).__name__)
 # Output:
 # args_template CapturedArgTemplate 3
 # kwargs_template NoneType
@@ -295,16 +287,16 @@ print("kwargs_template", type(op.kwargs_template).__name__)
 ### op-saved-args
 With `save_args=True` each op keeps the argument values it was called with.
 
-- covers: `Op.saved_args`, `Op.saved_kwargs`, `Op.has_saved_args`
+- covers: `Op.call.saved_args`, `Op.call.saved_kwargs`, `Op.call.has_saved_args`
 - tasks: replay, function
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
 op = trace.ops["linear_1_1"]
-print("has_saved_args", op.has_saved_args)
-print("saved_args", [tuple(a.shape) for a in op.saved_args])
-print("saved_kwargs", op.saved_kwargs)
+print("has_saved_args", op.call.has_saved_args)
+print("saved_args", [tuple(a.shape) for a in op.call.saved_args])
+print("saved_kwargs", op.call.saved_kwargs)
 # Output:
 # has_saved_args True
 # saved_args [(3, 4), (8, 4), (8,)]
@@ -314,7 +306,7 @@ print("saved_kwargs", op.saved_kwargs)
 ### op-input-activations
 The saved outputs of an op's parents, the values it consumed (per op).
 
-- covers: `Op.input_activations`, `Op.input_shapes`, `Op.input_dtypes`, `Op.input_memory`
+- covers: `Op.input_activations`, `Op.input_shapes`, `Op.input_dtypes`, `Op.cost.input_memory`
 - tasks: inspect-op, read-activation
 - fixture: toy
 
@@ -324,7 +316,7 @@ op = trace.ops["linear_2_3"]
 print("input_activations", [tuple(t.shape) for t in op.input_activations])
 print("input_shapes", op.input_shapes)
 print("input_dtypes", op.input_dtypes)
-print("input_memory", op.input_memory)
+print("input_memory", op.cost.input_memory)
 # Output:
 # input_activations [(3, 8)]
 # input_shapes (torch.Size([3, 8]),)
@@ -335,18 +327,18 @@ print("input_memory", op.input_memory)
 ### op-call-environment
 Timing, RNG and autocast state recorded around an op's call (per op).
 
-- covers: `Op.func_duration`, `Op.func_rng_states`, `Op.func_autocast_state`, `Op.bytes_delta_at_call`, `Op.bytes_peak_at_call`
+- covers: `Op.cost.duration`, `Op.call.rng_states`, `Op.call.autocast_state`, `Op.cost.bytes_delta_at_call`, `Op.cost.bytes_peak_at_call`
 - tasks: timing, inspect-op
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
-print("func_duration", type(op.func_duration).__name__)
-print("func_rng_states", type(op.func_rng_states).__name__)
-print("func_autocast_state", sorted(op.func_autocast_state))
-print("bytes_delta_at_call", op.bytes_delta_at_call)
-print("bytes_peak_at_call", type(op.bytes_peak_at_call).__name__)
+print("func_duration", type(op.cost.duration).__name__)
+print("func_rng_states", type(op.call.rng_states).__name__)
+print("func_autocast_state", sorted(op.call.autocast_state))
+print("bytes_delta_at_call", op.cost.bytes_delta_at_call)
+print("bytes_peak_at_call", type(op.cost.bytes_peak_at_call).__name__)
 # Output:
 # func_duration Duration
 # func_rng_states dict
@@ -358,15 +350,15 @@ print("bytes_peak_at_call", type(op.bytes_peak_at_call).__name__)
 ### op-code-context
 Where in your code an op ran: the last frame is the line that called the function.
 
-- covers: `Op.code_context`
+- covers: `Op.source.frames`
 - tasks: source, inspect-op
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["relu_1_2"]
-frame = op.code_context[-1]
-print(len(op.code_context) > 0)
+frame = op.source.frames[-1]
+print(len(op.source.frames) > 0)
 print(frame.func_name)
 print(frame.call_line.strip())
 # Output:
@@ -378,28 +370,26 @@ print(frame.call_line.strip())
 ### op-grad-fn
 The autograd node behind an op's output (per op; the live handle is not saved to disk).
 
-- covers: `Op.grad_fn_class_name`, `Op.grad_fn_class_qualname`, `Op.grad_fn_handle`, `Op.grad_fn_object_id`
+- covers: `Op.autograd.grad_fn_class_name`, `Op.autograd.grad_fn_class_qualname`, `Op.autograd.grad_fn_handle`
 - tasks: autograd, inspect-op
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 op = trace.ops["linear_1_1"]
-print("grad_fn_class_name", op.grad_fn_class_name)
-print("grad_fn_class_qualname", op.grad_fn_class_qualname)
-print("grad_fn_handle", type(op.grad_fn_handle).__name__)
-print("grad_fn_object_id", isinstance(op.grad_fn_object_id, int))
+print("grad_fn_class_name", op.autograd.grad_fn_class_name)
+print("grad_fn_class_qualname", op.autograd.grad_fn_class_qualname)
+print("grad_fn_handle", type(op.autograd.grad_fn_handle).__name__)
 # Output:
 # grad_fn_class_name AddmmBackward0
 # grad_fn_class_qualname builtins.AddmmBackward0
 # grad_fn_handle AddmmBackward0
-# grad_fn_object_id True
 ```
 
 ### op-grad-fn-after-backward
 After a backward pass the op links to its backward record and the live handle is released.
 
-- covers: `Op.grad_fn`, `Op.grad_fn_label`, `Op.grad_fn_handle`
+- covers: `Op.autograd.grad_fn`, `Op.grad_fn_label`, `Op.autograd.grad_fn_handle`
 - tasks: autograd, backward
 - fixture: toy
 
@@ -407,9 +397,9 @@ After a backward pass the op links to its backward record and the live handle is
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 trace.backward(trace.ops["output_1"].out.sum())
 op = trace.ops["linear_1_1"]
-print("grad_fn", type(op.grad_fn).__name__, op.grad_fn.label, op.grad_fn.op_label)
+print("grad_fn", type(op.autograd.grad_fn).__name__, op.autograd.grad_fn.label, op.autograd.grad_fn.op_label)
 print("grad_fn_label", op.grad_fn_label)
-print("grad_fn_handle", op.grad_fn_handle)
+print("grad_fn_handle", op.autograd.grad_fn_handle)
 # Output:
 # grad_fn GradFn addmm_back_2_7 linear_1_1
 # grad_fn_label addmm_back_2_7
@@ -421,23 +411,23 @@ print("grad_fn_handle", op.grad_fn_handle)
 ### op-cost-facts
 FLOPs, MACs and ideal memory traffic of one conv call (per op).
 
-- covers: `Op.flops_forward`, `Op.flops_backward`, `Op.flops_total`, `Op.macs_forward`, `Op.macs_backward`, `Op.macs_total`, `Op.bytes_read`, `Op.bytes_written`, `Op.arithmetic_intensity`, `Op.compute_record`
+- covers: `Op.cost.flops_forward`, `Op.cost.flops_backward`, `Op.cost.flops_total`, `Op.cost.macs_forward`, `Op.macs_backward`, `Op.macs_total`, `Op.cost.bytes_read`, `Op.cost.bytes_written`, `Op.cost.arithmetic_intensity`, `Op.cost.compute_record`
 - tasks: flops, cost
 - fixture: cnn
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["conv2d_1_1"]
-print("flops_forward", op.flops_forward)
-print("flops_backward", op.flops_backward)
-print("flops_total", op.flops_total)
-print("macs_forward", op.macs_forward)
+print("flops_forward", op.cost.flops_forward)
+print("flops_backward", op.cost.flops_backward)
+print("flops_total", op.cost.flops_total)
+print("macs_forward", op.cost.macs_forward)
 print("macs_backward", op.macs_backward)
 print("macs_total", op.macs_total)
-print("bytes_read", op.bytes_read)
-print("bytes_written", op.bytes_written)
-print("arithmetic_intensity", round(op.arithmetic_intensity, 3))
-print("compute_record", op.compute_record)
+print("bytes_read", op.cost.bytes_read)
+print("bytes_written", op.cost.bytes_written)
+print("arithmetic_intensity", round(op.cost.arithmetic_intensity, 3))
+print("compute_record", op.cost.compute_record)
 # Output:
 # flops_forward 14.1 KFLOPs
 # flops_backward 28.2 KFLOPs
@@ -456,7 +446,7 @@ print("compute_record", op.compute_record)
 ### op-params-facts
 Parameter counts of a linear op after freezing its bias (per op).
 
-- covers: `Op.has_params`, `Op.num_params`, `Op.num_params_trainable`, `Op.num_params_frozen`, `Op.num_param_tensors_trainable`, `Op.num_param_tensors_frozen`, `Op.has_trainable_params`, `Op.has_frozen_params`, `Op.param_names`, `Op.param_shapes`, `Op.param_dtypes`, `Op.param_memory`
+- covers: `Op.has_params`, `Op.num_params`, `Op.num_params_trainable`, `Op.num_params_frozen`, `Op.num_param_tensors_trainable`, `Op.num_param_tensors_frozen`, `Op.has_trainable_params`, `Op.has_frozen_params`, `Op.param_names`, `Op.param_shapes`, `Op.param_dtypes`, `Op.cost.param_memory`
 - tasks: params, inspect-op
 - fixture: toy
 
@@ -475,7 +465,7 @@ print("has_frozen_params", op.has_frozen_params)
 print("param_names", op.param_names)
 print("param_shapes", op.param_shapes)
 print("param_dtypes", op.param_dtypes)
-print("param_memory", op.param_memory)
+print("param_memory", op.cost.param_memory)
 # Output:
 # has_params True
 # num_params 40
@@ -494,7 +484,7 @@ print("param_memory", op.param_memory)
 ### op-param-objects
 `Op.params` lists the parameters an op used; `parent_params` is emptied after capture to free memory.
 
-- covers: `Op.params`, `Op.parent_params`, `Op.parent_param_ops`
+- covers: `Op.params`, `Op.graph.parent_params`, `Op.graph.parent_param_ops`
 - tasks: params
 - fixture: toy
 
@@ -502,8 +492,8 @@ print("param_memory", op.param_memory)
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
 print("params", [p.address for p in op.params])
-print("parent_param_ops", sorted(op.parent_param_ops.values()))
-print("parent_params", op.parent_params)
+print("parent_param_ops", sorted(op.graph.parent_param_ops.values()))
+print("parent_params", op.graph.parent_params)
 # Output:
 # params ['fc1.weight', 'fc1.bias']
 # parent_param_ops [1, 1]
@@ -515,7 +505,7 @@ print("parent_params", op.parent_params)
 ### op-graph-facts
 An op's direct neighbours in the graph, as pass-qualified labels (per op).
 
-- covers: `Op.parents`, `Op.children`, `Op.has_parents`, `Op.has_children`, `Op.siblings`, `Op.has_siblings`, `Op.co_parents`, `Op.has_co_parents`, `Op.num_inputs`, `Op.input_ops`, `Op.root_ancestors`
+- covers: `Op.parents`, `Op.children`, `Op.graph.has_parents`, `Op.graph.has_children`, `Op.graph.siblings`, `Op.graph.has_siblings`, `Op.graph.co_parents`, `Op.graph.has_co_parents`, `Op.graph.num_inputs`, `Op.input_ops`, `Op.graph.root_ancestors`
 - tasks: graph, navigate
 - fixture: toy
 
@@ -524,15 +514,15 @@ trace = tl.trace(model, x)
 op = trace.ops["relu_1_2"]
 print("parents", op.parents)
 print("children", op.children)
-print("has_parents", op.has_parents)
-print("has_children", op.has_children)
-print("siblings", op.siblings)
-print("has_siblings", op.has_siblings)
-print("co_parents", op.co_parents)
-print("has_co_parents", op.has_co_parents)
-print("num_inputs", op.num_inputs)
+print("has_parents", op.graph.has_parents)
+print("has_children", op.graph.has_children)
+print("siblings", op.graph.siblings)
+print("has_siblings", op.graph.has_siblings)
+print("co_parents", op.graph.co_parents)
+print("has_co_parents", op.graph.has_co_parents)
+print("num_inputs", op.graph.num_inputs)
 print("input_ops", [o.label for o in op.input_ops])
-print("root_ancestors", op.root_ancestors)
+print("root_ancestors", op.graph.root_ancestors)
 # Output:
 # parents ('linear_1_1',)
 # children ('linear_2_3',)
@@ -567,7 +557,7 @@ print([c.label for c in op.get_children()])
 ### op-ancestry-facts
 Which inputs and outputs an op connects to, and how far away they are (per op).
 
-- covers: `Op.input_ancestors`, `Op.output_descendants`, `Op.has_input_ancestor`, `Op.has_output_descendant`, `Op.min_distance_from_input`, `Op.max_distance_from_input`, `Op.min_distance_to_output`, `Op.max_distance_to_output`, `Op.is_orphan`, `Op.is_internal_sink`
+- covers: `Op.input_ancestors`, `Op.output_descendants`, `Op.graph.has_input_ancestor`, `Op.graph.has_output_descendant`, `Op.graph.min_distance_from_input`, `Op.graph.max_distance_from_input`, `Op.graph.min_distance_to_output`, `Op.graph.max_distance_to_output`, `Op.graph.is_orphan`, `Op.is_internal_sink`
 - tasks: graph
 - fixture: toy
 
@@ -576,13 +566,13 @@ trace = tl.trace(model, x)
 op = trace.ops["relu_1_2"]
 print("input_ancestors", op.input_ancestors)
 print("output_descendants", op.output_descendants)
-print("has_input_ancestor", op.has_input_ancestor)
-print("has_output_descendant", op.has_output_descendant)
-print("min_distance_from_input", op.min_distance_from_input)
-print("max_distance_from_input", op.max_distance_from_input)
-print("min_distance_to_output", op.min_distance_to_output)
-print("max_distance_to_output", op.max_distance_to_output)
-print("is_orphan", op.is_orphan)
+print("has_input_ancestor", op.graph.has_input_ancestor)
+print("has_output_descendant", op.graph.has_output_descendant)
+print("min_distance_from_input", op.graph.min_distance_from_input)
+print("max_distance_from_input", op.graph.max_distance_from_input)
+print("min_distance_to_output", op.graph.min_distance_to_output)
+print("max_distance_to_output", op.graph.max_distance_to_output)
+print("is_orphan", op.graph.is_orphan)
 print("is_internal_sink", op.is_internal_sink)
 # Output:
 # input_ancestors frozenset({'input_1'})
@@ -600,7 +590,7 @@ print("is_internal_sink", op.is_internal_sink)
 ### op-io-role
 Which ops are inputs, outputs or real computations, one row per op.
 
-- covers: `Op.io_role`, `Op.is_input`, `Op.is_output`, `Op.is_final_output`, `Op.is_output_parent`, `Op.is_compute_op`, `Op.input_was_parameter`
+- covers: `Op.graph.io_role`, `Op.is_input`, `Op.is_output`, `Op.graph.is_final_output`, `Op.graph.is_output_parent`, `Op.graph.is_compute`, `Op.input_was_parameter`
 - tasks: graph, io
 - fixture: toy
 
@@ -608,8 +598,8 @@ Which ops are inputs, outputs or real computations, one row per op.
 trace = tl.trace(model, x)
 for label in trace.op_labels:
     op = trace.ops[label]
-    print(label, op.io_role, op.is_input, op.is_output, op.is_final_output,
-          op.is_output_parent, op.is_compute_op, op.input_was_parameter)
+    print(label, op.graph.io_role, op.is_input, op.is_output, op.graph.is_final_output,
+          op.graph.is_output_parent, op.graph.is_compute, op.input_was_parameter)
 # Output:
 # input_1:1 input.x True False False False False False
 # linear_1_1:1 None False False False False True False
@@ -621,7 +611,7 @@ for label in trace.op_labels:
 ### op-internal-source
 A tensor made inside `forward` (here `torch.ones`) is an internal source, not an input.
 
-- covers: `Op.is_internal_source`, `Op.is_internally_initialized`, `Op.is_constant`, `Op.internal_source_parents`, `Op.internal_source_ancestors`, `Op.has_internal_source_ancestor`, `Op.tl_authored_root`
+- covers: `Op.graph.is_internal_source`, `Op.call.is_internally_initialized`, `Op.is_constant`, `Op.graph.internal_source_parents`, `Op.graph.internal_source_ancestors`, `Op.graph.has_internal_source_ancestor`, `Op.call.tl_authored_root`
 - tasks: graph, internal-source
 - fixture: none
 
@@ -631,13 +621,13 @@ class AddOnes(torch.nn.Module):
         return x + torch.ones(4)
 trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.ops["ones_1_1"], trace.ops["add_1_2"]
-print("is_internal_source", ones.is_internal_source)
-print("is_internally_initialized", ones.is_internally_initialized)
+print("is_internal_source", ones.graph.is_internal_source)
+print("is_internally_initialized", ones.call.is_internally_initialized)
 print("is_constant", ones.is_constant, add.is_constant)
-print("internal_source_parents", add.internal_source_parents)
-print("internal_source_ancestors", add.internal_source_ancestors)
-print("has_internal_source_ancestor", add.has_internal_source_ancestor)
-print("tl_authored_root", ones.tl_authored_root)
+print("internal_source_parents", add.graph.internal_source_parents)
+print("internal_source_ancestors", add.graph.internal_source_ancestors)
+print("has_internal_source_ancestor", add.graph.has_internal_source_ancestor)
+print("tl_authored_root", ones.call.tl_authored_root)
 # Output:
 # is_internal_source True
 # is_internally_initialized True
@@ -651,7 +641,7 @@ print("tl_authored_root", ones.tl_authored_root)
 ### op-edge-records
 Per-edge records: how each parent fed this op and which tensor args made no edge.
 
-- covers: `Op.edge_uses`, `Op.dropped_edge_tensor_args`, `Op.unattributed_tensor_args`, `Op.edge_substitutions`, `Op.edge_replacement_stamps`, `Op.out_versions_by_child`, `Op.has_out_variations`
+- covers: `Op.edge_uses`, `Op.call.dropped_edge_tensor_args`, `Op.call.unattributed_tensor_args`, `Op.graph.edge_substitutions`, `Op.edge_replacement_stamps`, `Op.out_versions_by_child`, `Op.has_out_variations`
 - tasks: graph, replay
 - fixture: toy
 
@@ -659,9 +649,9 @@ Per-edge records: how each parent fed this op and which tensor args made no edge
 trace = tl.trace(model, x)
 op = trace.ops["linear_2_3"]
 print("edge_uses", op.edge_uses)
-print("dropped_edge_tensor_args", op.dropped_edge_tensor_args)
-print("unattributed_tensor_args", op.unattributed_tensor_args)
-print("edge_substitutions", op.edge_substitutions)
+print("dropped_edge_tensor_args", op.call.dropped_edge_tensor_args)
+print("unattributed_tensor_args", op.call.unattributed_tensor_args)
+print("edge_substitutions", op.graph.edge_substitutions)
 print("edge_replacement_stamps", op.edge_replacement_stamps)
 print("out_versions_by_child", op.out_versions_by_child)
 print("has_out_variations", op.has_out_variations)
@@ -680,7 +670,7 @@ print("has_out_variations", op.has_out_variations)
 ### op-module-facts
 Which module an op ran inside, and whether it is that module's only op (per op).
 
-- covers: `Op.module`, `Op.modules`, `Op.module_call_stack`, `Op.module_call_depth`, `Op.in_submodule`, `Op.is_atomic_module`, `Op.atomic_module`, `Op.atomic_module_address`, `Op.atomic_module_call`, `Op.atomic_module_call_label`
+- covers: `Op.module`, `Op.modules`, `Op.module_context.call_stack`, `Op.module_context.call_depth`, `Op.in_submodule`, `Op.module_context.is_atomic_module`, `Op.module_context.atomic_module`, `Op.module_context.atomic_module_address`, `Op.module_context.atomic_module_call`, `Op.atomic_module_call_label`
 - tasks: modules, inspect-op
 - fixture: toy
 
@@ -689,13 +679,13 @@ trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
 print("module", op.module)
 print("modules", op.modules)
-print("module_call_stack", op.module_call_stack)
-print("module_call_depth", op.module_call_depth)
+print("module_call_stack", op.module_context.call_stack)
+print("module_call_depth", op.module_context.call_depth)
 print("in_submodule", op.in_submodule)
-print("is_atomic_module", op.is_atomic_module)
-print("atomic_module", type(op.atomic_module).__name__, op.atomic_module.address)
-print("atomic_module_address", op.atomic_module_address)
-print("atomic_module_call", op.atomic_module_call)
+print("is_atomic_module", op.module_context.is_atomic_module)
+print("atomic_module", type(op.module_context.atomic_module).__name__, op.module_context.atomic_module.address)
+print("atomic_module_address", op.module_context.atomic_module_address)
+print("atomic_module_call", op.module_context.atomic_module_call)
 print("atomic_module_call_label", op.atomic_module_call_label)
 # Output:
 # module fc1:1
@@ -713,21 +703,21 @@ print("atomic_module_call_label", op.atomic_module_call_label)
 ### op-module-io
 Which module calls an op's output entered or left (per op).
 
-- covers: `Op.input_to_modules`, `Op.input_to_module_calls`, `Op.output_of_modules`, `Op.output_of_module_calls`, `Op.is_module_input`, `Op.is_module_output`, `Op.module_entry_arg_keys`
+- covers: `Op.module_context.input_to_modules`, `Op.module_context.input_to_module_calls`, `Op.module_context.output_of_modules`, `Op.module_context.output_of_module_calls`, `Op.module_context.is_module_input`, `Op.module_context.is_module_output`, `Op.module_context.entry_arg_keys`
 - tasks: modules, io
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["relu_1_2"]
-print("input_to_modules", op.input_to_modules)
-print("input_to_module_calls", op.input_to_module_calls)
-print("is_module_input", op.is_module_input)
-print("module_entry_arg_keys", dict(op.module_entry_arg_keys))
+print("input_to_modules", op.module_context.input_to_modules)
+print("input_to_module_calls", op.module_context.input_to_module_calls)
+print("is_module_input", op.module_context.is_module_input)
+print("module_entry_arg_keys", dict(op.module_context.entry_arg_keys))
 fc1 = trace.ops["linear_1_1"]
-print("output_of_modules", fc1.output_of_modules)
-print("output_of_module_calls", fc1.output_of_module_calls)
-print("is_module_output", fc1.is_module_output)
+print("output_of_modules", fc1.module_context.output_of_modules)
+print("output_of_module_calls", fc1.module_context.output_of_module_calls)
+print("is_module_output", fc1.module_context.is_module_output)
 # Output:
 # input_to_modules ['fc2']
 # input_to_module_calls ('fc2:1',)
@@ -796,7 +786,7 @@ print("output_containers", [c.root_kind for c in op.output_containers])
 ### op-grad-facts
 After one backward pass each op holds its output gradient (per op).
 
-- covers: `Op.grad`, `Op.has_grad`, `Op.has_saved_grad`, `Op.grad_shape`, `Op.grad_dtype`, `Op.gradient_memory`, `Op.save_grads`, `Op.derived_grad`
+- covers: `Op.grad`, `Op.has_grad`, `Op.has_saved_grad`, `Op.autograd.grad_shape`, `Op.autograd.grad_dtype`, `Op.gradient_memory`, `Op.save_grads`, `Op.autograd.derived_grad`
 - tasks: gradients, backward
 - fixture: toy
 
@@ -808,11 +798,11 @@ op = trace.ops["relu_1_2"]
 print("grad", tuple(op.grad.shape))
 print("has_grad", op.has_grad)
 print("has_saved_grad", op.has_saved_grad)
-print("grad_shape", tuple(op.grad_shape))
-print("grad_dtype", op.grad_dtype)
+print("grad_shape", tuple(op.autograd.grad_shape))
+print("grad_dtype", op.autograd.grad_dtype)
 print("gradient_memory", op.gradient_memory)
 print("save_grads", op.save_grads)
-print("derived_grad", op.derived_grad)
+print("derived_grad", op.autograd.derived_grad)
 # Output:
 # grad (3, 8)
 # has_grad True
@@ -827,7 +817,7 @@ print("derived_grad", op.derived_grad)
 ### op-grads-per-backward
 Two backward passes give each op one gradient record per pass; `grad_for` picks one.
 
-- covers: `Op.grads`, `Op.grad_for`
+- covers: `Op.autograd.grads`, `Op.autograd.grad_for`
 - tasks: gradients, backward
 - fixture: toy
 
@@ -837,8 +827,8 @@ trace = tl.trace(model, x, capture=opts)
 trace.backward(trace.ops["output_1"].out.sum(), retain_graph=True)
 trace.backward(trace.ops["output_1"].out.sum() * 2)
 op = trace.ops["relu_1_2"]
-print("grads", len(op.grads))
-first, second = op.grad_for(bwd=1), op.grad_for(bwd=2)
+print("grads", len(op.autograd.grads))
+first, second = op.autograd.grad_for(bwd=1), op.autograd.grad_for(bwd=2)
 print("grad_for", tuple(first.shape), bool(torch.allclose(second, 2 * first)))
 # Output:
 # grads 2
@@ -848,7 +838,7 @@ print("grad_for", tuple(first.shape), bool(torch.allclose(second, 2 * first)))
 ### op-gradient-transform
 A gradient transform stores a changed copy of each saved gradient (per op).
 
-- covers: `Op.gradient_transform`, `Op.transformed_grad`, `Op.transformed_grad_shape`, `Op.transformed_grad_dtype`, `Op.transformed_gradient_memory`
+- covers: `Op.gradient_transform`, `Op.payload.transformed_grad`, `Op.payload.transformed_grad_shape`, `Op.payload.transformed_grad_dtype`, `Op.transformed_gradient_memory`
 - tasks: gradients, transform-activations
 - fixture: toy
 
@@ -858,9 +848,9 @@ trace = tl.trace(model, x, capture=opts)
 trace.backward(trace.ops["output_1"].out.sum())
 op = trace.ops["relu_1_2"]
 print("gradient_transform", callable(op.gradient_transform))
-print("transformed_grad", tuple(op.transformed_grad.shape))
-print("transformed_grad_shape", tuple(op.transformed_grad_shape))
-print("transformed_grad_dtype", op.transformed_grad_dtype)
+print("transformed_grad", tuple(op.payload.transformed_grad.shape))
+print("transformed_grad_shape", tuple(op.payload.transformed_grad_shape))
+print("transformed_grad_dtype", op.payload.transformed_grad_dtype)
 print("transformed_gradient_memory", op.transformed_gradient_memory)
 # Output:
 # gradient_transform True
@@ -873,7 +863,7 @@ print("transformed_gradient_memory", op.transformed_gradient_memory)
 ### op-lazy-grad
 A lazy load keeps saved gradients on disk until you ask for one.
 
-- covers: `Op.grad_ref`, `Op.materialize_grad`
+- covers: `Op.payload.materialize_grad`
 - tasks: save-load, lazy, gradients
 - fixture: toy
 
@@ -883,10 +873,8 @@ trace = tl.trace(model, x, capture=opts)
 trace.backward(trace.ops["output_1"].out.sum())
 trace.save("run.tlspec")
 op = tl.load("run.tlspec", lazy=True).ops["relu_1_2"]
-print("grad_ref", op.grad_ref is not None)
-print("materialize_grad", tuple(op.materialize_grad().shape))
+print("materialize_grad", tuple(op.payload.materialize_grad().shape))
 # Output:
-# grad_ref True
 # materialize_grad (3, 8)
 ```
 
@@ -895,23 +883,23 @@ print("materialize_grad", tuple(op.materialize_grad().shape))
 ### op-conditional-test
 The `h.sum() > 0` test of an `if` is a terminal bool op (per op).
 
-- covers: `Op.is_scalar_bool`, `Op.bool_value`, `Op.is_terminal_bool`, `Op.is_terminal_conditional_bool`, `Op.terminal_bool_for`, `Op.terminal_conditional_id`, `Op.conditional_context_kind`, `Op.conditional_wrapper_kind`, `Op.is_in_conditional_evaluation`
+- covers: `Op.control_flow.is_scalar_bool`, `Op.control_flow.bool_value`, `Op.control_flow.is_terminal_bool`, `Op.control_flow.is_terminal_conditional_bool`, `Op.control_flow.terminal_bool_for`, `Op.terminal_conditional_id`, `Op.control_flow.context_kind`, `Op.control_flow.wrapper_kind`, `Op.control_flow.is_in_conditional_evaluation`
 - tasks: conditionals, branch
 - fixture: branch
 
 ```python
 trace = tl.trace(model, x)
-op = next(trace.ops[l] for l in trace.op_labels if trace.ops[l].is_terminal_bool)
+op = next(trace.ops[l] for l in trace.op_labels if trace.ops[l].control_flow.is_terminal_bool)
 print("label", op.label)
-print("is_scalar_bool", op.is_scalar_bool)
-print("bool_value", op.bool_value)
-print("is_terminal_bool", op.is_terminal_bool)
-print("is_terminal_conditional_bool", op.is_terminal_conditional_bool)
-print("terminal_bool_for", op.terminal_bool_for)
+print("is_scalar_bool", op.control_flow.is_scalar_bool)
+print("bool_value", op.control_flow.bool_value)
+print("is_terminal_bool", op.control_flow.is_terminal_bool)
+print("is_terminal_conditional_bool", op.control_flow.is_terminal_conditional_bool)
+print("terminal_bool_for", op.control_flow.terminal_bool_for)
 print("terminal_conditional_id", op.terminal_conditional_id)
-print("conditional_context_kind", op.conditional_context_kind)
-print("conditional_wrapper_kind", op.conditional_wrapper_kind)
-print("is_in_conditional_evaluation", op.is_in_conditional_evaluation)
+print("conditional_context_kind", op.control_flow.context_kind)
+print("conditional_wrapper_kind", op.control_flow.wrapper_kind)
+print("is_in_conditional_evaluation", op.control_flow.is_in_conditional_evaluation)
 # Output:
 # label gt_1_3:1
 # is_scalar_bool True
@@ -928,7 +916,7 @@ print("is_in_conditional_evaluation", op.is_in_conditional_evaluation)
 ### op-conditional-body
 Ops in the `if` test or the taken arm carry their conditional roles and branch stack (per op).
 
-- covers: `Op.is_in_conditional`, `Op.in_conditionals`, `Op.conditional_depth`, `Op.conditional_branch_depth`, `Op.conditional_branch_stack`
+- covers: `Op.control_flow.is_in_conditional`, `Op.control_flow.in_conditionals`, `Op.control_flow.depth`, `Op.control_flow.branch_depth`, `Op.control_flow.branch_stack`
 - tasks: conditionals, branch
 - fixture: branch
 
@@ -936,8 +924,8 @@ Ops in the `if` test or the taken arm carry their conditional roles and branch s
 trace = tl.trace(model, x)
 for label in trace.op_labels:
     op = trace.ops[label]
-    print(label, op.is_in_conditional, op.in_conditionals,
-          op.conditional_depth, op.conditional_branch_depth, op.conditional_branch_stack)
+    print(label, op.control_flow.is_in_conditional, op.control_flow.in_conditionals,
+          op.control_flow.depth, op.control_flow.branch_depth, op.control_flow.branch_stack)
 # Output:
 # input_1:1 False () 0 0 ()
 # linear_1_1:1 False () 0 0 ()
@@ -950,18 +938,18 @@ for label in trace.op_labels:
 ### op-conditional-children
 The op before an `if` lists which of its children sit in which arm (per op).
 
-- covers: `Op.conditional_arm_children`, `Op.conditional_then_children`, `Op.conditional_else_children`, `Op.conditional_elif_children`, `Op.conditional_entry_children`
+- covers: `Op.control_flow.arm_children`, `Op.control_flow.then_children`, `Op.control_flow.else_children`, `Op.control_flow.elif_children`, `Op.control_flow.entry_children`
 - tasks: conditionals, branch
 - fixture: branch
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["linear_1_1"]
-print("conditional_arm_children", op.conditional_arm_children)
-print("conditional_then_children", op.conditional_then_children)
-print("conditional_else_children", op.conditional_else_children)
-print("conditional_elif_children", op.conditional_elif_children)
-print("conditional_entry_children", op.conditional_entry_children)
+print("conditional_arm_children", op.control_flow.arm_children)
+print("conditional_then_children", op.control_flow.then_children)
+print("conditional_else_children", op.control_flow.else_children)
+print("conditional_elif_children", op.control_flow.elif_children)
+print("conditional_entry_children", op.control_flow.entry_children)
 # Output:
 # conditional_arm_children {0: {'then': ['relu_1_4']}}
 # conditional_then_children ('relu_1_4',)
@@ -975,7 +963,7 @@ print("conditional_entry_children", op.conditional_entry_children)
 ### op-buffer-writes
 A training-mode batch norm writes its running stats: each write is a buffer op.
 
-- covers: `Op.is_buffer`, `Op.is_buffer_source`, `Op.buffer_pass`, `Op.buffer_write_kind`, `Op.buffer_source`, `Op.buffer_value_changed`, `Op.buffer_replay_validated`, `Op.buffer_source_func_name`
+- covers: `Op.graph.is_buffer`, `Op.is_buffer_source`, `Op.buffer_pass`, `Op.buffer_write_kind`, `Op.graph.buffer_source`, `Op.buffer_value_changed`, `Op.buffer_replay_validated`, `Op.graph.buffer_source_func_name`
 - tasks: buffers
 - fixture: none
 
@@ -984,10 +972,10 @@ torch.manual_seed(0)
 trace = tl.trace(torch.nn.BatchNorm1d(4), torch.randn(8, 4))
 for label in trace.op_labels:
     op = trace.ops[label]
-    if op.is_buffer:
-        print(label, op.address, op.is_buffer_source, op.buffer_pass, op.buffer_write_kind,
-              op.buffer_source, op.buffer_value_changed, op.buffer_replay_validated,
-              op.buffer_source_func_name)
+    if op.graph.is_buffer:
+        print(label, op.buffer_address, op.is_buffer_source, op.buffer_pass, op.buffer_write_kind,
+              op.graph.buffer_source, op.buffer_value_changed, op.buffer_replay_validated,
+              op.graph.buffer_source_func_name)
 # Output:
 # buffer_1:1 num_batches_tracked True 1 None None None None None
 # buffer_2:1 num_batches_tracked True 2 inplace add_1_1 True None add_
@@ -1000,7 +988,7 @@ for label in trace.op_labels:
 ### op-buffer-links
 Walk from a buffer write to the op that produced it, and from an op to the writes it feeds.
 
-- covers: `Op.buffer_source_ops`, `Op.buffer_sink_ops`
+- covers: `Op.graph.buffer_source_ops`, `Op.graph.buffer_sink_ops`
 - tasks: buffers, navigate
 - fixture: none
 
@@ -1009,7 +997,7 @@ torch.manual_seed(0)
 trace = tl.trace(torch.nn.BatchNorm1d(4), torch.randn(8, 4))
 for label in trace.op_labels:
     op = trace.ops[label]
-    sources, sinks = list(op.buffer_source_ops), list(op.buffer_sink_ops)
+    sources, sinks = list(op.graph.buffer_source_ops), list(op.graph.buffer_sink_ops)
     if sources or sinks:
         print(label, [o.label for o in sources], [o.label for o in sinks])
 # Output:
@@ -1022,7 +1010,7 @@ for label in trace.op_labels:
 ### op-transform-boundary
 `torch.func.vmap` shows up as one boundary op that names the function it mapped.
 
-- covers: `Op.is_transform`, `Op.transform_kind`, `Op.transform_chain`, `Op.transform_config`, `Op.transform_fn_name`, `Op.transform_fn_qualname`, `Op.transform_fn_source`
+- covers: `Op.call.is_func_transform`, `Op.call.func_transform_kind`, `Op.call.func_transform_chain`, `Op.call.func_transform_config`, `Op.call.func_transform_fn_name`, `Op.call.func_transform_fn_qualname`, `Op.call.func_transform_fn_source`
 - tasks: transforms, vmap
 - fixture: none
 
@@ -1033,14 +1021,14 @@ class Mapped(torch.nn.Module):
     def forward(self, x):
         return torch.func.vmap(double)(x)
 trace = tl.trace(Mapped(), torch.randn(3, 2))
-op = next(trace.ops[l] for l in trace.op_labels if trace.ops[l].is_transform)
+op = next(trace.ops[l] for l in trace.op_labels if trace.ops[l].call.is_func_transform)
 print("label", op.label)
-print("transform_kind", op.transform_kind)
-print("transform_chain", op.transform_chain)
-print("transform_config", {k: op.transform_config[k] for k in ("in_dims", "out_dims")})
-print("transform_fn_name", op.transform_fn_name)
-print("transform_fn_qualname", op.transform_fn_qualname)
-print("transform_fn_source", op.transform_fn_source.func_name)
+print("transform_kind", op.call.func_transform_kind)
+print("transform_chain", op.call.func_transform_chain)
+print("transform_config", {k: op.call.func_transform_config[k] for k in ("in_dims", "out_dims")})
+print("transform_fn_name", op.call.func_transform_fn_name)
+print("transform_fn_qualname", op.call.func_transform_fn_qualname)
+print("transform_fn_source", op.call.func_transform_fn_source.func_name)
 # Output:
 # label vmap_1_1:1
 # transform_kind vmap
@@ -1077,14 +1065,14 @@ print("zeroed", float(op.out.abs().sum()))
 ### op-injection-provenance
 Ordinary model ops carry no injection record; only intervention-made ops do.
 
-- covers: `Op.injection_provenance`, `Op.episode_step`
+- covers: `Op.call.injection_provenance`, `Op.episode_step`
 - tasks: intervene, provenance
 - fixture: toy
 
 ```python
 trace = tl.trace(model, x)
 op = trace.ops["relu_1_2"]
-print("injection_provenance", op.injection_provenance)
+print("injection_provenance", op.call.injection_provenance)
 print("episode_step", op.episode_step)
 # Output:
 # injection_provenance None

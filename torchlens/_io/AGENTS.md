@@ -24,7 +24,8 @@ hostile input, and every load path here is fail-closed.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
 - `format_contract.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
-  module path only torchlens 2.x wrote, with `ArtifactTooOldError`.
+  module path only torchlens 2.x wrote, with `ArtifactTooOldError`; that includes any path at or
+  below a public package's submodule 3.0 made private (the old types module of `tl.intervention`).
 - No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
   torch's default tensor reduction) is refused by name. Plain metadata tensors (annotation
   values, small raw inputs/outputs) are written by `_canonical_pickle.py` through the
@@ -117,7 +118,7 @@ binding dependency. Runtime component attachment and family binding belong to
 
 Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; it reads the frozen wire version names from the `_runnable` vocabulary through one deferred import in `component_versions()`.
 
-Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/save.py` delegates decoding there.
+Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/_save.py` delegates decoding there.
 
 Lazy payload index derivation and BlobRef lookup live with `LazyActivationRef` in `lazy.py`. Resave and nested materialization derive the index from validated format 3 record cells, and resave uses the same codec/chunk writer as eager payloads.
 

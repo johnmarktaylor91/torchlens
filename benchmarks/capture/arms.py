@@ -26,6 +26,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from torchlens._utils._record_group_table import record_member
+
 CASES = (
     "single_module_output",
     "matched_retained",
@@ -378,7 +380,7 @@ class TLRecordArm(_TorchLensBase):
         cands = []
         for record in records:
             ctx = record.ctx
-            calls = tuple(getattr(ctx, "output_of_module_calls", ()) or ())
+            calls = tuple(record_member(ctx, "output_of_module_calls", ()) or ())
             if ctx.address == site or any(str(c).split(":")[0] == site for c in calls):
                 payload = (
                     record.ram_payload if record.ram_payload is not None else record.disk_payload

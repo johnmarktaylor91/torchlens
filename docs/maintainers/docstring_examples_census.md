@@ -10,7 +10,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _autoroute | 9 | 0 |
 | _capture | 7 | 0 |
 | _captured_run | 1 | 0 |
-| _data_classes | 27 | 0 |
+| _data_classes | 43 | 0 |
 | _debug_report | 1 | 0 |
 | _distributed | 9 | 0 |
 | _doctor_types | 2 | 0 |
@@ -46,7 +46,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _vocab | 2 | 0 |
 | agent | 10 | 0 |
 | appliances | 2 | 0 |
-| attribution | 45 | 0 |
+| attribution | 46 | 0 |
 | backends | 21 | 0 |
 | bridge | 53 | 0 |
 | bundle | 3 | 0 |
@@ -80,6 +80,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 10 | 0 |
 | viz | 11 | 0 |
-| **total** | **1062** | **0** |
+| **total** | **1079** | **0** |
 
-Public callable members of those classes (methods and properties): 1498.
+Public callable members of those classes (methods and properties): 1661.

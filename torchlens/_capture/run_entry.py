@@ -40,11 +40,11 @@ from .._utils.tensor_utils import SaveMode
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
+from ..intervention._predicates import InterventionPredicate
+from ..intervention._site_keys import armed_live_minter, predicate_needs_live_site_keys
 from ..intervention._zero_fire import capture_rule_fire_ledger
-from ..intervention.predicates import InterventionPredicate
-from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
-from ..recording.exceptions import PredicateError
-from ..recording.options import HaltPredicateFn, PredicateFn
+from ..recording._exceptions import PredicateError
+from ..recording._options import HaltPredicateFn, PredicateFn
 from ._run_setup import (
     _configure_predicate_options,
     _construct_trace,
@@ -534,7 +534,7 @@ def _finish_run_entry(
         # (fail-closed load validation in _io/_forgery_identity_facts.py).
         for output_label in trace.output_layers:
             for output_op in trace.ops.resolve_all(output_label):
-                output_op.tl_authored_root = True
+                output_op._internal_set("tl_authored_root", True)
     from .._snoop._entry import finish_echo
 
     finish_echo(echo_session, trace)

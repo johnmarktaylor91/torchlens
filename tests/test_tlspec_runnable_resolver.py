@@ -32,7 +32,7 @@ from torchlens._utils._runnable_alias_resolver import resolve_runnable_torch_ali
 from torchlens._utils._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES
 from torchlens._utils._torch_symbols import getattr_allowlisted
 from torchlens.errors import ReattachError
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 

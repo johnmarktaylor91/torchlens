@@ -22,7 +22,7 @@ import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.backends.torch import _aten_capture
-from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
+from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
 
 _VALUES = tl.options.CaptureOptions(aten_ops="values")
 _VALUES_REFERENCE = tl.options.CaptureOptions(aten_ops="values", save_mode="reference")
