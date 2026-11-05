@@ -339,7 +339,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # accessors; measured 4398.
     # 4450 -> 4300 (C-245 fixq2): the dispatch-mode and roll real-op probes moved
     # to _utils/_kernel_probes.py; measured 4277.
-    "torchlens/_utils/_torch_compat.py": 4300,
+    # 4300 -> 4277 (floor batch FB1a): the floor capability flags merged in and the
+    # causal-bias lookup probe body moved to _utils/_kernel_probes.py; measured 4277.
+    "torchlens/_utils/_torch_compat.py": 4277,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
