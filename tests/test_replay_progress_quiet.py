@@ -147,7 +147,7 @@ def test_a_short_delayed_loop_yields_everything_and_builds_nothing(
 ) -> None:
     """A loop that ends before its wait gives back every item and builds no bar."""
 
-    items = display.progress_bar(range(50), total=50, desc="x", delay=60.0)
+    items = display.delayed_progress_bar(range(50), total=50, desc="x", delay=60.0)
     assert list(items) == list(range(50))
     assert notebook_bars == []
 
@@ -158,7 +158,7 @@ def test_a_delayed_loop_past_its_wait_starts_the_bar_where_it_stands(
     """The bar starts at the items already done and is closed once the loop ends."""
 
     monkeypatch.setattr(display, "time", _FastClock())
-    items = display.progress_bar(range(50), total=50, desc="x", delay=5.0)
+    items = display.delayed_progress_bar(range(50), total=50, desc="x", delay=5.0)
     assert list(items) == list(range(50))
     assert len(notebook_bars) == 1
     bar = notebook_bars[0]
@@ -172,7 +172,7 @@ def test_a_delayed_loop_closes_its_bar_when_the_caller_stops_early(
     """A replay that raises mid-cone still closes the bar it started."""
 
     monkeypatch.setattr(display, "time", _FastClock())
-    items = display.progress_bar(range(50), total=50, desc="x", delay=5.0)
+    items = display.delayed_progress_bar(range(50), total=50, desc="x", delay=5.0)
     assert isinstance(items, Generator)
     assert [next(items) for _ in range(5)] == [0, 1, 2, 3, 4]
     items.close()

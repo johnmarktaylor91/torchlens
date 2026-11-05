@@ -452,7 +452,6 @@ def progress_bar(
     desc: str,
     enabled: bool = True,
     threshold: int = 10,
-    delay: float = 0.0,
 ) -> Iterable[_T]:
     """Wrap an iterable with an environment-appropriate progress bar.
 
@@ -468,24 +467,52 @@ def progress_bar(
         Whether the caller requested progress reporting.
     threshold:
         Minimum total count required before a progress bar is shown.
-    delay:
-        Seconds the loop must run before any bar is built. Zero builds the
-        bar up front; a positive delay leaves a loop that finishes sooner
-        without any bar object, terminal or notebook widget.
 
     Returns
     -------
     Iterable[_T]
-        Original iterable, a tqdm-wrapped iterable, or a generator that
-        starts a bar once ``delay`` has passed.
+        Original iterable or a tqdm-wrapped iterable.
     """
 
     if not enabled or total is None or total <= threshold:
         return iterable
-    if delay > 0:
-        return _delayed_progress(iterable, total=total, desc=desc, delay=delay)
     bar = _tqdm_bar(iterable, total=total, desc=desc)
     return iterable if bar is None else cast(Iterable[_T], bar)
+
+
+def delayed_progress_bar(
+    iterable: Iterable[_T],
+    *,
+    total: int,
+    desc: str,
+    delay: float,
+    threshold: int = 10,
+) -> Iterable[_T]:
+    """Wrap an iterable with a progress bar that appears only once the loop runs long.
+
+    Parameters
+    ----------
+    iterable:
+        Iterable to wrap.
+    total:
+        Total iteration count.
+    desc:
+        Progress-bar label.
+    delay:
+        Seconds the loop must run before any bar is built. A loop that ends
+        sooner builds no bar object at all: no terminal bar, no notebook widget.
+    threshold:
+        Minimum total count required before a progress bar is considered.
+
+    Returns
+    -------
+    Iterable[_T]
+        Original iterable, or a generator that starts a bar once ``delay`` has passed.
+    """
+
+    if total <= threshold:
+        return iterable
+    return _delayed_progress(iterable, total=total, desc=desc, delay=delay)
 
 
 def _tqdm_bar(
