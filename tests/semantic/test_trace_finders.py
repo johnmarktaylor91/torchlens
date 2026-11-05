@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
+from torchlens._data_classes.module import Module
 
 
 class DistilBertSdpaAttention(nn.Module):
@@ -105,16 +108,74 @@ def test_modules_with_facet_skips_reused_modules_without_the_facet() -> None:
     assert [module.address for module in log.attention_blocks()] == ["attn"]
 
 
-def test_modules_with_facet_refuses_a_shared_layer_that_declares_the_facet() -> None:
-    """A shared attention layer is refused by name, never silently dropped from the sweep."""
+def test_modules_with_facet_yields_a_shared_layer_whose_facets_refuse_at_read() -> None:
+    """A shared attention layer is yielded as its Module; its own facets refuse at read time."""
 
     log = trace_fn(_AlbertStyleModel(), torch.randn(2, 3, 8))
 
-    with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' has 2 calls") as info:
-        list(log.modules_with_facet("q"))
+    found = list(log.modules_with_facet("q"))
+    assert [module.address for module in found] == ["shared"]
+    assert [module.address for module in log.attention_blocks()] == ["shared"]
+    assert isinstance(found[0], Module)
+    with pytest.raises(tl.errors.InvalidArgumentError, match=r"'shared' has 2 calls") as info:
+        _ = found[0].facets
     assert info.value.fields["code"] == "module_call_ambiguous"
-    assert "trace.modules['shared'].calls[N].facets.q" in str(info.value)
+    assert "module.calls[N]" in str(info.value)
+    q_values = [call.facets.q.value for call in found[0].calls.values()]
+    assert len(q_values) == 2
+    assert not torch.equal(q_values[0], q_values[1])
     assert list(log.modules_with_facet("normalized")) == []
+
+
+def test_modules_with_facet_skips_a_shared_layer_whose_calls_lack_the_facet() -> None:
+    """A shared layer is yielded only when at least one of its calls has the facet now.
+
+    The capture saves nothing, so the recipe declares ``q`` but no call can read
+    it: the sweep keeps its available-now contract and yields nothing.
+    """
+
+    with pytest.warns(UserWarning, match="matched zero sites"):
+        log = trace_fn(_AlbertStyleModel(), torch.randn(2, 3, 8), save=tl.func("relu"))
+
+    shared = log.modules["shared"]
+    assert shared.num_calls == 2
+    assert not any(call.facets.has("q") for call in shared.calls.values())
+    assert list(log.modules_with_facet("q")) == []
+    assert list(log.attention_blocks()) == []
+
+
+def test_patching_sweep_refuses_a_shared_layer_before_any_patched_forward() -> None:
+    """A whole-module patching sweep refuses a shared layer once the baselines are traced."""
+
+    forwards: list[int] = []
+
+    class _CountingAlbert(_AlbertStyleModel):
+        """ALBERT-style model that records each forward."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Record the forward, then run the shared block twice."""
+
+            forwards.append(1)
+            return super().forward(x)
+
+    def metric(log: Any) -> torch.Tensor:
+        """Return the summed first output."""
+
+        return log[log.output_layers[0]].out.sum()
+
+    model = _CountingAlbert()
+    clean, corrupted = torch.randn(2, 3, 8), torch.randn(2, 3, 8)
+    trace_fn(model, clean)
+    per_trace = len(forwards)
+    forwards.clear()
+
+    with pytest.raises(tl.errors.InvalidArgumentError, match="'shared' has 2 calls") as info:
+        tl.facets.patching.activation_patch_attention_output(
+            model, clean, corrupted, metric, facet_name="q"
+        )
+    assert info.value.fields["code"] == "module_call_ambiguous"
+    assert "patching sweeps patch whole modules" in info.value.fields["remedy"]
+    assert len(forwards) == 2 * per_trace
 
 
 def test_module_call_facets_read_each_pass_of_a_shared_layer() -> None:

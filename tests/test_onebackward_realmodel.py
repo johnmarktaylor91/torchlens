@@ -18,6 +18,7 @@ import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens.attribution import onebackward as ob
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
@@ -202,6 +203,7 @@ def resnet_trace():
 class TestRealResNet18:
     """RG11-flavored rows: pretrained torchvision weights from the local cache."""
 
+    @requires_gradient_edge
     def test_empty_default_frozen_set_disclosed(self, resnet_trace: tl.Trace) -> None:
         """Memo test 16: no transformer MLPs -> empty set, disclosed, no warning."""
 
@@ -215,6 +217,7 @@ class TestRealResNet18:
         assert table.provenance.frozen_resolved_count == 0
         assert any("empty set" in note for note in table.provenance.warnings)
 
+    @requires_gradient_edge
     def test_viscnn_abs_of_sum_oracle(self, resnet_trace: tl.Trace) -> None:
         """Memo test 16: abs-of-sum equals a hand-rolled Taylor importance.
 
@@ -243,6 +246,7 @@ class TestRealResNet18:
         manual = float((payload * grad_table[site].value).sum().abs())
         assert table[site].score == pytest.approx(manual, rel=1e-6)
 
+    @requires_gradient_edge
     def test_grad_only_read_retains_nothing(self, resnet_trace: tl.Trace) -> None:
         """D14 headline at real scale: gradient reads carry no payload bytes."""
 

@@ -397,7 +397,7 @@ Append mode is for memory-constrained evaluation over compatible chunks:
 
 ```text
 trace.run(model, first_chunk)
-trace.run(model, next_chunk, replay=tl.options.ReplayOptions(append=True))
+trace.append(next_chunk, model=model)
 ```
 
 The appended run must match the original graph shape, labels, dtypes, and non-batch dimensions.

@@ -58,7 +58,7 @@ from ._deltas import (
     _tensor_field as _tensor_field,
 )
 from ._draw import bundle_show as _bundle_show, forward_bundle_draw as _forward_bundle_draw
-from ._labels import AmbiguousLabelError, label_view
+from ._labels import label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
 from ._members import coerce_member_name, parse_members
@@ -1406,4 +1406,4 @@ class Bundle:
         return _comparisons.weak_model(log)
 
 
-__all__ = ["AmbiguousLabelError", "SuperAtenOp", "SuperOp"]
+__all__ = ["SuperAtenOp", "SuperOp"]

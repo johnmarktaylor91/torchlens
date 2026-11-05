@@ -8,7 +8,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import AppendStateValidationWarning
-from torchlens.options import CaptureOptions, ReplayOptions
+from torchlens.options import CaptureOptions
 from torchlens.validation import validate_backward_pass
 
 
@@ -47,7 +47,7 @@ def test_validate_backward_on_stacked_trace_warns() -> None:
         torch.randn(1, 3),
         capture=CaptureOptions(replayable=True),
     )
-    trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    trace.append(torch.randn(1, 3), model=model)
 
     with pytest.warns(AppendStateValidationWarning, match="stacked appended trace"):
         assert validate_backward_pass(trace, torch.randn(1, 3)) is False

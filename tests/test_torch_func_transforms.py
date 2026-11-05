@@ -11,6 +11,7 @@ from _stale_holders import OpaqueCallable
 
 import torchlens as tl
 from torchlens import Recording, _state
+from torchlens._utils import _torch_compat as tc
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
@@ -788,6 +789,32 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
 def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> None:
     """Replay validation fails when raw transform escape leaves no output boundary."""
 
+    x = torch.randn(3, 4)
+
+    with pytest.warns(UserWarning, match="functorch"):
+        assert not validate_forward_pass(
+            RawPreBuiltTransformModel().eval(),
+            x,
+            validate_metadata=False,
+        )
+
+
+@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
+def test_raw_transform_escape_is_detected_without_the_level_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw transform is detected when ``maybe_current_level`` is absent (torch 2.1, 2.2).
+
+    The interpreter-stack probe stands in for the level API. Without it TorchLens
+    could not tell it ran inside the transform, logged ops on its BatchedTensors and
+    crashed reading their storage instead of reporting the escape.
+    """
+
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_FUNCTORCH_LEVEL_API", ("torch:_C._functorch.absent_level_api",)
+    )
+    monkeypatch.setattr(tc, "HAS_FUNCTORCH_LEVEL_API", tc.HAS_FUNCTORCH_LEVEL_API)
+    monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
     x = torch.randn(3, 4)
 
     with pytest.warns(UserWarning, match="functorch"):

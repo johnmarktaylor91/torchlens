@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens.attribution import onebackward as ob
 
 transformers = pytest.importorskip("transformers")
@@ -47,6 +48,7 @@ def _output_seed(trace: tl.Trace) -> ob.SeedTarget:
 class TestFacetBridge:
     """Item 3b: the semantic-evidence-only resolver."""
 
+    @requires_gradient_edge
     def test_resolves_exactly_the_mlp_output_homes(self, gpt2_trace: tl.Trace) -> None:
         """Both blocks' GPT2MLP output homes resolve; nothing else does."""
 
@@ -57,6 +59,7 @@ class TestFacetBridge:
         assert resolution.attention_bearing
         assert len(resolution.sites) == 2, sorted(resolution.sites)
 
+    @requires_gradient_edge
     def test_substring_guard_pin(self, gpt2_trace: tl.Trace) -> None:
         """A path-substring filter over-selects vs the semantic bridge.
 
@@ -80,6 +83,7 @@ class TestFacetBridge:
             "semantic bridge is still the only resolver"
         )
 
+    @requires_gradient_edge
     def test_underivable_refusal_on_attention_without_mlp_facets(
         self, gpt2_trace: tl.Trace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -109,6 +113,7 @@ class TestFacetBridge:
         assert excinfo.value.fields["code"] == "default_frozen_sites_underivable"
         assert excinfo.value.fields["remedy"]
 
+    @requires_gradient_edge
     def test_unknown_policy_refuses(self, gpt2_trace: tl.Trace) -> None:
         """No 'attribution_graph' preset name exists until R10 lands."""
 
@@ -123,6 +128,7 @@ class TestFacetBridge:
 class TestFrozenSemantics:
     """Item 3: the three-state contract and hook lifecycle."""
 
+    @requires_gradient_edge
     def test_default_differs_from_total_derivative_upstream(self, gpt2_trace: tl.Trace) -> None:
         """Memo test 11 at config scale: the two policies differ upstream.
 
@@ -148,6 +154,7 @@ class TestFrozenSemantics:
         )
         assert frozen_row.policy_digest != none_row.policy_digest
 
+    @requires_gradient_edge
     def test_hook_removal_restores_bitexact(self, gpt2_trace: tl.Trace) -> None:
         """A frozen read then a frozen=None read: the latter is unpolluted."""
 
@@ -164,6 +171,7 @@ class TestFrozenSemantics:
                     "freeze hooks leaked into a later unfrozen read"
                 )
 
+    @requires_gradient_edge
     def test_frozen_applied_is_cone_dependent(self, gpt2_trace: tl.Trace) -> None:
         """fired <= resolved and non-empty on cone-pruned targets (D6)."""
 
@@ -178,6 +186,7 @@ class TestFrozenSemantics:
         assert frozen_rows
         assert all(row.frozen_reached is not None for row in frozen_rows)
 
+    @requires_gradient_edge
     def test_explicit_frozen_replaces_default(self, gpt2_trace: tl.Trace) -> None:
         """An explicit set replaces (never unions with) the default."""
 
@@ -193,6 +202,7 @@ class TestFrozenSemantics:
         assert table.provenance.frozen_policy == "explicit"
         assert table.provenance.frozen_requested_count == 1
 
+    @requires_gradient_edge
     def test_alias_group_freeze_disclosure(self) -> None:
         """Freezing one alias member discloses its siblings (D11)."""
 
@@ -212,6 +222,7 @@ class TestFrozenSemantics:
 class TestDisclosureBranches:
     """FORK-1: both branches behind the one constant, both green (test 13)."""
 
+    @requires_gradient_edge
     def test_branch_w_warns_once_per_process(self, gpt2_trace: tl.Trace) -> None:
         """The shipped branch: one warning, then silence; never with explicit."""
 
@@ -231,6 +242,7 @@ class TestDisclosureBranches:
         codes = [getattr(warning.message, "fields", {}).get("code") for warning in second]
         assert "read_frozen_default_linearization" not in codes
 
+    @requires_gradient_edge
     def test_branch_r_refuses_until_chosen(
         self, gpt2_trace: tl.Trace, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -247,6 +259,7 @@ class TestDisclosureBranches:
         table = ob.read(gpt2_trace, target=target, method="grad", reduce="sum", frozen=None)
         assert table.status_counts().get("ok", 0) > 0
 
+    @requires_gradient_edge
     def test_detector_never_fires_on_attention_free_models(self) -> None:
         """ResNet-style graphs: empty default set, disclosed, no warning."""
 

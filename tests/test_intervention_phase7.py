@@ -14,7 +14,6 @@ from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
-from torchlens.intervention.rerun import run
 from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
@@ -409,13 +408,13 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
-def test_rerun_append_true_dispatches_to_append() -> None:
-    """Phase 12 implements append rerun through the function API."""
+def test_trace_append_dispatches_to_append() -> None:
+    """Phase 12 implements append rerun through ``Trace.append``."""
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
 
-    run(log, ReluAdd(), x, replay=tl.options.ReplayOptions(append=True))
+    log.append(x, model=ReluAdd())
 
     assert log.state is TraceState.APPENDED
 

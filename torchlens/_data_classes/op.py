@@ -94,7 +94,7 @@ from ..intervention.types import (
     EdgeUseRecord,
     FunctionRegistryKey,
 )
-from . import _doors, _labels, _op_cost, _op_relations, _op_save
+from . import _doors, _familiar_names, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
@@ -974,23 +974,23 @@ class GradientRecordAccessor(Accessor[GradientRecord]):
 
         super().__init__({str(record.ordinal): record for record in records}, item_list=records)
 
-    def for_pass(self, pass_index: int) -> GradientRecord:
+    def for_pass(self, pass_number: int) -> GradientRecord:
         """Return the gradient record for a one-based backward pass number."""
 
-        matches = [record for record in self._list if record.backward_pass_number == pass_index]
+        matches = [record for record in self._list if record.backward_pass_number == pass_number]
         if len(matches) == 1:
             return matches[0]
         if matches:
             raise InvalidArgumentError(
-                f"Multiple gradient records participated in pass {pass_index}; "
+                f"Multiple gradient records participated in pass {pass_number}; "
                 "use positional indexing on .grads",
                 code="gradient_pass_ambiguous",
                 remedy="use positional indexing on .grads to pick one record",
-                pass_index=pass_index,
+                pass_number=pass_number,
             )
         available = [record.backward_pass_number for record in self._list]
         raise KeyError(
-            f"Gradient record for backward pass {pass_index} not found; participated in "
+            f"Gradient record for backward pass {pass_number} not found; participated in "
             f"passes {available}."
         )
 
@@ -1665,7 +1665,7 @@ class Op(OpAtenMixin, _SelectionOperand):
             if not name.startswith("_"):
                 refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
                 _refuse_read_without_trace(self, member=name)
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            raise _familiar_names.missing_attribute_error(type(self).__name__, name)
 
     def __setattr__(
         self,

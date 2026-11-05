@@ -39,10 +39,6 @@ class AmbiguousLabelError(KeyError):
     """
 
 
-# Defined here so this leaf never imports the package at call time (layering:
-# the import kept ``_labels`` inside the big cycle); pickles and the error
-# registry keep the facade home.
-AmbiguousLabelError.__module__ = "torchlens.bundle"
 BUNDLE_ACCESSOR_NAMES = (
     "ops",
     "layers",
