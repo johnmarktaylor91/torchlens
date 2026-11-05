@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._edit_change import CHANGED_NODE_CLASS
+from ._encoding_key import RampKey, color_key, ramp_row_html, size_key_line, stack_key_line
 from ._render_utils import html_escape
 
 if TYPE_CHECKING:
@@ -208,7 +209,6 @@ def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
     channel, nothing else.
     """
 
-    from ._encoding_key import RampKey, color_key, size_key_line, stack_key_line
     from .overlays import legend_domain_text
 
     rows: list[LegendRow] = []
@@ -326,7 +326,6 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
 def _ramp_row(row: LegendRow, theme: VisualizationTheme) -> str:
     """Return the key's colour-bar row, measured in the skin's key face."""
 
-    from ._encoding_key import ramp_row_html
     from ._header_block import _text_width
 
     size = theme.typography.secondary_size
