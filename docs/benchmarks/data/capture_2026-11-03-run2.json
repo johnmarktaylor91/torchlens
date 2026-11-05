@@ -1159,7 +1159,7 @@
   },
   {
    "section": "gpt2",
-   "text": "| GPT-2 small, CPU, second run, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.trace` (full trace) | 99.88 s (93.72 to 106.37 s) |"
+   "text": "| GPT-2 small, CPU, second run, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.trace(..., save=...)` (full graph, selected outputs saved) | 99.88 s (93.72 to 106.37 s) |"
   },
   {
    "section": "gpt2",
@@ -1179,7 +1179,7 @@
   },
   {
    "section": "gpt2",
-   "text": "| GPT-2 small, CPU, second run, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.trace` (full trace) | 49.97 s (49.80 to 59.79 s) |"
+   "text": "| GPT-2 small, CPU, second run, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.trace(..., save=...)` (full graph, selected outputs saved) | 49.97 s (49.80 to 59.79 s) |"
   },
   {
    "section": "gpt2",
@@ -1199,7 +1199,7 @@
   },
   {
    "section": "gpt2",
-   "text": "| GPT-2 small, CPU, second run, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.trace` (full trace) | 143.45 s (116.07 to 165.04 s) |"
+   "text": "| GPT-2 small, CPU, second run, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.trace(..., save=...)` (full graph, selected outputs saved) | 143.45 s (116.07 to 165.04 s) |"
   },
   {
    "section": "resnet18_cpu",
@@ -1263,7 +1263,7 @@
   },
   {
    "section": "resnet18_cpu",
-   "text": "| ResNet-18, CPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 5.26 s (4.58 s to 5.57 s) |"
+   "text": "| ResNet-18, CPU, eight steering strengths, n=3 processes | `tl.trace(..., intervene=...)` per strength | 5.26 s (4.58 s to 5.57 s) |"
   },
   {
    "section": "resnet18_cpu",
@@ -1303,7 +1303,7 @@
   },
   {
    "section": "resnet18_cpu",
-   "text": "| ResNet-18, CPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 22.11 ms (15.41 ms to 22.90 ms) |"
+   "text": "| ResNet-18, CPU, full forward, n=3 processes | plain forward after a trace (torch wrappers still installed, nothing recorded) | 22.11 ms (15.41 ms to 22.90 ms) |"
   },
   {
    "section": "resnet18_cpu",

@@ -1041,7 +1041,7 @@
   },
   {
    "section": "resnet18_gpu",
-   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 3.61 s (3.59 s to 4.20 s) |"
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | `tl.trace(..., intervene=...)` per strength | 3.61 s (3.59 s to 4.20 s) |"
   },
   {
    "section": "resnet18_gpu",
@@ -1081,7 +1081,7 @@
   },
   {
    "section": "resnet18_gpu",
-   "text": "| ResNet-18, GPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 2.39 ms (2.36 ms to 3.11 ms) |"
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | plain forward after a trace (torch wrappers still installed, nothing recorded) | 2.39 ms (2.36 ms to 3.11 ms) |"
   },
   {
    "section": "resnet18_gpu",
