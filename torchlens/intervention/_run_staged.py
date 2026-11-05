@@ -22,20 +22,20 @@ from .._fast_live_steer import hooked_run_diagnostic, stages_user_entries
 from .._trace_state import TraceState
 from .._utils.hashing import compute_graph_shape_hash
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._rerun import (
+    _assign_unique_plan_ids,
+    _reconcile_rerun_hook_fires,
+    _refuse_shifted_raw_index_resave,
+    _share_source_state_clones,
+)
 from ._rerun_predicate import (
     RerunSpecPlan,
     plan_rerun_spec,
     settle_predicate_rerun,
     translate_staged_final_labels,
 )
+from ._runtime import active_intervention_context
 from .hooks import normalize_hooks_from_spec
-from .rerun import (
-    _assign_unique_plan_ids,
-    _reconcile_rerun_hook_fires,
-    _refuse_shifted_raw_index_resave,
-    _share_source_state_clones,
-)
-from .runtime import active_intervention_context
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

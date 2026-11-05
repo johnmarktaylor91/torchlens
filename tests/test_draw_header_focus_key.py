@@ -245,7 +245,9 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert noun == "ops"
     assert int(count.replace(",", "")) == len(sized)
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
-    assert size == decimal_size(sum(int(trace.ops[label].activation_memory) for label in labels))
+    assert size == decimal_size(
+        sum(int(trace.ops[label].cost.activation_memory) for label in labels)
+    )
     assert f"{compact_count(trace.num_params, full_below=1000)} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
@@ -280,7 +282,7 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         # and sizes the input and output nodes it draws.
         boundary = [loop.ops[label] for label in (*loop.input_layers, *loop.output_layers)]
         assert len(loop.ops) + len(boundary) == 11
-        total = sum(int(op.activation_memory) for op in (*loop.ops.values(), *boundary))
+        total = sum(int(op.cost.activation_memory) for op in (*loop.ops.values(), *boundary))
         assert decimal_size(total) == "149 B"
     finally:
         loop.cleanup()
@@ -376,7 +378,7 @@ def test_focus_count_skips_the_boundary_stubs(
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
-        expected = sum(int(trace.ops[label].activation_memory) for label in labels)
+        expected = sum(int(trace.ops[label].cost.activation_memory) for label in labels)
         assert f"<br align='left'/>{count} ops ({decimal_size(expected)})<br" in header
 
 

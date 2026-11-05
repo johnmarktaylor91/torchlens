@@ -20,11 +20,11 @@ import torchlens as tl
 from torchlens._capture.outcome import CaptureOutcomeError
 from torchlens._io import ArtifactError
 from torchlens.errors import TraceCaptureError
+from torchlens.intervention._save import SaveLevel, load_intervention_spec, save_intervention
 from torchlens.intervention._spec_codec import _deserialize_fire_record, _serialize_fire_record
 from torchlens.intervention._spec_values import _SerializedState
+from torchlens.intervention._types import FireRecord
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.save import SaveLevel, load_intervention_spec, save_intervention
-from torchlens.intervention.types import FireRecord
 
 
 def _spec_dir(tmp_path):
@@ -67,7 +67,7 @@ def test_fire_record_edge_address_malformed_refuses():
 # --- settled-outcome gate on the spec door ------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_save.py, campaign mutant kills.
 def test_save_intervention_refuses_failed_capture(tmp_path):
     class Boom(nn.Module):
         def __init__(self) -> None:

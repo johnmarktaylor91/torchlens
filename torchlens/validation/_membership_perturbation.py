@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -52,7 +54,7 @@ def isin_membership_toggle_values(
     """
 
     slot = _isin_slot_of(layer, parent_label)
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
+    kwargs = dict(record_member(layer, "saved_kwargs", None) or {})
     if slot is None or kwargs.get("assume_unique"):
         return None
     other = _isin_operand(layer, kwargs, 1 - slot)
@@ -69,7 +71,7 @@ def isin_membership_toggle_values(
 def _isin_slot_of(layer: Op, parent_label: str) -> int | None:
     """Return 0 for the ``elements`` operand, 1 for ``test_elements``, else None."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     for position in (0, 1):
         if positions.get("args", {}).get(position) == parent_label:
             return position
@@ -81,7 +83,7 @@ def _isin_slot_of(layer: Op, parent_label: str) -> int | None:
 def _isin_operand(layer: Op, kwargs: dict[str, Any], slot: int) -> torch.Tensor | None:
     """Return the saved operand in ``slot`` as a tensor (a Python scalar is wrapped)."""
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
+    args = tuple(record_member(layer, "saved_args", None) or ())
     value = args[slot] if slot < len(args) else kwargs.get(_SLOT_NAMES[slot])
     if isinstance(value, torch.Tensor):
         return value.detach()

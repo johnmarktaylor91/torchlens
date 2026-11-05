@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 
 def _op_metadata(trace: Any) -> dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int, Any]]:
     """Index each stored operation by its canonical label and occurrence."""
@@ -17,7 +19,7 @@ def _op_metadata(trace: Any) -> dict[tuple[str, int], tuple[int, tuple[str, ...]
         shape = getattr(op, "shape", None)
         entries[(label, occurrence)] = (
             index,
-            tuple(getattr(op, "module_call_stack", ()) or ()),
+            tuple(record_member(op, "module_call_stack", ()) or ()),
             None if shape is None else tuple(int(dim) for dim in shape),
             int(getattr(op, "pass_number", occurrence + 1) or (occurrence + 1)),
             op,

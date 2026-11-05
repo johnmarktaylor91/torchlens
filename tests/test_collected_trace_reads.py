@@ -38,9 +38,9 @@ class _ConvNet(nn.Module):
 
 _OP_READS = (
     "out",
-    "bytes_read",
-    "bytes_written",
-    "atomic_module",
+    "cost.bytes_read",
+    "cost.bytes_written",
+    "module_context.atomic_module",
     "input_ops",
     "layer",
     "containers",
@@ -48,6 +48,21 @@ _OP_READS = (
     "receptive_field",
 )
 _LAYER_READS = ("out", "parents", "children", "receptive_field")
+
+
+def _read(view: Any, path: str) -> Any:
+    """Read a dotted member path (``cost.bytes_read``) off ``view``."""
+
+    value = view
+    for part in path.split("."):
+        value = getattr(value, part)
+    return value
+
+
+def _read_id(path: str) -> str:
+    """Test id of a read: its leaf member name."""
+
+    return path.rsplit(".", 1)[-1]
 
 
 def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
@@ -58,13 +73,13 @@ def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
 def _assert_value_or_typed_refusal(view: Any, name: str, trace_ref: weakref.ref) -> None:
     """Read ``view.<name>``: a value (never None), or the typed refusal once the Trace is gone.
 
-    A read the view can still answer from its own record (``bytes_written`` from
+    A read the view can still answer from its own record (``cost.bytes_written`` from
     the Op's shape and dtype) may answer after the Trace is gone; one that needs
     the Trace refuses. Neither may answer ``None``.
     """
 
     try:
-        value = getattr(view, name)
+        value = _read(view, name)
     except RecordBindingError as exc:
         assert trace_ref() is None, f"{name} refused while its Trace is alive"
         assert exc.fields["code"] == "trace_reference_collected", name
@@ -112,7 +127,7 @@ def test_chained_receptive_field_is_a_view_or_refuses_typed() -> None:
         assert view.at((0, 0)) is not None
 
 
-@pytest.mark.parametrize("name", _OP_READS)
+@pytest.mark.parametrize("name", _OP_READS, ids=_read_id)
 def test_held_op_read_is_value_or_typed_refusal(name: str) -> None:
     """Each Op read answers its value or refuses typed once the Trace variable is gone."""
 
@@ -135,7 +150,7 @@ def test_live_trace_reads_are_values() -> None:
     trace = tl.trace(model, x)
     op = trace["conv2d_1_1"]
     for name in _OP_READS:
-        assert getattr(op, name) is not None, name
+        assert _read(op, name) is not None, name
     layer = trace.layers["conv2d_1_1"]
     for name in _LAYER_READS:
         assert getattr(layer, name) is not None, name

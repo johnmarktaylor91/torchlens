@@ -25,9 +25,10 @@ from example_models import MAMLInnerLoop
 from torch import nn
 
 import torchlens as tl
-import torchlens.validation.core as validation_core
+import torchlens.validation._core as validation_core
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation import last_validation_failure
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 _GLOBAL_OFFSET = torch.randn(3)
 
@@ -137,13 +138,15 @@ def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
     grad_ops = _grad_ops(trace)
     assert len(grad_ops) == 4
     for index, op in enumerate(grad_ops):
-        assert op.is_transform is True
-        assert op.transform_kind == "autograd.grad"
-        engine_flags = {k: v for k, v in op.transform_config.items() if not k.startswith("_tl")}
+        assert op.call.is_func_transform is True
+        assert op.call.func_transform_kind == "autograd.grad"
+        engine_flags = {
+            k: v for k, v in op.call.func_transform_config.items() if not k.startswith("_tl")
+        }
         assert engine_flags == {"create_graph": True}
         assert op.multi_output_index == index
         assert len(op.parents) == 1 and op.parents[0].startswith("mean")
-        assert not op.unattributed_tensor_args
+        assert not op.call.unattributed_tensor_args
     transform_labels = [op.label for op in trace.transforms]
     assert transform_labels == [op.label for op in grad_ops]
     selected = tl.trace(MAMLInnerLoop(), torch.rand(4, 8), save=tl.func_transform("autograd.grad"))
@@ -302,11 +305,12 @@ def test_grad_fns_of_a_backward_inside_forward_pair_with_their_captured_ops(
         recording_ops = [
             op
             for op in trace._layer_list
-            if op.grad_fn_object_id in grad_fns and getattr(op, "is_compute_op", False)
+            if record_member(op, "grad_fn_object_id", None) in grad_fns
+            and record_member(op, "is_compute_op", False)
         ]
         assert recording_ops
         for op in recording_ops:
-            grad_fn = grad_fns[op.grad_fn_object_id]
+            grad_fn = grad_fns[record_member(op, "grad_fn_object_id", None)]
             assert grad_fn.has_op, grad_fn.label
             assert grad_fn.op is not None and grad_fn.op_label == op.layer_label
         paired = [grad_fn for grad_fn in grad_fns.values() if grad_fn.has_op]
@@ -334,12 +338,15 @@ def test_second_order_inside_forward_keeps_the_orders_of_the_same_math_after_the
         grad_fns = list(trace.autograd.grad_fns)
         ops = list(trace.ops)
         first_grad, second_grad = [
-            index for index, op in enumerate(ops) if op.transform_kind == "autograd.grad"
+            index for index, op in enumerate(ops) if op.call.func_transform_kind == "autograd.grad"
         ]
         # ``penalty = (g ** 2).sum()`` runs between the two grads: ``__pow__`` then ``sum``.
         penalty_ops = {op.func_name.strip("_"): op for op in ops[first_grad + 1 : second_grad]}
         assert {"pow", "sum"} <= set(penalty_ops), sorted(penalty_ops)
-        penalty_ids = {penalty_ops["pow"].grad_fn_object_id, penalty_ops["sum"].grad_fn_object_id}
+        penalty_ids = {
+            record_member(penalty_ops["pow"], "grad_fn_object_id", None),
+            record_member(penalty_ops["sum"], "grad_fn_object_id", None),
+        }
         penalty_nodes = [g for g in grad_fns if g.grad_fn_object_id in penalty_ids]
         assert len(penalty_nodes) == 2 and all(g.has_op for g in penalty_nodes)
         assert {grad_fn.order for grad_fn in penalty_nodes} == {2}

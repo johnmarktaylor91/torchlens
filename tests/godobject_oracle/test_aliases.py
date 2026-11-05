@@ -98,8 +98,8 @@ def test_multi_output_siblings_share_call_facts_not_identity() -> None:
     assert len(split_ops) >= 2, "split did not produce sibling output ops"
     first, second = split_ops[0], split_ops[1]
     assert first is not second
-    assert first.func_call_id == second.func_call_id
-    assert first.args_template == second.args_template
+    assert first.call.call_id == second.call.call_id
+    assert first.call.args_template == second.call.args_template
     assert first.multi_output_index != second.multi_output_index
     assert first.layer_label != second.layer_label
 
@@ -190,25 +190,27 @@ def test_equivalence_group_shared_live_view() -> None:
     """
 
     trace = _capture_recurrent()
-    grouped = [op for op in trace.ops.values() if op.equivalent_ops]
+    grouped = [op for op in trace.ops.values() if op.graph.equivalent_ops]
     by_group: dict[frozenset, list] = {}
     for op in grouped:
-        by_group.setdefault(frozenset(op.equivalent_ops), []).append(op)
+        by_group.setdefault(frozenset(op.graph.equivalent_ops), []).append(op)
     multi = [members for members in by_group.values() if len(members) >= 2]
     assert multi, "no multi-member equivalence group captured"
     first, second = multi[0][0], multi[0][1]
-    assert first.equivalent_ops == second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops, "group members must share ONE cached view"
+    assert first.graph.equivalent_ops == second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops, (
+        "group members must share ONE cached view"
+    )
     with pytest.raises(AttributeError):
-        first.equivalent_ops.add("__aliases_v1_group__")
+        first.graph.equivalent_ops.add("__aliases_v1_group__")
 
     # LIVE through the sanctioned scrub path: filtering the group once is
     # observed by every member on its next read, sharing intact.
     from torchlens._data_classes.cleanup import _scrub_per_op_equivalence_lists
 
-    group_labels = sorted(first.equivalent_ops)
+    group_labels = sorted(first.graph.equivalent_ops)
     removed = group_labels[-1]
     _scrub_per_op_equivalence_lists(multi[0], {removed})
-    assert removed not in first.equivalent_ops
-    assert removed not in second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops
+    assert removed not in first.graph.equivalent_ops
+    assert removed not in second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops

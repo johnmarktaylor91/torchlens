@@ -152,7 +152,7 @@ def test_equal_allclose_control_flow_still_validates(model_cls: type[nn.Module])
 def _backstop_op(func_call_id: int) -> SimpleNamespace:
     """Build a minimal captured-op stand-in for the backstop census."""
 
-    return SimpleNamespace(func_call_id=func_call_id)
+    return SimpleNamespace(call=SimpleNamespace(call_id=func_call_id))
 
 
 def _backstop_dec(owner_func_call_id: int) -> dict[str, Any]:

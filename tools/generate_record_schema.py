@@ -234,6 +234,20 @@ def _is_property(cls: type, name: str) -> bool:
     return False
 
 
+def _storage_attr_for(cls: type, name: str) -> str:
+    """Return the attribute that holds persisted field ``name`` on ``cls``.
+
+    A member moved into an Op or Layer concern group keeps its persisted name
+    but lives under a private storage attribute, so the descriptor and pooling
+    checks read that attribute; the persisted binding stays unchanged.
+    """
+
+    from torchlens._utils._record_group_table import LAYER_STORAGE_ATTRS, OP_STORAGE_ATTRS
+
+    mapping = {"Op": OP_STORAGE_ATTRS, "Layer": LAYER_STORAGE_ATTRS}.get(cls.__name__, {})
+    return mapping.get(name, name)
+
+
 def _classify(
     schema_key: str,
     cls: type,
@@ -255,8 +269,9 @@ def _classify(
         return "BITSET", "mutable_container"
     if name in _GROUP_FIELDS:
         return "GROUP", "mutable_container"
+    attr = _storage_attr_for(cls, name)
     stored = name in _OVERLAY_EDGE_FIELDS or name in _STORED_BEHIND_PROPERTY_FIELDS
-    if _is_property(cls, name) and not stored:
+    if _is_property(cls, attr) and not stored:
         return "COMPUTED", "immutable"
     if policy.portable_policy is FieldPolicy.DROP:
         return "RUNTIME", "immutable"
@@ -268,7 +283,7 @@ def _classify(
         return "EDGE", "mutable_container" if is_container else "immutable"
     if is_container:
         return "SCALAR", "mutable_container"
-    if name in pooled_slots:
+    if attr in pooled_slots:
         return "INTERNED", "immutable"
     return "SCALAR", "immutable"
 

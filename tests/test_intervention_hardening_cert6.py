@@ -27,6 +27,7 @@ from torchlens.intervention._metrics import (
     cosine_distance,
     relative_l1,
 )
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
     _deserialize_value,
     _serialize_value,
@@ -34,7 +35,6 @@ from torchlens.intervention._spec_values import (
 )
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
-from torchlens.intervention.save import SaveLevel
 from torchlens.options import InterventionOptions
 
 

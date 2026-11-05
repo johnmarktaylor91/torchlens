@@ -130,7 +130,7 @@ def _plant(monkeypatch: pytest.MonkeyPatch, func_name: str, func: Callable[..., 
         for op in trace._layer_list:
             if op.func_name != func_name:
                 continue
-            replayed = planted(*op.saved_args, **dict(op.saved_kwargs or {}))
+            replayed = planted(*op.call.saved_args, **dict(op.call.saved_kwargs or {}))
             if isinstance(replayed, torch.Tensor) and torch.equal(replayed, op.out):
                 op.func = planted
                 planted_labels.append(op.label)

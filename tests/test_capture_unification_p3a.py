@@ -115,7 +115,7 @@ def test_sparse_shell_ops_skip_exhaustive_enrichment_work(
     monkeypatch.setattr(_ops_predicate_events, "_record_predicate_output", forbidden)
     # The saved-argument copy wrappers.py calls (imported at call time).
     monkeypatch.setattr(_ops_arguments, "_copy_saved_arg_tree", forbidden)
-    monkeypatch.setattr(wrappers, "log_current_rng_states", forbidden)
+    monkeypatch.setattr(wrappers, "log_op_rng_states", forbidden)
 
     with pytest.warns(UserWarning, match="matched zero sites"):
         recording = tl.record(PredicateToy(), torch.randn(2, 4), save=tl.func("never_matches"))

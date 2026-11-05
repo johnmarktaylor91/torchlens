@@ -65,7 +65,7 @@ COUNTED: dict[str, tuple[str, str]] = {
     "selector_eval_evaluate": ("torchlens/_ir/selector_eval.py", "evaluate"),
     "op_getattribute": ("torchlens/_data_classes/op.py", "__getattribute__"),
     "op_store_cell_get": ("torchlens/_trace_core/op_store.py", "cell_get"),
-    "replays": ("torchlens/intervention/replay.py", "_run_replay"),
+    "replays": ("torchlens/intervention/_replay.py", "_run_replay"),
     "graph_builds": ("torchlens/mechinterp/_edges.py", "component_graph"),
 }
 
@@ -179,11 +179,11 @@ def reference_gap(
 TIMED: dict[str, tuple[str, str]] = {
     "patch_edges": ("torchlens/mechinterp/_edge_patch.py", "patch_edges"),
     "resolve_sites": ("torchlens/_selection/resolver.py", "resolve_sites"),
-    "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
-    "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
-    "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
+    "origin_sites_for_hooks": ("torchlens/intervention/_replay.py", "_origin_sites_for_hooks"),
+    "hook_targets_by_label": ("torchlens/intervention/_replay.py", "_hook_targets_by_label"),
+    "group_for_site": ("torchlens/intervention/_replay.py", "_group_for_site"),
     "build_selection_do_plan": ("torchlens/_selection/selection.py", "build_selection_do_plan"),
-    "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
+    "run_replay": ("torchlens/intervention/_replay.py", "_run_replay"),
 }
 
 

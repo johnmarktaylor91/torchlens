@@ -19,10 +19,10 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from ._helpers import _helper_spec
+from ._types import Edit
 from .errors import HookValueError
-from .helpers import _helper_spec
 from .hooks import HookContext, normalize_hook
-from .types import Edit
 
 _NAMED = ("first", "last")
 

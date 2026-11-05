@@ -13,7 +13,7 @@ from ..._capture.predicates import _evaluate_keep_op, build_op_record_context
 from ..._capture.projections import append_projected_event
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._utils._tensor_label import get_tensor_label, set_tensor_label
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
 from . import _ops_predicates as _preds
 from ._ops_containers import _walk_output_tensors_with_paths
 
@@ -70,7 +70,7 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         whose parent is the op the edit replaced.
     """
 
-    from ...intervention.runtime import (
+    from ...intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
     )

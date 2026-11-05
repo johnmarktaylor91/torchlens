@@ -146,7 +146,7 @@ def test_node_plots_no_matplotlib() -> None:
 
     script = """
 import sys
-import torchlens.viz.node_plots
+import torchlens.viz._node_plots
 print('matplotlib' in sys.modules)
 """
     result = subprocess.run(
@@ -165,7 +165,7 @@ def test_scatter_displacement_is_disclosed_in_image() -> None:
     thumbnails away from their true coordinates, the image must say so.
     """
 
-    from torchlens.viz.node_plots import _MORE_OUTLINE
+    from torchlens.viz._node_plots import _MORE_OUTLINE
 
     thumbs = [Image.new("RGB", (24, 24), (200, 40, 40)) for _ in range(2)]
     coincident = np.asarray([[0.0, 0.0], [0.0, 0.0]], dtype=np.float64)

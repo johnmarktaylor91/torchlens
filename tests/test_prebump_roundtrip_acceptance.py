@@ -195,8 +195,8 @@ _OWNER_CLASSES: dict[str, str] = {
     "_AtenExecutionContext": "torchlens._ir.events",
     "KernelLaunch": "torchlens._kernel_telemetry",
     "_TelemetryPayload": "torchlens._kernel_telemetry",
-    "Edit": "torchlens.intervention.types",
-    "FireRecord": "torchlens.intervention.types",
+    "Edit": "torchlens.intervention._types",
+    "FireRecord": "torchlens.intervention._types",
 }
 
 
@@ -498,13 +498,13 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     fork = _edge_fork()
     child = fork.layers["conv2d_2_3"].ops[0]
     store_key = ("positional", (0,))
-    assert store_key in child.edge_substitutions
-    live_value = child.edge_substitutions[store_key]["value"]
+    assert store_key in child.graph.edge_substitutions
+    live_value = child.graph.edge_substitutions[store_key]["value"]
     live_stamps = child.edge_replacement_stamps
     live_edge_address = next(record.edge_address for record in child.edits if record.edge_address)
     loaded = _plain_roundtrip(fork, tmp_path, "edges")
     loaded_child = loaded.layers["conv2d_2_3"].ops[0]
-    assert torch.equal(loaded_child.edge_substitutions[store_key]["value"], live_value)
+    assert torch.equal(loaded_child.graph.edge_substitutions[store_key]["value"], live_value)
     assert _persisted_eq(loaded_child.edge_replacement_stamps, live_stamps)
     assert (
         next(record.edge_address for record in loaded_child.edits if record.edge_address)
@@ -512,7 +512,7 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     )
     gen2 = _second_generation(loaded, tmp_path, "edges")
     gen2_child = gen2.layers["conv2d_2_3"].ops[0]
-    assert torch.equal(gen2_child.edge_substitutions[store_key]["value"], live_value)
+    assert torch.equal(gen2_child.graph.edge_substitutions[store_key]["value"], live_value)
 
 
 def test_l9_checkpoint_witness_family_roundtrip(tmp_path) -> None:
@@ -854,7 +854,7 @@ def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
     trace.save(str(path))
     loaded = tl.load(str(path))
     assert loaded.tlspec_version == 12
-    assert [op.site_key for op in loaded.ops] == [op.site_key for op in trace.ops]
+    assert [op.graph.site_key for op in loaded.ops] == [op.graph.site_key for op in trace.ops]
 
 
 def test_newer_than_runtime_version_refuses_typed() -> None:

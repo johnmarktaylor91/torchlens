@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.injection import InjectedOp, InjectionProvenance
+from torchlens.intervention._injection import InjectedOp, InjectionProvenance
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -101,7 +101,7 @@ def test_injection_anchored_provenance_c07_grammar(chain) -> None:
         "spec_rule_id",
     ]
     host = logged.layers["relu_1_2"].ops[0]
-    assert prov.host_site_key == host.site_key
+    assert prov.host_site_key == host.graph.site_key
     assert prov.spec_rule_id == spec.rules[0].rule_id  # PERSISTED rule id
     assert prov.host_pass == 1
     assert prov.firing_index == 1
@@ -202,7 +202,9 @@ def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
     assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
-    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
+    assert [op.graph.site_key for op in logged._layer_list] == [
+        op.graph.site_key for op in base._layer_list
+    ]
     # the LATER edit fired identically: same tanh output in both runs
     assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
     assert len(logged.injected_ops) > 0

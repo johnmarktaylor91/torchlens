@@ -49,6 +49,6 @@ def test_empty_input_has_no_receptive_descriptor() -> None:
     empty_input = next(op for op in trace.input_ops if 0 in tuple(op.shape))
     full_input = next(op for op in trace.input_ops if 0 not in tuple(op.shape))
     roles = {role for _label, role in solve(trace).descriptors}
-    assert (full_input.io_role or full_input.label) in roles
-    assert (empty_input.io_role or empty_input.label) not in roles
+    assert (full_input.graph.io_role or full_input.label) in roles
+    assert (empty_input.graph.io_role or empty_input.label) not in roles
     assert check_geometric_metadata_invariants(trace)

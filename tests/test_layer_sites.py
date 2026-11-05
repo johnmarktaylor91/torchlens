@@ -99,12 +99,12 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     # failure this tripwire exists to catch.
     log = tl.trace(_ResModel(), torch.randn(2, 8))
     layer = log.layers["tanh_1_1"]
-    member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
+    member_keys = [op.graph.site_key for _, op in sorted(layer.ops.items())]
     assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "layer_site_ambiguous"
-    assert ".ops[k].site_key" in str(excinfo.value)
+    assert ".ops[k].graph.site_key" in str(excinfo.value)
 
 
 def test_site_key_refuses_typed_when_keys_absent() -> None:
@@ -113,7 +113,7 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     layer = log.layers["linear_1_1"]
     for _, op in layer.ops.items():
-        op.site_key = None
+        op._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "site_key_unavailable"
@@ -130,17 +130,17 @@ def test_site_peers_finds_reused_site_cohort() -> None:
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     assert len(relu_labels) == 3
     first = log.layers[relu_labels[0]]
-    assert [peer.layer_label for peer in first.site_peers] == relu_labels[1:]
+    assert [peer.layer_label for peer in first.graph.site_peers] == relu_labels[1:]
     # Symmetric membership: every cohort member sees the other two.
     for label in relu_labels:
-        peer_labels = {peer.layer_label for peer in log.layers[label].site_peers}
+        peer_labels = {peer.layer_label for peer in log.layers[label].graph.site_peers}
         assert peer_labels == set(relu_labels) - {label}
 
 
 # Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_site_peers_empty_when_site_unshared() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log.layers["linear_1_1"].site_peers == ()
+    assert log.layers["linear_1_1"].graph.site_peers == ()
 
 
 def test_site_peers_refuses_typed_without_keys() -> None:
@@ -149,13 +149,13 @@ def test_site_peers_refuses_typed_without_keys() -> None:
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     layer = log.layers[relu_labels[0]]
     for _, op in layer.ops.items():
-        op.site_key = None
+        op._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_peers
+        _ = layer.graph.site_peers
     assert excinfo.value.fields["code"] == "site_key_unavailable"
     # Other layers with keys never match the stripped layer either way.
     other = log.layers[relu_labels[1]]
-    assert relu_labels[0] not in {peer.layer_label for peer in other.site_peers}
+    assert relu_labels[0] not in {peer.layer_label for peer in other.graph.site_peers}
 
 
 # ---------------------------------------------------------------------------

@@ -62,10 +62,13 @@ def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
         assert loaded_entry["total_fire_duration"] is None
 
 
-def test_keyless_op_backed_rollup_refuses_site_key_unavailable(monkeypatch) -> None:
+def test_keyless_op_backed_rollup_refuses_site_key_unavailable() -> None:
     trace = _backward_trace()
+    # Precondition: the refusal below is about op-backed grad-fns, so the test is
+    # vacuous unless the backward walk paired some grad-fn with its captured op.
+    assert any(record.has_op for record in trace._grad_fn_logs.values())
     for op in trace._layer_list:
-        monkeypatch.setattr(type(op), "site_key", None, raising=False)
+        op._graph_site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = trace.grad_fn_site_summary
     assert excinfo.value.fields["code"] == "site_key_unavailable"

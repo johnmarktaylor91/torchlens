@@ -17,6 +17,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from torchlens._utils._record_group_table import record_member
+
 from .common import DEVICE, first_tensor
 
 
@@ -241,7 +243,7 @@ class TLRecord:
         cands = []
         for record in r:
             ctx = record.ctx
-            calls = tuple(getattr(ctx, "output_of_module_calls", ()) or ())
+            calls = tuple(record_member(ctx, "output_of_module_calls", ()) or ())
             if ctx.address == site or any(str(c).split(":")[0] == site for c in calls):
                 payload = (
                     record.ram_payload if record.ram_payload is not None else record.disk_payload

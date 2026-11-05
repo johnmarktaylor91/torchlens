@@ -25,7 +25,7 @@ import torchlens as tl
 from torchlens import _entry_refusals as refusals, _errors as base_refusals
 from torchlens.backends import _entry_refusals as backend_refusals
 from torchlens.errors import TorchLensError
-from torchlens.recording.exceptions import refuse_recorder_uninitialized
+from torchlens.recording._exceptions import refuse_recorder_uninitialized
 
 _HERE = Path(__file__)
 
@@ -467,7 +467,7 @@ def test_public_entry_auto_capture_every(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_public_entry_text_table_limit() -> None:
     """``viz.batch_summary.text_table`` refuses ``max_n`` below one."""
 
-    from torchlens.viz.batch_summary import text_table
+    from torchlens.viz._batch_summary import text_table
 
     with pytest.raises(ValueError) as exc_info:
         text_table(["a"], 0)

@@ -20,18 +20,17 @@ from typing import Any, Literal, TypeAlias, overload
 
 import torch
 
-from .._ir.container import (
-    DataclassField,
-    DictKey,
-    HFKey,
-    NamedField,
-    OutputPathComponent,
-    TupleIndex,
-)
+from .._ir.container import OutputPathComponent
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
+from .._utils._record_group_table import record_member
 from ._facet_tensor_ops import _copy_scatter_value, _ensure_scatter_capable, _heads_geometry
 from ._families import family_entries, family_spec
+from ._structural_names import (
+    _canonical_multi_output_name,
+    _path_to_dotted_name,
+    _primary_structural_names,
+)
 from .coverage import facet_coverage as coverage
 
 RecordScope = Literal["op", "module", "any"]
@@ -461,7 +460,7 @@ class FacetSpec(_SelectionOperand):
         return cls(
             home_kind=home_kind,
             home_label=getattr(home, "label", getattr(home, "call_label", None)),
-            home_address=getattr(home, "address", None),
+            home_address=record_member(home, "address", None),
             pass_index=getattr(home, "pass_number", None),
             call_index=getattr(home, "call_index", None),
             output_path=tuple(getattr(home, "container_path", ()) or ()),
@@ -1215,7 +1214,7 @@ class FacetView(Mapping[FacetKey, Any]):
         """Describe a facet no registered recipe produces here, naming what exists."""
 
         record = self._record
-        owner = getattr(record, "address", None) or getattr(record, "label", None) or "record"
+        owner = record_member(record, "address", None) or getattr(record, "label", None) or "record"
         class_name = getattr(record, "class_name", None) or _owning_module_class_name(record)
         available = sorted(str(key) for key in self._cache)
         detail = (
@@ -1822,7 +1821,7 @@ def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
     if not _record_scope_matches(recipe.public.target_scope, record):
         return False
     class_name = getattr(record, "class_name", getattr(record, "type", None))
-    class_qualname = getattr(record, "class_qualname", getattr(record, "func_qualname", None))
+    class_qualname = getattr(record, "class_qualname", record_member(record, "func_qualname", None))
     if recipe.public.class_names and class_name not in recipe.public.class_names:
         return False
     if recipe.public.qualnames and class_qualname not in recipe.public.qualnames:
@@ -1864,7 +1863,7 @@ def _recipe_priority(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int]:
     """Return ``(specificity, source)`` for conflict resolution."""
 
     class_name = getattr(record, "class_name", getattr(record, "type", None))
-    class_qualname = getattr(record, "class_qualname", getattr(record, "func_qualname", None))
+    class_qualname = getattr(record, "class_qualname", record_member(record, "func_qualname", None))
     specificity = 0
     if recipe.public.qualnames and class_qualname in recipe.public.qualnames:
         specificity = 3
@@ -1991,66 +1990,6 @@ def _op_structural_facets(record: Any) -> dict[FacetKey, Any]:
         if dotted is not None:
             facets[dotted] = spec
     return facets
-
-
-def _primary_structural_names(records: Sequence[Any]) -> builtins.list[str | None]:
-    """Return collision-safe primary string names for output records."""
-
-    candidates: builtins.list[str] = []
-    for index, record in enumerate(records):
-        name = _canonical_multi_output_name(getattr(record, "multi_output_name", None))
-        if name is not None:
-            candidates.append(name)
-            continue
-        path_key = tuple(getattr(record, "container_path", ()) or ())
-        dotted = _path_to_dotted_name(path_key)
-        candidates.append(dotted or f"out{index}")
-    duplicates = {name for name in candidates if candidates.count(name) > 1}
-    return [None if name in duplicates else name for name in candidates]
-
-
-def _path_to_dotted_name(path: tuple[OutputPathComponent, ...]) -> str | None:
-    """Return a dotted structural name for ordinary positional paths."""
-
-    if not path:
-        return None
-    parts: builtins.list[str] = []
-    for index, component in enumerate(path):
-        part = _path_component_to_name(component)
-        if part is None:
-            return None
-        if index == 0 and isinstance(component, TupleIndex):
-            parts.append(f"out{part}")
-        else:
-            parts.append(part)
-    return ".".join(parts)
-
-
-def _canonical_multi_output_name(name: Any) -> str | None:
-    """Return the public structural facet name for a captured output name."""
-
-    if not isinstance(name, str) or not name:
-        return None
-    first, separator, rest = name.partition(".")
-    if first.isdecimal():
-        return f"out{first}{separator}{rest}" if separator else f"out{first}"
-    return name
-
-
-def _path_component_to_name(component: OutputPathComponent) -> str | None:
-    """Return a string component name when it has unambiguous item syntax."""
-
-    if isinstance(component, TupleIndex):
-        return str(component.index)
-    if isinstance(component, NamedField | DataclassField):
-        return component._name
-    if isinstance(component, DictKey | HFKey):
-        return str(component._key)
-    if isinstance(component, int):
-        return str(component)
-    if isinstance(component, str):
-        return component
-    return None
 
 
 def _record_scope_matches(scope: RecordScope, record: Any) -> bool:

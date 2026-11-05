@@ -35,7 +35,7 @@ from torchlens import _state
 from torchlens._capture_honesty import ADVISORY_PARAMETER_CREATED_IN_FORWARD
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import (
+from torchlens.validation._diagnostics import (
     CHECK_ARG_LOGGING,
     CHECK_COMPLETENESS,
     CHECK_SOURCE_PROVENANCE,

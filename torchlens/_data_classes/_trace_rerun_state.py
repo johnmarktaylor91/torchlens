@@ -10,6 +10,7 @@ import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes
+from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils.fail_open import fail_open
 from . import _doors
 from ._state_adapter import state_items, state_restore
@@ -255,7 +256,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
         "kwargs_template",
         "_edge_uses",
     ):
-        if hasattr(new_layer, field_name):
+        if hasattr(new_layer, op_attr(field_name)):
             if field_name not in copies:
                 copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
             value = copies[field_name]
@@ -297,7 +298,7 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
                     copied_value,
                     preserved_user_annotations,
                 )
-            setattr(layer_log, field_name, copied_value)
+            setattr(layer_log, layer_attr(field_name), copied_value)
         layer_log.source_trace = trace
 
 
@@ -437,7 +438,7 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
             copy_rerun_value(trace, key): copy_rerun_value(trace, item)
             for key, item in value.items()
         }
-    from ..intervention.types import REPLAY_TEMPLATE_TYPES
+    from ..intervention._types import REPLAY_TEMPLATE_TYPES
 
     if type(value) in REPLAY_TEMPLATE_TYPES:
         # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
@@ -466,7 +467,7 @@ def append_state_from(target: Trace, trace: Trace) -> None:
     # By position, not raw label: a reused module repeats its raw label across passes.
     for layer, new_layer in zip(target._layer_list, trace._layer_list, strict=True):
         if not (
-            getattr(layer, "is_buffer", False)
+            record_member(layer, "is_buffer", False)
             or is_append_buffer_side_effect_layer(target, layer, old_by_label)
         ):
             layer._append_tensor_from(new_layer, "out")
@@ -512,7 +513,7 @@ def is_append_buffer_side_effect_layer(
         if child_layer is None:
             return False
         if not (
-            getattr(child_layer, "is_buffer", False)
+            record_member(child_layer, "is_buffer", False)
             and getattr(child_layer, "buffer_write_kind", None) is not None
         ):
             return False
@@ -552,9 +553,10 @@ def copy_append_last_chunk_fields(trace: Trace, layer: Any, new_layer: Any) -> N
         "edits",
         "annotations",
     ):
-        if hasattr(new_layer, field_name):
+        attr = op_attr(field_name)
+        if hasattr(new_layer, attr):
             layer._internal_set(
-                field_name, copy_append_metadata_value(trace, getattr(new_layer, field_name))
+                field_name, copy_append_metadata_value(trace, getattr(new_layer, attr))
             )
 
 
@@ -620,7 +622,7 @@ def refresh_appended_tensor_metadata(trace: Trace, layer: Any) -> None:
             "transformed_gradient_memory",
         ),
     ):
-        value = getattr(layer, tensor_field, None)
+        value = record_member(layer, tensor_field, None)
         if isinstance(value, torch.Tensor):
             from .._utils.tensor_utils import get_memory_amount
 

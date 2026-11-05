@@ -38,10 +38,10 @@ from .._ir.selector_eval import selector_from_spec
 from .._selection.selector_base import BaseSelector
 from .._selection.selectors import where
 from ._rerun_predicate import spec_from_recipe
+from ._save import _MANIFEST_FILE, _fsync_directory, _read_json_file, _reject_symlink_path
+from ._spec import Recipe, Rule
 from ._spec_values import SaveLevel, _coerce_save_level
 from .errors import ReplayPreconditionError
-from .save import _MANIFEST_FILE, _fsync_directory, _read_json_file, _reject_symlink_path
-from .spec import Recipe, Rule
 
 
 class _RuleHook(NamedTuple):

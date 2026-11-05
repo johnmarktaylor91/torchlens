@@ -52,6 +52,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from ._condensed_flow import JUNCTION_FUNC_NAMES
@@ -438,7 +439,7 @@ def _instance_honesty_refusal(
         op = labels_index.get(label)
         if op is None:
             return False
-        if bool(getattr(op, "is_buffer", False)):
+        if bool(record_member(op, "is_buffer", False)):
             return False
         return op.label not in member_set
 

@@ -210,7 +210,9 @@ def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     predicate chain is recorded by the shared pruned-nondeterministic-control
     recorder, so the run ceilings even though the DAG never sees the chain."""
 
-    from torchlens.backends.torch._completeness_escape_state import pruned_rng_control_source_labels
+    from torchlens.backends.torch._completeness_escape_state import (
+        pruned_rng_control_source_labels,
+    )
 
     x = torch.randn(2, 4)
     trace = tl.trace(EmptyBranchPrunedModel(), x.clone(), capture=_CAPTURE)
@@ -254,7 +256,7 @@ def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
     accept either disposition but NEVER a false VERIFIED.
     """
 
-    from torchlens.errors.runnable import RunnablePreflightError
+    from torchlens.errors._runnable import RunnablePreflightError
 
     trace = tl.trace(model, x.clone(), capture=_CAPTURE)
     path = tmp_path / f"{type(model).__name__}.tlspec"
@@ -459,7 +461,9 @@ def test_new_size_form_redispatches_uninit_family_aten() -> None:
 
     from torch.utils._python_dispatch import TorchDispatchMode
 
-    from torchlens.backends.torch._completeness_origins import _operator_uninit_family_tail
+    from torchlens.backends.torch._completeness_origins import (
+        _operator_uninit_family_tail,
+    )
 
     calls: list[Any] = []
 

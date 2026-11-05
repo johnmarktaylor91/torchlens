@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._utils.hashing import sha256_canonical_json
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 
 __all__ = [
     "BUNDLE_OPERATION_KINDS",

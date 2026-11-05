@@ -28,7 +28,7 @@ from torchlens._io.format3.container import RELATIONS_FILE
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import TOKEN_BOUNDARY_FAMILY_ID
 from torchlens.bundle._token_spans import find_token_spans
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 from torchlens.io import attach_sidecar
 
 _VOCAB = 32

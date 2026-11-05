@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import tensor_nanequal
 from ._saved_value_proofs import _index_component_dims
 
@@ -72,7 +73,7 @@ def setitem_index_component_key(layer: Op, parent_label: str) -> Any:
 
     if getattr(layer, "func_name", None) != "__setitem__":
         return None
-    positions = getattr(layer, "parent_arg_positions", {}) or {}
+    positions = record_member(layer, "parent_arg_positions", {}) or {}
     keys = [
         key for key, label in (positions.get("args", {}) or {}).items() if label == parent_label
     ]
@@ -102,7 +103,7 @@ def layer_has_setitem_index_parent(layer: Op) -> bool:
 
     if getattr(layer, "func_name", None) != "__setitem__":
         return False
-    positions = getattr(layer, "parent_arg_positions", {}) or {}
+    positions = record_member(layer, "parent_arg_positions", {}) or {}
     labels = {label for label in (positions.get("args", {}) or {}).values() if label}
     return any(setitem_index_component_key(layer, label) is not None for label in labels)
 
@@ -177,7 +178,7 @@ def _setitem_call(
     """
 
     key = setitem_index_component_key(layer, parent_label)
-    args: tuple[Any, ...] = getattr(layer, "saved_args", None) or ()
+    args: tuple[Any, ...] = record_member(layer, "saved_args", None) or ()
     if key is None or len(args) < 3 or not isinstance(args[0], torch.Tensor):
         return None
     if not isinstance(parent_values, torch.Tensor):

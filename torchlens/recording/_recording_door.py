@@ -18,7 +18,7 @@ from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
 
 if TYPE_CHECKING:
-    from .options import RecordingOptions
+    from ._options import RecordingOptions
 
 #: The ``RecordingOptions`` fields the recorder reads; an unset field stays
 #: ``MISSING`` so the recorder config resolves it.

@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._replay_warnings import replay_warnings_ignored
 
 if TYPE_CHECKING:
@@ -126,7 +127,7 @@ def _flat_slot_of(layer: Op, label: str) -> Slot | None:
     not a value operand.
     """
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     slots: list[Any] = [k for k, v in (positions.get("args") or {}).items() if v == label]
     slots += [k for k, v in (positions.get("kwargs") or {}).items() if v == label]
     if len(slots) != 1 or isinstance(slots[0], tuple) or slots[0] == "out":
@@ -140,8 +141,8 @@ def _probe_call(layer: Op, layers_to_perturb: list[str]) -> _ProbeCall | None:
     slot = _flat_slot_of(layer, layers_to_perturb[0]) if len(layers_to_perturb) == 1 else None
     if slot is None:
         return None
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     kwargs = {name: value for name, value in saved_kwargs.items() if name != "out"}
     present = 0 <= slot < len(args) if isinstance(slot, int) else slot in kwargs
     return _ProbeCall(args, kwargs, slot) if present else None

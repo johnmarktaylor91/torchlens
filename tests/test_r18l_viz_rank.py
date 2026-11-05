@@ -26,7 +26,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.viz.node_plots import (
+from torchlens.viz._node_plots import (
     _lineplot_point,
     _normalize_finite,
     heatmap,

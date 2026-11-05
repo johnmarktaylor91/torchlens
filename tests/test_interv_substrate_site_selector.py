@@ -1,7 +1,7 @@
 """C03: tl.site() structural selector + live site-key minting (Build 0a/0c).
 
 The address law's structural lane: a ``site`` WHERE term is valid in EVERY
-lane -- post hoc against ``op.site_key``, and during a live capture against
+lane -- post hoc against ``op.graph.site_key``, and during a live capture against
 the streaming minter armed by the ``tl.trace`` entry. The parity pin is the
 verification surgery risk 1 demands: the SAME streaming minter, fed retained
 ops in execution order, reproduces the postprocess keys byte-identically.
@@ -17,8 +17,8 @@ import torchlens as tl
 from torchlens import site
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._errors import ArgumentTypeError
+from torchlens.intervention._site_keys import mint_keys_in_execution_order
 from torchlens.intervention.errors import SelectorCapabilityError
-from torchlens.intervention.site_keys import mint_keys_in_execution_order
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -146,9 +146,9 @@ def test_streaming_minter_reproduces_postprocess_keys(model_cls: type[nn.Module]
     log = _ready(model_cls())
     reminted = mint_keys_in_execution_order(log)
     mismatches = {
-        label: (reminted[label], log.ops[label].site_key)
+        label: (reminted[label], log.ops[label].graph.site_key)
         for label in reminted
-        if log.ops[label].site_key != reminted[label]
+        if log.ops[label].graph.site_key != reminted[label]
     }
     assert not mismatches, f"streaming/postprocess key drift: {mismatches}"
 

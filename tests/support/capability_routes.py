@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 
 from torchlens._utils import _torch_compat
-from torchlens.attribution.onebackward import ReadError
+from torchlens.attribution._onebackward import ReadError
 
 
 @dataclass(frozen=True)

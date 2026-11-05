@@ -100,7 +100,7 @@ def _streamed_cell(trace_kwargs: dict[str, Any]) -> _Cell:
 
 
 def _trace_keeping_payloads() -> Any:
-    op = SimpleNamespace(label="relu_1_2", out_ref="blob-0", out=object(), is_output=False)
+    op = SimpleNamespace(label="relu_1_2", _out_ref="blob-0", out=object(), is_output=False)
     return SimpleNamespace(saved_ops=[op], ops=[op], outcome=None)
 
 

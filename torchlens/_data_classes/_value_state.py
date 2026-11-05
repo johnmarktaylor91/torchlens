@@ -7,6 +7,7 @@ from typing import Any
 from .._utils._display_card import REPR_COLS
 from .._utils._display_numbers import format_count, format_exact_count, plural
 from .._utils._display_text import tensor_text
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 
 NOT_SAVED = "(not saved)"
@@ -34,7 +35,7 @@ def _payload_state(op: Any) -> str:
         if slot("out_ref") is not None:
             return "lazy"
         return "unsaved"
-    if getattr(op, "out_ref", None) is not None:
+    if record_member(op, "out_ref", None) is not None:
         return "lazy"
     return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
 
@@ -110,7 +111,7 @@ def payload_facts(record: Any) -> tuple[str, Any, str]:
         return metadata_text(record), None, FREED
     if not isinstance(payload, torch.Tensor):
         return metadata_text(record), None, PREVIEW_BACKEND
-    stats = _statistics(payload, compute=True, identity=getattr(record, "site_key", None))
+    stats = _statistics(payload, compute=True, identity=record_member(record, "site_key", None))
     return metadata_text(record, payload), stats, ""
 
 
@@ -119,7 +120,7 @@ def edited_token(record: Any) -> str:
 
     return (
         EDITED
-        if getattr(record, "is_edited", False) or getattr(record, "edge_substitutions", None)
+        if getattr(record, "is_edited", False) or record_member(record, "edge_substitutions", None)
         else ""
     )
 

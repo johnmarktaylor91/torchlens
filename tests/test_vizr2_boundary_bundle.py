@@ -18,8 +18,13 @@ from torch import nn
 
 import torchlens as tl
 from tests.support.hf_capabilities import causal_lm_returns_cache_object
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization.collapse_optimizer import select_collapse_plan
-from torchlens._visualization.collapse_plan import RenderContext, collapse_plan_for_trace, count
+from torchlens._visualization.collapse_plan import (
+    RenderContext,
+    collapse_plan_for_trace,
+    count,
+)
 
 
 class _Body(nn.Module):
@@ -59,7 +64,7 @@ def _trace(n: int) -> tl.Trace:
 
 
 def _boxes(address: str) -> Callable[[object], bool]:
-    return lambda module: getattr(module, "address", None) == address
+    return lambda module: record_member(module, "address", None) == address
 
 
 def _dot(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
