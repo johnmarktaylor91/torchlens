@@ -413,7 +413,6 @@ def _add_node_to_graphviz(
     encoding: Any | None = None,
     suppressed_args: Mapping[int, frozenset[str]] | None = None,
     show_saved_for_backward: bool = False,
-    show_arg_labels: bool = True,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -533,7 +532,6 @@ def _add_node_to_graphviz(
         rolled_maps,
         deduped_edge_registry,
         label_color=label_ink,
-        show_arg_labels=show_arg_labels,
     )
 
 
@@ -599,10 +597,7 @@ def _build_layer_node(
     )
     node_bg_color = _get_node_bg_color(self, node)
 
-    if node.graph.has_input_ancestor:
-        line_style = "solid"
-    else:
-        line_style = "dashed"
+    line_style = "solid" if node.graph.has_input_ancestor else "dashed"
 
     default_spec = NodeSpec(
         lines=compute_default_node_lines(

@@ -1490,11 +1490,8 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             has no parent.
         """
 
-        parent = self.parent_trace
-        if parent is None:
-            return None
-        root = parent
-        while root.parent_trace is not None:
+        root = self.parent_trace
+        while root is not None and root.parent_trace is not None:
             root = root.parent_trace
         return root
 

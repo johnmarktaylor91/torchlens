@@ -13,7 +13,11 @@ from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
-from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
+from ._draw_validation import (
+    _validate_draw_flag_options,
+    _validate_draw_options,
+    _validate_draw_renderer,
+)
 from ._edge_shapes import _with_edge_shapes
 from ._edit_highlighter import (
     HighlighterStyle,
@@ -88,7 +92,6 @@ from .render_execution import (
     surface_layout_stderr,
     warn_oversize_vector,
 )
-from .renderer_registry import renderer_info, renderer_names
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
 from .source_graph import _resolve_focus_module, build_source_graph
@@ -299,6 +302,7 @@ def _resolve_draw_request(
         edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
         grad_edge=cast(Optional[Dict[str, Any]], request.grad_edge_overrides) or {},
         module=cast(Optional[Dict[str, Any]], request.module_overrides) or {},
+        arg_labels=request.show_arg_labels,
     )
     request = replace(
         request,
@@ -636,7 +640,6 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 encoding=request.encoding,
                 suppressed_args=suppressed_args,
                 show_saved_for_backward=request.show_saved_for_backward,
-                show_arg_labels=request.show_arg_labels,
             )
     draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
     (container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes) = (
@@ -1368,22 +1371,7 @@ def draw(
         # schedule of the returned Drawing are computed against.
         request_sink["request"] = request
 
-    if vis_renderer not in renderer_names():
-        raise InvalidArgumentError(
-            f"vis_renderer must be one of {sorted(renderer_names())}; received "
-            f"{vis_renderer!r}. Out-of-tree renderers register through "
-            "torchlens._visualization.renderer_registry.register_renderer.",
-            code="visualization_renderer_invalid",
-            remedy="pass a registered renderer name",
-            argument="vis_renderer",
-        )
-    renderer_capability_rows = renderer_info(vis_renderer).capabilities
-    if request.encoding is not None and not bool(
-        renderer_capability_rows.get("encoding_channels", False)
-    ):
-        from ._encoding import raise_encoding_renderer_refusal
-
-        raise_encoding_renderer_refusal(vis_renderer, request.encoding.active_channels())
+    _validate_draw_renderer(vis_renderer, request.encoding)
     resolved_outpath, announce_path = resolve_draw_outpath(
         vis_outpath, vis_fileformat, announce_path
     )
