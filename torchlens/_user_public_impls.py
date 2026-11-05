@@ -17,8 +17,6 @@ from typing import Any, Literal, cast
 import torch
 from torch import nn
 
-from torchlens.backends.registry import BackendUnsupportedError
-
 from . import _user_funcs as _user_funcs, _validation_argument_references as _arg_references
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
@@ -36,14 +34,14 @@ from ._input_coerce import _coerce_inputs
 from ._literals import (
     OutputDeviceLiteral,
 )
-from ._options_validation import _validate_output_device
 from ._robustness import check_model_and_input_variants
-from ._save_budget import SaveBudgetOption, resolve_save_budget
+from ._save_budget import SaveBudgetOption
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import restores_rng_streams, set_random_seed
+from ._validation_entry_options import resolve_forward_validation_entry
 from ._validation_retrace_saves import compare_retrace_graphs, retrace_save_indices
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
@@ -54,7 +52,7 @@ from ._validation_state_snapshot import (
     state_matches_snapshot,
     with_storage_bindings_of,
 )
-from .backends.registry import BackendName, resolve_backend_spec
+from .backends.registry import BackendName
 from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 from .errors import TraceNotReproducibleWarning
 from .options import CaptureOptions, CaptureOptions as _CaptureOptions
@@ -570,6 +568,8 @@ def validate_forward_pass(
     backend: BackendName | None = None,
     output_device: OutputDeviceLiteral = "same",
     save_budget: SaveBudgetOption = "auto",
+    num_threads: int | None = None,
+    trace_observer: Callable[[Trace | None], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
@@ -599,6 +599,11 @@ def validate_forward_pass(
     save_budget:
         Per-device retained-bytes ceiling for the validator capture (same values and
         default as ``CaptureOptions.save_budget``); parameters kept by reference are not charged.
+    num_threads:
+        Torch intra-op threads for the validation forwards, restored afterwards.
+    trace_observer:
+        Called once per run with the validation trace after replay and before its
+        cleanup, or with ``None`` at a precondition refusal; see ``tl.validate``.
 
     Returns
     -------
@@ -608,7 +613,8 @@ def validate_forward_pass(
     Raises
     ------
     BackendUnsupportedError
-        If a non-default save option is requested for a non-torch backend.
+        If a non-default save option, ``num_threads`` or ``trace_observer`` is
+        requested for a non-torch backend.
 
     Examples
     --------
@@ -617,25 +623,16 @@ def validate_forward_pass(
     ('bool', True)
     """
 
-    _validate_output_device(output_device)
-    resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
-    # Forward only non-default save options: a default call reaches every
-    # backend's entry with exactly the keywords it always received.
-    save_options: dict[str, Any] = {}
-    if output_device != "same":
-        save_options["output_device"] = output_device
-    if save_budget != "auto":
-        save_options["save_budget"] = save_budget
-    if save_options and spec.name != "torch":
-        raise BackendUnsupportedError(
-            f"Backend {spec.name!r} validation does not accept {sorted(save_options)!r}; "
-            "only the torch backend's validator capture honors these save options.",
-            code="backend_unsupported",
-            remedy="omit output_device and save_budget, or validate on the torch backend",
-            backend=spec.name,
-            options=sorted(save_options),
-        )
+    spec, forwarded = resolve_forward_validation_entry(
+        backend,
+        model,
+        inputs,
+        input_kwargs,
+        output_device,
+        save_budget,
+        num_threads,
+        trace_observer,
+    )
     return spec.validate_entry(
         model,
         inputs,
@@ -643,7 +640,7 @@ def validate_forward_pass(
         seed=seed,
         verbose=verbose,
         validate_metadata=validate_metadata,
-        **save_options,
+        **forwarded,
     )
 
 

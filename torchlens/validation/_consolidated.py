@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -31,6 +32,7 @@ from ._diagnostics import (
 )
 
 if TYPE_CHECKING:
+    from .._data_classes.trace import Trace
     from ..receptive_field._types import ReceptiveFieldValidation
 
 
@@ -220,6 +222,7 @@ def _validate_scope_keywords(
 #: Scopes whose validation runs the saving validator capture that honors the
 #: ``output_device`` / ``save_budget`` save options.
 _SAVE_OPTION_SCOPES = frozenset({"forward", "saved", "intervention"})
+_FORWARD_HARNESS_SCOPES = frozenset({"forward", "saved"})
 
 
 def _validate_save_option_keywords(
@@ -291,6 +294,34 @@ def _save_option_kwargs(
     if save_budget != "auto":
         forwarded["save_budget"] = save_budget
     return forwarded
+
+
+def _refuse_forward_only_keywords(
+    scope: str,
+    num_threads: int | None,
+    trace_observer: Callable[[Trace | None], None] | None,
+) -> None:
+    """Refuse ``num_threads`` and ``trace_observer`` outside the forward/saved scopes.
+
+    Parameters
+    ----------
+    scope:
+        Normalized validation scope.
+    num_threads, trace_observer:
+        The requested keywords; ``None`` means omitted.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``validation_scope_invalid``, naming the keyword, when either is passed
+        for ``scope="backward"``, ``"intervention"`` or ``"receptive_field"``.
+    """
+
+    if scope in _FORWARD_HARNESS_SCOPES:
+        return
+    for name, value in (("num_threads", num_threads), ("trace_observer", trace_observer)):
+        if value is not None:
+            refuse_validation_scope(scope, _FORWARD_HARNESS_SCOPES, keyword=name)
 
 
 def _intervention_report(
@@ -443,6 +474,95 @@ def _validate_receptive_field_scope(
     return [*receptive, *projective]
 
 
+@contextlib.contextmanager
+def _validation_peak_probe() -> Iterator[None]:
+    """Record opt-in peak-memory observations around one forward/saved validation.
+
+    Validation is the product's largest transient peak. Cheap peak observations
+    are published through ``last_validation_peak_memory()``; measurement only,
+    never part of the verdict. The probes are OPT-IN
+    (``TORCHLENS_VALIDATE_PEAK_MEMORY=1``), mirroring the capture-side
+    ``measure_python_peak_memory`` design: the ``torch.cuda.is_available()``
+    probe can trigger driver init on some setups, so default calls pay nothing.
+    """
+
+    from .._data_classes.cleanup import _trim_host_allocator  # deferred: startup cost
+    from .._utils.env_flags import closed_bool_env  # deferred: startup cost
+    from ._diagnostics import _LAST_RUN_PEAKS  # deferred: startup cost
+
+    peaks_enabled = closed_bool_env("TORCHLENS_VALIDATE_PEAK_MEMORY")
+    _LAST_RUN_PEAKS.clear()
+    rss_before = _rss_high_water_bytes() if peaks_enabled else None
+    cuda_armed = peaks_enabled and torch.cuda.is_available() and torch.cuda.is_initialized()
+    # Snapshot the peak instead of reset_peak_memory_stats, which clobbers the
+    # caller's process-wide high-water counter; a run under it honestly reads 0.
+    cuda_peak_before = int(torch.cuda.max_memory_allocated()) if cuda_armed else 0
+    try:
+        yield
+    finally:
+        rss_after = _rss_high_water_bytes() if peaks_enabled else None
+        if rss_before is not None and rss_after is not None:
+            _LAST_RUN_PEAKS["host_rss_peak_delta_bytes"] = max(0, rss_after - rss_before)
+        if cuda_armed:
+            cuda_peak_after = int(torch.cuda.max_memory_allocated())
+            _LAST_RUN_PEAKS["cuda_peak_allocated_bytes"] = (
+                cuda_peak_after if cuda_peak_after > cuda_peak_before else 0
+            )
+        # The comparison/report phase reallocates AFTER the internal trims, so
+        # freed glibc arena would stay resident per call; one more trim at the
+        # end, after the peak reads (high-water maxima the trim cannot lower).
+        _trim_host_allocator()
+
+
+def _validate_forward_scope(
+    model: nn.Module,
+    inputs: Any,
+    input_kwargs: dict[str, Any] | None,
+    *,
+    scope: str,
+    verbose: bool,
+    forward_options: dict[str, Any],
+) -> bool:
+    """Run the forward/saved validation, settling every failure class as ``False``.
+
+    A metadata-invariant failure is ONE more way the verdict is ``False``: the
+    invariant pass already recorded its identity on the side channel before
+    re-raising (``validation/_core.py``); a record is made sure to exist for the
+    R67 warning, then the verdict settles ``False``.
+
+    Parameters
+    ----------
+    model, inputs, input_kwargs:
+        Model and inputs to validate.
+    scope:
+        Normalized scope, ``"forward"`` or ``"saved"``.
+    verbose:
+        Whether validators should emit diagnostics.
+    forward_options:
+        Keywords forwarded to ``validate_forward_pass``.
+
+    Returns
+    -------
+    bool
+        The validation verdict.
+    """
+
+    from .._user_public_impls import validate_forward_pass  # deferred: cycle
+    from ._invariants import MetadataInvariantError  # deferred: startup cost
+
+    with _validation_peak_probe():
+        try:
+            passed = validate_forward_pass(
+                model, inputs, input_kwargs=input_kwargs, verbose=verbose, **forward_options
+            )
+        except MetadataInvariantError as invariant_error:
+            _record_invariant_failure_if_missing(invariant_error)
+            passed = False
+    if passed is False:
+        _report_validation_failure(scope, verbose)
+    return passed
+
+
 @restores_rng_streams
 def validate(
     model: nn.Module,
@@ -462,6 +582,8 @@ def validate(
     backend: BackendName | None = None,
     output_device: OutputDeviceLiteral = "same",
     save_budget: SaveBudgetOption = "auto",
+    num_threads: int | None = None,
+    trace_observer: Callable[[Trace | None], None] | None = None,
 ) -> bool | InterventionValidationReport | list[ReceptiveFieldValidation]:
     """Validate a model/input pair for a requested TorchLens scope.
 
@@ -522,6 +644,20 @@ def validate(
         ``None`` to disable). Exceeding it raises
         :class:`~torchlens.errors.SaveBudgetExceededError` exactly as the
         capture does. Same scopes as ``output_device``.
+    num_threads:
+        Torch intra-op threads for every validation forward (ground truth,
+        capture, retrace, replay); the prior count is restored on return and on
+        error. ``None`` keeps the process setting. Forward and saved scopes,
+        torch backend only.
+    trace_observer:
+        Called exactly once per forward/saved run with the validation ``Trace``
+        after replay and before cleanup, or with ``None`` when a precondition
+        refusal returns ``False`` before any capture; not called when the call
+        raises. It may read public fields (``len(trace.ops)``,
+        ``trace.provenance.fingerprint``, ``trace.validation_replay_status``);
+        the trace is cleaned up after it returns, so keep values, not the
+        trace. An exception it raises propagates after teardown restores
+        state. It never changes the verdict. Same scopes as ``num_threads``.
 
     Returns
     -------
@@ -570,6 +706,7 @@ def validate(
     _validate_save_option_keywords(
         normalized_scope, output_device=output_device, save_budget=save_budget
     )
+    _refuse_forward_only_keywords(normalized_scope, num_threads, trace_observer)
     save_options = _save_option_kwargs(output_device, save_budget)
     if normalized_scope == "backward":
         spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
@@ -605,77 +742,22 @@ def validate(
             backend=backend,
         )
 
-    from .._user_public_impls import validate_forward_pass
-
     if normalized_scope in {"forward", "saved"}:
-        # validation is the product's largest transient peak and had no
-        # instrumentation. Record cheap peak observations around the run and
-        # publish them through ``last_validation_peak_memory()``; measurement
-        # only, never part of the verdict. The probes are an
-        # OPT-IN (TORCHLENS_VALIDATE_PEAK_MEMORY=1), mirroring the
-        # measure_python_peak_memory capture-side design -- the
-        # torch.cuda.is_available() probe can trigger driver init on some
-        # setups and none of it feeds the verdict, so default validate calls
-        # pay nothing. last_validation_peak_memory() already returns None for
-        # the empty off-state.
-        from .._utils.env_flags import closed_bool_env
-        from ._diagnostics import _LAST_RUN_PEAKS
-
-        peaks_enabled = closed_bool_env("TORCHLENS_VALIDATE_PEAK_MEMORY")
-        _LAST_RUN_PEAKS.clear()
-        rss_before = _rss_high_water_bytes() if peaks_enabled else None
-        cuda_armed = peaks_enabled and torch.cuda.is_available() and torch.cuda.is_initialized()
-        cuda_peak_before = 0
-        if cuda_armed:
-            # snapshot the peak instead of reset_peak_memory_stats,
-            # which clobbers the caller's process-wide high-water counter.
-            # A run that stays under the pre-existing peak honestly reads 0.
-            cuda_peak_before = int(torch.cuda.max_memory_allocated())
-        from ._invariants import MetadataInvariantError
-
-        try:
-            try:
-                passed = validate_forward_pass(
-                    model,
-                    inputs,
-                    input_kwargs=input_kwargs,
-                    seed=seed,
-                    verbose=verbose,
-                    validate_metadata=validate_metadata,
-                    backend=backend,
-                    **save_options,
-                )
-            except MetadataInvariantError as invariant_error:
-                # The bool contract covers EVERY failure class. The
-                # invariant pass already recorded its identity on the side
-                # channel before re-raising (validation/_core.py); make sure a
-                # record exists for the R67 warning below, then settle False.
-                _record_invariant_failure_if_missing(invariant_error)
-                passed = False
-        finally:
-            rss_after = _rss_high_water_bytes() if peaks_enabled else None
-            if rss_before is not None and rss_after is not None:
-                _LAST_RUN_PEAKS["host_rss_peak_delta_bytes"] = max(0, rss_after - rss_before)
-            if cuda_armed:
-                cuda_peak_after = int(torch.cuda.max_memory_allocated())
-                _LAST_RUN_PEAKS["cuda_peak_allocated_bytes"] = (
-                    cuda_peak_after if cuda_peak_after > cuda_peak_before else 0
-                )
-            # validate's high-water phase sits on
-            # the WRONG side of the internal trims -- the comparison/report
-            # phase reallocates AFTER second_trace.cleanup() trimmed, so
-            # ~180-225 MB of freed glibc arena would stay resident per call
-            # (measured: manual malloc_trim recovers it). One more trim at
-            # the END of the scope; correctness-neutral (releases only
-            # allocator-free pages, ~1 ms next to a multi-second validate),
-            # and after the peak reads above, which are high-water maxima the
-            # trim cannot lower.
-            from .._data_classes.cleanup import _trim_host_allocator
-
-            _trim_host_allocator()
-        if passed is False:
-            _report_validation_failure(normalized_scope, verbose)
-        return passed
+        return _validate_forward_scope(
+            model,
+            inputs,
+            input_kwargs,
+            scope=normalized_scope,
+            verbose=verbose,
+            forward_options={
+                "seed": seed,
+                "validate_metadata": validate_metadata,
+                "backend": backend,
+                "num_threads": num_threads,
+                "trace_observer": trace_observer,
+                **save_options,
+            },
+        )
     return _intervention_report(
         model,
         inputs,
