@@ -54,7 +54,6 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._forward_helpers import _normalize_module_stack
 from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
 from ._sparse_refs import (
     _module_frames_from_record_context,
@@ -423,6 +422,8 @@ def _build_record_context(
     sample_id: str | int | None = None,
 ) -> RecordContext:
     """Build the single source-of-truth RecordContext schema."""
+
+    from ._forward_helpers import _normalize_module_stack  # deferred: cycle _forward_helpers
 
     data = op_log_or_op_data
     stack = _normalize_module_stack(module_stack)
