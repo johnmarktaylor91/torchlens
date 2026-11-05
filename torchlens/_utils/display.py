@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 
 _T = TypeVar("_T")
 
+#: Name prefix of every trace's visualizer scratch folder (``ensure_trace_visualizer_dir``).
+VISUALIZER_DIR_PREFIX = "torchlens_visualizers_"
+
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
     """Atomically replace a text file with fully written content.
@@ -79,7 +82,7 @@ def ensure_trace_visualizer_dir(trace: Any) -> Path:
     current = getattr(trace, "_visualizer_dir", None)
     if current is not None and Path(current).is_dir():
         return Path(current)
-    output_dir = Path(tempfile.mkdtemp(prefix="torchlens_visualizers_"))
+    output_dir = Path(tempfile.mkdtemp(prefix=VISUALIZER_DIR_PREFIX))
     trace._visualizer_dir = str(output_dir)
     weakref.finalize(trace, shutil.rmtree, output_dir, ignore_errors=True)
     return output_dir

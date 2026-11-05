@@ -4,14 +4,15 @@ v1 ships the COLOR channel (``color_by``): a value source (Layer/Op field
 name, scalar node-overlay builtin, or callable ``node -> value``) compiled
 down to the existing NodeSpec chain as a fillcolor transform in the C3
 precedence slot (after the node-style preset and intervention styling, before
-the user ``node_spec_fn``), plus an auto-legend that disclosures the
-transform.
+the user ``node_spec_fn``), plus a plain drawn key (a labelled colour bar)
+and a non-drawn method record (``_encoding_key``). "Legend note" and
+"legend line" below mean a line of that method record.
 
 Wave 1 adds the SIZE channel (``size_by`` + ``scale=``): a scalar field,
 callable, or the closed ``"dims"`` shape token mapped to node width/height
 minimums (Graphviz ``fixedsize=false`` -- a label can never be truncated by
 an encoding, and the max clamp bounds encoded area at
-:data:`SIZE_BY_MAX_AREA_MULT` times the default node area). The shipped
+:data:`SIZE_BY_MAX_AREA_MULT` times the typical node area). The shipped
 multi-dim -> geometry mapping is the D4 DEFAULT (memo 3.2 C2, AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
 preserved) with the default ``scale="sqrt"`` -- D4 was UNRULED at this
@@ -47,6 +48,7 @@ bound.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -60,6 +62,8 @@ from ._encoding_size_layout import (
     SIZE_SCALE_VOCABULARY,
     non_batch_numel,
 )
+from ._oklab import hex_to_oklab, oklab_to_hex, stop_positions
+from ._ramps import DARK_SEQUENTIAL_RAMP, LIGHT_SEQUENTIAL_RAMP
 from .themes import fill_with_ink
 
 if TYPE_CHECKING:
@@ -406,9 +410,9 @@ NOTE_LOG_NONPOSITIVE = "values <= 0 -- unencoded under the log transform"
 #: fields; unit-dependent behavior).
 COLOR_TRANSFORM_VOCABULARY = ("linear", "rank", "log")
 
-#: Fallback sequential anchors: the skins' warm YlOrBr low/high (no blue).
-LIGHT_RAMP = ("#FFF7BC", "#993404")
-DARK_RAMP = ("#3A2E22", "#FED98E")
+#: Fallback stop lists when a theme carries no ramp: the default family's.
+LIGHT_RAMP = LIGHT_SEQUENTIAL_RAMP
+DARK_RAMP = DARK_SEQUENTIAL_RAMP
 
 # ---------------------------------------------------------------------------
 # SIZE channel constants (wave 1; D4 DEFAULT-APPLIED -- memo 3.1/3.2 C2).
@@ -419,42 +423,45 @@ DARK_RAMP = ("#3A2E22", "#FED98E")
 SIZE_DIMS_TOKEN = "dims"
 
 
-def _hex_to_rgb(color: str) -> tuple[int, int, int]:
-    """Parse ``#RRGGBB`` into an RGB tuple."""
+def interpolate_hex(stops: Sequence[str], fraction: float) -> str:
+    """Return the colour at ``fraction`` along a multi-stop ramp, blended in OKLab.
 
-    stripped = color.lstrip("#")
-    return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
-
-
-def interpolate_hex(start: str, end: str, fraction: float) -> str:
-    """Linearly interpolate between two ``#RRGGBB`` colors.
-
-    The ONE colormap interpolation home (generalized from
-    ``bundle_diff._interpolate``, which now consumes this helper).
+    The ONE colormap interpolation home (``bundle_diff`` consumes it too).
+    Stops sit at their share of the path's OKLab length
+    (:func:`~torchlens._visualization._oklab.stop_positions`), so equal
+    fraction steps are equal perceptual steps; a fraction landing on a stop
+    returns that stop exactly.
 
     Parameters
     ----------
-    start:
-        Start color.
-    end:
-        End color.
+    stops:
+        Two or more ``#RRGGBB`` colours, low value first.
     fraction:
-        Interpolation fraction in ``[0, 1]``.
+        Position in ``[0, 1]`` (clamped).
 
     Returns
     -------
     str
-        Interpolated hex color.
+        Upper-case hex colour.
+
+    Examples
+    --------
+    >>> from torchlens._visualization._encoding import interpolate_hex
+    >>> interpolate_hex(("#FFFFFF", "#C93F3F"), 1.0)
+    '#C93F3F'
     """
 
+    stops = tuple(stops)
     fraction = max(0.0, min(1.0, fraction))
-    start_rgb = _hex_to_rgb(start)
-    end_rgb = _hex_to_rgb(end)
-    values = [
-        round(start_value + (end_value - start_value) * fraction)
-        for start_value, end_value in zip(start_rgb, end_rgb, strict=True)
-    ]
-    return "#{:02X}{:02X}{:02X}".format(*values)
+    positions = stop_positions(stops)
+    upper = next(index for index, position in enumerate(positions) if position >= fraction)
+    if positions[upper] == fraction or upper == 0:
+        return stops[upper].upper()
+    low, high = positions[upper - 1], positions[upper]
+    weight = (fraction - low) / (high - low)
+    start, end = hex_to_oklab(stops[upper - 1]), hex_to_oklab(stops[upper])
+    mixed = [a + (b - a) * weight for a, b in zip(start, end, strict=True)]
+    return oklab_to_hex((mixed[0], mixed[1], mixed[2]))
 
 
 @dataclass(frozen=True)
@@ -526,9 +533,9 @@ class EncodingState:
     stack_spec: EncodingChannelSpec | None = None
     stack_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
     stack_notes: list[str] = field(default_factory=list)
-    # Skin-supplied 3-anchor ramp (N4): low/mid/high. None keeps the
-    # historical 2-anchor module ramps.
-    ramp_anchors: tuple[str, str, str] | None = None
+    # Skin-supplied ramp stop list, low value first (N4). None keeps the
+    # module fallback stops.
+    ramp_stops: tuple[str, ...] | None = None
 
     def note(self, text: str) -> None:
         """Record a color-channel legend note once."""
@@ -571,27 +578,17 @@ class EncodingState:
         return tuple(channels)
 
     @property
-    def ramp(self) -> tuple[str, str]:
-        """Return the theme-aware sequential ramp endpoints."""
+    def ramp(self) -> tuple[str, ...]:
+        """Return the theme-aware sequential ramp stops, low value first."""
 
-        if self.ramp_anchors is not None:
-            return (self.ramp_anchors[0], self.ramp_anchors[2])
+        if self.ramp_stops is not None:
+            return self.ramp_stops
         return DARK_RAMP if self.dark_theme else LIGHT_RAMP
 
     def ramp_color(self, fraction: float) -> str:
-        """Map a [0, 1] fraction through the (possibly 3-anchor) ramp.
+        """Map a [0, 1] fraction through the ramp's stops (OKLab blend)."""
 
-        With skin anchors the mapping is piecewise low->mid->high, so a
-        future diverging map is a mapping change, not a schema change.
-        """
-
-        if self.ramp_anchors is not None:
-            low, mid, high = self.ramp_anchors
-            if fraction <= 0.5:
-                return interpolate_hex(low, mid, fraction * 2.0)
-            return interpolate_hex(mid, high, (fraction - 0.5) * 2.0)
-        start, end = self.ramp
-        return interpolate_hex(start, end, fraction)
+        return interpolate_hex(self.ramp, fraction)
 
 
 def _require_channel_spec(state: EncodingState) -> EncodingChannelSpec:
@@ -1616,83 +1613,6 @@ def populate_encoding_state(
     _normalize_color_values(state, raw_values)
 
 
-def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
-    """Format a domain endpoint for the legend (builtin-aware, with units)."""
-
-    from .overlays import legend_domain_text
-
-    return legend_domain_text(spec, value)
-
-
-def _color_legend_rows(state: EncodingState) -> list[Any]:
-    """Return color-channel title and ramp rows for the disclosure legend."""
-
-    from .node_spec import NodeSpec
-
-    if state.spec is None:
-        return []
-    transform_wording = {
-        "linear": "linear min-max",
-        "rank": "rank mapping (ordinal, not ratio)",
-        "log": "log scale (scale-invariant; values <= 0 unencoded)",
-    }[state.spec.transform]
-    title_lines = [
-        f"color_by: {state.spec.display_name}",
-        transform_wording,
-        # The coverage line falls out of the same computation (N13 slice):
-        # a legend may never advertise a scale over zero encoded nodes.
-        f"encoded {len(state.colors)} of {state.eligible_count} eligible nodes",
-        *state.aggregation_lines,
-        *state.notes,
-    ]
-    rows = [NodeSpec(lines=title_lines, shape="box", style="filled,rounded")]
-    if state.domain is None or not state.colors:
-        return rows
-    low, high = state.domain
-    # The 0.5 swatch encodes the geometric mean under log and the midpoint
-    # under linear; under rank it encodes the middle rank, not this midpoint.
-    mid = math.sqrt(low * high) if state.spec.transform == "log" else (low + high) / 2.0
-    for tag, fraction, value in (("min", 0.0, low), ("mid", 0.5, mid), ("max", 1.0, high)):
-        rows.append(
-            NodeSpec(
-                lines=[f"{tag}: {_format_domain_value(state.spec, value)}"],
-                shape="box",
-                fillcolor=state.ramp_color(fraction),
-            )
-        )
-    return rows
-
-
-def _non_color_legend_rows(state: EncodingState) -> list[Any]:
-    """Return active size and stack disclosure rows."""
-
-    from .node_spec import NodeSpec
-
-    rows: list[NodeSpec] = []
-    if state.size_spec is not None:
-        size_lines = [
-            f"size_by: {state.size_spec.display_name}",
-            f"size ~ {state.size_scale}({state.size_spec.display_name}), min-max, clamped",
-            *state.size_aggregation_lines,
-            *state.size_notes,
-        ]
-        if state.size_domain is not None:
-            low, high = state.size_domain
-            size_lines.append(
-                f"min {_format_domain_value(state.size_spec, low)} .. "
-                f"max {_format_domain_value(state.size_spec, high)}"
-            )
-        rows.append(NodeSpec(lines=size_lines, shape="box", style="filled,rounded"))
-    if state.stack_spec is not None:
-        stack_lines = [
-            f"stack_by: {state.stack_spec.display_name}",
-            "same rank = same annotation value",
-            *state.stack_notes,
-        ]
-        rows.append(NodeSpec(lines=stack_lines, shape="box", style="filled,rounded"))
-    return rows
-
-
 #: Notice emitted when an active channel forces the dot engine where AUTO
 #: would have chosen the rank backend by cost (memo 2.1). Forcing dot on a
 #: >threshold-cost graph is the case the rank backend exists for -- expect
@@ -1729,10 +1649,10 @@ def attach_encoding_state(
             size_spec=size_spec,
             size_scale=size_scale,
             stack_spec=stack_spec,
-            # The skin's 3-anchor ramp (N4). The low anchor is off-ground by
+            # The skin's ramp stops (N4). The low stop is off-ground by
             # construction: an encoded-lowest node is never invisible (the
             # measured white-on-white absence defect).
-            ramp_anchors=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
+            ramp_stops=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
         ),
     )
 

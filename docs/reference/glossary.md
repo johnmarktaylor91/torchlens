@@ -1317,37 +1317,43 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **color_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(color_by=...)` fills eligible operation nodes from a colorblind-safe sequential ramp,
-  normalized linear min-max over the visible nodes (the legend states the transform). Missing,
-  non-finite, or rolled-ambiguous values leave nodes unencoded with a legend note. On rolled
+  normalized linear min-max over the visible nodes. The drawn key is a colour bar labelled with
+  the quantity and its units at both ends, and nothing else (no transform, coverage or notes).
+  The ramp is a stop list blended in OKLab at even perceptual speed (default viridis, dark =
+  high on a light page). Missing,
+  non-finite, or rolled-ambiguous values leave nodes unencoded. On rolled
   multi-pass layers, field sources resolve through a name-keyed rolled-aggregate allowlist:
   per-pass-varying and first-pass-only sources are never painted as if uniform, exact cross-pass
-  totals encode with a mandatory aggregation legend line, and unclassified sources refuse
+  totals encode (the aggregation is kept on the encoding state, not drawn), and unclassified sources refuse
   (`encoding_source_invalid`). Wrong-typed values refuse (`encoding_value_invalid`); a raising
   callable refuses with the original exception chained (`encoding_callable_error`). On a
   collapsed draw, module boxes and segments take the exact sum of their member ops for additive
   sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields) with an aggregation
-  legend line; other sources leave them unencoded with a legend note.
+  line on the encoding state; other sources leave them unencoded with a note on the encoding state.
 
 **size_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(size_by=...)` sizes eligible operation nodes from a scalar field, the `color_by`
   builtin tokens (`"time"`, `"bytes"`, `"flops"`, ... with the same meaning and units), the
   closed `"dims"` shape token (numel of the non-batch output shape), or a callable
   `node -> scalar`. Collapsed boxes and segments size from the same exact member-op sums as
-  `color_by`. Sizes are label-aware: the median label box among encoded nodes (or a node's
-  own label box when larger) is the smallest-value size and the largest value gets 4x that area. Emitted sizes are width/height
+  `color_by`. The smallest value draws at the drawing's typical node size (the median size the
+  nodes' labels need, widened for ellipses and other non-box shapes) and the largest at 2x that
+  area; a node whose text needs more room draws at what its text needs, so one long label never
+  inflates the other nodes. Emitted sizes are width/height
   MINIMUMS under `fixedsize=false`: a label can never be truncated by an encoding and fonts never
   scale. Strictly opt-in — plain `draw()` keeps
   uniform boxes. On rolled multi-pass layers size REFUSES where color degrades
   (`size_by_rolled_varying`): a size source that cannot be certified single-valued
   (marker-varying, first-pass projection, varying shape under `"dims"`) has no honest "n/a"
-  rendering. Exact cross-pass totals (`total_*`) encode with a mandatory aggregation legend line;
-  callables bypass the rolled table with a legend disclosure.
+  rendering. Exact cross-pass totals (`total_*`) encode with a mandatory aggregation line on the
+  encoding state; callables bypass the rolled table with a note on the encoding state. The drawn key
+  is one line, for example `size: output bytes, 15 KB ... 60 KB`.
 
 **scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
 : The size-channel scale transform: `"sqrt"` (default; compresses dynamic range) or `"linear"`
   (the literal area motif). Log is rejected by design (flattens 512-vs-4096). Supplied without
   `size_by` it refuses (`scale_requires_size_by`); an unknown token refuses
-  (`encoding_scale_invalid`). Every legend drawn states the active scale.
+  (`encoding_scale_invalid`).
 
 **stack_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank (the classic
@@ -1373,13 +1379,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **show_legend tri-state**
 : `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
-  then a channel-only disclosure legend; a `module=` focused draw also gets the key), `True` (the
+  then the channel key alone; a `module=` focused draw also gets the key), `True` (the
   key: one compact row per drawn mark, each drawn with its real shape and fill --
   input, output, trainable and frozen weights, module frame, module run as one op, collapsed
   module, hidden buffers, buffer, true/false test, mutated parameter or intervention only when the
   picture has one -- plus
-  channel rows when active), and `False` (no legend, honored even with channels active — the
-  encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
+  the channel key when active), and `False` (no legend, honored even with channels active — the
+  key is then not drawn). On `Trace.draw` the key sits in the top-left block under the
   header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
 **show_containers / container_max_inline (Trace.draw kwargs)**
@@ -3096,8 +3102,10 @@ deprecation shim owed*
   `"debug"` (what is broken?), `"speed"` (where does time go?), `"dims"` (what shape is the
   data?), `"transformer"` (how is attention wired?), `"memory"` (what is big in bytes?),
   `"sequence"` (how do the passes unfold?), `"compute"` (where are the FLOPs?) and
-  `"interventions"` (what did the edits change?). Each view prints its caption lines under
-  the header block, starting with `view: <name> -- <question>`. Keywords you pass win over
+  `"interventions"` (what did the edits change?). Each view prints any caption lines it needs
+  under the header block, which names the model, the traced network's op count and size (a `module=` draw: that
+  module's; never the drawn boxes), the parameters
+  (compact from 1,000, `11.7M params`) and, on an edited trace, one edit line. Keywords you pass win over
   the view's own settings, so combinations are spelled with keywords, for example
   `trace.draw(view="debug", show_edge_shapes=True)`. `theme=` stays the colour skin and
   composes with any view; `"speed"`, `"memory"` and `"compute"` turn on the
@@ -3398,7 +3406,7 @@ deprecation shim owed*
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
-  an encoding channel is active, then a channel-only disclosure legend; a
+  an encoding channel is active, then the channel key alone; a
   `module=` focused draw also shows the key. The reading key (what `@name`,
   an op name's two counters, the shape and size line and call arguments mean)
   is opt-in: `show_legend=True` adds it to a focused draw.
@@ -5066,7 +5074,7 @@ alphabetical order.
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
 | `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (accepts `save_grads`; other keywords pass to `torch.Tensor.backward`); returns the Trace |
-| `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
+| `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"`. A trace captured from one photo (a file path or PIL image) draws a thumbnail of it on the input node; `"shape_only"` turns that off |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
 | `Trace.buffer_write_ops` | Labels of buffer Ops that record writes to registered buffers |
@@ -6560,7 +6568,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `idempotent=` | constructor keyword of `tl.agent.AgentToolSpec` (default `True`) |
 | `identifier=` | keyword of `tl.bridge.brain_score.activations_extractor` (keyword-only; default `None`): Brain-Score activations identifier; defaults to the model class name, matching `PytorchWrapper`; constructor keyword of `tl.postprocessing.ResolvedPostprocessing` (required): Model, weights, label bank, or default-policy identifier |
 | `ids=` | constructor keyword of `tl.transformer.TokenAxis` (default `None`): Optional tokenizer ids aligned with `tokens` |
-| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional local image path used by the existing `NodeSpec.image` render hook; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
+| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional picture for the selected nodes: an image file path or a PIL image; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
 | `images=` | keyword of `tl.viz.image_scatter` (keyword-only; default `None`): Optional PIL images to paste at scatter positions; keyword of `tl.viz.montage` (required): Input images to render |
 | `in_progress=` | keyword of `tl.dataset_extraction.open_extraction` (keyword-only; default `False`): Open a still-writing artifact's trusted committed prefix; `reader.refresh()` rescans |
 | `include_activations=` | keyword of `Trace.save` (keyword-only; default `False`): Archive exactly the capture-time `save=`-selected payloads for inspection and eligible byte-exact attestation; those payloads never seed execution; keyword of `Recording.save` (keyword-only; default `False`) |
@@ -7148,7 +7156,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `site_id=` | keyword of `HistoryReader.observations` (keyword-only; default `None`); keyword of `HistoryView.series`, `HistoryView.site_streams`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
 | `site_key=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): Live structural site key for the op (recapture-stable identity) |
 | `sites=` | keyword of `HistoryView.from_blocks`, `tl.trackers.architecture_fingerprint`, `tl.trackers.build_manifest`, `tl.trackers.emission_from_block` (required); keyword of `tl.attribution.deconvolution` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only); keyword of `tl.attribution.guided_backprop` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only -- the module-hook coverage class for reference-implementation parity); keyword of `tl.bridge.brain_score.per_layer` (keyword-only; default `None`): Optional iterable of sites to score: layer labels, selectors, or module dotted paths (the spelling Brain-Score users already write). Defaults to every STIMULUS-INDEXED saved tensor layer except input placeholders, through the core eligibility gate -- a partially saved trace scores its saved sites ..; keyword of `tl.bridge.lit.model` (keyword-only; default `None`): Which activations to expose as LIT `Embeddings` fields: the gate-passed `"blocks"` preset, explicit module addresses (optionally pass-qualified `"address:N"`), or `` for none. Required -- the bridge refuses rather than guesses ([UI-SPRINT] item 4); constructor keyword of `tl.debug.LivenessProbe`, `tl.mechinterp.SavePlan` (required); keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'resid_pre'`): Facet to patch (`resid_pre` / `attn_out` / `z` / ...); keyword of `tl.neuro.compare` (keyword-only; default `None`): Sites to score (default: every stimulus-indexed saved site, or every mapping key); keyword of `tl.neuro.plan_extraction` (keyword-only; default `'all'`): `"all"` (every saved-activation site on the observed path) or an iterable of layer labels to include; constructor keyword of `tl.options.NarrationOptions` (optional): Narration scope: `True` (every completed tensor-output event plus module structure lines), `"modules"` (structure lines only -- a cheap flight recorder), or any LIVE-evaluable selector/callable (`tl.func`, `tl.in_module`, boolean combinations, bounded `followed_by`). Selectors needing ..; keyword of `tl.mechinterp.ablation_controls` (keyword-only; default `None`): Optional `name -> selector` of neighbouring sites; runs the site family |
-| `size_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Size encoding channel (keyword-only; unstable): a Layer/Op field name, the `"dims"` shape token, or a callable `node -> scalar`. Encoded nodes get width/height minimums (labels are never truncated), clamped to 4x the default area. A rolled multi-pass layer whose source cannot be certified ..; constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE size-channel value source (field, `"dims"`, or callable); see `Trace.draw` |
+| `size_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Size encoding channel (keyword-only; unstable): a Layer/Op field name, the `"dims"` shape token, or a callable `node -> scalar`. Encoded nodes get width/height minimums (labels are never truncated), clamped to 2x the typical node area. A rolled multi-pass layer whose source cannot be certified ..; constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE size-channel value source (field, `"dims"`, or callable); see `Trace.draw` |
 | `sketch=` | keyword of `tl.trackers.correct_histogram`, `tl.trackers.histogram_points` (required) |
 | `skip_fn=` | keyword of `Trace.draw` (keyword-only; default `None`): Per-node styling and selection callbacks (see `tl.viz.nodes`); constructor keyword of `tl.options.VisualizationOptions` (optional): Optional layer skip predicate |
 | `slice_cols=` | constructor keyword of `tl.mechinterp.ProjectionSource` (required): `(start, stop)` column slice into the math-oriented fused weight, `None` for unfused roles |
