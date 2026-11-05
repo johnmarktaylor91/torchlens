@@ -797,6 +797,207 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         ),
     ),
     CustomCheckExemption(
+        func_name="index_add",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_add joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="index_add_",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_add_ joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="index_copy",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_copy joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="index_copy_",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_copy_ joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="index_fill",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_fill joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="index_fill_",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "index_fill_ joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="take_along_dim",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "take_along_dim joins the degenerate-index-domain row (maintainer ruling 2026-11-05): "
+            "only an index with no admissible alternate value (domain n<=1) is exempt"
+        ),
+        refuses=(
+            "any perturbable index domain, which is rotated in-domain instead (negative "
+            "entries in [-n, 0) count as in-domain), and every non-index parent of the call"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="nll_loss",
+        check="_check_index_domain_degenerate",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "nll_loss joins cross_entropy's degenerate target row (maintainer "
+            "ruling 2026-11-05): a single-class domain or an all-ignore_index target admits no "
+            "alternate target"
+        ),
+        refuses=(
+            "a perturbable target domain (rotated in-domain with out-of-range sentinels "
+            "preserved) and the log-probability parent"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="masked_scatter",
+        check="check_masked_scatter_empty_source_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "an empty saved source admits only the all-False mask (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("a mask over a non-empty source, the input parent and the source parent"),
+    ),
+    CustomCheckExemption(
+        func_name="masked_scatter_",
+        check="check_masked_scatter_empty_source_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "an empty saved source admits only the all-False mask (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("a mask over a non-empty source, the input parent and the source parent"),
+    ),
+    CustomCheckExemption(
+        func_name="maskedscatter",
+        check="check_masked_scatter_empty_source_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "an empty saved source admits only the all-False mask (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("a mask over a non-empty source, the input parent and the source parent"),
+    ),
+    CustomCheckExemption(
+        func_name="ctc_loss",
+        check="check_ctc_single_target_length_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "concatenated 1-D targets force sum(target_lengths) == targets.numel(), so a "
+            "batch of one has a single valid target length (maintainer ruling 2026-11-05)"
+        ),
+        refuses=(
+            "padded 2-D targets, unbatched log_probs, input lengths, batches of two or more "
+            "and every other parent"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="conv_transpose1d",
+        check="check_conv_transpose_unit_output_padding_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "output_padding must be below the stride or dilation, so with every stride and "
+            "dilation 1 the only valid value is 0 (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("any stride or dilation above 1, a non-zero saved padding and every other parent"),
+    ),
+    CustomCheckExemption(
+        func_name="conv_transpose2d",
+        check="check_conv_transpose_unit_output_padding_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "output_padding must be below the stride or dilation, so with every stride and "
+            "dilation 1 the only valid value is 0 (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("any stride or dilation above 1, a non-zero saved padding and every other parent"),
+    ),
+    CustomCheckExemption(
+        func_name="conv_transpose3d",
+        check="check_conv_transpose_unit_output_padding_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "output_padding must be below the stride or dilation, so with every stride and "
+            "dilation 1 the only valid value is 0 (maintainer ruling 2026-11-05)"
+        ),
+        refuses=("any stride or dilation above 1, a non-zero saved padding and every other parent"),
+    ),
+    CustomCheckExemption(
+        func_name="argsort",
+        check="check_argsort_singleton_dim_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "argsort over a dim of size 1 returns index 0 for every input (maintainer "
+            "ruling 2026-11-05)"
+        ),
+        refuses=("a sorted dim of two or more, a non-zero saved output and any non-input parent"),
+    ),
+    CustomCheckExemption(
         func_name="where",
         check="_check_where_exempt",
         contract=_C2,
@@ -1304,9 +1505,9 @@ class TestRegistryLedgerMechanismIsRedCapable:
         """A new op in the custom registry needs its own audit record."""
 
         planted = dict(ex.CUSTOM_EXEMPTION_CHECKS)
-        planted["take_along_dim"] = ex._check_index_domain_degenerate
+        planted["bucketize"] = ex._check_index_domain_degenerate
         violations = custom_check_violations(planted, CUSTOM_CHECK_LEDGER, ex)
-        assert any("take_along_dim" in violation for violation in violations)
+        assert any("bucketize" in violation for violation in violations)
 
     def test_rebinding_an_audited_check_to_another_predicate_is_reported(self) -> None:
         """Swapping ``masked_fill``'s proof for a laxer one is reported."""

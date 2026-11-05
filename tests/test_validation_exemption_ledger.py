@@ -605,6 +605,17 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
+        code="setitem_empty_mask_value",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:setitem_empty_mask_value_decision",
+        refuses=(
+            "a mask with any True entry, an index with no bool mask component, a perturbed "
+            "parent at the destination or index slot, and a saved output that differs from "
+            "the saved destination"
+        ),
+    ),
+    Exemption(
         code="zero_source_index_irrelevant",
         tier="posthoc",
         contract="C2 perturbation sensitivity",

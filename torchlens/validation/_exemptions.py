@@ -37,6 +37,13 @@ import torch
 
 from .._data_classes.op import Op
 from .._utils._record_group_table import record_member
+from ._degenerate_domains import (  # noqa: F401  (the table resolves these through globals())
+    _check_index_domain_degenerate,
+    check_argsort_singleton_dim_exempt,
+    check_conv_transpose_unit_output_padding_exempt,
+    check_ctc_single_target_length_exempt,
+    check_masked_scatter_empty_source_exempt,
+)
 from ._destination_coverage import (
     _get_scatter_destination_dim_index,
     _index_positions_cover_destination_exactly,
@@ -60,12 +67,7 @@ from ._exemptions_arg_slots import (
     _perturbed_parent_occupies_arg_slot,
 )
 from ._foreign_kernel_dependence import check_foreign_kernel_dependence_exempt  # noqa: F401
-from ._index_domain import (
-    _INDEX_DOMAIN_ARG_SPECS,
-    _index_domain_size,
-    _parent_is_index_domain_arg,
-    _saved_integer_index_tensor,
-)
+from ._index_domain import _INDEX_DOMAIN_ARG_SPECS, _parent_is_index_domain_arg
 from ._influence_probes import (
     _bool_comparison_straddle_probe,
     _bool_predicate_influence_probe,
@@ -138,47 +140,6 @@ _VALUE_PROOFS = (
     sdpa_value_proof_decision,
     saved_value_proof_decision,
 )  # dispatch order: the operand and sdpa proofs decide first
-
-
-def _check_index_domain_degenerate(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
-    """Exempt an index parent ONLY when no in-domain perturbation exists.
-
-    A domain of ``n <= 1`` valid values, or a saved index tensor with zero
-    in-domain entries (e.g. an all-``ignore_index`` target), admits no valid
-    alternate index at all -- value-irrelevance is forced by the domain
-    constraint, not assumed. Any perturbable domain returns False so the
-    strict in-domain rotation check runs.
-
-    Parameters
-    ----------
-    self:
-        Trace being validated (unused; signature parity with the registry).
-    layer:
-        Captured index-consuming op.
-    layers_to_perturb:
-        Parent labels currently being perturbed.
-
-    Returns
-    -------
-    bool
-        Whether the perturbed parent is a provably unperturbable index arg.
-    """
-
-    del self
-    if len(layers_to_perturb) != 1:
-        return False
-    if not _parent_is_index_domain_arg(layer, layers_to_perturb[0]):
-        return False
-    saved_index = _saved_integer_index_tensor(layer)
-    if saved_index is None:
-        return False
-    domain_size = _index_domain_size(layer)
-    if domain_size is None:
-        return False
-    if domain_size < 2:
-        return True
-    in_domain = (saved_index >= 0) & (saved_index < domain_size)
-    return not bool(in_domain.any())
 
 
 # ---------------------------------------------------------------------------

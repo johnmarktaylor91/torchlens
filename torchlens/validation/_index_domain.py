@@ -10,13 +10,17 @@ Split from ``validation/_exemptions.py`` along this seam (R43 file-size
 ratchet); the logic is unchanged.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._data_classes.op import Op
 from .._utils._record_group_table import record_member
 from ._setitem_index_probe import layer_has_setitem_index_parent, setitem_index_probe_values
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 # ---------------------------------------------------------------------------
 # Index-domain perturbation standard.
@@ -63,9 +67,9 @@ _INDEX_DOMAIN_ARG_SPECS: dict[str, tuple[int, frozenset[str]]] = {
     # input.numel() when dim is None (indices into the flattened input).
     "take_along_dim": (1, frozenset({"indices"})),
     # index_add/index_copy/index_fill(input, dim, index, ...) and their in-place
-    # forms -- domain = input.shape[dim], as for index_select. No exemption
-    # applies to them: the scatter overwrite proof matches overwriting scatters
-    # by name (``_destination_coverage._OVERWRITE_SCATTER_FUNC_NAMES``).
+    # forms -- domain = input.shape[dim], as for index_select. Like every op in
+    # this table they take the degenerate-domain exemption
+    # (``_degenerate_domains._check_index_domain_degenerate``).
     "index_add": (2, frozenset({"index"})),
     "index_add_": (2, frozenset({"index"})),
     "index_copy": (2, frozenset({"index"})),
