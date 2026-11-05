@@ -139,6 +139,9 @@ def render_lines_to_html(lines: list[str]) -> str:
         if index == 0:
             text = f"<B>{text}</B>"
         rows.append(f'<TR><TD ALIGN="CENTER">{text}</TD></TR>')
+    if not rows:
+        # A table with no rows is a Graphviz syntax error; no lines means no label.
+        return ""
     return (
         '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="2">'
         + "".join(rows)

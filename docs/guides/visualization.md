@@ -72,7 +72,7 @@ The shape of the node says what kind of record it is. An ellipse is a plain oper
 module that ran as one operation, such as an `nn.Linear` or `nn.Conv2d`, or the one operation
 a module ran itself while the rest ran in its submodules (the residual `add` of a block, in
 the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
-(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
+(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A `node_spec_fn` callback can drop that double border by setting `spec.extra_attrs["peripheries"] = "1"`. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
 
 When the trace was captured from a photo, `tl.trace(model, "cat.jpg")` or a PIL image, the
@@ -464,6 +464,7 @@ These keywords of `Trace.draw` are not pictured above:
 | `fold_patterns` | fold named linear paths into one node: `"idiomatic"` for the curated conv-bn-relu preset, or a mapping such as `{"ConvBnRelu": "conv2d > batch_norm > relu"}`; not combined with automatic `collapse` |
 | `collapse_fn`, `skip_fn` | your own predicates for which modules collapse and which operations are left out (see `tl.viz.nodes`) |
 | `show_edge_shapes` | label each forward edge with the producer's output shape |
+| `show_arg_labels` | label the edges into a multi-input operation (`cat`, a two-input function) with the argument position each parent fills (default `True`); `False` draws none |
 | `show_input_transform_summary` | add a row summarizing the input preprocessing |
 | `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
 | `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"as_node"` |

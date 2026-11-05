@@ -50,6 +50,7 @@ def collect_pre_forward_tensor_ids(
     from .model_prep import (
         _clear_module_attribute_tensor_metadata,
         _clear_module_callables_tensor_metadata,
+        method_index,
     )
 
     owned: dict[int, torch.Tensor] = {}
@@ -71,8 +72,11 @@ def collect_pre_forward_tensor_ids(
     submodules = list(model.modules())
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen, visit=_note)
+    methods = method_index(type(submodule) for submodule in submodules)
     for submodule in submodules:
-        _clear_module_callables_tensor_metadata(submodule, seen, visit=_note_callable)
+        _clear_module_callables_tensor_metadata(
+            submodule, seen, visit=_note_callable, methods=methods
+        )
     return owned, frozenset(callable_only)
 
 

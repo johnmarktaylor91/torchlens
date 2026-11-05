@@ -101,6 +101,7 @@ VisualizationOptions.open_viewer
 VisualizationOptions.order_siblings
 VisualizationOptions.renderer
 VisualizationOptions.rolled
+VisualizationOptions.show_arg_labels
 VisualizationOptions.show_buffers
 VisualizationOptions.show_cone
 VisualizationOptions.show_edge_shapes

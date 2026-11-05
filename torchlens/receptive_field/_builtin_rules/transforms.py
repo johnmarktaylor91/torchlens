@@ -13,7 +13,7 @@ from .._rules import (
     _RuleResult,
     register_rf_rule,
 )
-from ._utils import int_tuple
+from ._utils import int_tuple, parent_roles
 
 
 def _axis_map_result(
@@ -102,13 +102,51 @@ def _shape_axis_map(
     return mapping
 
 
+#: Argument roles of a reshape's data operand; every other traced parent is a
+#: size argument (``x.view(bsz, seq_len, -1)`` with 0-d tensor sizes).
+_RESHAPE_DATA_ROLES = frozenset({"args:0", "kwargs:input", "kwargs:self"})
+
+
 @register_rf_rule("flatten", "reshape", "view", "squeeze", "unsqueeze")
 def reshape(context: ReceptiveFieldRuleContext) -> _RuleResult:
-    """Remap singleton-only reshapes exactly and refuse mixed-axis identities."""
+    """Remap singleton-only reshapes exactly and refuse mixed-axis identities.
 
-    if not context.in_shapes:
-        return context.unknown("reshape is missing its input shape")
-    parent_shape = context.in_shapes[0]
+    The axis map describes the data operand only. A traced size argument (a 0-d
+    tensor read from ``shape_as_tensor``) sets the layout of every output unit,
+    so it gets a whole-extent upper bound; applying the data operand's axis map
+    to it named axes a 0-d parent does not have.
+    """
+
+    parents = tuple(context.op.parents or ())
+    if len(parents) <= 1:
+        if not context.in_shapes:
+            return context.unknown("reshape is missing its input shape")
+        return _reshape_data_result(context, context.in_shapes[0])
+    data = [
+        (label, shape)
+        for label, shape in zip(parents, context._parent_shapes, strict=False)
+        if parent_roles(context, label) & _RESHAPE_DATA_ROLES
+    ]
+    if len(data) != 1 or data[0][1] is None:
+        return context.unknown("reshape data operand is not one traced parent with a shape")
+    data_label, data_shape = data[0]
+    return _RuleResult(
+        "per_parent",
+        {
+            "by_parent": {data_label: _reshape_data_result(context, tuple(data_shape))},
+            "default": context.full(
+                "all", exact=False, note="a traced reshape size sets every output unit's layout"
+            ),
+        },
+        None,
+    )
+
+
+def _reshape_data_result(
+    context: ReceptiveFieldRuleContext, parent_shape: Sequence[int]
+) -> _RuleResult:
+    """Map the reshape's data operand (``parent_shape``) onto its output axes."""
+
     mapping = _shape_axis_map(parent_shape, context.out_shape)
     if mapping is None:
         return _block_reshape(context, parent_shape)

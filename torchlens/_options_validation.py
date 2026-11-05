@@ -189,6 +189,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # truthily meant ON.
 _VISUALIZATION_BOOL_FIELDS = (
     "show_edge_shapes",
+    "show_arg_labels",
     "rolled",
     "open_viewer",
     "show_cone",
@@ -435,6 +436,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "file_format": visualization.file_format if explicit("file_format") else None,
         "show_buffers": visualization.show_buffers,
         "show_edge_shapes": visualization.show_edge_shapes,
+        "show_arg_labels": visualization.show_arg_labels,
         "direction": visualization.direction,
         "layout": visualization.layout,
         "renderer": visualization.renderer,

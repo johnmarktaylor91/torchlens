@@ -354,6 +354,7 @@ def render_combined_graph(
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
     show_edge_shapes: bool = False,
+    show_arg_labels: bool = True,
     show_legend: bool | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.
@@ -502,6 +503,7 @@ def render_combined_graph(
                 show_buffer_layers=show_buffer_layers,
                 overrides=overrides,
                 node_spec_fn=node_spec_fn,
+                show_arg_labels=show_arg_labels,
                 edge_map=edge_map,
                 captured_forward_edges=captured_forward_edges,
                 node_decision=(

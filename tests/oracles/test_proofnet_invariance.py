@@ -129,3 +129,23 @@ def test_show_edge_shapes_is_capture_invariant() -> None:
         f"capture code reads show_edge_shapes ({readers}) -- the dont-care"
         " declaration for 'VisualizationOptions.show_edge_shapes' is FALSE; key it"
     )
+
+
+def test_show_arg_labels_is_capture_invariant() -> None:
+    """show_arg_labels is a draw-only flag: no capture path can read it."""
+
+    import inspect
+
+    import torchlens as tl
+
+    trace_params = inspect.signature(tl.trace).parameters
+    assert "show_arg_labels" not in trace_params
+    readers = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in sorted((REPO_ROOT / "torchlens" / "_capture").rglob("*.py"))
+        if "show_arg_labels" in path.read_text("utf-8")
+    ]
+    assert readers == [], (
+        f"capture code reads show_arg_labels ({readers}) -- the dont-care"
+        " declaration for 'VisualizationOptions.show_arg_labels' is FALSE; key it"
+    )

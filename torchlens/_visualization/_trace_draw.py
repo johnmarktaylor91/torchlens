@@ -185,6 +185,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     node_style: VisNodeModeLiteral = "default",
     show_buffers: BufferVisibilityLiteral = "meaningful",
     show_edge_shapes: bool = False,
+    show_arg_labels: bool = True,
     show_legend: bool | None = None,
     color_by: Any = None,
     size_by: str | Callable[[Any], Any] | None = None,
@@ -252,6 +253,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             intervening_cluster=intervening_cluster,
             show_buffer_layers=show_buffers,
             show_edge_shapes=show_edge_shapes,
+            show_arg_labels=show_arg_labels,
             bwd=bwd,
             show_legend=show_legend,
         )

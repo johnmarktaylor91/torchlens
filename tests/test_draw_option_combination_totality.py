@@ -164,6 +164,8 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "show_redundant_args": (PAIRED, True),
     # Walk ruling names.1: the edge-shape channel prints each edge's tensor shape.
     "show_edge_shapes": (PAIRED, True),
+    # Argument-position edge labels are on by default; the pair turns them off.
+    "show_arg_labels": (PAIRED, False),
     # view="interventions" routes through the interventions view, which refuses
     # typed on this un-edited sweep trace (the rule in expected_refusal); the
     # edited-trace renders live in test_surgery_visuals_marks.py.
