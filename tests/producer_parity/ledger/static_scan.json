@@ -3888,6 +3888,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/_runnable/seam.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_runnable/state.py",
@@ -8318,14 +8326,6 @@
   "has_default": false,
   "sites": 4,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/intervention/_intervened_rerun_guard.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": true,

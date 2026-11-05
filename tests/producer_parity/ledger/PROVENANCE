@@ -4995,3 +4995,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 9e76ae8686a471abe5ca43537a9b98f1b51df919 (dirty)
 recorded: 2026-11-03T19:47:35.526847+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rq1104-gallery-defects: re-merge adds _module_replacement.py and moves the rerun-guard audit helper into _runnable/seam.py; static producer scan refreshed for those sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 623779e24cab88bd771807a016777062cbc4715b (clean)
+recorded: 2026-11-05T01:07:25.272766+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rq1104-gallery-defects: re-merge adds _module_replacement.py and moves the rerun-guard audit helper into _runnable/seam.py; static producer scan refreshed for those sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 623779e24cab88bd771807a016777062cbc4715b (clean)
+recorded: 2026-11-05T01:07:28.641924+00:00
