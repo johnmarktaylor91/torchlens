@@ -795,10 +795,10 @@ def _render_raw_input(
             max_items=max_items,
             include_more=include_more,
         )
-    sequence = _raw_input_sequence(value)
+    sequence = [value] if isinstance(value, Image.Image) else _raw_input_sequence(value)
     if sequence is None:
         return None
-    if len(sequence) == 1:
+    if len(sequence) == 1 and not isinstance(sequence[0], Image.Image):  # one photo: batch of one
         return _render_raw_input(trace, sequence[0], batch_render="first")
     if all(isinstance(item, str) for item in sequence):
         strings = cast(Sequence[str], sequence)
