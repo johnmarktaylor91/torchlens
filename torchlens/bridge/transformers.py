@@ -1,7 +1,7 @@
 """Hugging Face auto-route bridge helpers and the TorchLens attention backend.
 
 The attention backend (``register_attention``, ``record_attention``) lives in
-``torchlens.bridge.hf_attention`` and is re-exported here.
+``torchlens.bridge._hf_attention`` and is re-exported here.
 """
 
 from __future__ import annotations
@@ -18,15 +18,15 @@ from torchlens._capture.structure_only import ValueDependentBranchError
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
 from torchlens._input_coerce import _is_modality_input
-from torchlens.bridge._hf_processor import _make_multimodal_transform, _resolve_hf_processor
-from torchlens.bridge._hf_refusals import _is_hf_pretrained_model
-from torchlens.bridge._image_preprocessing import accept_image_resolution
-from torchlens.bridge.hf_attention import (
+from torchlens.bridge._hf_attention import (
     AttentionCall,
     AttentionRecording,
     record_attention,
     register_attention,
 )
+from torchlens.bridge._hf_processor import _make_multimodal_transform, _resolve_hf_processor
+from torchlens.bridge._hf_refusals import _is_hf_pretrained_model
+from torchlens.bridge._image_preprocessing import accept_image_resolution
 
 from .. import preprocessing as _preprocessing
 from .._entry_refusals import refuse_processor_unresolved

@@ -12,7 +12,7 @@ the passes at the capture door instead: every capture pass (``tl.trace``,
 that function while a cell records and notes, for each call, whether its request references the
 cell's hook (armed) and which of the hook's fires happened inside the call. A
 saved-DAG replay (``fork.do``, ``push``) is a pass too: it runs inside
-``torchlens.intervention.replay._run_replay``, recomputes only the cone of its
+``torchlens.intervention._replay._run_replay``, recomputes only the cone of its
 origins, and is counted the same way with that cone as its scope.
 """
 
@@ -79,7 +79,7 @@ _ACTIVE: list[PassRecorder | None] = [None]
 #: The doors the recorder wraps, as ``(module, attribute)``.
 _DOORS: tuple[tuple[str, str], ...] = (
     ("torchlens._capture.run_entry", "_run_resolved_request"),
-    ("torchlens.intervention.replay", "_run_replay"),
+    ("torchlens.intervention._replay", "_run_replay"),
 )
 
 #: The function each installed wrapper replaced, keyed like ``_DOORS``. The

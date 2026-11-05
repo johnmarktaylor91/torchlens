@@ -50,7 +50,7 @@ def test_elif_only_witnessed_if_chain_validates_and_names_its_terminal_bool() ->
         assert elif_arm.fired is False
         assert else_arm.fired is True
         assert conditional.fired_arm_kind == "else"
-        body = [op.label for op in trace._layer_list if op.conditional_branch_stack]
+        body = [op.label for op in trace._layer_list if op.control_flow.branch_stack]
         assert body, "the else body op must carry the arm membership"
     finally:
         trace.cleanup()

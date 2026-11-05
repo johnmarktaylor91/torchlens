@@ -19,7 +19,8 @@ from .._errors import InvalidArgumentError
 from .._io.payload_codec import get_payload_codec
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
-from ..intervention.types import Relationship
+from .._utils._record_group_table import record_member
+from ..intervention._types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
 from ._deltas import _distance_value, _tensor_field as _read_tensor_field
 
@@ -229,7 +230,7 @@ def _check_rank_by(by: str) -> None:
 def _module_row_key(site: Any, site_key: str) -> str:
     """Return the module address a site belongs to, or its own key when it has none."""
 
-    address = getattr(site, "atomic_module_address", None)
+    address = record_member(site, "atomic_module_address", None)
     return address if address else site_key
 
 

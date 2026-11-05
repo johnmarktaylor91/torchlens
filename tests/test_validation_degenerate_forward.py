@@ -22,8 +22,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.validation._core as validation_core
 import torchlens.validation._degenerate_forward as degenerate_forward
-import torchlens.validation.core as validation_core
 from torchlens._user_funcs import _run_model_and_save_specified_outs
 from torchlens.validation import last_validation_failure
 from torchlens.validation._degenerate_forward import (
@@ -31,7 +31,7 @@ from torchlens.validation._degenerate_forward import (
     fail_if_final_outputs_non_finite,
     perturbation_insensitive_failure,
 )
-from torchlens.validation.diagnostics import (
+from torchlens.validation._diagnostics import (
     CHECK_DEGENERATE_FORWARD,
     CHECK_PERTURBATION,
     get_validation_failure,

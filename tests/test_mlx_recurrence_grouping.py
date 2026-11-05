@@ -89,7 +89,7 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     assert [op.pass_number for op in relu_ops] == [1, 2]
     assert {op.layer_label for op in matmul_ops} == {matmul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*matmul_ops, *relu_ops))
-    assert list(matmul_ops[0].recurrent_ops) == [op.label for op in matmul_ops]
+    assert list(matmul_ops[0].graph.recurrent_ops) == [op.label for op in matmul_ops]
     assert trace._layer_num_calls[matmul_ops[0].layer_label] == 2
     assert MLXBackend().validate_trace(trace).passed is True
 

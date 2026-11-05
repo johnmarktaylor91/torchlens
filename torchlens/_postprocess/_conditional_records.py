@@ -148,7 +148,7 @@ def _find_conditional_evaluation_entry_edge(
             continue
 
         parent_layer = self._layer_dict_all_keys[parent_label]
-        if parent_label != first_bool_label and parent_layer.has_output_descendant:
+        if parent_label != first_bool_label and parent_layer._graph_has_output_descendant:
             return (parent_label, first_bool_label)
         parent_queue.extend(parent_layer.parents)
 
@@ -218,10 +218,37 @@ def roles_held_by_pass(
 
     if not layer_roles:
         return []
-    pass_stack = set(op.conditional_branch_stack or ())
+    pass_stack = set(op._control_flow_branch_stack or ())
     return [
         role
         for role in layer_roles
         if role.role != "body"
         or arm_stack_entries.get((role.conditional_id, role.arm_index)) in pass_stack
     ]
+
+
+def _ordered_branch_kinds(event: Any) -> list[str]:
+    """Return a conditional event's branch kinds in arm order.
+
+    Parameters
+    ----------
+    event:
+        Conditional event whose ``branch_ranges`` name its AST arms.
+
+    Returns
+    -------
+    list[str]
+        ``"then"``, the ``elif_<n>`` kinds by index, then ``"else"`` and
+        ``"fallthrough"`` when present.
+    """
+
+    ast_branch_kinds = list(event.branch_ranges)
+    ordered_branch_kinds = ["then"]
+    ordered_branch_kinds.extend(
+        sorted(
+            (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
+            key=lambda kind: int(kind.split("_", 1)[1]),
+        )
+    )
+    ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
+    return ordered_branch_kinds

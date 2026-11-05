@@ -7,7 +7,8 @@ import re as _re
 from .._data_classes._annotation_image import drawable_annotation_image
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
-from ..viz import batch_summary
+from .._utils._record_group_table import record_member
+from ..viz import _batch_summary as batch_summary
 from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
@@ -28,6 +29,7 @@ from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
 from ._render_names import call_collapsed_spec_fn
+from ._render_node_parts import _buffer_node_address, _module_output_summary
 from .modes import CollapsedModeScope
 
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
@@ -124,7 +126,7 @@ def _get_hidden_parent_buffer_addresses(
         Hidden buffer addresses in parent order, de-duplicated.
     """
 
-    if show_buffer_layers == "always" or node.is_buffer:
+    if show_buffer_layers == "always" or node.graph.is_buffer:
         return []
 
     hidden_addresses: list[str] = []
@@ -138,9 +140,9 @@ def _get_hidden_parent_buffer_addresses(
             parent_node = trace.ops[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
-        if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
+        if not parent_node.graph.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
-        address = parent_node.address
+        address = parent_node.buffer_address
         if address is None or address in seen_addresses:
             continue
         hidden_addresses.append(address)
@@ -593,7 +595,7 @@ def _build_layer_node(
     )
     node_bg_color = _get_node_bg_color(self, node)
 
-    if node.has_input_ancestor:
+    if node.graph.has_input_ancestor:
         line_style = "solid"
     else:
         line_style = "dashed"
@@ -660,7 +662,7 @@ def _build_layer_node(
     if collapsed_container_nodes is not None and node_args["name"] in collapsed_container_nodes:
         return node_color
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
-    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
+    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.graph.is_buffer):
         node_args["peripheries"] = "2"
         hidden_tooltip = f"Hidden buffers: {', '.join(hidden_buffer_addresses)}"
         if "tooltip" in node_args:
@@ -676,7 +678,7 @@ def _build_layer_node(
 
     graphviz_graph.node(**image_box_args(self, node_args))
 
-    if node.is_final_output:
+    if node.graph.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
             s.node(_render_node_name(node, vis_mode))
@@ -797,7 +799,7 @@ def _render_raw_input(
             strings = strings[:max_items]
         # Lazy: ..viz top-imports this package, so an import-time edge back
         # into ..viz would mint a bidirectional package cycle (b5 R51).
-        from ..viz import batch_summary
+        from ..viz import _batch_summary as batch_summary
 
         return {
             "label": batch_summary.text_table(strings, max_items),
@@ -1108,10 +1110,7 @@ def _render_raw_output(value: Any) -> dict[str, str] | None:
         }
     if _is_label_score_sequence(value):
         lines = ["output", *[_format_label_score_row(label, score) for label, score in value]]
-        return {
-            "label": render_lines_to_html(lines),
-            "tooltip": _tooltip_repr(value),
-        }
+        return {"label": render_lines_to_html(lines), "tooltip": _tooltip_repr(value)}
     if _is_batch_topk_output(value):
         lines = _format_batch_topk_output_lines(value)
         return {
@@ -1345,18 +1344,7 @@ def _build_collapsed_module_node(
     )
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = address_w_pass.rsplit(":", 1)
-    try:
-        module_call = self.module_calls[address_w_pass]
-        module_output_layer: GraphNode = self.ops[module_call.output_ops[-1]]
-    except (KeyError, IndexError):
-        module_output_layer = node
-    module_output_shape = getattr(module_output_layer, "shape", None)
-    if module_output_shape is None:
-        module_output_shape = getattr(module_output_layer, "out_shape", None)
-    module_output_shape = module_output_shape or ()
-    module_output_fsize = getattr(module_output_layer, "activation_memory", None)
-    if module_output_fsize is None:
-        module_output_fsize = "0 B"
+    module_output_shape, module_output_fsize = _module_output_summary(self, address_w_pass, node)
     address, call_index = module_tuple
     fold = _run_fold_for_address(address, repeat_folds)
     if fold is not None:
@@ -1377,8 +1365,10 @@ def _build_collapsed_module_node(
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self.layers[o].is_buffer for o in module_call.ops)
-        module_has_input_ancestor = any(self.layers[o].has_input_ancestor for o in module_call.ops)
+        module_num_buffers = sum(self.layers[o].graph.is_buffer for o in module_call.ops)
+        module_has_input_ancestor = any(
+            self.layers[o].graph.has_input_ancestor for o in module_call.ops
+        )
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1397,15 +1387,15 @@ def _build_collapsed_module_node(
             # remainder (num_layers over all passes) overstated every
             # multi-call box.
             module_num_tensors = max(0, module_num_tensors - len(surfaced_call_ops))
-            module_num_buffers -= sum(layer.is_buffer for layer in surfaced_call_ops)
+            module_num_buffers -= sum(layer.graph.is_buffer for layer in surfaced_call_ops)
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
     else:
         graph_node_label = module_tuple[0]
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(layer.is_buffer for layer in ml)
-        module_has_input_ancestor = any(layer.has_input_ancestor for layer in ml)
+        module_num_buffers = sum(layer.graph.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.graph.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
@@ -1546,7 +1536,11 @@ def _atomic_module_sibling_counts(trace: "Trace") -> dict[str, int]:
 
     counts: dict[str, int] = {}
     for other in trace._layer_logs.values():
-        if isinstance(other, Layer) and getattr(other, "is_atomic_module", False) and other.modules:
+        if (
+            isinstance(other, Layer)
+            and record_member(other, "is_atomic_module", False)
+            and other.modules
+        ):
             other_address = other.modules[-1].rsplit(":", 1)[0]
             counts[other_address] = counts.get(other_address, 0) + 1
     return counts
@@ -1615,9 +1609,9 @@ def _buffer_versions_for_layer(layer_log: "Layer") -> tuple[int, ...]:
     """
 
     versions = {
-        int(op.buffer_pass)
+        int(record_member(op, "buffer_pass"))
         for op in layer_log.ops.values()
-        if getattr(op, "buffer_pass", None) is not None
+        if record_member(op, "buffer_pass", None) is not None
     }
     return tuple(sorted(versions))
 
@@ -1643,7 +1637,7 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         return None
 
     call_groups = _call_groups_for_layer(layer_log)
-    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.is_buffer else ()
+    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.graph.is_buffer else ()
     if not call_groups and not buffer_versions:
         return None
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
@@ -1700,7 +1694,7 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
+    if (node.module_context.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
         if isinstance(source_node, Op):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
@@ -1717,21 +1711,15 @@ def _get_node_address_shape_color(
         node_address = "<br/>@" + node_address
         node_shape = "box"
         node_color = "black"
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         annotation = (
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
-        if annotation is not None and annotation.buffer_versions:
-            address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
-        elif self._buffer_num_calls[source_node.address] == 1:
-            address = source_node.address
-        else:
-            address = f"{source_node.address}:{source_node.buffer_pass}"
-        node_address = "<br/>@" + address
+        node_address = "<br/>@" + _buffer_node_address(self, source_node, annotation)
         node_shape = "cylinder"
         node_color = "black"
     elif node.is_output or node.is_input:
-        node_address = "<br/>@" + node.io_role
+        node_address = "<br/>@" + node.graph.io_role
         node_shape = "oval"
         node_color = "black"
     else:
@@ -1757,9 +1745,9 @@ def _is_only_non_buffer_in_module(
     """
     # Check whether it leaves its module:
     if not (
-        (len(node.output_of_modules) > 0)
+        (len(node.module_context.output_of_modules) > 0)
         and (len(node.modules) > 0)
-        and (node.modules[-1].split(":")[0] in node.output_of_modules)
+        and (node.modules[-1].split(":")[0] in node.module_context.output_of_modules)
     ):
         return False
 
@@ -1780,7 +1768,8 @@ def _is_only_non_buffer_in_module(
         else:
             parent_layer = self._layer_logs[parent_layer_label]
         if (
-            (not parent_layer.is_buffer) or _is_buffer_visible(parent_layer, show_buffer_layers)
+            (not parent_layer.graph.is_buffer)
+            or _is_buffer_visible(parent_layer, show_buffer_layers)
         ) and ((len(parent_layer.modules) > 0) and parent_layer.modules[-1] == node.modules[-1]):
             return False
 
@@ -1803,9 +1792,9 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = INPUT_COLOR
     elif node.is_output:
         bg_color = OUTPUT_COLOR
-    elif node.is_terminal_bool:
+    elif record_member(node, "is_terminal_bool", False):
         bg_color = bool_node_fill(node, BOOL_NODE_COLOR)
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
         source = node.original if isinstance(node, FocusNode) else node
@@ -1949,7 +1938,7 @@ def compute_default_node_lines(
         return list(layer_log.lines) or [layer_log.display_label]
 
     # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
-    lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
+    lines = [bool_value_line(layer_log)] if layer_log.control_flow.is_terminal_bool else []
     # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; the "label" token keeps it too.
     module_row = node_label_fields is None or "module" in node_label_fields
     call_label = pass_mark_suffix(

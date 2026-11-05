@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Collection, Iterable
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
 from ._engine import solve
 from ._errors import ReceptiveFieldConfigurationError
 from ._types import (
@@ -83,24 +84,24 @@ def _require_input_role(trace: Trace, input_op: Op | None) -> str | None:
     model_inputs = [
         op
         for op in trace._layer_list
-        if bool(getattr(op, "is_input", False)) and getattr(op, "io_role", None) is not None
+        if bool(getattr(op, "is_input", False)) and record_member(op, "io_role", None) is not None
     ]
 
     # Canonical layer_list operation supplied directly.
     for op in model_inputs:
         if op is input_op:
-            return op.io_role
+            return op.graph.io_role
 
     # Trace accessor handle: resolve to its canonical model-input op by trace
     # ownership plus exact input label/IO role, then reject anything foreign.
     if getattr(input_op, "source_trace", None) is trace:
         handle_label = str(getattr(input_op, "label", ""))
-        handle_role = getattr(input_op, "io_role", None)
+        handle_role = record_member(input_op, "io_role", None)
         for op in model_inputs:
             if op.label == handle_label or (
-                handle_role is not None and op.io_role == str(handle_role)
+                handle_role is not None and op.graph.io_role == str(handle_role)
             ):
-                return op.io_role
+                return op.graph.io_role
 
     raise ReceptiveFieldConfigurationError(
         "input must be a model-input Op (or trace input accessor handle) belonging to this trace."

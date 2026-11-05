@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import Any
 
 from .._data_classes._template_walk import dataclass_field_names
+from .._utils._record_group_table import record_member
 
 #: Exact leaf classes that are never containers, dataclasses or callables.
 _ATOMIC_CLASSES = frozenset({int, float, bool, bytes, complex, type(None)})
@@ -145,13 +146,13 @@ def _rename_replay_fields(
         set_entry_field(
             "_edge_uses", [_rename_label_dataclass(record, mapping, cache) for record in edge_uses]
         )
-    args_template = getattr(layer_entry, "args_template", None)
+    args_template = record_member(layer_entry, "args_template", None)
     if args_template is not None:
         set_entry_field(
             "args_template",
             _rename_template_parent_refs(args_template, mapping, parent_ref_cls, cache),
         )
-    kwargs_template = getattr(layer_entry, "kwargs_template", None)
+    kwargs_template = record_member(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
         set_entry_field(
             "kwargs_template",

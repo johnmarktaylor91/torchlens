@@ -29,7 +29,7 @@ import torchlens as tl
 from torchlens._postprocess import _call_site_contract as contract, loop_detection
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.diagnostics import get_validation_diagnostics
+from torchlens.validation._diagnostics import get_validation_diagnostics
 
 
 class _TwoReluLines(nn.Module):
@@ -102,7 +102,7 @@ def test_planted_recurrent_group_spanning_two_sites_fails_step7(
         relus = [entry for entry in trace if entry.func_name == "relu"]
         joined = sorted(entry._label_raw for entry in relus)
         for entry in relus:
-            entry.recurrent_ops = joined
+            entry._graph_recurrent_ops = joined
 
     monkeypatch.setattr(loop_detection, "_rebuild_pass_assignments", _joining_rebuild)
     _capture_must_breach(_TwoReluLines(), "iii")

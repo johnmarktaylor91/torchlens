@@ -24,9 +24,9 @@ import torchlens as tl
 from torchlens._io.format3.contract import BLOBS_DIR, INTERVENTION_FILE, TYPED_VALUE_KEY
 from torchlens._io.format3.payloads import RECIPE_CHUNK_STEM, PayloadStore
 from torchlens._io.format3.recipe import _RecipeEncoder
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import _serialize_value, _SerializedState
-from torchlens.intervention.save import SaveLevel
-from torchlens.intervention.types import InterventionSpec
+from torchlens.intervention._types import InterventionSpec
 from torchlens.options import CaptureOptions, InterventionOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword

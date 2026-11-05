@@ -6,7 +6,7 @@ argument's shape. These helpers locate that index slot, measure its domain, and
 build in-domain perturbations (full rotation, single-entry move) for the replay
 ladder. ``exemptions.py`` consumes the slot and domain facts for its degenerate-
 domain and value-irrelevance decisions; ``core.py`` consumes the perturbations.
-Split from ``validation/exemptions.py`` along this seam (R43 file-size
+Split from ``validation/_exemptions.py`` along this seam (R43 file-size
 ratchet); the logic is unchanged.
 """
 
@@ -15,6 +15,7 @@ from typing import Any
 import torch
 
 from .._data_classes.op import Op
+from .._utils._record_group_table import record_member
 from ._setitem_index_probe import layer_has_setitem_index_parent, setitem_index_probe_values
 
 # ---------------------------------------------------------------------------
@@ -101,7 +102,7 @@ def _parent_is_index_domain_arg(layer: Op, parent_label: str) -> bool:
     if spec is None:
         return False
     index_pos, index_kwargs = spec
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     if (parent_arg_positions.get("args", {}) or {}).get(index_pos) == parent_label:
         return True
     kwarg_map = parent_arg_positions.get("kwargs", {}) or {}
@@ -123,7 +124,7 @@ def layer_has_index_domain_parent(layer: Op) -> bool:
         one of its kwarg spellings (``_parent_is_index_domain_arg``).
     """
 
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
+    parent_arg_positions = record_member(layer, "parent_arg_positions", {}) or {}
     labels = set((parent_arg_positions.get("args", {}) or {}).values())
     labels |= set((parent_arg_positions.get("kwargs", {}) or {}).values())
     return any(
@@ -170,8 +171,8 @@ def _index_domain_size(layer: Op) -> int | None:
     """
 
     func_name = getattr(layer, "func_name", None)
-    args: tuple[Any, ...] = getattr(layer, "saved_args", None) or ()
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args: tuple[Any, ...] = record_member(layer, "saved_args", None) or ()
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     if func_name == "embedding":
         weight = kwargs.get("weight", args[0] if args else None)
         if isinstance(weight, torch.Tensor) and weight.ndim >= 1:
@@ -242,8 +243,8 @@ def _in_domain_ignore_index(layer: Op, domain_size: int) -> int | None:
 
     if getattr(layer, "func_name", None) not in _IGNORE_INDEX_OPS:
         return None
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
-    args: tuple[Any, ...] = getattr(layer, "saved_args", None) or ()
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
+    args: tuple[Any, ...] = record_member(layer, "saved_args", None) or ()
     # nll_loss(input, target, weight, size_average, ignore_index, ...);
     # cross_entropy shares the slot order.
     ignore = kwargs.get("ignore_index", args[4] if len(args) > 4 else -100)
@@ -295,11 +296,11 @@ def _saved_index_domain_arg_value(layer: Op) -> Any:
     if spec is None:
         return None
     index_pos, index_kwargs = spec
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     for name in index_kwargs:
         if name in kwargs:
             return kwargs[name]
-    args: tuple[Any, ...] = getattr(layer, "saved_args", None) or ()
+    args: tuple[Any, ...] = record_member(layer, "saved_args", None) or ()
     if len(args) > index_pos:
         return args[index_pos]
     return None

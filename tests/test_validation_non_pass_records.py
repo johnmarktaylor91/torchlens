@@ -17,11 +17,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.validation.core as core
+import torchlens.validation._core as core
 from torchlens._user_funcs import _run_model_and_save_specified_outs
 from torchlens.validation import get_validation_failure
-from torchlens.validation.core import ValidationCheckResult, validate_saved_outs
-from torchlens.validation.diagnostics import (
+from torchlens.validation._core import ValidationCheckResult, validate_saved_outs
+from torchlens.validation._diagnostics import (
     CHECK_PERTURBATION,
     CHECK_REPLAY,
     CHECK_REPLAY_UNVERIFIED,
@@ -78,7 +78,7 @@ def test_every_status_exit_of_validate_saved_outs_goes_through_the_recorder() ->
             and node.func.attr == "as_status"
         ]
         assert not builders, f"{path.name} builds a status directly at lines {builders}"
-    functions = _module_functions("core.py") | _module_functions("_saved_outs_steps.py")
+    functions = _module_functions("_core.py") | _module_functions("_saved_outs_steps.py")
     offenders = _status_exits_outside_recorder("validate_saved_outs", functions, set())
     assert not offenders, f"status exits outside the failure recorder: {offenders}"
 

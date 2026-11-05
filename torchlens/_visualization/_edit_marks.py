@@ -34,7 +34,7 @@ from .._selection.resolver import _resolve_sites
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import EDITED_NODE_CLASS, INTERVENTION_SITE_COLOR
 from ..intervention._edit_repr import _is_signature_default, render_edit_repr
-from ..intervention.helpers import builtin_helper_constructor
+from ..intervention._helpers import builtin_helper_constructor
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
 from .node_spec import _forward_site
@@ -43,7 +43,7 @@ from .themes import _relative_luminance
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from ..intervention.types import Edit, FireRecord
+    from ..intervention._types import Edit, FireRecord
     from .themes import VisualizationTheme
 
 __all__ = [
@@ -251,7 +251,7 @@ def short_edit_text(edit: Edit) -> str:
 def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
     """Return the mark for a plain hook callable or a value replacement."""
 
-    from ..intervention.types import Edit
+    from ..intervention._types import Edit
 
     if isinstance(hook, Edit):
         return _helper_mark(hook, detail=detail)

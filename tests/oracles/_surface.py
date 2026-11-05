@@ -182,9 +182,7 @@ def _normalize_import_state(namespace: types.ModuleType) -> None:
     Importing the deterministic filesystem submodule set pins the walk to
     ONE canonical maximal state; installers are idempotent by contract
     (re-import is a module-cache hit). Private modules are not imported here:
-    a documented member must exist on its class without them (the
-    ``gpu_kernels`` views are declared on ``Op``/``AtenOp`` and reach the
-    private telemetry module only when read).
+    a documented member must exist on its class without them.
 
     Parameters
     ----------

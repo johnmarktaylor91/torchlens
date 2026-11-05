@@ -37,7 +37,7 @@ from torchlens.attribution._core import (
     _target_repr,
     _temporarily_eval,
 )
-from torchlens.intervention.helpers import mean_ablate, zero_ablate
+from torchlens.intervention._helpers import mean_ablate, zero_ablate
 
 # Deterministic per-engine pass budgets (attrib memo D9), sized by the
 # measured 16.6x direct-vs-replay per-pass ratio (13.4 ms direct vs 222 ms

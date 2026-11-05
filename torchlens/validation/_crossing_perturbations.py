@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -94,7 +96,7 @@ def _is_real_numeric(value: torch.Tensor) -> bool:
 def _isclose_slot_of(layer: Op, parent_label: str) -> int | None:
     """Return 0 for the ``input`` operand, 1 for ``other``, else None."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     for position in (0, 1):
         if positions.get("args", {}).get(position) == parent_label:
             return position
@@ -106,8 +108,8 @@ def _isclose_slot_of(layer: Op, parent_label: str) -> int | None:
 def _isclose_operand(layer: Op, slot: int) -> torch.Tensor | None:
     """Return the saved operand in ``slot`` as a tensor (a Python scalar is wrapped)."""
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     value = args[slot] if slot < len(args) else kwargs.get(_ISCLOSE_SLOTS[slot])
     if isinstance(value, torch.Tensor):
         return value.detach()
@@ -119,8 +121,8 @@ def _isclose_operand(layer: Op, slot: int) -> torch.Tensor | None:
 def _isclose_tolerances(layer: Op) -> tuple[float, float, bool]:
     """Return the recorded ``rtol``, ``atol`` and ``equal_nan`` (positional or keyword)."""
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     values: list[Any] = []
     for index, (name, default) in enumerate(_ISCLOSE_DEFAULTS, start=2):
         values.append(args[index] if index < len(args) else kwargs.get(name, default))
@@ -224,8 +226,8 @@ def integer_extrema_crossing_values(
 def _extrema_other_operand(layer: Op, parent_label: str) -> torch.Tensor | None:
     """Return the other positional tensor operand when the parent fills exactly one of two."""
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    positions = (getattr(layer, "parent_arg_positions", None) or {}).get("args", {})
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    positions = (record_member(layer, "parent_arg_positions", None) or {}).get("args", {})
     slots = [index for index in (0, 1) if positions.get(index) == parent_label]
     if len(args) < 2 or len(slots) != 1:
         return None

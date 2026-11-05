@@ -24,7 +24,6 @@ from ..._capture.projections import LiveOpView, active_recording_state_or_none
 from ..._capture.session import capture_session_for
 from ..._capture_honesty import warn_held_scan_truncated
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.module import HookInfo
@@ -91,10 +90,8 @@ from ._ops_finalize import _make_layer_log_entry
 from ._ops_interventions import _pop_tensor_live_fire_results
 from ._predicate_forward import _predicate_module_forward
 from ._quantized_flops import estimate_quantized_module_forward_flops
-from ._replacement_op_fields import (
-    _copy_field_value_for_replacement,
-    _next_untagged_tensor_label,
-)
+from ._replacement_op_fields import _next_untagged_tensor_label
+from ._replacement_template import _replacement_template_fields
 from ._root_prep import (
     prepare_bound_owner_once,
     record_model_identity,
@@ -1347,12 +1344,7 @@ def _ensure_module_output_tensor_logged(
     template_entry = parent_entries[0] if parent_entries else None
     layer_type = "internalsource" if is_internal_source else "interventionreplacement"
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
-    fields_dict = {
-        field_name: _copy_field_value_for_replacement(
-            getattr(template_entry, field_name, None) if template_entry is not None else None
-        )
-        for field_name in LAYER_PASS_LOG_FIELD_ORDER
-    }
+    fields_dict = _replacement_template_fields(template_entry)
     address = _module_address(module)
     # The TOP-LEVEL model is never registered in `_mod_call_index` -- its
     # `forward` is deliberately left undecorated ("Root module is handled
@@ -1406,9 +1398,9 @@ def _ensure_module_output_tensor_logged(
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
     for parent_entry in parent_entries:
-        root_ancestors.update(parent_entry.root_ancestors or set())
+        root_ancestors.update(parent_entry._graph_root_ancestors or set())
         input_ancestors.update(parent_entry.input_ancestors or set())
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors or set())
+        internal_source_ancestors.update(parent_entry._graph_internal_source_ancestors or set())
     if is_internal_source:
         # A self-rooted internal source: it is its own root and internal-source
         # ancestor, with no input ancestry (mirrors buffer source tagging).
@@ -1533,7 +1525,7 @@ def _ensure_module_output_tensor_logged(
             "children": [],
             "has_children": False,
             "is_input": False,
-            "has_input_ancestor": any(entry.has_input_ancestor for entry in parent_entries),
+            "has_input_ancestor": any(entry._graph_has_input_ancestor for entry in parent_entries),
             "input_ancestors": input_ancestors,
             "min_distance_from_input": None,
             "max_distance_from_input": None,
@@ -1555,7 +1547,7 @@ def _ensure_module_output_tensor_logged(
             "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
-            or any(entry.has_internal_source_ancestor for entry in parent_entries),
+            or any(entry._graph_has_internal_source_ancestor for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,
@@ -1749,7 +1741,7 @@ def _record_module_exit_metadata(
     mod_id = id(module)
     module_call_index = trace._module_capture_ws.mod_call_index[mod_id]
     trace._module_capture_ws.mod_call_labels[mod_id].pop()
-    from ...intervention.runtime import (
+    from ...intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
         _record_module_intervention_parent_labels,
@@ -1980,7 +1972,7 @@ def module_forward_decorator(
                         out = orig_forward(*args, **kwargs)
                 else:
                     out = orig_forward(*args, **kwargs)
-                from ...intervention.runtime import _apply_module_boundary_live_hooks
+                from ...intervention._runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
                     out,

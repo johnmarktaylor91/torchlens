@@ -226,6 +226,7 @@ def test_label_field_set_matches_every_builder_read(
 
     from torchlens._data_classes.op import _OP_STORE_LAYOUT, Op, _OpField
     from torchlens._trace_core.label_cells import LABEL_FIELDS
+    from torchlens._utils._record_group_table import ACTIVE_GROUPS, OP_STORAGE_ATTRS
 
     _, _, italy = pair
     fork = italy.fork()
@@ -245,6 +246,10 @@ def test_label_field_set_matches_every_builder_read(
     for op in ops:
         _string_labels(op, "site")
     monkeypatch.undo()
+    # A grouped read (``op.call.call_id``) records the group and its storage cell;
+    # name it by the persisted field the builders mean.
+    persisted = {storage: field for field, storage in OP_STORAGE_ATTRS.items()}
+    reads = {persisted.get(name, name) for name in reads if name not in ACTIVE_GROUPS}
 
     stored = set(_OP_STORE_LAYOUT.names)
     declared = set(LABEL_FIELDS)
@@ -253,8 +258,9 @@ def test_label_field_set_matches_every_builder_read(
     field_reads = reads & stored
     assert _uncovered(field_reads, declared) == set()
     assert field_reads == declared
-    # Each is a plain cell descriptor, so the cell IS what the builder reads.
-    assert all(type(vars(Op)[name]) is _OpField for name in declared)
+    # Each is a plain cell descriptor (a grouped field's sits under its storage
+    # attribute), so the cell IS what the builder reads.
+    assert all(type(vars(Op)[OP_STORAGE_ATTRS.get(name, name)]) is _OpField for name in declared)
     # Red-capable: dropping any one entry is caught.
     for name in sorted(declared):
         assert _uncovered(field_reads, declared - {name}) == {name}

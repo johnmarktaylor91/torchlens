@@ -14,6 +14,8 @@ import torch
 import torch.nn as nn
 from _validation_capture import _capture, _quiet_validate
 
+from torchlens._utils._record_group_table import record_member
+
 # ---------------------------------------------------------------------------
 # R08 (b1-opus round-5): the discrete-bool blanket posthoc exemption
 # ---------------------------------------------------------------------------
@@ -38,7 +40,7 @@ def test_bool_comparison_spurious_edge_now_fails() -> None:
     tripwire fires.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -60,7 +62,7 @@ def test_far_threshold_comparison_keeps_evidence_backed_exemption() -> None:
     and the exemption now carries straddle-probe evidence instead of being a
     blanket dtype pass (red-capable: pre-fix the justification was None)."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -81,7 +83,7 @@ def test_isnan_edge_validates_via_nan_probe() -> None:
     VALIDATED (red-capable: pre-fix the finite draws never flipped the output
     and the blanket bool exemption absorbed it)."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -157,7 +159,7 @@ def test_bool_predicate_spurious_edge_now_fails(func_name: str) -> None:
     parametrization settles ``exempted``).
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -179,7 +181,7 @@ def test_bool_predicate_honest_edge_stays_green(func_name: str) -> None:
     """Honest control: the real edge validates (rungs) or exempts WITH
     battery evidence -- never the evidence-free blanket, never a failure."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -238,16 +240,16 @@ def test_bool_predicate_probe_never_mutates_retained_saved_args() -> None:
     corrupted operand (red-capable: pre-fix the byte comparison fails).
     """
 
-    from torchlens.validation.exemptions import _bool_predicate_influence_probe
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_InplaceMaskGate(), torch.randn(3, 4))
     target = [op for op in trace._layer_list if op.func_name == "logical_and_"][0]
-    saved_args = list(target.saved_args or ())
+    saved_args = list(target.call.saved_args or ())
     assert saved_args and isinstance(saved_args[0], torch.Tensor)
     snapshots = [
         arg.detach().clone() if isinstance(arg, torch.Tensor) else arg for arg in saved_args
     ]
-    arg_positions = (getattr(target, "parent_arg_positions", None) or {}).get("args", {})
+    arg_positions = (record_member(target, "parent_arg_positions", None) or {}).get("args", {})
     assert arg_positions, "expected positional parent metadata on the in-place op"
     # Probe through each single-parent slot the metadata knows about.
     for position, parent_label in arg_positions.items():
@@ -268,7 +270,7 @@ def test_bool_predicate_probe_catch_is_typed() -> None:
     refusals (TypeError/ValueError/RuntimeError) still settle "cannot run".
     """
 
-    from torchlens.validation.exemptions import _bool_predicate_influence_probe
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_PredicateZoo("isnan"), torch.randn(3, 4))
     target = [op for op in trace._layer_list if op.func_name == "isnan"][0]
@@ -337,10 +339,10 @@ def test_vmap_index_mask_model_validates() -> None:
 def test_bool_predicate_probe_treats_index_refusal_as_cannot_run() -> None:
     """IndexError from an out-of-range substitute index is the same refusal as RuntimeError."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
-    from torchlens.validation.exemptions import _bool_predicate_influence_probe
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth, vmap_op, batch_arange, _query = _vmap_mask_trace()
     try:
@@ -357,7 +359,7 @@ def test_bool_predicate_probe_treats_index_refusal_as_cannot_run() -> None:
 def test_frozen_vmap_mask_callable_still_fails(parent: str) -> None:
     """Negative: a dead edge on the vmap boundary op still fails as perturbation_insensitive."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 

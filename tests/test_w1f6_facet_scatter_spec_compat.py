@@ -23,13 +23,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._save import check_spec_compat, load_intervention_spec
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     GraphShapeMismatchError,
     ReplayPreconditionError,
 )
 from torchlens.intervention.hooks import normalize_hooks_from_spec
-from torchlens.intervention.save import check_spec_compat, load_intervention_spec
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.

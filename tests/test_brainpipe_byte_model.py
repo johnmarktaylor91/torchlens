@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 
 
 def _model() -> nn.Module:
@@ -34,7 +35,7 @@ def _real_retained_bytes(log: object) -> int:
     seen: set[tuple[int, int]] = set()
     total = 0
     for op in log._layer_list:  # type: ignore[attr-defined]  # every row (sumfam F1)
-        for payload in (op.out, getattr(op, "transformed_out", None)):
+        for payload in (op.out, record_member(op, "transformed_out", None)):
             if not isinstance(payload, torch.Tensor):
                 continue
             storage = payload.untyped_storage()

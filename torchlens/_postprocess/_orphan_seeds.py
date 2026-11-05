@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._column_passes_graph import log_internally_terminated_tensor
 
 if TYPE_CHECKING:
@@ -97,7 +98,9 @@ def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set
 
     func_groups: dict[int, set[str]] = {}
     for raw_label in self._raw_graph_ws.raw_layer_labels_list:
-        func_call_id = getattr(self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None)
+        func_call_id = record_member(
+            self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None
+        )
         if func_call_id is not None:
             func_groups.setdefault(func_call_id, set()).add(raw_label)
 
@@ -152,7 +155,7 @@ def _remember_orphan_rows(self: Trace, orphan_nodes: set[str]) -> None:
             "raw_label": orphan._label_raw,
             "label": orphan.label,
             "payload_ref": orphan.out_ref
-            if getattr(orphan, "out_ref", None) is not None
+            if record_member(orphan, "out_ref", None) is not None
             else orphan.out,
         }
         for orphan in self._orphan_logs

@@ -105,7 +105,7 @@ def _set_op_durations(log: tl.Trace, seconds: float) -> None:
 
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = seconds
+            layer_pass._cost_duration = seconds
 
 
 def test_profiling_collapsed_module_counts_every_pass(tmp_path: Path) -> None:
@@ -192,7 +192,7 @@ def test_profiling_multipass_rows_omitted_when_untimed(tmp_path: Path) -> None:
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = None
+            layer_pass._cost_duration = None
 
     rolled = _render_dot(log, tmp_path / "rolled", node_style="profiling", rolled=True)
     unrolled = _render_dot(log, tmp_path / "unrolled", node_style="profiling")

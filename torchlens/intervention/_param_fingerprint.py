@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from ..backends.torch._param_fingerprint import ParamFingerprint
-    from .types import LiteralTensor
+    from ._types import LiteralTensor
 
 CHANGED_PARAMS_RUN_KEY = "replayed_with_changed_params"
 """``Trace.last_run`` key naming the changed parameters a replay used under the opt-in."""

@@ -22,6 +22,7 @@ from .._utils._mutation_names import (
     _SETTER_MUTATION_FUNC_NAMES,
     _is_inplace_augmented_assignment_dunder,
 )
+from .._utils._record_group_table import op_attr
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.tensor_utils import (
     SaveMode,
@@ -30,6 +31,7 @@ from .._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_to,
 )
+from ._op_bytes import activation_bytes
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
 from ._op_grad_stream import stream_grad_blobs
 from ._op_transforms import (
@@ -195,7 +197,6 @@ def _dtype_or_none(value: Any) -> torch.dtype | None:
 
 def _memory_or_none(value: Any) -> Bytes | None:
     """Return tensor memory in bytes, or ``None`` for non-tensor values."""
-
     if not isinstance(value, torch.Tensor):
         return None
     return as_bytes(get_memory_amount_from_metadata(value, tuple(value.shape), value.dtype))
@@ -343,9 +344,9 @@ def _copy_with_shallow_fields(
     with row_clone_scope(object.__getattribute__(op, "_core")):
         for field in LAYER_PASS_LOG_FIELD_ORDER:
             if field not in fields_not_to_deepcopy:
-                fields_dict[field] = _copy_op_field_value(getattr(op, field, None))
+                fields_dict[field] = _copy_op_field_value(getattr(op, op_attr(field), None))
             else:
-                fields_dict[field] = getattr(op, field, None)
+                fields_dict[field] = getattr(op, op_attr(field), None)
     copied_entry = type(op)(fields_dict, _store=_store)
     return copied_entry
 
@@ -392,8 +393,8 @@ def save_activation(
         target_device = t.device
         if save_mode == "cpu_async":
             target_device = torch.device("cpu")
-        elif op.output_device not in ("same", str(t.device)):
-            target_device = torch.device(op.output_device)
+        elif op._output_device not in ("same", str(t.device)):
+            target_device = torch.device(op._output_device)
         save_raw_activations = trace._options_save_raw_activations if trace is not None else True
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2 (same gate as the exhaustive hot path): a declared
@@ -428,17 +429,17 @@ def save_activation(
             # Clone the tensor, optionally detaching from autograd graph.
             raw_out = copy_tensor_payload(
                 t,
-                detach_tensor=op.detach_saved_activations,
+                detach_tensor=op._detach_saved_activations,
                 save_mode=save_mode,
             )
             # Move to the user-requested output device if needed.
-            if op.output_device not in [str(raw_out.device), "same"]:
-                raw_out = safe_to(raw_out, op.output_device)
+            if op._output_device not in [str(raw_out.device), "same"]:
+                raw_out = safe_to(raw_out, op._output_device)
             _stamp_reference_out(op.annotations, raw_out, save_mode)
 
         op.shape = tuple(raw_out.shape)
         op.dtype = raw_out.dtype
-        op.activation_memory = Bytes(get_memory_amount_from_metadata(raw_out, op.shape, op.dtype))
+        op._cost_activation_memory = activation_bytes(raw_out, op.shape, op.dtype)
 
         if store_raw:
             if dedup_cached_out is None:
@@ -455,9 +456,9 @@ def save_activation(
         op._internal_set("out", raw_out if store_raw else None)
 
         op._internal_set("transformed_out", None)
-        op.transformed_out_shape = None
-        op.transformed_out_dtype = None
-        op.transformed_activation_memory = None
+        op._payload_transformed_out_shape = None
+        op._payload_transformed_out_dtype = None
+        op._cost_transformed_activation_memory = None
         if activation_transform is not None:
             transformed_out = op._apply_transform(
                 raw_out,
@@ -472,25 +473,25 @@ def save_activation(
             op._internal_set("transformed_out", transformed_out)
             op._validate_train_mode_transform_output(
                 raw_out,
-                op.transformed_out,
+                op.payload.transformed_out,
                 transform_kind="activation",
                 transform=activation_transform,
             )
             op._validate_streaming_transform_output(
-                op.transformed_out,
+                op.payload.transformed_out,
                 transform_kind="activation",
                 streaming_active=writer is not None,
             )
-            op.transformed_out_shape = _shape_or_none(op.transformed_out)
-            op.transformed_out_dtype = _dtype_or_none(op.transformed_out)
-            op.transformed_activation_memory = _memory_or_none(op.transformed_out)
+            op._payload_transformed_out_shape = _shape_or_none(op.payload.transformed_out)
+            op._payload_transformed_out_dtype = _dtype_or_none(op.payload.transformed_out)
+            op._cost_transformed_activation_memory = _memory_or_none(op.payload.transformed_out)
         if budget is not None:
             if reduce_only:
                 # No source-sized admission happened (no clone allocated);
                 # charge the retained summary output directly.
-                budget.charge_retained(str(op._layer_label_raw), (op.transformed_out,))
+                budget.charge_retained(str(op._layer_label_raw), (op.payload.transformed_out,))
             else:
-                budget.commit(budget_reservation, (op.out, op.transformed_out))
+                budget.commit(budget_reservation, (op.out, op.payload.transformed_out))
     except Exception as exc:
         if writer is not None:
             writer.abort(f"Failed while saving out for {op._streaming_label}: {exc}")
@@ -549,22 +550,22 @@ def _log_tensor_grad(
     """
     trace = op._source_trace
     raw_grad = grad
-    op.grad_shape = tuple(raw_grad.shape)
-    op.grad_dtype = raw_grad.dtype
+    op._autograd_grad_shape = tuple(raw_grad.shape)
+    op._autograd_grad_dtype = raw_grad.dtype
     op.gradient_memory = Bytes(get_memory_amount(raw_grad))
     grad_transform = trace._options_grad_transform if trace is not None else None
     op._internal_set("transformed_grad", None)
-    op.transformed_grad_shape = None
-    op.transformed_grad_dtype = None
+    op._payload_transformed_grad_shape = None
+    op._payload_transformed_grad_dtype = None
     op.transformed_gradient_memory = None
     writer = getattr(trace, "_out_writer", None) if trace is not None else None
     if prebuilt is not None:
         raw_payload, transformed_payload = prebuilt
         if grad_transform is not None:
             op._internal_set("transformed_grad", transformed_payload)
-            op.transformed_grad_shape = _shape_or_none(op.transformed_grad)
-            op.transformed_grad_dtype = _dtype_or_none(op.transformed_grad)
-            op.transformed_gradient_memory = _memory_or_none(op.transformed_grad)
+            op._payload_transformed_grad_shape = _shape_or_none(op.payload.transformed_grad)
+            op._payload_transformed_grad_dtype = _dtype_or_none(op.payload.transformed_grad)
+            op.transformed_gradient_memory = _memory_or_none(op.payload.transformed_grad)
         op._internal_set("grad", raw_payload)
         op.has_grad = True
         stream_grad_blobs(op, trace, writer)
@@ -596,18 +597,18 @@ def _log_tensor_grad(
         )
         op._validate_train_mode_transform_output(
             raw_grad,
-            op.transformed_grad,
+            op.payload.transformed_grad,
             transform_kind="grad",
             transform=grad_transform,
         )
         op._validate_streaming_transform_output(
-            op.transformed_grad,
+            op.payload.transformed_grad,
             transform_kind="grad",
             streaming_active=writer is not None,
         )
-        op.transformed_grad_shape = _shape_or_none(op.transformed_grad)
-        op.transformed_grad_dtype = _dtype_or_none(op.transformed_grad)
-        op.transformed_gradient_memory = _memory_or_none(op.transformed_grad)
+        op._payload_transformed_grad_shape = _shape_or_none(op.payload.transformed_grad)
+        op._payload_transformed_grad_dtype = _dtype_or_none(op.payload.transformed_grad)
+        op.transformed_gradient_memory = _memory_or_none(op.payload.transformed_grad)
 
     save_raw_gradients = trace._options_save_raw_grads if trace is not None else True
     store_raw = save_raw_gradients or grad_transform is None
@@ -625,7 +626,7 @@ def _log_tensor_grad(
     )
     op.has_grad = True
     if budget is not None and grad_reservation is not None:
-        budget.commit(grad_reservation, (op.grad, op.transformed_grad))
+        budget.commit(grad_reservation, (op.grad, op.payload.transformed_grad))
     stream_grad_blobs(op, trace, writer)
 
 
@@ -767,7 +768,7 @@ def _stream_tensor_blob(
 ) -> None:
     """Stream one tensor field when present."""
 
-    tensor = getattr(op, tensor_field)
+    tensor = getattr(op, op_attr(tensor_field))
     if tensor is None:
         return
     if not isinstance(tensor, torch.Tensor):

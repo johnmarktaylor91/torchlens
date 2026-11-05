@@ -12,8 +12,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.recording.exceptions import RecorderStateError
-from torchlens.recording.types import _RAW_METADATA_FIELDS
+from torchlens.recording._exceptions import RecorderStateError
+from torchlens.recording._types import _RAW_METADATA_FIELDS
 
 
 def _model() -> nn.Module:
@@ -29,7 +29,7 @@ def _model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/types.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_types.py.
 def test_raw_metadata_covers_every_event_payload_free() -> None:
     """One row per chronological event, closed field set plus retained flag."""
 
@@ -48,7 +48,7 @@ def test_raw_metadata_covers_every_event_payload_free() -> None:
     assert all(row["shape"] is not None and row["dtype"] is not None for row in op_rows)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/types.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_types.py.
 def test_raw_metadata_refuses_when_event_stream_is_gone() -> None:
     """A stream-less recording refuses typed, never an empty tuple."""
 

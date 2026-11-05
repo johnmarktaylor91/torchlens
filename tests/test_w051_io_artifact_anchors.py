@@ -28,6 +28,7 @@ from torchlens._io.format3 import contract
 from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.validate import check_record_anchors
 from torchlens._io.format3.values import ValueEncoder
+from torchlens._utils._record_group_table import record_member
 
 #: The op-table columns the forgeries below edit (the 2.x pickled ``Op`` attributes).
 _OP_FIELDS = (
@@ -230,7 +231,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     path = tmp_path / "genuine_edge.tlspec"
     fork.save(path)
     loaded = tl.load(path)
-    carriers = [op for op in loaded._layer_list if getattr(op, "edge_substitutions", None)]
+    carriers = [op for op in loaded._layer_list if record_member(op, "edge_substitutions", None)]
     assert carriers, "the genuine tier-(ii) carrier must persist and load"
 
 

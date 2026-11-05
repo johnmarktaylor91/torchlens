@@ -26,7 +26,7 @@ from torchlens._capture.arg_positions import (
     _normalize_func_name,
     extract_tensors_and_params,
 )
-from torchlens.intervention.types import ParentRef
+from torchlens.intervention._types import ParentRef
 from torchlens.options import CaptureOptions
 
 # ---------------------------------------------------------------------------
@@ -250,7 +250,7 @@ def _assert_parents_match_args_template(layer: Any) -> None:
         Captured operation whose parent edges and template are compared.
     """
 
-    template = layer.args_template
+    template = layer.call.args_template
     assert template is not None
     template_parents = _template_parent_labels((template.args, template.kwargs))
     assert set(layer.parents) == template_parents

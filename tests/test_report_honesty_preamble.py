@@ -67,7 +67,7 @@ def test_debug_dataframes_carry_honesty(export_trace: tl.Trace) -> None:
     assert both["trace_b"]["capture_status"] == "complete"
 
 
-# Kept: sole branch coverage of _capture_honesty.py, recording/types.py.
+# Kept: sole branch coverage of _capture_honesty.py, recording/_types.py.
 def test_fastlog_tables_carry_honesty() -> None:
     """Recording.to_pandas attaches the settled recording outcome facts."""
 

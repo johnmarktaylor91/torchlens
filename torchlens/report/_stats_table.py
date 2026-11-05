@@ -31,7 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
-from ..intervention.edge_semantics import distribution_relation
+from .._utils._record_group_table import record_member
+from ..intervention._edge_semantics import distribution_relation
 from ..stats._tensor_stats import tensor_stats
 
 if TYPE_CHECKING:
@@ -332,7 +333,7 @@ def build_stats_table(
     scanned_elements = 0
     skipped_by_budget = 0
     for op in trace._layer_list or ():
-        if grain == "module" and not getattr(op, "is_module_output", False):
+        if grain == "module" and not record_member(op, "is_module_output", False):
             continue
         label = str(getattr(op, "label", getattr(op, "layer_label", "?")))
         state, reason = _row_state(op)
@@ -362,7 +363,7 @@ def build_stats_table(
             StatsTableRow(
                 row_id=f"op:{label}",
                 label=label,
-                site_key=getattr(op, "site_key", None),
+                site_key=record_member(op, "site_key", None),
                 state=state,
                 value_stats=stats,
                 reason=reason,

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ..._ir.events import FunctionCallRef
     from ..._trace_core.op_store import OpStoreLayout
-    from ...intervention.types import EdgeUseRecord
+    from ...intervention._types import EdgeUseRecord
     from .ops import ExhaustiveOpDraft
 
 __all__: tuple[str, ...] = ()

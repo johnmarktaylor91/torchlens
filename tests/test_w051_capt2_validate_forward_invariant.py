@@ -16,9 +16,9 @@ from torch import nn
 import torchlens as tl
 from torchlens._user_funcs import validate_forward_pass
 from torchlens.errors import TorchLensWarning
-from torchlens.validation import invariants as _invariants
-from torchlens.validation.diagnostics import CHECK_METADATA_INVARIANT, last_validation_failure
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation import _invariants as _invariants
+from torchlens.validation._diagnostics import CHECK_METADATA_INVARIANT, last_validation_failure
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _Tiny(nn.Module):

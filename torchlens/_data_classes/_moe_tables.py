@@ -47,7 +47,7 @@ def _row(trace: Trace, route: _Route) -> dict[str, Any]:
     return {
         "module": route.block or "self",
         "router": route.gate,
-        "call": trace.ops[route.indices].func_call_id,
+        "call": trace.ops[route.indices].call.call_id,
         "token_shape": tuple(indices.shape[:-1]),
         "expert_indices": selected,
         "gate_weights": gates,

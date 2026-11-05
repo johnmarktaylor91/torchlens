@@ -36,15 +36,18 @@ def test_test_ops_are_outside_and_arm_ops_inside_the_body() -> None:
     by_prefix = {label.rsplit("_", 2)[0]: label for label in labels}
     for test_prefix in ("sum", "gt"):
         test_op = trace[by_prefix[test_prefix]]
-        assert test_op.is_in_conditional_body is False, test_prefix
+        assert test_op.control_flow.is_in_conditional_body is False, test_prefix
     arm_op = trace[by_prefix["linear"]]
-    assert arm_op.has_output_descendant
-    assert arm_op.is_in_conditional_body is True
-    assert trace[by_prefix["add"]].is_in_conditional_body is False
+    assert arm_op.graph.has_output_descendant
+    assert arm_op.control_flow.is_in_conditional_body is True
+    assert trace[by_prefix["add"]].control_flow.is_in_conditional_body is False
 
 
 def test_op_and_layer_agree_on_body_membership() -> None:
     trace = tl.trace(ThenFeedsOutput(), torch.ones(1, 4))
     for label in trace.layer_labels:
         layer = trace.layers[label]
-        assert trace[label].is_in_conditional_body == layer.is_in_conditional_body, label
+        assert (
+            trace[label].control_flow.is_in_conditional_body
+            == layer.control_flow.is_in_conditional_body
+        ), label

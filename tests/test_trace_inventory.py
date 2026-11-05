@@ -84,7 +84,7 @@ def test_sites_table_refuses_keyless_legacy_artifacts() -> None:
     torch.manual_seed(1)
     trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
     for op in trace._layer_list:
-        op.site_key = None
+        op._graph_site_key = None
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.sites()
@@ -125,7 +125,9 @@ def test_bill_of_materials_reports_captured_facts() -> None:
     # retained_now; the at_capture facts print BESIDE them.
     assert bom["activations"]["payload_scope"] == "retained_now"
     assert bom["activations"]["num_saved_at_capture"] == len(saved)
-    assert bom["activations"]["at_capture_memory"] == sum(int(op.activation_memory) for op in saved)
+    assert bom["activations"]["at_capture_memory"] == sum(
+        int(op.cost.activation_memory) for op in saved
+    )
     # A live full-save trace still holds everything it captured.
     assert bom["activations"]["retained_now_memory"] == bom["activations"]["at_capture_memory"]
     assert bom["backward"]["num_grad_fn_records"] == 0

@@ -23,6 +23,7 @@ import re
 from typing import Any
 
 from .._pass_tokens import pass_token_labels
+from .._utils._record_group_table import record_member
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 #: Where ``Trace`` is defined; this module identifies it by class, not by import.
@@ -231,7 +232,7 @@ def _module_containment_candidates(subject: Any, lifecycle: str) -> tuple[Any, .
 
     if lifecycle == "capture":
         return _capture_module_candidates(subject)
-    return tuple(getattr(subject, "output_of_module_calls", ()) or ()) + tuple(
+    return tuple(record_member(subject, "output_of_module_calls", ()) or ()) + tuple(
         getattr(subject, "modules", ()) or ()
     )
 
@@ -251,7 +252,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     """
 
     candidates: list[str] = []
-    address = getattr(ctx, "address", None)
+    address = record_member(ctx, "address", None)
     if address is not None:
         candidates.append(str(address))
     source_trace: Any = getattr(ctx, "source_trace", None)
@@ -263,7 +264,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     for frame in getattr(ctx, "module_stack", ()):
         candidates.extend(_module_frame_candidates(frame))
     modules = getattr(ctx, "modules", ())
-    module_ops = getattr(ctx, "output_of_module_calls", ())
+    module_ops = record_member(ctx, "output_of_module_calls", ())
     candidates.extend(
         _module_candidate_string(candidate) for candidate in tuple(modules) + tuple(module_ops)
     )
@@ -353,7 +354,7 @@ def _is_module_scope_alias(kind: str, subject: Any, lifecycle: str) -> bool:
 def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
     """Return module-output-boundary candidates for ``tl.module``."""
 
-    module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
+    module_outputs = tuple(record_member(subject, "output_of_module_calls", ()) or ())
     if lifecycle == "capture" and not module_outputs:
         # Capture subjects include backend ``OpEvent`` records, which carry the
         # owning session as ``source_trace`` (they have no ``trace`` member).
@@ -498,7 +499,7 @@ def _grad_fn_forward_op(site: Any) -> Any:
     every forward selector kind evaluates against.
     """
 
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+    from torchlens._data_classes._grad_fn_pass import _pass_op_for_grad_fn
 
     op = site.op
     pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
@@ -519,7 +520,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     gradient edit was a silent no-op).
     """
 
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+    from torchlens._data_classes._grad_fn_pass import _pass_op_for_grad_fn
 
     trace = site.trace
     if trace is None:
@@ -544,7 +545,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     for layer in trace._layer_list:
         if getattr(layer, "layer_label", None) == paired_label:
             continue
-        if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
+        if record_member(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
             continue
         if _shares_grad_fn_tensor(layer, accepted, paired_parents):
             aliases.append(layer)

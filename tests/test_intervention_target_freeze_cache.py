@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pickle
 
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     TargetSpec,
     TensorSliceSpec,
 )

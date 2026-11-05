@@ -16,6 +16,7 @@ from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_inputs
 from .._utils import _torch_compat
+from .._utils._record_group_table import record_member
 from .._utils.arg_handling import normalize_input_args
 from .._utils.rng import _snapshot_cuda_rng_states
 from ..backends.torch.wrappers import unwrap_torch, wrap_torch
@@ -318,7 +319,7 @@ def _op_locations(op: Any) -> tuple[tuple[str, int], ...]:
     """
 
     locations: list[tuple[str, int]] = []
-    for frame in getattr(op, "code_context", ()) or ():
+    for frame in record_member(op, "code_context", ()) or ():
         source_file = getattr(frame, "file", None)
         line_number = getattr(frame, "line_number", None)
         if source_file is None or not isinstance(line_number, int):
