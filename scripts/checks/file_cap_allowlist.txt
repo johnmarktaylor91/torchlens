@@ -271,7 +271,7 @@ torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	71
 torchlens/_io/streaming.py::BundleStreamWriter.stage_for_settlement	82
 torchlens/_io/streaming.py::BundleStreamWriter.submit_blob	78
 torchlens/_io/tlspec.py::_TlSpecWriter.write_bundle	116
-torchlens/_ir/capture_events.py	1225
+torchlens/_ir/capture_events.py	1224
 torchlens/_ir/capture_events.py::CaptureEvents._copy_for_replay	119
 torchlens/_ir/capture_events.py::CaptureEvents.append_amendment	69
 torchlens/_ir/capture_events.py::CaptureEvents.concat	187
@@ -325,7 +325,7 @@ torchlens/_options_validation.py::_validate_capture_values	71
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
-torchlens/_postprocess/_materialize.py	1768
+torchlens/_postprocess/_materialize.py	1744
 torchlens/_postprocess/_materialize.py::_apply_join_cells	219
 torchlens/_postprocess/_materialize.py::_buffer_write_fields	63
 torchlens/_postprocess/_materialize.py::_module_output_fields	74
