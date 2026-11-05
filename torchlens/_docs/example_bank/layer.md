@@ -521,7 +521,7 @@ print("has_input_ancestor", layer.graph.has_input_ancestor)
 ### layer-internal-source
 A tensor made inside `forward` is an internal-source layer, not an input.
 
-- covers: `Layer.graph.is_internal_source`, `Layer.graph.has_input_ancestor`
+- covers: `Layer.graph.is_internal_source`, `Layer.internal_source_parents`, `Layer.graph.has_input_ancestor`
 - tasks: graph, internal-source
 - fixture: none
 
@@ -533,9 +533,11 @@ trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.layers["ones_1_1"], trace.layers["add_1_2"]
 print("is_internal_source", ones.graph.is_internal_source, add.graph.is_internal_source)
 print("has_input_ancestor", ones.graph.has_input_ancestor, add.graph.has_input_ancestor)
+print("internal_source_parents", add.graph.internal_source_parents)
 # Output:
 # is_internal_source True False
 # has_input_ancestor False True
+# internal_source_parents ('ones_1_1',)
 ```
 
 ## Modules
@@ -543,7 +545,7 @@ print("has_input_ancestor", ones.graph.has_input_ancestor, add.graph.has_input_a
 ### layer-module-facts
 Which module a single-pass layer runs inside and which module calls it feeds or ends.
 
-- covers: `Layer.module`, `Layer.modules`, `Layer.module_context.call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
+- covers: `Layer.module`, `Layer.modules`, `Layer.module_call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
 - tasks: modules, inspect-layer
 - fixture: toy
 

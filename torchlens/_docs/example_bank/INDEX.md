@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-474 examples, 1215 public names, 147 tasks.
+474 examples, 1216 public names, 147 tasks.
 
 ## By task
 
@@ -431,7 +431,7 @@ By name lists the 3 most focused examples first;
 | `Layer.graph.equivalent_ops` | layer.md#layer-edges-across-passes |
 | `Layer.graph.has_children` | layer.md#layer-graph-facts |
 | `Layer.graph.has_co_parents` | layer.md#layer-graph-facts |
-| `Layer.graph.has_input_ancestor` | layer.md#layer-internal-source, layer.md#layer-ancestry |
+| `Layer.graph.has_input_ancestor` | layer.md#layer-ancestry, layer.md#layer-internal-source |
 | `Layer.graph.has_parents` | layer.md#layer-graph-facts |
 | `Layer.graph.has_siblings` | layer.md#layer-graph-facts |
 | `Layer.graph.io_role` | layer.md#layer-io-role |
@@ -454,6 +454,7 @@ By name lists the 3 most focused examples first;
 | `Layer.input_ancestors` | layer.md#layer-ancestry |
 | `Layer.input_to_module_calls` | layer.md#layer-module-facts |
 | `Layer.input_was_parameter` | layer.md#layer-io-role |
+| `Layer.internal_source_parents` | layer.md#layer-internal-source |
 | `Layer.is_buffer_source` | layer.md#layer-buffer-writes |
 | `Layer.is_edited` | layer.md#layer-do-ablate |
 | `Layer.is_inplace` | layer.md#layer-func-facts |
@@ -467,8 +468,8 @@ By name lists the 3 most focused examples first;
 | `Layer.macs_backward` | layer.md#layer-cost-facts |
 | `Layer.macs_total` | layer.md#layer-cost-facts |
 | `Layer.module` | layer.md#layer-module-facts |
+| `Layer.module_call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.call_depth` | layer.md#layer-module-facts |
-| `Layer.module_context.call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.is_atomic_module` | layer.md#layer-module-facts |
 | `Layer.module_context.is_module_input` | layer.md#layer-single-pass-reads |
 | `Layer.module_context.output_of_module_calls` | layer.md#layer-module-facts |
