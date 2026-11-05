@@ -74,7 +74,7 @@ DRAW_ENTRY_POINTS: Mapping[str, str] = {
 }
 CALL_ENTRY = {
     "draw": "Trace.draw",
-    "lens": "Trace.draw",
+    "view": "Trace.draw",
     # The backward and combined pictures are graph= values of the one draw door.
     "draw_backward": "Trace.draw",
     "draw_combined": "Trace.draw",
@@ -169,7 +169,6 @@ def _module_vocab() -> list[VocabValue]:
         ("modes.COLLAPSED_MODE_REGISTRY", modes.COLLAPSED_MODE_REGISTRY),
         ("themes.THEME_PRESETS", themes.THEME_PRESETS),
         ("lenses", lenses),
-        ("lenses._roster.COMPOSITIONS", _roster.COMPOSITIONS),
         ("lenses._filter.FILTER_TOKENS", _filter.FILTER_TOKENS),
         ("collapse_patterns.IDIOMATIC_PATTERNS", collapse_patterns.IDIOMATIC_PATTERNS),
         ("overlays.SUPPORTED_OVERLAYS", overlays.SUPPORTED_OVERLAYS),

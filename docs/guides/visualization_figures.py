@@ -263,7 +263,7 @@ FIGURES: tuple[Figure, ...] = (
     Figure(
         "interventions",
         _mlp,
-        {"highlight": "interventions"},
+        {"view": "interventions"},
         edit=("fc1", "zero_ablate"),
     ),
     Figure("edited", _mlp, edit=("fc1", "zero_ablate")),
@@ -337,7 +337,7 @@ def _refuse_dropped_features(caught: list[warnings.WarningMessage]) -> None:
 def _move_sidecars(figure: Figure, dot_dir: Path | None) -> None:
     """Keep only images in the image folder.
 
-    ``highlight="interventions"`` also writes the full edit record as
+    ``view="interventions"`` also writes the full edit record as
     ``<name>.census.txt`` beside the image. It moves to ``dot_dir`` when one is
     given and is deleted otherwise (the page shows the caption, not the file).
 

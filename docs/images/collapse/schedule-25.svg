@@ -12,7 +12,7 @@
 <text text-anchor="start" x="8" y="-7667.02" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">ResNet</text>
 <text text-anchor="start" x="8" y="-7653.02" font-family="Helvetica,sans-Serif" font-size="14.00">58 nodes (1.8 MB)</text>
 <text text-anchor="start" x="8" y="-7639.02" font-family="Helvetica,sans-Serif" font-size="14.00">11,689,512 params (44.6 MB, all trainable)</text>
-<text text-anchor="start" x="8" y="-7625.02" font-family="Helvetica,sans-Serif" font-size="14.00">this model reuses 8 modules across 16 calls; vis_mode=&#39;rolled&#39; shows the loop</text>
+<text text-anchor="start" x="8" y="-7625.02" font-family="Helvetica,sans-Serif" font-size="14.00">8 reused modules (16 calls); rolled=True draws the loop</text>
 <g id="clust2" class="cluster">
 <title>cluster_layer2_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="1.5" points="8,-786.92 8,-2898.03 688,-2898.03 688,-786.92 8,-786.92"/>

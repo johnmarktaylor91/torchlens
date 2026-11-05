@@ -178,6 +178,26 @@ def test_bounded_render_child_dies_with_hard_parent_death(tmp_path: Path) -> Non
             parent.wait(timeout=5)
 
 
+def test_input_node_renders_a_single_pil_image(tmp_path: Path) -> None:
+    """A bare PIL image stored as the trace input is drawn on the input node as a batch of one.
+
+    ``tl.trace(model, "photo.jpg")`` keeps the photo itself as ``trace.input``; before the fix
+    only a list of images rendered, and the single photo fell back to the tensor-shape label.
+    """
+
+    from PIL import Image
+
+    from torchlens._visualization._render_nodes import _render_raw_input
+
+    photo = Image.new("RGB", (8, 8), "white")
+    trace = tl.trace(nn.Linear(4, 2), torch.zeros(1, 4))
+    trace.input = photo
+    attrs = _render_raw_input(trace, photo, batch_render="auto")
+    assert attrs is not None and "image" in attrs
+    listed = _render_raw_input(trace, [photo], batch_render="auto")
+    assert listed is not None and "image" in listed
+
+
 def test_missing_graphviz_binary_refuses_typed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

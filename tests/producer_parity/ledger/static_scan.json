@@ -1780,7 +1780,7 @@
   "field": "kind",
   "file": "torchlens/_io/format3/payloads.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -4676,7 +4676,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 15,
+  "sites": 16,
   "via_getattr": false
  },
  {
@@ -5626,6 +5626,22 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/_visualization/lenses/_attention.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/lenses/_attention.py",
+  "has_default": true,
+  "sites": 3,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/_visualization/lenses/_budget.py",
   "has_default": true,
   "sites": 1,
@@ -5637,22 +5653,6 @@
   "file": "torchlens/_visualization/lenses/_filter.py",
   "has_default": true,
   "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/lenses/_resolve.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/lenses/_resolve.py",
-  "has_default": true,
-  "sites": 2,
   "via_getattr": true
  },
  {
@@ -5709,6 +5709,14 @@
   "file": "torchlens/_visualization/source_graph.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/surgery_visuals.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7056,6 +7064,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_ops_arg_slots.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/torch/_ops_arg_slots.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_ops_arguments.py",
@@ -7068,7 +7092,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/torch/_ops_arguments.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -7362,6 +7386,22 @@
  {
   "ambiguous": false,
   "field": "backend_semantics",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
   "file": "torchlens/backends/torch/_ops_shared_fields.py",
   "has_default": false,
   "sites": 1,
