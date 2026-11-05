@@ -20,8 +20,12 @@ import pytest
 import torch
 
 import torchlens.trackers as trk
-from torchlens._utils._optimizer_hooks import _BINDINGS, hook_around, register_step_hooks
-from torchlens._utils._torch_compat import stripped_step_hook_wrapper
+from torchlens._utils._optimizer_hooks import (
+    _BINDINGS,
+    hook_around,
+    register_step_hooks,
+    stripped_step_hook_wrapper,
+)
 
 
 def _bare_step(events: list[str], *, stripped: bool) -> Callable[..., Any]:
@@ -239,17 +243,19 @@ def test_watch_session_sees_the_boundary_when_the_class_step_was_stripped() -> N
 
 @pytest.mark.heavy
 def test_watch_after_torch_compile_in_a_fresh_process() -> None:
-    """The real trigger: ``torch.compile`` before a watch session, in a fresh process."""
+    """The real trigger: an optimizer, then ``torch.compile``, then a watch session."""
 
     script = textwrap.dedent(
         """
         import torch
         import torchlens.trackers as trk
 
-        torch.compile(lambda x: x + 1, backend="eager")
         torch.manual_seed(0)
         model = torch.nn.Sequential(torch.nn.Linear(8, 4), torch.nn.ReLU(), torch.nn.Linear(4, 2))
+        # An optimizer built before the compile: on torch 2.1 the compile then
+        # strips the hook wrapper torch put on its class (the test-shard order).
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+        torch.compile(lambda x: x + 1, backend="eager")
         fired = []
         optimizer.register_step_post_hook(lambda *_: fired.append("user_post"))
         before = set(vars(optimizer))
