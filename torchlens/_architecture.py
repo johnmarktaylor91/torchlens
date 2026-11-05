@@ -78,6 +78,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io.scrub": "L3",
     "_io.tlspec": "L3",
     "_io.rehydrate": "L3",
+    # The source-bundle resolver split out of rehydrate (size cap) sits at its tier.
+    "_io._rehydrate_source_bundle": "L3",
     "_io.lazy": "L3",
     "_io.runnable": "L3",
     "_io.runnable_load": "L3",
