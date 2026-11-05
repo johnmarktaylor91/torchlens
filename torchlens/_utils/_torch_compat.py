@@ -85,6 +85,7 @@ __all__ = [
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_DYNAMO_COMPILE_COUNTERS",
     "HAS_DYNAMO_IS_COMPILING",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_FUNCOL_GROUP_RESOLUTION",
     "HAS_FUNCOL_WAIT_INTERPOSITION",
@@ -108,6 +109,7 @@ __all__ = [
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
     "HAS_HOP_COMPILATION_ENV",
@@ -191,7 +193,7 @@ __all__ = [
     "get_dynamo_compile_counters",
     "get_dynamo_optimized_module_type",
     "get_dynamo_explain",
-    "get_functorch_maybe_current_level",
+    "get_functorch_transform_probe",
     "get_functorch_wrapped_tensor_checker",
     "get_fsdp_wrapper_type",
     "get_fx_graph_module_type",
@@ -328,6 +330,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_TORCH_VF": ("torch:_VF",),
     "HAS_TORCH_FUNC": ("torch:func",),
     "HAS_FUNCTORCH_LEVEL_API": ("torch:_C._functorch.maybe_current_level",),
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API": ("torch:_C._functorch.peek_interpreter_stack",),
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API": ("torch:_C._functorch.is_functorch_wrapped_tensor",),
     "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
@@ -998,44 +1001,9 @@ def _probe_disabled_torch_function_impl() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether torch's GradientEdge surface actually WORKS end to end.
+    """Return whether GradientEdge works end to end (``False`` on 2.1-2.3; see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge`` and
-        ``get_gradient_edge`` -- the ``(node, output slot)`` addressing pair the one-backward read
-        engine seeds ``autograd.grad`` with -- AND a real ``autograd.grad`` call seeding an OUTPUT
-        ``GradientEdge`` with an explicit cotangent succeeds. Attribute presence alone is
-        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its own internal
-        ``torch.autograd._make_grads`` calls ``out.is_nested`` on every output -- including a bare
-        ``GradientEdge``, which has no such attribute -- and raises ``AttributeError`` (fixed
-        upstream by 2.4, matching this read's long-documented "2.4+" remedy text). Absent on older
-        torch or broken on this intermediate band is a healthy old install either way, not a
-        TorchLens degradation: the read refuses typed.
-    """
-
-    if (
-        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is None
-        or _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is None
-    ):
-        return False
-    from torch.autograd.graph import GradientEdge
-
-    try:
-        x = torch.randn(1, requires_grad=True)
-        h = x * 2
-        if h.grad_fn is None:
-            # Never happens for a requires_grad leaf's product, but the
-            # static annotation is ``Node | None``; treat an impossible-in-
-            # practice None the same as any other probe failure below.
-            return False
-        torch.autograd.grad(
-            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
-        )
-    except Exception:
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_gradient_edge())
 
 
 def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
@@ -1331,50 +1299,15 @@ def _probe_mha_fastpath_switch() -> bool:
 
 
 def _probe_reduce_tuple_dim() -> bool:
-    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim`` (``False`` on 2.1; see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
-        of axes directly (added torch 2.2; torch 2.1 only accepts a single
-        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
-        falls back to sequential single-axis reduction.
-    """
-
-    probe = torch.zeros((2, 2), dtype=torch.bool)
-    try:
-        probe.any(dim=(0, 1))
-    except TypeError:
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_reduce_tuple_dim())
 
 
 def _probe_meta_item_guard() -> bool:
-    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors (see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when calling ``.item()`` (or any other scalar extraction, e.g. ``bool()``) on a
-        meta tensor raises a plain ``RuntimeError`` carrying torch's own "Tensor.item() cannot be
-        called on meta tensors" guard. torch 2.1-2.2 have no such guard: the call instead falls all
-        the way through to the aten dispatcher's generic ``NotImplementedError`` ("... not
-        implemented for this backend"). TorchLens's structure-only forward-boundary backstop
-        (``backends/torch/structure_only_belt.py``) classifies a caught ``NotImplementedError`` as
-        ``meta_kernel_unavailable`` and a generic ``RuntimeError`` as
-        ``value_dependent_branch_unsupported`` by raising-frame PROVENANCE, never message text --
-        correctly, since the two exception FAMILIES genuinely differ here. Absence is a healthy old
-        install surfacing the honest alternate typed refusal, not a TorchLens degradation.
-    """
-
-    try:
-        torch.ones((), device="meta").item()
-    except NotImplementedError:
-        return False
-    except RuntimeError:
-        return True
-    return False
+    return bool(_real_op_probe_leaf().probe_meta_item_guard())
 
 
 HAS_VARIABLE_FUNCTIONS: bool = _probe_attribute_paths("HAS_VARIABLE_FUNCTIONS")
@@ -1382,6 +1315,9 @@ HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
 HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
 HAS_FUNCTORCH_APIS: bool = _probe_functorch_apis()
 HAS_FUNCTORCH_LEVEL_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_LEVEL_API")
+HAS_FUNCTORCH_INTERPRETER_STACK_API: bool = _probe_attribute_paths(
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API"
+)
 HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
 HAS_JIT_BUILTIN_TABLE: bool = _probe_attribute_paths("HAS_JIT_BUILTIN_TABLE")
 HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_attribute_paths("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
@@ -1581,6 +1517,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TORCH_FUNC",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
@@ -1611,6 +1548,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DISABLE_TORCH_FUNCTION",
     "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_FUNCOL_GROUP_RESOLUTION",
@@ -2005,9 +1943,8 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_compile_counters(force_probe=True)
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
-    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the
-    # real capability, not the pre-probe placeholder. Degradation warnings are
-    # deduped once-per-process and the probes are cached.
+    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
+    # capability, not the placeholder (warnings deduped per process, probes cached).
     get_jit_all_schemas()
     get_tensorbase_class()
     get_disable_torch_function_context()
@@ -2161,17 +2098,27 @@ def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
-def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
-    """Return functorch transform-level introspection when available.
+def get_functorch_transform_probe() -> Callable[[], Any] | None:
+    """Return a zero-argument probe that is not ``None`` inside a functorch transform.
+
+    ``torch._C._functorch.maybe_current_level`` when present; otherwise (torch
+    2.1 and 2.2) ``torch._C._functorch.peek_interpreter_stack``, which reads the
+    same dynamic-layer stack and returns ``None`` when it is empty. An absent level
+    API alone is no degradation (``HAS_FUNCTORCH_LEVEL_API`` still reads False from
+    its import-time probe), so only the absence of both marks a capability missing.
 
     Returns
     -------
     Callable[[], Any] | None
-        ``torch._C._functorch.maybe_current_level`` or ``None`` when absent.
+        The probe, or ``None`` when neither surface exists (detection disabled).
     """
 
+    level = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_FUNCTORCH_LEVEL_API"][0])
+    if level is not None:
+        return level
     return _resolve_or_mark_missing(
-        "HAS_FUNCTORCH_LEVEL_API", "functorch transform-boundary detection is disabled"
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
+        "functorch transform-boundary detection is disabled",
     )
 
 
@@ -2470,18 +2417,42 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     return _FAKE_TENSOR_MODE_CLS
 
 
-def get_higher_order_operator(module: str, attribute: str) -> Any | None:
+def get_higher_order_operator(
+    module: str, attribute: str, *, table: str = "python_key_table"
+) -> Any | None:
     """Return operator ``attribute`` of ``torch._higher_order_ops.<module>`` (``"cond"``, ...).
 
-    ``None`` when this torch lacks it or it has no ``python_key_table`` to register a
-    dispatch-mode rule in.
+    ``None`` when this torch lacks it or it has no ``table`` (torch 2.1:
+    ``python_key_mode_table``) to register a dispatch-mode rule in.
     """
 
     op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
-    return op if isinstance(getattr(op, "python_key_table", None), dict) else None
+    return op if isinstance(getattr(op, table, None), dict) else None
+
+
+def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
+    """Return the ``cond`` HigherOrderOperator the completeness witness keys its rule on.
+
+    ``cond.cond_op`` when present; torch 2.1 has no ``cond_op`` and its bare ``cond``
+    is the operator, with its rules in ``python_key_mode_table``. Only the absence
+    of both marks ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
+    """
+
+    op = get_higher_order_operator("cond", "cond_op")
+    if (
+        op is None
+        and _import_module_attr_or_none("torch._higher_order_ops.cond", "cond_op") is None
+    ):
+        op = get_higher_order_operator("cond", "cond", table="python_key_mode_table")
+    if op is None and mark_missing:
+        mark_torch_capability_missing("HAS_COND_HIGHER_ORDER_OP", "cond captures are not witnessed")
+    return op
+
+
+HAS_COND_HIGHER_ORDER_OP: bool = get_cond_witness_operator(mark_missing=False) is not None
 
 
 def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
@@ -3379,15 +3350,13 @@ def force_eager_stance_scope() -> Iterator[bool]:
 
     Notes
     -----
-    The stance (public API, torch >= 2.6; verified experimentally in the
-    2026-08-12 design-review compile reconcile) runs the ORIGINAL Python inside every
-    compiled callable reached in the scope, triggers zero new compiles during
-    the scope (including on never-seen input shapes), and leaves every warm
-    compiled artifact reproduced bitwise after exit. Reading the probe never
-    imports ``torch._dynamo``. Skipping the stance when Dynamo is absent is
-    exact for every callable that EXISTS at scope entry (compiling one imports
-    Dynamo), but NOT for a callable created inside the scope: a forward whose
-    first ``torch.compile`` happens mid-capture imports Dynamo after this
+    The stance (public API, torch >= 2.6; verified experimentally in the 2026-08-12 design-review
+    compile reconcile) runs the ORIGINAL Python inside every compiled callable reached in the scope,
+    triggers zero new compiles during the scope (including on never-seen input shapes), and leaves
+    every warm compiled artifact reproduced bitwise after exit. Reading the probe never imports
+    ``torch._dynamo``. Skipping the stance when Dynamo is absent is exact for every callable that
+    EXISTS at scope entry (compiling one imports Dynamo), but NOT for a callable created inside the
+    scope: a forward whose first ``torch.compile`` happens mid-capture imports Dynamo after this
     check, so that callable runs compiled and is bypassed-and-disclosed
     (``dynamo_region_not_logged``) rather than eager-logged.
     """
@@ -4238,14 +4207,12 @@ def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
 def tensor_version_or_none(tensor: Any) -> int | None:
     """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
 
-    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError``
-    ("Inference tensors do not track version counter"), which ``getattr(...,
-    None)`` does not swallow -- every capture under ambient
-    ``torch.inference_mode()`` crashed on TL's own dedup/reference/version
-    bookkeeping reads. This helper is the ONE safe accessor for every
-    TorchLens-owned ``_version`` read; an unavailable version degrades the
-    optimization (dedup miss / conservative mutation fallback), never aborts
-    capture. Genuine USER ``_version`` reads keep their native torch behavior.
+    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
+    not track version counter"), which ``getattr(..., None)`` does not swallow -- every capture
+    under ambient ``torch.inference_mode()`` crashed on TL's own dedup/reference/version bookkeeping
+    reads. This helper is the ONE safe accessor for every TorchLens-owned ``_version`` read; an
+    unavailable version degrades the optimization (dedup miss / conservative mutation fallback),
+    never aborts capture. Genuine USER ``_version`` reads keep their native torch behavior.
     """
 
     try:

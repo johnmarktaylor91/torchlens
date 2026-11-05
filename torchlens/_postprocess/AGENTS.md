@@ -22,6 +22,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
 | `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances; `_orphan_seeds.py` owns flood seeds, call-group closure and pre-removal identity/payload bookkeeping |
 | `ast_branches.py` | 5 support, 11.5 support | Conditional AST indexing and source variable name resolution. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
+| `_branch_source.py` | 5 support | Source text for `ast_branches.py`: disk files, and the `linecache` text of a notebook cell with no file (`mtime` None entries only). A cell name seen with two different texts fails closed for the process (`_interactive_file_index`). Also the source-range containment predicates |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
 | `loop_detection.py` | 7 | Call-site grouping (`callsite_v1`, rule in `docs/guides/grouping.md`; keys from `utils/_call_site.py`); falls back to the structural adapter when no op carries call-site evidence |
 | `loop_grouping_adapter.py` | 7 fallback | Backend-neutral structural grouper (`grouper_v1`) for captures without call-site evidence (other backends, predicate-mode `tl.record`) |
@@ -31,6 +32,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_streamed_tensor_types.py` | 18 support | Bind published chunk identities and resolve streamed payload dtype names |
 | `_multipass_params.py` | 14 support | Parameter union for a layer whose passes consume different parameters (split from `finalization.py`) |
 | `_lazy_param_geometry.py` | 15 support | Finalize deferred geometry for lazy-at-prep params (R43 split from `finalization.py`) |
+| `_column_passes_finalize.py` | 15.5 | Step 15.5 body (aggregate `Layer` build) over the `OpColumns` view, its facade body as the fallback, and the conditional merge and view helpers both share; `finalization._build_layer_logs` delegates to it (split from `finalization.py`) |
 | `saved_summary.py` | 11 support | Saved-output summary refresh helpers (`_refresh_fast_saved_summary`) |
 | `source_provenance.py` | 11, 11.5 | Provenance disclosure warning (`_warn_unattributed_tensor_args`) and source variable names (`_populate_var_names`) |
 | `incremental.py` | fastlog enrichment | Adds module path strings to sparse recordings (`Recording.enrich`) |
@@ -77,7 +79,7 @@ step 17.5 (the contracted container-adoption + workspace-drop seam).
 | 13 | `clear_cuda_cache` | `torch.cuda.empty_cache` | Optional CUDA cache clear |
 | 14 | `log_time_elapsed` | `_log_time_elapsed` | Capture timing |
 | 15 | `finalize_param_logs` | `_finalize_param_logs` | Build and complete ParamLogs |
-| 15.5 | `build_layer_logs` | `_build_layer_logs` | Build aggregate LayerLogs |
+| 15.5 | `build_layer_logs` | `_build_layer_logs` (body in `_column_passes_finalize.build_layer_logs`) | Build aggregate LayerLogs |
 | 16 | `build_module_logs` | `_build_module_logs` | Build ModuleLogs |
 | 16.5 | `hash_graph_shape` | `compute_graph_shape_hash` | Hash graph shape before pass-finished behavior changes |
 | 17 | `mark_tracing_finished` | `_set_tracing_finished` | Switch Trace to user-facing behavior |

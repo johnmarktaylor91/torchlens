@@ -73,35 +73,13 @@ hop_compile_depth = 0
 cond_entry_innermost = False
 
 
-def _is_tracing_value(value: Any, tracing_types: tuple[type[Any], ...]) -> bool:
-    """Return whether one call argument belongs to a fake-tensor tracing pass.
+def _fake_tensor_mode_active(stack: list[Any]) -> bool:
+    """Return whether a ``FakeTensorMode`` is on the current dispatch-mode stack.
 
     Parameters
     ----------
-    value:
-        A positional or keyword argument of the decorated call.
-    tracing_types:
-        The data-free tracing tensor classes of this torch build.
-
-    Returns
-    -------
-    bool
-        ``True`` for a tracing tensor, a tracing tensor class (the ``cls``
-        argument of ``Tensor._make_subclass``), or a list or tuple holding a
-        tracing tensor.
-    """
-
-    if isinstance(value, tracing_types):
-        return True
-    if isinstance(value, type):
-        return issubclass(value, tracing_types)
-    if isinstance(value, (list, tuple)):
-        return any(isinstance(item, tracing_types) for item in value)
-    return False
-
-
-def _fake_tensor_mode_active() -> bool:
-    """Return whether a ``FakeTensorMode`` is on the current dispatch-mode stack.
+    stack:
+        The non-empty current dispatch-mode stack.
 
     Returns
     -------
@@ -111,8 +89,7 @@ def _fake_tensor_mode_active() -> bool:
     """
 
     fake_mode_cls = get_fake_tensor_mode_class()
-    stack = get_current_dispatch_mode_stack()
-    if fake_mode_cls is None or not stack:
+    if fake_mode_cls is None:
         return False
     return any(isinstance(mode, fake_mode_cls) for mode in stack)
 
@@ -331,8 +308,24 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
     tracing_types = get_tracing_tensor_types()
     if not tracing_types:
         return False
-    in_pass = any(_is_tracing_value(value, tracing_types) for value in (*args, *kwargs.values()))
-    return in_pass or _fake_tensor_mode_active()
+    # Hot path (CC above 10 on purpose): this runs on every decorated call, so the
+    # argument scan is inline (no helper call or generator step per argument): a
+    # tracing tensor, a tracing tensor class (the ``cls`` argument of
+    # ``Tensor._make_subclass``), or a list or tuple holding a tracing tensor. The
+    # dispatch-mode stack, empty in ordinary capture, is read before the
+    # FakeTensorMode class.
+    for value in (*args, *kwargs.values()):
+        if isinstance(value, tracing_types):
+            return True
+        if isinstance(value, type):
+            if issubclass(value, tracing_types):
+                return True
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                if isinstance(item, tracing_types):
+                    return True
+    stack = get_current_dispatch_mode_stack()
+    return bool(stack) and _fake_tensor_mode_active(stack)
 
 
 def call_inside_tracing_pass(

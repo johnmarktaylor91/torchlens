@@ -24,6 +24,7 @@ from typing import Any
 
 from ..._utils._hop_entry_compile import compile_disabled
 from ..._utils._torch_compat import (
+    get_cond_witness_operator,
     get_higher_order_eager_kernel,
     get_higher_order_operator,
     get_scan_eager_body,
@@ -78,6 +79,32 @@ def _cond_rule(
     with mode:
         branch = true_fn if pred else false_fn
         return branch(*operands)
+
+
+def _cond_rule_any_dispatch(*args: Any) -> Any:
+    """Run the taken ``cond`` branch under either HOP dispatch convention.
+
+    Current torch pops the mode and passes it first (``_cond_rule``). Torch 2.1,
+    whose bare ``cond`` is the operator, calls the rule with the operator's own
+    arguments and leaves the mode active, so the branch runs as-is and every op it
+    dispatches still reaches the witness.
+
+    Parameters
+    ----------
+    *args:
+        ``(mode, pred, true_fn, false_fn, operands)`` or ``(pred, true_fn, false_fn, operands)``.
+
+    Returns
+    -------
+    Any
+        The taken branch's output.
+    """
+
+    if isinstance(args[0], _TorchLensDispatchMode):
+        return _cond_rule(*args)
+    pred, true_fn, false_fn, operands = args
+    branch = true_fn if pred else false_fn
+    return branch(*operands)
 
 
 def _scan_rule_from(generic_scan: Callable[..., Any]) -> _HopRule:
@@ -165,6 +192,24 @@ def _dense_rule_from(dense: Callable[..., Any]) -> _HopRule:
     return _dense_rule
 
 
+def witness_rule_table(op: Any) -> dict[Any, Any]:
+    """Return the operator's per-mode rule table (torch 2.1 names it ``python_key_mode_table``).
+
+    Parameters
+    ----------
+    op:
+        Operator from ``get_higher_order_operator`` or ``get_cond_witness_operator``.
+
+    Returns
+    -------
+    dict[Any, Any]
+        Dispatch-mode type to rule.
+    """
+
+    table = getattr(op, "python_key_table", None)
+    return table if isinstance(table, dict) else op.python_key_mode_table
+
+
 def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
     """Return ``(operator, rule)`` pairs available on the running torch.
 
@@ -175,9 +220,9 @@ def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
     """
 
     rules: list[tuple[Any, _HopRule]] = []
-    cond_op = get_higher_order_operator("cond", "cond_op")
+    cond_op = get_cond_witness_operator()
     if cond_op is not None:
-        rules.append((cond_op, _cond_rule))
+        rules.append((cond_op, _cond_rule_any_dispatch))
     scan_op = get_higher_order_operator("scan", "scan_op")
     generic_scan = get_scan_eager_body()
     if scan_op is not None and generic_scan is not None:
@@ -206,7 +251,7 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
 
     registered: list[str] = []
     for op, rule in _witness_hop_rules():
-        if mode_type not in op.python_key_table:
+        if mode_type not in witness_rule_table(op):
             op.py_impl(mode_type)(_DynamoDeferredRule(rule))
         registered.append(str(op.name()))
     return tuple(registered)
@@ -256,7 +301,7 @@ def hide_witness_hop_rules_from_dynamo() -> None:
     """Swap each plain witness rule for its ``torch.compiler.disable`` form (idempotent)."""
 
     for op, _rule in _witness_hop_rules():
-        table = op.python_key_table
+        table = witness_rule_table(op)
         for mode_type, entry in tuple(table.items()):
             if isinstance(entry, _DynamoDeferredRule):
                 table[mode_type] = compile_disabled(entry.rule)

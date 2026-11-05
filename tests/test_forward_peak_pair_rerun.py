@@ -21,7 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture import peak_memory, trace as capture_trace
 from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
-from torchlens.options import CaptureOptions, ReplayOptions
+from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -67,7 +67,7 @@ def test_append_rerun_after_a_cpu_zero_round_trips(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     log, model = _rerun_log(monkeypatch, first=0, rerun=4096)
-    log.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    log.append(torch.randn(1, 3), model=model)
 
     assert log.cost.forward_peak_memory_reason is None
     log.save(tmp_path / "append_bundle")

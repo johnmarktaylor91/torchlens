@@ -532,7 +532,7 @@ class ConditionalAccessor:
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace(TraceOutputMixin, TraceLike):
+class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -2333,12 +2333,12 @@ class Trace(TraceOutputMixin, TraceLike):
         return _trace_views.suggest_layer_labels(self, selector, limit=limit)
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
-        """Yield single-call Modules whose semantic facet view has a facet available now."""
+        """Yield Modules with facet ``name`` available now, reused ones included."""
 
         return _trace_views.modules_with_facet(self, name)
 
     def attention_blocks(self) -> Iterator[Any]:
-        """Yield Modules with an available query-projection facet."""
+        """Yield Modules with an available query-projection facet, reused ones included."""
 
         return self.modules_with_facet("q")
 
