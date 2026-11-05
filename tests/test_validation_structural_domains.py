@@ -139,6 +139,35 @@ def test_single_bag_offsets_edge_is_verified_and_a_frozen_replay_still_fails() -
     assert frozen.decision == "failed", (frozen.decision, frozen.reason)
 
 
+class _PaddedBag(nn.Module):
+    """torch_frame-style bag: mean mode, ``padding_idx=0`` and singleton bags led by padding."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.bag = nn.EmbeddingBag(3, 4, mode="mean", padding_idx=0)
+
+    def forward(self, ids: torch.Tensor, offsets: torch.Tensor) -> torch.Tensor:
+        return self.bag(ids, offsets)
+
+
+def test_offsets_move_skips_a_padding_entry() -> None:
+    """Handing the padding entry between the first two bags changes nothing; the move skips it."""
+
+    inputs = [torch.tensor([0, 1, 2, 0, 1, 2]), torch.tensor([0, 1, 1, 3, 4, 4])]
+    model = _PaddedBag().eval()
+    assert _quiet_validate(model, inputs) is True
+    trace = _capture(model, inputs)
+    op = _op(trace, "embedding_bag")
+    assert embedding_bag_offsets_values(op, inputs[1]).tolist() == [0, 1, 2, 3, 4, 4]
+    offsets_label = op.call.parent_arg_positions["args"][2]
+    verified = _perturb(trace, op, offsets_label)
+    assert verified.decision == "validated", (verified.decision, verified.reason)
+    _freeze(op)
+    frozen = _perturb(trace, op, offsets_label)
+    assert frozen.decision == "failed", (frozen.decision, frozen.reason)
+
+
 def test_shape_read_view_validates_and_walks_the_receptive_field() -> None:
     model, inputs = _ShapeReadView().eval(), [torch.ones(1, 12, dtype=torch.long)]
     trace = tl.trace(model, inputs)

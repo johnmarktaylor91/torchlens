@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 _EMBEDDING_BAG_INDICES_SLOT = 1
 _EMBEDDING_BAG_OFFSETS_SLOT = 2
 _EMBEDDING_BAG_INCLUDE_LAST_SLOT = 7
+_EMBEDDING_BAG_PADDING_SLOT = 8
 
 #: Ops whose size arguments may be traced 0-d tensors next to a ``-1`` wildcard.
 _RESHAPE_FUNCS = frozenset({"view", "reshape"})
@@ -165,7 +166,8 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
     index count, and with ``include_last_offset`` the closing offset stays put.
     The first interior boundary that can move takes one index from the bag
     after it (or gives one to it), so the pooled output and every bag count
-    the edge is real for change. When no boundary can move (a single bag), the
+    the edge is real for change. A move that would only hand over an entry at
+    ``padding_idx`` (pooled as nothing) is skipped. When no boundary can move (a single bag), the
     last bag is split in two instead.
 
     Parameters
@@ -186,14 +188,19 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
     if offsets.ndim != 1 or count is None:
         return None
     values = [int(value) for value in offsets.tolist()]
-    if not values or values[0] != 0:
+    if not values or values[0] != 0 or values != sorted(values) or values[-1] > count:
         return None
     movable_end = len(values) - (1 if _include_last_offset(layer) else 0)
+    carried = _non_padding_entries(layer, count)
     for position in range(1, movable_end):
         upper = values[position + 1] if position + 1 < len(values) else count
-        if values[position] - 1 >= values[position - 1]:
+        # Moving the boundary down hands entry ``values[position] - 1`` to the
+        # later bag; moving it up hands entry ``values[position]`` to the
+        # earlier bag. An entry at ``padding_idx`` is pooled as nothing, so
+        # handing it over leaves both bags unchanged and proves nothing.
+        if values[position] - 1 >= values[position - 1] and carried[values[position] - 1]:
             moved = values[position] - 1
-        elif values[position] + 1 <= upper:
+        elif values[position] + 1 <= upper and carried[values[position]]:
             moved = values[position] + 1
         else:
             continue
@@ -201,6 +208,18 @@ def embedding_bag_offsets_values(layer: Op, offsets: torch.Tensor) -> torch.Tens
         result[position] = moved
         return result
     return _split_last_bag(offsets, values, count, _include_last_offset(layer))
+
+
+def _non_padding_entries(layer: Op, count: int) -> list[bool]:
+    """Return, per index entry, whether it is pooled (not equal to ``padding_idx``)."""
+
+    args: Sequence[Any] = layer.call.saved_args or ()
+    padding = args[_EMBEDDING_BAG_PADDING_SLOT] if len(args) > _EMBEDDING_BAG_PADDING_SLOT else None
+    padding = (layer.call.saved_kwargs or {}).get("padding_idx", padding)
+    indices = args[_EMBEDDING_BAG_INDICES_SLOT]
+    if not isinstance(padding, int) or isinstance(padding, bool) or padding < 0:
+        return [True] * count
+    return [int(value) != padding for value in indices.reshape(-1).tolist()]
 
 
 def _split_last_bag(
