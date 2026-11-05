@@ -261,13 +261,9 @@ def _canonical_repr(value: Any, *, exact: bool = False) -> str:
     if isinstance(value, BaseSelector):
         return f"selector:{value!r}"
     if callable(value):
-        return _opaque_callable_repr(getattr(value, "__qualname__", type(value).__name__))
+        qualname = getattr(value, "__qualname__", type(value).__name__)
+        return f"callable:{qualname}@opaque"
     return f"value:{render_value(value, exact=exact)}"
-
-
-def _opaque_callable_repr(qualname: str) -> str:
-    """Render an opaque callable action (shared with the capture door's fire-record match)."""
-    return f"callable:{qualname}@opaque"
 
 
 @dataclass(frozen=True)
