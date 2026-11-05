@@ -47,6 +47,13 @@ is recorded with the parameters' and checked at the same two points, with the
 same clone-path rerun on any change. A digest of each alias's bytes is also
 taken when it is made and compared before replay, so a write that skips the
 version counter (through ``.data``, or into the storage) reruns the same way.
+When that saved output is still a pending clone-on-write alias of the live
+tensor (outputs saved with grad disabled), the argument's alias is registered
+under the same clone-on-write key, so an intercepted write to the live tensor
+copies both out with the pre-write bytes. Its version check is the registry's
+own: an unchanged version while it still shares the live storage, bit-identical
+to the saved output once copied out; its digest must match the bytes it was
+made with in both states.
 """
 
 from __future__ import annotations
@@ -141,6 +148,7 @@ class ParameterArgumentReferences:
         self._offload_device = None if offload_device is None else torch.device(offload_device)
         self._alias_saved_values = alias_saved_values
         self._value_aliases: dict[int, tuple[torch.Tensor, int, str]] = {}
+        self._pending_aliases: dict[int, tuple[torch.Tensor, int, str, torch.Tensor, Any]] = {}
         self._value_digests: dict[int, bytes] = {}
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
@@ -190,10 +198,8 @@ class ParameterArgumentReferences:
         """Return an alias of ``saved_value`` standing in for a copy of ``tensor``, or ``None``.
 
         ``saved_value`` is the saved output of the op recorded as ``tensor``'s
-        parent. The alias is taken only when that output is TorchLens's own
-        exclusive copy (a plain dense tensor spanning its whole storage, not a
-        pending clone-on-write alias of a live tensor) and holds exactly the
-        argument's value: same dtype, shape, strides and bytes, on the device
+        parent. The alias is taken only when that output is a plain dense
+        tensor spanning its whole storage and holds exactly the argument's value: same dtype, shape, strides and bytes, on the device
         the retained copy would live on (with an offloading ``output_device``,
         the bytes are compared there and the alias carries the consumed-device
         tag, as the offloaded copy does). Like the copy it replaces, the alias
@@ -201,7 +207,10 @@ class ParameterArgumentReferences:
         an identity gradient edge; it carries the argument's capture label. Its
         version, shared with the parent's saved output, is recorded and checked
         by :meth:`first_change`, and a digest of its bytes by
-        :meth:`first_digest_change`. Callers hold ``pause_logging``.
+        :meth:`first_digest_change`. When the output is still a pending
+        clone-on-write alias of a live tensor, the alias is registered with the
+        clone-on-write registry instead (see :meth:`_pending_value_alias`).
+        Callers hold ``pause_logging``.
 
         This runs inside the model's forward: any exception raised while
         deciding or building the alias is not the model's, so it is dropped and
@@ -224,21 +233,57 @@ class ParameterArgumentReferences:
         with internal_scalar_read():
             if not _value_alias_eligible(tensor, saved_value, target or tensor.device):
                 return None
-            if _is_pending_deferred_payload(saved_value):
-                return None
+            pending_key = _pending_payload_key(saved_value)
             consumed = tensor if target is None else _detached_on(tensor, target)
-            if not _same_bits(consumed, saved_value):
+            if pending_key is False or not _same_bits(consumed, saved_value):
                 return None
             digest = _value_digest(saved_value)
+        if pending_key is not None:
+            if target is not None:
+                return None
+            return self._pending_value_alias(tensor, saved_value, parent_label, pending_key, digest)
         alias = _alias_like_copy(tensor, saved_value)
         if alias is None:
             return None
-        label = get_tensor_label(tensor)
-        if label is not None:
-            set_tensor_label(alias, label)
+        _label_like(alias, tensor)
         if target is not None:
             setattr(alias, CONSUMED_DEVICE_ATTR, tensor.device)
         self._value_aliases[id(alias)] = (alias, alias._version, parent_label)
+        self._value_digests[id(alias)] = digest
+        return alias
+
+    def _pending_value_alias(
+        self,
+        tensor: torch.Tensor,
+        saved_value: torch.Tensor,
+        parent_label: str,
+        key: Any,
+        digest: bytes,
+    ) -> torch.Tensor | None:
+        """Alias a parent output that is still a pending clone-on-write alias of a live tensor.
+
+        The alias is registered with the clone-on-write registry under the
+        payload's key, exactly as a second saved copy of the same live tensor
+        would be, so any intercepted write to that tensor first rebinds it to
+        fresh storage holding the pre-write bytes, together with the payload.
+        Like the deferred copy it replaces, it is a plain detached tensor, so
+        a copy that would require grad is refused (one kept on another device
+        is refused by the caller). Its version counter is the live tensor's, which legal writes
+        move, so :meth:`first_change` checks it differently (see
+        :func:`_pending_alias_change`); ``digest`` is the digest of the bytes it
+        stands for, checked by :meth:`first_digest_change` as for every alias.
+        """
+
+        if tensor.requires_grad and torch.is_grad_enabled():
+            return None
+        alias = _tensor_utils._try_defer_payload_alias(saved_value)
+        if alias is None:
+            return None
+        with _tensor_utils._paused_internal_reads():
+            if _tensor_utils._deferred_storage_key(alias) != key:
+                return None
+        _label_like(alias, tensor)
+        self._pending_aliases[id(alias)] = (alias, alias._version, parent_label, saved_value, key)
         self._value_digests[id(alias)] = digest
         return alias
 
@@ -246,7 +291,10 @@ class ParameterArgumentReferences:
         """Whether ``tensor`` is an alias :meth:`value_alias` made in this capture."""
 
         entry = self._value_aliases.get(id(tensor))
-        return entry is not None and entry[0] is tensor
+        if entry is not None and entry[0] is tensor:
+            return True
+        pending = self._pending_aliases.get(id(tensor))
+        return pending is not None and pending[0] is tensor
 
     @property
     def offloads(self) -> bool:
@@ -336,6 +384,13 @@ class ParameterArgumentReferences:
                     f"the saved output of {parent_label!r}, kept by reference as an argument, "
                     f"was written in place (version {version} to {alias._version})"
                 )
+        for alias, version, parent_label, payload, key in self._pending_aliases.values():
+            change = _pending_alias_change(alias, version, payload, key)
+            if change is not None:
+                return (
+                    f"the saved output of {parent_label!r}, kept by reference as an argument "
+                    f"while its source was live, {change}"
+                )
         return None
 
     def first_digest_change(self) -> str | None:
@@ -344,11 +399,17 @@ class ParameterArgumentReferences:
         A write that does not move the version counter (through ``.data``, or
         straight into the storage) would change an alias and its parent's saved
         output together, so the argument check could no longer see it: the
-        digest taken when the alias was made catches it instead.
+        digest taken when the alias was made catches it instead. An alias
+        registered under its parent's clone-on-write key is digested over the
+        bytes it stood for when it was made: still sharing the live storage, a
+        write there that the interception missed changes them; once copied out
+        it must still hold exactly those pre-write bytes.
         """
 
+        aliases = [(key, entry[0], entry[2]) for key, entry in self._value_aliases.items()]
+        aliases += [(key, entry[0], entry[2]) for key, entry in self._pending_aliases.items()]
         with pause_logging(), internal_scalar_read():
-            for key, (alias, _, parent_label) in self._value_aliases.items():
+            for key, alias, parent_label in aliases:
                 if _value_digest(alias) != self._value_digests[key]:
                     return (
                         f"the saved output of {parent_label!r}, kept by reference as an "
@@ -446,15 +507,49 @@ def _spans_whole_storage(tensor: torch.Tensor) -> bool:
     return span * tensor.element_size() == tensor.untyped_storage().nbytes()
 
 
-def _is_pending_deferred_payload(saved_value: torch.Tensor) -> bool:
-    """Whether ``saved_value`` still shares a live tensor's storage (a pending clone-on-write).
+def _pending_payload_key(saved_value: torch.Tensor) -> Any:
+    """Return the clone-on-write key ``saved_value`` is pending under, ``None``, or ``False``.
 
-    Materialising such a payload rebinds that one object to fresh storage, so
-    an alias taken from it would keep reading the live tensor.
+    ``None`` means TorchLens's own exclusive copy; a key means the payload
+    still shares a live tensor's storage (a pending clone-on-write alias);
+    ``False`` means the storage cannot be identified, which refuses the alias.
     """
 
     key = _tensor_utils._deferred_storage_key(saved_value)
-    return key is None or key in _tensor_utils._DEFER_PENDING
+    if key is None:
+        return False
+    return key if key in _tensor_utils._DEFER_PENDING else None
+
+
+def _pending_alias_change(
+    alias: torch.Tensor, version: int, payload: torch.Tensor, key: Any
+) -> str | None:
+    """Describe how a registered saved-value alias changed, or ``None``.
+
+    While the alias still sits on the live storage it was registered under,
+    every legal write to that storage would have rebound it first, so a moved
+    version means a write the clone-on-write interception did not see. Once
+    rebound, it holds its own copy of the bytes the payload was rebound with
+    at the same time, so the two must still be bit-identical; a version move
+    then only means the live tensor was written, which is legal.
+    """
+
+    with _tensor_utils._paused_internal_reads():
+        if _tensor_utils._deferred_storage_key(alias) == key:
+            if alias._version != version:
+                return f"was written without interception (version {version} to {alias._version})"
+            return None
+        if _tensor_utils._deferred_storage_key(payload) == key or not _same_bits(alias, payload):
+            return "no longer equals the saved output after it was copied out"
+    return None
+
+
+def _label_like(alias: torch.Tensor, tensor: torch.Tensor) -> None:
+    """Give ``alias`` the capture label ``tensor`` carries, as its copy would have."""
+
+    label = get_tensor_label(tensor)
+    if label is not None:
+        set_tensor_label(alias, label)
 
 
 def _detached_on(tensor: torch.Tensor, device: torch.device) -> torch.Tensor:
