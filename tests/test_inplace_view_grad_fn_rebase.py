@@ -139,3 +139,58 @@ def test_plain_view_read_keeps_its_own_node() -> None:
     _check_backward_graph_invariants(trace)
     (getitem,) = [layer for layer in trace._layer_list if layer.func_name == "__getitem__"]
     assert getitem.autograd.grad_fn.class_name == "SliceBackward0"
+
+
+class _ConsumedBeforeWrite(nn.Module):
+    """Read a view, then write it in place; the earlier reader keeps the view's node."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sum that reaches the view's node through the earlier reader."""
+
+        y = self.lin(x)
+        v = y[:, 5:6]
+        a = v * 3.0
+        v.add_(1.0)
+        return a.sum() + y.sum()
+
+
+def _only_layer(trace: tl.Trace, func_names: tuple[str, ...]) -> tl.Layer:
+    """Return the one layer whose function name is in ``func_names``."""
+
+    (layer,) = [layer for layer in trace._layer_list if layer.func_name in func_names]
+    return layer
+
+
+def test_view_consumed_before_write_keeps_its_node() -> None:
+    """A view read before the write keeps its node; the reader's edge lands on its op.
+
+    The reader's ``MulBackward0`` still points at the view's ``SliceBackward0``, so
+    that node stays in the graph and the view op's recorded handle was already
+    right. Rebinding it to the base's ``CopySlices`` would leave the reader's edge
+    on a node no op owns while the graph still validated.
+    """
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_ConsumedBeforeWrite(), _input().requires_grad_(True))
+        trace.backward(trace[trace.output_layers[0]].out.sum())
+    _check_backward_graph_invariants(trace)
+    getitem = _only_layer(trace, ("__getitem__",))
+    mul = _only_layer(trace, ("__mul__", "mul"))
+    assert getitem.autograd.grad_fn.class_name == "SliceBackward0"
+    mul_next_ids = mul.autograd.grad_fn.next_grad_fn_ids
+    assert getitem.autograd.grad_fn.grad_fn_object_id in mul_next_ids
+    assert all(trace._grad_fn_logs[next_id].has_op for next_id in mul_next_ids)
+
+
+def test_view_consumed_before_write_backward_validates() -> None:
+    """Backward validation passes when a view is read before its in-place write."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(_ConsumedBeforeWrite(), _input(), scope="backward")
