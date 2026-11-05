@@ -50,6 +50,7 @@ from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import read_tensor
 from torchlens._io.format3.values import RowRef, object_state
 from torchlens._io.format3.writer import record_kind_of
+from torchlens._utils._record_group_table import record_member
 from torchlens.types import UnencodableValue
 
 _LEVELS = ("portable", "audit", "runnable", "executable_with_callables")
@@ -299,7 +300,7 @@ def _live_cell(record: Any, state: dict[str, Any], name: str, storage: str) -> A
         return state[name]
     if storage == "computed":
         try:
-            return getattr(record, name)
+            return record_member(record, name)
         except (AttributeError, LookupError, RuntimeError, TypeError, ValueError):
             return None
     return None
