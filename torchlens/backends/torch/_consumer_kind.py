@@ -10,6 +10,22 @@ modules, which then asked the still-loading belt for this function.
 
 from __future__ import annotations
 
+from types import ModuleType
+
+
+def _ast_branches() -> ModuleType:
+    """Return ``_postprocess.ast_branches``, imported on first use (this module is a leaf).
+
+    Returns
+    -------
+    ModuleType
+        The AST branch-index module both lookups here read.
+    """
+
+    from ..._postprocess import ast_branches
+
+    return ast_branches
+
 
 def _classify_consumer_kind(filename: str, line: int) -> str:
     """Raise-time branch-kind classification (memo sec 2.3).
@@ -21,9 +37,7 @@ def _classify_consumer_kind(filename: str, line: int) -> str:
     """
 
     try:
-        from ..._postprocess.ast_branches import classify_bool
-
-        kind = classify_bool(filename, line).kind
+        kind = _ast_branches().classify_bool(filename, line).kind
     except Exception:  # noqa: BLE001 — classification must never mask the refusal
         return "scalar_escape"
     return "scalar_escape" if kind == "unknown" else kind
@@ -49,6 +63,4 @@ def _source_unreadable(filename: str) -> bool:
         ``True`` when no AST index can be built for ``filename``.
     """
 
-    from ..._postprocess.ast_branches import get_file_index
-
-    return get_file_index(filename) is None
+    return _ast_branches().get_file_index(filename) is None
