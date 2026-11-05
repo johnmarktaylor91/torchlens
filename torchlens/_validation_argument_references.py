@@ -34,9 +34,9 @@ exact copy, for the one layer being checked (see
 :mod:`torchlens.validation._replay_device`). This also applies on the clone-path
 rerun; with ``output_device="same"`` nothing is moved or tagged.
 
-The same first-attempt capture (``output_device="same"`` only) also keeps a
-retained tensor argument by reference when its recorded parent op already saved
-the identical value: same dtype, shape, strides and device and the same bytes
+The same first-attempt capture also keeps a retained tensor argument by
+reference when its recorded parent op already saved the identical value, on the
+device the retained copy would live on: same dtype, shape, strides and the same bytes
 (compared bit for bit, so NaN payloads and signed zeros count). The argument is
 then saved as a detached alias of that parent's saved output, instead of a
 second copy of the same bytes. A recorded parent whose saved value differs (a
@@ -119,8 +119,7 @@ class ParameterArgumentReferences:
         (validation's ``output_device``), or ``None`` to keep them in place.
     alias_saved_values:
         Whether a retained argument identical to its parent's saved output is
-        kept as an alias of that output (see :meth:`value_alias`). Never on
-        together with ``offload_device``.
+        kept as an alias of that output (see :meth:`value_alias`).
     """
 
     def __init__(
@@ -133,7 +132,7 @@ class ParameterArgumentReferences:
         self._owners = owners
         self._fallback_reason = fallback_reason
         self._offload_device = None if offload_device is None else torch.device(offload_device)
-        self._alias_saved_values = alias_saved_values and self._offload_device is None
+        self._alias_saved_values = alias_saved_values
         self._value_aliases: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
@@ -186,31 +185,37 @@ class ParameterArgumentReferences:
         parent. The alias is taken only when that output is TorchLens's own
         exclusive copy (a plain dense tensor spanning its whole storage, not a
         pending clone-on-write alias of a live tensor) and holds exactly the
-        argument's value: same dtype, shape, strides and device, and the same
-        bytes. Like the copy it replaces, the alias is a detached tensor with
-        the argument's ``requires_grad`` under the current grad mode, and it
-        carries the argument's capture label. Its version, shared with the
-        parent's saved output, is recorded and checked by :meth:`first_change`.
-        Callers hold ``pause_logging``.
+        argument's value: same dtype, shape, strides and bytes, on the device
+        the retained copy would live on (with an offloading ``output_device``,
+        the bytes are compared there and the alias carries the consumed-device
+        tag, as the offloaded copy does). Like the copy it replaces, the alias
+        requires grad exactly when the copy would, and is then a non-leaf with
+        an identity gradient edge; it carries the argument's capture label. Its
+        version, shared with the parent's saved output, is recorded and checked
+        by :meth:`first_change`. Callers hold ``pause_logging``.
         """
 
         if not self._alias_saved_values:
             return None
+        target = self.retention_device(tensor)
         with internal_scalar_read():
-            if (
-                not _value_alias_eligible(tensor, saved_value)
-                or _is_pending_deferred_payload(saved_value)
-                or not _same_bits(tensor, saved_value)
-            ):
+            if not _value_alias_eligible(tensor, saved_value, target or tensor.device):
                 return None
+            if _is_pending_deferred_payload(saved_value):
+                return None
+            consumed = tensor if target is None else _detached_on(tensor, target)
+            if not _same_bits(consumed, saved_value):
+                return None
+        alias = _alias_like_copy(tensor, saved_value)
+        if alias is None:
+            return None
         from ._utils._tensor_label import get_tensor_label, set_tensor_label
 
-        alias = saved_value.detach()
-        if tensor.requires_grad and torch.is_grad_enabled():
-            alias.requires_grad_(True)
         label = get_tensor_label(tensor)
         if label is not None:
             set_tensor_label(alias, label)
+        if target is not None:
+            setattr(alias, CONSUMED_DEVICE_ATTR, tensor.device)
         self._value_aliases[id(alias)] = (alias, alias._version, parent_label)
         return alias
 
@@ -360,8 +365,8 @@ def _describe_change(name: str, before: int, after: int) -> str:
     return f"parameter {name!r} was written in place (version {before} to {after})"
 
 
-def _value_alias_eligible(tensor: torch.Tensor, saved_value: Any) -> bool:
-    """Whether ``saved_value`` could stand in for a copy of ``tensor`` (no byte read yet)."""
+def _value_alias_eligible(tensor: torch.Tensor, saved_value: Any, device: torch.device) -> bool:
+    """Whether ``saved_value`` could stand in for a copy of ``tensor`` kept on ``device``."""
 
     if type(tensor) is not torch.Tensor or type(saved_value) is not torch.Tensor:
         return False
@@ -374,7 +379,7 @@ def _value_alias_eligible(tensor: torch.Tensor, saved_value: Any) -> bool:
         tensor.dtype != saved_value.dtype
         or tensor.shape != saved_value.shape
         or tensor.stride() != saved_value.stride()
-        or tensor.device != saved_value.device
+        or saved_value.device != device
         or saved_value.numel() == 0
     ):
         return False
@@ -409,6 +414,33 @@ def _is_pending_deferred_payload(saved_value: torch.Tensor) -> bool:
 
     key = tensor_utils._deferred_storage_key(saved_value)
     return key is None or key in tensor_utils._DEFER_PENDING
+
+
+def _detached_on(tensor: torch.Tensor, device: torch.device) -> torch.Tensor:
+    """Return a detached copy of ``tensor`` on ``device``, only to compare its bytes there."""
+
+    with torch.no_grad():
+        return tensor.detach().to(device)
+
+
+def _alias_like_copy(tensor: torch.Tensor, saved_value: torch.Tensor) -> torch.Tensor | None:
+    """Alias ``saved_value`` with the autograd state the copy of ``tensor`` would have.
+
+    The eager copy is a graph-connected clone: it requires grad, as a non-leaf,
+    exactly when ``tensor`` does under the current grad mode. A plain detached
+    alias stands in for a copy that would not; otherwise the alias gets an
+    identity gradient edge to ``saved_value`` (which is not an autograd view, so
+    an in-place write legal on the clone stays legal on it). When the parent's
+    saved output carries no gradient path, no alias is taken.
+    """
+
+    if not (tensor.requires_grad and torch.is_grad_enabled()):
+        return saved_value.detach()
+    if not saved_value.requires_grad:
+        return None
+    from ._utils.tensor_utils import _mint_graph_connected_alias
+
+    return _mint_graph_connected_alias(saved_value)
 
 
 def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:

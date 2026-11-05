@@ -9,8 +9,9 @@ that saved output instead of a second copy. These tests pin, on the CPU:
   the copy-only path, and reaches the same verdict;
 * a planted wrong-parent swap to a producer with different values keeps the
   copy at that slot and still fails;
-* an untraced in-place write after the parent was saved keeps the copy and
-  still fails;
+* an in-place write after the parent was saved keeps the copy, with the
+  copy-only verdict, and still fails when its per-child version record is
+  dropped (a planted capture bug);
 * replay never writes through an alias (versions and bytes are unchanged after
   validation, with in-place ops consuming aliased arguments), and a write into
   an alias during the capture makes validation rerun with every argument copied.
@@ -256,20 +257,50 @@ def test_wrong_parent_swap_to_different_values_keeps_the_copy_and_fails(
     assert _validate(_Different(), x, lambda trace: None, copy_only=True) is False
 
 
-def test_untraced_in_place_write_after_save_keeps_the_copy_and_fails() -> None:
-    shared: list[bool] = []
+def _mul_slot_shares_parent(shared: list[bool]) -> Callable[[Any], None]:
+    """Observer recording whether the mul's saved argument sits on its parent's output."""
 
     def observe(trace: Any) -> None:
         for op, parent, value in _parent_slots(trace):
             if op.func_name == "__mul__":
                 shared.append(_shares_parent_output(value, parent))
 
+    return observe
+
+
+def test_an_in_place_write_after_save_is_kept_as_a_copy_with_the_same_verdict() -> None:
     torch.manual_seed(0)
     model = _UntracedWrite()
     x = torch.randn(3, 4)
+    shared: list[bool] = []
+    copy_verdict = _validate(model, x, lambda trace: None, copy_only=True)
+    assert _validate(model, x, _mul_slot_shares_parent(shared)) is copy_verdict
+    assert shared and not any(shared), shared
+
+
+def test_an_in_place_write_after_save_with_its_version_record_dropped_still_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dropped: list[str] = []
+
+    def drop_version(self: Any, parent_label: str, *args: Any, **kwargs: Any) -> None:
+        """Planted capture bug: never record the value a child consumed after a write."""
+
+        dropped.append(parent_label)
+
+    monkeypatch.setattr(
+        torchlens.backends.torch._ops_shared_fields,
+        "_get_parent_output_version_snapshot",
+        drop_version,
+    )
+    torch.manual_seed(0)
+    model = _UntracedWrite()
+    x = torch.randn(3, 4)
+    shared: list[bool] = []
     assert _validate(model, x, lambda trace: None, copy_only=True) is False
-    assert _validate(model, x, observe) is False
-    assert not any(shared), shared
+    assert _validate(model, x, _mul_slot_shares_parent(shared)) is False
+    assert dropped, "the planted bug never ran: inconclusive"
+    assert shared and not any(shared), shared
 
 
 def test_replay_never_writes_through_an_alias_to_the_parents_saved_output() -> None:
@@ -338,6 +369,78 @@ def test_a_write_into_an_alias_during_capture_reruns_with_every_argument_copied(
     assert "saved output" in fallbacks[0].extra["reason"]
 
 
+class _NoGradChain(nn.Module):
+    """An integer chain (its saved outputs stay clone-on-write) written after a child read it."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        index = x.argmax(dim=1)
+        parity = index.remainder(2)
+        shifted = parity + 1
+        parity.mul_(3)
+        return x.sum(dim=1) * shifted + parity
+
+
+class _StorageContextReceiver(nn.Module):
+    """A storage-context receiver whose parent saved the identical bytes."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        scaled = x * 1.0
+        scaled.as_strided_((2, 2), (4, 1))
+        return scaled + 1.0
+
+
+def _saved_slot_values(trace: Any, func_name: str) -> list[tuple[torch.Tensor, bool]]:
+    """Return each saved tensor at a parent slot of ``func_name`` ops, and whether it is aliased."""
+
+    return [
+        (value.detach().clone(), _shares_parent_output(value, parent))
+        for op, parent, value in _parent_slots(trace)
+        if op.func_name == func_name
+    ]
+
+
+@pytest.mark.parametrize(
+    ("model_type", "func_name", "shape"),
+    [(_NoGradChain, "__add__", (3, 5)), (_StorageContextReceiver, "as_strided_", (4, 4))],
+    ids=["pending-clone-on-write-parent", "storage-context-receiver"],
+)
+def test_refused_slots_keep_their_copy_with_the_same_verdict(
+    model_type: type[nn.Module], func_name: str, shape: tuple[int, ...]
+) -> None:
+    torch.manual_seed(0)
+    x = torch.randn(*shape)
+    seen: dict[str, list[tuple[torch.Tensor, bool]]] = {}
+
+    def observe(key: str) -> Callable[[Any], None]:
+        def record(trace: Any) -> None:
+            seen[key] = _saved_slot_values(trace, func_name)
+
+        return record
+
+    copy_verdict = _validate(model_type(), x, observe("copy"), copy_only=True)
+    assert _validate(model_type(), x, observe("alias")) is copy_verdict
+    assert seen["alias"], seen
+    assert not any(aliased for _, aliased in seen["alias"]), seen["alias"]
+    assert len(seen["alias"]) == len(seen["copy"])
+    for (alias_value, _), (copy_value, _) in zip(seen["alias"], seen["copy"], strict=True):
+        assert torch.equal(alias_value, copy_value)
+
+
+def test_a_grad_alias_is_a_non_leaf_that_takes_the_clones_in_place_write() -> None:
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    source = torch.randn(4, requires_grad=True)
+    consumed = source * 1.0
+    saved = consumed.clone()
+    with _state.pause_logging():
+        alias = guard.value_alias(consumed.clone(), saved, "p")
+    assert alias is not None
+    assert alias.requires_grad and not alias.is_leaf
+    assert alias.untyped_storage().data_ptr() == saved.untyped_storage().data_ptr()
+    assert guard.first_change() is None
+    alias.add_(1.0)
+    assert guard.first_change() is not None
+
+
 def test_the_guard_refuses_unequal_bytes_signed_zero_and_partial_storage() -> None:
     guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
     saved = torch.tensor([0.0, 1.0, float("nan")])
@@ -347,8 +450,10 @@ def test_the_guard_refuses_unequal_bytes_signed_zero_and_partial_storage() -> No
         assert guard.value_alias(torch.tensor([0.0, 2.0, float("nan")]), saved, "p") is None
         assert guard.value_alias(saved[:2].clone(), saved[:2], "p") is None
         assert guard.value_alias(saved.clone().double(), saved, "p") is None
-    offloading = arg_references.ParameterArgumentReferences(
-        {}, offload_device="cpu", alias_saved_values=True
-    )
-    assert not offloading.aliases_saved_values
+    with _state.pause_logging():
+        detached = guard.value_alias(saved.clone(), saved, "p")
+    assert detached is not None and not detached.requires_grad
+    off = arg_references.ParameterArgumentReferences({}, alias_saved_values=False)
+    with _state.pause_logging():
+        assert off.value_alias(saved.clone(), saved, "p") is None
     assert guard.first_change() is None
