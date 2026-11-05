@@ -79,7 +79,7 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
-from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs
+from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs, perturb_through_values
 from ._pre_replay import (
     CoreBindings,
     _is_provable_functionless_source_or_boundary,
@@ -3247,8 +3247,8 @@ def _prepare_input_args_for_validating_layer(
                         return None, "no_index_single_entry_perturbation"
                     parent_layer_func_values = single_entry
                 else:
-                    parent_layer_func_values = _directional_step_perturb(
-                        parent_values, perturb_strategy
+                    parent_layer_func_values = perturb_through_values(
+                        parent_values, lambda v: _directional_step_perturb(v, perturb_strategy)
                     )
             else:
                 parent_layer_func_values = parent_values

@@ -10780,7 +10780,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/validation/_crossing_perturbations.py",
   "has_default": true,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": true
  },
  {
