@@ -1,7 +1,7 @@
 """Fast path for :func:`torchlens.extract` when every request is a module's output.
 
-A full capture records every operation of the forward pass (about 15-20x the
-cost of the plain forward on a small transformer). When each requested name is
+A full capture records every operation of the forward pass, which costs many
+times a plain forward on a small transformer. When each requested name is
 an exact module address, the model is in eval mode and the input is one tensor
 already on the model's device, the same values come from one plain forward with
 forward hooks on those modules. The fast path returns only when the result is

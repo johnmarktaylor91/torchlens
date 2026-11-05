@@ -5832,8 +5832,6 @@ package-docstrings	torchlens/_errors.py	20
 package-docstrings	torchlens/_errors.py	22
 package-docstrings	torchlens/_errors.py	22,
 package-docstrings	torchlens/_errors.py	5.4,
-package-docstrings	torchlens/_extract_fast.py	15
-package-docstrings	torchlens/_extract_fast.py	20
 package-docstrings	torchlens/_extraction/__init__.py	18
 package-docstrings	torchlens/_extraction/__init__.py	19
 package-docstrings	torchlens/_extraction/callable_identity.py	15
