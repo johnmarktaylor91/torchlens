@@ -236,7 +236,7 @@ def test_accumulate_grad_absence_uses_name_matching(monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize(
     ("helper_name", "flag_name", "expected"),
     [
-        ("get_functorch_maybe_current_level", "HAS_FUNCTORCH_LEVEL_API", None),
+        ("get_functorch_transform_probe", "HAS_FUNCTORCH_INTERPRETER_STACK_API", None),
         ("get_functorch_wrapped_tensor_checker", "HAS_FUNCTORCH_WRAPPED_TENSOR_API", None),
         ("get_fx_graph_module_type", "HAS_FX_GRAPH_MODULE", None),
     ],
@@ -254,6 +254,36 @@ def test_nested_private_helper_absence_marks_capability(
     with pytest.warns(UserWarning, match=flag_name):
         assert getattr(tc, helper_name)() is expected
     assert getattr(tc, flag_name) is False
+
+
+def test_functorch_transform_probe_falls_back_to_the_interpreter_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``maybe_current_level`` (torch 2.1, 2.2) the probe reads the interpreter stack."""
+
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_LEVEL_API")
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_INTERPRETER_STACK_API")
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_FUNCTORCH_LEVEL_API", ("torch:_C._functorch.absent_level_api",)
+    )
+    monkeypatch.delenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", raising=False)
+    with warnings.catch_warnings():
+        # The fallback is no degradation: an absent level API alone stays silent.
+        warnings.simplefilter("error", tc.TorchCapabilityWarning)
+        probe = tc.get_functorch_transform_probe()
+    assert probe is not None
+    assert probe() is None
+    inside: list[object] = []
+
+    def row_fn(row: torch.Tensor) -> torch.Tensor:
+        """Record the probe's answer inside the transform."""
+
+        inside.append(probe())
+        return row
+
+    torch.func.vmap(row_fn)(torch.ones(2, 3))
+    assert inside and all(level is not None for level in inside)
+    assert tc.HAS_FUNCTORCH_INTERPRETER_STACK_API is True
 
 
 @pytest.mark.parametrize(
@@ -314,8 +344,10 @@ def test_private_torch_capability_flags_present_on_supported_range() -> None:
         "HAS_TORCH_FUNC",
         "HAS_FUNCTORCH_APIS",
         "HAS_FUNCTORCH_LEVEL_API",
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
         "HAS_JIT_BUILTIN_TABLE",
+        "HAS_COND_HIGHER_ORDER_OP",
         "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
         "HAS_JIT_OVERLOAD_RESOLVER",
         "HAS_DEVICE_CONTEXT_DISPATCH",
@@ -362,6 +394,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TORCH_FUNC": True,
         "HAS_FUNCTORCH_APIS": True,
         "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API": True,
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API": True,
         "HAS_JIT_BUILTIN_TABLE": True,
         # fix-capture-r3 R56: TorchScript compatibility while wrapped needs the
@@ -383,6 +416,8 @@ def test_torch_capability_snapshot_contract() -> None:
         # ran them; a build without it charges the innermost node marker.
         "HAS_CURRENT_AUTOGRAD_NODE": tc.HAS_CURRENT_AUTOGRAD_NODE,
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
+        # The unchecked view replay; older torch spells it ``_view_func``.
+        "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
@@ -490,6 +525,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_DISABLE_TORCH_FUNCTION": True,
         "HAS_VARIABLE_FUNCTIONS_CLASS": True,
         "HAS_FAKE_TENSOR_MODE": tc.HAS_FAKE_TENSOR_MODE,
+        # cond_op, or on torch 2.1 the bare cond operator: present on every supported
+        # torch, hardcoded True as a tripwire for the completeness witness cond rule.
+        "HAS_COND_HIGHER_ORDER_OP": True,
         "HAS_DTENSOR_SHARD_GEOMETRY": tc.HAS_DTENSOR_SHARD_GEOMETRY,
         # L8/C2 funcol boundary capture degrades independently when group
         # resolution or dispatcher-level wait interposition is unavailable.
@@ -949,6 +987,25 @@ def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
     monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: True)
     native = tc.tensor_any_over_dims(mask, (0, 2))
     assert torch.equal(fallback, native)
+
+
+def test_view_func_replay_falls_back_to_the_older_spelling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``Tensor._view_func_unsafe`` view replay resolves to ``Tensor._view_func``.
+
+    The replay itself is exercised end to end through this fallback by the
+    ``_view_func`` cases of ``tests/test_view_func_replay.py`` on a torch that
+    lacks the newer spelling.
+    """
+
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_VIEW_FUNC_UNSAFE", ("torch:Tensor._no_such_view_func",)
+    )
+    assert tc.get_view_func_replay() is torch.Tensor._view_func
+    monkeypatch.undo()
+    expected = getattr(torch.Tensor, "_view_func_unsafe", torch.Tensor._view_func)
+    assert tc.get_view_func_replay() is expected
 
 
 def test_probe_gradient_edge_is_functional_not_just_attribute_presence(

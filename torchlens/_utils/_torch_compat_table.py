@@ -143,6 +143,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row(
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")
     ),
+    _row("HAS_COND_HIGHER_ORDER_OP"),
     _row("HAS_CPU_HALF_KERNELS", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"),
     _row("HAS_CUDA_GRAPHS"),
@@ -181,6 +182,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_FUNCOL_MODULE"),
     _row("HAS_FUNCOL_WAIT_INTERPOSITION", absent_on=("2.1.2",)),
     _row("HAS_FUNCTORCH_APIS"),
+    _row("HAS_FUNCTORCH_INTERPRETER_STACK_API"),
     _row("HAS_FUNCTORCH_LEVEL_API", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_FUNCTORCH_WRAPPED_TENSOR_API"),
     _row("HAS_FX_GRAPH_MODULE"),
@@ -250,6 +252,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG"),
     _row("HAS_VARIABLE_FUNCTIONS"),
     _row("HAS_VARIABLE_FUNCTIONS_CLASS"),
+    _row("HAS_VIEW_FUNC_UNSAFE", absent_on=("2.1.2",)),
 )
 
 CAPABILITY_ROWS: dict[str, CapabilityRow] = {row.flag: row for row in _ROWS}

@@ -126,7 +126,13 @@
     recorded as sibling ops with no boundary (FlashAttention 2's
     `flash_attn::_flash_attn_forward`, keyed on the operator its replay callable calls plus
     its `func_name`: the log-sum-exp and dropout mask read q and k, the rng state none of q,
-    k, v; the attention output has no row). An ordinary custom Function
+    k, v; the attention output has no row). A `vmap` boundary over a known transformers mask
+    builder is checked against a declared mask-builder table (ruling
+    d-aad71aaad45648ba93beaf7e05f2a1bb): `head_idx`, position 1, is excused only when the
+    mapped callable is `and_mask`, `causal_mask_function` or the packed-sequence, padding or
+    sliding-window inner mask of `transformers.masking_utils` by identity, an `and_mask`
+    composes only table builders, and no leaf's code references `head_idx`; everything else
+    stays strict (`validation/_mask_builder_dependence.py`). An ordinary custom Function
     (interior in torch) is captured op by op exactly as before. A round trip outside any
     Function is never collapsed into a boundary that hides ops: the export is journaled as a
     departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited

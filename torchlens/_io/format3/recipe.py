@@ -30,15 +30,21 @@ import torch
 
 from .. import _json
 from ..format_errors import ArtifactError, OpaqueCallableError
-from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, SAVE_LEVELS, TYPED_VALUE_KEY
+from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
 from .decode import decode_value
 from .payloads import PayloadStore, read_tensor
+from .recipe_shape import _placeholders_in, _recipe_shape_problem
 from .values import ValueEncoder, build_record, callable_placeholder, tagged
 
 #: ``format`` of the recipe file.
 RECIPE_FORMAT: Final = "torchlens.intervention_recipe"
 #: ``format_version`` of the recipe file (the saved-format major).
 RECIPE_FORMAT_VERSION: Final = 3
+#: ``format_version`` of a recipe carrying a facet-write rule: a reader of format 3
+#: alone would install that rule's edit on the whole home tensor, so it must refuse.
+FACET_RECIPE_FORMAT_VERSION: Final = 4
+#: Recipe format versions this reader accepts.
+READABLE_RECIPE_FORMAT_VERSIONS: Final = (RECIPE_FORMAT_VERSION, FACET_RECIPE_FORMAT_VERSION)
 #: Save level whose recipe is never executable.
 _AUDIT_LEVEL: Final = "audit"
 #: Edit portability of a rule whose edit is a user callable.
@@ -197,15 +203,16 @@ def _rule(index: int, hook_spec: Any, encoder: _RecipeEncoder) -> dict[str, Any]
     edit = getattr(hook_spec, "helper", None)
     if edit is None:
         edit = getattr(hook_spec, "hook", None)
+    target = getattr(hook_spec, "site_target", None)
+    selector = _selector(target, encoder, f"{index}.selector")
     if metadata.get("facet_write"):
-        # A facet write fires through a capture-bound scatter wrapper; the raw
-        # edit alone would apply to the whole tensor, so the rule keeps only a
-        # placeholder of the wrapper.
-        edit = getattr(hook_spec, "hook", None)
-        encoded_edit = _placeholder_edit(index, edit, encoder)
+        # A facet write fires through a capture-bound scatter wrapper. A built-in edit
+        # persists as the request (edit, narrowed facet selector as the site, home
+        # label, facet name, write mask and its digest) that a load re-resolves; any
+        # other edit keeps only a placeholder of the wrapper.
+        selector, encoded_edit = _facet_rule_parts(index, hook_spec, selector, encoder)
     else:
         encoded_edit = _edit(index, edit, encoder)
-    target = getattr(hook_spec, "site_target", None)
     rule_metadata = dict(metadata)
     handle = getattr(hook_spec, "handle", None)
     if handle is not None:
@@ -213,10 +220,35 @@ def _rule(index: int, hook_spec: Any, encoder: _RecipeEncoder) -> dict[str, Any]
     return {
         "index": index,
         "direction": _direction(metadata, target),
-        "selector": _selector(target, encoder, f"{index}.selector"),
+        "selector": selector,
         "edit": encoded_edit,
         "metadata": encoder.encode(rule_metadata, f"{index}.metadata"),
     }
+
+
+def _facet_rule_parts(
+    index: int, hook_spec: Any, selector: dict[str, Any], encoder: _RecipeEncoder
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the ``selector`` and ``edit`` objects of a facet-write rule."""
+
+    helper = getattr(hook_spec, "helper", None)
+    request = hook_spec.metadata.get("facet_selector")
+    builtin = _is_edit(helper) and getattr(helper, "portability", None) == "builtin"
+    if not builtin or not isinstance(request, dict):
+        return selector, _placeholder_edit(index, getattr(hook_spec, "hook", None), encoder)
+    facet = {**selector, "selector_kind": "facet"}
+    facet["selector_value"] = encoder.encode(dict(request), f"{index}.selector.selector_value")
+    return facet, _edit(index, helper, encoder)
+
+
+def _format_version(rules: Sequence[Mapping[str, Any]]) -> int:
+    """Return the recipe format version: the facet version when a rule persists a facet write."""
+
+    facet = any(
+        rule["selector"]["selector_kind"] == "facet" and rule["edit"]["portability"] == "builtin"
+        for rule in rules
+    )
+    return FACET_RECIPE_FORMAT_VERSION if facet else RECIPE_FORMAT_VERSION
 
 
 def _value_rule(index: int, value_spec: Any, encoder: _RecipeEncoder) -> dict[str, Any]:
@@ -295,23 +327,6 @@ class _RecipeEncoder(ValueEncoder):
         return self._store.recipe_reference(value)
 
 
-def _placeholders_in(data: Any) -> list[dict[str, Any]]:
-    """Return every ``callable_placeholder`` object inside encoded data."""
-
-    found: list[dict[str, Any]] = []
-    stack = [data]
-    while stack:
-        item = stack.pop()
-        if isinstance(item, dict):
-            if item.get(TYPED_VALUE_KEY) == "callable_placeholder":
-                found.append(item)
-                continue
-            stack.extend(item.values())
-        elif isinstance(item, list):
-            stack.extend(item)
-    return found
-
-
 def _builtin_helpers(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return one helper entry per distinct built-in edit name the rules use."""
 
@@ -386,7 +401,7 @@ def build_recipe(
     )
     recipe = {
         "format": RECIPE_FORMAT,
-        "format_version": RECIPE_FORMAT_VERSION,
+        "format_version": _format_version(rules),
         "helper_registry_version": HELPER_REGISTRY_VERSION,
         "save_level": header.save_level,
         "executable": executable,
@@ -536,10 +551,10 @@ def read_recipe(root: str | Path) -> dict[str, Any]:
             code="bundle_load_failed",
             remedy="load a directory written by save_intervention or trace.save",
         )
-    if data.get("format_version") != RECIPE_FORMAT_VERSION:
+    if data.get("format_version") not in READABLE_RECIPE_FORMAT_VERSIONS:
         raise ArtifactError(
             f"{path} has recipe format_version {data.get('format_version')!r}; this "
-            f"TorchLens reads {RECIPE_FORMAT_VERSION}.",
+            f"TorchLens reads {', '.join(map(str, READABLE_RECIPE_FORMAT_VERSIONS))}.",
             code="bundle_load_failed",
             remedy="re-save the recipe with this TorchLens version",
         )
@@ -552,96 +567,6 @@ def read_recipe(root: str | Path) -> dict[str, Any]:
             remedy="re-save the recipe with save_intervention or trace.save; do not hand-edit it",
         )
     return {key: _bind(value, Path(root), key) for key, value in data.items()}
-
-
-#: Save levels a recipe may carry: the artifact's own, so a recipe saved with a runnable
-#: trace (``level="runnable"``) reads back.
-_RECIPE_SAVE_LEVELS: Final = frozenset(SAVE_LEVELS)
-#: Keys every rule object carries.
-_RULE_KEYS: Final = frozenset({"index", "selector", "edit"})
-
-
-def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
-    """Return ``(detail, code)`` for the first structural fault of a recipe, else ``None``."""
-
-    allowed = {
-        "format",
-        "format_version",
-        "helper_registry_version",
-        "save_level",
-        "executable",
-        "spec_derived",
-        "append_state",
-        "rules",
-        "values",
-        "helpers",
-        "function_registry_keys",
-        "capture_rules",
-    }
-    if set(data) - allowed:
-        return "recipe contains unknown keys", "manifest_schema_invalid"
-    problem = _capture_rules_problem(data.get("capture_rules", []))
-    if problem is not None:
-        return problem, "manifest_schema_invalid"
-    if data.get("save_level") not in _RECIPE_SAVE_LEVELS:
-        return f"save_level {data.get('save_level')!r} is unknown", "artifact_save_level_invalid"
-    rules = data.get("rules")
-    if not isinstance(rules, list):
-        return "rules is missing or not an array", "manifest_schema_invalid"
-    if not isinstance(data.get("values", []), list):
-        return "values is not an array", "manifest_schema_invalid"
-    for position, rule in enumerate(rules):
-        if not isinstance(rule, dict) or not _RULE_KEYS.issubset(rule):
-            return f"rule {position} lacks {sorted(_RULE_KEYS)}", "manifest_schema_invalid"
-        if not isinstance(rule["edit"], dict) or not isinstance(rule["selector"], dict):
-            return f"rule {position} edit or selector is not an object", "manifest_schema_invalid"
-    return None
-
-
-# Complexity: the closed capture-rule grammar checks selector and edit portability together.
-def _capture_rules_problem(rules: Any) -> str | None:
-    """Check the closed capture-rule schema before decoding any member."""
-
-    if not isinstance(rules, list):
-        return "capture_rules is not an array"
-    if _placeholders_in(rules):
-        return "capture_rules requires portable built-in edits"
-    selector_keys = {"selector_kind", "selector_value", "strict", "slice_spec", "metadata"}
-    edit_keys = {
-        "name",
-        "args",
-        "kwargs",
-        "portability",
-        "signal",
-        "is_batch_independent",
-        "is_compatible_with_append",
-        "metadata",
-        "selection_recipe",
-    }
-    # Keep the closed wire-schema checks together so every refusal is reviewed in one place.
-    for index, rule in enumerate(rules):
-        if not isinstance(rule, dict) or set(rule) != {"index", "selector", "edit"}:
-            return f"capture_rules[{index}] has unknown or missing keys"
-        if type(rule["index"]) is not int or rule["index"] != index:
-            return f"capture_rules[{index}] has an invalid index"
-        target, edit = rule["selector"], rule["edit"]
-        if not isinstance(target, dict) or set(target) != selector_keys:
-            return f"capture_rules[{index}] has an invalid selector"
-        if type(target["strict"]) is not bool or not isinstance(target["metadata"], dict):
-            return f"capture_rules[{index}] has invalid selector field types"
-        if not isinstance(target["selector_kind"], str) or not target["selector_kind"]:
-            return f"capture_rules[{index}] has an invalid selector kind"
-        if not isinstance(edit, dict) or set(edit) != edit_keys or edit["portability"] != "builtin":
-            return f"capture_rules[{index}] requires a built-in edit"
-        if (
-            not isinstance(edit["args"], list)
-            or not isinstance(edit["kwargs"], dict)
-            or not isinstance(edit["metadata"], dict)
-            or type(edit["is_batch_independent"]) is not bool
-            or type(edit["is_compatible_with_append"]) is not bool
-        ):
-            return f"capture_rules[{index}] has invalid edit field types"
-    return None
 
 
 def trace_capture_rules(trace: Any) -> list[tuple[Any, Any]]:

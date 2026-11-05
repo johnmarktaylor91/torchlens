@@ -724,6 +724,10 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # torch-aware snapshot at import; the basis module falls back to the torch
         # compat snapshot when nothing is registered.
         ("torchlens/_doctor_types.py", "_CAPABILITY_SNAPSHOT_PROVIDER"),
+        # Internal-read routing slot: backends/torch/_internal_read registers the wrapper
+        # pass-through predicate and unwrap ledger at import; the low-level routed tensor
+        # reads fall back to the method call when nothing is registered.
+        ("torchlens/_utils/_torch_symbols.py", "_INTERNAL_READS"),
         # Facet-snapshot provider slot: the capture door registers a lazy loader and
         # _semantic.facets registers snapshot() when it loads; the engine reads it.
         ("torchlens/_registry/_facet_snapshot.py", "_PROVIDER"),
@@ -774,6 +778,10 @@ _PROCESS_CACHES = frozenset(
     {
         # tl.errors.quiet: one quieted subclass per warning class, built on first use.
         ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
+        # Routed tensor reads: last resolution per routed name (ten keys), held with the
+        # class attribute it came from and re-resolved when that attribute changes, so
+        # it needs no epoch.
+        ("torchlens/_utils/_torch_symbols.py", "_RESOLVED"),
         # Call-site grouping per-code memos (content token, instruction map),
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),

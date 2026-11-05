@@ -17,61 +17,35 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._runnable.seam import carries_intervened_values, runnable_trace_state
 from .errors import EngineDispatchError
 
 _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
-# Audit rows that record an edit which changed no recorded value (an armed
-# gradient edit changes no forward value; its settle row says what fired).
-_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
 
 
-def _carries_intervened_values(trace: Any) -> bool:
-    """Return whether persisted evidence says recorded values were intervened.
+def _artifact_values_intervened(trace: Any) -> bool:
+    """Return whether the values the trace was LOADED with were intervened.
 
     Parameters
     ----------
     trace:
-        Trace to inspect.
+        Loaded trace (or a fork of one; forks copy the runnable state).
 
     Returns
     -------
     bool
-        True when an op was replaced or fired, or a ``do()`` audit row records
-        a fired edit (attempts that failed or fired nowhere changed nothing).
+        The snapshot the loader took before any session edit
+        (``RunnableTraceState.loaded_values_intervened``). An edit staged in
+        this session, such as a ``set_only`` edit on a loaded fork, marks ops
+        edited too, so the live evidence cannot tell the artifact's values
+        from the session's; the snapshot can. When no snapshot was taken the
+        live evidence decides.
     """
 
-    for layer in trace._layer_list or ():
-        if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
-            return True
-    return any(
-        isinstance(row, dict) and _audit_row_records_fired_edit(row)
-        for row in getattr(trace, "intervention_audit", None) or ()
-    )
-
-
-def _audit_row_records_fired_edit(row: dict[str, Any]) -> bool:
-    """Return whether one persisted audit row records an edit that changed values.
-
-    Parameters
-    ----------
-    row:
-        One ``intervention_audit`` row.
-
-    Returns
-    -------
-    bool
-        EVENT rows carry a status: fired means changed values. Resolve-bearing
-        rows carry none: an ACT row lists the site keys its edit fired on (a
-        ``do()`` that only staged its hooks lists none), and EDGE and PARAM rows
-        exist only after a substitution replayed. An unknown shape fails closed.
-    """
-
-    status = row.get("status")
-    if status is not None:
-        return status not in _VALUE_NEUTRAL_AUDIT_STATUSES
-    if row.get("kind") == "ACT":
-        return bool(row.get("sites"))
-    return True
+    snapshot = runnable_trace_state(trace).loaded_values_intervened
+    if snapshot is not None:
+        return bool(snapshot)
+    return carries_intervened_values(trace)
 
 
 def _session_spec_has_fired(trace: Any) -> bool:
@@ -130,16 +104,17 @@ def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
         an artifact whose recorded values were intervened, no rerun of this
         session has replaced those values yet, and its recipe holds a callable
         placeholder (or no recipe was saved). Edits staged after loading do
-        not count: they would run without the recorded intervention. Live
-        traces are never refused: an empty staged spec there means the user
-        detached it on purpose.
+        not count either way: they would run without the recorded
+        intervention, and they never make a pristine artifact look
+        intervened. Live traces are never refused: an empty staged spec there
+        means the user detached it on purpose.
     """
 
     if str(getattr(provider, "value", provider)) not in _LOADED_PROVIDERS:
         return
     if _session_spec_has_fired(trace):
         return
-    if not _carries_intervened_values(trace):
+    if not _artifact_values_intervened(trace):
         return
     placeholders = _loaded_recipe_placeholders(trace)
     if placeholders == []:

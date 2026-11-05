@@ -49,7 +49,6 @@ from importlib.machinery import PathFinder
 from typing import Any
 
 import torch
-from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
@@ -66,6 +65,7 @@ __all__ = [
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -85,6 +85,7 @@ __all__ = [
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_DYNAMO_COMPILE_COUNTERS",
     "HAS_DYNAMO_IS_COMPILING",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_FUNCOL_GROUP_RESOLUTION",
     "HAS_FUNCOL_WAIT_INTERPOSITION",
@@ -108,6 +109,7 @@ __all__ = [
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
     "HAS_GENERATOR_CLONE_STATE",
@@ -191,7 +193,7 @@ __all__ = [
     "get_dynamo_compile_counters",
     "get_dynamo_optimized_module_type",
     "get_dynamo_explain",
-    "get_functorch_maybe_current_level",
+    "get_functorch_transform_probe",
     "get_functorch_wrapped_tensor_checker",
     "get_fsdp_wrapper_type",
     "get_fx_graph_module_type",
@@ -221,39 +223,6 @@ TorchCapabilitySnapshot = dict[str, bool]
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
-
-
-class _ParameterAsSubclassProbeMode(TorchDispatchMode):
-    """Redispatch operations unchanged for the Parameter subclass capability probe."""
-
-    def __torch_dispatch__(
-        self,
-        func: Any,
-        types: tuple[type[Any], ...],
-        args: tuple[Any, ...] = (),
-        kwargs: dict[str, Any] | None = None,
-    ) -> Any:
-        """Redispatch one probe operation without changing its result.
-
-        Parameters
-        ----------
-        func:
-            Dispatcher operator invoked by the probe.
-        types:
-            Participating tensor subclass types.
-        args:
-            Positional operator arguments.
-        kwargs:
-            Keyword operator arguments.
-
-        Returns
-        -------
-        Any
-            Unmodified operator result.
-        """
-
-        del types
-        return func(*args, **(kwargs or {}))
 
 
 def _probe_device_type_arg_supported() -> bool:
@@ -329,6 +298,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_TORCH_VF": ("torch:_VF",),
     "HAS_TORCH_FUNC": ("torch:func",),
     "HAS_FUNCTORCH_LEVEL_API": ("torch:_C._functorch.maybe_current_level",),
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API": ("torch:_C._functorch.peek_interpreter_stack",),
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API": ("torch:_C._functorch.is_functorch_wrapped_tensor",),
     "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
@@ -346,6 +316,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
+    "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -601,84 +572,21 @@ def _probe_safe_weights_only_load() -> bool:
 
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
-    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+    """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
-    :class:`TorchDispatchMode` is active because the returned raw tensor is already
-    associated with a base ``Tensor`` Python object. Newer torch releases permit the
-    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
-    behavioral probe mirrors the dynamic-parameter logging context without parsing a
-    version string.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    parameter = torch.nn.Parameter(torch.empty(0))
-    try:
-        with _ParameterAsSubclassProbeMode():
-            plain_tensor = parameter.as_subclass(torch.Tensor)
-    except (RuntimeError, TypeError):
-        return False
-    return type(plain_tensor) is torch.Tensor
-
-
-class _SubclassCtorProbe(torch.Tensor):
-    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+    return bool(_real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode())
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
-    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+    """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
-    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
-    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
-    subclass X but the raw Tensor object is already associated to a python
-    object of type Tensor." This reproduces on stock torch with a no-op mode
-    (TorchLens's own wrapping is not the cause); newer torch permits the
-    conversion. TorchLens's completeness witness and intervention-ready
-    captures are themselves dispatch modes, so call sites that construct or
-    convert into a strict subclass while one is active need this behavioral
-    probe rather than a parsed version string. Sibling probe (Parameter-to-
-    Tensor, the opposite direction, also version-gated but independently):
-    :func:`_probe_parameter_as_subclass_in_dispatch_mode`.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    base = torch.empty(0)
-    try:
-        with _ParameterAsSubclassProbeMode():
-            converted = base.as_subclass(_SubclassCtorProbe)
-    except (RuntimeError, TypeError):
-        return False
-    return type(converted) is _SubclassCtorProbe
+    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode())
 
 
 def _probe_roll_tensor_shifts() -> bool:
-    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
+    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts`` (see the leaf)."""
 
-    Older torch (verified: 2.8 rejects with ``RuntimeError: shifts required``;
-    2.13 accepts) does not unpack a 0-dim tensor passed as the ``shifts``
-    argument itself; the tuple spelling ``shifts=(tensor,)`` is accepted
-    everywhere. Behavioral probe on a 1-element tensor, never a version parse.
-
-    Returns
-    -------
-    bool
-        ``True`` when the bare tensor ``shifts`` spelling executes.
-    """
-
-    try:
-        torch.roll(torch.zeros(2), shifts=torch.zeros((), dtype=torch.long))  # type: ignore[arg-type]
-    except (RuntimeError, TypeError):
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_roll_tensor_shifts())
 
 
 _TOP_SAVED_TENSORS_DEFAULT_HOOKS_ARGS: tuple[bool, ...] | None = None
@@ -959,47 +867,9 @@ def _probe_disabled_torch_function_impl() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether torch's GradientEdge surface actually WORKS end to end.
+    """Return whether GradientEdge works end to end (``False`` on 2.1-2.3; see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
-        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
-        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
-        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
-        an explicit cotangent succeeds. Attribute presence alone is
-        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
-        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
-        every output -- including a bare ``GradientEdge``, which has no such
-        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
-        matching this read's long-documented "2.4+" remedy text). Absent on
-        older torch or broken on this intermediate band is a healthy old
-        install either way, not a TorchLens degradation: the read refuses
-        typed.
-    """
-
-    if (
-        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is None
-        or _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is None
-    ):
-        return False
-    from torch.autograd.graph import GradientEdge
-
-    try:
-        x = torch.randn(1, requires_grad=True)
-        h = x * 2
-        if h.grad_fn is None:
-            # Never happens for a requires_grad leaf's product, but the
-            # static annotation is ``Node | None``; treat an impossible-in-
-            # practice None the same as any other probe failure below.
-            return False
-        torch.autograd.grad(
-            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
-        )
-    except Exception:
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_gradient_edge())
 
 
 def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
@@ -1190,18 +1060,10 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
 def get_numpy_bridge_support(*, force_probe: bool = False) -> bool:
     """Return whether torch can exchange arrays with the installed NumPy, lazily.
 
-    Parameters
-    ----------
-    force_probe:
-        Run the probe even when cached. Diagnostic surfaces set this.
-
-    Returns
-    -------
-    bool
-        See ``_kernel_probes.probe_numpy_bridge``. Cached after the first call. A
-        failed probe flips ``HAS_NUMPY_BRIDGE`` through
-        :func:`mark_torch_capability_missing`, so the degradation warns once and
-        shows in the capability snapshot and the doctor report.
+    Cached result of ``_kernel_probes.probe_numpy_bridge``; ``force_probe`` (set by
+    diagnostic surfaces) reruns it. A failed probe flips ``HAS_NUMPY_BRIDGE`` through
+    :func:`mark_torch_capability_missing`, so the degradation warns once and shows
+    in the capability snapshot and the doctor report.
     """
 
     global HAS_NUMPY_BRIDGE, _NUMPY_BRIDGE_PROBED
@@ -1327,54 +1189,15 @@ def _probe_mha_fastpath_switch() -> bool:
 
 
 def _probe_reduce_tuple_dim() -> bool:
-    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim`` (``False`` on 2.1; see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
-        of axes directly (added torch 2.2; torch 2.1 only accepts a single
-        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
-        falls back to sequential single-axis reduction.
-    """
-
-    probe = torch.zeros((2, 2), dtype=torch.bool)
-    try:
-        probe.any(dim=(0, 1))
-    except TypeError:
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_reduce_tuple_dim())
 
 
 def _probe_meta_item_guard() -> bool:
-    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors (see the leaf)."""
 
-    Returns
-    -------
-    bool
-        ``True`` when calling ``.item()`` (or any other scalar extraction,
-        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
-        carrying torch's own "Tensor.item() cannot be called on meta
-        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
-        falls all the way through to the aten dispatcher's generic
-        ``NotImplementedError`` ("... not implemented for this backend").
-        TorchLens's structure-only forward-boundary backstop
-        (``backends/torch/structure_only_belt.py``) classifies a caught
-        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
-        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
-        raising-frame PROVENANCE, never message text -- correctly, since
-        the two exception FAMILIES genuinely differ here. Absence is a
-        healthy old install surfacing the honest alternate typed refusal,
-        not a TorchLens degradation.
-    """
-
-    try:
-        torch.ones((), device="meta").item()
-    except NotImplementedError:
-        return False
-    except RuntimeError:
-        return True
-    return False
+    return bool(_real_op_probe_leaf().probe_meta_item_guard())
 
 
 HAS_VARIABLE_FUNCTIONS: bool = _probe_attribute_paths("HAS_VARIABLE_FUNCTIONS")
@@ -1382,6 +1205,9 @@ HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
 HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
 HAS_FUNCTORCH_APIS: bool = _probe_functorch_apis()
 HAS_FUNCTORCH_LEVEL_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_LEVEL_API")
+HAS_FUNCTORCH_INTERPRETER_STACK_API: bool = _probe_attribute_paths(
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API"
+)
 HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
 HAS_JIT_BUILTIN_TABLE: bool = _probe_attribute_paths("HAS_JIT_BUILTIN_TABLE")
 HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_attribute_paths("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
@@ -1392,6 +1218,7 @@ HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CL
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
+HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1582,6 +1409,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TORCH_FUNC",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
@@ -1592,6 +1420,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -1611,6 +1440,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_DISABLE_TORCH_FUNCTION",
     "HAS_DISABLED_TORCH_FUNCTION_IMPL",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
+    "HAS_COND_HIGHER_ORDER_OP",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",
     "HAS_FUNCOL_GROUP_RESOLUTION",
@@ -1811,6 +1641,9 @@ class TorchCapabilityWarning(TorchLensWarning):
 
 OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
     {
+        # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
+        # fallback of get_view_func_replay, not a degradation.
+        "HAS_VIEW_FUNC_UNSAFE",
         # PEP 657 / 3.11 code-object surfaces: an interpreter feature, not a
         # torch-private degradation -- CPython 3.10 installs are healthy.
         "HAS_CODE_POSITIONS",
@@ -1994,9 +1827,8 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dtensor_type(force_probe=True)
     get_gradient_edge_support(force_probe=True)
     _force_real_op_probes()
-    # Both getters document that diagnostic surfaces force them; without this
-    # the doctor reported them "unprobed" on every install that had not yet
-    # consumed them, hiding a real absence on torch 2.1-2.2.
+    # Getters documented as forced by diagnostic surfaces; unforced, the doctor called
+    # them "unprobed" on installs not yet consuming them, hiding real torch 2.1-2.2 gaps.
     get_meta_item_guard_support(force_probe=True)
     get_mha_fastpath_switch_support(force_probe=True)
     get_numpy_bridge_support(force_probe=True)
@@ -2009,7 +1841,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
     # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
-    # capability, not the pre-probe placeholder (warnings dedupe once; probes cache).
+    # capability, not the placeholder (warnings deduped per process, probes cached).
     get_jit_all_schemas()
     get_tensorbase_class()
     get_disable_torch_function_context()
@@ -2163,17 +1995,38 @@ def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
-def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
-    """Return functorch transform-level introspection when available.
+def get_view_func_replay() -> Callable[..., Any] | None:
+    """Return ``Tensor._view_func_unsafe``, else torch 2.1's ``Tensor._view_func``, else ``None``.
+
+    Torch 2.2 renamed the unchecked view-chain replay to ``_view_func_unsafe`` and
+    gave ``_view_func`` a checked wrapper; on 2.1 ``_view_func`` is that same unchecked
+    replay (``HAS_VIEW_FUNC_UNSAFE``). ``None`` (neither) makes view replay refuse.
+    """
+    found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
+    return found if found is not None else _resolve_attribute_path("torch:Tensor._view_func")
+
+
+def get_functorch_transform_probe() -> Callable[[], Any] | None:
+    """Return a zero-argument probe that is not ``None`` inside a functorch transform.
+
+    ``torch._C._functorch.maybe_current_level`` when present; otherwise (torch
+    2.1 and 2.2) ``torch._C._functorch.peek_interpreter_stack``, which reads the
+    same dynamic-layer stack and returns ``None`` when it is empty. An absent level
+    API alone is no degradation (``HAS_FUNCTORCH_LEVEL_API`` still reads False from
+    its import-time probe), so only the absence of both marks a capability missing.
 
     Returns
     -------
     Callable[[], Any] | None
-        ``torch._C._functorch.maybe_current_level`` or ``None`` when absent.
+        The probe, or ``None`` when neither surface exists (detection disabled).
     """
 
+    level = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_FUNCTORCH_LEVEL_API"][0])
+    if level is not None:
+        return level
     return _resolve_or_mark_missing(
-        "HAS_FUNCTORCH_LEVEL_API", "functorch transform-boundary detection is disabled"
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
+        "functorch transform-boundary detection is disabled",
     )
 
 
@@ -2472,7 +2325,9 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     return _FAKE_TENSOR_MODE_CLS
 
 
-def get_higher_order_operator(module: str, attribute: str) -> Any | None:
+def get_higher_order_operator(
+    module: str, attribute: str, *, table: str = "python_key_table"
+) -> Any | None:
     """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
 
     Parameters
@@ -2481,19 +2336,43 @@ def get_higher_order_operator(module: str, attribute: str) -> Any | None:
         ``torch._higher_order_ops`` submodule name (``"cond"``, ``"scan"``, ...).
     attribute:
         Operator attribute in that submodule (``"cond_op"``, ...).
+    table:
+        Rule-table attribute required on the operator (torch 2.1: ``python_key_mode_table``).
 
     Returns
     -------
     Any | None
         The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``python_key_table`` to register a dispatch-mode rule in.
+        no ``table`` to register a dispatch-mode rule in.
     """
 
     op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
-    return op if isinstance(getattr(op, "python_key_table", None), dict) else None
+    return op if isinstance(getattr(op, table, None), dict) else None
+
+
+def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
+    """Return the ``cond`` HigherOrderOperator the completeness witness keys its rule on.
+
+    ``cond.cond_op`` when present; torch 2.1 has no ``cond_op`` and its bare ``cond``
+    is the operator, with its rules in ``python_key_mode_table``. Only the absence
+    of both marks ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
+    """
+
+    op = get_higher_order_operator("cond", "cond_op")
+    if (
+        op is None
+        and _import_module_attr_or_none("torch._higher_order_ops.cond", "cond_op") is None
+    ):
+        op = get_higher_order_operator("cond", "cond", table="python_key_mode_table")
+    if op is None and mark_missing:
+        mark_torch_capability_missing("HAS_COND_HIGHER_ORDER_OP", "cond captures are not witnessed")
+    return op
+
+
+HAS_COND_HIGHER_ORDER_OP: bool = get_cond_witness_operator(mark_missing=False) is not None
 
 
 def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
