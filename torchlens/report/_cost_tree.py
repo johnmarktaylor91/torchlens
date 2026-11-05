@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
-#: Row roles (D5, closed): an OWNER row's self family is additive mass; a
+#: Row roles (closed): an OWNER row's self family is additive mass; a
 #: SUBTOTAL row aggregates owners below it; a REMAINDER row is synthesized
 #: to conserve totals under a view (top_k / depth cutoff / root-direct ops).
 COST_ROW_ROLES: tuple[str, ...] = ("OWNER", "SUBTOTAL", "REMAINDER")

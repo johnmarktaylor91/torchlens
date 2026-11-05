@@ -117,8 +117,8 @@ def dtensor_dual_geometry(value: Any) -> dict[str, Any] | None:
     }
 
 
-#: The one distributed-scope marker value (DOCUMENTED-UNSTABLE pending its S2
-#: amendment; census plan 3.1). A fully replicated DTensor is NOT shard-local.
+#: The one distributed-scope marker value (DOCUMENTED-UNSTABLE pending its
+#: amendment). A fully replicated DTensor is NOT shard-local.
 RANK_LOCAL_SHARD = "rank_local_shard"
 
 

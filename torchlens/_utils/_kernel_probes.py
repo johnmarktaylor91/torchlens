@@ -538,7 +538,7 @@ def probe_sdpa_empty_row_zero() -> bool:
 def probe_attention_causal_bias() -> bool:
     """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable.
 
-    NEVER executes ``torch.nn.attention.bias`` (r45/r49 lazy-import belt): that
+    NEVER executes ``torch.nn.attention.bias`` (lazy-import belt): that
     module's top level calls ``torch._dynamo.allow_in_graph(...)``, dragging the
     whole ``_dynamo``/``_inductor`` tree into every ``import torchlens``. When
     the USER has already imported the module, the class is inspected exactly;

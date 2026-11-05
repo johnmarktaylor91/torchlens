@@ -51,7 +51,7 @@ pass, step, and site. The fix is one stateless mechanism:
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through C03's ONE FireRecord builder: each realized
+Every firing routes its audit through the ONE FireRecord builder: each realized
 draw lands as a typed :class:`~torchlens.intervention._types.SamplingRecord` that
 ``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
 ``ledger_notes`` line lifted into ``determinism_note``. No draw is session-only.

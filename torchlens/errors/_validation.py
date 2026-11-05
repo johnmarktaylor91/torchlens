@@ -14,7 +14,7 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
     Embeds the check name (e.g., ``"graph_topology"``) in the message prefix
     and stores it as an attribute for programmatic inspection in tests.
     ``_ActionableErrorMixin`` supplies ``__reduce__`` so the strict two-argument
-    constructor survives pickle/deepcopy/process boundaries (R64-F1) instead of
+    constructor survives pickle/deepcopy/process boundaries instead of
     degrading to a bare ``TypeError`` when ``cls(*args)`` is replayed.
 
     Examples

@@ -136,7 +136,7 @@ class TensorMeta(TorchLensMeta):
     label_session: int | None = None
     # STRONG reference to the ``UntypedStorage`` the object held when its
     # label was last stamped by ``set_tensor_label`` -- the label rung's
-    # storage-integrity pin, the activation/label twin of r81's buffer-address
+    # storage-integrity pin, the activation/label twin of the buffer-address
     # keeper (``_SessionBufferStamp.storage``). The IDENTITY anchor
     # (``label_session``) proves this is the current-session labeled object; this
     # pin proves the object's live storage was NOT ``.data=``/``set_``-rebound to
@@ -445,18 +445,18 @@ def detached_saved_activation_label(tensor: Tensor) -> str | None:
 
 
 # --------------------------------------------------------------------------- #
-# r83 C1 -- CURRENT-SESSION OBJECT ANCHORING FOR RAW LABELS.
+# CURRENT-SESSION OBJECT ANCHORING FOR RAW LABELS.
 #
 # ``TensorMeta.label_raw`` (and its promoted ``buffer_source`` sibling) used to
 # be validated by pure TEXT membership in the active capture's live event index.
 # Label text is deterministic per op-kind + ordinal, so an ordinary op in a
 # LATER, unrelated capture regenerates the same string: a tensor still carrying
 # a label from an EARLIER capture was therefore accepted as current-session
-# provenance and spliced into the new DAG as the same-named node (r82, broken
+# provenance and spliced into the new DAG as the same-named node (broken
 # independently by three lanes -- a stock ``register_forward_hook`` activation
 # collector sufficed, producing a SAME-INPUT wrong parent bind reported as
-# ``VERIFIED``). r79 gave the param rung an object-identity belt and r81 gave
-# the buffer ``address`` rung one; this is the label rung's.
+# ``VERIFIED``). The param rung has an object-identity belt and the
+# buffer ``address`` rung has one; this is the label rung's.
 #
 # THE ANCHOR is ``TensorMeta.label_session``: the monotonic token of the capture
 # that issued this object's label, written onto the object's OWN metadata by
@@ -484,7 +484,7 @@ def detached_saved_activation_label(tensor: Tensor) -> str | None:
 # are stamped on every activation and strong refs would pin the whole activation
 # graph, defeating sparse ``save=``; anything still alive at cleanup time is
 # alive because something outside TorchLens holds it -- exactly the leak vehicles
-# cleanup needs to reach. Weakness is safe here in a way it is NOT for the r81
+# cleanup needs to reach. Weakness is safe here in a way it is NOT for the
 # buffer stamp keeper: entries are only ever compared by dereferenced object
 # identity, and ``WeakIdRef.__eq__`` returns False whenever either side is dead,
 # so a recycled ``id()`` can never produce a false match.
@@ -507,12 +507,12 @@ class _LabelSession:
         """
         self.token = token
         # Weak inventory of every object stamped this session, for the
-        # inventory-driven cleanup (r83 C1 root A). One entry per OBJECT, not
+        # inventory-driven cleanup. One entry per OBJECT, not
         # per stamp: relabeling an in-place receiver does not re-register.
         self.stamped: WeakIdKeyDictionary = WeakIdKeyDictionary()
         # Weak per-storage-base-address index of the stamped inventory, so an
         # in-place op can resolve OTHER live labeled tensors sharing its
-        # target's storage (view-mediated mutation provenance -- W3 F1) in
+        # target's storage (view-mediated mutation provenance) in
         # O(aliases) instead of scanning every stamped object. Keyed by the
         # stamp-time ``UntypedStorage.data_ptr()``; consumers re-validate the
         # LIVE storage before acting, so a stale (rebound/dead) entry is inert.
@@ -581,7 +581,7 @@ def sweep_retired_label_stamps() -> int:
     only through ``forward.__code__.co_names``, so a module-global appended to
     from a HOOK or a helper function, or a class attribute, is in none of its
     sets. Enumerating by REGISTRATION instead reaches all of them -- and the
-    container-nested ``types.ModuleType`` stash r81's shallow sweep could not.
+    container-nested ``types.ModuleType`` stash the shallow buffer sweep could not.
 
     Defence-in-depth, NOT the correctness argument: the belt rejects an
     unanchored stamp whether or not this sweep ever reached the object.
@@ -676,7 +676,7 @@ def _register_storage_alias(session: _LabelSession, storage_ptr: int, t: Any) ->
 
     Notes
     -----
-    SF-52 layout: the overwhelmingly common single-alias bucket is one bare
+    Layout: the overwhelmingly common single-alias bucket is one bare
     ``weakref.ref`` (a full per-bucket ``WeakIdKeyDictionary`` cost ~6
     marginal objects per op); a second live distinct alias upgrades the
     bucket in place. Registration stays idempotent per object, and a
@@ -750,7 +750,7 @@ def _session_gate_blocks(meta: TensorMeta) -> bool:
 
     The read gate shared by :func:`get_tensor_label` and :func:`get_label_list`.
     Outside a capture (postprocess and every read after ``end_label_session``)
-    nothing is gated, so post-capture behaviour is exactly as before r83.
+    nothing is gated, so post-capture behaviour is exactly as before.
 
     Parameters
     ----------
@@ -817,7 +817,7 @@ def session_label_storage_intact(meta: TensorMeta | None, tensor: Any) -> bool:
     """Return whether a labeled object's LIVE storage is still its stamp-time storage.
 
     The STORAGE-INTEGRITY axis of label/activation provenance, the twin of
-    r81's :func:`session_validated_buffer_address` storage check for the buffer
+    The :func:`session_validated_buffer_address` storage check for the buffer
     ``address`` rung. A label anchor (:func:`session_meta_is_anchored`) proves an
     object is the current-session labeled producer; this proves that object's
     storage was not ``.data=``/``set_``-rebound to foreign or input-derived
@@ -830,7 +830,7 @@ def session_label_storage_intact(meta: TensorMeta | None, tensor: Any) -> bool:
     PASSES -- it is honest, tracked/journaled state mutation -- while a ``.data=``
     / ``set_`` rebind swaps the pointer to another storage and FAILS.
 
-    Fail-closed, mirroring r81: a keeper or live storage inaccessible on exactly
+    Fail-closed, mirroring the buffer rung: a keeper or live storage inaccessible on exactly
     ONE side is NOT intact (``False``); only the symmetric-inaccessible case
     (both unreadable) falls back to pure object/anchor identity (``True``).
 
@@ -879,7 +879,7 @@ def _session_storage_gate_blocks(meta: TensorMeta, t: Any) -> bool:
 
     Only applies during an active capture: outside one (postprocess, and every
     read after ``end_label_session``) nothing is gated, so post-capture behaviour
-    is byte-identical to r83. A foreign-session label is already rejected by
+    is byte-identical to before. A foreign-session label is already rejected by
     :func:`_session_gate_blocks`, so only the current-session anchored label
     reaches the storage validation here. Fail-closed: an anchored label whose
     storage integrity cannot be proven (asymmetric-inaccessible) is rejected.
@@ -1093,7 +1093,7 @@ def set_tensor_label(t: Any, label: str) -> None:
     # storage handle: it MUST run under ``internal_scalar_read`` plus
     # ``pause_logging``, or the runnable host-escape patches record it as a
     # user raw-pointer escape and fail-close EVERY runnable capture to
-    # UNVERIFIABLE (r15-H1 ``_HOST_ESCAPE_RAW_POINTER``).
+    # UNVERIFIABLE (``_HOST_ESCAPE_RAW_POINTER``).
     if meta.label_storage is not None:
         try:
             with _state.pause_logging(), internal_scalar_read():
@@ -1139,7 +1139,7 @@ def get_tensor_label(t: Any) -> str | None:
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
         # AsyncCollectiveTensor is a transparent async view of its inner ``.elem``
-        # (merge-ranks C2 recording): the funcol boundary labels the inner tensor
+        # (merge-ranks recording): the funcol boundary labels the inner tensor
         # through the ordinary relabel dance, while user code holds the ACT wrapper.
         # Delegating the read here -- the ONE label chokepoint -- lets every consumer
         # parent on the boundary without stamping the wrapper (whose storage pin would

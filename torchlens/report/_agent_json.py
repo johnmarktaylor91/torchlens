@@ -327,7 +327,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
     call_stack = [str(m) for m in record_member(op, "module_call_stack", ()) or ()]
-    # FF1 (agent memo 3.5): `module_address` is the ATOMIC-module address and
+    # FF1 (agent memo): `module_address` is the ATOMIC-module address and
     # is null on 90-91% of real-transformer rows, so every module-grain
     # rollup collapsed into one None bucket. `module_containment` is the
     # call-stack-derived innermost containing module -- populated on every

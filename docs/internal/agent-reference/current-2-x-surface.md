@@ -891,7 +891,7 @@ expert contributions from routing indices alone.
   analysis-only); `"health_facts"` and `"capture_advisories"` are reserved annotation
   families with their validation rows; and three ENTRY-DARK slots are declared with
   fail-closed load validation so their Phase-3 writers need no further bump:
-  `Op.call.injection_provenance` (F01 log_injections), `Trace.source.snapshots`,
+  `Op.call.injection_provenance` (log_injections), `Trace.source.snapshots`,
   `Trace.graph.structure_evidence`. Contract of record:
   `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
   the adjudicated field-intent census is maintained privately. The C07X
@@ -918,12 +918,12 @@ expert contributions from routing indices alone.
   entry-dark slots with fail-closed validation: `Trace.provenance.root_entry_point` (the closed
   `module_call|bound_method|function_call` root descriptor, written UNCONDITIONALLY on
   every capture; joined to the rerun identity gate FAIL-CLOSED — the bullet above),
-  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (F41 writes it on
+  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (written on
   bound-method captures, live). The Bundle-side ledger rows
   join SPLIT OFF per the review proviso: the ledger shape stays
-  unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
+  unresolved and must not hold the amendment past V9-FREEZE.
 - SITE KEYS + GROUPING SURFACE (every spelling DOCUMENTED-UNSTABLE
-  pending naming-session/S2 ratification): every retained op carries
+  pending naming-session ratification): every retained op carries
   `op.graph.site_key` (`site_key_v1`) — a portable, policy-independent
   STRUCTURAL-POSITION identity minted at grouping time on every backend
   (`"s1|" + module-site/type/slot/ordinal`, percent-escaped; ordinals restart
@@ -931,7 +931,7 @@ expert contributions from routing indices alone.
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until). Per-pass keys read as `layer.ops[k].graph.site_key`
+  internal for now). Per-pass keys read as `layer.ops[k].graph.site_key`
   (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /

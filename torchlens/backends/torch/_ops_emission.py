@@ -149,7 +149,7 @@ def _unattributed_tensor_arg_positions(
         tensor has a LIVE traced producer absent from the recorded parent
         edges, an identity-witnessed dropped edge independent of the slot value
         (round-31 FN-1..6: value evidence misses a dropped bool/all-zero edge
-        and a swap between value-identical producers). r29 F3a/F3c extend it:
+        and a swap between value-identical producers). Two cases extend it:
         a session-validated PARAMETER slot missing from ``parent_params`` is a
         dropped param edge, and a slot whose RECORDED parent label disagrees
         with the tensor's own provenance labels is a permuted edge (a set check
@@ -251,7 +251,7 @@ def _unattributed_tensor_arg_positions(
             if fact
             else isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None
         ):
-            # r29 F3a: the parameter rung. A Parameter never appears in
+            # The parameter rung. A Parameter never appears in
             # ``parent_arg_positions`` (the recorder skips it) and
             # ``tensor_session_parent_labels`` returns ``()`` for it, so a
             # dropped PARAM edge was invisible to both witness branches.

@@ -14,7 +14,7 @@ in the same style.
 Shape rules (normative, from the fold):
 
 - **One mark family, never a new view kind**: the marks ride the standard
-  ``Trace.draw`` node-spec funnel through C05's lens registry (the
+  ``Trace.draw`` node-spec funnel through the lens registry (the
   ``"interventions"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
   row registered below); there is no separate surgery picture type.
 - **Per-lane splice-box disclosure**: each transaction's disclosure box
@@ -32,7 +32,7 @@ Shape rules (normative, from the fold):
   (one line per edit, in its own lane's wording) renders under the figure's
   header, and ``Trace.draw(view="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
-- **CREDIT rows** ride the full census text (D01's acknowledgment list), not
+- **CREDIT rows** ride the full census text (the acknowledgment list), not
   the figure.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.

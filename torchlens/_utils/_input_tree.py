@@ -113,7 +113,7 @@ def raise_input_tree_cycle_refusal(*, kind: str) -> None:
 
 
 def raise_input_tree_namedtuple_refusal(*, declared: int, physical: int) -> None:
-    """Raise the typed non-total-namedtuple-schema input refusal (B3R4-R12-1).
+    """Raise the typed non-total-namedtuple-schema input refusal.
 
     A tuple subclass DECLARING a ``_fields`` schema that does not account for
     the physical tuple (a malformed non-tuple-of-str ``_fields``, or a declared
@@ -147,7 +147,7 @@ def raise_input_tree_namedtuple_refusal(*, declared: int, physical: int) -> None
 
 @dataclass(frozen=True, slots=True)
 class InstanceStateInspection:
-    """One inert instance-state inspection result (r71 C).
+    """One inert instance-state inspection result.
 
     ``complete`` is ``True`` only when the enumeration is PROVABLY total inertly;
     ``reason`` names the closed fail-closed cause otherwise. ``uncertainty is NEVER
@@ -175,9 +175,9 @@ def _raw_mro_attr(value: Any, attr: str) -> Any:
 
 
 def inspect_instance_state(value: Any) -> InstanceStateInspection:
-    """Inertly enumerate the SET instance-state NAMES on ``value``, fail-closed (r71 C).
+    """Inertly enumerate the SET instance-state NAMES on ``value``, fail-closed.
 
-    THE single instance-state inspector for declared-schema containers. It NEVER routes the instance ``__dict__`` through ``getattr`` (r70 hon1-F1: a property/descriptor-shadowed
+    THE single instance-state inspector for declared-schema containers. It NEVER routes the instance ``__dict__`` through ``getattr`` (a property/descriptor-shadowed
     ``__dict__`` executes user code returning attacker-chosen ``{}``, turning
     "untrustworthy" into "proved empty"). Instead:
 

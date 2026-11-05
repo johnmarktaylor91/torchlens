@@ -1734,7 +1734,7 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     """Resolve a wrapped-call tensor arg to a buffer address, late-indexing lazies.
 
     The first-encounter registration ladder of the wrapper hot path: the
-    session-validated stamp first (r81 -- never trust a raw static stamp), the
+    session-validated stamp first (never trust a raw static stamp), the
     storage-anchored tracker resolution second, the lazy-buffer late-index
     third (a no-op unless pending lazy buffers were recorded), and last an
     unstamped pre-forward model-owned tensor (``_held_late_index``), stamped here.

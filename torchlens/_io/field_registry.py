@@ -102,8 +102,8 @@ _PERSISTED_MODULE_NAMES: dict[str, str] = {
 #: The reverse map: persisted module path to the module that now holds the classes.
 _RUNTIME_MODULE_NAMES: dict[str, str] = {v: k for k, v in _PERSISTED_MODULE_NAMES.items()}
 
-#: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
-#: r2-corrected). Everything not listed is FACT by conservative default:
+#: Tier overrides for persisted fields with census evidence (digest
+#: audit, corrected). Everything not listed is FACT by conservative default:
 #: treating a derived field as fact never loses truth, while the reverse
 #: launders evidence into "recomputable". RATIFIED at the v9 write
 #: (2026-08-27) with ZERO persistence-policy flips: every enrichment-tier

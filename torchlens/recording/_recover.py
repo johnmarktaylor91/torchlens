@@ -336,7 +336,7 @@ def _read_index_lines(path: Path) -> list[str]:
         # Regular file only (open_regular): a FIFO index used to block here forever,
         # and a symlinked index would read whatever file it named.
         with open_regular(path, follow_symlinks=False) as handle:
-            # R10-3 fstat-first: refuse on the stat size BEFORE reading so an
+            # Fstat-first: refuse on the stat size BEFORE reading so an
             # over-ceiling index never materializes a transient ~512 MiB
             # buffer. The post-read length check stays as the truth for a file
             # that grew after the stat.

@@ -457,7 +457,7 @@ def _save_call_args_fields(
     """Snapshot the call's arguments into ``fields_dict`` under the save budget."""
 
     if trace._options_save_args:
-        # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
+        # Admit BEFORE the clones allocate: the snapshot
         # used to clone every tensor argument first and charge after.
         from ._ops_retention import _admit_saved_args_budget, _commit_saved_args_budget
         from ._ops_saved_arg_copies import _copy_saved_call_args, _saved_parent_values

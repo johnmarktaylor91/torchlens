@@ -236,7 +236,7 @@ def _record_escape_source_tensor(
     # escape witness).
     meta = get_tensor_meta(source)
     address = record_member(meta, "address", None) if meta is not None else None
-    # r18 + r19-C: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
+    # A PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
     # keeps a graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses
     # by its kept op; a parameter carries NO source node, so a param-rooted read op is orphan-pruned
     # and its raw label resolves to no final op -> the escape would fail closed (INCOMPLETE_SCALAR_

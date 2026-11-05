@@ -23,7 +23,7 @@ def _is_cached_property_cell(owner_type: type, field_name: str) -> bool:
     under the property's own name (e.g. the public ``Trace.recipe`` accessor).
     Those cells are DERIVED state that rebuilds on access, never portable
     fields, and they appear only after a read -- refusing them made a
-    read-only public property poison every later ``Trace.save`` (B3R4-R10-1).
+    read-only public property poison every later ``Trace.save``.
     The check runs only on the refusal path, so the hot field loop pays nothing.
     """
 

@@ -541,7 +541,7 @@ class TraceProvenance(_TraceGroup):
         """The capture-provenance block (the relocated summary preamble).
 
         Returns the historical discoverability preamble BYTE-FOR-BYTE
-        (summary memo 3.6): agent/MCP consumers that parsed it out of the
+        (summary memo): agent/MCP consumers that parsed it out of the
         old summary text keep an exact source after the preamble left the
         default view.
 

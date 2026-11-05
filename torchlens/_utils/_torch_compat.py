@@ -1824,7 +1824,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_compile_counters(force_probe=True)
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
-    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
+    # Lazily-probed accessors: resolve so the snapshot reports the real
     # capability, not the placeholder (warnings deduped per process, probes cached).
     get_jit_all_schemas()
     get_tensorbase_class()
@@ -4092,7 +4092,7 @@ def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
 def tensor_version_or_none(tensor: Any) -> int | None:
     """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
 
-    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
+    Inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
     not track version counter"), which ``getattr(..., None)`` does not swallow -- every capture
     under ambient ``torch.inference_mode()`` crashed on TL's own dedup/reference/version bookkeeping
     reads. This helper is the ONE safe accessor for every TorchLens-owned ``_version`` read; an

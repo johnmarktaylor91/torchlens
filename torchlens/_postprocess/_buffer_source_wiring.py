@@ -25,7 +25,7 @@ def _buffer_values_identical(left: torch.Tensor, right: torch.Tensor) -> bool:
     not another recorded two different graphs. This is the exact (no tolerance)
     ``tensor_nanequal`` that validation replay checks the ``identity`` op against:
     identical NaN and Inf positions, identical finite values, identical zero signs.
-    Meta payloads carry no values, so they never compare identical (W1-FAB).
+    Meta payloads carry no values, so they never compare identical.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ def _buffer_source_value_matches(
     cannot run; the verdict falls back to the DECLARED geometry (shape +
     dtype agreement between the producer op and the buffer's write record) —
     a hypothesis claim exactly like the shapes it rides on, corroborated or
-    refuted by discharge against a real capture (weightsfree memo D7: the
+    refuted by discharge against a real capture (weightsfree memo: the
     parity gate is the acceptance authority, the graph must not diverge from
     the real capture's purely because values were unavailable).
     """

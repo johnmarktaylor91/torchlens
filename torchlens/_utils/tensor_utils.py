@@ -856,8 +856,8 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
         or type(x) is torch.nn.Parameter
     ):
         return nullcontext()
-    # Deferred: backends.torch is upward of utils in the layer map (C01 item
-    # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
+    # Deferred: backends.torch is upward of utils in the layer map;
+    # this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
     # `import torchlens` never pays for it.
     from ._dispatch_modes import pause_own_dispatch_modes
 

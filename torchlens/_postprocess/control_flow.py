@@ -947,7 +947,7 @@ def _merge_buffer_entries(
     # branch bools / arm-entry children the duplicate parented. The matching
     # trace-level edges (conditional_branch_edges, conditional_arm_entry_edges,
     # conditional_edge_call_indices) repoint via ``replacement_labels`` in the
-    # closing reference scrub (deep-hunt C3).
+    # closing reference scrub.
     for entry_child in buffer_to_remove.control_flow.entry_children:
         if entry_child not in shadow["conditional_entry_children"]:
             shadow["conditional_entry_children"].add(entry_child)

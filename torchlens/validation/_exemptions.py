@@ -315,7 +315,7 @@ def _uninitialized_value_origin(op: Any, source_trace: Any, depth: int = 0) -> b
     """
 
     # Same per-call proof as the replay-skip consumer: a value-bearing
-    # new(tensor)/new(data) result is REAL data (R08-1 sibling site). A parentless
+    # new(tensor)/new(data) result is REAL data (sibling site). A parentless
     # torch.empty-family allocation is uninitialized memory too.
     return uninitialized_by_design_applies(op) or is_uninitialized_allocation_factory(op)
 

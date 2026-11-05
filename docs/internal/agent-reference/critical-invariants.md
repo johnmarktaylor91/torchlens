@@ -38,7 +38,7 @@
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
-    annotation families; entry-dark declared slots `Op.call.injection_provenance` (F01 writes),
+    annotation families; entry-dark declared slots `Op.call.injection_provenance`,
     `Trace.source.snapshots`, `Trace.graph.structure_evidence` validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.

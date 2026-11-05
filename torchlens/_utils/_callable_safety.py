@@ -57,9 +57,9 @@ deliberately NOT used (they would wrongly deny ``Tensor.module_load`` /
 ``_preload_cuda_deps``) are enumerated exactly instead. ``from_numpy`` and
 ``frombuffer`` are pure and stay resolvable (they match none of the patterns).
 
-GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` / ``resize_``;
-r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``; r41 ``cond`` /
-``while_loop`` / ``autocast_increment_nesting``; r50 the ``cdata=`` raw-pointer
+GENERAL INVARIANT (the denylist-completeness class -- ``from_file`` / ``resize_``;
+``apply_`` / ``map_``; ``map2_`` / ``register_hook``; ``cond`` /
+``while_loop`` / ``autocast_increment_nesting``; the ``cdata=`` raw-pointer
 constructor families, closed in ``_raw_pointer_denial``). A callable reachable in the
 allowed namespace is NOT a pure forward op -- and must NOT resolve from an untrusted
 bundle -- if it does ANY of the following, regardless of whether it was individually
@@ -1261,11 +1261,11 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
 
     The callable is unwrapped to its real identity, then admitted only if (a) its
     terminal NAME is not a side-effecting callable (file-I/O / serialization / import
-    gadget, process-global-state mutator, or storage-unsafe in-place op incl. the r43
+    gadget, process-global-state mutator, or storage-unsafe in-place op incl. the
     ``share_memory_`` storage rebind), (a2) its terminal name, if a dunder, is one of
     the operator-protocol forward dunders (``_ALLOWED_FORWARD_DUNDERS``: arithmetic /
     reflected / in-place / comparison / bitwise / index-item / numeric-conversion) --
-    every OTHER ``__x__`` (the r47 secE_1 storage-REBIND ``__setstate__`` and its
+    every OTHER ``__x__`` (the storage-REBIND ``__setstate__`` and its
     pickle / copy / array / dlpack / format / repr / reversed siblings) is denied by
     shape even when torch-OVERRIDABLE, (b) its signature exposes neither an
     arbitrary-callable nor a raw-pointer parameter, and (c) its module clears the gate.
@@ -1278,7 +1278,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     (``T`` / ``mT`` / ``real`` / ``imag``). This closes, as a CLASS, the non-forward
     internal builtins those roots host (functionalization dispatch controls, JIT / type
     constructors, Storage / legacy ``*Tensor`` ctors, state getters, deprecated Tensor
-    methods) that the pre-r43 module-prefix admission let through.
+    methods) that the earlier module-prefix admission let through.
     DEEPER allowlisted operator submodules (``torch.nn.functional`` / ``torch._VF`` /
     ``torch._C._nn`` / ``torch.linalg`` / ...) keep their module-PREFIX admission. The
     ``operator`` / ``_operator`` root is gated separately by a POSITIVE NAME allowlist
@@ -1306,7 +1306,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     real = _unwrap_capture_wrapper(func)
     if _is_side_effecting_callable_name(real):
         return False
-    # r47 (secE_1): deny NON-forward protocol dunders by SHAPE (positive forward-dunder
+    # Deny NON-forward protocol dunders by SHAPE (positive forward-dunder
     # allowlist), before every module branch, so it covers BOTH the module-less
     # ``_is_tensor_method_descriptor`` path AND the gated-root path -- closing
     # ``Tensor.__setstate__`` (an overridable storage-REBIND whose leading ``__`` carries
@@ -1341,7 +1341,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # on the EXACT internal-builtin roots (``torch`` / ``torch._C`` /
     # ``torch._tensor``) DEFAULT-DENY and admit ONLY structurally-recognized genuine
     # forward operators (overridable identity / aten schema / pure factory / audited
-    # wrapper), inverting the pre-r43 prefix admission that let every non-forward
+    # wrapper), inverting the earlier prefix admission that let every non-forward
     # internal builtin through. Checked BEFORE the prefix ``_matches`` so DEEPER
     # allowlisted operator submodules keep their module-prefix admission.
     if module in _OPERATOR_GATED_ROOTS:

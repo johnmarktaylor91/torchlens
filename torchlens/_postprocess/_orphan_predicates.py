@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 def _child_edge_totally_overwrites(self: Trace, walked_label: str, child_label: str) -> bool:
-    """Return whether a child op TOTALLY overwrites the walked tensor's bytes (r53 hon_2).
+    """Return whether a child op TOTALLY overwrites the walked tensor's bytes.
 
     The sanitized pruned-orphan walk stops at a total-writer edge whose
     DESTINATION is the walked tensor (``copy_``/``zero_``/``fill_``/RNG-fill
@@ -52,8 +52,8 @@ def _rng_orphan_drove_control_or_output(
     """Return whether an orphaned nondeterministic op's value steered control or output.
 
     Walks the forward (child) chain from ``start_label``. The nondeterministic
-    result (a seeded torch-RNG draw or an uninitialized-memory family product,
-    r53 hon_2) "influenced control" when the op itself or any descendant is a
+    result (a seeded torch-RNG draw or an uninitialized-memory family
+    product) "influenced control" when the op itself or any descendant is a
     recorded tensor->host escape source (its value was read by
     ``bool()``/``.item()`` to steer pure-Python control flow); it "influenced
     output" when a descendant is an output node (defensive: an output-reaching
@@ -86,7 +86,7 @@ def _rng_orphan_drove_control_or_output(
 
 
 def _orphan_is_uninit_alloc_source(self: Trace, op: Any) -> bool:
-    """Return whether an orphaned op is an uninitialized-memory value source (r53 hon_2).
+    """Return whether an orphaned op is an uninitialized-memory value source.
 
     Keys on the shared closed family table (``utils/rng.py``): the ``empty``
     factory family taints unless its product has zero elements; a resize

@@ -759,7 +759,7 @@ def _relabel_module_calls(layer_entry: Op) -> None:
     if layer_entry.module is not None:
         layer_entry.module = _module_call_label(layer_entry.module)
     layer_entry.modules = [_module_call_label(module_call) for module_call in layer_entry.modules]
-    # B3R7-R05-1: ``module_call_stack`` carries the same containment fact
+    # ``module_call_stack`` carries the same containment fact
     # as ``modules`` (seeded from the modules facet at ingest), so it is
     # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
     layer_entry._module_context_call_stack = [

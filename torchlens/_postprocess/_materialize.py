@@ -729,7 +729,7 @@ def _normalize_edge_use_record(
     if not isinstance(parent_label, str) or not isinstance(edge_use, str):
         return None
     source_event = op_events_by_label.get(parent_label)
-    # F10 (lovely item 8): the storage verdict populates from the closed
+    # The storage verdict populates from the closed
     # function-semantics table when this event carries a function name;
     # keyword edges and unknown functions stay the honest "unknown".
     from ..intervention._edge_semantics import classify_view_or_copy

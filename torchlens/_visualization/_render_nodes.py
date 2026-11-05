@@ -34,7 +34,7 @@ from ._render_names import call_collapsed_spec_fn
 from ._render_node_parts import _buffer_node_address, _module_output_summary
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
+# Home moved to node_spec to keep this file under its
 # ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
 # too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
@@ -727,7 +727,7 @@ def _queue_segment_node(
     # One ``presentation`` arg (PLR0913); a bare string is vis_mode only.
     pres = presentation if isinstance(presentation, tuple) else (presentation,)
     vis_mode, theme, encoding = (*pres, None, None)[:3]
-    # K4 capsule colors derive from the active theme (F11 memo item 10:
+    # K4 capsule colors derive from the active theme (memo:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])

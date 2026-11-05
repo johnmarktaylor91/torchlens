@@ -123,7 +123,7 @@ def _call_io_layers(
             te = self.ops[op_label]
         except (KeyError, TypeError):
             continue
-        # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
+        # ``input_to_module_calls`` is the authoritative
         # fed-call fact. The old ``len(module_call_stack) > 0`` companion
         # test was a proxy for the same thing only while the enter lane
         # wrote both together; under containment semantics it would drop

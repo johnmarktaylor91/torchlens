@@ -1202,7 +1202,7 @@ def torch_func_decorator(
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
         # ---- Fast path ---- (logging off: pass through; DeviceContext injection still runs for
-        # torch.device('meta') contexts). r43 hon2_4: op-logging is OWNER-thread-scoped, so a
+        # torch.device('meta') contexts). Op-logging is OWNER-thread-scoped, so a
         # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
@@ -2066,7 +2066,7 @@ _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_metho
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
-    B8-4 invariant: no torchlens path may FIRST-call a cached torch
+    Invariant: no torchlens path may FIRST-call a cached torch
     introspection table while wrappers are installed. Both install paths call
     this before their setattr loop; ``originals_exposed`` also shows originals
     on slots a failed decoration pass left wrapped (the #138 retry). Covered:

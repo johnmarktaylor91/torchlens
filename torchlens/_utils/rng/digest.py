@@ -102,7 +102,7 @@ def _digest_rng_instance(holder: Any) -> str:
     if isinstance(holder, np.random.SeedSequence):
         return _seed_seq_state_fragment(holder)
     if isinstance(holder, torch.Generator):
-        # r7 b8-sol R57: a model-held ``torch.Generator`` drawn on a
+        # A model-held ``torch.Generator`` drawn on a
         # pre-existing (non-hooked) thread advanced state with NO witness
         # while the numpy analog was digest-caught, so the residual
         # enumeration's "only an EXTERNALLY-HELD generator" claim was

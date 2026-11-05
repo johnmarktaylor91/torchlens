@@ -22,7 +22,7 @@ from typing import Any
 
 from .._utils._record_group_table import record_member
 
-#: Versioned, documented fold key (agent memo 3.4). Recorded in every folded
+#: Versioned, documented fold key (agent memo). Recorded in every folded
 #: payload so a consumer can branch on the key generation.
 FOLD_KEY_VERSION = "torchlens.agent_fold_key.v1"
 

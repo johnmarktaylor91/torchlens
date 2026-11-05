@@ -105,7 +105,7 @@ def _resolve_dtype(dtype: object | None) -> object | None:
         return dtype
     if dtype.startswith("torch."):
         dtype_name = dtype.split(".", 1)[1]
-        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
+        # ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
         # fall back to the original string when the name is not a real top-level torch symbol.
         return torch_attr(dtype_name) or dtype
     return dtype
