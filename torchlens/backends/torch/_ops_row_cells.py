@@ -6,7 +6,8 @@ ingest scatters the record back into cells (``scatter_record_to_cells``).
 :func:`op_row_cells` computes the same cells in one hop, without building the
 record; :func:`write_op_row` appends them as one layout-ordered row.
 
-The value contract is exact: for the same arguments, ``op_row_cells`` returns
+The value contract is exact: for the same draft (fields dict, fire results,
+call box), ``op_row_cells`` returns
 ``scatter_record_to_cells(_op_record_from_log(...), IngestExtras(), trace)``
 key for key and value for value (types included), evaluated at the same
 moment. Facet presence is mirrored: a facet the freeze would omit reads the
@@ -20,38 +21,26 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
-
-import torch
+from typing import TYPE_CHECKING, Any, cast
 
 from ..._ir.op_record import FACET_DEFAULTS
-from ..._ir.op_record_scatter import _resolve_dtype
+from ..._ir.op_record_scatter import _function_ref_cells, _resolve_dtype
 from ..._trace_core.op_store import _MISSING
 from ._ops_capture_records import _resolve_call_function_ref
 from ._ops_container_base import _copy_parent_arg_positions
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-    from ..._ir.events import ModuleFrame
+    from ..._ir.events import FunctionCallRef
     from ..._ir.intervention import FireResult
-    from ..._ir.refs import FunctionCallRef
 
 __all__ = ("op_row_cells", "write_op_row")
 
-#: One default instance per defaultable facet, built on first use. Every
-#: default field the cells read is either immutable or copied below, exactly
-#: as the scatter copies the per-call default it builds.
-_FACET_DEFAULT_CACHE: dict[str, Any] = {}
-
 
 def _facet_default(name: str) -> Any:
-    """Return the cached default instance of one facet."""
+    """Return a fresh default instance of one facet (the scatter builds one per absent facet)."""
 
-    value = _FACET_DEFAULT_CACHE.get(name)
-    if value is None:
-        value = FACET_DEFAULTS[name]()
-        _FACET_DEFAULT_CACHE[name] = value
-    return value
+    return FACET_DEFAULTS[name]()
 
 
 def _semantics_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
@@ -91,34 +80,6 @@ def _transformed_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
         "transformed_out_dtype": _resolve_dtype(str(fields_dict["transformed_out_dtype"])),
         "transformed_activation_memory": fields_dict["transformed_activation_memory"],
         "transformed_out": payload,
-    }
-
-
-def _function_cells(function: FunctionCallRef) -> dict[str, Any]:
-    """Return the cells the scatter reads off the function-call ref."""
-
-    return {
-        "func": function.func,
-        "func_id": function.func_id,
-        "func_call_id": function.func_call_id,
-        "func_name": function.func_name,
-        "func_qualname": function.func_qualname,
-        "code_context": list(function.code_context),
-        "var_names": [],
-        "func_duration": function.func_duration or 0,
-        "flops_forward": function.flops_forward,
-        "flops_backward": function.flops_backward,
-        "func_rng_states": function.func_rng_states,
-        "func_autocast_state": function.func_autocast_state,
-        "arg_names": tuple(function.arg_names),
-        "num_args_total": function.num_args_total,
-        "num_pos_args": function.num_pos_args,
-        "num_kwargs": function.num_kwargs,
-        "non_tensor_pos_args": list(function.non_tensor_pos_args),
-        "non_tensor_kwargs": dict(function.non_tensor_kwargs),
-        "func_non_tensor_args": list(function.func_non_tensor_args),
-        "is_inplace": function.is_inplace,
-        "func_config": dict(function.func_config),
     }
 
 
@@ -297,84 +258,96 @@ def _core_graph_cells(trace: Trace, fields_dict: Mapping[str, Any]) -> dict[str,
     }
 
 
+#: Constant-valued cells the scatter seeds for every op (immutable values only).
+_SCALAR_CONSTANT_CELLS: tuple[tuple[str, Any], ...] = (
+    ("ordinal_index", -1),
+    ("label", None),
+    ("short_label", None),
+    ("layer_label", None),
+    ("short_layer_label", None),
+    ("num_passes", 1),
+    ("input_ops", None),
+    ("input_activations", None),
+    ("input_shapes", None),
+    ("input_dtypes", None),
+    ("input_memory", None),
+    ("num_inputs", None),
+    ("grad", None),
+    ("transformed_grad", None),
+    ("has_grad", False),
+    ("grad_shape", None),
+    ("transformed_grad_shape", None),
+    ("grad_dtype", None),
+    ("transformed_grad_dtype", None),
+    ("gradient_memory", 0),
+    ("transformed_gradient_memory", None),
+    ("grad_fn", None),
+    ("multi_output_name", None),
+    ("min_distance_from_input", None),
+    ("max_distance_from_input", None),
+    ("is_output", False),
+    ("is_final_output", False),
+    ("has_output_descendant", False),
+    ("is_orphan", False),
+    ("min_distance_to_output", None),
+    ("max_distance_to_output", None),
+    ("buffer_pass", None),
+    ("buffer_write_kind", None),
+    ("buffer_value_changed", None),
+    ("buffer_replay_validated", None),
+    ("buffer_source_func_name", None),
+    ("is_internal_sink", False),
+    ("is_terminal_bool", False),
+    ("is_terminal_conditional_bool", False),
+    ("conditional_context_kind", None),
+    ("conditional_wrapper_kind", None),
+    ("terminal_conditional_id", None),
+    ("terminal_bool_for", None),
+    ("is_in_conditional_body", False),
+    ("conditional_branch_depth", 0),
+    ("_address_normalized", None),
+    ("fx_qualpath", None),
+    ("fx_call_index", 0),
+    ("is_module_output", False),
+    ("is_atomic_module", False),
+    ("atomic_module_call", None),
+)
+#: Constant-container cells; each op gets fresh empty containers, as the scatter builds them.
+_EMPTY_LIST_CELLS: tuple[str, ...] = (
+    "lookup_keys",
+    "recurrent_ops",
+    "in_conditionals",
+    "conditional_branch_stack",
+    "conditional_entry_children",
+    "conditional_then_children",
+    "conditional_else_children",
+    "input_to_module_calls",
+    "output_of_modules",
+    "output_of_module_calls",
+)
+_EMPTY_DICT_CELLS: tuple[str, ...] = (
+    "conditional_elif_children",
+    "conditional_arm_children",
+)
+
+
 def _constant_cells() -> dict[str, Any]:
     """Return the cells the scatter seeds with constants (fresh containers per op)."""
 
-    return {
-        "ordinal_index": -1,
-        "label": None,
-        "short_label": None,
-        "layer_label": None,
-        "short_layer_label": None,
-        "num_passes": 1,
-        "lookup_keys": [],
-        "input_ops": None,
-        "input_activations": None,
-        "input_shapes": None,
-        "input_dtypes": None,
-        "input_memory": None,
-        "num_inputs": None,
-        "grad": None,
-        "transformed_grad": None,
-        "has_grad": False,
-        "grad_shape": None,
-        "transformed_grad_shape": None,
-        "grad_dtype": None,
-        "transformed_grad_dtype": None,
-        "gradient_memory": 0,
-        "transformed_gradient_memory": None,
-        "grad_fn": None,
-        "multi_output_name": None,
-        "recurrent_ops": [],
-        "min_distance_from_input": None,
-        "max_distance_from_input": None,
-        "is_output": False,
-        "is_final_output": False,
-        "has_output_descendant": False,
-        "output_descendants": set(),
-        "is_orphan": False,
-        "min_distance_to_output": None,
-        "max_distance_to_output": None,
-        "buffer_pass": None,
-        "buffer_write_kind": None,
-        "buffer_value_changed": None,
-        "buffer_replay_validated": None,
-        "buffer_source_func_name": None,
-        "is_internal_sink": False,
-        "is_terminal_bool": False,
-        "is_terminal_conditional_bool": False,
-        "conditional_context_kind": None,
-        "conditional_wrapper_kind": None,
-        "terminal_conditional_id": None,
-        "in_conditionals": [],
-        "terminal_bool_for": None,
-        "is_in_conditional_body": False,
-        "conditional_branch_stack": [],
-        "conditional_branch_depth": 0,
-        "conditional_entry_children": [],
-        "conditional_then_children": [],
-        "conditional_elif_children": {},
-        "conditional_else_children": [],
-        "conditional_arm_children": {},
-        "_address_normalized": None,
-        "fx_qualpath": None,
-        "fx_call_index": 0,
-        "input_to_module_calls": [],
-        "module_entry_arg_keys": defaultdict(list),
-        "output_of_modules": [],
-        "output_of_module_calls": [],
-        "is_module_output": False,
-        "is_atomic_module": False,
-        "atomic_module_call": None,
-    }
+    cells: dict[str, Any] = dict(_SCALAR_CONSTANT_CELLS)
+    for name in _EMPTY_LIST_CELLS:
+        cells[name] = []
+    for name in _EMPTY_DICT_CELLS:
+        cells[name] = {}
+    cells["output_descendants"] = set()
+    cells["module_entry_arg_keys"] = defaultdict(list)
+    return cells
 
 
 def op_row_cells(
     trace: Trace,
     fields_dict: Mapping[str, Any],
-    tensor: torch.Tensor,
     fire_results: tuple[FireResult, ...] = (),
-    module_stack: tuple[ModuleFrame, ...] | None = None,
     call_ref_box: list[FunctionCallRef] | None = None,
 ) -> dict[str, Any]:
     """Return one exhaustive op's record-sourced store cells without building its record.
@@ -385,13 +358,8 @@ def op_row_cells(
         Active capture trace (the ``source_trace`` cell and the live index).
     fields_dict
         The final exhaustive draft, as passed to ``_op_record_from_log``.
-    tensor
-        The op's output tensor (accepted for signature parity with the freeze;
-        every cell it feeds is already on the draft).
     fire_results
         Intervention results for this op.
-    module_stack
-        Module frames (signature parity; the cells read ``modules`` only).
     call_ref_box
         The per-call shared function-ref box, updated as the freeze updates it.
 
@@ -401,7 +369,6 @@ def op_row_cells(
         Cell name to value, equal to the scatter of the frozen record.
     """
 
-    del tensor, module_stack
     facet_cells = _facet_value_cells(fields_dict, fire_results)
     cells = _constant_cells()
     cells.update(_core_graph_cells(trace, fields_dict))
@@ -411,7 +378,8 @@ def op_row_cells(
     cells.update(_ancestry_cells(fields_dict))
     cells.update(_transform_cells(fields_dict, facet_cells["annotations"]))
     cells.update(facet_cells)
-    cells.update(_function_cells(_resolve_call_function_ref(fields_dict, call_ref_box)))
+    function = _resolve_call_function_ref(cast(dict[str, Any], fields_dict), call_ref_box)
+    cells.update(_function_ref_cells(function))
     return cells
 
 

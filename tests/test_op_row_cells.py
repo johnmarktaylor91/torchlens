@@ -179,9 +179,7 @@ def shadow_commits(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, 
         direct = op_row_cells(
             draft.trace,
             draft.fields_dict,
-            draft.tensor,
             draft.fire_results,
-            module_stack=draft.module_stack,
             call_ref_box=box,
         )
         record = real_freeze(draft)
