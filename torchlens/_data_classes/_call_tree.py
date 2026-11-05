@@ -6,11 +6,12 @@ plus the call-scope helpers that resolve a ModuleCall's op-slot labels and
 count its scoped graph edges. ``module.py`` consumes
 ``_edge_counts_for_scope``, ``_print_call_tree_from_root``,
 ``_resolve_call_ops``, ``_sum_call_ops_field``, ``_live_call_trace`` and
-``_bound_call_trace``; the display-only helpers are internal to the printer.
+``_bound_call_trace`` (``_conditional_arms`` also reads ``_live_call_trace``);
+the display-only helpers are internal to the printer.
 """
 
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, TextIO, cast
+from typing import TYPE_CHECKING, Any, TextIO, cast
 
 from .._errors import RecordBindingError
 
@@ -278,21 +279,25 @@ def show_call_tree(
     )
 
 
-def _live_call_trace(call: "ModuleCall") -> "Trace | None":
+def _live_call_trace(
+    call: Any, *, slot: str = "_source_trace_ref", record: str = "ModuleCall"
+) -> "Trace | None":
     """Return the ModuleCall's owning Trace, or ``None`` for a call never bound to one.
 
     A call holds its Trace weakly, so a dead reference means the user dropped the
     Trace: that refuses ``trace_reference_collected`` instead of reading as an
-    empty result.
+    empty result. ``ConditionalArm`` reads its own weak reference through here
+    too (``slot`` names the instance-dict key holding the reference, ``record``
+    the record named in the refusal), so both share one refusal site.
     """
 
-    ref = call.__dict__.get("_source_trace_ref")
+    ref = call.__dict__.get(slot)
     if ref is None:
         return None
     trace = ref()
     if trace is None:
         raise RecordBindingError(
-            "Trace has been garbage-collected; a ModuleCall does not keep its Trace alive",
+            f"Trace has been garbage-collected; a {record} does not keep its Trace alive",
             code="trace_reference_collected",
             remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
         )
