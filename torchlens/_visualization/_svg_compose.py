@@ -13,11 +13,13 @@ import html
 import os
 import re
 import subprocess
+import warnings
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .._utils.display import atomic_write_text
+from .._utils.display import atomic_write_text, user_stacklevel
+from ..errors._base import TorchLensWarning
 from . import _render_utils
 from ._edit_highlighter import HighlighterStyle, highlight_svg
 from ._loop_edges import reports_route_failure, without_compass_ports
@@ -60,7 +62,8 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     renderer its notebook display and ``save`` to another format use: the
     same bounded Graphviz child as ``draw``, with the bundled font, so the
     key's table, sized to its words in that face, fits them; relative node
-    images resolved against ``image_root`` while it exists; Graphviz stderr
+    images resolved against ``image_root`` while it exists, and dropped with
+    one warning once their trace is collected; Graphviz stderr
     surfaced as the usual layout warning; and an SVG's local image references
     embedded as data URIs, so the picture never links a file under the temp
     folder. Failures propagate; ``Drawing`` maps them to its typed refusal.
@@ -80,8 +83,11 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
             cwd=str(root) if root else None,
         )
 
-    completed = run(dot)
-    if reports_route_failure(completed.stderr) and (portless := without_compass_ports(dot)) != dot:
+    drawn = _without_missing_pictures(dot, root)
+    completed = run(drawn)
+    if reports_route_failure(completed.stderr) and (
+        (portless := without_compass_ports(drawn)) != drawn
+    ):
         # Graphviz could not route the loop's corner ports (2.43, :mod:`._loop_edges`):
         # keep the portless layout only when it routes cleanly.
         retry = run(portless)
@@ -91,6 +97,49 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     if fileformat != "svg":
         return payload
     return _inline_svg_local_images(payload.decode("utf-8"), root).encode("utf-8")
+
+
+# A node picture's row in its HTML label (:mod:`._node_boxes`): one cell holding one image.
+_PICTURE_ROW = re.compile(r'<TR><TD[^>]*><IMG SRC="([^"]*)"[^>]*/></TD></TR>')
+
+
+def _without_missing_pictures(dot: str, root: Path | None) -> str:
+    """Drop node picture rows whose file is gone, with one warning naming them.
+
+    A drawing's pictures live in its trace's scratch folder, which goes when
+    the trace is collected; Graphviz refuses an HTML label whose image file is
+    missing, so the drawing renders without those pictures instead. Relative
+    sources resolve where the Graphviz child runs: ``root`` when it exists,
+    else the caller's working directory.
+    """
+
+    missing: list[str] = []
+
+    def keep_present(match: re.Match[str]) -> str:
+        """Return the row unchanged when its picture exists, else drop it."""
+
+        source = html.unescape(match.group(1))
+        path = Path(source)
+        if not path.is_absolute():
+            path = (root if root is not None else Path.cwd()) / path
+        if path.is_file():
+            return match.group(0)
+        missing.append(source)
+        return ""
+
+    trimmed = _PICTURE_ROW.sub(keep_present, dot)
+    if missing:
+        warnings.warn(
+            TorchLensWarning(
+                f"Drawing pictures {missing!r} are missing: the trace that held them was "
+                "collected, taking its scratch folder with it, so the drawing renders "
+                "without them. Remedy: keep the trace alive while you display or save "
+                "its drawing",
+                code="layout_engine_stderr",
+            ),
+            stacklevel=user_stacklevel(),
+        )
+    return trimmed
 
 
 def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None) -> None:

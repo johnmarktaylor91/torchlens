@@ -8,6 +8,7 @@ turns the photo off, and a saved trace keeps a bounded copy that still draws.
 
 from __future__ import annotations
 
+import gc
 import importlib
 import re
 from pathlib import Path
@@ -24,6 +25,7 @@ from torchlens._visualization._input_photo import (
     _raw_input_visualizer_dir,
     single_photo,
 )
+from torchlens.errors import TorchLensWarning
 
 pytest.importorskip("PIL")
 Image = importlib.import_module("PIL.Image")
@@ -152,6 +154,31 @@ def test_photo_drawing_renders_from_another_working_directory(
     saved = drawing.save(tmp_path / "again.png")
     with Image.open(saved) as picture:
         assert picture.format == "PNG"
+
+
+def test_photo_drawing_renders_after_its_trace_is_collected(tmp_path: Path) -> None:
+    """Save and notebook display drop a picture whose trace was collected, with one warning.
+
+    The pictures live in the trace's scratch folder, which goes with the trace;
+    the drawing still renders, without the photo row, and says why.
+    """
+
+    trace = tl.trace(_TinyVision(), _photo())
+    drawing = trace.draw(path=str(tmp_path / "graph"), file_format="svg")
+    assert _IMG_ROW.search(_input_node(drawing.dot)), drawing.dot
+    root = Path(trace._visualizer_dir)
+    del trace
+    gc.collect()
+    assert not root.exists()
+    with pytest.warns(TorchLensWarning, match="collected") as caught:
+        saved = drawing.save(tmp_path / "late.png")
+    named = [str(item.message) for item in caught if "collected" in str(item.message)]
+    assert len(named) == 1 and INPUT_PHOTO_FILE in named[0], named
+    with Image.open(saved) as picture:
+        assert picture.format == "PNG"
+    with pytest.warns(TorchLensWarning, match="collected"):
+        shown = drawing._repr_svg_()
+    assert shown is not None and "<svg" in shown
 
 
 def test_shape_only_turns_the_photo_off(tmp_path: Path) -> None:
