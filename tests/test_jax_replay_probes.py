@@ -114,12 +114,16 @@ def test_argmax_over_a_single_entry_axis_still_fails() -> None:
 
 
 def test_float_child_that_ignores_its_parent_still_fails() -> None:
-    """``x * 0.0`` stays zero under every candidate, the lift included."""
+    """``x - x`` stays zero under every candidate, the lift included.
+
+    (``x * 0.0`` is credited by the zero-annihilator proof, torch parity; see
+    ``tests/test_jax_zero_annihilator.py``.)
+    """
 
     def vanishing(_: None, x: Any) -> Any:
         """Return zero for every input."""
 
-        return x * 0.0
+        return x - x
 
     trace = _trace(vanishing, jnp.arange(6.0, dtype=jnp.float32).reshape(2, 3))
     trace.validate_forward_pass([], validate_metadata=False)

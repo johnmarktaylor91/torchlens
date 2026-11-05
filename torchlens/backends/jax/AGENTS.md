@@ -52,3 +52,8 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   primitives must stay typed refusals rather than silent boundary nodes.
 - Module scope labels are the only module-identity channel; keep the
   `tlm_`/`tlc_` codecs in `modules.py` and `jaxpr.py` in lockstep.
+- Perturbation exemptions are value proofs only. `_zero_annihilator.py` (torch
+  parity, reason `multiplicative_zero_annihilator`) credits a `mul`/`dot_general`
+  edge no candidate moved only when the parent fills one slot and the saved
+  co-operand and saved output are exactly zero everywhere; it runs after the
+  replay matched and never replaces it. Pinned by `tests/test_jax_zero_annihilator.py`.
