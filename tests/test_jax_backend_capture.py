@@ -1900,9 +1900,9 @@ def test_jax_validation_fails_when_output_ignores_its_parent() -> None:
     """An equation whose output does not depend on its graph parent fails perturbation."""
 
     def vanishing(_: None, x: Any) -> Any:
-        """Return an output that is zero for every input."""
+        """Return an output that is zero for every input (``x * 0.0`` is a proved annihilator)."""
 
-        return x * 0.0
+        return x - x
 
     trace = _trace_jax(vanishing, (None, jnp.ones((2, 3), dtype=jnp.float32)))
 

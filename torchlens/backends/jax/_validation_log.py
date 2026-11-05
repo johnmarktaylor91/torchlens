@@ -1,15 +1,22 @@
 """Per-run validation decision log for the JAX backend.
 
-Extracted from ``backend`` so that module stays under its size ceiling.
+Extracted from ``backend`` so that module stays under its size ceiling. Also
+records the verdict of an equation no perturbation candidate moved.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from ..._data_classes.trace import Trace
 from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
+from ._trace_graph_helpers import _data_parent_arg_positions
+from ._zero_annihilator import ZERO_ANNIHILATOR_REASON, _zero_annihilator_justification
+
+if TYPE_CHECKING:
+    from .jaxpr import JaxEquationCapture
 
 
 @dataclass
@@ -84,3 +91,63 @@ def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
         )
         for reason in (CONSTANT_PRODUCER_LEAF_REASON, CONSTANT_PARENT_PAYLOAD_REASON):
             log.exempted_reason_counts[reason] = log.exempted_reason_counts.get(reason, 0) + 1
+
+
+def _record_insensitive_outcome(
+    log: _JaxValidationLog,
+    labels: tuple[str, str],
+    capture: JaxEquationCapture,
+    op: Any,
+    replay: tuple[Sequence[Any], Sequence[Any]],
+) -> bool:
+    """Record the verdict for an equation no perturbation candidate moved.
+
+    The zero-annihilator proof (``_zero_annihilator``) is the only credit; anything
+    it refuses fails ``perturbation_insensitive``.
+
+    Parameters
+    ----------
+    log
+        Per-run validation decision log.
+    labels
+        The op label and function name the decision is recorded under.
+    capture
+        Captured JAX equation metadata.
+    op
+        Materialized TorchLens operation for the equation.
+    replay
+        The replay inputs and the saved outputs.
+
+    Returns
+    -------
+    bool
+        True when the zero-annihilator proof holds (recorded as exempted);
+        False otherwise (recorded as ``perturbation_insensitive``).
+    """
+
+    op_label, func_name = labels
+    inputs, saved_outputs = replay
+    positions_by_parent: dict[str, list[int]] = {}
+    for position, parent_label in _data_parent_arg_positions(op).items():
+        positions_by_parent.setdefault(str(parent_label), []).append(position)
+    justification = _zero_annihilator_justification(
+        str(capture.primitive), positions_by_parent, inputs, saved_outputs
+    )
+    if justification is None:
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
+        )
+        return False
+    _record_jax_decision(
+        log,
+        op_label,
+        func_name,
+        _JaxVerdict("perturbation", "exempted", ZERO_ANNIHILATOR_REASON),
+        justification,
+    )
+    counts = log.exempted_reason_counts
+    counts[ZERO_ANNIHILATOR_REASON] = counts.get(ZERO_ANNIHILATOR_REASON, 0) + 1
+    return True
