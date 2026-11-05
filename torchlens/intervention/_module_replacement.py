@@ -153,6 +153,8 @@ def materialize_module_replacements(
 
 
 def _call_address(call_label: str) -> str:
+    """The module address of a module-call label (``addr:pass`` without the pass)."""
+
     return call_label.rsplit(":", 1)[0]
 
 
@@ -182,6 +184,8 @@ def _is_inner_call(call_label: str, moved_calls: list[str]) -> bool:
 
 
 def _next_type_index(trace: Trace) -> int:
+    """The 1-based index the next replacement op takes among the trace's replacement ops."""
+
     return 1 + sum(1 for op in trace._layer_list if op.type == REPLACEMENT_TYPE)
 
 
@@ -358,6 +362,8 @@ def _restore_last_op(
 
 
 def _spellings(site: Op) -> set[str]:
+    """Every label spelling (final and raw, op and layer) a reference to ``site`` may use."""
+
     return {
         s
         for s in (site.label, site.layer_label, site._label_raw, site._layer_label_raw)
@@ -366,6 +372,8 @@ def _spellings(site: Op) -> set[str]:
 
 
 def _is_record(value: Any) -> bool:
+    """Whether ``value`` is a dataclass instance (not a dataclass type)."""
+
     return dataclasses.is_dataclass(value) and not isinstance(value, type)
 
 

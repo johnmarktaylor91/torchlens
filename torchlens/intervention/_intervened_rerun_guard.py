@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._runnable.seam import carries_intervened_values
+from .._runnable.seam import carries_intervened_values, runnable_trace_state
 from .errors import EngineDispatchError
 
 _LOADED_PROVIDERS = frozenset({"loaded_sparse", "loaded_analysis"})
@@ -42,7 +42,7 @@ def _artifact_values_intervened(trace: Any) -> bool:
         live evidence decides.
     """
 
-    snapshot = getattr(getattr(trace, "_runnable", None), "loaded_values_intervened", None)
+    snapshot = runnable_trace_state(trace).loaded_values_intervened
     if snapshot is not None:
         return bool(snapshot)
     return carries_intervened_values(trace)

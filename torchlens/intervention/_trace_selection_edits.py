@@ -528,13 +528,30 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
     _commit_replay_updates(trace, pending_updates, pending_records)
 
 
+def _own_specs(trace: Trace, wanted: frozenset[str]) -> list[Any]:
+    """The sticky-hook specs one transaction attached (handles in ``wanted``)."""
+
+    return [spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted]
+
+
 def _own_origin_entries(trace: Trace, wanted: frozenset[str]) -> Any:
     """Normalize the sticky-hook specs one transaction attached, as replay origins."""
 
-    own_specs = [
-        spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
-    ]
-    return _normalize_sticky_hook_specs(own_specs, allow_replay_only_site_targets=True)
+    return _normalize_sticky_hook_specs(
+        _own_specs(trace, wanted), allow_replay_only_site_targets=True
+    )
+
+
+def _materialize_module_edits(trace: Trace, boundary: list[Any]) -> None:
+    """Record each pushed ``tl.module(...)`` edit like its capture-time twin.
+
+    The edited value moves into a replacement op after the module's last op,
+    and the accessors that index the op population are rebuilt.
+    """
+
+    if materialize_module_replacements(trace, boundary):
+        _invalidate_trace_op_layer_accessor_caches(trace)
+        _invalidate_trace_module_call_accessor_cache(trace)
 
 
 def push_from_handles(
@@ -580,14 +597,12 @@ def push_from_handles(
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, None)
     origin_entries = hook_entries
-    boundary: list[Any] = []
     if wanted or staged_values:
         origin_entries = _own_origin_entries(trace, wanted) + _normalize_value_specs(staged_values)
-    if wanted:
-        own_specs = [
-            spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
-        ]
-        boundary = snapshot_module_boundary_sites(trace, own_specs)
+    # A differentiable push replays onto a fresh fork and leaves ``trace`` as it was.
+    boundary = (
+        [] if differentiable else snapshot_module_boundary_sites(trace, _own_specs(trace, wanted))
+    )
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
         if differentiable:
@@ -600,11 +615,7 @@ def push_from_handles(
                 trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
             )
     clear_staged_unfired(trace)
-    # A tl.module(...) edit is recorded like its capture-time twin: the edited
-    # value moves into a replacement op after the module's last op.
-    if materialize_module_replacements(trace, boundary):
-        _invalidate_trace_op_layer_accessor_caches(trace)
-        _invalidate_trace_module_call_accessor_cache(trace)
+    _materialize_module_edits(trace, boundary)
     return result
 
 
