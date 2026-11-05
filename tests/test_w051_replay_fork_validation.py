@@ -194,3 +194,22 @@ def test_source_trace_and_fork_of_pushed_fork_validate(two) -> None:
     assert _validate(grandchild, 2.0 * b) is True
     assert _validate(trace, model(x)) is True
     assert REPLAY_CAPTURE_DIGESTS_KEY not in (trace.last_run or {})
+
+
+def test_second_replay_on_a_fork_keeps_the_first_replays_capture_digests(two) -> None:
+    """A later replay extends the capture-digest ledger; a fresh run context never drops it.
+
+    The first ``do`` overwrites ``relu_1_2``; the second recomputes only the
+    tanh branch and its consumers. Validation still needs the relu's
+    capture-time digest to check the add's saved snapshot, so the second
+    replay's run context must carry the ledger over.
+    """
+
+    model, x, trace = two
+    _a, b = _parts(model, x)
+    fork = trace.fork()
+    fork.do(tl.label("relu_1_2"), tl.zero_ablate())
+    tanh = next(op for op in trace._layer_list if op.func_name == "tanh")
+    fork.do(tl.label(tanh.layer_label), tl.zero_ablate())
+    assert "relu_1_2:1" in fork.last_run[REPLAY_CAPTURE_DIGESTS_KEY]
+    assert _validate(fork, torch.zeros_like(b)) is True
