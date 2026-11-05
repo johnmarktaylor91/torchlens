@@ -1227,7 +1227,7 @@ def _shape_op_config_int(op: Any, key: str) -> int | None:
 
 
 def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
-    """Read the first executed input-consuming constraint op from a trace.
+    """Read the first executed input-consuming constraint op, pass by pass.
 
     Parameters
     ----------
@@ -1240,9 +1240,6 @@ def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
         Executed constraint metadata, or ``None``.
     """
 
-    # Per-pass Op records in execution order, never aggregate Layers: a layer
-    # that runs more than once (a loop, a shared module) refuses per-pass
-    # fields such as ``input_shapes`` on its aggregate record.
     for op in trace.ops:
         func_name = str(getattr(op, "func_name", "")).lower()
         input_shapes = tuple(_shape_tuple(shape) for shape in getattr(op, "input_shapes", ()) or ())
