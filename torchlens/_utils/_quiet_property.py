@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import sys
 import threading
 from typing import Any
 
@@ -73,3 +74,22 @@ def read_attr_quietly(item: Any, name: str) -> Any:
         return getattr(item, name)
     finally:
         logging.disable(previous)
+
+
+def class_crawl_names(obj_type: type) -> list[str]:
+    """Return the class-level attribute names the tensor search may read on ``obj_type``.
+
+    Normally ``dir(obj_type)``. A ``torch.distributions.Distribution`` keeps its tensor
+    state in its instance dictionary (the output-container contract records exactly
+    that); its class-level names are derived values (``mean``, ``variance``,
+    ``stddev``) and lazy properties (``probs``, ``logits``). Reading one runs torch math
+    after the forward (``Exponential.mean`` is ``rate.reciprocal()``), so the search
+    would report a fresh tensor no traced op produced as a model output, and a lazy
+    property would write a new tensor into the distribution. Its instance attributes
+    are still crawled (the caller unions them in).
+    """
+    module = sys.modules.get("torch.distributions.distribution")
+    base = getattr(module, "Distribution", None)
+    if isinstance(base, type) and issubclass(obj_type, base):
+        return []
+    return dir(obj_type)

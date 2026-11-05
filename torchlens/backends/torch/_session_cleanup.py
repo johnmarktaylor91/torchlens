@@ -16,9 +16,9 @@ import logging
 import sys
 import types
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from types import ModuleType
-from typing import Any
+from typing import Any, TypeAlias
 
 import torch
 from torch import nn
@@ -29,9 +29,14 @@ __all__ = [
     "_clear_callable_session_tensor_metadata",
     "_clear_container_tree_tensor_metadata",
     "_clear_module_attribute_tensor_metadata",
+    "_clear_model_tree_tensor_metadata",
     "_clear_module_callables_tensor_metadata",
     "_clear_session_tensor_metadata",
+    "method_index",
 ]
+
+#: The model's user methods by attribute name (see :func:`method_index`).
+MethodIndex: TypeAlias = Mapping[str, tuple[types.FunctionType, ...]]
 
 #: Exact leaf types that can never carry TorchLens tensor metadata.
 _SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
@@ -55,6 +60,8 @@ _OBJECT_WALK_STOP_TYPES = (nn.Module, logging.Filterer, logging.Manager, logging
 #: Function hops followed from a forward into the user helpers it names (the MLX
 #: closure-constant census follows the same number).
 _HELPER_HOP_BUDGET = 3
+#: ``functools.wraps`` links followed inward from one function (decorator stacks).
+_WRAPPED_LINK_LIMIT = 8
 #: Top-level packages whose functions are library code, never a user helper keeping
 #: model state: torch (and TorchLens's own wrappers, which copy torch's
 #: ``__module__``), TorchLens and the standard library.
@@ -400,7 +407,7 @@ def _clear_callable_session_tensor_metadata(
     callable_obj: Any,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
-    owner: type | None = None,
+    methods: MethodIndex | None = None,
 ) -> None:
     """Clear TorchLens tensor metadata captured by a callable object.
 
@@ -427,9 +434,10 @@ def _clear_callable_session_tensor_metadata(
         Object ids already visited during this cleanup scan.
     visit
         Optional per-tensor action replacing the default ``clear_meta``.
-    owner
-        The class of the module whose forward this is, so a ``self.<method>`` the
-        forward names is followed as a helper (see :func:`_walk_named_globals`).
+    methods
+        The model's user methods by name (:func:`method_index`), so a
+        ``self.<method>`` or ``self.child.<method>`` the forward names is followed
+        as a helper (see :func:`_walk_named_globals`).
 
     Returns
     -------
@@ -440,7 +448,12 @@ def _clear_callable_session_tensor_metadata(
     chain = _forward_wrapper_chain(getattr(callable_obj, "__func__", callable_obj))
     for link in chain:
         _clear_callable_link_tensor_metadata(link, seen, visit)
-    _walk_named_globals(chain[-1], owner, seen, visit, _HELPER_HOP_BUDGET)
+    # A user decorator on the forward itself (``@beartype``, a ``functools.wraps``
+    # gradient switch) is transparent: the decorated forward's names are read at
+    # the full budget, not one hop down behind the wrapper.
+    for link in _wrapped_links(chain[-1]):
+        _clear_callable_link_tensor_metadata(link, seen, visit)
+        _walk_named_globals(link, methods, seen, visit, _HELPER_HOP_BUDGET)
 
 
 def _code_names(code: types.CodeType) -> Iterator[str]:
@@ -467,6 +480,33 @@ def _user_helper(value: Any) -> types.FunctionType | None:
     return None if root in _LIBRARY_PACKAGE_ROOTS else value
 
 
+def _wrapped_links(func: Any) -> list[Any]:
+    """Return ``func`` and the user functions its ``functools.wraps`` chain wraps, outermost first.
+
+    A decorator built with ``functools.wraps`` (``torch.no_grad()``, ``@beartype``, an
+    autocast pin) holds the decorated function in a closure cell the wrapper's code
+    never names, and records it as ``__wrapped__``. Following that link keeps a
+    decorated helper as visible as an undecorated one. ``__wrapped__`` is read from
+    the function's own ``__dict__`` so no user ``__getattr__`` runs; library links
+    are not followed (see :func:`_user_helper`).
+    """
+
+    links = [func]
+    current = (
+        getattr(func, "__dict__", {}).get("__wrapped__")
+        if type(func) is types.FunctionType
+        else None
+    )
+    while current is not None and len(links) < _WRAPPED_LINK_LIMIT:
+        if type(current) is types.MethodType:
+            current = current.__func__
+        if _user_helper(current) is None or any(current is link for link in links):
+            break
+        links.append(current)
+        current = current.__dict__.get("__wrapped__")
+    return links
+
+
 def _class_helper(owner: type, name: str) -> types.FunctionType | None:
     """Return the user function ``owner`` resolves ``name`` to, ``self.<name>``'s method."""
 
@@ -480,9 +520,47 @@ def _class_helper(owner: type, name: str) -> types.FunctionType | None:
     return None
 
 
+def method_index(classes: Iterable[type]) -> MethodIndex:
+    """Index the user methods of the model's module classes by attribute name.
+
+    A forward reaches module-level state through methods of its own class
+    (``self.forward_once``) and of its children's classes
+    (``self.SO3_rotation[i].set_wigner`` calling a module-level ``wigner_D``).
+    Each class resolves a name through its MRO as an instance would; library
+    classes (``nn.Module`` and the rest of torch) contribute nothing.
+
+    Parameters
+    ----------
+    classes
+        The module classes of the prepared model, in any order (duplicates ignored).
+
+    Returns
+    -------
+    MethodIndex
+        ``name -> user functions`` that some class in ``classes`` resolves ``name`` to.
+    """
+
+    index: dict[str, list[types.FunctionType]] = {}
+    for owner in dict.fromkeys(classes):
+        user_classes = [klass for klass in owner.__mro__ if _user_class(klass)]
+        for name in dict.fromkeys(name for klass in user_classes for name in vars(klass)):
+            helper = _class_helper(owner, name)
+            if helper is not None and not any(helper is fn for fn in index.get(name, ())):
+                index.setdefault(name, []).append(helper)
+    return {name: tuple(functions) for name, functions in index.items()}
+
+
+def _user_class(klass: type) -> bool:
+    """Return whether ``klass`` is defined outside the library packages."""
+
+    module = getattr(klass, "__module__", None)
+    root = module.partition(".")[0] if isinstance(module, str) else ""
+    return root not in _LIBRARY_PACKAGE_ROOTS
+
+
 def _walk_named_globals(
     func: Any,
-    owner: type | None,
+    methods: MethodIndex | None,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None,
     hops: int,
@@ -495,11 +573,13 @@ def _walk_named_globals(
     cached grids. Reading only the forward's own names left that state outside
     the snapshot (a warm cache's tensor became an unattributed argument) and
     outside the session clear (a cold cache filled in one capture kept a stale
-    label into the next). A named user function, or a method of ``owner`` the
-    code names (``self.forward_once``), is swept like the forward itself:
-    defaults, closure cells, its ``__dict__`` and the globals its code names,
-    one hop less each time. Library functions (torch, TorchLens, the standard
-    library) are not followed; at zero hops a function is swept as an object.
+    label into the next). A named user function, or a model-class method the
+    code names (``self.forward_once``, ``self.child.set_wigner``; see
+    :func:`method_index`), is swept like the forward itself: defaults, closure
+    cells, its ``__dict__`` and the globals its code names, one hop less each
+    time. A ``functools.wraps`` decorator costs no hop (:func:`_wrapped_links`).
+    Library functions (torch, TorchLens, the standard library) are not
+    followed; at zero hops a function is swept as an object.
     """
 
     globals_dict = getattr(func, "__globals__", None)
@@ -507,9 +587,9 @@ def _walk_named_globals(
     if not isinstance(globals_dict, dict) or code is None:
         return
     for name in _code_names(code):
-        method = _class_helper(owner, name) if owner is not None and hops > 0 else None
-        if method is not None:
-            _walk_user_helper(method, owner, seen, visit, hops)
+        if methods is not None and hops > 0:
+            for method in methods.get(name, ()):
+                _walk_user_helper(method, methods, seen, visit, hops)
         if name not in globals_dict:
             continue
         value = globals_dict[name]
@@ -517,28 +597,31 @@ def _walk_named_globals(
         if helper is None:
             _clear_session_tensor_metadata(value, seen, visit=visit)
         else:
-            _walk_user_helper(helper, None, seen, visit, hops)
+            _walk_user_helper(helper, methods, seen, visit, hops)
 
 
 def _walk_user_helper(
     func: types.FunctionType,
-    owner: type | None,
+    methods: MethodIndex | None,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None,
     hops: int,
 ) -> None:
-    """Sweep one user helper function once per sweep, then the globals it names."""
+    """Sweep one user helper function once per budget, its wrapped links, then their names."""
 
-    # The inverted id keys the helper walk apart from the plain object visit of the
+    # The inverted key keeps the helper walk apart from the plain object visit of the
     # same function (``seen`` holds object ids, all non-negative), so a function met
-    # first as a module attribute is still followed when a forward names it.
-    walk_key = ~id(func)
+    # first as a module attribute is still followed when a forward names it. The
+    # budget is part of the key: a helper first met deep in one chain (few hops
+    # left) is walked again when a shorter chain reaches it with more hops.
+    walk_key = ~(id(func) * (_HELPER_HOP_BUDGET + 1) + hops)
     if walk_key in seen:
         return
     seen.add(walk_key)
-    _clear_callable_link_tensor_metadata(func, seen, visit)
-    _clear_session_tensor_metadata(func, seen, visit=visit)
-    _walk_named_globals(func, owner, seen, visit, hops - 1)
+    for link in _wrapped_links(func):
+        _clear_callable_link_tensor_metadata(link, seen, visit)
+        _clear_session_tensor_metadata(link, seen, visit=visit)
+        _walk_named_globals(link, methods, seen, visit, hops - 1)
 
 
 def _lru_cache_entries(wrapper: Any) -> list[Any]:
@@ -595,6 +678,7 @@ def _clear_module_callables_tensor_metadata(
     module: nn.Module,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
+    methods: MethodIndex | None = None,
 ) -> None:
     """Walk one module's forward callable and its helpers, then its class's ``lru_cache`` contents.
 
@@ -611,10 +695,32 @@ def _clear_module_callables_tensor_metadata(
         Object ids already visited during this sweep.
     visit
         Optional per-tensor action replacing the default ``clear_meta``.
+    methods
+        The whole model's :func:`method_index`, built once per sweep; ``None``
+        indexes ``module``'s own class only.
     """
 
     _clear_callable_session_tensor_metadata(
-        getattr(module, "forward", None), seen, visit=visit, owner=type(module)
+        getattr(module, "forward", None),
+        seen,
+        visit=visit,
+        methods=method_index((type(module),)) if methods is None else methods,
     )
     for cache in _class_lru_caches(type(module)):
         _clear_session_tensor_metadata(cache, seen, visit=visit)
+
+
+def _clear_model_tree_tensor_metadata(model: nn.Module, seen: set[int]) -> None:
+    """Clear the session metadata on every submodule's attributes and forward callables.
+
+    The session-end half of the sweep :func:`._module_boundary_adoption.
+    collect_pre_forward_tensor_ids` runs before the forward, over the same
+    surfaces with the same :func:`method_index`, so the clear reaches every
+    cached tensor the snapshot pinned.
+    """
+
+    submodules = list(model.modules())
+    methods = method_index(type(submodule) for submodule in submodules)
+    for submodule in submodules:
+        _clear_module_attribute_tensor_metadata(submodule, seen)
+        _clear_module_callables_tensor_metadata(submodule, seen, methods=methods)
