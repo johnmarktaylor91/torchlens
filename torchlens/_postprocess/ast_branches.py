@@ -665,7 +665,7 @@ def _interactive_file_index(filename: str) -> FileIndex | None:
     IPython and Jupyter register each cell's text in ``linecache`` under a
     pseudo-filename and compile the cell under that name, so the registered
     text is what the running code came from. The index is cached under
-    ``(filename, sha256 of text)`` and the first text is pinned per name. A
+    ``(filename, digest of text)`` and the first text is pinned per name. A
     second, different text under the same name means TorchLens can no longer
     tell which text a running frame was compiled from: the name warns once
     and stays unreadable for the rest of the process (no conditional is
@@ -710,7 +710,7 @@ def _interactive_file_index(filename: str) -> FileIndex | None:
 
 
 def _source_digest(source: str) -> bytes:
-    """Return the SHA-256 digest that pins one source text to its filename."""
+    """Return the content digest that pins one source text to its filename."""
 
     return hashlib.sha256(source.encode("utf-8", "surrogatepass")).digest()
 

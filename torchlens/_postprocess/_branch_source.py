@@ -43,7 +43,7 @@ def read_interactive_source(filename: str) -> str | None:
     """Return the text ``linecache`` holds for source that has no file.
 
     Only entries written for interactive source count: a 4-tuple whose
-    modification time is ``None`` (IPython, Jupyter and the 3.13 REPL write
+    modification time is ``None`` (IPython, Jupyter and the newer Python REPL write
     these, and ``linecache.checkcache`` never evicts them). An entry with a
     real modification time belongs to a file on disk; when that file is gone
     the cached text may be stale, so it is not read. The same rule decides
@@ -83,8 +83,9 @@ def split_source_lines(source: str) -> list[str]:
     List[str]
         Lines with terminators kept. Only ``\\n``, ``\\r\\n``, and ``\\r``
         terminate lines; characters ``str.splitlines`` also breaks on (form
-        feed, ``\\x0b``, ``\\u2028``, ...) stay inside their line, matching
-        ``ast._splitlines_no_ff`` so AST byte offsets index correctly.
+        feed, vertical tab, Unicode line and paragraph separators, ...) stay
+        inside their line, matching ``ast._splitlines_no_ff`` so AST byte
+        offsets index correctly.
     """
 
     lines: list[str] = []
