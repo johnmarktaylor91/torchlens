@@ -129,6 +129,31 @@ def test_tensor_input_draws_no_photo(tmp_path: Path) -> None:
     assert "<IMG" not in node, node
 
 
+def test_photo_drawing_renders_from_another_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Draw, notebook display and save all render when the caller's cwd is elsewhere.
+
+    The photo sits in an HTML ``<IMG>`` cell whose path is relative to the trace's
+    scratch root (R19-6), and a missing ``<IMG>`` file is a Graphviz error, not a
+    warning; so every render of the returned drawing must run Graphviz from that root.
+    """
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    drawing = tl.trace(_TinyVision(), _photo()).draw(
+        path=str(tmp_path / "graph"), file_format="svg"
+    )
+    assert _IMG_ROW.search(_input_node(drawing.dot)), drawing.dot
+    assert "data:image/png;base64" in (tmp_path / "graph.svg").read_text()
+    shown = drawing._repr_svg_()
+    assert shown is not None and "data:image/png;base64" in shown
+    saved = drawing.save(tmp_path / "again.png")
+    with Image.open(saved) as picture:
+        assert picture.format == "PNG"
+
+
 def test_shape_only_turns_the_photo_off(tmp_path: Path) -> None:
     """``batch_render="shape_only"``, at capture or set afterwards, draws no photo."""
 
