@@ -487,7 +487,7 @@ def _value_digest(tensor: torch.Tensor) -> bytes:
 
     with torch.no_grad():
         flat = tensor.detach().reshape(-1).cpu().contiguous()
-        return hashlib.blake2b(flat_byte_view(flat).numpy(), digest_size=16).digest()
+        return hashlib.blake2b(flat_byte_view(flat).numpy().data, digest_size=16).digest()
 
 
 def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:
