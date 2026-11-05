@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -11,6 +12,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization import _render_nodes
+
+# ``_render_entrypoints`` star-imports the render modules. Loaded for the first time inside a test
+# that has patched one of their names, it copies the patch, and ``monkeypatch`` never restores
+# that copy; so load it before any test here patches.
+importlib.import_module("torchlens._visualization._render_entrypoints")
 
 
 class _SplitReuse(nn.Module):

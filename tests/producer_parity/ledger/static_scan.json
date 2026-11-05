@@ -4944,6 +4944,22 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/_visualization/_edge_multiplicity.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_visualization/_edge_multiplicity.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_edge_shapes.py",
@@ -5149,14 +5165,6 @@
   "file": "torchlens/_visualization/_render_edges.py",
   "has_default": false,
   "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_visualization/_render_edges.py",
-  "has_default": false,
-  "sites": 2,
   "via_getattr": false
  },
  {
