@@ -882,6 +882,10 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/backends/torch/completeness_witness.py", "_FRAMEWORK_FILENAME_VERDICTS"),
         ("torchlens/backends/torch/_module_class_metadata.py", "_module_class_metadata_cache"),
         ("torchlens/backends/torch/ops.py", "_CAPTURE_PRODUCER_POLICIES"),
+        # Row-direct commit plans (field ids and the scalar-constant row template),
+        # one per op store layout, built on first use; the layout is a module
+        # constant held by its plan, so the memo is bounded and needs no epoch.
+        ("torchlens/backends/torch/_ops_row_cells.py", "_PLANS"),
         # Agent-surface digest-hint cache (moved from torchlens/bridge/mcp.py
         # in the 2026-10 agent-reference reorg): full stat identity (path,
         # dev, ino, size, mtime_ns) -> content digest, FIFO-evicted at 16. A

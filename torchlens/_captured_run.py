@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any, Final, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.refs import journal_record
 
 # record-groups: keep-flat (vocabulary module: no record-table import; reads stay getattr)
 from ._errors import CaptureNotActiveError
@@ -154,8 +155,10 @@ class TraceLike:
         if events is None:
             return _event_tuple((), "OpEvents", "events")
         if hasattr(events, "amended_op_records"):
-            return _event_tuple(events.amended_op_records(), "OpEvents", "events")
-        return _event_tuple(events.op_events, "OpEvents", "events")
+            return _event_tuple(
+                map(journal_record, events.amended_op_records()), "OpEvents", "events"
+            )
+        return _event_tuple(map(journal_record, events.op_events), "OpEvents", "events")
 
     @property
     def backward_events(self) -> tuple[Any, ...]:

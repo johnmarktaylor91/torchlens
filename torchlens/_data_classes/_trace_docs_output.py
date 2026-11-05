@@ -302,7 +302,7 @@ DOCS: dict[str, str] = {
         node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn:
             Per-node styling and selection callbacks (see ``tl.viz.nodes``).
         intervention_mode:
-            How intervened sites are marked: ``"node_mark"`` or ``"cone"``.
+            How intervened sites are marked: ``"node_mark"`` or ``"as_node"``.
         show_cone:
             Shade the downstream cone of every intervention.
         code_panel:
