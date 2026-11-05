@@ -102,7 +102,7 @@ RESULT = trace["linear_1_1"].out.detach().tolist()
 | Zero and mean ablations | `tl.zero_ablate()`, `tl.mean_ablate(dim=...)`, `tl.mean_ablate(population, dim=None)` |
 | Resampling ablation | `torchlens.intervention.resample_rows_from(population, seed=..., axis=...)` |
 | Multi-source causal mediation templates | Several traces in a `Bundle`, with explicit metrics |
-| Dataset-level batched evaluation | Call the bound spec per batch, or `trace.run(model, batch, replay=tl.options.ReplayOptions(append=True))` when the graph is the same |
+| Dataset-level batched evaluation | Call the bound spec per batch, or `trace.append(batch, model=model)` when the graph is the same |
 | Model-family-specific abstractions | No exact equivalent |
 
 Worked TorchLens recipes for the rows above (each fence is executed):
@@ -322,7 +322,7 @@ step, but a trace per step costs far more than the bound call.
 
 Pyvene evaluates interventions batch by batch inside its own loop. In TorchLens, either call the
 bound spec on each batch (no trace), or trace the first batch with the intervention and append
-further batches with `trace.run(model, batch, replay=tl.options.ReplayOptions(append=True))` when
+further batches with `trace.append(batch, model=model)` when
 the graph is the same for every batch. The append constraints are on the
 [intervention explainers](../intervention_explainers.md#append-constraints) page.
 

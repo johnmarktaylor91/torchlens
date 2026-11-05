@@ -19,7 +19,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import AppendBatchDependenceError
-from torchlens.options import ReplayOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -51,14 +50,14 @@ def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
     log._attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None))
     log.run(model, x)
     with pytest.raises(AppendBatchDependenceError):
-        log.run(model, torch.randn(2, 4), replay=ReplayOptions(append=True))
+        log.append(torch.randn(2, 4), model=model)
 
     model2, x2, log2 = _traced_model()
     log2._attach_hooks(tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None))
     log2.run(model2, x2)
     n_before = log2["relu_1_2"].out.shape[0]
-    appended = log2.run(model2, torch.randn(2, 4), replay=ReplayOptions(append=True))
-    assert appended["relu_1_2"].out.shape[0] == n_before + 2
+    log2.append(torch.randn(2, 4), model=model2)
+    assert log2["relu_1_2"].out.shape[0] == n_before + 2
 
 
 def test_typo_can_never_flip_batch_independent_open() -> None:

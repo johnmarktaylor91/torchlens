@@ -1099,7 +1099,7 @@ torchlens/intervention/_trace_edits.py::do_with_options	65
 torchlens/intervention/_trace_edits.py::set_site	63
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	79
-torchlens/intervention/_trace_run.py::run	322
+torchlens/intervention/_trace_run.py::run	305
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	61
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
@@ -1144,13 +1144,13 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	152
-torchlens/intervention/rerun.py	1640
+torchlens/intervention/rerun.py	1626
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
-torchlens/intervention/rerun.py::_chunked_rerun	77
+torchlens/intervention/rerun.py::_chunked_rerun	71
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
-torchlens/intervention/rerun.py::run	143
+torchlens/intervention/rerun.py::run	136
 torchlens/intervention/runtime.py	1638
 torchlens/intervention/runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/runtime.py::_apply_live_backward_prehooks	72
@@ -1217,7 +1217,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1688
+torchlens/options.py	1681
 torchlens/options.py::CaptureOptions.__init__	74
 torchlens/options.py::VisualizationOptions.__init__	129
 torchlens/options.py::_merge_grouped_options	74
