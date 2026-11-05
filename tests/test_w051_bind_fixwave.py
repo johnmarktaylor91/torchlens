@@ -24,7 +24,6 @@ import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
 from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.values import ValueEncoder
-from torchlens._utils._record_group_table import record_member
 from torchlens.intervention._injection import attest_injected_ops, injected_ops
 from torchlens.intervention.errors import BindingPreflightError, OpaqueCallableError
 
@@ -158,18 +157,14 @@ def _injected_rows(state):
     """Injected rows of the decoded provenance test view."""
 
     return [
-        op
-        for op in state["_layer_list"]
-        if record_member(op, "injection_provenance", None) is not None
+        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """Model rows of the decoded provenance test view."""
 
-    return [
-        op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
-    ]
+    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
 
 
 # ---------------------------------------------------------------------------
@@ -286,9 +281,9 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
         for row in _injected_rows(state):
             envelope = row.annotations["injection_codec_v1"]
             suffix = row.layer_label[len(envelope["host_label"]) :]
-            row.call.injection_provenance["host_site_key"] = tanh.graph.site_key
-            row.call.injection_provenance["host_pass"] = 7
-            row.call.injection_provenance["spec_rule_id"] = "r-forged"
+            row.injection_provenance["host_site_key"] = tanh.site_key
+            row.injection_provenance["host_pass"] = 7
+            row.injection_provenance["spec_rule_id"] = "r-forged"
             envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
             row.layer_label = f"{tanh.layer_label}:{tanh.pass_number}{suffix}"
 
@@ -306,7 +301,7 @@ def test_site_key_label_disagreement_refuses_at_load(tmp_path) -> None:
     def inconsistent(state) -> None:
         tanh = next(op for op in _model_rows(state) if op.layer_label.startswith("tanh"))
         for row in _injected_rows(state):
-            row.call.injection_provenance["host_site_key"] = tanh.graph.site_key
+            row.injection_provenance["host_site_key"] = tanh.site_key
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, inconsistent)
@@ -332,7 +327,7 @@ def test_forged_injection_provenance_refuses_at_load(
 
     def forge(state) -> None:
         for row in _injected_rows(state):
-            row.call.injection_provenance[provenance_key] = forged_value
+            row.injection_provenance[provenance_key] = forged_value
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, forge)

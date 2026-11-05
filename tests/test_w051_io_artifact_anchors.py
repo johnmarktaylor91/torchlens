@@ -203,7 +203,7 @@ def test_pass_stamp_out_of_range_refuses(
 def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
         op = state["_layer_list"][2]
-        op._graph_edge_substitutions = {("positional", (0,)): {"forged": True}}
+        op.edge_substitutions = {("positional", (0,)): {"forged": True}}
         op.edge_replacement_stamps = {("positional", (0,)): {"forged": True}}
 
     path = _tampered(source_bundle, tmp_path / "edge.tlspec", forge)
@@ -212,7 +212,7 @@ def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -
 
 def test_edge_carrier_without_matching_stamps_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        state["_layer_list"][2]._graph_edge_substitutions = {("positional", (0,)): {}}
+        state["_layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
 
     path = _tampered(source_bundle, tmp_path / "edge2.tlspec", forge)
     _assert_refuses(path, "artifact_edge_substitutions_invalid")
