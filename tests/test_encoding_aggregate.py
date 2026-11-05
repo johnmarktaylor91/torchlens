@@ -199,7 +199,7 @@ def test_scaled_size_area_spans_max_mult() -> None:
     )
 
 
-def test_final_sizes_fit_labels_and_scale_from_a_shared_base(
+def test_final_sizes_fit_labels_and_never_shrink_below_the_value_size(
     nested_log: tl.Trace, tmp_path: Path
 ) -> None:
     _draw(nested_log, tmp_path, size_by="bytes")
@@ -209,56 +209,88 @@ def test_final_sizes_fit_labels_and_scale_from_a_shared_base(
     floor = estimate_label_box(["x"], DEFAULT_FONT_PT)
     for size in finals.values():
         assert size[0] >= floor[0] and size[1] >= floor[1]
-    # Area / base area is exactly 1 + f * (M - 1) for every node, all from one shared
-    # base, so area is ordered by value.
-    bases = {}
+    # Every node is at least the typical base scaled by its value; the base is the
+    # smallest such per-dimension quotient, so no node falls below its value's size.
+    factors = {
+        key: math.sqrt(1.0 + state.size_fractions[key] * (SIZE_BY_MAX_AREA_MULT - 1.0))
+        for key in finals
+    }
+    base = (
+        min(size[0] / factors[key] for key, size in finals.items()),
+        min(size[1] / factors[key] for key, size in finals.items()),
+    )
     for key, size in finals.items():
-        factor = math.sqrt(1.0 + state.size_fractions[key] * (SIZE_BY_MAX_AREA_MULT - 1.0))
-        bases[key] = (size[0] / factor, size[1] / factor)
-    first = next(iter(bases.values()))
-    for base in bases.values():
-        assert base == pytest.approx(first, abs=2e-3)
-    order = sorted(finals, key=lambda key: state.size_fractions[key])
-    areas = [finals[key][0] * finals[key][1] for key in order]
-    assert len(order) >= 2
-    assert all(b >= a - 1e-6 for a, b in zip(areas, areas[1:], strict=False))
+        assert size[0] >= base[0] * factors[key] - 2e-3
+        assert size[1] >= base[1] * factors[key] - 2e-3
 
 
-def test_equal_values_get_equal_sizes_whatever_the_label() -> None:
+def _segment_layout(rows: dict[str, tuple[float, tuple[str, ...]]]) -> dict[str, Any]:
+    """Lay out segment capsules (drawn as boxes) from ``key -> (fraction, label rows)``."""
+
     from types import SimpleNamespace
 
-    from torchlens._visualization._encoding_size_layout import (
-        layout_encoded_sizes,
-        node_size_needed,
-    )
+    from torchlens._visualization._encoding_size_layout import layout_encoded_sizes
 
-    short = ("op_1", "(2, 8)")
-    long_row = ("op_9", "(2, 8)", "x" * 120)
     state = SimpleNamespace(
-        size_fractions={"a": 0.0, "b": 0.0, "c": 1.0, "d": 1.0},
+        size_fractions={key: fraction for key, (fraction, _rows) in rows.items()},
         sizes={},
         unit_keys={},
         final_sizes={},
         aggregates=SimpleNamespace(
-            segments=(
-                SimpleNamespace(key="a", label_lines=short),
-                SimpleNamespace(key="b", label_lines=long_row),
-                SimpleNamespace(key="c", label_lines=short),
-                SimpleNamespace(key="d", label_lines=long_row),
+            segments=tuple(
+                SimpleNamespace(key=key, label_lines=label) for key, (_f, label) in rows.items()
             )
         ),
     )
     layout_encoded_sizes((), state, SimpleNamespace(font_size=None))
-    finals = state.final_sizes
-    # The encoded value alone sets the size: equal values, equal boxes.
-    assert finals["a"] == finals["b"]
-    assert finals["c"] == finals["d"]
-    assert finals["c"][0] * finals["c"][1] == pytest.approx(
-        SIZE_BY_MAX_AREA_MULT * finals["a"][0] * finals["a"][1], rel=1e-2
+    return state.final_sizes
+
+
+_SHORT = ("op_1", "(2, 8)")
+_LONG = ("op_9", "(2, 8)", "x" * 120)
+
+
+def _need(rows: tuple[str, ...]) -> tuple[float, float]:
+    """Return the node size a box needs for ``rows`` at the default font."""
+
+    from torchlens._visualization._encoding_size_layout import node_size_needed
+
+    return node_size_needed(estimate_label_box(rows, DEFAULT_FONT_PT), "box")
+
+
+def test_smallest_value_draws_at_the_typical_size_and_largest_at_twice_its_area() -> None:
+    finals = _segment_layout(
+        {"a": (0.0, _SHORT), "b": (0.0, _SHORT), "c": (1.0, _SHORT), "d": (0.5, _SHORT)}
     )
-    # The smallest box still holds the longest label (segments draw as boxes).
-    need = node_size_needed(estimate_label_box(long_row, DEFAULT_FONT_PT), "box")
-    assert finals["b"][0] >= need[0] - 1e-3 and finals["b"][1] >= need[1] - 1e-3
+    need = _need(_SHORT)
+    assert finals["a"] == finals["b"]
+    assert finals["a"] == pytest.approx(need, abs=2e-3)
+    assert finals["c"][0] * finals["c"][1] == pytest.approx(
+        SIZE_BY_MAX_AREA_MULT * need[0] * need[1], rel=1e-2
+    )
+    assert SIZE_BY_MAX_AREA_MULT == 2.0
+    area = [finals[key][0] * finals[key][1] for key in ("a", "d", "c")]
+    assert area[0] < area[1] < area[2]
+
+
+def test_a_long_label_fits_without_inflating_the_other_nodes() -> None:
+    finals = _segment_layout(
+        {
+            "a": (0.0, _SHORT),
+            "b": (0.0, _SHORT),
+            "c": (1.0, _SHORT),
+            "d": (1.0, _SHORT),
+            "long": (0.0, _LONG),
+        }
+    )
+    short, long = _need(_SHORT), _need(_LONG)
+    # The typical node keeps its own size; the long label gets the room its text needs.
+    assert finals["a"] == pytest.approx(short, abs=2e-3)
+    assert finals["c"][0] * finals["c"][1] == pytest.approx(
+        SIZE_BY_MAX_AREA_MULT * short[0] * short[1], rel=1e-2
+    )
+    assert finals["long"][0] >= long[0] - 1e-3 and finals["long"][1] >= long[1] - 1e-3
+    assert finals["long"][0] == pytest.approx(long[0], abs=2e-3)
 
 
 def test_ellipse_needs_more_room_than_a_box() -> None:

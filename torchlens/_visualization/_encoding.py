@@ -12,7 +12,7 @@ Wave 1 adds the SIZE channel (``size_by`` + ``scale=``): a scalar field,
 callable, or the closed ``"dims"`` shape token mapped to node width/height
 minimums (Graphviz ``fixedsize=false`` -- a label can never be truncated by
 an encoding, and the max clamp bounds encoded area at
-:data:`SIZE_BY_MAX_AREA_MULT` times the default node area). The shipped
+:data:`SIZE_BY_MAX_AREA_MULT` times the typical node area). The shipped
 multi-dim -> geometry mapping is the D4 DEFAULT (memo 3.2 C2, AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
 preserved) with the default ``scale="sqrt"`` -- D4 was UNRULED at this

@@ -620,12 +620,13 @@ expert contributions from routing indices alone.
   the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  value-only (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: one shared base
-  box for every encoded node, per dimension the max over nodes of (label need / growth),
-  where label need is the padded label box from DejaVu Sans metrics (`_label_width`) times
-  the shape's Graphviz fit factor (sqrt 2 for ellipses); area grows linearly to
-  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value; equal values give equal sizes
-  and Graphviz never grows a node past its encoded size); collapsed
+  render-IR pass `_encoding_size_layout.layout_encoded_sizes`: the base is the typical node
+  size, per dimension the median label need over encoded nodes, where label need is the padded
+  label box from DejaVu Sans metrics (`_label_width`) times the shape's Graphviz fit factor
+  (sqrt 2 for ellipses); area grows linearly from the base at the smallest value to
+  `SIZE_BY_MAX_AREA_MULT` (2.0) x the base at the top value, and each node is then grown per
+  dimension to its own label need, so labels always fit at the normal font and one long label
+  never inflates the others); collapsed
   boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified

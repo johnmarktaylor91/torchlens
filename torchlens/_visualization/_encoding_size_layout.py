@@ -1,19 +1,17 @@
 """Label-aware node geometry for the ``size_by`` channel (render-IR post-pass).
 
 Graphviz treats an encoded width/height as a MINIMUM (``fixedsize=false``):
-a node is never smaller than what its label needs, so a size computed without
-the labels lets the label, not the value, set the node's size. This pass makes
-the value the node's size: once every node's label is resolved, it estimates
-the node size each label needs (the label box, padded the way Graphviz pads
-it and widened for the node's shape, e.g. an ellipse needs sqrt(2) times its
-label box), then picks ONE base box for every size-encoded node, the smallest
-that still holds every label once each node is scaled by its value. Every
-node is that base scaled by its normalized value, so the largest-value node
-has ``SIZE_BY_MAX_AREA_MULT`` times the area of the smallest. Equal values
-give equal node sizes whatever the label lengths, and because the estimate
-never falls short of Graphviz's own measure, Graphviz never grows a node
-past its encoded size. The cost: one long label on a small-value node
-widens every encoded node, since the base must hold it.
+a node is never smaller than what its label needs. Once every node's label is
+resolved, this pass estimates the node size each label needs (the label box,
+padded the way Graphviz pads it and widened for the node's shape, e.g. an
+ellipse needs sqrt(2) times its label box). The typical node size of the
+drawing (the median need, per dimension) is the base: the smallest value draws
+at that normal size and the largest at ``SIZE_BY_MAX_AREA_MULT`` (2x) its
+area, with the default sqrt value scale in between. A node whose own text needs
+more room than its value's size draws at what its text needs, so labels keep
+the default font size and always fit, and one long label never inflates the
+other nodes. Equal values draw equal sizes whenever both labels fit the
+value's size.
 
 Leaf module by design: its only package import is the leaf ``_label_width``.
 """
@@ -37,11 +35,10 @@ from ._label_width import text_width_em
 #: flattens 512-vs-4096 and defeats the size motif.
 SIZE_SCALE_VOCABULARY = ("sqrt", "linear")
 
-#: Max clamp in value space: encoded node area never exceeds this multiple of
-#: the default node area. PROVISIONAL value per the design memo (4.0), to be
-#: tuned once at a rendered-candidates review; the min clamp is free
-#: (fixedsize=false -- the box only ever GROWS from the label's natural size).
-SIZE_BY_MAX_AREA_MULT = 4.0
+#: Max clamp in value space: the largest value's node has this multiple of the
+#: typical node's area (the smallest value's node has the typical area). 2.0 keeps
+#: a sized drawing near its plain size, so labels stay readable at page width.
+SIZE_BY_MAX_AREA_MULT = 2.0
 
 #: Graphviz's own default node geometry in inches (dot default width=0.75,
 #: height=0.5). Emitted sizes are MINIMUMS scaled from this baseline with the
@@ -179,16 +176,30 @@ def growth_factor(fraction: float, max_area_mult: float) -> float:
     return math.sqrt(1.0 + fraction * (max_area_mult - 1.0))
 
 
-def shared_base(
-    needs: dict[str, tuple[float, float]], fractions: dict[str, float], max_area_mult: float
-) -> tuple[float, float]:
-    """Return the smallest base box that holds every label once scaled by its value."""
+def typical_base(needs: dict[str, tuple[float, float]]) -> tuple[float, float]:
+    """Return the drawing's typical node size: the median label need, per dimension."""
 
-    growths = {key: growth_factor(fractions[key], max_area_mult) for key in needs}
-    return (
-        max(need[0] / growths[key] for key, need in needs.items()),
-        max(need[1] / growths[key] for key, need in needs.items()),
-    )
+    widths = sorted(need[0] for need in needs.values())
+    heights = sorted(need[1] for need in needs.values())
+    return (_median(widths), _median(heights))
+
+
+def _median(ordered: list[float]) -> float:
+    """Return the median of an already sorted, non-empty list."""
+
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
+def fitted_size(
+    base: tuple[float, float], need: tuple[float, float], fraction: float, max_area_mult: float
+) -> tuple[float, float]:
+    """Return the value-scaled base, grown per dimension to what the node's text needs."""
+
+    scaled = scaled_size(base, fraction, max_area_mult)
+    return (max(scaled[0], round(need[0], 3)), max(scaled[1], round(need[1], 3)))
 
 
 def scaled_size(
@@ -284,9 +295,11 @@ def layout_encoded_sizes(nodes: tuple[Any, ...], state: Any, context: Any) -> tu
         key: node_size_needed(estimate_label_box(lines, font_pt), shapes[key])
         for key, lines in labels.items()
     }
-    base = shared_base(needs, state.size_fractions, SIZE_BY_MAX_AREA_MULT)
-    for key in needs:
-        state.final_sizes[key] = scaled_size(base, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT)
+    base = typical_base(needs)
+    for key, need in needs.items():
+        state.final_sizes[key] = fitted_size(
+            base, need, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT
+        )
     out = []
     for node in nodes:
         key = state.unit_keys.get(node.name)

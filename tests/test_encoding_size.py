@@ -33,6 +33,7 @@ from torchlens._visualization._encoding import (
     resolve_size_by,
     resolve_size_scale,
 )
+from torchlens._visualization._encoding_size_layout import SIZE_BY_MAX_AREA_MULT
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -399,15 +400,24 @@ def _longest_row(label: str) -> int:
     return max(len(re.sub(r"<[^>]*>", "", row)) for row in label.split("</TR>"))
 
 
-@pytest.mark.skipif(shutil.which("dot") is None, reason="needs the Graphviz dot binary")
-def test_equal_values_draw_equal_sizes_whatever_the_label(
-    mlp_log: tl.Trace, tmp_path: Path
-) -> None:
-    """The encoded value alone sets a node's size; the label must not widen it.
+def _bounding_area(dot: str) -> float:
+    """Lay ``dot`` out with Graphviz; return its bounding-box area in square points."""
 
-    A short-label relu and a long-label linear (its params row) share one
-    encoded value; after Graphviz lays them out they have the same width and
-    height, so Graphviz grew neither past its encoded size.
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input=dot, capture_output=True, text=True, check=True
+    ).stdout
+    x0, y0, x1, y1 = (float(part) for part in json.loads(layout)["bb"].split(","))
+    return (x1 - x0) * (y1 - y0)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="needs the Graphviz dot binary")
+def test_sized_drawing_stays_near_its_plain_size(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    """size_by grows a node to at most twice the typical node's area, so the drawing
+    stays near its plain size and its labels stay readable at page width.
+
+    A short-label relu and a long-label linear (its params row) share the smallest
+    value: the relu draws at its encoded size and the linear at what its text
+    needs, and the long label never widens the relu.
     """
 
     labels = [op.label.split(":")[0] for op in mlp_log.ops]
@@ -417,17 +427,18 @@ def test_equal_values_draw_equal_sizes_whatever_the_label(
     def value(node: Any) -> float:
         return 1.0 if node.label.split(":")[0] in (short, long) else 3.0
 
-    dot = _draw(mlp_log, tmp_path, size_by=value)
-    nodes = _laid_out_nodes(dot)
+    plain = _draw(mlp_log, tmp_path / "plain")
+    sized = _draw(mlp_log, tmp_path / "sized", size_by=value)
+    assert _bounding_area(sized) <= SIZE_BY_MAX_AREA_MULT * 1.25 * _bounding_area(plain)
+    nodes = _laid_out_nodes(sized)
     short_node = next(v for name, v in nodes.items() if name.startswith(short))
     long_node = next(v for name, v in nodes.items() if name.startswith(long))
-    # The two labels genuinely differ: the linear's longest row is far longer.
     assert _longest_row(long_node[2]) >= 2 * _longest_row(short_node[2])
-    assert short_node[:2] == long_node[:2]
-    # Graphviz lays a node out at its encoded size rounded up to whole points.
     finals = {key.split(":")[0]: size for key, size in _state(mlp_log).final_sizes.items()}
-    assert finals[short] == finals[long]
+    # Graphviz lays a node out at its encoded size rounded up to whole points.
     assert short_node[:2] == pytest.approx(finals[short], abs=1.0 / 72.0)
+    assert long_node[:2] == pytest.approx(finals[long], abs=1.0 / 72.0)
+    assert finals[long][0] > finals[short][0]
 
 
 # ---------------------------------------------------------------------------
