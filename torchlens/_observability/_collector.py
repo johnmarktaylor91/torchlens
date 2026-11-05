@@ -254,7 +254,7 @@ class HistoryCollector:
                 raise WatchPlanError(
                     f"stream {stream!r} is not collectable by the Route-A "
                     f"module-tier collector (streams: {ROUTE_A_STREAMS}). "
-                    "activation_grad rides the observer seam (backward "
+                    "activation_grad rides the F24 observer seam (backward "
                     "hooks), not this collector.",
                     code="watch_plan_invalid",
                     stream=stream,

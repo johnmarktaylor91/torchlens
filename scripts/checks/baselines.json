@@ -5,12 +5,12 @@
     "largest_scc": 457
   },
   "id_lint": {
-    "total": 257,
+    "total": 258,
     "walk_ruling": 1,
     "work_item": 0,
     "review_round": 36,
     "finding": 17,
-    "sprint_feature": 78,
+    "sprint_feature": 79,
     "memo_item": 125
   }
 }
