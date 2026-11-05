@@ -236,7 +236,7 @@ def test_accumulate_grad_absence_uses_name_matching(monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize(
     ("helper_name", "flag_name", "expected"),
     [
-        ("get_functorch_maybe_current_level", "HAS_FUNCTORCH_LEVEL_API", None),
+        ("get_functorch_transform_probe", "HAS_FUNCTORCH_INTERPRETER_STACK_API", None),
         ("get_functorch_wrapped_tensor_checker", "HAS_FUNCTORCH_WRAPPED_TENSOR_API", None),
         ("get_fx_graph_module_type", "HAS_FX_GRAPH_MODULE", None),
     ],
@@ -266,8 +266,11 @@ def test_functorch_transform_probe_falls_back_to_the_interpreter_stack(
     monkeypatch.setitem(
         tc._ATTRIBUTE_PROBES, "HAS_FUNCTORCH_LEVEL_API", ("torch:_C._functorch.absent_level_api",)
     )
-    monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
-    probe = tc.get_functorch_transform_probe()
+    monkeypatch.delenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", raising=False)
+    with warnings.catch_warnings():
+        # The fallback is no degradation: an absent level API alone stays silent.
+        warnings.simplefilter("error", tc.TorchCapabilityWarning)
+        probe = tc.get_functorch_transform_probe()
     assert probe is not None
     assert probe() is None
     inside: list[object] = []
@@ -280,7 +283,6 @@ def test_functorch_transform_probe_falls_back_to_the_interpreter_stack(
 
     torch.func.vmap(row_fn)(torch.ones(2, 3))
     assert inside and all(level is not None for level in inside)
-    assert tc.HAS_FUNCTORCH_LEVEL_API is False
     assert tc.HAS_FUNCTORCH_INTERPRETER_STACK_API is True
 
 

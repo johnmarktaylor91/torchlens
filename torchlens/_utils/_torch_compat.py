@@ -191,7 +191,6 @@ __all__ = [
     "get_dynamo_compile_counters",
     "get_dynamo_optimized_module_type",
     "get_dynamo_explain",
-    "get_functorch_maybe_current_level",
     "get_functorch_transform_probe",
     "get_functorch_wrapped_tensor_checker",
     "get_fsdp_wrapper_type",
@@ -2135,27 +2134,14 @@ def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
-def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
-    """Return functorch transform-level introspection when available.
-
-    Returns
-    -------
-    Callable[[], Any] | None
-        ``torch._C._functorch.maybe_current_level`` or ``None`` when absent.
-    """
-
-    return _resolve_or_mark_missing(
-        "HAS_FUNCTORCH_LEVEL_API",
-        "functorch transform-boundary detection falls back to the interpreter stack",
-    )
-
-
 def get_functorch_transform_probe() -> Callable[[], Any] | None:
     """Return a zero-argument probe that is not ``None`` inside a functorch transform.
 
     ``torch._C._functorch.maybe_current_level`` when present; otherwise (torch
     2.1 and 2.2) ``torch._C._functorch.peek_interpreter_stack``, which reads the
-    same dynamic-layer stack and returns ``None`` when it is empty.
+    same dynamic-layer stack and returns ``None`` when it is empty. An absent level
+    API alone is no degradation (``HAS_FUNCTORCH_LEVEL_API`` still reads False from
+    its import-time probe), so only the absence of both marks a capability missing.
 
     Returns
     -------
@@ -2163,7 +2149,7 @@ def get_functorch_transform_probe() -> Callable[[], Any] | None:
         The probe, or ``None`` when neither surface exists (detection disabled).
     """
 
-    level = get_functorch_maybe_current_level()
+    level = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_FUNCTORCH_LEVEL_API"][0])
     if level is not None:
         return level
     return _resolve_or_mark_missing(
