@@ -23,7 +23,10 @@ only on the grid. An all-zero input makes every term zero for every finite grid.
 
 ``conv_zero_input_output_is_bias``: a convolution of an all-zero input is a sum of products
 with a zero factor, so the output is exactly the bias (zero without one) for every finite
-weight; a finite saved output equal to the broadcast bias proves it on this capture.
+weight; a finite saved output equal to the broadcast bias proves it on this capture. A
+transposed convolution (``conv_transpose1d/2d/3d``) scatters each input element times the
+weight into the output and adds the bias, the same sum of products with an input factor,
+and keeps the bias at ``args[2]`` and the output channels at dim ``-(spatial dims + 1)``.
 
 ``or_absorbing_true_operand``: ``a | b`` is True wherever ``b`` is True, so a bool operand that
 is all True fixes the output to all True whatever the other operand holds.
@@ -51,8 +54,15 @@ from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 _GRID_SAMPLER_FUNC_NAMES = frozenset(
     {"grid_sampler", "grid_sample", "grid_sampler_2d", "grid_sampler_3d"}
 )
-#: Convolution spellings and their number of spatial dims.
-_CONV_SPATIAL_DIMS = {"conv1d": 1, "conv2d": 2, "conv3d": 3}
+#: Convolution spellings (direct and transposed) and their number of spatial dims.
+_CONV_SPATIAL_DIMS = {
+    "conv1d": 1,
+    "conv2d": 2,
+    "conv3d": 3,
+    "conv_transpose1d": 1,
+    "conv_transpose2d": 2,
+    "conv_transpose3d": 3,
+}
 _OR_FUNC_NAMES = frozenset({"__or__", "__ror__", "bitwise_or", "logical_or"})
 #: pow spellings -> (base slot, exponent slot); ``x.__rpow__(b)`` computes ``b ** x``.
 _POW_SLOTS = {"pow": (0, 1), "__pow__": (0, 1), "__rpow__": (1, 0)}
