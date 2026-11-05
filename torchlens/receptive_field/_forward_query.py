@@ -10,7 +10,14 @@ from typing import TYPE_CHECKING, Any, cast
 
 from . import _engine
 from ._engine_forward import _ProjectiveFieldSolution
-from ._engine_geometry import _Affine, _as_tuple, _Mapped, _select_full_axes, _transpose_mapped
+from ._engine_geometry import (
+    _Affine,
+    _as_tuple,
+    _has_no_units,
+    _Mapped,
+    _select_full_axes,
+    _transpose_mapped,
+)
 from ._errors import ReceptiveFieldError
 from ._path import _select_target_descriptor, forward_index_image
 from ._query import (
@@ -188,7 +195,9 @@ def _walk_target_body(
     children = tuple(
         by_reference[label]
         for label in op.children
-        if label in by_reference and by_reference[label].label in active
+        if label in by_reference
+        and by_reference[label].label in active
+        and not _has_no_units(by_reference[label])
     )
     for child in children:
         result, rule_name = _engine._rule_result(child)
