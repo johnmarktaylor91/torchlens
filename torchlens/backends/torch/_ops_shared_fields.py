@@ -49,6 +49,9 @@ from .tensor_tracking import (
 
 # Transform-boundary config attribute; its builder kwargs are snapshotted per op.
 _TRANSFORM_CONFIG = "__tl_transform_config__"
+# Marks "no transform config on this function"; most ops have none, and the fresh
+# empty dict they record needs no snapshot.
+_NO_CONFIG = object()
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -154,12 +157,11 @@ def _build_shared_fields_dict(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    # Separate tensor args (graph edges) from non-tensor args (metadata, equivalence
-    # hashing); the latter are op-time snapshots, safe from later caller mutation.
+    # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
-    parent_layer_labels = get_live_label_list(
-        arg_tensors, self.capture_events.live_index.by_raw_label
-    )
+    # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
+    live_labels = get_live_label_list(arg_tensors, self.capture_events.live_index.by_raw_label)
+    parent_layer_labels = list(dict.fromkeys(live_labels))
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
@@ -231,7 +233,8 @@ def _build_shared_fields_dict(
         func_name if is_transform else None
     )
     fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
-    fields_dict["transform_config"] = snapshot_mutable_arg(getattr(func, _TRANSFORM_CONFIG, {}))
+    config = getattr(func, _TRANSFORM_CONFIG, _NO_CONFIG)
+    fields_dict["transform_config"] = {} if config is _NO_CONFIG else snapshot_mutable_arg(config)
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
