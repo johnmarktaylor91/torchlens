@@ -1236,7 +1236,7 @@ torchlens/receptive_field/_engine_descriptor.py::_descriptor	64
 torchlens/receptive_field/_engine_descriptor.py::_public_axis	69
 torchlens/receptive_field/_engine_forward.py	816
 torchlens/receptive_field/_engine_forward.py::_degrade_for_selected_axes	61
-torchlens/receptive_field/_engine_forward.py::_solve_projective_uncached	82
+torchlens/receptive_field/_engine_forward.py::_solve_projective_uncached	81
 torchlens/receptive_field/_engine_forward.py::_transpose_axis_map	68
 torchlens/receptive_field/_engine_forward.py::_transpose_full	94
 torchlens/receptive_field/_engine_forward.py::_transpose_passthrough	93

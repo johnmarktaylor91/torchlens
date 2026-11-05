@@ -30,6 +30,7 @@ from ._engine_geometry import (
     _compose,
     _Dissolved,
     _Full,
+    _has_no_units,
     _identity_map,
     _InputState,
     _Mapped,
@@ -150,8 +151,7 @@ def _solve_projective_uncached(
     states_by_op: dict[str, dict[str, _InputState]] = {}
 
     for op in reversed(_topological_operations(operations, by_reference)):
-        # An op with no units (a zero-length axis) carries no value onward: it
-        # seeds no geometry as a target and relays none to its parents.
+        # An op with no units seeds no geometry as a target and relays none.
         if op.label not in active_labels or _has_no_units(op):
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
@@ -211,16 +211,6 @@ def _solve_projective_uncached(
         per_op=MappingProxyType(per_op),
         states=MappingProxyType(flattened_states),
     )
-
-
-def _has_no_units(op: Op) -> bool:
-    """Return whether ``op``'s captured tensor has a zero-length axis.
-
-    Such a tensor holds no units, so no unit of a parent reaches a target
-    through it. A shapeless op (``shape is None``) is not unit-less.
-    """
-
-    return op.shape is not None and 0 in tuple(op.shape)
 
 
 def _seed_target(op: Op) -> _InputState:

@@ -9,8 +9,15 @@ from math import ceil, floor
 from typing import TYPE_CHECKING, Any, cast
 
 from . import _engine
-from ._engine_forward import _has_no_units, _ProjectiveFieldSolution
-from ._engine_geometry import _Affine, _as_tuple, _Mapped, _select_full_axes, _transpose_mapped
+from ._engine_forward import _ProjectiveFieldSolution
+from ._engine_geometry import (
+    _Affine,
+    _as_tuple,
+    _has_no_units,
+    _Mapped,
+    _select_full_axes,
+    _transpose_mapped,
+)
 from ._errors import ReceptiveFieldError
 from ._path import _select_target_descriptor, forward_index_image
 from ._query import (
