@@ -19,7 +19,6 @@ from .._entry_refusals import (
     refuse_if_nonpositive_every,
 )
 from .._utils.env_flags import closed_bool_env
-from ..bundle import Bundle
 
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
@@ -216,6 +215,9 @@ class Session:
         Any
             ``torchlens.Bundle`` keyed by invocation name.
         """
+
+        # deferred: startup cost (a plain tl.trace reaches this package and must not load bundle)
+        from ..bundle import Bundle
 
         return Bundle(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}

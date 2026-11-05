@@ -16,7 +16,6 @@ from typing import Any
 import torch
 from torch import nn
 
-import torchlens as tl
 import torchlens.bridge.transformers as hf
 
 # ---------------------------------------------------------------------------
@@ -171,8 +170,11 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
         def __call__(self, text: Any, **kwargs: Any) -> Any:
             return {"input_ids": text}
 
+    import torchlens._user_funcs as user_funcs
+
+    # trace_text captures through the capture door that tl.trace names.
     monkeypatch.setattr(
-        tl, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
+        user_funcs, "trace", lambda *a, **k: SimpleNamespace(_provenance_input_preprocessor=None)
     )
     log = hf.trace_text(Model(), "hello", tokenizer=ExplicitCustomTokenizer())
     record = log._provenance_input_preprocessor

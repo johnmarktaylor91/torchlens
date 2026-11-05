@@ -46,7 +46,7 @@ from typing import Any
 
 import torch
 
-from ..intervention.edge_substitution import _recompute_with_substitution
+from ..intervention import edge_substitution as _edge_substitution
 from ._errors import refuse
 
 __all__ = ["patch_edges", "receiver_selection"]
@@ -143,7 +143,7 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     values: list[torch.Tensor] = [attention[0][1]] * len(attention)
     for (_input, _norm, home), indices in groups.items():
         receiver = attention[indices[0]][0]
-        recomputed = _recompute_with_substitution(
+        recomputed = _edge_substitution._recompute_with_substitution(  # patch seam
             trace, _input_edge_record(trace, receiver), [attention[i][1] for i in indices], home
         )
         reason = recomputed if isinstance(recomputed, str) else "it is not a tensor"

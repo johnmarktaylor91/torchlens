@@ -47,8 +47,6 @@ from collections.abc import Callable, Iterator, Sequence
 from functools import partial
 from typing import Any, Literal, cast
 
-from torchlens._data_classes.grad_fn import GradFn
-
 from .._selection.errors import (
     LiveModeLabelError,
     SelectorCapabilityError,
@@ -1026,6 +1024,8 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
 
 def _is_grad_fn(subject: Any) -> bool:
     """Return whether a site subject is a backward ``GradFn`` log."""
+
+    from torchlens._data_classes.grad_fn import GradFn  # deferred: cycle
 
     return isinstance(subject, GradFn)
 
