@@ -418,10 +418,10 @@ def _crafted_new_bundle(tmp_path: Path, kwargs: dict[str, Any]) -> tuple[Path, t
 
     trace, reference = _replay_capture()
     target = next(op for op in trace._layer_list if op.func_name == "relu")
-    target.func_name = "new"
-    target.func_id = FunctionRegistryKey("torch.Tensor", "new", "method")
-    target.saved_kwargs = dict(kwargs)
-    target.non_tensor_kwargs = dict(kwargs)
+    target._internal_set("func_name", "new")
+    target._internal_set("func_id", FunctionRegistryKey("torch.Tensor", "new", "method"))
+    target._internal_set("saved_kwargs", dict(kwargs))
+    target._internal_set("non_tensor_kwargs", dict(kwargs))
     path = tmp_path / "crafted.tlz"
     trace.save(path, level="executable_with_callables")
     return path, reference
@@ -491,7 +491,7 @@ def test_replay_execution_refuses_a_pointer_keyword() -> None:
     calls: list[Any] = []
     op.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
     with pytest.raises(RunPreconditionError) as excinfo:
-        execute_replay_func(op, {"args": list(op.saved_args), "kwargs": {"cdata": 0}}, [])
+        execute_replay_func(op, {"args": list(op.call.saved_args), "kwargs": {"cdata": 0}}, [])
     assert excinfo.value.fields["code"] == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
     assert calls == []
 
