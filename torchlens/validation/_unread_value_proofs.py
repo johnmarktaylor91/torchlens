@@ -132,7 +132,7 @@ def _uniform_finite_value(value: Any) -> float | None:
         value = flat[0].item()
     if isinstance(value, complex):
         return None
-    scalar = float(value)  # type: ignore[arg-type]
+    scalar = float(value)
     return scalar if math.isfinite(scalar) else None
 
 

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1731 modules, 702264 lines, 0 modules without a docstring.
+85 packages, 1731 modules, 702268 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 85 | 34413 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 85 | 34417 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -2318,7 +2318,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (85 modules, 34413 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (85 modules, 34417 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2405,7 +2405,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
 | `_structural_slot_checks` | Pre-perturbation checks for argument slots whose value is pinned by structure. | 173 |
 | `_trace_checks` | Trace check functions reached from the records through ''_data_classes._doors.validation''. | 184 |
-| `_unread_value_proofs` | Posthoc value proofs for writes that cannot change the output and unread arguments. | 352 |
+| `_unread_value_proofs` | Posthoc value proofs for writes that cannot change the output and unread arguments. | 356 |
 | `_value_predicates` | Saved-value predicates used by the posthoc value-proof decisions. | 197 |
 
 ### `torchlens.viz`
