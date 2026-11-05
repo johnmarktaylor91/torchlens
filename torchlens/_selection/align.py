@@ -260,7 +260,7 @@ def align_resolved_selection(resolved: Selection, target: Any) -> Selection:
         )
         target_address = (op.layer_label, getattr(op, "pass_number", 1) or 1)
         if target_address != entry.key:
-            # Site-key-first rebind under label drift (C03/B4): the aligned
+            # Site-key-first rebind under label drift: the aligned
             # entry addresses the TARGET op's same-policy address; the
             # provenance line above already discloses the cross-run origin.
             entries.append(dataclasses.replace(entry, key=target_address, provenance=provenance))

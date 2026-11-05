@@ -63,20 +63,20 @@ def _path_faithfulness(
     if run_truncated:
         # L4 2.4 positive-claim bar: a truncated (until=) run may never settle a
         # positive claim. The ceiling is an input to the verdict derivation
-        # UPSTREAM of attestation (the r35-I3 extension point), so VERIFIED is
+        # UPSTREAM of attestation (the extension point), so VERIFIED is
         # unreachable and attestation derives NOT_APPLICABLE via the existing
         # lattice rule before a single archive byte is read. Contradictions the
         # executed region DOES evidence still degrade normally: the failed-check
         # arm above settles DIVERGED first (the cap is a ceiling, never a floor).
         return PathFaithfulness.UNVERIFIABLE, None
-    # r71 A3: the VERIFIED gate consults ONLY the parser-derived completeness FLOOR
+    # The VERIFIED gate consults ONLY the parser-derived completeness FLOOR
     # (re-derived here from the typed gap ledger by the ONE derivation function).
     # The persisted summary is a redundant assertion checked equal at parse; reading
     # it for a verdict is forbidden (source-scan tripwire).
     if derived_witness_completeness(descriptor.coverage_gaps) is not WitnessCompleteness.COMPLETE:
         return PathFaithfulness.UNVERIFIABLE, None
     if input_alias_unresolved:
-        # r35 decision D: the three-valued alias engine could prove neither
+        # decision D: the three-valued alias engine could prove neither
         # overlap nor disjointness for a same-storage input pair. Unknown is not
         # an observed contradiction (never DIVERGED by assumption) and not a
         # proof of equivalence (never VERIFIED): the honest ceiling is
@@ -108,7 +108,7 @@ def _path_faithfulness(
         # so the honest ceiling is UNVERIFIABLE, never a false VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     if nondeterministic_control_source:
-        # r53 hon_2: a recorded control fact (scalar-bool, loop predicate, or a
+        # a recorded control fact (scalar-bool, loop predicate, or a
         # tensor->host escape source) derives from surviving uninitialized-memory
         # taint -- the taken branch is a function of allocator garbage no seed
         # governs, so NO replay is reproducible. Exact parity with the seeded
@@ -127,7 +127,7 @@ def _path_faithfulness(
         # honest ceiling is UNVERIFIABLE, never a silently wrong VERIFIED.
         return PathFaithfulness.UNVERIFIABLE, None
     if input_derived_layout_stale:
-        # r73 F1: the capture read a layout predicate on an activation ROOTED at a
+        # The capture read a layout predicate on an activation ROOTED at a
         # model input, and this run's input carries different strides than capture
         # (channels_last twin, transposed-then-copied layout, ...). Memory format
         # propagates through elementwise ops, so the recorded taken path may not be
@@ -155,15 +155,15 @@ def _run_report(
     state_carried: bool = False,
     truncation: RunTruncation | None = None,
 ) -> RunReport:
-    """Build the settled run-report surface -- the ONE report finalizer (r37 corr2-5).
+    """Build the settled run-report surface -- the ONE report finalizer.
 
     EVERY provider (loaded sparse AND live refresh) routes its report through this
     constructor: ``poisoned`` is DERIVED solely from ``path_faithfulness is not
-    VERIFIED`` (no caller Boolean exists), and the r35 I3 tripwire-on-the-tripwire
+    VERIFIED`` (no caller Boolean exists), and the I3 tripwire-on-the-tripwire
     asserts ``attested`` structurally implies a verified, unpoisoned path, so no
     provider can emit an internally contradictory report. Direct ``RunReport(``
     construction outside this finalizer is forbidden (source-scan meta-test).
-    ``nondeterministic_sources`` (r53 F4) is normalized (sorted, deduplicated)
+    ``nondeterministic_sources`` is normalized (sorted, deduplicated)
     and closed-vocabulary-checked HERE and only here.
     """
 
@@ -240,7 +240,7 @@ def _numeric_attestation_check(
 ) -> tuple[NumericAttestationStatus, ContractCheck | None]:
     """Compare recomputed saved slots with the independent activation archive.
 
-    r35 I3 (corr2_7): eligibility DERIVES from the settled provisional path
+    Eligibility DERIVES from the settled provisional path
     verdict -- computed from every non-numeric contract check and every static/
     dynamic ceiling, including the fork's inherited monotonic mark -- instead of
     a parallel Boolean flag list. Any verdict that is not ``verified`` returns
@@ -302,7 +302,7 @@ def _numeric_attestation_check(
         # are only meaningful at that journal point, so skip byte-exact activation attestation
         # rather than raising a false mismatch on a valid replay. A repeated buffer slot whose
         # archived bytes EQUAL the capture state (a read-only running stat under eval) is stable,
-        # not journaled, and stays byte-attestable (r29-C4, codex-F2).
+        # not journaled, and stays byte-attestable.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if _has_out_mutated_activation_member(descriptor, raw_members):
         # An archived activation that later became an ``out=`` destination was
@@ -311,7 +311,7 @@ def _numeric_attestation_check(
         # divergence on an otherwise faithful original-input replay.
         return NumericAttestationStatus.NOT_APPLICABLE, None
     if raw_members and _lacks_recorded_original_input_eligibility(descriptor, layer):
-        # r6 H2 (disclosure half only -- the status stays NOT_APPLICABLE by design).
+        # H2 (disclosure half only -- the status stays NOT_APPLICABLE by design).
         # A ``save=`` selective capture that did not select the model input records ZERO
         # ``original_input_digests`` / ``input_fingerprints``, so attestation can never
         # apply no matter what the caller passes to ``.run()``. Left unnamed that is
@@ -524,7 +524,7 @@ def _is_benign_layout_nonreproducible(
     True only when BOTH the recomputed and archived values are real tensors, the
     producing op is a known layout/reduction-order-sensitive BLAS kernel, and the
     recomputed value sits within a tight ULP band of the archive. Used solely as
-    the F1 fallback: such a slot reports ``not_applicable`` instead of raising,
+    the fallback: such a slot reports ``not_applicable`` instead of raising,
     because a byte-faithful replay is genuinely infeasible from the no-grad run
     path. Every other mismatch (non-BLAS op, larger-than-ULP divergence, or a
     non-tensor slot) still raises ``replay_value_mismatch``.

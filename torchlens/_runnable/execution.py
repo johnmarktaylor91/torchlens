@@ -122,7 +122,7 @@ _MODEL_INPUT_METADATA_FACT_KEY = "model_input_metadata"
 
 _INPUT_DERIVED_LAYOUT_FACT_NAME = "derived_layout_read"
 """Synthetic envelope fact: a layout-trio read on an activation whose value DAG roots at the
-owning input site (r73 F1). Carries the leaf's capture-time stride tuple. Consumed by
+owning input site. Carries the leaf's capture-time stride tuple. Consumed by
 :func:`_input_derived_layout_stale` as a run-time UNVERIFIABLE ceiling -- NEVER compared in
 :func:`_input_metadata_contract_checks`: a changed input layout does not PROVE the derived
 intermediate's layout differs (a ``reshape`` in between can canonicalize it), so the honest
@@ -132,7 +132,7 @@ Producer mirror: ``torchlens.backends.torch.completeness_witness.INPUT_DERIVED_L
 
 _VIEW_OP_QUALNAMES = frozenset(
     {
-        # Storage-sharing view ops whose output aliases an input tensor's storage (r29-C3, F2).
+        # Storage-sharing view ops whose output aliases an input tensor's storage.
         # Deliberately OVER-broad: some entries here also cover copy variants -- that only
         # widens the fail-closed gate, which fires ONLY when runtime inputs actually alias, so
         # a false positive here can never over-trigger an ordinary (non-aliased-input) run.
@@ -186,15 +186,15 @@ _VIEW_OP_QUALNAMES = frozenset(
         "values",
     }
 )
-"""Torch op qualnames whose output can SHARE STORAGE with a tensor input (r29-C3, F2)."""
+"""Torch op qualnames whose output can SHARE STORAGE with a tensor input."""
 
 
-# r37 INV-2: the alias/overlap proof engine lives in ``utils.tensor_utils`` --
+# the alias/overlap proof engine lives in ``utils.tensor_utils`` --
 # absolute, device-scoped byte intervals, three-valued relation, pure-integer
 # enumeration. The former local implementation keyed "same memory" on
 # ``untyped_storage().data_ptr()`` EQUALITY, which mis-proved disjointness for
 # overlapping views of one external buffer (``torch.from_numpy(arr[:6])`` vs
-# ``arr[2:8]`` -- distinct torch storages, genuinely shared host memory; hon1_1).
+# ``arr[2:8]`` -- distinct torch storages, genuinely shared host memory).
 # No local reimplementation or pointer-equality shortcut may reappear here.
 
 
@@ -212,10 +212,10 @@ view that changes the executed alignment class is caught.
 """
 
 
-# r55 C3 -> r57 C3 (free_1 HIGH / sec_1 MED / corr_2 HIGH): op-agnostic
+# C3 -> r57 C3 (free_1 HIGH / sec_1 MED / corr_2 HIGH): op-agnostic
 # allocation-bomb preflight, with the size-driving-op ALLOWLIST DELETED.
 #
-# The op-execution literal-argument path is the seam r53 free_1 missed: a hostile
+# The op-execution literal-argument path is the seam free_1 missed: a hostile
 # ``.tlspec`` can edit one plaintext ``manifest.json`` numeric literal so a
 # taken-path call (``torch.zeros(10**12)``/``F.pad(x, [10**12])``/
 # ``hann_window(10**11)``/``interpolate(scale_factor=1e12)``) drives a
@@ -226,7 +226,7 @@ view that changes the executed alignment class is caught.
 # left honest/small), and per-arg ``.to("meta")`` never forces a *factory* op (no
 # tensor operand) onto meta.
 #
-# r55 gated the projection behind a hand-maintained ``_SIZE_DRIVING_QUALNAME_TAILS``
+# gated the projection behind a hand-maintained ``_SIZE_DRIVING_QUALNAME_TAILS``
 # allowlist; that allowlist re-opened the class at every op it forgot (r56 found
 # ``pad``/``constant_pad_nd``/``fold``/``*_window``/``tril_indices``/``one_hot``
 # missing, plus a float ``interpolate(scale_factor=...)`` slipping the integer-only
@@ -243,7 +243,7 @@ view that changes the executed alignment class is caught.
 
 
 class _ProjectionCountExceeded(Exception):
-    """Private sentinel: a projection realized more fake outputs than the ceiling (r59).
+    """Private sentinel: a projection realized more fake outputs than the ceiling.
 
     Raised from ``_CountBoundedFakeTensorMode.__torch_dispatch__`` DURING fanout
     construction (before the full fake tree exists), so a huge output-count literal can
@@ -260,7 +260,7 @@ class _UnreadableProjectedOutput(Exception):
     """Private sentinel: a projected output's allocation size could not be read.
 
     Raised from ``_new_allocation_bytes`` when ``numel()``/``element_size()``/
-    ``device`` raises on a projected output tensor (grind-r5 b7 R22, sol
+    ``device`` raises on a projected output tensor (sol
     HIGH): the old ``except Exception: continue`` charged the unknown
     allocation as ZERO bytes, contradicting the helper's own fail-closed
     contract ("an output whose storage identity cannot be read is CHARGED")
@@ -332,7 +332,7 @@ _MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
 
 
 _MAX_DECODE_NESTING_DEPTH = 200
-"""Defensive run-side literal-decode nesting ceiling (r55 C4).
+"""Defensive run-side literal-decode nesting ceiling.
 
 W3's load-side parser (``_io/runnable_load._parse_literal``) already bounds
 descriptor nesting to the SAME ceiling at parse, so a legitimately-loaded

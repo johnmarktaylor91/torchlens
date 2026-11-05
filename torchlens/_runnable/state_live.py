@@ -135,7 +135,7 @@ def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any 
     calls leave the model bit-identical with ``a is b`` alias semantics intact.
     Raises :class:`LiveStateRestoreFailure` (original exception chained) on the
     first failed restore; the caller owns the state-compromised consequence
-    (L4 5.4).
+    .
 
     Only a slot whose bytes differ from its snapshot is written back (see
     :func:`_write_back_slot`). An

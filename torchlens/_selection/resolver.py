@@ -515,7 +515,7 @@ def find_sites(
 
 
 def _guard_episode_step_query(log: Trace, selector: Any) -> None:
-    """Door guard for post-hoc episode-step queries (lane F42).
+    """Door guard for post-hoc episode-step queries.
 
     A step-qualified selector resolving against a product with no step axis
     would match NOTHING silently -- the inverse of the fires-at-every-step

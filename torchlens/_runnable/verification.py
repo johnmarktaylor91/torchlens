@@ -228,7 +228,7 @@ def _attestation_inputs_match(
 ) -> bool:
     """Return whether the run's inputs are LOGICALLY and PHYSICALLY original.
 
-    r35 hon1_3 (H-a): eligibility is layout-strict. Alongside the logical byte
+    (H-a): eligibility is layout-strict. Alongside the logical byte
     digests, every recorded ``InputAttestationFingerprint`` must equal the
     fingerprint of the value that actually seeds execution -- sizes, strides,
     storage offset, memory-format flags, conj/neg bits, device, subclass class,
@@ -268,7 +268,7 @@ def _attestation_state_matches(
 ) -> bool:
     """Return whether runtime state is capture-equivalent rather than random.
 
-    r35 corr2_5: eligibility is PARTITIONED by persistence. PERSISTENT slots
+    eligibility is PARTITIONED by persistence. PERSISTENT slots
     (the canonical ``state_dict``) compare against the activation layer's
     ``capture_state_digests`` (which by construction contain only canonical
     entries). USED NON-PERSISTENT buffer slots are separately required to
@@ -366,7 +366,7 @@ def _contract_check(
 
 
 def _first_failed_contract(checks: Sequence[ContractCheck]) -> ContractCheck | None:
-    """Return the first failed contract check, or ``None`` when all passed (r39 corr2_4)."""
+    """Return the first failed contract check, or ``None`` when all passed."""
 
     return next((check for check in checks if not check.passed), None)
 
@@ -377,8 +377,7 @@ def _raise_failed_contract_as_divergence(
     """Roll back and raise a first-failed contract check as a typed ``PathDivergenceError``.
 
     The single typed-divergence raise shared by hard admission (:func:`_raise_first_divergence`),
-    the call loop (r39 corr2_4), and the live provider's classify-at-native-failure fold (r41
-    hon1_3): a call that throws AFTER an input contract check already failed is INPUT
+    the call loop, and the live provider's classify-at-native-failure fold: a call that throws AFTER an input contract check already failed is INPUT
     DIVERGENCE, not resolved-callable ``RuntimeSignatureDriftError``, so it must surface as
     ``PathDivergenceError`` carrying that first failed check under either policy. ``cause``
     (live provider) chains the native error as ``__cause__`` so the underlying torch failure
@@ -525,7 +524,7 @@ def _decode_torch_symbol(qualname: str) -> Any:
     """
 
     if qualname.startswith("torch.device(") and qualname.endswith(")"):
-        # r41 secC: the device constructor is inert value construction but rejects a
+        # secC: the device constructor is inert value construction but rejects a
         # malformed payload with a raw torch error; an attacker-edited qualname must
         # surface as the SAME typed literal refusal as every other branch, never a
         # bare ``RuntimeError`` outside the ``RunnableErrorCode`` vocabulary.
@@ -542,7 +541,7 @@ def _decode_torch_symbol(qualname: str) -> Any:
             f"Unsupported torch literal symbol {qualname!r}.",
             code=RunnableErrorCode.UNSUPPORTED_LITERAL.value,
         )
-    # r42 secC_1 / r45: the shared ``torch_attr`` helper reads ``torch.__dict__`` WITHOUT firing
+    # the shared ``torch_attr`` helper reads ``torch.__dict__`` WITHOUT firing
     # ``torch.__getattr__``, so an attacker qualname (``torch._inductor`` / ``_dynamo`` /
     # ``_export`` / ``onnx`` / deprecated ``has_cuda``) triggers NO lazy submodule import and
     # invokes NO deprecated ``replacement()`` -- both unrequested side effects the old
@@ -596,13 +595,13 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     ``getattr`` (untrusted-bundle path strings could otherwise walk descriptor / dunder
     chains).
 
-    One synthetic component form (r29-C2) is decoded: a terminal
+    One synthetic component form is decoded: a terminal
     ``EMPTY_CONTAINER_PATH_MARKER`` resolves to the KIND string of the empty container at
     the parent path (so a runtime empty container of a different kind, or a non-empty/scalar
     value, diverges). Mapping lookups bind by CANONICAL ENCODED TOKEN for every key
-    (r69 D): each runtime candidate is encoded through the one
+    : each runtime candidate is encoded through the one
     ``encode_mapping_key`` authority and compared by exact token type/value -- the
-    r29 ``(BOOL_KEY_PATH_TAG, bool)`` tuple spelling is retired (no producer emits
+    ``(BOOL_KEY_PATH_TAG, bool)`` tuple spelling is retired (no producer emits
     it; a decoded-value lookup lane would reopen hash-equality conflation).
     """
 
@@ -620,7 +619,7 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
             if kind is None:
                 raise KeyError(EMPTY_CONTAINER_PATH_MARKER)
             return kind
-        # r67 C2 (corr1-3): a registered container resolves indexed components by
+        # A registered container resolves indexed components by
         # RE-FLATTENING through its registration -- never ``obj[index]`` (the type may
         # not support indexing at all). A missing/throwing registration raises typed
         # KeyError (bind-side fence), never an AttributeError crash.
@@ -636,7 +635,7 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
                 current = children[component]
                 continue
         if isinstance(current, Mapping):
-            # r69 D: ONE canonical key identity end to end -- EVERY mapping lookup
+            # ONE canonical key identity end to end -- EVERY mapping lookup
             # (including raw-looking str/int components) encodes each runtime
             # candidate through the same ``encode_mapping_key`` authority and
             # compares exact canonical token type/value. A persisted component is

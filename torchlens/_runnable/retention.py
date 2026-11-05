@@ -371,7 +371,7 @@ def _preflight_retention_floor(
     descriptor: SparseRunDescriptor,
     admitted_view_slot_ids: frozenset[str] = frozenset(),
 ) -> None:
-    """Refuse a run whose GUARANTEED retained bytes provably exceed the budget (r59).
+    """Refuse a run whose GUARANTEED retained bytes provably exceed the budget.
 
     Loaded-sparse replay keeps every taken-path op output alive in its slot values until
     the run ends (plus an ``Op.out`` clone for each saved op), and one reconstruct clone

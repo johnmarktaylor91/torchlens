@@ -55,7 +55,7 @@ def _hybrid_registered_flatten_children(value: Any) -> list[Any] | None:
     registered container (a registered namedtuple, list, dict, or tuple
     subclass) never reached the registered lane at run time while the
     capture-side ``ContainerSpec`` builder dispatches registered-FIRST with
-    no generic exclusion (T11.6). This covers exactly that excluded slice; a
+    no generic exclusion. This covers exactly that excluded slice; a
     throwing flatten returns ``None`` (the caller falls back to the generic
     walk, same as the sibling helper).
     """
@@ -113,7 +113,7 @@ def _tensor_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
-        # r67 C2 (hon1-F1): mapping keys route through the ONE type-strict codec so a
+        # (hon1-F1): mapping keys route through the ONE type-strict codec so a
         # tensor child under a grammar key (2.5 / None / bool / safe tuple) enters the
         # leaf accounting; a non-grammar key is skipped here (its subtree is already
         # opaque-ceilinged / save-refused by the structure spine).
@@ -290,7 +290,7 @@ def _container_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
-        # r67 C2 (hon1-F1): same ONE type-strict key codec as the capture-side path
+        # (hon1-F1): same ONE type-strict key codec as the capture-side path
         # normalization -- lockstep by construction.
         for key, child in value.items():
             component = _codec_component(key)
@@ -309,8 +309,8 @@ def _container_kind(value: Any) -> str:
     """Return the sparse witness vocabulary name for a runtime container.
 
     Dispatch order mirrors the capture-side ``ContainerSpec`` builder
-    (T11.6): REGISTERED wins over every generic kind, exactly as it does at
-    capture and in the sibling leaf-path walkers above. The r67 C2 fix added
+    : REGISTERED wins over every generic kind, exactly as it does at
+    capture and in the sibling leaf-path walkers above. The fix added
     the registered branch BELOW the generic kinds, so a HYBRID registered
     container (a registered dataclass/namedtuple/tuple subclass) recorded
     ``"registered"`` at capture but reported its generic kind here -- an
@@ -329,7 +329,7 @@ def _container_kind(value: Any) -> str:
     # the inverted order classified a real GPT-2 CausalLMOutput as
     # "dataclass" against its recorded "hf_model_output" witness, so every
     # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
-    # the same bug class as the r67 C2 registered-branch fix above).
+    # the same bug class as the registered-branch fix above).
     if is_distribution(value):
         return DISTRIBUTION_CONTAINER_KIND
     if _is_hf_model_output(value):
@@ -400,7 +400,7 @@ def _container_field_names(value: Any) -> tuple[str, ...]:
 def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
     """Return producer-compatible field names for a torch structseq value.
 
-    r35 hon1_4: delegates to the shared repr-independent helper in
+    delegates to the shared repr-independent helper in
     ``utils/_torch_compat.py`` -- the exact same source the capture side uses,
     so capture and replay stay behavior-identical. Console wrap position,
     dtype/device suffixes, and tensor rendering can never create or destroy a
@@ -480,7 +480,7 @@ def _tensor_derived_scalar_stale(
     """
 
     snapshots = witness_source_snapshots or {}
-    # r71 A2: the OWNER-RECORD obligations (``TensorSlotDescriptor.host_escape``) are
+    # The OWNER-RECORD obligations (``TensorSlotDescriptor.host_escape``) are
     # the required staleness domain -- replay-consumed structure, never the witness
     # stream. An obligated slot with no surviving witness cannot be re-confirmed:
     # stale (fail closed). A gap-discharged obligation also reads stale here, which
@@ -537,7 +537,7 @@ def _is_unbound_state_escape_witness(witness: ControlWitness) -> bool:
 
 
 def _is_state_metadata_fact_witness(witness: ControlWitness) -> bool:
-    """Return whether a structure witness records a declared state-metadata fact (r65)."""
+    """Return whether a structure witness records a declared state-metadata fact."""
 
     return (
         witness.kind is ControlWitnessKind.SHAPE_STRUCTURE_FACT
@@ -568,7 +568,7 @@ def _unbound_state_escape_stale(
         binding = slot.state_binding
         if binding is not None:
             name_to_slot_id.setdefault(binding.state_dict_name, slot.slot_id)
-    # r71 A2: the OWNER-RECORD dispositions (``StateSlotBinding.host_escape_disposition
+    # The OWNER-RECORD dispositions (``StateSlotBinding.host_escape_disposition
     # == "escaped"``) are the required staleness domain. An escaped-claimed slot with
     # no surviving witness cannot re-confirm its capture digest: stale (fail closed);
     # a gap-discharged claim coincides with its guaranteed UNVERIFIABLE floor.

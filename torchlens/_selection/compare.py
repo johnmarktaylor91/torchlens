@@ -164,7 +164,7 @@ class _JoinGuard:
     SITE KEY under :func:`~torchlens._postprocess._site_join.join_site_profiles`
     verdicts — labels leave the join key entirely, so a live edit's label
     renumbering can no longer break comparison of structurally intact sites.
-    ``corroborated`` and ``positional`` verdicts admit comparison (D-2);
+    ``corroborated`` and ``positional`` verdicts admit comparison;
     refused verdicts and one-sided keys refuse typed with the verdict
     disclosed, never guessed. Either side keyless degrades to the historical
     address+shape pairing (with its site-key-disagreement belt intact).
@@ -360,7 +360,7 @@ def _machinery_entry(entry: Site, source: str) -> Site:
 
 
 def _is_machinery_entry(trace: Any, entry: Site) -> bool:
-    """Whether one subject entry is an engine-inserted machinery op (D-7)."""
+    """Whether one subject entry is an engine-inserted machinery op."""
 
     return record_type(_op_for_entry(trace, entry), None) in _MACHINERY_LAYER_TYPES
 
@@ -756,7 +756,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
     k-th time THAT layer ran), never episode steps: a layer absent from a
     step has no pass there, so on any model whose layer is not called at
     every step (a routed mixture-of-experts expert) pass k need not lie at
-    episode step k (foldB D11). Both counts exist today — each layer's
+    episode step k. Both counts exist today — each layer's
     ``num_passes`` and the episode ledger's step rows — so the read
     discloses them at the point of use, without new arguments; the typed
     refusal for an explicit step axis is a named future surface (F-EPISODE

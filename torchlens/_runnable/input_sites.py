@@ -42,7 +42,7 @@ __all__ = (
 )
 
 
-#: Distinguished "the classifier itself failed" result (R22-2): callers with
+#: Distinguished "the classifier itself failed" result: callers with
 #: ADMISSION power (the fast-run pre-forward gate) must fail CLOSED on it —
 #: guard-machinery failure is otherwise indistinguishable from inputs-match.
 #: The soft native-failure-time consumer treats it as unclassifiable and lets
@@ -55,12 +55,12 @@ def _first_failed_live_input_check(
 ) -> ContractCheck | None | Any:
     """Return the first failed input-contract check for a live refresh.
 
-    r41 hon1_3 (corr2_4 parity): reads the capture-recorded input ops' shape/dtype off
+    reads the capture-recorded input ops' shape/dtype off
     the live Trace and compares the runtime leaves positionally, mirroring the sparse
     ``_bind_runtime_inputs`` check names (``input_shape:slot:<label>`` /
     ``input_dtype:slot:<label>``) and message text so both providers speak identically.
 
-    Sentinel-or-raise contract (R22-2): ``None`` means the checks RAN and
+    Sentinel-or-raise contract: ``None`` means the checks RAN and
     passed (or there was legitimately nothing to check); the module-level
     ``_INPUT_CHECK_UNAVAILABLE`` sentinel means the classifier machinery
     itself failed and NOTHING was verified. The two used to collapse into
@@ -177,7 +177,7 @@ def _require_loaded_sparse_provider(
     ):
         raise_analysis_run_unavailable(trace)
     if readiness.status is not ReadinessStatus.READY or not isinstance(callables, Mapping):
-        # R65-2: this is the main torch-drift refusal a loaded-sparse run()
+        # this is the main torch-drift refusal a loaded-sparse run()
         # hits, and it used to carry no code, no summary, and no remedy while
         # the per-callable causes sat unsummarized in fields["diagnostics"].
         # Mirror _preflight_failure_message: fold the first diagnostic into
@@ -237,7 +237,7 @@ def _is_model_input_literal_witness(witness: ControlWitness) -> bool:
 def _model_input_metadata_facts(
     descriptor: SparseRunDescriptor,
 ) -> list[tuple[ControlWitness, Mapping[str, Any]]]:
-    """Decode every witnessed model-input metadata-predicate fact (r27-H2)."""
+    """Decode every witnessed model-input metadata-predicate fact."""
 
     facts: list[tuple[ControlWitness, Mapping[str, Any]]] = []
     for witness in descriptor.control_witnesses:
@@ -317,7 +317,7 @@ def _runtime_input_metadata_value(value: torch.Tensor, name: str) -> Any:
 
 
 def _fact_path_tuple_or_none(fact: Mapping[str, Any]) -> tuple[Any, ...] | None:
-    """Belt twin of the parse-side path validator (r75 L1): ``None`` means fail closed.
+    """Belt twin of the parse-side path validator: ``None`` means fail closed.
 
     Parse refuses a non-sequence fact ``path`` as ``context_field_invalid`` before any
     execution-side consumer runs; this belt keeps the execution readers total anyway so a
@@ -340,7 +340,7 @@ def _input_metadata_contract_checks(
     inputs: Any,
     positions: set[Any],
 ) -> tuple[ContractCheck, ...]:
-    """Compare runtime input metadata predicates with capture-time observed facts (r27-H2).
+    """Compare runtime input metadata predicates with capture-time observed facts.
 
     The capture-time forward READ these predicates (``is_contiguous`` / ``stride`` /
     ``requires_grad``) on a model-input leaf, so their values can have steered the
@@ -352,7 +352,7 @@ def _input_metadata_contract_checks(
     """
 
     checks: list[ContractCheck] = []
-    # r71 A2 belt: the totalized envelope domain is the boundary record's tensor-site
+    # A2 belt: the totalized envelope domain is the boundary record's tensor-site
     # set (one envelope per bound tensor leaf, empty read sets explicit). Parse
     # enforces the equality; a deficit that somehow reached execution fails closed.
     boundary_site_count = sum(len(site.tensor_sites) for site in descriptor.input_boundary)
@@ -400,7 +400,7 @@ def _input_metadata_contract_checks(
             resolved = False
         for name in sorted(recorded_facts):
             if str(name) == _INPUT_DERIVED_LAYOUT_FACT_NAME:
-                # r73 F1: the derived-layout fact is a run-time UNVERIFIABLE ceiling
+                # The derived-layout fact is a run-time UNVERIFIABLE ceiling
                 # (``_input_derived_layout_stale``), never a DIVERGED compare -- a
                 # changed input layout does not prove the derived intermediate's
                 # layout differs, so it must not fail a contract check here.
@@ -432,7 +432,7 @@ def _input_metadata_contract_checks(
 
 
 def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) -> bool:
-    """Return whether an input-derived layout escape's rooting input changed layout (r73 F1).
+    """Return whether an input-derived layout escape's rooting input changed layout.
 
     The capture-time forward read a layout predicate (``is_contiguous`` / ``stride`` /
     ``storage_offset``) on an ACTIVATION whose value DAG roots at a model input; memory
@@ -490,14 +490,14 @@ def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) ->
 
 
 def _inventory_site_positions(descriptor: SparseRunDescriptor) -> set[Any]:
-    """Decode the required input-site set from the REQUIRED boundary record (r71 A2).
+    """Decode the required input-site set from the REQUIRED boundary record.
 
     THE run-side site authority is the witness-free ``input_boundary`` record --
     replay-consumed structure, exact-validated at parse against the MODEL_INPUT slot
     bindings and dense positional roots. The required-witness inventory is a
     redundant mirror; a disagreement here (impossible post-parse) fails closed typed
     (belt against parser regressions), and runtime site selection never re-derives
-    arity from surviving witnesses (the secA-F1 self-referential lane).
+    arity from surviving witnesses (the self-referential lane).
     """
 
     from torchlens._runnable import decode_input_site_position
@@ -544,7 +544,7 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
     leaf positions makes the shortcut fire only for a genuinely single-argument
     model, so a mixed ``[tensor, python_arg]`` call binds each site correctly.
 
-    r69 A: the parse-validated required inventory is the site AUTHORITY (union
+    The parse-validated required inventory is the site AUTHORITY (union
     belt below); a descriptor whose slot/literal-derived positions escape the
     inventory set fails closed typed instead of silently widening arity.
     """
@@ -574,7 +574,7 @@ def _model_input_arity_positions(descriptor: SparseRunDescriptor) -> set[Any]:
 
 
 def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] | None:
-    """Enumerate the runtime call's TOP-LEVEL model-input site positions (r42 corr1_1).
+    """Enumerate the runtime call's TOP-LEVEL model-input site positions.
 
     Mirrors :func:`_input_site_value`'s dispatch so the actual top-level site SET aligns with
     the recorded ``("arg", i)`` / ``("kwarg", key)`` positions. A single bare positional site is

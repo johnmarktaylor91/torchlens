@@ -838,7 +838,7 @@ def low_variance(
 
 
 # ---------------------------------------------------------------------------
-# ReadTable-scored ranking: the M(reads) `by=` door (item 5, D9).
+# ReadTable-scored ranking: the M(reads) `by=` door.
 # ---------------------------------------------------------------------------
 
 
@@ -981,7 +981,7 @@ def _table_population_explicit(
     trace: Any,
     rows: dict[str, Any],
 ) -> list[tuple[Site, Any]]:
-    """Apply the explicit-population CONTRACT arm of the D9 law."""
+    """Apply the explicit-population CONTRACT arm of the law."""
 
     population = _resolve_population(node.within, trace)
     pairs: list[tuple[Site, Any]] = []
@@ -1011,7 +1011,7 @@ def _table_population(
     trace: Any,
     rows: dict[str, Any],
 ) -> tuple[list[tuple[Site, Any]], dict[str, int]]:
-    """Apply the D9 contract/filter law to the ranking population.
+    """Apply the contract/filter law to the ranking population.
 
     Explicit ``within=``: every population site must be covered by an ``ok``
     scored row -- anything else refuses ``population_not_covered`` naming the

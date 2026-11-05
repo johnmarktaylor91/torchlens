@@ -1,4 +1,4 @@
-"""Selection / intervention algebra: the dual selection types (L6 stage 1).
+"""Selection / intervention algebra: the dual selection types.
 
 ``Selection`` is the composable QUERY — a frozen AST over leaf terms and
 boolean combinators, model/trace-independent; resolving it is explicit.
@@ -31,7 +31,7 @@ never as a fuzzy mask.
 
 The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary (S2-routed).
 Mixed-kind composition refuses typed (``selection_kind_incompatible``); the matrix
-cells change only via explicit D-ruling landing as an S2 amendment, never a lane-local edit.
+cells change only via explicit D-ruling landing as an amendment, never a lane-local edit.
 
 ``Selection`` is SESSION-TIME ONLY and is never persisted.
 """
@@ -160,7 +160,7 @@ def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
 
 
 def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in GRAPH ORDER (F10; lovely matrix row, bug 14).
+    """Return entries in GRAPH ORDER (lovely matrix row, bug 14).
 
     ACT entries order by the trace's execution order of their
     ``(layer_label, pass_index)`` address — a resolved selection reads in
@@ -1575,7 +1575,7 @@ def _apply_invalid(
 
     ``code`` is always the contracted ``selection_apply_invalid``; the
     explicit keyword exists so a raise site can spell the code visibly (the
-    S-17 census counts site-visible codes, the ``_encoding_error`` pattern).
+    census counts site-visible codes, the ``_encoding_error`` pattern).
     """
 
     return SelectionError(message, code=code, reason=reason, **fields)

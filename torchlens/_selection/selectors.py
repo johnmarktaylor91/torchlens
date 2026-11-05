@@ -360,7 +360,7 @@ class WhereSelector(BaseSelector):
 
 @dataclass(frozen=True, repr=False)
 class SiteSelector(BaseSelector):
-    """Structural-position selector over ``site_key_v1`` components (C03).
+    """Structural-position selector over ``site_key_v1`` components.
 
     The site-key-primary WHERE spelling (surgery memo Build 0a/0c): valid in
     EVERY lane under the address law -- post hoc against ``op.site_key``,

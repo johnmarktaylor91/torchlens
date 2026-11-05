@@ -42,7 +42,7 @@ __all__ = (
 def _top_level_input_site_contract_checks(
     descriptor: SparseRunDescriptor, inputs: Any, positions: set[Any]
 ) -> tuple[ContractCheck, ...]:
-    """Reject a runtime call carrying MORE top-level input sites than capture (r42 corr1_1).
+    """Reject a runtime call carrying MORE top-level input sites than capture.
 
     The sparse descriptor records CONCRETE boundary positions and encodes no open-ended variadic
     contract: a capture of a ``*args`` / ``**kwargs`` model that took two args recorded exactly
@@ -96,7 +96,7 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
 
     from torchlens._input_walk import classify_scalar
 
-    # r71 B: a ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
+    # A ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
     # component VALUES only, so ``slice(5) == slice(MyIntEnum.FAST)`` is True and a
     # type-steered branch would falsely VERIFY. Compare component-by-component through
     # the SAME scalar type/value rules (never ``slice.__eq__`` as authority).
@@ -110,7 +110,7 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
 
     recorded_kind, recorded_norm = classify_scalar(recorded)
     runtime_kind, runtime_norm = classify_scalar(runtime)
-    # r69 B: a semantic-typed scalar (enum member, builtin/np-scalar subclass) never
+    # A semantic-typed scalar (enum member, builtin/np-scalar subclass) never
     # collapses into the builtin atom families -- type identity is application
     # semantics, so a same-value cross-class replacement DIVERGES in both directions
     # (a semantic capture cannot exist in a saved artifact: producer refuses typed).
@@ -126,7 +126,7 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
         return isinstance(recorded, bool) and isinstance(runtime, bool) and recorded == runtime
     # Float family (exact builtins after wrapper normalization). ``int`` stays
     # distinct from ``float`` (``2`` vs ``2.0`` must diverge). Compare by IEEE-754
-    # bit pattern of the float VALUE so the r4 signed-zero/NaN honesty is preserved.
+    # bit pattern of the float VALUE so the signed-zero/NaN honesty is preserved.
     rec_is_float = isinstance(recorded, float)
     run_is_float = isinstance(runtime, float)
     if rec_is_float or run_is_float:
@@ -218,7 +218,7 @@ def _bind_runtime_inputs(
     """Bind and defensively clone public input leaves by persisted model sites.
 
     Returns the bound clone map, the ordered input contract checks, and the
-    ``input_alias_topology_unresolved`` ceiling flag (r35 decision D). Accepted
+    ``input_alias_topology_unresolved`` ceiling flag. Accepted
     leaves are mirrored through the transaction ``ceiling``'s byte guard (r61
     corr_2): a tampered input slot shape plus a runtime expanded view refuses
     typed at ``clone_allocation_preflight`` instead of dying in the allocator.
@@ -230,7 +230,7 @@ def _bind_runtime_inputs(
     values: dict[str, torch.Tensor] = {}
     checks: list[ContractCheck] = []
     positions = _model_input_arity_positions(descriptor)
-    # r42 corr1_1: reject EXTRA top-level args/kwargs (site-set superset) BEFORE any per-site
+    # reject EXTRA top-level args/kwargs (site-set superset) BEFORE any per-site
     # tensor/literal/metadata check, so an ignored extra input can never be blessed VERIFIED.
     checks.extend(_top_level_input_site_contract_checks(descriptor, inputs, positions))
     # Torch capture DE-ALIASES model inputs (each input leaf is cloned before the forward,
@@ -264,7 +264,7 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
-        # r37 corr2-6 phase 0: EXACT-type admission precedes every dispatchable
+        # corr2-6 phase 0: EXACT-type admission precedes every dispatchable
         # property read. A tensor SUBCLASS routes ``shape``/``dtype``/``device``/
         # ``names`` through ``__torch_function__``, so reading any of them before
         # this gate would execute user subclass code and leak its raw exception in
@@ -334,7 +334,7 @@ def _bind_runtime_inputs(
                 ),
             )
         )
-        # r33 F7: pin DEVICE and LAYOUT next to shape+dtype. The shape+dtype contract does NOT
+        # Pin DEVICE and LAYOUT next to shape+dtype. The shape+dtype contract does NOT
         # pin either, yet the state lives on the capture DEVICE and the recorded DAG assumes a
         # STRIDED DENSE input, so a same-shape+dtype runtime input on a different device or with
         # an exotic layout (sparse/meta/nested/named) cannot be faithfully reproduced by the
@@ -399,7 +399,7 @@ def _bind_runtime_inputs(
     checks.extend(_input_metadata_contract_checks(descriptor, inputs, positions))
     checks.extend(_input_nontensor_tree_contract_checks(descriptor, inputs, positions))
     # ------------------------------------------------------------------
-    # r35 I5 (corr2_6) -- CONTRACT-BEFORE-TOUCH admission choke point.
+    # I5 -- CONTRACT-BEFORE-TOUCH admission choke point.
     # Everything ABOVE this comment reads only non-materializing, exception-
     # safe facts from the RAW bound leaves. Everything BELOW may clone,
     # transfer, view, digest, or otherwise materialize input bytes. Hard
@@ -436,7 +436,7 @@ def _bind_runtime_inputs(
     )
     checks.extend(alias_checks)
     if input_alias_unresolved:
-        # r25-4: the unresolved-topology ceiling was previously an unnamed boolean
+        # the unresolved-topology ceiling was previously an unnamed boolean
         # threaded to the faithfulness classifier, so a caller told to branch on the
         # documented ``input_alias_topology_unresolved`` code could never observe it.
         # Surface the code on a PASSED disclosure row in ``report.contract_checks``:
@@ -481,7 +481,7 @@ def _runtime_mirror_clone(
 ) -> torch.Tensor:
     """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
 
-    r37 corr2-7 (R13): ``detach().clone()`` strips a leaf's ``requires_grad``, so
+    corr2-7: ``detach().clone()`` strips a leaf's ``requires_grad``, so
     the recorded ``grad_enabled=True`` call context became semantically inert (no
     autograd history on replay) and the exact original input was needlessly
     attestation-ineligible (fingerprint flag mismatch). The runtime mirror restores
@@ -491,14 +491,14 @@ def _runtime_mirror_clone(
     the ONE second-clone helper -- every input-bind/state-clone/staging site routes
     through it or the staging helper's recorded-trainable rule.
 
-    r61 corr_2: the mirror routes through the transaction ceiling's byte guard --
+    corr_2: the mirror routes through the transaction ceiling's byte guard --
     the clone's ``numel()`` is the LOGICAL numel of an expanded runtime view, so a
     tampered input slot (`[1]` -> huge) with a matching runtime ``expand`` refuses
     typed at ``clone_allocation_preflight`` BEFORE the materializing clone, never
     an allocator death. Honest inputs clone with ``requires_grad`` mirrored, so
     attestation eligibility is unchanged.
 
-    r67 C5 (corr1-2): the mirror is a PRE-EXECUTION defensive materialization, so it
+    The mirror is a PRE-EXECUTION defensive materialization, so it
     runs under the neutral ambient -- a caller inside ``torch.inference_mode()`` no
     longer mints an inference-mode mirror (which lost attestation on an otherwise
     exact run and could not carry the mirrored ``requires_grad``).
@@ -535,7 +535,7 @@ def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
 
     A view op (``a[0]``, ``a.t()``, ``a.narrow(...)``) produces an output that SHARES STORAGE
     with its tensor input, so an in-place op on that view mutates the input's storage even
-    though the view slot has no ``version_of`` link to the input (r29-C3, F2-hon). The gate
+    though the view slot has no ``version_of`` link to the input (F2-hon). The gate
     that guards the input-aliasing fail-closed therefore follows both version chains and
     view-producing lineage from the model-input slots: a slot enters the closure if it is a
     model input, is versioned from a closure slot, or is the output of a view op whose tensor

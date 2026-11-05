@@ -57,14 +57,14 @@ def _input_alias_topology_checks(
     * IDENTITY (``forward(a, b)`` with ``a is b`` -- self/cross-attention ``q is k``): the
       captured / replayed clones are distinct objects, so an ``if a is b`` / ``id()`` identity
       branch takes the OTHER arm than a fresh model on the aliased input would -- a false
-      VERIFIED even on the ORIGINAL input (r33 F1). This holds with NO in-place mutation, so
+      VERIFIED even on the ORIGINAL input. This holds with NO in-place mutation, so
       the check is UNCONDITIONAL.
     * OVERLAPPING STORAGE SPANS (two views whose byte spans overlap, a storage-identity
       ``a.data_ptr() == b.data_ptr()`` branch, or an in-place mutation that propagates between
       overlapping sites): the de-aliased clones neither share storage nor propagate a mutation
       between sites, so a fresh model on the aliased input can diverge.
 
-    Both fail closed (``runtime topology != captured`` per the F1 contract: capture de-aliases,
+    Both fail closed (``runtime topology != captured`` per the contract: capture de-aliases,
     so ANY runtime aliasing is unreproducible and a genuinely identity/storage-independent model
     cannot be PROVEN so at this surface -- the honest verdict is fail-closed). DISJOINT spans of
     one base (``base[:2]`` / ``base[2:]`` -- same storage pointer, non-overlapping bytes) are NOT
@@ -94,7 +94,7 @@ def _input_alias_topology_checks(
     # ``_touched_bytes_relation`` adapter -- pure per-pair overhead at high arity):
     # * Identity aliasing: two input sites bound to the SAME tensor object
     #   (``a is b``) -- recorded directly, the byte engine is not consulted.
-    # * Storage aliasing (r35 decision D): the three-valued touched-byte engine.
+    # * Storage aliasing: the three-valued touched-byte engine.
     #   PROVED overlap is an observed contradiction (failed check -> DIVERGED);
     #   PROVED disjointness passes; ``unknown`` is the
     #   ``input_alias_topology_unresolved`` unverifiability ceiling -- never
@@ -137,17 +137,17 @@ def _clone_state_values(
 ) -> dict[str, torch.Tensor]:
     """Clone run-local state while preserving alias groups, device, and trainability.
 
-    r37 R5/R13: this second clone runs AFTER staging normalized every value to its
+    R5/R13: this second clone runs AFTER staging normalized every value to its
     slot device, so it must not strip anything staging established -- ``clone()``
     keeps the device; alias groups keep one shared clone (identity-keyed); and the
     RECORDED per-slot ``trainable`` bit is restored on the clone (state semantics
     come from the recorded binding, NOT ``mirror_requires_grad`` -- unlike runtime
     INPUTS whose mirror follows the live leaf, see ``_runtime_mirror_clone``).
-    r61 corr_2: each identity's single clone routes through the transaction
+    corr_2: each identity's single clone routes through the transaction
     ceiling's byte guard, so an oversized staged value refuses typed at
     ``clone_allocation_preflight`` instead of dying in the allocator.
 
-    r67 C5 (corr1-2): the second state clone is a PRE-EXECUTION defensive
+    The second state clone is a PRE-EXECUTION defensive
     materialization, so it runs under the neutral ambient -- a caller inside
     ``torch.inference_mode()`` no longer mints inference-mode run-local state that
     trips the staged tripwire's ``is_inference`` dim on TorchLens's own output.
@@ -193,9 +193,9 @@ def _snapshot_input_fingerprints(
     slot_values: Mapping[str, torch.Tensor],
     input_byte_digests: Mapping[str, str],
 ) -> dict[str, InputAttestationFingerprint]:
-    """Fingerprint the EXECUTED input clones on the capture-identical basis (hon1_3).
+    """Fingerprint the EXECUTED input clones on the capture-identical basis.
 
-    Runs after admission (I5), before any sparse call. The capture side
+    Runs after admission, before any sparse call. The capture side
     fingerprints the retained input clone that seeded the captured forward; both
     sides therefore compare the same clone basis, so a physical twin (layout /
     stride / offset / alignment-class change) is detected exactly.
@@ -219,7 +219,7 @@ def build_input_attestation_fingerprint(
     *,
     byte_digest: str | None = None,
 ) -> InputAttestationFingerprint:
-    """Build the physical identity fingerprint of one model-input value (hon1_3 H-a).
+    """Build the physical identity fingerprint of one model-input value.
 
     Both sides use the same basis: at save time the LIVE retained in-memory input
     that seeded the captured forward; at run time the executed defensive clone.
@@ -343,7 +343,7 @@ def _input_site_value(inputs: Any, position: Any, positions: set[Any]) -> Any:
 
 def _type_strict_path(path: Iterable[Any]) -> tuple[Any, ...]:
     """Type-tag numeric mapping-key path components so ``bool``/``int``/``float`` twins do not
-    conflate under Python ``==`` (r33 F6).
+    conflate under Python ``==``.
 
     A dict key ``True`` compares equal to ``1`` and ``1.0`` (``True == 1 == 1.0`` with colliding
     hashes), so a raw ``(True,)`` leaf path matches ``(1,)`` / ``(1.0,)`` in the contract path
@@ -411,7 +411,7 @@ def _input_tree_contract_checks(
 def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     """Enumerate runtime non-tensor input leaf paths, mirroring the capture walk.
 
-    Routes through the shared boundary traversal (``torchlens._input_walk``, r65
+    Routes through the shared boundary traversal (``torchlens._input_walk``
     Cluster Y) with the SAME tagged-key literal vocabulary as the capture-side
     ``_record_runnable_input_literal_leaves``, so the runtime non-tensor leaf-path SET
     aligns with the recorded fact set BY CONSTRUCTION: tensor leaves are skipped,

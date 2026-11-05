@@ -82,7 +82,7 @@ def _bind_call_outputs(
     output = _resolve_setter_output(call, output, slot_values)
     expected_paths = tuple(slots[slot_id].output_path or () for slot_id in call.output_slot_ids)
     actual_paths = _tensor_leaf_paths(output)
-    # r59 gate 2 (backstop): a projection-skipped call (data-dependent fail-open, or no
+    # gate 2 (backstop): a projection-skipped call (data-dependent fail-open, or no
     # numeric literal) cannot smuggle an unbounded realized-output tree past the
     # front-line count projection. Honest realized == recorded, so this is pure headroom.
     ceiling.charge_realized_outputs(call, len(actual_paths))
@@ -147,7 +147,7 @@ def _bind_call_outputs(
         checks += _bind_version_aliases(call, value, op_label, slots, aliases, slot_values)
         produced_slot_ids.update(aliases)
         for produced_slot_id in produced_slot_ids & attestation_slot_ids:
-            # r59 gate 3: byte-guard every op-output snapshot before it allocates.
+            # gate 3: byte-guard every op-output snapshot before it allocates.
             attestation_slot_values[produced_slot_id] = ceiling.guarded_clone(
                 value,
                 call_id=call.call_id,
@@ -157,7 +157,7 @@ def _bind_call_outputs(
         if witness_source_snapshots is not None:
             # Snapshot every escape-witness source slot at its production point so a
             # later in-place mutation of the live tensor cannot restale the digest
-            # comparison (H3): the run-digest then matches the pre-mutation save-digest.
+            # comparison: the run-digest then matches the pre-mutation save-digest.
             for produced_slot_id in produced_slot_ids & witness_slot_ids:
                 witness_source_snapshots[produced_slot_id] = ceiling.guarded_clone(
                     value,
@@ -309,7 +309,7 @@ def _mutation_contract_checks(
     slot -- a mode-sensitive norm layer (InstanceNorm/BatchNorm with
     ``track_running_stats=True``) updates its ``running_mean``/``running_var`` running stats
     inside the functional ``instance_norm``/``batch_norm`` call, which TorchLens does not
-    record as a separate in-place op (r29-C3, codex-F3). That running-stat update is a
+    record as a separate in-place op. That running-stat update is a
     declared-state side effect reproduced identically on a fresh replay from the captured
     state, NOT the input/activation-tensor mutation this check guards against, so state slots
     are excluded from the non-inplace ``changed`` set. Value correctness of the updated buffer
@@ -359,7 +359,7 @@ def _mutation_contract_checks(
     )
     # Version leg: enforced only when a baseline exists. An inference tensor has no
     # version counter, so its in-place relation is proven by alias identity alone
-    # (hon1_4); a versioned tensor keeps the full version-bump requirement.
+    # a versioned tensor keeps the full version-bump requirement.
     version_leg = input_slot_id in changed if input_slot_id in before_versions else True
     return (
         _contract_check(
@@ -455,7 +455,7 @@ def _reconstruct_output(
         slot_values_dict[slot.slot_id] = value
         op = _op_for_slot(fork, slot.slot_id)
         if op is not None:
-            # r59 gate 3: byte-guard the reconstructed model-output snapshot too.
+            # gate 3: byte-guard the reconstructed model-output snapshot too.
             op._internal_set(
                 "out",
                 ceiling.guarded_clone(
@@ -490,7 +490,7 @@ def _reconstruct_output(
         # Genuine bare-tensor model output: nothing to reconstruct.
         return values[0][1]
     if values:
-        # r35 I1 defense in depth: a multi-leaf output with NO recorded container
+        # I1 defense in depth: a multi-leaf output with NO recorded container
         # spec can only come from a legacy/tampered artifact (new saves are refused
         # unless losslessness is proved). Approximating the container here would be
         # a silent lossy substitution, so fail typed instead.
@@ -606,7 +606,7 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
 
     if getattr(spec, "lossy_reconstruction", False):
         return True
-    # r37 R11: the load-time recompute follows the capability table's per-kind
+    # The load-time recompute follows the capability table's per-kind
     # instance-state rule. ``type_recompute`` kinds re-derive lossiness from the
     # RESOLVED type so a forged ``lossy_reconstruction=False`` cannot suppress it;
     # builtin-stateless kinds short-circuit False; ``instance_refused`` /
@@ -624,14 +624,14 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
             # Unresolved namedtuple type: reconstruction substitutes a synthesized
             # type -- a lossy type substitution, never a false VERIFIED.
             return True
-        # secB_1 forged-flag defense: a resolved namedtuple type that CAN carry
+        # forged-flag defense: a resolved namedtuple type that CAN carry
         # per-instance state (no ``__slots__ = ()``) is treated as lossy even when
         # the persisted flag is false. Plain ``collections.namedtuple`` /
         # ``typing.NamedTuple`` / slotted subclasses stay VERIFIED-eligible.
-        # r49 secB_1: ALSO couple to reconstruction's substitution criterion -- a namedtuple
+        # ALSO couple to reconstruction's substitution criterion -- a namedtuple
         # type that is neither a generated namedtuple nor a trusted structseq rebuilds as a
         # plain ``tuple`` (type substitution), which the instance-dict signal alone misses
-        # (the r48 non-``FunctionType``-``__new__`` hole).
+        # (the non-``FunctionType``-``__new__`` hole).
         return namedtuple_type_can_carry_instance_state(
             container_type
         ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
@@ -653,10 +653,10 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
 
 
 def _fresh_bare_tensor_root(trace: Any) -> bool:
-    """Return whether the fresh refresh proof positively attests a bare-tensor output root (r39).
+    """Return whether the fresh refresh proof positively attests a bare-tensor output root.
 
     Consumes the ``_runnable_output_losslessness`` proof ``save_new_outs`` copies from the FRESH
-    refresh forward onto the projected fork (corr2_5). The live bare-tensor fast path is honest
+    refresh forward onto the projected fork. The live bare-tensor fast path is honest
     ONLY when that proof is present, lossless, its root kind is exactly ``bare_tensor``, it walked
     a single leaf, and it used no fallback/duplicate traversal -- otherwise an opaque
     set/frozenset/custom container (which yields the same one-leaf/no-spec/no-path signature)

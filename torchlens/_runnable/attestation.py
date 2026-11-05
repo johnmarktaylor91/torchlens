@@ -107,7 +107,7 @@ def _has_journaled_buffer_activation_member(
     buffer was actually WRITTEN mid-forward (a norm layer updating its running stats). When
     every repeated member equals the capture state digest, the buffer is a STABLE read-only
     source (running stats under eval, or an unwritten buffer read at several points), which is
-    fully byte-attestable and must NOT be suppressed (r29-C4, codex-F2). When the capture state
+    fully byte-attestable and must NOT be suppressed. When the capture state
     digest is unavailable for a repeated buffer name, fail closed (treat as journaled) rather
     than risk a false mismatch.
 
@@ -239,7 +239,7 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
     (``_nondeterministic_value_sources``): surviving ``uninitialized_alloc``
     taint that reaches an archived-activation member slot or a model output
     slot makes the artifact declared-nondeterministic, so numeric attestation
-    is ``not_applicable`` UPFRONT -- never the r52 contradictory
+    is ``not_applicable`` UPFRONT -- never the contradictory
     ``replay_value_mismatch`` raise on bytes the recorded computation
     never determined. Fully sanitized flows (``empty`` then a total write) and
     dead tainted intermediates keep the run attestation-eligible, and a byte
@@ -283,7 +283,7 @@ def _decoded_positional_literals(call: RunnableCallDescriptor) -> tuple[Any, ...
 def _nondeterministic_value_sources(
     descriptor: SparseRunDescriptor,
 ) -> dict[str, frozenset[str]]:
-    """Classify every tensor slot's declared nondeterministic VALUE sources (r53 hon_2).
+    """Classify every tensor slot's declared nondeterministic VALUE sources.
 
     THE single load-side choke point for nondeterministic-value recognition: no
     call site outside this function may re-derive nondeterminism from qualnames
@@ -352,11 +352,11 @@ def _nondeterministic_value_sources(
                 if tuple(ref.argument_path) == ("kwargs", "out"):
                     dest_slot_id = ref.slot_id
                     break
-            # r55 hon_2: an ``out=`` that ALIASES a value operand
+            # an ``out=`` that ALIASES a value operand
             # (``torch.add(a, x, out=a)``) computes a result that READS the
             # destination's prior (uninitialized) bytes -- it is NOT a pure total
             # overwrite. "All elements written" is not "result independent of
-            # prior content". Preserve the destination's taint (fail closed, r35
+            # prior content". Preserve the destination's taint (fail closed
             # unknown-alias precedent) by declining to treat it as a total-write
             # destination; only a genuine total write to a destination that is
             # not itself read (below, or the ``copy_``/``zero_``/``fill_`` receiver
@@ -384,7 +384,7 @@ def _nondeterministic_value_sources(
         if consumes_seeded:
             produced = produced | {_SEEDED_SOURCE_KIND}
         is_uninit_factory = qualname_is_uninitialized_alloc(namespace, qualname)
-        # r55 hon_1 consumer: ``Tensor.new`` is uninitialized-memory ONLY in its
+        # consumer: ``Tensor.new`` is uninitialized-memory ONLY in its
         # SIZE-argument form (``new(*sizes)`` redispatches ``aten.empty``); the
         # DATA form (``new([values])``/``new(tensor)``) is a deterministic copy
         # constructor. Decode the call's positional literal sizes and consult
@@ -501,7 +501,7 @@ def _declared_nondeterministic_sources(
     descriptor: SparseRunDescriptor,
     taint: Mapping[str, frozenset[str]],
 ) -> frozenset[str]:
-    """Derive the run's declared nondeterministic sources (closed vocabulary, r53 F4).
+    """Derive the run's declared nondeterministic sources (closed vocabulary).
 
     ``seeded_rng`` and ``host_rng`` are the descriptor's existing presence
     facts; ``uninitialized_alloc`` is declared exactly when surviving family
@@ -531,7 +531,7 @@ def _declared_nondeterministic_sources(
 
 
 def _is_mode_sensitive_qualname(qualname: str | None) -> bool:
-    """Delegate to the ONE shared mode-sensitivity classifier (r71 A).
+    """Delegate to the ONE shared mode-sensitivity classifier.
 
     Single-sourced in ``torchlens._runnable.is_mode_sensitive_qualname`` so the
     parse-time ``module_training_mode`` domain derivation and this runtime belt can

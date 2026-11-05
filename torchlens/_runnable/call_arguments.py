@@ -53,7 +53,7 @@ def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
     """Return whether a decoded argument tree carries a size-relevant numeric literal.
 
     One of the two size sources ``_projection_required_by_arguments`` recognizes
-    (the other is a tensor operand -- ``_has_tensor_operand``, r61). "Carries a
+    (the other is a tensor operand -- ``_has_tensor_operand``). "Carries a
     size-relevant literal" means the decoded tree holds any non-bool ``int`` or
     any *finite* ``float`` -- the float branch covers multiplier parameters such as
     ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
@@ -107,7 +107,7 @@ def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
 def _projection_required_by_arguments(args: Sequence[Any], kwargs: Mapping[str, Any]) -> bool:
     """Whether this replay call carries any size source (tensor operand or numeric literal).
 
-    The ONLY sound projection skip is "no size source at all" (r61): a call with
+    The ONLY sound projection skip is "no size source at all": a call with
     neither a tensor operand nor a numeric literal gives no fake/meta kernel
     anything to size an output tree from, so it is provably allocation-trivial.
     Any richer skip heuristic (has-literal-only, numel/arity thresholds) gaps on a
@@ -193,7 +193,7 @@ def _new_allocation_bytes(
     An output tensor whose fake ``untyped_storage()._cdata`` aliases a fake-INPUT
     storage allocates nothing -- it is a pure view, an input-returning op, or an
     in-place op -- so it contributes ZERO new bytes and is skipped. This structural
-    storage-aliasing test replaces the r55 hardcoded view-name exclusion
+    storage-aliasing test replaces the hardcoded view-name exclusion
     (``expand``/``broadcast_to``/``as_strided``/``unfold``) with no op/view list,
     and correctly charges only the NEW tensors of a mixed-output op (e.g.
     ``split`` -> views of the input are skipped; a fresh concat is charged). An
@@ -247,7 +247,7 @@ def _preflight_call_allocation(
     "no literal implies bounded by live shapes", is FALSE for shape amplifiers such as
     ``outer``/``kron``/broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/
     ``einsum``/``diag`` and the zero-numel ``mm``/``matmul``/``einsum`` on ``[N,0]@[0,N]``).
-    The r55 op-name allowlist is deleted, so "size-relevance" is decided structurally by
+    The op-name allowlist is deleted, so "size-relevance" is decided structurally by
     the projection, not guessed; the ONLY skip is a call with NO size source at all
     (``_projection_required_by_arguments``). Two structural bounds fire before the real
     call:
@@ -266,7 +266,7 @@ def _preflight_call_allocation(
     If the projection RAISES a NON-allocation error -- a data-dependent op with no
     fake/meta impl (``nonzero``/``unique`` -> ``DynamicOutputShapeException``, or ``fold``
     with capture-invalid ``output_size``) -- it FAILS OPEN to the run-prep bound, so a
-    legitimate such op is never over-refused (the r51 over-catch anti-pattern). But an
+    legitimate such op is never over-refused (the over-catch anti-pattern). But an
     ALLOCATION-classed projection failure (``std::bad_alloc`` in the C++ prelude at
     int-limit N) fails CLOSED typed (r59 section 2.4): the real op's identical prelude
     would die too, so failing open just runs the death twice. An unavailable
@@ -274,7 +274,7 @@ def _preflight_call_allocation(
     stability but no longer gates the projection.
     """
 
-    del entry  # r57: no op-name gate; r61: no has-literal gate either -- any size source projects.
+    del entry  # No op-name gate: no has-literal gate either -- any size source projects.
     # A call producing a view run-prep admitted past the budget has no recorded-output
     # bound behind it, so every fail-open below fails CLOSED for it instead.
     if not _projection_required_by_arguments(args, kwargs):
@@ -310,7 +310,7 @@ def _preflight_call_allocation(
             output_count_ceiling=count_ceiling,
         ) from exc
     except Exception as exc:
-        # r59 section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
+        # section 2.4: an ALLOCATION-classed projection failure (std::bad_alloc in
         # the O(N) C++ prelude at int-limit N) fails CLOSED -- the real op's identical
         # prelude dies too. Every OTHER failure (data-dependent nonzero/unique, fold
         # output_size inconsistency) keeps today's FAIL OPEN so a legitimate op runs.
@@ -463,7 +463,7 @@ def _execute_sparse_call(
                 slot_id=tensor_argument.slot_id,
             ) from exc
         _write_argument(args, kwargs, tensor_argument.argument_path, value)
-    # r55 C3: op-agnostic allocation preflight BEFORE the real dispatch. A typed
+    # Op-agnostic allocation preflight BEFORE the real dispatch. A typed
     # refusal here replaces the raw allocator OOM-kill a hostile literal would
     # otherwise cause; it never masks a genuine signature drift (the drift path
     # below still runs the real call for every non-refused request).
@@ -476,7 +476,7 @@ def _execute_sparse_call(
         # signature drift.
         raise
     except Exception as exc:
-        # r59 section 2.4: an allocation-classed death from the REAL call is a capability
+        # section 2.4: an allocation-classed death from the REAL call is a capability
         # fact, not signature drift -- re-type it typed at ``op_allocation_execution`` so a
         # gate-4-passing run whose live+transient peak still overruns the host reports an
         # allocation refusal, never a misleading ``runtime_signature_mismatch``.
