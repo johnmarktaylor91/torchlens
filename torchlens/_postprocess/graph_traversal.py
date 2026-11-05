@@ -35,6 +35,7 @@ from ..backends.torch._completeness_escape_state import (
     record_pruned_alias_mutation_source,
     record_pruned_rng_control_source,
 )
+from ..backends.torch._storage_exports import mark_alias_rebound_output
 from ..backends.torch.sources import log_source_tensor
 from . import _column_passes, _column_passes_graph
 from ._buffer_addresses import _recorded_buffer_address
@@ -345,7 +346,6 @@ def _add_output_layers(
         )
 
         # Fix function information:
-
         new_output_node.func = identity
         new_output_node.func_name = "none"
         # Identity partition (A1): a synthetic output node is a BOUNDARY
@@ -515,8 +515,9 @@ def _add_output_layers(
                 and actual_comparison is not None
                 and not tensor_nanequal(actual_comparison, comparison_output)
             ):
-                output_node.out_versions_by_child[new_output_node._label_raw] = actual_comparison
-                output_node.has_out_variations = True
+                _record_output_variation(
+                    self, output_node, new_output_node, output_address_suffix, actual_comparison
+                )
 
         # Change original output node:
 
@@ -528,6 +529,21 @@ def _add_output_layers(
         new_output_layers.append(new_output_node._label_raw)
 
     self.output_layers = new_output_layers
+
+
+def _record_output_variation(
+    self: "Trace", output_node: Op, new_output_node: Op, address: str, actual: torch.Tensor
+) -> None:
+    """Record an output node's differing parent snapshot and its capture alias mark, if any.
+
+    A returned sibling view that a view write relabeled onto ``output_node`` is bound to
+    the write; capture recorded that relabel for the output's ``address`` and the forward
+    validation tripwire accepts the snapshot only with the mark.
+    """
+
+    output_node.out_versions_by_child[new_output_node._label_raw] = actual
+    output_node.has_out_variations = True
+    mark_alias_rebound_output(self, address, (output_node._label_raw, new_output_node._label_raw))
 
 
 def _find_output_ancestors(self: "Trace") -> None:

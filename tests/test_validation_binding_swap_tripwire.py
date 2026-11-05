@@ -103,6 +103,18 @@ class _SiblingViewAfterWrite(nn.Module):
         return torch.sub(sibling, other)
 
 
+class _SiblingViewReturnedAfterWrite(nn.Module):
+    """Two views of one tensor returned after a write through the first (a planner's head)."""
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        """Scale ``y[:, :2]`` in place, return it, its sibling ``y[:, 2:3]`` and a fresh tensor."""
+
+        y = x * 2.0
+        first, sibling = y[:, :2], y[:, 2:3]
+        first *= 3.0
+        return {"first": first, "sibling": sibling, "fresh": x[:, 3:4] + 1.0}
+
+
 def _trace(model: nn.Module, x: torch.Tensor) -> Any:
     """Capture ``model`` with saved arguments, as validation does."""
 
@@ -173,6 +185,24 @@ def _bind_past_the_write(trace: Any) -> None:
     _bind(trace, child, {0: _op(trace, "__mul__").layer_label, 1: _op(trace, "view").layer_label})
 
 
+def _output_node(trace: Any, parent_func_name: str) -> Any:
+    """Return the one output node whose parent is the op named ``parent_func_name``."""
+
+    (node,) = [
+        op
+        for op in trace._layer_list
+        if op.is_output
+        and _op_for_validation_label(trace, op.parents[0]).func_name == parent_func_name
+    ]
+    return node
+
+
+def _bind_fresh_output_to_the_write(trace: Any) -> None:
+    """Bind the fresh ``(3, 1)`` output to the in-place write, as the returned sibling is."""
+
+    _bind(trace, _output_node(trace, "add"), {0: _op(trace, "__imul__").layer_label})
+
+
 _PLANTS: dict[str, tuple[type[nn.Module], Callable[[Any], None]]] = {
     "binary_swapped": (_Binary, _swap("sub", 0, 1)),
     "base_and_view_swapped": (_BaseAndView, _swap("add", 0, 1)),
@@ -184,6 +214,10 @@ _PLANTS: dict[str, tuple[type[nn.Module], Callable[[Any], None]]] = {
         _swap("sub", 0, 1),
     ),
     "sibling_alias_and_fresh_operand_swapped": (_SiblingViewAfterWrite, _swap("sub", 0, 1)),
+    "fresh_output_bound_to_the_write": (
+        _SiblingViewReturnedAfterWrite,
+        _bind_fresh_output_to_the_write,
+    ),
 }
 
 
@@ -363,4 +397,45 @@ def test_sibling_alias_snapshot_is_explained_only_by_its_capture_mark() -> None:
     versions = parent.out_versions_by_child
     key = next(k for k in (child.label, child.layer_label) if k in versions)
     versions[key] = versions[key].double()
+    assert not explained(journal)
+
+
+def test_returned_sibling_alias_is_explained_only_by_its_capture_mark() -> None:
+    """A returned sibling view bound to the write needs capture's mark for its output node."""
+
+    from torchlens.validation._core import _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    trace = _trace(_SiblingViewReturnedAfterWrite(), torch.randn(3, 8))
+    parent = _op(trace, "__imul__")
+    (child,) = [
+        op
+        for op in trace._layer_list
+        if op.is_output and op.parents[0] == parent.layer_label and tuple(op.shape) == (3, 1)
+    ]
+
+    def explained(marks: Any) -> bool:
+        """Run the tripwire on the returned sibling with the capture ``marks``."""
+
+        return snapshot_binding_explained(
+            child,
+            parent,
+            _saved_out_payload,
+            lambda label: _op_for_validation_label(trace, label),
+            marks,
+        )
+
+    journal = trace.__dict__["_foreign_departures"]
+    key = (parent._label_raw, child._label_raw)
+    assert journal.alias_slots[key] == frozenset({("args", 0)})
+    assert explained(journal)
+    assert not explained(None)
+    others = {k: v for k, v in journal.alias_slots.items() if k != key}
+    assert not explained(dataclasses.replace(journal, alias_slots=others))
+    assert not explained(
+        dataclasses.replace(journal, alias_slots={**others, key: frozenset({("args", 1)})})
+    )
+    versions = parent.out_versions_by_child
+    label = next(k for k in (child.label, child.layer_label) if k in versions)
+    versions[label] = versions[label].double()
     assert not explained(journal)
