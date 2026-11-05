@@ -19,6 +19,7 @@ import importlib.util
 import operator
 import warnings
 from collections.abc import Callable, Iterator
+from typing import cast
 
 import pytest
 import torch
@@ -27,7 +28,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._utils._torch_compat import get_cond_witness_operator, get_higher_order_operator
 from torchlens.backends.torch import rescue
+from torchlens.backends.torch._backward_dispatch import _BackwardCensusMode
+from torchlens.backends.torch._completeness_finalize import _CompletenessDispatchMode
+from torchlens.backends.torch._completeness_hop import witness_rule_table
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
@@ -96,6 +101,23 @@ def _hop_function(module: str, name: str) -> Callable[..., object]:
     return fn
 
 
+def _torch_cond() -> Callable[..., torch.Tensor]:
+    """Return the user-facing ``cond`` (on torch 2.1, the bare operator itself).
+
+    The witness keys its cond rule on ``cond_op`` where torch has it. Torch 2.1
+    predates ``cond_op`` and ``torch.cond``: ``torch._higher_order_ops.cond.cond``
+    is the operator, and the witness keys its rule on it
+    (``get_cond_witness_operator``), so every cond case runs on every torch.
+
+    Returns
+    -------
+    Callable[..., torch.Tensor]
+        The user-facing ``cond`` entry point.
+    """
+
+    return cast(Callable[..., torch.Tensor], _hop_function("cond", "cond"))
+
+
 class _Forward(nn.Module):
     """Wrap a plain function as a module forward."""
 
@@ -136,6 +158,7 @@ class _CondLinear(nn.Module):
 
         super().__init__()
         self.lin = nn.Linear(3, 3)
+        self.cond = _torch_cond()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Take the linear branch.
@@ -151,7 +174,7 @@ class _CondLinear(nn.Module):
             Branch output plus the input.
         """
 
-        return torch.cond(x.sum() > -1e9, lambda t: self.lin(t), lambda t: t - 1, (x,)) + x
+        return self.cond(x.sum() > -1e9, lambda t: self.lin(t), lambda t: t - 1, (x,)) + x
 
 
 def _cond_true(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -168,7 +191,8 @@ def _cond_true(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
         The forward function.
     """
 
-    return lambda x: torch.cond(x.sum() > -1e9, lambda t: mul(t, 2.0), lambda t: t - 1, (x,)) + x
+    cond = _torch_cond()
+    return lambda x: cond(x.sum() > -1e9, lambda t: mul(t, 2.0), lambda t: t - 1, (x,)) + x
 
 
 def _cond_false(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -185,7 +209,8 @@ def _cond_false(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
         The forward function.
     """
 
-    return lambda x: torch.cond(x.sum() < -1e9, lambda t: t - 1, lambda t: mul(t, 2.0), (x,)) + x
+    cond = _torch_cond()
+    return lambda x: cond(x.sum() < -1e9, lambda t: t - 1, lambda t: mul(t, 2.0), (x,)) + x
 
 
 def _while_loop(mul: _Mul) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -398,3 +423,22 @@ def test_cond_capture_holds_only_the_taken_branch() -> None:
     assert "__mul__" in true_funcs and "__sub__" not in true_funcs
     assert "__mul__" in false_funcs and "__sub__" not in false_funcs
     assert true_funcs.count("__mul__") == 1 and false_funcs.count("__mul__") == 1
+
+
+def test_cond_witness_rule_is_keyed_on_the_operator_cond_dispatches_through() -> None:
+    """The cond rule sits on ``cond_op`` where torch has it, else on the bare 2.1 operator.
+
+    On current torch the key is the same object as before the bare-operator
+    fallback (``get_higher_order_operator("cond", "cond_op")``); on torch 2.1 it is
+    ``torch._higher_order_ops.cond.cond``, the operator a user's ``cond`` call
+    dispatches through. Both witness dispatch modes carry the rule on it.
+    """
+
+    module = importlib.import_module("torch._higher_order_ops.cond")
+    operator_ = get_cond_witness_operator()
+    if hasattr(module, "cond_op"):
+        assert operator_ is module.cond_op
+        assert operator_ is get_higher_order_operator("cond", "cond_op")
+    else:
+        assert operator_ is module.cond
+    assert {_CompletenessDispatchMode, _BackwardCensusMode} <= set(witness_rule_table(operator_))

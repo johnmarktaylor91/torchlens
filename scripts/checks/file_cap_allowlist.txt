@@ -332,10 +332,9 @@ torchlens/_postprocess/_materialize.py::ingest_op_records	122
 torchlens/_postprocess/_primitive_profile.py::_materialize_backward_primitive_profile	64
 torchlens/_postprocess/_recurrence.py::_build_preview_recurrence_graph	111
 torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
-torchlens/_postprocess/ast_branches.py	2214
+torchlens/_postprocess/ast_branches.py	2202
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
-torchlens/_postprocess/ast_branches.py::get_file_index	91
 torchlens/_postprocess/control_flow.py	1140
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
@@ -487,9 +486,9 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4390
+torchlens/_utils/_torch_compat.py	4356
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
-torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
+torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	62
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
 torchlens/_utils/_torch_compat.py::probe_c10d_capabilities	73
 torchlens/_utils/_torch_compat.py::probe_funcol_wait_interposition	61
@@ -836,11 +835,11 @@ torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_grad_pro
 torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_wrapper	75
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes	401
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes._restore_installed	108
-torchlens/backends/torch/_completeness_storage.py	870
+torchlens/backends/torch/_completeness_storage.py	866
 torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_method	65
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
-torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
+torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
@@ -946,7 +945,7 @@ torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
-torchlens/backends/torch/rescue.py	933
+torchlens/backends/torch/rescue.py	918
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
@@ -1038,7 +1037,6 @@ torchlens/debug/_infer_input_shape.py::_run_search.finalize	106
 torchlens/debug/_infer_input_shape.py::_shape_from_prior	138
 torchlens/debug/_infer_input_shape.py::_verified_result	65
 torchlens/debug/_nan.py::bisect_nan	61
-torchlens/debug/_nan.py::find_nan	93
 torchlens/debug/_nan.py::nonfinite_origin	91
 torchlens/debug/_nan_backward.py::bisect_nan_backward	86
 torchlens/debug/_params.py::compare_params	123
