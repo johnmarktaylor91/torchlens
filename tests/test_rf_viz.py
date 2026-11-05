@@ -198,6 +198,22 @@ def test_show_draws_a_single_pil_input_as_the_base_image() -> None:
     pixels = set(rendered.getdata())
     assert (255, 255, 255) in pixels and len(pixels) > 1  # the photo, with the box drawn on it
 
+    # A raw photo of another size than the model input (resized or cropped by preprocessing)
+    # cannot carry the box; the overlay then draws the preprocessed input tensor as the photo.
+    class _Trace:
+        input = Image.new("RGB", (40, 30), "white")
+        provenance = SimpleNamespace(
+            input_preprocessor=SimpleNamespace(config={"mean": [0.5] * 3, "std": [0.5] * 3})
+        )
+
+        def __getitem__(self, label: str) -> Any:
+            return SimpleNamespace(out=torch.full((1, 3, 8, 8), -1.0))  # de-normalizes to black
+
+    view._op = SimpleNamespace(source_trace=_Trace())
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == (8, 8)
+    assert (0, 0, 0) in set(rendered.getdata())
+
 
 def test_show_3d_requires_explicit_slice() -> None:
     """Require a plane selection before rendering a 3-D spatial input."""
