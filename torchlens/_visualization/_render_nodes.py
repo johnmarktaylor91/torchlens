@@ -1203,9 +1203,11 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
     ]
     lines = ["output"]
-    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:3]:
+    batch_items = sorted({int(row.get("batch_item", 0)) for row in rows})[:3]
+    for batch_item in batch_items:
         item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:5]
-        lines.append(f"item {batch_item}")
+        if len(batch_items) > 1:  # one input needs no "item 0" heading
+            lines.append(f"item {batch_item}")
         lines.extend(
             [
                 f"{int(row.get('rank', 0))}. "
