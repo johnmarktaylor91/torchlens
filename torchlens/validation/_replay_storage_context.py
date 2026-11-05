@@ -250,7 +250,7 @@ def relay_to_captured_layout(layer: Any, arg_type: str, key: Any, value: Any) ->
         return relay_to_layout(value, layout)
     detached = value.detach()
     relayed = relay_to_layout(detached, layout)
-    if relayed is detached:
+    if relayed is detached or not isinstance(relayed, torch.Tensor):
         return value
     with torch.enable_grad():
         grad_leaf = relayed.detach().requires_grad_(True)

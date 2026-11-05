@@ -18,7 +18,6 @@ import torch.nn.functional as F
 
 import torchlens as tl
 from torchlens.intervention.types import CapturedArgTemplate, ParentRef
-from torchlens.validation._replay_storage_context import relay_to_captured_layout
 
 
 class _GEGLU(nn.Module):
@@ -91,6 +90,14 @@ def test_matrix_times_strided_vector_validates() -> None:
     model = _StridedVectorSolve()
     xy = _orthogonal_columns(model)
     assert tl.validate(model, xy, scope="forward", validate_metadata=True)
+
+
+def relay_to_captured_layout(layer: object, arg_type: str, key: object, value: object) -> object:
+    """Call the replay helper, imported late so the model tests run against any build."""
+
+    from torchlens.validation._replay_storage_context import relay_to_captured_layout as relay
+
+    return relay(layer, arg_type, key, value)
 
 
 class _Layer:
