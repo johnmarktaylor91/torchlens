@@ -352,3 +352,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad9bbbedfec4801a390aa1d203dfed7f81a46ef9 (dirty)
 recorded: 2026-11-04T14:50:07.852730+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: lens-styles-1104: node_style=profiling drops rows on inputs and outputs and the single-pass out= row; text ink rechecked on channel fills
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a442b337cae3a36f16d62ea292f0334a8d55492b (clean)
+recorded: 2026-11-05T04:18:47.881298+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: input-photo-1104: input photo and picture boxes, sizes drop .0, compact counts, viridis key, header trim and network count, gentle size_by
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4181fa4e0590d0ef8d370a688d097ddb77c1a84b (clean)
+recorded: 2026-11-05T07:04:59.137347+00:00

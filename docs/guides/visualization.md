@@ -31,8 +31,11 @@ program to be installed.
 `trace.draw()`
 
 The graph flows from the input at the bottom to the output at the top. The header in the top
-left corner names the model and counts what was drawn: 10 operations whose outputs total
-18.9 KiB, and 1,610 parameters, all trainable. Each thick-bordered box is one module call: here
+left corner names the model and counts the traced network: 12 operations whose outputs total
+18.9 KB (two of them, the batch norms' step-counter updates, are hidden with the buffers), and
+1.61K parameters, all trainable. The count is the network's whatever the drawing collapses: a
+`depth=1` drawing of the same model still says 12 operations. Counts from 1,000 up print compact in the
+parameter line (`11.7M params`), and op counts from 10,000 up (`12.3K ops`). Each thick-bordered box is one module call: here
 `@features` (an `nn.Sequential`) holds two `ConvBlock` modules, `@features.0` and
 `@features.1`. The name under each box's address is the module's class.
 
@@ -71,6 +74,13 @@ a module ran itself while the rest ran in its submodules (the residual `add` of 
 the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
 (`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
+
+When the trace was captured from a photo, `tl.trace(model, "cat.jpg")` or a PIL image, the
+input node shows a small thumbnail of it above its rows. `trace.batch_render = "shape_only"`
+(or `CaptureOptions(batch_render="shape_only")`) draws the plain node instead. Any node that
+carries a picture (the input photo, an `annotate(image=...)` picture, a layer thumbnail) draws
+as a rounded box in its usual fill with the picture in its own cell above the text, and so does
+an output node that lists decoded labels.
 
 ## Fill colors
 
@@ -228,12 +238,38 @@ never folds.
 
 `trace.draw(module='blocks.1')`
 
-The header gives the path to the module (`Stack > blocks.1`, of class `Block`) and how much
-was drawn. The operations outside the module that connect to it appear as stubs: green
+The header gives the path to the module (`Stack > blocks.1`, of class `Block`) and that
+module's operation count and size. The operations outside the module that connect to it appear as stubs: green
 `from` nodes feed the module and salmon `to` nodes read from it, each naming the operation and
 module on the other side. The reading key at the top is on by default for a focused drawing.
 
 ## Ready-made views
+
+`view=` picks a premade view: a bundle of draw settings plus a caption, each built to answer
+one question.
+
+| Call | Question it answers |
+|---|---|
+| `trace.draw(view="overview")` | what is this model? |
+| `trace.draw(view="debug")` | what is broken? |
+| `trace.draw(view="speed")` | where does time go? |
+| `trace.draw(view="dims")` | what shape is the data? |
+| `trace.draw(view="transformer")` | how is attention wired? |
+| `trace.draw(view="memory")` | what is big in bytes? |
+| `trace.draw(view="sequence")` | how do the passes unfold? |
+| `trace.draw(view="compute")` | where are the FLOPs? |
+| `trace.draw(view="interventions")` | what did the edits change? |
+
+Each view prints any caption lines it needs under the header block (the header itself names
+the model, the drawn count and size, and the parameters). Leaving `view=` unset draws the plain graph, which already shows
+every operation. Any keyword you pass wins over the view's own settings, so combinations are
+spelled with keywords, for example `trace.draw(view="debug", show_edge_shapes=True)`, and
+`theme=` (see [Themes](#themes)) changes the colours of any view.
+
+A view checks that the trace holds what it needs and refuses with a remedy when it does not:
+`"speed"` needs timings, `"transformer"` needs attention modules and `"sequence"` needs more
+than one pass. `"transformer"` draws the first repeated block that holds attention (for GPT-2,
+`transformer.h.0`) and names it in the caption; pass `module=` to choose another.
 
 ### Profiling: `node_style="profiling"`
 
@@ -243,12 +279,14 @@ module on the other side. The reading key at the top is on by default for a focu
 
 Each node gains rows for how long the operation took (`t=`), the size of its output (`out=`),
 the line of code that called it (`call=`) and the function that line is in (`fn=`).
+`view="speed"`, `view="memory"` and `view="compute"` turn these rows on themselves and color
+the nodes by time, bytes or FLOPs.
 
-### What an edit changed: `highlight="interventions"`
+### What an edit changed: `view="interventions"`
 
 After an edit (here, zeroing the output of `fc1` on a fork of the trace), the edited node is
-marked in purple with the edit's name, and the header counts the edits and warns that values
-after the edit are counterfactual, not what the model computed:
+marked in purple with the edit's name, and the header counts the edits in one line
+(`1 edit: Δ zero_ablate on linear_1_1`); the capture facts stay on `edited.outcome`:
 
 ```text
 edited = trace.fork()
@@ -269,28 +307,38 @@ edit: everything whose value the edit could have changed.
 The shading is drawn into SVG directly; for PNG and PDF output it needs the optional
 `cairosvg` package, and without it TorchLens warns and draws the edit marks alone.
 
-`highlight="interventions"` draws the full record of every edit: each edited node is marked
-(a solid border is a recorded fact, a dashed one an inferred attribution), and the caption
-lists each edit, how it was applied and the audit record behind it. The full record is also
-written beside the image as `<path>.census.txt`.
+`view="interventions"` shows what the edits changed: each edited op gets a purple outline
+(dashed when the site is inferred, not recorded), and every other op whose saved value
+differs from the clean run gets a light purple outline and its largest absolute change.
+A collapsed module box takes the marks of the ops inside it: the edit outline when it holds
+an edited op, otherwise the light purple outline and the largest change among its ops.
+The clean values come from the unedited trace the fork came from, so keep it alive; when it
+is gone the caption says so and only the edits are marked. The full record is written
+beside the image as `<path>.census.txt`. A trace with
+no recorded edit refuses with `surgery_evidence_missing`.
 
 [![The intervention view, with its caption](../images/visualization/interventions.png)](../images/visualization/interventions.png)
 
-`edited.draw(highlight='interventions')`
+`edited.draw(view='interventions')`
 
 ## Color and size by any value
 
 `color_by=` fills nodes from a color ramp by a value, and `size_by=` scales node area by a
 value. Both take a built-in name (`"time"`, `"bytes"`, `"flops"`, `"magnitude"`,
 `"grad_norm"`, and for `size_by` also `"dims"`), the name of a field on the node records, or
-a function from a node to a number. The legend states the source, the scale and the range.
+a function from a node to a number. The key shows a colour bar labelled with the quantity and
+its units at both ends (`time: 0.098 ms ... 1.46 ms`) and, with `size_by`, one line such as
+`size: output bytes, 15 KB ... 60 KB`, and nothing else. The colour scale is viridis, dark for
+high values (slow, big) on a light page.
 
 [![Nodes colored by execution time and sized by output bytes](../images/visualization/color_size.png)](../images/visualization/color_size.png)
 
 `trace.draw(color_by='time', size_by='bytes')`
 
-Nodes with no value for the source are left unfilled and the legend says how many were
-encoded. `size_scale=` chooses how values map to area (the legend names the mapping in use).
+Nodes with no value for the source are left unfilled. `size_scale=` chooses how values map
+to area. The smallest value draws at the drawing's typical node size and the largest at twice
+that area, so a sized drawing stays close to its plain size; a node whose text needs more room
+draws at what its text needs, at the normal font size.
 
 ## Direction
 
@@ -415,6 +463,11 @@ These keywords of `Trace.draw` are not pictured above:
 | `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
 | `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"cone"` |
 | `bwd`, `intervening_cluster` | backward and combined graphs: which backward pass or passes to draw, and where backward-only nodes sit (`"upstream"`, `"outside"`, `"downstream"` or `"own"`) |
+
+To put a picture on a node, annotate it before drawing: `trace.annotate(label, image=...)`
+takes a path to any image file Pillow can open (PNG, JPEG, WebP, ...) or a PIL image. A PNG
+file is drawn as it is; any other picture is drawn from a PNG copy, because some Graphviz
+builds cannot read JPEG node images.
 
 The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
 lists every keyword with its accepted values.

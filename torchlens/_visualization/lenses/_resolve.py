@@ -13,8 +13,8 @@ honesty terms:
 - View-aware source-family resolution (N16) with the zero-coverage refusal
   and the mandatory rolled aggregation line.
 - The visible-detail budget resolver (N10) for rows that compact.
-- Refusal taxonomy (memo section 2 item 5): overview/blueprint never
-  refuse; speed/memory/compute/dims refuse on missing EVIDENCE;
+- Refusal taxonomy (memo section 2 item 5): overview never
+  refuses; speed/memory/compute/dims refuse on missing EVIDENCE;
   transformer/sequence refuse on factual absence of SUBJECT. Every refusal
   names the remedy.
 - Disclosure is a RENDERED artifact: the assembled disclosure lines ship as
@@ -30,11 +30,16 @@ from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
-from ..._record_type import record_type
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
+    LENS_BANNER_OMIT_KEY,
+    LENS_CAPTION_KEY,
+)
 from ...errors._base import TorchLensWarning
 from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
+from ._attention import attention_role_spec_fn, first_attention_block, has_attention_subject
 from ._budget import BudgetResolution, resolve_budget
 from ._families import ResolvedSource, resolve_source_family, scalar_or_none, source_coverage
 from ._filter import CompiledDisplayFilter, DisplayFilter, compile_display_filter
@@ -91,31 +96,6 @@ def _request_dialect(user_kwargs: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-#: Attention role rows: module-address suffix -> per-layer fact wording.
-#: These are per-LAYER facts (the module tree's own names plus op types),
-#: never trace classification -- a hybrid gets rows exactly where the facts
-#: are.
-_ATTENTION_ROLE_SUFFIXES = {
-    "q_proj": "attention role: query projection",
-    "k_proj": "attention role: key projection",
-    "v_proj": "attention role: value projection",
-    "out_proj": "attention role: output projection",
-    "o_proj": "attention role: output projection",
-    "qkv": "attention role: fused q/k/v projection",
-}
-
-#: Op types that are themselves attention facts.
-_ATTENTION_OP_TYPES = frozenset(
-    {
-        "scaled_dot_product_attention",
-        "scaleddotproductattention",
-        "sdpa",
-        "multi_head_attention_forward",
-        "multiheadattentionforward",
-    }
-)
-
-
 @dataclass(frozen=True)
 class LensResolution:
     """One resolved lens draw: parameters plus mandatory disclosure.
@@ -148,48 +128,18 @@ class LensResolution:
     notices: tuple[str, ...] = dataclass_field(default=())
 
 
-def _module_facets_say_attention(trace: Trace) -> bool:
-    """The facet leg of the attention-subject probe.
+def _has_multipass_subject(trace: Trace) -> bool:
+    """Return whether a parameterised layer runs more than one pass.
 
-    ``Module.facets`` is single-call and refuses ``module_call_ambiguous``
-    on any reused module; that per-module accessor limitation is never the
-    TRACE-level fact and must not surface as the user's refusal (D03-R1)
-    -- the op scan in :func:`_has_attention_subject` still probes those
-    modules' calls.
+    A loop reuses weights (an RNN cell, a tied block); a feed-forward model
+    that calls one stateless ``nn.ReLU`` twice has nothing to sequence, so
+    reused parameter-free ops alone do not count.
     """
 
-    try:
-        for module in trace.modules:
-            try:
-                if module.facets.has("q"):
-                    return True
-            except InvalidArgumentError as error:
-                if error.fields.get("code") != "module_call_ambiguous":
-                    raise
-    except (AttributeError, TypeError):
-        pass
-    return False
-
-
-def _has_attention_subject(trace: Trace) -> bool:
-    """Return whether the trace factually contains attention structure."""
-
-    if _module_facets_say_attention(trace):
-        return True
-    for op in trace._layer_list:
-        if str(record_type(op, "")) in _ATTENTION_OP_TYPES:
-            return True
-        for address in getattr(op, "modules", ()) or ():
-            tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
-            if tail in _ATTENTION_ROLE_SUFFIXES:
-                return True
-    return False
-
-
-def _has_multipass_subject(trace: Trace) -> bool:
-    """Return whether any layer runs more than one pass."""
-
-    return any(getattr(op, "num_passes", 1) > 1 for op in trace._layer_list)
+    return any(
+        getattr(op, "num_passes", 1) > 1 and bool(getattr(op, "has_params", False))
+        for op in trace._layer_list
+    )
 
 
 def _check_subject(trace: Trace, lens: LensPreset) -> None:
@@ -198,20 +148,20 @@ def _check_subject(trace: Trace, lens: LensPreset) -> None:
     subject = LENS_SUBJECTS.get(lens.name)
     if subject is None:
         return
-    if subject == "attention_structure" and not _has_attention_subject(trace):
+    if subject == "attention_structure" and not has_attention_subject(trace):
         raise InvalidArgumentError(
             "no attention structure detected in this trace; the transformer "
-            "lens never draws an ordinary graph under a domain name",
-            code="lens_attention_subject_absent",
-            remedy="use theme='overview' for a domain-neutral picture",
-            argument="lens",
+            "view never draws an ordinary graph under a domain name",
+            code="view_attention_subject_absent",
+            remedy="leave view= unset, or pass view='overview', for a domain-neutral picture",
+            argument="view",
         )
     if subject == "multi_pass" and not _has_multipass_subject(trace):
         raise InvalidArgumentError(
-            "this trace has a single pass; nothing to sequence",
-            code="lens_single_pass_no_sequence",
-            remedy="use theme='overview' for a domain-neutral picture",
-            argument="lens",
+            "no layer with weights runs more than once in this trace; nothing to sequence",
+            code="view_single_pass_no_sequence",
+            remedy="leave view= unset, or pass view='overview', for a domain-neutral picture",
+            argument="view",
         )
 
 
@@ -237,17 +187,17 @@ def _resolve_perf_source(
     if coverage.encoded == 0:
         family = source.family
         if coverage.total == 0 or _no_member_anywhere(trace, family_token):
-            code = "lens_headline_evidence_missing"
+            code = "view_headline_evidence_missing"
         else:
-            code = "lens_source_zero_coverage"
+            code = "view_source_zero_coverage"
         raise InvalidArgumentError(
-            f"the {lens.name!r} lens needs {family.name} evidence "
+            f"the {lens.name!r} view needs {family.name} evidence "
             f"({source.member}) and this capture has none: 0 of "
             f"{coverage.total} ops carry it -- the picture would answer a "
             "different question under a populated legend",
             code=code,
             remedy=family.capture_remedy,
-            argument="lens",
+            argument="view",
         )
     from ._families import records_for_member, safe_label
 
@@ -297,7 +247,9 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
     """Return the internal top-5 callout preset fn for the speed lens."""
 
     total = sum(values.values())
-    top = sorted(values.items(), key=lambda pair: pair[1], reverse=True)[:5]
+    # Zero-time records (model inputs and outputs) never rank.
+    timed = [(label, value) for label, value in values.items() if value > 0]
+    top = sorted(timed, key=lambda pair: pair[1], reverse=True)[:5]
     ranks = {label: index + 1 for index, (label, _) in enumerate(top)}
     shares = {label: (value / total if total else 0.0) for label, value in top}
     del unit_wording  # units ride the legend; the callout stays compact
@@ -309,49 +261,57 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
 
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:
-                spec.lines.append(f"top-{ranks[candidate]} of 5 ({shares[candidate]:.0%} of total)")
+                spec.lines.append(
+                    f"top-{ranks[candidate]} of {len(top)} ({shares[candidate]:.0%} of total)"
+                )
                 break
         return spec
 
     return _apply
 
 
-def _debug_label_spec_fn() -> Any:
-    """Return the debug preset fn adding dtype/device label rows."""
+def _dtype_device(record: Any) -> tuple[str | None, str | None]:
+    """Return one record's output dtype and device as display strings."""
+
+    dtype = getattr(record, "dtype", None)
+    device = getattr(record, "device_ref", None)
+    return (
+        None if dtype is None else str(dtype).replace("torch.", ""),
+        None if device is None else str(device),
+    )
+
+
+def _usual_dtype_device(trace: Trace) -> tuple[str | None, str | None]:
+    """Return the trace's most common (dtype, device) pair over its ops."""
+
+    counts: dict[tuple[str | None, str | None], int] = {}
+    for op in trace._layer_list:
+        pair = _dtype_device(op)
+        counts[pair] = counts.get(pair, 0) + 1
+    if not counts:
+        return None, None
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def _debug_label_spec_fn(usual: tuple[str | None, str | None]) -> Any:
+    """Return the debug preset fn marking ops whose dtype or device is unusual.
+
+    The usual pair goes in the caption once; a node gets a row only where it
+    differs (a cast, a device move), which is what a debugging reader is
+    looking for.
+    """
 
     def _apply(layer: Any, spec: Any) -> Any:
-        """Append dtype/device label rows where the layer carries them."""
+        """Append a dtype/device row when the layer differs from the usual pair."""
 
-        dtype = getattr(layer, "dtype", None)
-        device = getattr(layer, "output_device", None)
+        dtype, device = _dtype_device(layer)
         parts = []
-        if dtype is not None:
-            parts.append(f"dtype: {str(dtype).replace('torch.', '')}")
-        if device:
+        if dtype is not None and dtype != usual[0]:
+            parts.append(f"dtype: {dtype}")
+        if device is not None and device != usual[1]:
             parts.append(f"device: {device}")
         if parts:
             spec.lines.append(", ".join(parts))
-        return spec
-
-    return _apply
-
-
-def _attention_role_spec_fn() -> Any:
-    """Return the transformer preset fn attaching per-layer role rows."""
-
-    def _apply(layer: Any, spec: Any) -> Any:
-        """Append the observed attention-role row for recognized layers."""
-
-        layer_type = str(record_type(layer, ""))
-        if layer_type in _ATTENTION_OP_TYPES:
-            spec.lines.append("attention: scaled dot-product (observed)")
-            return spec
-        for address in getattr(layer, "modules", ()) or ():
-            tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
-            row = _ATTENTION_ROLE_SUFFIXES.get(tail)
-            if row is not None:
-                spec.lines.append(row)
-                break
         return spec
 
     return _apply
@@ -431,10 +391,10 @@ def _warn_secondary(lens_name: str, member: str, why: str) -> str:
     notice = f"{member} degraded: {why}"
     warnings.warn(
         TorchLensWarning(
-            f"lens {lens_name!r} SECONDARY member {member} degraded: {why}. "
-            "Remedy: the lens renders without it; re-capture or adjust the "
-            "view to restore the member.",
-            code="lens_secondary_degraded",
+            f"view {lens_name!r} SECONDARY member {member} degraded: {why}. "
+            "Remedy: the view renders without it; re-capture or adjust the "
+            "draw keywords to restore the member.",
+            code="view_secondary_degraded",
         ),
         stacklevel=4,
     )
@@ -483,25 +443,25 @@ def _entry_gates(trace: Trace, lens: LensPreset, user_kwargs: dict[str, Any]) ->
     # -- Legend-dependence gate (mechanism; populated by the battery). -----
     if lens.name in LEGEND_DEPENDENT_LENSES and user_kwargs.get("show_legend", True) is False:
         raise InvalidArgumentError(
-            f"the legibility gate ruled the {lens.name!r} lens "
+            f"the legibility gate ruled the {lens.name!r} view "
             "legend-DEPENDENT (naive readers could not identify the channel "
-            "without it); explicit show_legend=False is refused for this lens",
-            code="lens_legend_suppression_refused",
-            remedy="drop show_legend=False, or use a lens the gate ruled legend-optional",
+            "without it); explicit show_legend=False is refused for this view",
+            code="view_legend_suppression_refused",
+            remedy="drop show_legend=False, or use a view the gate ruled legend-optional",
             argument="show_legend",
         )
 
     # -- Detail ceiling for the collapse='none' rows (debug, dims). --------
     if lens.name in ("debug", "dims") and len(trace._layer_list) > LENS_DETAIL_CEILING:
         raise InvalidArgumentError(
-            f"the {lens.name!r} lens renders uncollapsed and this "
+            f"the {lens.name!r} view renders uncollapsed and this "
             f"trace has {len(trace._layer_list)} ops (ceiling {LENS_DETAIL_CEILING})",
-            code="lens_above_detail_budget",
+            code="view_above_detail_budget",
             remedy=(
                 "focus the render (module= or a Selection region), or pass an "
                 "explicit collapse= override at your own risk"
             ),
-            argument="lens",
+            argument="view",
         )
 
 
@@ -521,12 +481,10 @@ def _perf_stage(
         )
     coverage = source_coverage(trace, source.member)
     build.disclosure.append(
-        # The reconciling phrase: the encoding legend counts VISIBLE nodes,
-        # this line counts ops -- two denominators, one picture (D03 AMBER).
-        f"coverage: encoded {coverage.encoded} of {coverage.total} ops ({source.member}); "
-        "the legend counts visible nodes, which can each aggregate several ops"
+        # Ops, not visible nodes: one visible node can aggregate several ops.
+        f"coverage: encoded {coverage.encoded} of {coverage.total} ops; "
+        f"colour: {source.family.unit_wording}"
     )
-    build.disclosure.append(source.family.unit_wording)
     if source.aggregation_line is not None:
         build.disclosure.append(source.aggregation_line)
     if lens.name == "speed":
@@ -562,17 +520,20 @@ def _debug_stage(trace: Trace, lens: LensPreset, build: _LensBuild) -> Nonfinite
 
     if lens.name != "debug":
         return None
-    build.preset_fns.append(_debug_label_spec_fn())
+    usual = _usual_dtype_device(trace)
+    build.preset_fns.append(_debug_label_spec_fn(usual))
+    if usual[0] is not None and usual[1] is not None:
+        build.disclosure.append(f"ops are {usual[0]} on {usual[1]} unless a node says otherwise")
     nonfinite = derive_nonfinite_channel(trace)
     build.disclosure.extend(nonfinite.legend_lines)
     if nonfinite.zero_coverage:
         warnings.warn(
             TorchLensWarning(
                 "nonfinite status: NOT CHECKED -- no saved payloads to "
-                "examine; the debug lens renders without per-node status "
+                "examine; the debug view renders without per-node status "
                 "motifs. Remedy: re-capture with saved payloads or "
                 "CaptureOptions(on_nonfinite='track').",
-                code="lens_nonfinite_not_checked",
+                code="view_nonfinite_not_checked",
             ),
             stacklevel=3,
         )
@@ -595,8 +556,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
             _warn_secondary(
                 lens.name,
                 "stack_by",
-                "the lockstep license does not hold on this trace "
-                "(pass indexes are not globally non-decreasing)",
+                "the passes are not in order on this trace, so they are not stacked",
             )
         )
 
@@ -612,13 +572,21 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
                 _warn_secondary(
                     lens.name,
                     "show_saved_for_backward",
-                    "no autograd-memory evidence on this capture",
+                    "this capture has no saved-for-backward sizes",
                 )
             )
 
-    # -- Transformer: per-layer role rows. ---------------------------------
+    # -- Transformer: per-layer role rows, one block in full. --------------
     if lens.name == "transformer":
-        build.preset_fns.append(_attention_role_spec_fn())
+        build.preset_fns.append(attention_role_spec_fn())
+        block = None if build.user_kwargs.get("module") else first_attention_block(trace)
+        if block is not None:
+            address, class_name, count = block
+            build.effective["module"] = address
+            build.disclosure.append(
+                f"showing {address}, the first of {count} {class_name} blocks; "
+                "pass module= to draw another"
+            )
 
 
 def _filter_stage(
@@ -657,7 +625,7 @@ def _skin_stage(skin: str | None, build: _LensBuild) -> None:
         build.preset_fns.append(_channel_exclusivity_spec_fn(theme))
     if channel_active and build.effective.get("collapse") not in (None, "none"):
         build.effective["collapsed_node_spec_fn"] = _neutral_collapsed_spec_fn(
-            theme.neutral_aggregate_fill, build.user_kwargs.get("collapsed_node_spec_fn")
+            theme.neutral_aggregate_fill, build.effective.get("collapsed_node_spec_fn")
         )
         build.disclosure.append("collapsed boxes: neutral fill = aggregate, not encoded")
 
@@ -671,13 +639,11 @@ def _finalize_draw_kwargs(build: _LensBuild, passthrough: dict[str, Any]) -> dic
     if composed is not None:
         build.effective["node_spec_fn"] = composed
 
-    # -- Rendered disclosure caption (never a tooltip). ---------------------
-    caption = "\\n".join(line.replace("\n", " ") for line in build.disclosure)
+    # -- Rendered disclosure caption (never a tooltip), under the header. ---
     graph_overrides = dict(build.effective.get("graph_overrides") or {})
-    existing_label = graph_overrides.get("label")
-    graph_overrides["label"] = f"{existing_label}\\n{caption}" if existing_label else caption
-    graph_overrides.setdefault("labelloc", "b")
-    graph_overrides.setdefault("fontsize", "10")
+    graph_overrides[LENS_CAPTION_KEY] = "\n".join(
+        line.replace("\n", " ") for line in build.disclosure
+    )
     build.effective["graph_overrides"] = graph_overrides
 
     draw_kwargs: dict[str, Any] = {}
@@ -688,6 +654,54 @@ def _finalize_draw_kwargs(build: _LensBuild, passthrough: dict[str, Any]) -> dic
             draw_kwargs[_DRAW_KWARG_SPELLINGS.get(name, name)] = value
     draw_kwargs.update(passthrough)
     return draw_kwargs
+
+
+def _start_build(trace: Trace, lens: LensPreset, request_kwargs: dict[str, Any]) -> _LensBuild:
+    """Merge the lens members under the explicit kwargs into a fresh build."""
+
+    effective = resolve_lens_request(lens, request_kwargs, lens.surface)
+    effective.pop("preset_spec_fn", None)
+    if (
+        effective.get("vis_mode") == "rolled"
+        and "vis_mode" not in request_kwargs
+        and not _has_multipass_subject(trace)
+    ):
+        # Rolling a feed-forward model only folds reused stateless ops (one
+        # nn.ReLU called twice) into loops that are not there.
+        effective["vis_mode"] = "unrolled"
+    build = _LensBuild(
+        effective=effective,
+        user_kwargs=request_kwargs,
+        view=str(effective.get("vis_mode", _effective_view(lens, request_kwargs))),
+        # No "view: <name>" line: the header carries only what the picture shows.
+        disclosure=[],
+    )
+    if lens.preset_spec_fn is not None:
+        build.preset_fns.append(lens.preset_spec_fn)
+    return build
+
+
+def _surgery_mount(trace: Trace, build: _LensBuild) -> None:
+    """Mount the surgery stage: marks, plain caption, and the header lines it moves.
+
+    The headline check, mark family and census resolve in the surgery module
+    (missing evidence refuses ``surgery_evidence_missing``); the header's
+    capture-status lines about the edit move to the census sidecar, since the
+    header's edit line already says the trace is edited.
+    """
+
+    from .. import surgery_visuals as _surgery_visuals
+
+    mark_spec_fn, box_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
+    build.preset_fns.append(mark_spec_fn)
+    # Collapsed boxes take the marks of the ops inside them; the user's fn last.
+    build.effective["collapsed_node_spec_fn"] = _compose_node_spec_fns(
+        [box_spec_fn], build.effective.get("collapsed_node_spec_fn")
+    )
+    build.disclosure.extend(census_lines)
+    overrides = dict(build.effective.get("graph_overrides") or {})
+    overrides[LENS_BANNER_OMIT_KEY] = EDITED_HEADER_OMITTED_BANNERS
+    build.effective["graph_overrides"] = overrides
 
 
 def resolve_lens(
@@ -731,28 +745,13 @@ def resolve_lens(
     resolved_lens = lens if isinstance(lens, LensPreset) else get_lens(lens)
     _check_subject(trace, resolved_lens)
     _entry_gates(trace, resolved_lens, request_kwargs)
-
-    effective = resolve_lens_request(resolved_lens, request_kwargs, resolved_lens.surface)
-    effective.pop("preset_spec_fn", None)
-    build = _LensBuild(
-        effective=effective,
-        user_kwargs=request_kwargs,
-        view=_effective_view(resolved_lens, request_kwargs),
-        disclosure=[f"lens: {resolved_lens.name} -- {resolved_lens.question}"],
-    )
-    if resolved_lens.preset_spec_fn is not None:
-        build.preset_fns.append(resolved_lens.preset_spec_fn)
+    build = _start_build(trace, resolved_lens, request_kwargs)
 
     source, channel_values = _perf_stage(trace, resolved_lens, build)
     budget = _budget_stage(trace, build, channel_values)
     nonfinite = _debug_stage(trace, resolved_lens, build)
-    if resolved_lens.name == "surgery":
-        # Surgery lens (lane F43): headline check + mark family + census
-        # disclosure resolve in the surgery module; this stage only mounts
-        # them on the build (missing evidence refuses surgery_evidence_missing).
-        mark_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
-        build.preset_fns.append(mark_spec_fn)
-        build.disclosure.extend(census_lines)
+    if resolved_lens.name == "interventions":
+        _surgery_mount(trace, build)
     _secondary_stages(trace, resolved_lens, build)
     compiled_filter = _filter_stage(trace, display_filter, build)
     _skin_stage(skin, build)

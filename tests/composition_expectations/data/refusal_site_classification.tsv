@@ -282,11 +282,11 @@ torchlens._observability._spans:SpanRegistry.open:SpanError::2	CONTRACTED	span_o
 torchlens._observability._spans:validate_scalar_metadata:SpanError::1	CONTRACTED	region_metadata_invalid	new C06 observability-substrate site contracted in its own change: typed teaching refusal with contract-doc row (lane C06)
 torchlens._observability._kernels:_as_reduction_tensor:StatKernelError:_refuse_dtype:1	CONTRACTED	stat_dtype_unsupported	new C06 observability-substrate site contracted in its own change: factory-built typed refusal (complex dtypes have no signed magnitude ordering)
 torchlens._visualization._rank_layout_internal.layout:render_rank_layout:RankRenderEndpointError::1	CONTRACTED	rank_render_endpoint_undeclared	coded, documented (error contract), pipeline-invariant tripwire (vizmech D20); reachable only through a render-pipeline bug
-torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::1	CONTRACTED	lens_member_unknown	coded, documented; user-reachable at lens registration (themes N12)
-torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::2	CONTRACTED	lens_secondary_undeclared	coded, documented; user-reachable at lens registration (themes N2/N12)
-torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::3	CONTRACTED	lens_name_taken	coded, documented; user-reachable at lens registration (themes N12)
-torchlens._visualization.theme_registry:get_lens:InvalidArgumentError::1	CONTRACTED	lens_unknown	coded, documented, teaches the roster; user-reachable at lens lookup
-torchlens._visualization.theme_registry:resolve_lens_request:InvalidArgumentError::1	CONTRACTED	lens_user_kwarg_unknown	coded, documented; user-reachable at preset resolution (themes N1)
+torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::1	CONTRACTED	view_member_unknown	coded, documented; user-reachable at lens registration (themes N12)
+torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::2	CONTRACTED	view_secondary_undeclared	coded, documented; user-reachable at lens registration (themes N2/N12)
+torchlens._visualization.theme_registry:register_lens:InvalidArgumentError::3	CONTRACTED	view_name_taken	coded, documented; user-reachable at lens registration (themes N12)
+torchlens._visualization.theme_registry:get_lens:InvalidArgumentError::1	CONTRACTED	view_unknown	coded, documented, teaches the roster; user-reachable at lens lookup
+torchlens._visualization.theme_registry:resolve_lens_request:InvalidArgumentError::1	CONTRACTED	view_user_kwarg_unknown	coded, documented; user-reachable at preset resolution (themes N1)
 torchlens.neuro._brainpipe:parse_bytes:InvalidArgumentError::1	CONTRACTED	byte_budget_invalid	new planner surface contracted in its own change (F20 brainpipe D-26)
 torchlens.neuro._brainpipe:parse_bytes:InvalidArgumentError::2	CONTRACTED	byte_budget_invalid	new planner surface contracted in its own change (F20 brainpipe D-26)
 torchlens.neuro._brainpipe:parse_bytes:InvalidArgumentError::3	CONTRACTED	byte_budget_invalid	new planner surface contracted in its own change (F20 brainpipe D-26)
@@ -1015,17 +1015,17 @@ torchlens.report._summary_result:_row_matcher:InvalidArgumentError::1	CONTRACTED
 torchlens.report._summary_result:build_rebuilt_summary:InvalidArgumentError::1	CONTRACTED	flop_convention_unavailable	F08 fma1 over an underivable MAC split refuses (never accepted-and-ignored); pre-existing code + contract row
 torchlens.report._summary_result:result_to_pandas:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 to_pandas scope closed vocabulary; typed + contract row
 torchlens.report._summary_result:result_to_markdown:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 markdown projection on legacy reports teaches the rebuilt grammar; typed + contract row
-torchlens._visualization.lenses._families:resolve_source_family:InvalidArgumentError::1	CONTRACTED	lens_source_family_unknown	F12: closed family-token refusal; coded, documented, remedy tail
-torchlens._visualization.lenses._families:resolve_source_family:InvalidArgumentError::2	CONTRACTED	lens_view_invalid	F12: view vocabulary refusal; coded, documented, remedy tail
+torchlens._visualization.lenses._families:resolve_source_family:InvalidArgumentError::1	CONTRACTED	view_source_family_unknown	F12: closed family-token refusal; coded, documented, remedy tail
+torchlens._visualization.lenses._families:resolve_source_family:InvalidArgumentError::2	CONTRACTED	view_roll_mode_invalid	F12: view vocabulary refusal; coded, documented, remedy tail
 torchlens._visualization.lenses._filter:_token_predicate:InvalidArgumentError::1	CONTRACTED	display_filter_token_unknown	F12: closed v1 token vocabulary; coded, documented, teaching remedy
 torchlens._visualization.lenses._filter:_resolve_selection_operand:InvalidArgumentError::1	CONTRACTED	display_filter_selection_foreign	F12: foreign resolved selection refusal; alignment is the one explicit door
 torchlens._visualization.lenses._filter:_normalize_rules:InvalidArgumentError::1	CONTRACTED	display_filter_operand_invalid	F12: operand shape refusal; coded, documented
 torchlens._visualization.lenses._filter:compile_display_filter:InvalidArgumentError::1	CONTRACTED	display_filter_polarity_conflict	F12: v1 single-polarity rule; coded, documented
-torchlens._visualization.lenses._resolve:_check_subject:InvalidArgumentError::1	CONTRACTED	lens_attention_subject_absent	F12: subject-absence refusal with the overview escape (memo item 5)
-torchlens._visualization.lenses._resolve:_check_subject:InvalidArgumentError::2	CONTRACTED	lens_single_pass_no_sequence	F12: subject-absence refusal with the overview escape (memo item 5)
-torchlens._visualization.lenses._resolve:_resolve_perf_source:InvalidArgumentError::1	CONTRACTED	lens_headline_evidence_missing	F12: headline/zero-coverage refusal naming the capture remedy (one site, two codes by evidence shape)
-torchlens._visualization.lenses._resolve:_entry_gates:InvalidArgumentError::1	CONTRACTED	lens_legend_suppression_refused	F12: legend-dependence gate mechanism (entry-dark set; battery populates)
-torchlens._visualization.lenses._resolve:_entry_gates:InvalidArgumentError::2	CONTRACTED	lens_above_detail_budget	F12: uncollapsed-row detail ceiling naming both remedies
+torchlens._visualization.lenses._resolve:_check_subject:InvalidArgumentError::1	CONTRACTED	view_attention_subject_absent	F12: subject-absence refusal with the overview escape (memo item 5)
+torchlens._visualization.lenses._resolve:_check_subject:InvalidArgumentError::2	CONTRACTED	view_single_pass_no_sequence	F12: subject-absence refusal with the overview escape (memo item 5)
+torchlens._visualization.lenses._resolve:_resolve_perf_source:InvalidArgumentError::1	CONTRACTED	view_headline_evidence_missing	F12: headline/zero-coverage refusal naming the capture remedy (one site, two codes by evidence shape)
+torchlens._visualization.lenses._resolve:_entry_gates:InvalidArgumentError::1	CONTRACTED	view_legend_suppression_refused	F12: legend-dependence gate mechanism (entry-dark set; battery populates)
+torchlens._visualization.lenses._resolve:_entry_gates:InvalidArgumentError::2	CONTRACTED	view_above_detail_budget	F12: uncollapsed-row detail ceiling naming both remedies
 torchlens._visualization.lenses._resolve:_filter_stage:InvalidArgumentError::1	CONTRACTED	display_filter_skip_fn_conflict	F12: explicit-conflict refusal, never a silent override
 torchlens._visualization.lenses.audit.battery:_one_sided_bound:InvalidArgumentError::1	CONTRACTED	battery_anchor_insufficient	F12: threshold freezing needs anchors; coded, documented
 torchlens._visualization.lenses.audit.battery:freeze_threshold:InvalidArgumentError::1	CONTRACTED	battery_metric_invalid	F12: overlapping anchor bounds invalidate the metric, never waive a candidate
@@ -1324,6 +1324,7 @@ torchlens._training_validation:reject_compiled_model:InvalidArgumentError::1	CON
 torchlens.backends.torch._op_markers:refuse_unavailable_nvtx:InvalidArgumentError::1	CONTRACTED	emit_nvtx_unavailable	U35.3 (batch-2 HON): emit_nvtx=True on a CUDA-less host refuses as torch's emit_nvtx does
 torchlens._input_coerce:_reject_non_mapping_input_kwargs:ArgumentTypeError::1	CONTRACTED	input_kwargs_type_invalid	U11.2 (batch-2 HON): the R55 multi-input refusal moved ahead of backend dispatch so every backend gets it
 torchlens._input_coerce:_open_image_path:InvalidArgumentError::1	CONTRACTED	image_path_unreadable	an image file path given as tl.trace input that cannot be opened as an image (Pillow missing or undecodable) refuses typed before capture
+torchlens._data_classes._annotation_image:_check_readable:InvalidArgumentError::1	CONTRACTED	image_path_unreadable	a Trace.annotate(image=...) path that does not name an image file Pillow can open (missing, undecodable, or Pillow absent) refuses typed before any node is annotated
 torchlens._input_coerce:_materialize_image_paths:InvalidArgumentError::1	CONTRACTED	image_path_missing	an image-suffixed path given as tl.trace input that names no file refuses typed, unless the model has a text tokenizer and the string is text
 torchlens.export:xarray:InvalidArgumentError::1	CONTRACTED	xarray_presentation_mismatch	U28.2 (batch-2 HON): leading-size mismatch refuses typed, naming the layer; remedies run
 torchlens.attribution._text:_refuse_beyond_position_limit:AttributionError::1	CONTRACTED	text_input_exceeds_position_limit	U23.3 (batch-2 HON): un-truncated input past the model position limit refuses with a max_length remedy
@@ -1996,7 +1997,7 @@ torchlens._io.format3._payload_headers:validate_payload_headers:ArtifactError::2
 torchlens.bundle._compare_gate:_require_lined_up:BundleComparisonError::1	CONTRACTED	bundle_gate_input_values_differ	A-GATE comparison gate: different input values and graphs that do not line up; coded, contract-doc row, provoked by tests/test_compare_gate_lattice.py
 torchlens.bundle._compare_gate:_require_lined_up:BundleComparisonError::2	CONTRACTED	bundle_gate_input_identity_unproven	A-GATE comparison gate: input identity unprovable and graphs that do not line up, fail-closed; coded, contract-doc row, provoked by tests/test_compare_gate_lattice.py
 torchlens.intervention._super._base:_TensorBearing._require_equal_shapes:InvalidArgumentError::1	CONTRACTED	metric_shape_mismatch	per-site shape guard of Bundle.at(site).compare(): member tensors of different shapes (runs on inputs of different shapes) refuse naming the site instead of comparing flattened or failing inside the metric; coded, contract-doc row, provoked by tests/test_compare_gate_lattice.py
-torchlens._visualization._highlight:check_highlight:InvalidArgumentError::1	CONTRACTED	draw_highlight_invalid	Trace.draw(highlight=...) named no allowed highlight; the refusal lists the allowed values; contract row + tests/test_surgery_visuals_marks.py
+torchlens._visualization._view_door:check_view:InvalidArgumentError::1	CONTRACTED	draw_view_invalid	Trace.draw(view=...) named no premade view; the refusal lists the allowed values; contract row + tests/test_surgery_visuals_marks.py
 torchlens._observability._native_profile:require_join_result:ProfilerSessionError::1	CONTRACTED	device_time_unavailable	new F27 draw(color_by/size_by='device_time') refusal contracted in its own change (torchnative W2.3)
 torchlens._selection.selector_base:_and_universe:SelectorCompositionError::1	CONTRACTED	selector_signal_mismatch	grad-site integration: a pass qualifier joined to a bare activation selector (SPEC 1.5)
 torchlens._selection.selector_base:_and_universe:SelectorCompositionError::2	CONTRACTED	selector_cross_universe_and	grad-site integration: & across the activation, gradient and node universes (SPEC 1.5)

@@ -610,6 +610,8 @@ def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | 
         from PIL import Image
     except ImportError:
         return None
+    if isinstance(raw_input, Image.Image):
+        raw_input = (raw_input,)  # one photo is a batch of one
     if isinstance(raw_input, Sequence):
         sequence = raw_input
     elif hasattr(raw_input, "__len__") and hasattr(raw_input, "__iter__"):

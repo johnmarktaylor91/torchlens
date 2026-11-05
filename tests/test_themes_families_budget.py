@@ -44,10 +44,10 @@ def test_unknown_family_and_view_refuse_typed() -> None:
 
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_source_family("watts", "rolled")
-    assert excinfo.value.fields["code"] == "lens_source_family_unknown"
+    assert excinfo.value.fields["code"] == "view_source_family_unknown"
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_source_family("time", "sideways")
-    assert excinfo.value.fields["code"] == "lens_view_invalid"
+    assert excinfo.value.fields["code"] == "view_roll_mode_invalid"
 
 
 def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
@@ -64,12 +64,12 @@ def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     [
         pytest.param(
             "nonexistent_member_total_zzz",
-            "lens_headline_evidence_missing",
+            "view_headline_evidence_missing",
             id="zero_coverage_refuses_typed",
         ),
         pytest.param(
             "total_func_duration",
-            "lens_source_zero_coverage",
+            "view_source_zero_coverage",
             id="one_view_zero_coverage_names_the_zero_coverage_code",
         ),
     ],
@@ -139,7 +139,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
         warnings_module.simplefilter("always")
         budget = lenses.resolve_budget(mlp_log)
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
-    assert "lens_budget_above_ceiling_fallback" in codes
+    assert "view_budget_above_ceiling_fallback" in codes
     assert not budget.in_band
     assert "depth" in budget.dial
     assert any("estimate" in line for line in budget.disclosure)
@@ -151,7 +151,7 @@ def test_legend_dependence_gate_mechanism(mlp_log: Any, monkeypatch: Any) -> Non
     monkeypatch.setattr(resolve_module, "LEGEND_DEPENDENT_LENSES", {"speed"})
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(mlp_log, "speed", {"show_legend": False})
-    assert excinfo.value.fields["code"] == "lens_legend_suppression_refused"
+    assert excinfo.value.fields["code"] == "view_legend_suppression_refused"
     # Honored silently on a legend-optional lens (documented explicit value).
     resolution = lenses.resolve_lens(mlp_log, "overview", {"show_legend": False})
     assert resolution.draw_kwargs["show_legend"] is False

@@ -62,13 +62,18 @@ class LegendRow:
         Border color for the swatch cell (defaults to the theme border).
     hint:
         Optional short suffix rendered after the text, e.g. the non-oval
-        shape vocabulary (``"cylinder node"``) or an edge-style note.
+        shape vocabulary (``"cylinder node"``) or an edge-style note; on a
+        ramp row, the label at the bar's high end.
+    ramp:
+        Colour-bar segment fills, low value first; non-empty draws ``text``,
+        the bar, then ``hint`` on one row.
     """
 
     text: str
     swatch_fill: str | None = None
     swatch_border: str | None = None
     hint: str | None = None
+    ramp: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -89,6 +94,7 @@ LEGEND_ROLES = (
     "mutated parameter",
     "boolean",
     "edited",
+    "changed value",
     "changed by the edit",
 )
 
@@ -152,12 +158,13 @@ def drawn_legend_roles(
 
     A role counts only when a node was painted with it: its rendered fill
     (and, for buffers and mutated Parameters, the cylinder), or for
-    interventions the ``tl_edited`` and ``tl_downstream`` SVG classes the
-    edit marks carry.
+    interventions the ``tl_edited``, ``tl_downstream`` and ``tl_changed`` SVG
+    classes the edit marks carry.
     Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
     counts as parameterized.
     """
 
+    from ._edit_change import CHANGED_NODE_CLASS
     from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 
     fills = _role_fills(theme)
@@ -173,6 +180,8 @@ def drawn_legend_roles(
             roles.add("edited")
         if DOWNSTREAM_NODE_CLASS in classes:
             roles.add("changed by the edit")
+        if CHANGED_NODE_CLASS in classes:
+            roles.add("changed value")
         if shape == "cylinder":
             if fill in fills["buffer"]:
                 roles.add("buffer")
@@ -193,23 +202,27 @@ def drawn_legend_roles(
 
 
 def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
-    """Build the channel disclosure sections from an ``EncodingState``.
+    """Build the untitled channel key section from an ``EncodingState``.
 
-    Every disclosure line the disconnected-node form carried is preserved
-    (AUTO disclosures are contract text, memo 2.3); ramp stop rows keep their
-    interpolated swatches.
+    The drawn key is plain: a labelled colour bar and one line per other
+    channel, nothing else.
     """
 
-    from ._encoding import _color_legend_rows, _non_color_legend_rows
+    from ._encoding_key import RampKey, color_key, size_key_line, stack_key_line
+    from .overlays import legend_domain_text
 
     rows: list[LegendRow] = []
-    for spec in (*_color_legend_rows(state), *_non_color_legend_rows(state)):
-        fill = spec.fillcolor if isinstance(spec.fillcolor, str) else None
-        for index, line in enumerate(spec.lines):
-            rows.append(LegendRow(text=str(line), swatch_fill=fill if index == 0 else None))
+    color = color_key(state, legend_domain_text)
+    if isinstance(color, RampKey):
+        rows.append(LegendRow(text=color.low_text, ramp=color.fills, hint=color.high_text))
+    elif color is not None:
+        rows.append(LegendRow(text=color))
+    for line in (size_key_line(state, legend_domain_text), stack_key_line(state)):
+        if line is not None:
+            rows.append(LegendRow(text=line))
     if not rows:
         return ()
-    return (LegendSection(title="TorchLens encoding", rows=tuple(rows)),)
+    return (LegendSection(title="", rows=tuple(rows)),)
 
 
 def backward_key_sections(
@@ -271,11 +284,15 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
     size = theme.typography.secondary_pt
     cells: list[str] = []
     for section in sections:
-        cells.append(
-            f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
-            f'COLOR="{font_color}"><B>{html_escape(section.title)}</B></FONT></TD></TR>'
-        )
+        if section.title:
+            cells.append(
+                f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
+                f'COLOR="{font_color}"><B>{html_escape(section.title)}</B></FONT></TD></TR>'
+            )
         for row in section.rows:
+            if row.ramp:
+                cells.append(_ramp_row(row, theme))
+                continue
             text = html_escape(row.text)
             if row.hint is not None:
                 text += f" ({html_escape(row.hint)})"
@@ -285,6 +302,14 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
                     f'<TD FIXEDSIZE="TRUE" WIDTH="16" HEIGHT="10" '
                     f'BGCOLOR="{row.swatch_fill}" BORDER="1" COLOR="{swatch_border}"></TD>'
                 )
+            elif not section.title:
+                # An untitled section (the encoding key) has no swatch column: the
+                # line spans the table, so a stretched table cannot push it right.
+                cells.append(
+                    f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
+                    f'COLOR="{font_color}">{text}</FONT></TD></TR>'
+                )
+                continue
             else:
                 swatch = "<TD></TD>"
             cells.append(
@@ -295,6 +320,22 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
     return (
         f'<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3" '
         f'COLOR="{border_color}">' + "".join(cells) + "</TABLE>>"
+    )
+
+
+def _ramp_row(row: LegendRow, theme: VisualizationTheme) -> str:
+    """Return the key's colour-bar row, measured in the skin's key face."""
+
+    from ._encoding_key import ramp_row_html
+    from ._header_block import _text_width
+
+    size = theme.typography.secondary_size
+    bold = "bold" in theme.typography.family.lower()
+    return ramp_row_html(
+        row,
+        theme.typography.secondary_pt,
+        (theme.default_font, theme.default_border),
+        lambda text: _text_width(text, size, bold),
     )
 
 

@@ -359,12 +359,17 @@ def _base_image(
 
         batch = _matching_pil_image_batch(getattr(trace, "input", None), descriptor.input_shape[0])
         if batch:
-            return batch[0].convert("RGB")
+            photo = batch[0].convert("RGB")
+            if len(rendered_axes) == 1 or photo.size == _input_extent(descriptor, rendered_axes):
+                return photo
         try:
             input_op = trace[descriptor.input_op_label]
             tensor = input_op.out
             if isinstance(tensor, torch.Tensor):
-                return _tensor_image(tensor, descriptor, rendered_axes)
+                # The photo the model saw is the preprocessed tensor (resized, cropped), whose
+                # geometry the box is drawn in; a raw photo of another size would misplace it.
+                rgb = _tensor_rgb_image(tensor, trace, rendered_axes) if batch else None
+                return rgb if rgb is not None else _tensor_image(tensor, descriptor, rendered_axes)
         except (KeyError, AttributeError):
             pass
     width = max(1, int(descriptor.input_shape[rendered_axes[-1]]))
@@ -372,6 +377,41 @@ def _base_image(
         32 if len(rendered_axes) == 1 else max(1, int(descriptor.input_shape[rendered_axes[0]]))
     )
     return Image.new("RGB", (width, height), "white")
+
+
+def _input_extent(descriptor: ReceptiveField, axes: tuple[int, ...]) -> tuple[int, int]:
+    """Return the (width, height) of the model input over the two rendered spatial axes."""
+
+    return int(descriptor.input_shape[axes[-1]]), int(descriptor.input_shape[axes[0]])
+
+
+def _tensor_rgb_image(
+    tensor: torch.Tensor, trace: Any, axes: tuple[int, ...]
+) -> Image.Image | None:
+    """Render a preprocessed 3-channel image tensor as the photo the model saw.
+
+    Undoes the preprocessor's per-channel normalization when the trace recorded one
+    (``mean`` and ``std`` in its config); otherwise scales each channel to its own range.
+    Returns ``None`` for anything that is not one ``(batch, 3, height, width)`` image.
+    """
+
+    if tensor.ndim != 4 or int(tensor.shape[1]) != 3 or axes != (2, 3):
+        return None
+    data = tensor[0].detach().float().cpu()
+    config = getattr(
+        getattr(getattr(trace, "provenance", None), "input_preprocessor", None), "config", None
+    )
+    mean = config.get("mean") if isinstance(config, dict) else None
+    std = config.get("std") if isinstance(config, dict) else None
+    if mean is not None and std is not None and len(mean) == 3 and len(std) == 3:
+        data = data * torch.tensor([float(s) for s in std]).view(3, 1, 1)
+        data = data + torch.tensor([float(m) for m in mean]).view(3, 1, 1)
+    else:
+        low = data.amin(dim=(1, 2), keepdim=True)
+        high = data.amax(dim=(1, 2), keepdim=True)
+        data = (data - low) / (high - low).clamp_min(1e-12)
+    array = (data.clamp(0.0, 1.0) * 255.0).round().to(torch.uint8).permute(1, 2, 0).numpy()
+    return Image.fromarray(array, mode="RGB")
 
 
 def _tensor_image(

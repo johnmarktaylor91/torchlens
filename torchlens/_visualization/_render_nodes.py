@@ -4,6 +4,7 @@
 
 import re as _re
 
+from .._data_classes._annotation_image import drawable_annotation_image
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
 from ._bool_outcomes import bool_node_fill, bool_value_line
@@ -13,17 +14,23 @@ from ._encoding_aggregate import (
     collapsed_box_scope,
     segment_encoding_attrs,
 )
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
+from ._label_format import (
+    collapsed_param_detail,
+    compute_selected_node_lines as _compute_selected_node_lines,
+    shape_rows,
+)
+from ._node_boxes import image_box_args, list_box_attrs
 from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._render_names import call_collapsed_spec_fn
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
-# file under its ratchet ceiling; re-exported here for existing importers.
-# The spec-slot context lives there too, so the intervention callback reads it
-# without importing this module.
+# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
+# ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
+# too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
 from .themes import _edge_and_label_inks
 
@@ -604,38 +611,15 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    # A picture keeps the node's fill; image_box_args (below) draws it in its own top cell.
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
-        default_spec = default_spec.replace(
-            image=visualizer_path,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=visualizer_path)
     annotation_image = _annotation_image_path_for_node(self, node)
+    if annotation_image is not None:  # Graphviz gets a PNG whatever the source format
+        annotation_image = drawable_annotation_image(self, annotation_image)
     if annotation_image is not None:
-        default_spec = default_spec.replace(
-            image=annotation_image,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=annotation_image)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
@@ -648,7 +632,7 @@ def _build_layer_node(
 
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
-        raw_input_attrs = _render_raw_input(
+        raw_input_attrs = input_photo_attrs(self, node_args) or _render_raw_input(
             self, getattr(self, "input", None), batch_render=getattr(self, "batch_render", "auto")
         )
         if raw_input_attrs is not None:
@@ -660,7 +644,7 @@ def _build_layer_node(
         if raw_output_attrs is None:
             raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
-            node_args.update(raw_output_attrs)
+            node_args.update({**raw_output_attrs, **list_box_attrs(node_args)})
     node_args["name"] = _render_node_name(node, vis_mode)
     # Map membership is the ONE collapse predicate (the map builder owns the
     # mode decision); the edge pass reroutes mapped leaves' edges to the
@@ -682,7 +666,7 @@ def _build_layer_node(
         node_args["gradangle"] = "0"
     node_args.update(overlay_border_attrs(node, node_overlay))
 
-    graphviz_graph.node(**node_args)
+    graphviz_graph.node(**image_box_args(self, node_args))
 
     if node.is_final_output:
         with graphviz_graph.subgraph() as s:
@@ -746,7 +730,7 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
-    node_args.update(segment_encoding_attrs(encoding, segment.name))
+    node_args.update(segment_encoding_attrs(encoding, segment.name, tokens.segment_font))
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)
@@ -795,10 +779,10 @@ def _render_raw_input(
             max_items=max_items,
             include_more=include_more,
         )
-    sequence = _raw_input_sequence(value)
+    sequence = [value] if isinstance(value, Image.Image) else _raw_input_sequence(value)
     if sequence is None:
         return None
-    if len(sequence) == 1:
+    if len(sequence) == 1 and not isinstance(sequence[0], Image.Image):  # one photo: batch of one
         return _render_raw_input(trace, sequence[0], batch_render="first")
     if all(isinstance(item, str) for item in sequence):
         strings = cast(Sequence[str], sequence)
@@ -1030,27 +1014,6 @@ def _render_raw_input_image_batch(
     }
 
 
-def _raw_input_visualizer_dir(trace: "Trace") -> Path:
-    """Return a directory for raw-input visualization artifacts.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the rendered input node.
-
-    Returns
-    -------
-    Path
-        Directory where image artifacts can be written.
-    """
-
-    from .._utils.display import ensure_trace_visualizer_dir
-
-    input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
-    input_dir.mkdir(parents=True, exist_ok=True)
-    return input_dir
-
-
 def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Image.Image] | None:
     """Convert a 4D image tensor batch into PIL images.
 
@@ -1203,9 +1166,11 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
     ]
     lines = ["output"]
-    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:3]:
+    batch_items = sorted({int(row.get("batch_item", 0)) for row in rows})[:3]
+    for batch_item in batch_items:
         item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:5]
-        lines.append(f"item {batch_item}")
+        if len(batch_items) > 1:  # one input needs no "item 0" heading
+            lines.append(f"item {batch_item}")
         lines.extend(
             [
                 f"{int(row.get('rank', 0))}. "
@@ -1492,18 +1457,7 @@ def _build_collapsed_module_node(
     else:
         line_style = "dashed"
 
-    # Build param detail string for collapsed module
-    if module_nparams == 0:
-        param_detail = "0 parameters"
-    elif module_nparams_frozen == 0:
-        param_detail = f"{module_nparams} params (all trainable)"
-    elif module_nparams_trainable == 0:
-        param_detail = f"{module_nparams} params (all frozen)"
-    else:
-        param_detail = (
-            f"{module_nparams} params ({module_nparams_trainable} trainable, "
-            f"{module_nparams_frozen} frozen)"
-        )
+    param_detail = collapsed_param_detail(module_nparams, module_nparams_frozen)
 
     lines = [
         node_title.replace("<b>", "").replace("</b>", ""),
@@ -1530,6 +1484,7 @@ def _build_collapsed_module_node(
         fontcolor="black",
         color="black",
         style=f"filled,{line_style}",
+        tooltip=f"{module_nparams:,} params ({module_nparams_frozen:,} frozen)",
         extra_attrs={"ordering": "out"},
     )
     if theme is not None:
@@ -1549,7 +1504,7 @@ def _build_collapsed_module_node(
     # Encoding channels: exact member-op aggregate, user may override.
     mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, mode_spec)
+        result = call_collapsed_spec_fn(collapsed_node_spec_fn, ml, mode_spec, scope.op_labels)
         spec = mode_spec if result is None else result
     else:
         spec = mode_spec

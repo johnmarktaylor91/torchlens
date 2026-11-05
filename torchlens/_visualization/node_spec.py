@@ -10,6 +10,7 @@ render node internals and may not ride a vocabulary module under Rule V3).
 
 from __future__ import annotations
 
+import os
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
@@ -20,6 +21,8 @@ from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_HOOK_FILL_COLOR,
     INTERVENTION_OVERRIDE_KEYS,
     INTERVENTION_SITE_COLOR,
+    LENS_BANNER_OMIT_KEY,
+    LENS_CAPTION_KEY,
     BackwardNodeSpecFn,
     CollapsedNodeSpecFn,
     NodeSpec,
@@ -42,6 +45,7 @@ __all__ = [
     "INTERVENTION_HOOK_BORDER_COLOR",
     "INTERVENTION_HOOK_FILL_COLOR",
     "INTERVENTION_OVERRIDE_KEYS",
+    "LENS_CAPTION_KEY",
     "INTERVENTION_SITE_COLOR",
     "NodeSpec",
     "NodeSpecFn",
@@ -64,7 +68,9 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
     Returns
     -------
     str | None
-        Image path stored in ``annotations["user"]["image"]``, if present.
+        Image path stored in ``annotations["user"]["image"]``, if present and
+        the file still exists (a loaded trace can name a picture that is gone;
+        such a node is drawn without it and is not an image node).
     """
 
     from ._render_nodes import BoundaryNode, _layer_log_for_node
@@ -84,7 +90,7 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
         if not isinstance(user_annotations, dict):
             continue
         image = user_annotations.get("image")
-        if isinstance(image, str) and image:
+        if isinstance(image, str) and image and os.path.isfile(image):
             return image
     return None
 
@@ -161,7 +167,7 @@ def intervention_graph_override(
 
 
 def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str, Any]:
-    """Return graph overrides excluding TorchLens intervention style keys.
+    """Return graph overrides excluding TorchLens intervention style and caption keys.
 
     Parameters
     ----------
@@ -180,6 +186,7 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
         key: value
         for key, value in graph_overrides.items()
         if key not in INTERVENTION_OVERRIDE_KEYS
+        and key not in (LENS_CAPTION_KEY, LENS_BANNER_OMIT_KEY)
     }
 
 

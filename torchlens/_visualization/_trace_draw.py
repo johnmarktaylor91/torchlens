@@ -17,7 +17,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    DrawHighlightLiteral,
+    DrawViewLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -194,13 +194,13 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
     file_format: str | None = None,
     open_viewer: bool = False,
-    highlight: DrawHighlightLiteral | None = None,
+    view: DrawViewLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
-    if highlight is not None:
-        from ._highlight import draw_highlighted, explicit_draw_kwargs
+    if view is not None:
+        from ._view_door import draw_view, explicit_draw_kwargs
 
-        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
+        return draw_view(trace, view, explicit_draw_kwargs(draw, locals()))
 
     _require_graph_kind(graph, show_containers, show_edge_shapes)
     num_ops = len(trace) if hasattr(trace, "__len__") else None

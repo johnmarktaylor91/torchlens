@@ -76,7 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    DrawHighlightLiteral,
+    DrawViewLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -168,6 +168,7 @@ from .param import ParamAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
+    from PIL import Image
 
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
@@ -1339,7 +1340,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         selector: Any,
         *,
         data: Any = None,
-        image: str | Path | None = None,
+        image: "str | Path | Image.Image | None" = None,
         max_fanout: int = 1_000_000,
         copy: bool = False,
     ) -> "Trace":
@@ -1354,8 +1355,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             payloads are persisted under ``_annotation_blobs`` and are supported
             only for torch traces.
         image:
-            Optional local image path used by the existing ``NodeSpec.image``
-            render hook.
+            Optional picture for the selected nodes: an image file path or a PIL image.
         max_fanout:
             Explicit maximum number of selected sites. The default is
             intentionally large so annotation can fan out across many layers.
@@ -3299,7 +3299,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         file_format: str | None = None,
         open_viewer: bool = False,
-        highlight: DrawHighlightLiteral | None = None,
+        view: DrawViewLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 

@@ -381,7 +381,7 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156.0 KB"``: the divisor is 1024 and
+        Human-readable memory such as ``"156 KB"``: the divisor is 1024 and
         the unit names are the released drawings' (B, KB, MB, GB, TB).
     """
 
@@ -391,16 +391,17 @@ def format_memory(bytes_or_quantity: Any) -> str:
 
 
 #: Unit names for the drawing's sizes, each 1024 times the one before. The
-#: drawings keep the released look (``"60.0 KB"``), not the IEC names
+#: drawings keep the released look (``"60 KB"``), not the IEC names
 #: (``KiB``) that card and repr byte quantities use.
 _BINARY_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
 def binary_size(size: float) -> str:
-    """Return a byte count for a drawing, for example ``"60.0 KB"``.
+    """Return a byte count for a drawing, for example ``"60 KB"`` or ``"1.9 KB"``.
 
     The divisor is 1024. Whole bytes print without a decimal (``"48 B"``);
-    larger values print one decimal under the largest unit the value reaches.
+    larger values print one decimal under the largest unit the value reaches,
+    dropped when it is zero (``"588 KB"``, not ``"588.0 KB"``).
     """
 
     if size < 0:
@@ -413,7 +414,79 @@ def binary_size(size: float) -> str:
         value /= 1024.0
         if value < 1024 or unit == _BINARY_UNITS[-1]:
             break
-    return f"{value:.1f} {unit}"
+    text = f"{value:.1f}"
+    return f"{text.removesuffix('.0')} {unit}"
+
+
+#: Counts at or above this print compact (``12.3K``); smaller ones print in full.
+COMPACT_COUNT_FROM = 10_000
+_COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
+
+
+def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
+    """Return a count for a drawing: in full below ``full_below``, else 3 significant figures.
+
+    ``9999`` stays ``"9999"``; ``147968`` is ``"148K"``, ``85798656`` is
+    ``"85.8M"`` and ``1_500_000_000`` is ``"1.5B"``. The exact count stays in
+    the data and the node tooltip. The header's parameter count passes
+    ``full_below=1000`` (``1024`` is ``"1.02K"``).
+    """
+
+    if count < full_below:
+        return str(count)
+    for index, (divisor, suffix) in enumerate(_COUNT_UNITS):
+        if count >= divisor or index == len(_COUNT_UNITS) - 1:
+            text = f"{count / divisor:.3g}"
+            if float(text) >= 1000 and index > 0:  # 999.96K rounds up into the next unit
+                divisor, suffix = _COUNT_UNITS[index - 1]
+                text = f"{count / divisor:.3g}"
+            return f"{text}{suffix}"
+    return str(count)
+
+
+def header_count(count: int) -> str:
+    """Return a header count: thousands separators below 10,000, compact from there."""
+
+    return f"{count:,}" if count < COMPACT_COUNT_FROM else compact_count(count)
+
+
+def collapsed_param_detail(num_params: int, num_frozen: int) -> str:
+    """Return a collapsed module box's parameter row, for example ``"85.8M params (all trainable)"``."""
+
+    if num_params == 0:
+        return "0 parameters"
+    if num_frozen == 0:
+        return f"{compact_count(num_params)} params (all trainable)"
+    if num_frozen == num_params:
+        return f"{compact_count(num_params)} params (all frozen)"
+    trainable = compact_count(num_params - num_frozen)
+    return f"{compact_count(num_params)} params ({trainable} trainable, {compact_count(num_frozen)} frozen)"
+
+
+def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
+    """Format the operation and buffer counts for a collapsed module.
+
+    Parameters
+    ----------
+    num_layers:
+        Total tensor-layer count already computed for the module.
+    num_buffer_layers:
+        Number of buffer tensor layers within ``num_layers``.
+
+    Returns
+    -------
+    str
+        An honest collapsed-module summary such as ``"2 ops + 6 buffers"``.
+    """
+
+    num_ops = max(0, num_layers - num_buffer_layers)
+    parts: list[str] = []
+    if num_ops:
+        parts.append(f"{compact_count(num_ops)} {'op' if num_ops == 1 else 'ops'}")
+    if num_buffer_layers:
+        noun = "buffer" if num_buffer_layers == 1 else "buffers"
+        parts.append(f"{compact_count(num_buffer_layers)} {noun}")
+    return " + ".join(parts)
 
 
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:

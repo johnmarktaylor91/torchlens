@@ -175,6 +175,46 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
     assert show(_View(unknown), (0, 0, 3, 3), image=base).tobytes() == base.tobytes()
 
 
+def test_show_draws_a_single_pil_input_as_the_base_image() -> None:
+    """A trace captured from one photo keeps a bare PIL image as its input; show() draws it.
+
+    Before the fix the single image was not recognised as a batch of one, so the overlay fell
+    back to a heatmap of the normalized input tensor instead of the photo.
+    """
+
+    from types import SimpleNamespace
+
+    from torchlens.repgeom._node_visuals import _matching_pil_image_batch
+
+    photo = Image.new("RGB", (8, 8), "white")
+    assert _matching_pil_image_batch(photo, 1) == (photo,)
+    assert _matching_pil_image_batch(photo, 2) is None
+    assert _matching_pil_image_batch([photo], 1) == [photo]
+
+    view = _View(_descriptor(2))
+    view._op = SimpleNamespace(source_trace=SimpleNamespace(input=photo))
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == photo.size
+    pixels = set(rendered.getdata())
+    assert (255, 255, 255) in pixels and len(pixels) > 1  # the photo, with the box drawn on it
+
+    # A raw photo of another size than the model input (resized or cropped by preprocessing)
+    # cannot carry the box; the overlay then draws the preprocessed input tensor as the photo.
+    class _Trace:
+        input = Image.new("RGB", (40, 30), "white")
+        provenance = SimpleNamespace(
+            input_preprocessor=SimpleNamespace(config={"mean": [0.5] * 3, "std": [0.5] * 3})
+        )
+
+        def __getitem__(self, label: str) -> Any:
+            return SimpleNamespace(out=torch.full((1, 3, 8, 8), -1.0))  # de-normalizes to black
+
+    view._op = SimpleNamespace(source_trace=_Trace())
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == (8, 8)
+    assert (0, 0, 0) in set(rendered.getdata())
+
+
 def test_show_3d_requires_explicit_slice() -> None:
     """Require a plane selection before rendering a 3-D spatial input."""
 
