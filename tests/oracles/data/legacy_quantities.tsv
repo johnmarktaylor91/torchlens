@@ -11,40 +11,39 @@ Buffer.call_index	int	identifier	-	-	-	id/index/line
 Buffer.grad_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
 Buffer.num_overwrites	int	quantity	num_overwrites	green	tests/test_buffer_datamodel.py::test_recurrent_cell_reassignment_does_not_break_loop_detection (I2)	-
 CaptureFacts.advisories	int	quantity	advisories	green	tests/oracles/test_legacy_advisories_and_grad_storage.py::test_capture_advisories_match_the_planted_kinds_and_counts (I2)	-
-Layer.activation_memory	Bytes	quantity	activation_memory	green	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
-Layer.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Layer.conditional_depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
-Layer.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
-Layer.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
-Layer.fx_call_index	int	identifier	-	-	-	id/index/line
-Layer.grad_fn_object_id	int	identifier	-	-	-	id/index/line
-Layer.macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
-Layer.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
-Layer.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Layer.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Layer.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+LayerCost.activation_memory	Bytes	quantity	activation_memory	green	tests/test_bug_fixes_phase14.py::test_view_mutation_output_recomputes_transformed_payload_metadata (I1)	-
+LayerCost.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+LayerControlFlow.depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
+LayerCost.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
+LayerCost.flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+LayerCost.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
+LayerCost.duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
+LayerSource.fx_call_index	int	identifier	-	-	-	id/index/line
+LayerCost.macs_forward	Macs	quantity	macs_forward	green	tests/test_numbers_truth_compute.py::test_biased_linear_true_macs_not_flops_over_two (I2)	-
+LayerModuleContext.call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
+LayerCall.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+LayerAutograd.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+LayerCall.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Layer.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Layer.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Layer.num_passes	int	quantity	num_passes	green	tests/test_loop_module_rolling.py::test_reused_single_op_module_stays_a_loop (I2)	-
-Layer.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+LayerCall.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Layer.ordinal_index	int	identifier	-	-	-	id/index/line
 Layer.pass_index	int	identifier	-	-	-	id/index/line
 Layer.raw_index	int	identifier	-	-	-	id/index/line
 Layer.step_index	int	identifier	-	-	-	id/index/line
-Layer.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
-Layer.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Layer.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
-Layer.total_flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Layer.total_func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
+LayerCost.total_activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
+LayerCost.total_autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+LayerCost.total_flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
+LayerCost.total_flops_forward	Flops	quantity	flops_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+LayerCost.total_flops	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
+LayerCost.total_func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
 Layer.total_gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_on_layers_modules_and_buffers (I2)	-
-Layer.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
-Layer.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
+LayerCost.total_macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+LayerCost.total_param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
 Layer.type_index	int	identifier	-	-	-	id/index/line
 Module.address_depth	int	quantity	address_depth	green	tests/test_module_log.py::TestModuleLogFields::test_address_depth (I2)	-
 Module.call_depth	int	quantity	call_depth	green	tests/test_module_log.py::TestModuleLogFields::test_call_depth (I2)	-
@@ -106,41 +105,40 @@ ModuleCall.ordinal_index	int	identifier	-	-	-	id/index/line
 ModuleCall.output_activation_memory	Bytes	quantity	output_activation_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
 ModuleCall.output_gradient_memory	Bytes	quantity	output_gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
 ModuleCall.param_memory	Bytes	quantity	param_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_bytes_on_every_door (I2)	-
-Op.activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
-Op.arithmetic_intensity	float	quantity	arithmetic_intensity	green	tests/oracles/test_legacy_closed_forms.py::test_arithmetic_intensity_by_the_read_once_write_once_model (I2)	-
-Op.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Op.bytes_read	Bytes	quantity	bytes_read	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
-Op.bytes_written	Bytes	quantity	bytes_written	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
-Op.conditional_branch_depth	int	quantity	conditional_branch_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
-Op.conditional_depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
-Op.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-
-Op.flops_forward	Flops	quantity	flops_forward	green	tests/test_metadata.py::test_flops_conv_transpose_uses_input_work_basis (I2)	-
-Op.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
-Op.func_call_id	int	identifier	-	-	-	id/index/line
-Op.func_duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
-Op.fx_call_index	int	identifier	-	-	-	id/index/line
-Op.grad_fn_object_id	int	identifier	-	-	-	id/index/line
+OpCost.activation_memory	Bytes	quantity	activation_memory	green	tests/oracles/test_legacy_quantity_doors.py::test_activation_bytes_on_every_compute_door (I2)	-
+OpCost.arithmetic_intensity	float	quantity	arithmetic_intensity	green	tests/oracles/test_legacy_closed_forms.py::test_arithmetic_intensity_by_the_read_once_write_once_model (I2)	-
+OpCost.autograd_memory	Bytes	quantity	autograd_memory	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+OpCost.bytes_read	Bytes	quantity	bytes_read	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
+OpCost.bytes_written	Bytes	quantity	bytes_written	green	tests/test_roofline.py::test_linear_theoretical_bytes_and_intensity (I2)	-
+OpControlFlow.branch_depth	int	quantity	conditional_branch_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
+OpControlFlow.depth	int	quantity	conditional_depth	green	tests/oracles/test_legacy_module_counts.py::test_conditional_counts (I2)	-
+OpCost.flops_backward	Flops	quantity	flops_backward	green	tests/oracles/test_legacy_closed_forms.py::test_backward_flops_follow_the_backward_that_runs (I2)	-
+OpCost.flops_forward	Flops	quantity	flops_forward	green	tests/test_metadata.py::test_flops_conv_transpose_uses_input_work_basis (I2)	-
+OpCost.flops_total	Flops	quantity	flops_total	green	tests/oracles/test_legacy_closed_forms.py::test_backward_and_total_flops (I2)	-
+OpCall.call_id	int	identifier	-	-	-	id/index/line
+OpCost.duration	Duration	quantity	func_duration	green	tests/oracles/test_legacy_timing_bounds.py::test_op_and_layer_func_durations_are_bounded (I1)	-
+OpSource.fx_call_index	int	identifier	-	-	-	id/index/line
 Op.gradient_memory	Bytes	quantity	gradient_memory	green	tests/oracles/test_legacy_closed_forms.py::test_gradient_bytes_after_one_backward_pass (I2)	-
-Op.input_memory	Bytes	quantity	input_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
-Op.macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
-Op.max_distance_from_input	int	quantity	max_distance_from_input	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
-Op.max_distance_to_output	int	quantity	max_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
-Op.min_distance_from_input	int	quantity	min_distance_from_input	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
-Op.min_distance_to_output	int	quantity	min_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
-Op.module_call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
-Op.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
-Op.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
-Op.num_inputs	int	quantity	num_inputs	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
-Op.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+OpCost.input_memory	Bytes	quantity	input_memory	green	tests/oracles/test_legacy_closed_forms.py::test_activation_parameter_and_input_bytes (I2)	-
+OpCost.macs_forward	Macs	quantity	macs_forward	green	tests/oracles/test_legacy_quantity_doors.py::test_macs_and_flops_on_every_door (I2)	-
+OpGraph.max_distance_from_input	int	quantity	max_distance_from_input	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
+OpGraph.max_distance_to_output	int	quantity	max_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
+OpGraph.min_distance_from_input	int	quantity	min_distance_from_input	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
+OpGraph.min_distance_to_output	int	quantity	min_distance_to_output	green	tests/oracles/test_legacy_closed_forms.py::test_input_and_output_hop_distances (I2)	-
+OpModuleContext.call_depth	int	quantity	module_call_depth	green	tests/oracles/test_legacy_module_counts.py::test_module_call_tree_counts (I2)	-
+OpCall.num_args_total	int	quantity	num_args_total	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+OpAutograd.num_autograd_tensors	int	quantity	num_autograd_tensors	green	tests/oracles/test_legacy_autograd_counts.py::test_autograd_saved_bytes_on_every_door (I1)	-
+OpGraph.num_inputs	int	quantity	num_inputs	green	tests/oracles/test_legacy_graph_counts.py::test_parent_child_and_input_counts (I2)	-
+OpCall.num_kwargs	int	quantity	num_kwargs	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.num_param_tensors_frozen	int	quantity	num_param_tensors_frozen	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Op.num_param_tensors_trainable	int	quantity	num_param_tensors_trainable	green	tests/oracles/test_legacy_closed_forms.py::test_param_tensor_counts_split_frozen_and_trainable (I2)	-
 Op.num_params	int	quantity	num_params	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_params_frozen	int	quantity	num_params_frozen	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_params_trainable	int	quantity	num_params_trainable	green	tests/oracles/test_legacy_quantity_doors.py::test_parameter_counts_on_every_door (I2)	-
 Op.num_passes	int	quantity	num_passes	green	tests/oracles/test_legacy_quantity_doors.py::test_op_pass_and_edge_counts_on_every_door (I2)	-
-Op.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
+OpCall.num_pos_args	int	quantity	num_pos_args	green	tests/oracles/test_legacy_closed_forms.py::test_op_and_layer_argument_counts (I2)	-
 Op.ordinal_index	int	identifier	-	-	-	id/index/line
-Op.param_memory	Bytes	quantity	param_memory	green	tests/test_w051_mechinterp_roofline.py::test_roofline_linear_traffic_counts_parameter_bytes (I2)	-
+OpCost.param_memory	Bytes	quantity	param_memory	green	tests/test_w051_mechinterp_roofline.py::test_roofline_linear_traffic_counts_parameter_bytes (I2)	-
 Op.pass_number	int	identifier	-	-	-	id/index/line
 Op.raw_index	int	identifier	-	-	-	id/index/line
 Op.step_index	int	identifier	-	-	-	id/index/line
