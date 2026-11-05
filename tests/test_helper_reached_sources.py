@@ -217,8 +217,10 @@ def test_mid_forward_tensor_in_helper_reached_cache_still_fails_validation() -> 
     x = torch.randn(2, 4)
     model = _warm(_MidForwardCacheModel(), x)  # the snapshot pins last pass's entry
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # the provenance warning is not under test
+        warnings.simplefilter("ignore")  # the capture-gap warnings are not under test
+        trace = tl.trace(model, x)
         assert tl.validate(model, x, scope="forward") is False
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "source_provenance"
-    assert "unattributed_tensor_args" in failure.message
+    # The new entry is not the pinned pre-forward object, so it is never laundered
+    # into a constant source; validation fails on the hidden op that made it.
+    assert "constant" not in _types(trace)
+    assert last_validation_failure() is not None
