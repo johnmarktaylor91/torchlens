@@ -15581,6 +15581,7 @@
         "tests/test_interv_honesty_depth2_tripwire.py",
         "tests/test_param_substitution.py",
         "tests/test_surgery_live_regions.py",
+        "tests/test_torch_ops_call_recording.py",
         "tests/test_validation_binding_swap_tripwire.py",
         "tests/test_w051_replay_fork_validation.py"
       ],
