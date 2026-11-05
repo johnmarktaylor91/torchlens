@@ -10746,6 +10746,22 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
+  "file": "torchlens/validation/_ctc_lengths_perturbation.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_destination_coverage.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
   "file": "torchlens/validation/_destination_coverage.py",
   "has_default": true,
   "sites": 1,
@@ -11203,6 +11219,14 @@
   "ambiguous": false,
   "field": "parent_arg_positions",
   "file": "torchlens/validation/_mask_builder_dependence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_masked_scatter_perturbation.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
