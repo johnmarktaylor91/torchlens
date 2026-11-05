@@ -6,10 +6,12 @@ containers and callables reachable through module attributes, and from the
 globals of decorated forwards, so no tensor outlives its session carrying
 provenance a later capture could mistake for its own (split out of
 ``model_prep.py`` under the file-size ratchet; this is the teardown seam,
-not preparation). ``model_prep`` re-exports the three ``_clear_*`` walkers
+not preparation). ``model_prep`` re-exports the ``_clear_*`` walkers
 under their original names.
 """
 
+import functools
+import gc
 import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable
@@ -25,6 +27,7 @@ __all__ = [
     "_clear_callable_session_tensor_metadata",
     "_clear_container_tree_tensor_metadata",
     "_clear_module_attribute_tensor_metadata",
+    "_clear_module_callables_tensor_metadata",
     "_clear_session_tensor_metadata",
 ]
 
@@ -33,6 +36,9 @@ _SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
 #: Exact plain container types whose emptiness is a sound inline skip.
 _PLAIN_CONTAINER_TYPES = frozenset({dict, OrderedDict, list, tuple, set, frozenset, deque})
 _SCALAR_SEQUENCE_TYPES = frozenset({list, tuple})
+#: The C ``functools.lru_cache`` wrapper type (``None`` where only the pure-Python
+#: fallback exists; its cache lives in a closure cell the callable walk already reads).
+_LRU_CACHE_WRAPPER_TYPE: type | None = getattr(functools, "_lru_cache_wrapper", None)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -258,6 +264,10 @@ def _clear_reachable_tensor_metadata(
         return
     if isinstance(value, nn.Module):
         return
+    if _LRU_CACHE_WRAPPER_TYPE is not None and type(value) is _LRU_CACHE_WRAPPER_TYPE:
+        for entry in _lru_cache_entries(value):
+            _clear_session_tensor_metadata(entry, seen, depth + 1, visit)
+        return
     namespace = getattr(value, "__dict__", None)
     if namespace is None:
         return
@@ -414,3 +424,79 @@ def _clear_callable_session_tensor_metadata(
     for name in code.co_names:
         if name in globals_dict:
             _clear_session_tensor_metadata(globals_dict[name], seen, visit=visit)
+
+
+def _lru_cache_entries(wrapper: Any) -> list[Any]:
+    """Return what a C ``lru_cache`` wrapper holds: cached keys, results and its ``__dict__``.
+
+    The C wrapper keeps its cache off every attribute: a warm cache returns a
+    tensor built in an earlier pass with no op and no attribute read, so neither
+    the ownership snapshot nor the session-end clear saw it. Its ``tp_traverse``
+    visits every cache link's key and result, the cache dict and the wrapper's
+    ``__dict__`` without running user code. The wrapped function (its globals are
+    walked from the forward that names it) and the wrapper's type are dropped.
+    """
+
+    return [
+        referent
+        for referent in gc.get_referents(wrapper)
+        if type(referent) not in (type, types.FunctionType)
+    ]
+
+
+def _class_lru_caches(owner: type) -> list[Any]:
+    """Return the C ``lru_cache`` wrappers the user classes of ``owner``'s MRO hold.
+
+    A cached class attribute (``@staticmethod @lru_cache``, ``@lru_cache`` on a
+    method) is the wrapper itself; a decorator that wraps the cache in a Python
+    function (transformers' ``compile_compatible_method_lru_cache``) holds it in a
+    closure cell. Classes defined by torch hold no model cache and are skipped.
+    """
+
+    caches: list[Any] = []
+    if _LRU_CACHE_WRAPPER_TYPE is None:
+        return caches
+    for klass in owner.__mro__:
+        if klass is object or str(getattr(klass, "__module__", "")).startswith("torch."):
+            continue
+        for attr in vars(klass).values():
+            if type(attr) in (staticmethod, classmethod):
+                attr = attr.__func__
+            if type(attr) is _LRU_CACHE_WRAPPER_TYPE:
+                caches.append(attr)
+            elif type(attr) is types.FunctionType:
+                for cell in attr.__closure__ or ():
+                    try:
+                        held = cell.cell_contents
+                    except ValueError:
+                        continue
+                    if type(held) is _LRU_CACHE_WRAPPER_TYPE:
+                        caches.append(held)
+    return caches
+
+
+def _clear_module_callables_tensor_metadata(
+    module: nn.Module,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None = None,
+) -> None:
+    """Walk one module's forward callable, then the ``lru_cache`` contents its class holds.
+
+    The callable half of the pre-forward ownership snapshot and of the session-end
+    clear, so both reach the same cached tensors: the snapshot records a warm
+    cache's tensor as a pre-forward constant, and the clear strips the label a
+    capture left on a tensor it computed into a cold cache.
+
+    Parameters
+    ----------
+    module
+        One module of the prepared model tree.
+    seen
+        Object ids already visited during this sweep.
+    visit
+        Optional per-tensor action replacing the default ``clear_meta``.
+    """
+
+    _clear_callable_session_tensor_metadata(getattr(module, "forward", None), seen, visit=visit)
+    for cache in _class_lru_caches(type(module)):
+        _clear_session_tensor_metadata(cache, seen, visit=visit)

@@ -5,7 +5,11 @@ self``) deep-copies into an object with an empty attribute namespace, so the
 ground-truth forward on the copy raised ``AttributeError``; WavTokenizer's legacy
 ``weight_norm`` makes deepcopy raise, and the fallback refused a NumPy ``int64``
 ``hop_length`` and ``nn.LSTM._flat_weights`` (a list aliasing registered
-parameters). These tests pin the fixes and their narrowness.
+parameters). Uni-Core's ``LayerNorm`` keeps a closure over ``self`` as ``self.func``;
+``copy.deepcopy`` returns functions as themselves, so the copy's forward read the
+source module's parameters and source-provenance validation failed the copy's
+``layer_norm`` (tensor arguments from outside the copied model). These tests pin the
+fixes and their narrowness.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from torchlens._capture_state_helpers import (
 )
 from torchlens._plain_attr_fidelity import (
     assert_copy_kept_instance_attrs,
+    copy_model_for_validation,
     deepcopy_for_validation,
 )
 from torchlens.validation import validate_forward_pass
@@ -550,3 +555,77 @@ def test_tl_validate_restores_mutated_rich_state_on_the_live_fallback(kind: str)
     else:
         assert model.state is state
         assert _state_fingerprint(state) == before
+
+
+class ClosureLayerNorm(nn.Module):
+    """Uni-Core-shaped: the forward calls a closure over ``self`` built in ``__init__``."""
+
+    def __init__(self, width: int) -> None:
+        super().__init__()
+        self.normalized_shape = (width,)
+        self.weight = nn.Parameter(torch.ones(width))
+        self.bias = nn.Parameter(torch.zeros(width))
+
+        def torch_layer_norm(x: torch.Tensor) -> torch.Tensor:
+            return torch.nn.functional.layer_norm(
+                x, self.normalized_shape, self.weight.type(x.dtype), self.bias.type(x.dtype)
+            )
+
+        self.func = torch_layer_norm
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.func(x)
+
+
+class ClosureLayerNormHost(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(6, 6)
+        self.norm = ClosureLayerNorm(6)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.norm(self.fc(x))
+
+
+def test_copy_rebinds_module_closures_to_the_copy() -> None:
+    source = ClosureLayerNormHost()
+    copied = copy_model_for_validation(source)
+    cell_objects = [cell.cell_contents for cell in copied.norm.func.__closure__]
+    assert copied.norm in cell_objects
+    assert source.norm not in cell_objects
+    assert source.norm.func.__closure__[0].cell_contents is source.norm
+    with torch.no_grad():
+        copied.norm.weight.mul_(2.0)
+    x = torch.randn(3, 6)
+    assert not torch.equal(copied.norm(x), source.norm(x))
+
+
+def test_closure_over_self_model_validates() -> None:
+    torch.manual_seed(0)
+    assert validate_forward_pass(ClosureLayerNormHost().eval(), torch.randn(3, 6)) is True
+
+
+_FOREIGN_SCALE = nn.Parameter(torch.full((6,), 2.0))
+
+
+class ForeignClosureModel(nn.Module):
+    """A closure over a tensor outside the model tree keeps its object in the copy."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(6, 6)
+        scale = _FOREIGN_SCALE
+
+        def scaled(x: torch.Tensor) -> torch.Tensor:
+            return x * scale
+
+        self.scaled = scaled
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.scaled(self.fc(x))
+
+
+def test_copy_keeps_closure_cells_the_deepcopy_did_not_copy() -> None:
+    source = ForeignClosureModel()
+    copied = copy_model_for_validation(source)
+    assert copied.scaled is source.scaled
