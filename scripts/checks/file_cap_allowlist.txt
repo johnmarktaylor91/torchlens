@@ -1011,7 +1011,7 @@ torchlens/debug/_checks/_session.py	1635
 torchlens/debug/_checks/_session.py::ChecksSession.__init__	65
 torchlens/debug/_checks/_session.py::ChecksSession._commit_frozen	68
 torchlens/debug/_checks/_session.py::ChecksSession._raise_on_nonfinite_grads	81
-torchlens/debug/_checks/_session.py::ChecksSession.attach	64
+torchlens/debug/_checks/_session.py::ChecksSession.attach	63
 torchlens/debug/_determinism.py::check_determinism	138
 torchlens/debug/_dtype_range.py::dtype_range	117
 torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	148
@@ -1342,8 +1342,8 @@ torchlens/stats/_trajectory.py::measure_trajectory	62
 torchlens/trackers/_amp.py::correct_histogram	63
 torchlens/trackers/_graph.py::build_graph_ir	61
 torchlens/trackers/_graph.py::graph_ir_to_tensorboard	78
-torchlens/trackers/_watch.py	1533
-torchlens/trackers/_watch.py::watch	187
+torchlens/trackers/_watch.py	1529
+torchlens/trackers/_watch.py::watch	186
 torchlens/transformer/_decomp.py::render_neuron_card	67
 torchlens/transformer/_decomp.py::score_decomposition	78
 torchlens/transformer/_extract.py::attention_view	71

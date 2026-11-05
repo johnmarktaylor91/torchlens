@@ -1904,7 +1904,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_variable_functions_class()
     get_fake_tensor_mode_class()
     get_dtensor_shard_geometry_fn()
-    dynamo_is_compiling()
+    dynamo_is_compiling(force_probe=True)
     _ensure_dynamo_orig_callable_marker_probed()
     get_dynamo_explain()
     # L8/C2 + L9 privately-probed surfaces (fix/private-probe-routing): resolve
@@ -2398,11 +2398,11 @@ def get_higher_order_operator(
     Returns
     -------
     Any | None
-        The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``table`` to register a dispatch-mode rule in.
+        The ``HigherOrderOperator``, or ``None`` when this torch lacks it, its module
+        is not imported (never imported here), or it has no rule ``table``.
     """
 
-    op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
+    op = getattr(sys.modules.get(f"torch._higher_order_ops.{module}"), attribute, None)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
@@ -2417,13 +2417,11 @@ def get_cond_witness_operator(*, mark_missing: bool = True) -> Any | None:
     of both marks ``HAS_COND_HIGHER_ORDER_OP`` missing (cond is then unwitnessed).
     """
 
+    cond_module = sys.modules.get("torch._higher_order_ops.cond")  # never imported here
     op = get_higher_order_operator("cond", "cond_op")
-    if (
-        op is None
-        and _import_module_attr_or_none("torch._higher_order_ops.cond", "cond_op") is None
-    ):
+    if op is None and getattr(cond_module, "cond_op", None) is None:
         op = get_higher_order_operator("cond", "cond", table="python_key_mode_table")
-    if op is None and mark_missing:
+    if op is None and mark_missing and cond_module is not None:
         mark_torch_capability_missing("HAS_COND_HIGHER_ORDER_OP", "cond captures are not witnessed")
     return op
 
@@ -3206,33 +3204,31 @@ _DYNAMO_IS_COMPILING_CANDIDATES: tuple[tuple[str, str], ...] = (
 )
 
 
-def dynamo_is_compiling() -> bool:
+def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     """Return whether Dynamo is currently tracing this frame.
 
     Returns
     -------
     bool
-        True while a ``torch.compile`` region is being traced. False when the
-        capability is structurally ABSENT (no probe resolved), so an absent
-        probe degrades to "not compiling" rather than disabling capture. True
-        when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated
-        as possibly-compiling so the wrapper takes the disclosed dynamo-region
-        bypass (``capture_verified=False`` + ``dynamo_region_not_logged``)
-        instead of silently logging data-free FakeTensors -- the documented
-        crash class the guard exists to prevent. Both degraded paths flip
+        True while a ``torch.compile`` region is traced. False, with no import,
+        while ``torch._dynamo`` is unimported (unless ``force_probe``) or no probe
+        resolved: an absent probe means "not compiling". True when a resolved
+        probe RAISES (r-b4 R26-3), so the wrapper takes the disclosed bypass
+        instead of logging data-free FakeTensors. Both degraded paths flip
         ``HAS_DYNAMO_IS_COMPILING``.
 
     Notes
     -----
-    Probed once and cached as a bound callable, because this is consulted on the
-    capture logging path once per operation. Measured at ~0.5 us per call, which
-    is under 1% of the per-op logging cost.
+    Probed once and cached as a bound callable: it runs once per logged operation,
+    ~0.5 us per call, under 1% of the per-op logging cost.
     """
 
     global HAS_DYNAMO_IS_COMPILING, _DYNAMO_IS_COMPILING_FN, _DYNAMO_IS_COMPILING_PROBED
 
     if not _DYNAMO_IS_COMPILING_PROBED:
-        for module_name, attr_name in _DYNAMO_IS_COMPILING_CANDIDATES:
+        candidates = _DYNAMO_IS_COMPILING_CANDIDATES
+        loaded = [pair for pair in candidates if force_probe or pair[0] in sys.modules]
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3241,8 +3237,10 @@ def dynamo_is_compiling() -> bool:
                 _DYNAMO_IS_COMPILING_FN = candidate
                 break
         HAS_DYNAMO_IS_COMPILING = _DYNAMO_IS_COMPILING_FN is not None
-        _DYNAMO_IS_COMPILING_PROBED = True
+        _DYNAMO_IS_COMPILING_PROBED = HAS_DYNAMO_IS_COMPILING or len(loaded) == len(candidates)
     probe = _DYNAMO_IS_COMPILING_FN
+    if probe is None and "torch._dynamo" not in sys.modules:
+        return False
     if probe is None:
         mark_torch_capability_missing(
             "HAS_DYNAMO_IS_COMPILING",
@@ -3503,11 +3501,11 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
     global HAS_TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES_PROBED
 
     if not _TRACING_TENSOR_TYPES_PROBED:
-        candidate_modules = tuple(name for name, _attr in _TRACING_TENSOR_CANDIDATES)
-        if not force_probe and not any(name in sys.modules for name in candidate_modules):
+        loaded = [p for p in _TRACING_TENSOR_CANDIDATES if force_probe or p[0] in sys.modules]
+        if not loaded:
             return ()
         found: list[type[Any]] = []
-        for module_name, attr_name in _TRACING_TENSOR_CANDIDATES:
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3516,7 +3514,7 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
                 found.append(candidate)
         _TRACING_TENSOR_TYPES = tuple(found)
         HAS_TRACING_TENSOR_TYPES = bool(_TRACING_TENSOR_TYPES)
-        _TRACING_TENSOR_TYPES_PROBED = True
+        _TRACING_TENSOR_TYPES_PROBED = len(loaded) == len(_TRACING_TENSOR_CANDIDATES)
     if not _TRACING_TENSOR_TYPES:
         mark_torch_capability_missing(
             "HAS_TRACING_TENSOR_TYPES",
