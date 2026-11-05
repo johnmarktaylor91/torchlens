@@ -1435,9 +1435,9 @@ torchlens/validation/_invariants_conditional_modules.py::_check_module_hierarchy
 torchlens/validation/_invariants_conditional_modules.py::_check_module_layer_containment	107
 torchlens/validation/_invariants_conditionals.py::_check_conditional_child_labels_resolve	81
 torchlens/validation/_invariants_conditionals.py::_check_conditional_rolled_edge_call_indices	69
-torchlens/validation/_invariants_connectivity.py	819
+torchlens/validation/_invariants_connectivity.py	841
 torchlens/validation/_invariants_connectivity.py::_check_ancestry_closure	132
-torchlens/validation/_invariants_connectivity.py::_check_distance_invariants	62
+torchlens/validation/_invariants_connectivity.py::_check_distance_invariants	87
 torchlens/validation/_invariants_connectivity.py::_check_graph_connectivity	129
 torchlens/validation/_invariants_connectivity.py::_check_lookup_key_consistency	80
 torchlens/validation/_invariants_connectivity.py::_check_module_containment_logic	97

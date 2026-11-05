@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
+from ._invariants_distance_messages import _distance_order_message
 from ._invariants_parentless import (
     _consumed_unattributed_data_operand,
     _op_follows_recorded_backward_trigger,
@@ -55,8 +56,33 @@ def _check_distance_invariants(ml: Trace) -> None:
     for lpl in ml._layer_list:
         label = lpl.layer_label
 
-        _check_distance_order(name, lpl, label)
-        _check_terminal_distances(name, lpl, label, input_set, output_set)
+        # min <= max for input distances
+        message = _distance_order_message(label, lpl.graph, toward_output=False)
+        if message is not None:
+            raise MetadataInvariantError(name, message)
+
+        # min <= max for output distances
+        message = _distance_order_message(label, lpl.graph, toward_output=True)
+        if message is not None:
+            raise MetadataInvariantError(name, message)
+
+        # Input layers: distance from input == 0
+        if label in input_set:
+            if lpl.graph.min_distance_from_input != 0 or lpl.graph.max_distance_from_input != 0:
+                raise MetadataInvariantError(
+                    name,
+                    f"Input layer '{label}': distance_from_input should be 0, got "
+                    f"min={lpl.graph.min_distance_from_input}, max={lpl.graph.max_distance_from_input}",
+                )
+
+        # Output layers: distance from output == 0
+        if label in output_set:
+            if lpl.graph.min_distance_to_output != 0 or lpl.graph.max_distance_to_output != 0:
+                raise MetadataInvariantError(
+                    name,
+                    f"Output layer '{label}': distance_from_output should be 0, got "
+                    f"min={lpl.graph.min_distance_to_output}, max={lpl.graph.max_distance_to_output}",
+                )
 
         # has_input_ancestor ↔ input_ancestors non-empty
         has_ancestors = len(lpl.input_ancestors) > 0
@@ -808,10 +834,6 @@ from . import _invariants as _invariants_hub  # noqa: E402
 from ._invariants import (  # noqa: E402
     MetadataInvariantContract,
     MetadataInvariantError,
-)
-from ._invariants_distance_bounds import (  # noqa: E402
-    _check_distance_order,
-    _check_terminal_distances,
 )
 from ._invariants_topology import (  # noqa: E402
     _retained_orphan_layer_labels,
