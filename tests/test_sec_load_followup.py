@@ -146,8 +146,9 @@ def test_fastlog_symlinked_sidecar_refuses(tmp_path: Path, name: str) -> None:
 
     bundle = _fastlog_bundle(tmp_path)
     _relink(bundle / name, tmp_path / f"outside-{name}")
-    with pytest.raises(ArtifactError, match="symlink or not a regular file"):
+    with pytest.raises(ArtifactError, match="symlink or not a regular file") as info:
         recover_module.load(bundle)
+    assert info.value.fields["code"] == "load_path_symlink_rejected"
 
 
 @needs_symlinks
@@ -354,6 +355,20 @@ def test_capture_cache_hits_with_secret_outside_the_cache(cache_env: tuple[Path,
     if os.name == "posix":
         assert stat.S_IMODE(secret.stat().st_mode) == 0o600
     assert not any(path.name.endswith("secret") for path in cache_root.rglob("*"))
+
+
+def test_capture_cache_secret_directory_that_cannot_be_created_refuses(
+    cache_env: tuple[Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A state home that is a plain file refuses typed, naming the directory and the remedy."""
+
+    blocker = tmp_path / "state-is-a-file"
+    blocker.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv("XDG_STATE_HOME", str(blocker))
+    with pytest.raises(ArtifactError, match="cannot be created or inspected") as info:
+        prepare_cache._capture_cache_secret_dir()
+    assert str(blocker / "torchlens") in str(info.value)
+    assert "XDG_STATE_HOME" in str(info.value)
 
 
 def test_supplied_cache_directory_cannot_forge_an_entry(

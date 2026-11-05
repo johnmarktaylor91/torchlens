@@ -423,15 +423,18 @@ def _validate_blob_metadata(
     except ArtifactError:
         recovery_warnings.append(f"malformed blob path {blob_id}")
         return False, None
-    if not blob_path.exists():
-        recovery_warnings.append(f"missing blob {blob_id}")
-        return False, None
     # Containment above resolved symlinks; the blob itself must be the plain file the
     # writer created, so a FIFO cannot hang the digest and a link cannot alias a file.
-    blob_path = bundle_path / str(relative_path)
-    if not _is_plain_file(blob_path):
-        recovery_warnings.append(f"blob {blob_id} is a symlink or not a regular file")
+    plain_blob_path = bundle_path / str(relative_path)
+    blob_problem: str | None = None
+    if not blob_path.exists():
+        blob_problem = f"missing blob {blob_id}"
+    elif not _is_plain_file(plain_blob_path):
+        blob_problem = f"blob {blob_id} is a symlink or not a regular file"
+    if blob_problem is not None:
+        recovery_warnings.append(blob_problem)
         return False, None
+    blob_path = plain_blob_path
     try:
         payload = _load_verified_blob_tensor(blob_path, str(expected_sha256))
     except ArtifactError:
@@ -657,7 +660,7 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
         if not _is_plain_file(bundle_path / name):
             raise ArtifactError(
                 f"Fastlog bundle {name} is a symlink or not a regular file.",
-                code="fastlog_bundle_file_unsafe",
+                code="load_path_symlink_rejected",
                 remedy="Copy the bundle with its files as plain files, or re-record it.",
             )
     blobs_dir = bundle_path / "blobs"

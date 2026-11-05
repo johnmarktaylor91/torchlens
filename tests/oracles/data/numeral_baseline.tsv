@@ -3092,8 +3092,8 @@ docs-md	docs/maintainers/where.md	170
 docs-md	docs/maintainers/where.md	171
 docs-md	docs/maintainers/where.md	1713
 docs-md	docs/maintainers/where.md	1717
-docs-md	docs/maintainers/where.md	1719
 docs-md	docs/maintainers/where.md	172
+docs-md	docs/maintainers/where.md	1720
 docs-md	docs/maintainers/where.md	1726
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1734
@@ -3197,7 +3197,7 @@ docs-md	docs/maintainers/where.md	23
 docs-md	docs/maintainers/where.md	230
 docs-md	docs/maintainers/where.md	2302
 docs-md	docs/maintainers/where.md	231
-docs-md	docs/maintainers/where.md	23168
+docs-md	docs/maintainers/where.md	23191
 docs-md	docs/maintainers/where.md	232
 docs-md	docs/maintainers/where.md	233
 docs-md	docs/maintainers/where.md	234
@@ -3373,7 +3373,7 @@ docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3710
 docs-md	docs/maintainers/where.md	372
 docs-md	docs/maintainers/where.md	373
-docs-md	docs/maintainers/where.md	37301
+docs-md	docs/maintainers/where.md	37300
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
 docs-md	docs/maintainers/where.md	376
@@ -3477,7 +3477,7 @@ docs-md	docs/maintainers/where.md	473
 docs-md	docs/maintainers/where.md	474
 docs-md	docs/maintainers/where.md	475
 docs-md	docs/maintainers/where.md	477
-docs-md	docs/maintainers/where.md	4787
+docs-md	docs/maintainers/where.md	4777
 docs-md	docs/maintainers/where.md	479
 docs-md	docs/maintainers/where.md	48
 docs-md	docs/maintainers/where.md	480
@@ -3629,7 +3629,6 @@ docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
 docs-md	docs/maintainers/where.md	671
 docs-md	docs/maintainers/where.md	673
-docs-md	docs/maintainers/where.md	674
 docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
@@ -3644,7 +3643,7 @@ docs-md	docs/maintainers/where.md	691
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	6976
-docs-md	docs/maintainers/where.md	697719
+docs-md	docs/maintainers/where.md	697734
 docs-md	docs/maintainers/where.md	698
 docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
@@ -3699,7 +3698,7 @@ docs-md	docs/maintainers/where.md	765
 docs-md	docs/maintainers/where.md	767
 docs-md	docs/maintainers/where.md	77
 docs-md	docs/maintainers/where.md	770
-docs-md	docs/maintainers/where.md	7706
+docs-md	docs/maintainers/where.md	7709
 docs-md	docs/maintainers/where.md	771
 docs-md	docs/maintainers/where.md	773
 docs-md	docs/maintainers/where.md	774
@@ -3713,6 +3712,7 @@ docs-md	docs/maintainers/where.md	781
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	783
 docs-md	docs/maintainers/where.md	786
+docs-md	docs/maintainers/where.md	787
 docs-md	docs/maintainers/where.md	788
 docs-md	docs/maintainers/where.md	789
 docs-md	docs/maintainers/where.md	79
@@ -5843,7 +5843,7 @@ package-docstrings	torchlens/_capture/preflight.py	5_15
 package-docstrings	torchlens/_capture/prepare/_cache_pickle.py	2.1
 package-docstrings	torchlens/_capture/prepare/_cache_pickle.py	2.13
 package-docstrings	torchlens/_capture/prepare/cache.py	0600
-package-docstrings	torchlens/_capture/prepare/cache.py	0775
+package-docstrings	torchlens/_capture/prepare/cache.py	0700
 package-docstrings	torchlens/_capture/prepare/request.py	16
 package-docstrings	torchlens/_capture/prepare/resolve.py	15
 package-docstrings	torchlens/_capture/prepare/resolve.py	15,
@@ -7158,6 +7158,9 @@ package-docstrings	torchlens/_utils/_torch_symbols.py	562
 package-docstrings	torchlens/_utils/_uninit_alloc.py	43
 package-docstrings	torchlens/_utils/_uninit_alloc.py	53
 package-docstrings	torchlens/_utils/_uninit_alloc.py	55
+package-docstrings	torchlens/_utils/_weights_only_policy.py	2.5.1
+package-docstrings	torchlens/_utils/_weights_only_policy.py	2025
+package-docstrings	torchlens/_utils/_weights_only_policy.py	32434
 package-docstrings	torchlens/_utils/alias_footprint.py	1_1
 package-docstrings	torchlens/_utils/alias_footprint.py	2_6
 package-docstrings	torchlens/_utils/alias_footprint.py	37

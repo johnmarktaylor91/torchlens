@@ -96,21 +96,19 @@ def _capture_cache_io_error(message: str) -> Exception:
     return ArtifactError(message)
 
 
-def _harden_capture_cache_dir(directory: Path) -> None:
+def _harden_capture_cache_dir(directory: Path, *, create: bool = False) -> None:
     """Make one torchlens-owned cache directory private to the current user.
 
-    The default cache path is created under the caller's umask, which on a great many
-    Linux installs (umask 002) yields a group-writable ``0775`` directory -- so a hard
-    refusal would break the DEFAULT cache. Since torchlens owns these directories, the
-    write bits are stripped instead. A directory owned by a different user, or one whose
-    permissions cannot be tightened, is a genuine misconfiguration and refuses typed.
+    Group/other write bits (a umask ``002`` default) are stripped, not refused; a directory
+    owned by another user, or whose permissions cannot be tightened, refuses typed.
 
     Parameters
     ----------
     directory
-        A cache directory torchlens created (the configured root, or its ``capture``
-        subdirectory). Ancestors above the configured root are the caller's to secure
-        and are deliberately not inspected.
+        A cache directory torchlens owns (the configured root, its ``capture`` subdirectory
+        or the secret directory); ancestors are the caller's to secure and never inspected.
+    create
+        Create it (``0700``, with parents) first; a failure refuses like a failed ``stat``.
 
     Returns
     -------
@@ -120,20 +118,23 @@ def _harden_capture_cache_dir(directory: Path) -> None:
     Raises
     ------
     torchlens.errors.ArtifactError
-        When the directory is owned by another user, or is group/other-writable and
-        cannot be tightened. Either condition means a second principal can substitute
-        the pickle this process will load.
+        When it cannot be created or inspected, is another user's, or stays group/other
+        writable (a second principal could then substitute the pickle this process loads).
     """
 
+    try:
+        if create:
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        info = directory.stat()
+    except OSError as exc:
+        raise _capture_cache_io_error(
+            f"TorchLens capture cache directory {directory} cannot be created or "
+            f"inspected ({exc}). Point TORCHLENS_CACHE_DIR (the cache) or XDG_STATE_HOME "
+            "(its secret) at a private writable directory, or drop cache=True."
+        ) from exc
     if os.name != "posix":  # pragma: no cover - POSIX mode bits are the checked signal
         return
     euid = os.geteuid()
-    try:
-        info = directory.stat()
-    except OSError as exc:  # pragma: no cover - mkdir ran immediately before
-        raise _capture_cache_io_error(
-            f"TorchLens capture cache directory {directory} cannot be inspected ({exc})."
-        ) from exc
     if info.st_uid != euid:
         raise _capture_cache_io_error(
             f"TorchLens capture cache directory {directory} is owned by uid "
@@ -141,8 +142,7 @@ def _harden_capture_cache_dir(directory: Path) -> None:
             "traces, so loading one written by another user would execute their code. "
             "Point TORCHLENS_CACHE_DIR at a directory you own, or drop cache=True."
         )
-    permissive = info.st_mode & 0o022
-    if not permissive:
+    if not info.st_mode & 0o022:
         return
     try:
         directory.chmod(stat.S_IMODE(info.st_mode) & ~0o022)
@@ -215,17 +215,7 @@ def _capture_cache_secret_dir() -> Path:
 
     state_home = os.environ.get("XDG_STATE_HOME") or "~/.local/state"
     secret_dir = Path(state_home).expanduser() / "torchlens"
-    try:
-        secret_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    except OSError as exc:
-        from ..._io import ArtifactError
-
-        raise ArtifactError(
-            f"TorchLens capture cache secret directory {secret_dir} cannot be created ({exc}).",
-            code="capture_cache_secret_unavailable",
-            remedy="Set XDG_STATE_HOME to a private writable directory, or drop cache=True.",
-        ) from exc
-    _harden_capture_cache_dir(secret_dir)
+    _harden_capture_cache_dir(secret_dir, create=True)
     return secret_dir
 
 

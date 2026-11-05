@@ -51,6 +51,8 @@ _MAX_JSON_BYTES = 512 * 1024 * 1024
 # worst case near ~2 GiB while sitting far above any real body-index-bounded
 # manifest (which is orders of magnitude smaller).
 _MAX_JSON_NODES = 64_000_000
+#: Text encoding of every JSON file :func:`read_bounded` reads (no caller varies it).
+_JSON_FILE_ENCODING = "utf-8"
 
 _OPEN_BRACKETS = frozenset("[{")
 _CLOSE_BRACKETS = frozenset("]}")
@@ -374,7 +376,6 @@ def load_bounded(
 def read_bounded(
     path: Path,
     *,
-    encoding: str = "utf-8",
     max_depth: int = _MAX_JSON_DEPTH,
     max_bytes: int = _MAX_JSON_BYTES,
     max_nodes: int = _MAX_JSON_NODES,
@@ -392,8 +393,6 @@ def read_bounded(
     ----------
     path:
         JSON file to read.
-    encoding:
-        Text encoding of the file.
     max_depth:
         Maximum permitted bracket nesting depth.
     max_bytes:
@@ -419,11 +418,11 @@ def read_bounded(
     with open_regular(path, follow_symlinks=follow_symlinks) as handle:
         data = _bounded_read_bytes(handle, max_bytes)
     try:
-        text = data.decode(encoding)
+        text = data.decode(_JSON_FILE_ENCODING)
     except UnicodeDecodeError as exc:
         # Same does-not-parse class as broken JSON (R73): route through the
         # one channel every JSON-boundary handler already catches.
-        raise _refuse(f"manifest bytes are not valid {encoding}: {exc}", "") from exc
+        raise _refuse(f"manifest bytes are not valid {_JSON_FILE_ENCODING}: {exc}", "") from exc
     return loads_bounded(text, max_depth=max_depth, max_bytes=max_bytes, max_nodes=max_nodes)
 
 

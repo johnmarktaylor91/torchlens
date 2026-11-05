@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1720 modules, 697742 lines, 0 modules without a docstring.
+85 packages, 1720 modules, 697734 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -17,13 +17,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 56 | 26864 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1504 |
-| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4787 |
+| `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 9 | 4777 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 122 | 42714 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1264 |
 | `torchlens._distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 5 | 3101 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 602 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 20 | 11044 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37301 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37300 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 26 | 9242 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12736 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6007 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2812 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 32 | 14219 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1966 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7706 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7709 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3905 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14500 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2234 |
@@ -296,13 +296,13 @@ FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue
 
 ### `torchlens._capture.prepare`
 
-PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modules, 4787 lines)
+PREPARE stage of torch capture: request resolution, cache and dispatch. (9 modules, 4777 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 48 |
 | `_cache_pickle` | Pickle reductions that keep a capture-cache entry loadable on every supported torch. | 65 |
-| `cache` | Capture-cache lookup and store for the PREPARE stage. | 797 |
+| `cache` | Capture-cache lookup and store for the PREPARE stage. | 787 |
 | `chunked` | Chunked capture fan-out helpers for the PREPARE stage. | 798 |
 | `dispatch` | Backend capability gating and the MLX door for the PREPARE stage. | 711 |
 | `door` | Torch door for the PREPARE stage: admission, refusals and request resolution. | 1119 |
@@ -500,7 +500,7 @@ Extraction v2 runtime (extract memo items 4-19). (20 modules, 11044 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37301 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37300 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -517,7 +517,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_format3_runnable_bind` | Runnable binding of a 3.0 artifact: attach the component the carrier read, bind its families. | 510 |
 | `_injected_row_cells` | Cell checks for injected-op rows: the identity grammar and the codec envelope. | 324 |
 | `_inline_tensor` | Inline metadata tensors: a bounded, TorchLens-owned pickle reduction. | 276 |
-| `_json` | Bounded JSON reads for attacker-controlled ''.tlspec'' manifest boundaries. | 462 |
+| `_json` | Bounded JSON reads for attacker-controlled ''.tlspec'' manifest boundaries. | 461 |
 | `_load_validators` | Load-boundary structural validators for the op graph, edge carriers, and annotations. | 524 |
 | `_numpy_payload_codec` | Numeric NumPy values carried by the existing array payload transport. | 87 |
 | `_payload_codec_paddle` | Paddle place resolution for the payload codec. | 36 |
@@ -2108,7 +2108,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 19
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (28 modules, 7706 lines)
+Lightweight predicate-recording namespace for TorchLens. (28 modules, 7709 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2131,7 +2131,7 @@ Lightweight predicate-recording namespace for TorchLens. (28 modules, 7706 lines
 | `_recorder_config` | Resolved stop, capture and identity configuration for one predicate recording pass. | 52 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
 | `_recording_door` | The ''recording='' door of ''torchlens.recording.Recorder''. | 85 |
-| `_recover` | Load and recover fastlog directory bundles. | 674 |
+| `_recover` | Load and recover fastlog directory bundles. | 677 |
 | `_run_cores` | Retention of sealed run cores across the passes of one Recorder. | 61 |
 | `_storage_disk` | Synchronous disk storage backend for fastlog recordings. | 607 |
 | `_storage_ram` | In-memory storage backend for fastlog recordings. | 128 |
