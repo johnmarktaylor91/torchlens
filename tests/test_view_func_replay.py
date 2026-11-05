@@ -316,7 +316,7 @@ def _wrapped_view_and_base() -> tuple[torch.Tensor, torch.Tensor]:
 
     tl.trace(nn.Identity(), torch.ones(2))
     base = torch.arange(6.0).reshape(2, 3)
-    return base.t(), base
+    return _tracked_view(_transpose, base), base
 
 
 @pytest.mark.parametrize("method", _VIEW_FUNCS)
@@ -343,10 +343,11 @@ def test_bound_view_func_keeps_the_bound_method_contract(method: str) -> None:
     view, base = _wrapped_view_and_base()
     first, second = getattr(view, method), getattr(view, method)
     assert first == second and hash(first) == hash(second)
-    assert first != getattr(base.t(), method)
+    assert first != getattr(_tracked_view(_transpose, base), method)
     assert first.__self__ is view and first.__func__ is getattr(torch.Tensor, method)
     assert copy.copy(first) == first
     assert copy.deepcopy(first).__func__ is first.__func__
-    argument = view.clone() if method == "_rev_view_func_unsafe" else base.clone()
     stock = _state._decorated_to_orig[id(first.__func__)]
+    new_base = base * 2
+    argument = _transpose(new_base) if method == "_rev_view_func_unsafe" else new_base
     torch.testing.assert_close(first(argument), stock(view, argument))
