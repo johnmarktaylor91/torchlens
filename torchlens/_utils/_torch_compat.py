@@ -49,7 +49,6 @@ from importlib.machinery import PathFinder
 from typing import Any
 
 import torch
-from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
@@ -66,6 +65,7 @@ __all__ = [
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -223,39 +223,6 @@ _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
 
 
-class _ParameterAsSubclassProbeMode(TorchDispatchMode):
-    """Redispatch operations unchanged for the Parameter subclass capability probe."""
-
-    def __torch_dispatch__(
-        self,
-        func: Any,
-        types: tuple[type[Any], ...],
-        args: tuple[Any, ...] = (),
-        kwargs: dict[str, Any] | None = None,
-    ) -> Any:
-        """Redispatch one probe operation without changing its result.
-
-        Parameters
-        ----------
-        func:
-            Dispatcher operator invoked by the probe.
-        types:
-            Participating tensor subclass types.
-        args:
-            Positional operator arguments.
-        kwargs:
-            Keyword operator arguments.
-
-        Returns
-        -------
-        Any
-            Unmodified operator result.
-        """
-
-        del types
-        return func(*args, **(kwargs or {}))
-
-
 def _probe_device_type_arg_supported() -> bool:
     """Return True if ``torch.is_autocast_enabled`` accepts a ``device_type`` arg.
 
@@ -347,6 +314,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
+    "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -602,84 +570,21 @@ def _probe_safe_weights_only_load() -> bool:
 
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
-    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+    """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
-    :class:`TorchDispatchMode` is active because the returned raw tensor is already
-    associated with a base ``Tensor`` Python object. Newer torch releases permit the
-    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
-    behavioral probe mirrors the dynamic-parameter logging context without parsing a
-    version string.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    parameter = torch.nn.Parameter(torch.empty(0))
-    try:
-        with _ParameterAsSubclassProbeMode():
-            plain_tensor = parameter.as_subclass(torch.Tensor)
-    except (RuntimeError, TypeError):
-        return False
-    return type(plain_tensor) is torch.Tensor
-
-
-class _SubclassCtorProbe(torch.Tensor):
-    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+    return bool(_real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode())
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
-    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+    """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
-    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
-    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
-    subclass X but the raw Tensor object is already associated to a python
-    object of type Tensor." This reproduces on stock torch with a no-op mode
-    (TorchLens's own wrapping is not the cause); newer torch permits the
-    conversion. TorchLens's completeness witness and intervention-ready
-    captures are themselves dispatch modes, so call sites that construct or
-    convert into a strict subclass while one is active need this behavioral
-    probe rather than a parsed version string. Sibling probe (Parameter-to-
-    Tensor, the opposite direction, also version-gated but independently):
-    :func:`_probe_parameter_as_subclass_in_dispatch_mode`.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    base = torch.empty(0)
-    try:
-        with _ParameterAsSubclassProbeMode():
-            converted = base.as_subclass(_SubclassCtorProbe)
-    except (RuntimeError, TypeError):
-        return False
-    return type(converted) is _SubclassCtorProbe
+    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode())
 
 
 def _probe_roll_tensor_shifts() -> bool:
-    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
+    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts`` (see the leaf)."""
 
-    Older torch (verified: 2.8 rejects with ``RuntimeError: shifts required``;
-    2.13 accepts) does not unpack a 0-dim tensor passed as the ``shifts``
-    argument itself; the tuple spelling ``shifts=(tensor,)`` is accepted
-    everywhere. Behavioral probe on a 1-element tensor, never a version parse.
-
-    Returns
-    -------
-    bool
-        ``True`` when the bare tensor ``shifts`` spelling executes.
-    """
-
-    try:
-        torch.roll(torch.zeros(2), shifts=torch.zeros((), dtype=torch.long))  # type: ignore[arg-type]
-    except (RuntimeError, TypeError):
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_roll_tensor_shifts())
 
 
 _TOP_SAVED_TENSORS_DEFAULT_HOOKS_ARGS: tuple[bool, ...] | None = None
@@ -1329,6 +1234,7 @@ HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CL
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
+HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1528,6 +1434,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -1746,6 +1653,9 @@ class TorchCapabilityWarning(TorchLensWarning):
 
 OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
     {
+        # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
+        # fallback of get_view_func_replay, not a degradation.
+        "HAS_VIEW_FUNC_UNSAFE",
         # PEP 657 / 3.11 code-object surfaces: an interpreter feature, not a
         # torch-private degradation -- CPython 3.10 installs are healthy.
         "HAS_CODE_POSITIONS",
@@ -2095,6 +2005,17 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
 def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     """Return autograd's original-view-tracking context manager, or ``None`` (flag flipped)."""
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
+
+
+def get_view_func_replay() -> Callable[..., Any] | None:
+    """Return ``Tensor._view_func_unsafe``, else torch 2.1's ``Tensor._view_func``, else ``None``.
+
+    Torch 2.2 renamed the unchecked view-chain replay to ``_view_func_unsafe`` and
+    gave ``_view_func`` a checked wrapper; on 2.1 ``_view_func`` is that same unchecked
+    replay (``HAS_VIEW_FUNC_UNSAFE``). ``None`` (neither) makes view replay refuse.
+    """
+    found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
+    return found if found is not None else _resolve_attribute_path("torch:Tensor._view_func")
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:

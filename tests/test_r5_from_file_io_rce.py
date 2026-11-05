@@ -33,6 +33,7 @@ from torch import nn
 
 from torchlens._io._safe_unpickle import _safe_getattr
 from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens._utils._torch_compat import get_tensorbase_class
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.types import FunctionRegistryKey
@@ -58,7 +59,7 @@ def test_safe_getattr_denies_from_file() -> None:
     # Pure factory / method references off the same holder still resolve.
     assert callable(_safe_getattr(torch._C._VariableFunctionsClass, "from_numpy"))
     assert callable(_safe_getattr(torch._C._VariableFunctionsClass, "frombuffer"))
-    assert callable(_safe_getattr(torch._C.TensorBase, "sum"))
+    assert callable(_safe_getattr(get_tensorbase_class(), "sum"))
 
 
 # --------------------------------------------------------------------------- #
@@ -103,7 +104,8 @@ def _audited_dangerous_callables() -> list:
         torch.FileCheck,
         torch._load_global_deps,
         torch._preload_cuda_deps,
-        torch._import_device_backends,
+        # torch 2.1 has no _import_device_backends; the None filter below drops it.
+        getattr(torch, "_import_device_backends", None),
         torch._utils._import_dotted_name,
         torch.get_file_path,
         # Prior denials that must STAY closed.
