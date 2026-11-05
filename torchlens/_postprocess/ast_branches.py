@@ -611,9 +611,8 @@ def get_file_index(filename: str) -> FileIndex | None:
     a mismatch warns once and fails closed to ``None`` (honest
     non-attribution, never mis-attribution). ``invalidate_cache`` is the
     explicit opt-out: it clears the pin along with the index (a caller who
-    reloaded the module may re-index the new content). A filename with no
-    file on disk is indexed from the text ``linecache`` holds for it (a
-    notebook cell); see ``_interactive_file_index``.
+    reloaded the module may re-index the new content). A notebook cell has
+    no file: ``_interactive_file_index`` reads its ``linecache`` text.
 
     Parameters
     ----------
@@ -640,7 +639,6 @@ def get_file_index(filename: str) -> FileIndex | None:
     source = read_source_file(filename)
     if source is None:
         return None
-
     source_digest = _source_digest(source)
     drift_message = (
         f"TorchLens: source file {filename!r} changed on disk after it was "
