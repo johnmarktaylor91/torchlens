@@ -5,14 +5,15 @@
 
 ### Security
 
-- **runnable replay**: a crafted bundle could make `trace.run()` or `validate_forward_pass()` on a
-  loaded trace call a torch function with a raw memory address (`Tensor.new(cdata=...)`), call a
-  kernel that skips its own bounds checks (`torch._unsafe_index`, `torch._unsafe_index_put`,
-  `torch.segment_reduce(..., unsafe=True)`, `torch._nested_view_from_buffer` and their siblings),
-  or build a sparse tensor whose indices lie outside its shape. Each could crash the interpreter
-  or read and write memory outside any tensor. TorchLens now refuses a keyword that names a raw
-  address, every kernel without bounds checks, and the `check_invariants` switch that turns sparse
-  checks off, at load and again before each call, and runs every replay of a recorded call with
+- **runnable replay**: a crafted bundle could make `trace.run()` or
+  `torchlens.validation.validate_forward_pass()` on a loaded trace call a torch function with a
+  raw memory address (`Tensor.new(cdata=...)`), call a kernel that skips its own bounds checks
+  (`torch._unsafe_index`, `torch._unsafe_index_put`, `torch.segment_reduce(..., unsafe=True)`,
+  `torch._nested_view_from_buffer` and their siblings), or build a sparse tensor whose indices lie
+  outside its shape. Each could crash the interpreter or read and write memory outside any tensor.
+  TorchLens now refuses a keyword that names a raw address, every kernel without bounds checks,
+  and the `check_invariants` switch that turns sparse checks off, at load and again before each
+  call, and runs every replay of a recorded call with
   `torch.sparse.check_sparse_tensor_invariants` on. Where torch lacks that switch
   (`HAS_SPARSE_INVARIANT_CHECK` is `False`), replayed sparse construction is refused. Behavior
   change: an op whose schema has an `unsafe` argument is refused even with `unsafe=False`, so a
@@ -50,14 +51,16 @@
   After upgrading, each existing entry warns once and is rebuilt.
 
 - **io**: smaller load hardening. A FIFO or other non-regular file named `manifest.json`, or used
-  as a fastlog sidecar, blob or index, or as a history chunk, made `tl.load`,
-  `tl.recording.recover` or `tl.trackers.HistoryReader` hang; these are now refused. Fastlog
-  recovery no longer follows symlinked sidecars or blobs. A history artifact chunk must be named
-  `chunk-NNNNNN.npz`. A bundle whose `members/` directory is a symlink is refused. A runnable
-  descriptor that the bundle manifest does not list is refused before it is read. A JSON number
-  too large to parse, or one that parses to infinity, is refused with a typed error instead of
-  crashing or loading as `inf`. A zero dimension in a stored tensor shape can no longer hide an
+  as a recording sidecar, blob or index, or as a history chunk, made `tl.load`,
+  `tl.recording.recover` or `torchlens.trackers.HistoryReader` hang; these are now refused.
+  Recording recovery no longer follows symlinked sidecars or blobs. A history artifact chunk must
+  be named `chunk-NNNNNN.npz`. A bundle whose `members/` directory is a symlink is refused. A
+  runnable descriptor that the bundle manifest does not list is refused before it is read. A JSON
+  number too large to parse, or one that parses to infinity, is refused with a typed error instead
+  of crashing or loading as `inf`. A zero dimension in a stored tensor shape can no longer hide an
   oversized one.
+
+- **loading**: load bundles and artifacts from untrusted sources only with this version or later.
 
 ### Fixed
 
