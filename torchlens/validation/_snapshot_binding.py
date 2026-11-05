@@ -15,7 +15,8 @@ A differing snapshot is explained when
 
 - the parent is itself an in-place op: a reader of the base or of another alias of
   the view it wrote through is bound to the write, and its value is that alias, not
-  the written view (shape and content may differ); or
+  the written view; the snapshot has the write's dtype and the shape of an op on the
+  write's receiver chain (content is not compared); or
 - the parent is not an in-place op, the snapshot has the parent's shape and dtype
   (an in-place write never changes either), and an in-place op the child ALSO
   consumes wrote through the parent's lineage: the call reads a base together
@@ -25,8 +26,10 @@ A differing snapshot is explained when
   storage the forward had handed to the host zero-copy (``data_ptr``, a storage handle,
   a NumPy view, DLPack), so code outside torch dispatch may have written it. The mark
   names the exact argument slots the parent was bound to
-  (``backends/torch/_storage_exports.py``); a parent bound to any other slots, or a
-  snapshot without the mark, is not explained by it. A loaded trace carries no marks.
+  (``backends/torch/_storage_exports.py``), and capture sets it only when each slot
+  held the parent's own tensor on that exported storage; a parent bound to any other
+  slots, or a snapshot without the mark, is not explained by it. A loaded trace carries
+  no marks, and marks are not invalidated by later edits of a parent's snapshots.
 
 Anything else is a binding the recorded graph cannot produce, and argument logging
 fails. The check only adds failures; it never validates what failed before.
@@ -100,12 +103,38 @@ def snapshot_binding_explained(
     if same_geometry and tensor_nanequal(snapshot, saved, allow_tolerance=False):
         return True
     if record_member(parent_layer, "is_inplace", False):
-        return True
+        return _write_alias_geometry(snapshot, parent_layer, saved_out, resolve)
     if not same_geometry:
         return False
     if _consumed_write_reaches(target_layer, parent_layer, resolve):
         return True
     return _foreign_write_marked(target_layer, parent_layer, resolve, foreign_written or {})
+
+
+def _write_alias_geometry(
+    snapshot: torch.Tensor,
+    parent_layer: Op,
+    saved_out: Callable[[Op], Any],
+    resolve: Callable[[str], Any],
+) -> bool:
+    """Return whether an in-place parent's snapshot has the geometry of an alias it wrote.
+
+    A reader bound to an in-place op reads the written view or an alias on the write's
+    receiver chain (the view it wrote through, back to its base), so the snapshot has
+    the dtype of the write and the shape of one op on that chain. Content is not
+    compared: two same-shape in-place parents swapped, or a base and a same-shape view
+    of it swapped, still pass (named blind spots in the tripwire tests).
+    """
+
+    written = saved_out(parent_layer)
+    if not isinstance(written, torch.Tensor) or snapshot.dtype != written.dtype:
+        return False
+    shape = tuple(snapshot.shape)
+    for label in receiver_lineage(parent_layer, resolve):
+        alias = saved_out(resolve(label))
+        if isinstance(alias, torch.Tensor) and tuple(alias.shape) == shape:
+            return True
+    return False
 
 
 def _foreign_write_marked(

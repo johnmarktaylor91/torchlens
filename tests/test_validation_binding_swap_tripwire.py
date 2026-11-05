@@ -76,6 +76,19 @@ class _AliasesAfterViewWrite(nn.Module):
         return torch.add(y, z)
 
 
+class _TwoInplaceDifferentShapes(nn.Module):
+    """Two in-place writes of different shapes, read by one broadcasting call."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Write ``p`` (3 x 8) and ``q`` (8) in place, then subtract them."""
+
+        p = x * 2.0
+        q = x[0] * 3.0
+        p.add_(1.0)
+        q.mul_(2.0)
+        return torch.sub(p, q)
+
+
 def _trace(model: nn.Module, x: torch.Tensor) -> Any:
     """Capture ``model`` with saved arguments, as validation does."""
 
@@ -152,6 +165,10 @@ _PLANTS: dict[str, tuple[type[nn.Module], Callable[[Any], None]]] = {
     "write_back_base_and_view_swapped": (_WriteBack, _swap("__setitem__", 0, 2)),
     "cat_reordered": (_Cat, _swap("cat", (0, 0), (0, 2))),
     "consumer_bound_past_the_write": (_AliasesAfterViewWrite, _bind_past_the_write),
+    "inplace_parents_of_different_shapes_swapped": (
+        _TwoInplaceDifferentShapes,
+        _swap("sub", 0, 1),
+    ),
 }
 
 
@@ -235,4 +252,66 @@ def test_known_blind_spot_two_same_shape_inplace_parents_swapped() -> None:
             child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
         )
         for parent in parents
+    )
+
+
+class _SquareAliasesAfterWrite(nn.Module):
+    """A square base and its transpose, both read after a write through a row slice."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Write into ``y[0:2]``, then add ``y`` and ``y.t()``."""
+
+        y = x * 2.0
+        v = y.t()
+        a = y[0:2]
+        a.add_(1.0)
+        return torch.add(y, v)
+
+
+def _inplace_slot_parent(trace: Any) -> tuple[Any, Any]:
+    """Return ``add`` and the in-place parent bound to its first slot."""
+
+    child = _op(trace, "add")
+    parent = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
+    assert parent.is_inplace
+    return child, parent
+
+
+def test_inplace_parent_snapshot_off_the_write_chain_is_not_explained() -> None:
+    """An in-place parent's snapshot must have the shape of an op on the write's receiver chain."""
+
+    from torchlens.validation._core import _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    trace = _trace(_SquareAliasesAfterWrite(), torch.randn(4, 4))
+    child, parent = _inplace_slot_parent(trace)
+    parent.out_versions_by_child[child.layer_label] = torch.randn(2, 8)
+    assert not snapshot_binding_explained(
+        child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
+    )
+    parent.out_versions_by_child[child.layer_label] = torch.randn(4, 4).double()
+    assert not snapshot_binding_explained(
+        child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
+    )
+
+
+def test_known_blind_spot_base_and_same_shape_view_swapped() -> None:
+    """KNOWN BLIND SPOT: an in-place parent's snapshot of a same-shape alias is not told apart.
+
+    ``add(y, y.t())`` after a write through ``y[0:2]`` binds both slots to the write. A
+    swapped binding records the transpose's content as the base slot's snapshot; it has
+    the base's shape and dtype, the check compares no content, and it is explained. This
+    pins the gap (the base/view same-shape swap) so a stricter check shows up here.
+    """
+
+    from torchlens.validation._core import _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    trace = _trace(_SquareAliasesAfterWrite(), torch.randn(4, 4))
+    child, parent = _inplace_slot_parent(trace)
+    base = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
+    parent.out_versions_by_child[child.layer_label] = _slot_value(child, 0).detach().t().clone()
+    assert base is parent
+    assert snapshot_binding_explained(
+        child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
     )
