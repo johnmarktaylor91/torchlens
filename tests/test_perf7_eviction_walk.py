@@ -21,10 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._trace_core import op_store
+from torchlens._trace_core import eviction_walk, op_store
 from torchlens.options import CaptureOptions
 
-_CEILING = op_store._EVICT_WALK_DEPTH_CEILING
+_CEILING = eviction_walk._EVICT_WALK_DEPTH_CEILING
 
 
 def _reference_evict(
@@ -327,7 +327,7 @@ def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     _index_objects(cells, "cells", before)
     reference_before: dict[int, Any] = {}
     _index_objects(reference_cells, "cells", reference_before)
-    op_store._evict_payloads_in_list(cells, torch.Tensor)
+    eviction_walk._evict_payloads_in_list(cells, torch.Tensor)
     for index, value in enumerate(reference_cells):
         reference_cells[index] = _reference_evict(value, torch.Tensor)
     assert [_describe(c, before) for c in cells] == [
@@ -338,7 +338,7 @@ def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     before, reference_before = {}, {}
     _index_objects(mapping, "m", before)
     _index_objects(reference_mapping, "m", reference_before)
-    op_store._evict_payloads_in_mapping(mapping, torch.Tensor)
+    eviction_walk._evict_payloads_in_mapping(mapping, torch.Tensor)
     for key, value in reference_mapping.items():
         reference_mapping[key] = _reference_evict(value, torch.Tensor)
     assert _describe(mapping, before) == _describe(reference_mapping, reference_before)
