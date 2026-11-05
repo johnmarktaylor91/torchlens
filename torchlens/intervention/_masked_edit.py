@@ -30,6 +30,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._selection.selection import Site, _apply_invalid, _Mask
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ._types import Edit
 
 __all__ = [
@@ -94,7 +95,7 @@ def _row_equivariance_facts(
         for index in range(1, dense.shape[normalized_axis])
     )
     digest = hashlib.sha256(
-        dense.detach().to("cpu", torch.uint8).contiguous().numpy().tobytes()
+        tensor_payload_bytes(dense.detach().to("cpu", torch.uint8).contiguous())
     ).hexdigest()[:16]
     if not rows_equal:
         raise InvalidArgumentError(
@@ -201,7 +202,7 @@ def _mask_digest(mask: torch.Tensor) -> str:
 
     digest = hashlib.sha256()
     digest.update(repr(tuple(mask.shape)).encode())
-    digest.update(mask.to(torch.uint8).contiguous().numpy().tobytes())
+    digest.update(tensor_payload_bytes(mask.to(torch.uint8).contiguous()))
     return digest.hexdigest()
 
 

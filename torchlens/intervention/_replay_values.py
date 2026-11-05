@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._output_slot import mark_transformed_output_stale
+from .._utils._numpy_bridge import tensor_to_numpy
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -147,7 +148,7 @@ def tensor_content_digest(value: torch.Tensor) -> str:
     raw = flat.view(torch.uint8)
     # hashlib reads the unit-stride uint8 array through the buffer protocol;
     # ``tobytes()`` would first copy every payload byte into a bytes object.
-    return hashlib.sha256(raw.numpy().data).hexdigest()
+    return hashlib.sha256(tensor_to_numpy(raw).data).hexdigest()
 
 
 def rollback_snapshot(site: Op) -> dict[str, Any]:

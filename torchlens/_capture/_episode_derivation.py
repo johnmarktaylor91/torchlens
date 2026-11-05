@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._utils.collections import _path_component_key
 from .._utils.hashing import sha256_canonical_json
+from .._utils.tensor_leaves import tensor_payload_bytes
 from .._utils.tensor_utils import safe_copy
 from ..errors._episode import EpisodeDeclarationError
 
@@ -205,7 +206,7 @@ def _step_slice_digest(step_slice: Any) -> str:
     hasher.update(str(step_slice.dtype).encode("utf-8"))
     hasher.update(str(tuple(step_slice.shape)).encode("utf-8"))
     if flat.numel():
-        hasher.update(flat.view(torch.uint8).numpy().tobytes())
+        hasher.update(tensor_payload_bytes(flat.view(torch.uint8)))
     return f"sha256:{hasher.hexdigest()}"
 
 
