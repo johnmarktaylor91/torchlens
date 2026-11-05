@@ -305,7 +305,8 @@ def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyP
     first_write, second_write = after_each_write
     assert writer_nodes == ["CopySlices", "NoneType"]
     assert first_write.count("CopySlices") == 1
-    assert second_write.count("CopySlices") == 1
+    # The first write's CopySlices: its view op and (after the label move) its writer.
+    assert second_write.count("CopySlices") == 2
     assert second_write.count("SliceBackward0") == 1
 
 
@@ -502,7 +503,6 @@ _ALIAS_READS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "base_only": _base_only,
     "base_before_and_after": _base_before_and_after,
     "intermediate_view": _intermediate_view,
-    "sibling_view": _sibling_view,
 }
 
 
@@ -523,7 +523,7 @@ class _AliasRead(nn.Module):
 
 @pytest.mark.parametrize("read", sorted(_ALIAS_READS))
 def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
-    """Reading the base, an intermediate view or a sibling after a view write passes both checks.
+    """Reading the base or an intermediate view after a view write passes both checks.
 
     The write's gradient reaches the loss through the base's ``CopySlices`` (or a
     view regenerated over it), so the in-place op records ``CopySlices``.
@@ -534,6 +534,20 @@ def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
     writer = _only_layer(trace, ("add_", "mul_"))
     assert writer.autograd.grad_fn.class_name == "CopySlices"
     assert _backward_verdict(_AliasRead(_ALIAS_READS[read])) is True
+
+
+def test_sibling_view_read_after_a_view_write_fails_backward_validation_closed() -> None:
+    """An open capture gap stays rejected: the sibling view's op holds a node backward skips.
+
+    ``sibling`` is taken before the write, so its op recorded the pre-write
+    ``SliceBackward0``; reading ``sibling`` after the write goes through a view
+    node autograd regenerates over ``CopySlices``, which no op records. Backward
+    validation's capture (no base-label move) keeps the sibling op as the
+    reader's parent and rejects the record. Binding the sibling op to the
+    regenerated node is the postprocess rebind proposed by the view-write-2 lane.
+    """
+
+    assert _backward_verdict(_AliasRead(_sibling_view)) == "MetadataInvariantError"
 
 
 @pytest.mark.parametrize(

@@ -62,9 +62,6 @@ def _aten_view_op_names() -> frozenset[str]:
     )
 
 
-# Keyed on autograd class names from the user's graph (custom ``Function``
-# subclasses included), so the cache is bounded.
-@functools.lru_cache(maxsize=512)
 def is_view_backward_class(class_name: str) -> bool:
     """Return whether ``class_name`` is the backward node of an aten view op.
 
@@ -72,7 +69,9 @@ def is_view_backward_class(class_name: str) -> bool:
     op is a view when one of its schemas takes an argument that its result
     aliases without writing it. Read from torch's own schemas, so new view ops
     need no list here; any name that does not resolve, or a torch build that
-    cannot enumerate its schemas, is not a view.
+    cannot enumerate its schemas, is not a view. Not memoized per name (the
+    names come from the user's graph, custom ``Function`` classes included);
+    only the one set of view op names is cached.
 
     Parameters
     ----------
