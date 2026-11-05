@@ -129,7 +129,7 @@ def test_pt_shard_refuses_on_a_bypassable_weights_only_torch(
 
         raise AssertionError("torch.load reached on an unsafe torch")
 
-    monkeypatch.setattr(shards, "HAS_SAFE_WEIGHTS_ONLY_LOAD", False)
+    monkeypatch.setattr(shards, "weights_only_load_is_safe", lambda: False)
     monkeypatch.setattr(shards.torch, "load", _never)
     shard = tmp_path / "batch_00000.pt"
     shard.write_bytes(b"crafted")
@@ -160,7 +160,7 @@ def test_pyreft_weights_refuse_on_unsafe_torch_and_symlinked_weight(
 
         raise _Reached("torch.load reached on an unsafe torch")
 
-    monkeypatch.setattr(pyreft, "HAS_SAFE_WEIGHTS_ONLY_LOAD", False)
+    monkeypatch.setattr(pyreft, "weights_only_load_is_safe", lambda: False)
     monkeypatch.setattr(pyreft.torch, "load", _never)
     with pytest.raises(InvalidArgumentError) as info:
         pyreft._tensors(tmp_path / "intkey_k.bin", b"crafted", 1, 2)
@@ -184,9 +184,10 @@ def test_pyreft_weights_refuse_on_unsafe_torch_and_symlinked_weight(
 def _encoded(fmt: str) -> bytes:
     """Return a tiny RGB image encoded as ``fmt``."""
 
-    image_module = pytest.importorskip("PIL.Image")
+    from PIL import Image  # pillow is a core torchlens dependency, present in every CI leg
+
     buffer = io.BytesIO()
-    image_module.new("RGB", (4, 4), (10, 20, 30)).save(buffer, format=fmt)
+    Image.new("RGB", (4, 4), (10, 20, 30)).save(buffer, format=fmt)
     return buffer.getvalue()
 
 

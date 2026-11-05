@@ -48,7 +48,7 @@ from .._errors import InvalidArgumentError
 from .._io._json import loads_bounded, read_bytes_bounded
 from .._selection.selection import units
 from .._selection.subspace import subspace
-from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
+from .._utils._weights_only_policy import weights_only_load_is_safe
 from ..intervention._affine_source import set_affine_coordinates
 
 __all__ = ["LoreftArtifact", "read"]
@@ -363,7 +363,7 @@ def _weight_file(directory: Path, key: str) -> Path:
 def _tensors(path: Path, data: bytes, rank: int, dimension: int) -> dict[str, torch.Tensor]:
     """Return ``weight``, ``bias`` and ``rotate_layer`` from ``data``, refusing a malformed file."""
 
-    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:  # CVE-2025-32434: weights_only bypassable <= 2.5.1
+    if not weights_only_load_is_safe():  # CVE-2025-32434: weights_only bypassable <= 2.5.1
         raise _refusal(
             f"{path.name!r} needs torch 2.6+: this torch's weights_only loader is not safe "
             "against crafted files (CVE-2025-32434)",
