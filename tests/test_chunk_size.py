@@ -330,8 +330,10 @@ def test_rerun_chunk_size_matches_manual_append_loop() -> None:
     actual = tl.trace(model, x[:4], save="all")
     expected = tl.trace(model, x[:4], save="all")
 
-    actual.run(model, x, input_transform=False, replay=tl.options.ReplayOptions(chunk_size=4))
-    expected.run(model, x[:4], input_transform=False)
+    actual = actual.run(
+        model, x, input_transform=False, replay=tl.options.ReplayOptions(chunk_size=4)
+    )
+    expected = expected.run(model, x[:4], input_transform=False)
     expected.append(x[4:8], model=model)
     expected.append(x[8:], model=model)
 

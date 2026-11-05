@@ -30,6 +30,7 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
+from ..._utils._record_group_table import record_member
 from ._grad_fn_graph import _extend_grad_fn_graph_relations, _rename_appended_labels
 from ._grad_fn_membership import (
     MembershipSweeps,
@@ -126,7 +127,7 @@ def _layer_grad_fn_ids(trace: Any) -> frozenset[int]:
     return frozenset(
         grad_fn_object_id
         for layer in (*trace._layer_list, *trace._layer_logs.values())
-        if (grad_fn_object_id := getattr(layer, "grad_fn_object_id", None)) is not None
+        if (grad_fn_object_id := record_member(layer, "grad_fn_object_id", None)) is not None
     )
 
 

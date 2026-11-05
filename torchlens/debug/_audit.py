@@ -11,6 +11,7 @@ from .._debug_report import Report, rows_of
 from .._utils._display_card import LIST_LIMIT, render_card
 from .._utils._display_constructor import clipped, display_guard
 from .._utils._display_numbers import plural
+from .._utils._record_group_table import record_member
 from ._common import _compute_ops, _nonfinite_kind
 from ._gradients import grad_health
 from ._nan import bisect_nan, find_nan_in_trace
@@ -175,7 +176,10 @@ def _has_saved_gradients(trace: Trace) -> tuple[bool, str | None]:
         if len(trace.autograd.backward_passes) == 0:
             return False, "forward-only trace; no backward pass was captured"
         if len(trace.saved_grad_ops) == 0:
-            return False, "no saved gradients; re-trace with save_grads=True and backward()"
+            return (
+                False,
+                "no saved gradients; re-trace with save_grads=True and backward()",
+            )
     except ValueError as exc:
         return False, str(exc)
     return True, None
@@ -204,7 +208,7 @@ def _audit_partial_trace(partial: PartialTrace) -> HealthReport:
     )
     modules = tuple(
         str(module)
-        for module in (getattr(last, "module_call_stack", ()) if last is not None else ())
+        for module in (record_member(last, "module_call_stack", ()) if last is not None else ())
     )
     exception = partial.original_exception
     findings = [
@@ -241,7 +245,7 @@ def _audit_partial_trace(partial: PartialTrace) -> HealthReport:
             else "unknown"
         )
         nonfinite_modules = tuple(
-            str(module) for module in getattr(nonfinite_op, "module_call_stack", ())
+            str(module) for module in record_member(nonfinite_op, "module_call_stack", ())
         )
         findings.append(
             AuditFinding(

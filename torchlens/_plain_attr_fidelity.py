@@ -1,19 +1,29 @@
 """Plain-attribute fidelity facts for the validation deepcopy and fallback paths.
 
 Validation runs its ground truth and its replay on deep copies of the model so the
-caller's model state is untouched. Two facts decide whether that is sound:
+caller's model state is untouched. Three facts decide whether that is sound:
 
 * whether ``copy.deepcopy`` reproduced every plain attribute's instance namespace
   (:func:`assert_copy_kept_instance_attrs`); the ``self.__dict__ = self`` AttrDict
   idiom used by HiFi-GAN-family configs copies its items but leaves the copy's
   attribute namespace empty, so the copy's forward raises where the source's does not;
+* whether the copy runs in its source's train/eval mode (:func:`align_validation_copy`)
+  and, for the replay copy, its simple attribute values;
 * whether a plain attribute merely aliases the module's own registered tensors
   (:func:`is_registered_tensor_alias`), as ``nn.RNNBase._flat_weights`` does; such
   values are restored by the state_dict restore, so only their identity is plain state.
+
+:func:`deepcopy_for_validation` makes the copy itself. It shares imported Python
+module objects with the source instead of trying to pickle them: ``copy`` already
+treats functions and classes as atomic, and a module reached through an attribute
+(``self.F = torch.nn.functional``) is the same process-wide object the forward would
+reach through a global name, so sharing it is what an uncopied model does too.
 """
 
 from __future__ import annotations
 
+import copy
+import sys
 from typing import Any
 
 import torch
@@ -38,6 +48,26 @@ def _module_plain_attr_names(module: nn.Module) -> set[str]:
     """
 
     return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
+
+
+def deepcopy_for_validation(model: nn.Module) -> nn.Module:
+    """Return ``copy.deepcopy(model)`` with imported module objects shared, not copied.
+
+    Parameters
+    ----------
+    model:
+        Module tree to copy for a validation run.
+
+    Returns
+    -------
+    nn.Module
+        An independent deep copy; only entries of ``sys.modules`` are shared.
+    """
+
+    memo: dict[int, Any] = {
+        id(module): module for module in list(sys.modules.values()) if module is not None
+    }
+    return copy.deepcopy(model, memo)
 
 
 _FIDELITY_MAX_DEPTH = 4
@@ -332,3 +362,39 @@ def restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> 
                 continue
             if source_value != copied_value:
                 setattr(copied_module, name, source_value)
+
+
+def align_validation_copy(source: nn.Module, copied: nn.Module) -> None:
+    """Make a validation deepcopy behave like its source at validation entry.
+
+    Parameters
+    ----------
+    source:
+        Original module tree.
+    copied:
+        ``copy.deepcopy(source)``, about to run the ground truth or the replay.
+
+    Raises
+    ------
+    ValueError
+        From :func:`assert_copy_kept_instance_attrs`; callers take the disclosed
+        live-model fallback.
+
+    Notes
+    -----
+    A deepcopy can re-run ``__init__``: ``torch.fx.GraphModule.__deepcopy__``
+    does, and torchvision's feature-extractor graph module puts itself back in
+    train mode there, so the copy's batch norm used batch statistics and its
+    ground truth disagreed with the eval-mode capture. Every module's mode is
+    restored through ``train()`` (pre-order, so a parent's recursion is then
+    corrected per child), which also lets a module that swaps behaviour on a
+    mode change (that graph module swaps its train and eval graphs) follow.
+    Other plain attributes are left as the copy made them, so a class's own
+    ``__deepcopy__`` keeps its say; the replay copy aligns them separately.
+    """
+
+    assert_copy_kept_instance_attrs(source, copied)
+    for source_module, copied_module in zip(source.modules(), copied.modules(), strict=True):
+        mode = source_module.training
+        if isinstance(mode, bool) and copied_module.training is not mode:
+            copied_module.train(mode)

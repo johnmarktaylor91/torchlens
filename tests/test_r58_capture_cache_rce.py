@@ -12,8 +12,8 @@ allowlist deliberately refuses tensor/storage CONSTRUCTION and every non-allowli
 torchlens type, so a whole ``Trace`` fails it, and widening the allowlist to fit one
 would disarm the ``.tlspec`` front door. The boundary is closed on AUTHENTICITY
 instead: a private-directory precondition plus a per-entry HMAC-SHA256 tag keyed by a
-0600 secret inside that directory. Bytes that do not authenticate are never handed to
-``pickle``.
+per-user 0600 secret kept outside every cache directory. Bytes that do not authenticate
+are never handed to ``pickle``.
 """
 
 from __future__ import annotations
@@ -67,7 +67,14 @@ def cache_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point the capture cache at a private per-test directory."""
 
     monkeypatch.setenv("TORCHLENS_CACHE_DIR", str(tmp_path / "tlcache"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     return tmp_path / "tlcache" / "capture"
+
+
+def _secret_path(cache_root: Path) -> Path:
+    """Return the per-user capture-cache secret the ``cache_root`` fixture points at."""
+
+    return cache_root.parent.parent / "state" / "torchlens" / "capture_cache_secret"
 
 
 # --------------------------------------------------------------------------- #
@@ -104,7 +111,7 @@ def test_cache_secret_is_private(cache_root: Path) -> None:
         capture=tl.options.CaptureOptions(cache=True),
         save="all",
     )
-    secret = cache_root / ".capture_cache_secret"
+    secret = _secret_path(cache_root)
     assert secret.is_file()
     assert stat.S_IMODE(secret.stat().st_mode) == 0o600
 
@@ -257,7 +264,7 @@ def test_group_readable_secret_refuses_typed(cache_root: Path) -> None:
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
     tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
-    secret = cache_root / ".capture_cache_secret"
+    secret = _secret_path(cache_root)
     secret.chmod(0o644)
     try:
         with pytest.raises(ArtifactError, match="readable or writable"):

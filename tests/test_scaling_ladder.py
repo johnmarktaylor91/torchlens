@@ -72,6 +72,7 @@ def test_op_count_disclosure_fires_once_at_threshold(monkeypatch) -> None:
 def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
     """input_ancestors/output_descendants intern like root/internal (R60-2)."""
 
+    from torchlens._utils._record_group_table import record_member
     from torchlens.backends.torch.ops import _ANCESTOR_SLOT_DESCRIPTORS, _AncestorBitset
 
     log = tl.trace(_Chain(steps=10), torch.randn(2))
@@ -84,7 +85,7 @@ def test_all_four_ancestor_closures_compact_to_bitsets() -> None:
     ):
         cell = _ANCESTOR_SLOT_DESCRIPTORS[field_name].__get__(op, type(op))
         assert isinstance(cell, _AncestorBitset), field_name
-        assert isinstance(getattr(op, field_name), frozenset), field_name
+        assert isinstance(record_member(op, field_name), frozenset), field_name
 
 
 def test_dense_mask_batch_declines_above_node_ceiling(monkeypatch) -> None:

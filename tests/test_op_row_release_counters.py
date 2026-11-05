@@ -28,6 +28,7 @@ from torchlens._trace_core.op_store import (
     PooledCell,
     mark_op_row_released,
 )
+from torchlens._utils._record_group_table import record_storage_attr
 
 
 def _chain(depth: int) -> torch.nn.Module:
@@ -50,7 +51,7 @@ def _facade_husk(op: Any) -> None:
     row = object.__getattribute__(op, "_row")
     mark_op_row_released(store, row)
     for attr, _ in list(state_items(op)):
-        delattr(op, attr)
+        delattr(op, record_storage_attr(op, attr))
     op_mod._detach_op_husk(op)
 
 
@@ -185,7 +186,7 @@ def test_patched_field_attribute_keeps_the_facade_path(monkeypatch: pytest.Monke
     op = trace.ops[1]
     store = object.__getattribute__(op, "_core")
     row = object.__getattribute__(op, "_row")
-    name = op_mod._OP_SLOT_NAMES[0]
+    name = op_mod._OP_STATE_ATTRS[0][1]
     descriptor = vars(op_mod.Op)[name]
     monkeypatch.setattr(
         op_mod.Op,
@@ -205,9 +206,9 @@ def test_every_stored_field_attribute_qualifies_for_row_release() -> None:
 
     namespace = vars(op_mod.Op)
     unqualified = [
-        (name, type(namespace.get(name)).__name__)
-        for name in op_mod._OP_SLOT_NAMES
-        if namespace.get(name).__class__ not in op_mod._ROW_RELEASE_FIELD_CLASSES
-        and namespace.get(name) not in op_mod._ROW_RELEASE_PROPERTIES
+        (name, type(namespace.get(attr)).__name__)
+        for name, attr in op_mod._OP_STATE_ATTRS
+        if namespace.get(attr).__class__ not in op_mod._ROW_RELEASE_FIELD_CLASSES
+        and namespace.get(attr) not in op_mod._ROW_RELEASE_PROPERTIES
     ]
     assert unqualified == []

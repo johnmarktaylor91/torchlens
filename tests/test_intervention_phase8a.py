@@ -12,8 +12,8 @@ import torchlens as tl
 from torchlens._data_classes._trace_intervention_records import STAGED_UNFIRED_KEY
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
 from torchlens.intervention._trace_edits import set_site
+from torchlens.intervention._types import FireRecord, TargetSpec
 from torchlens.intervention.errors import SpecMutationError
-from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -74,7 +74,7 @@ def _first_internal_label(log: Any) -> str:
     """
 
     for layer in log._layer_list:
-        if not (layer.is_input or layer.is_output or layer.is_buffer):
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
 
@@ -259,10 +259,11 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
 
     result = log.run(ReluAdd(), x)
 
-    assert result is log
-    assert log.state is TraceState.RERUN_PROPAGATED
-    assert log._out_recipe_revision == log._spec_revision
-    assert log._recipe_is_clean()
+    assert result is not log
+    assert log._out_recipe_revision == 0  # the source is unchanged
+    assert result.state is TraceState.RERUN_PROPAGATED
+    assert result._out_recipe_revision == result._spec_revision
+    assert result._recipe_is_clean()
 
 
 def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:

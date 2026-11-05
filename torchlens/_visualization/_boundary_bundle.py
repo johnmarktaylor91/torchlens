@@ -24,6 +24,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from .._ir.container import TupleIndex
+from .._utils._record_group_table import record_member
 from ._render_leaf import _collapse_address_for_node, _container_component_role, _render_node_name
 from .node_spec import render_lines_to_html
 
@@ -120,7 +121,7 @@ def bundle_groups(trace: Trace, context: Any) -> dict[str, tuple[BundleGroup, ..
     for label in outputs:
         op = trace.ops[label]
         path = tuple(getattr(op, "container_path", ()) or ())
-        if not path or getattr(op, "is_buffer", False):
+        if not path or record_member(op, "is_buffer", False):
             continue
         producer = _producer_module(trace, op)
         if producer is None:

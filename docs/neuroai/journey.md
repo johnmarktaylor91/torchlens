@@ -2,9 +2,9 @@
 
 ## For neuroAI and computational neuroscience
 
-Comparing a model with brain or behaviour data needs per-layer features for a fixed stimulus set, extracted with the model's own preprocessing, in stimulus order, at a scale of thousands of images, and then handed to the analysis package (RSA, encoding models, shape metrics) that owns the brain side. TorchLens does the network side of that: it loads with your ecosystem's loader, verifies the input pipeline, addresses any layer precisely, extracts in batches to a self-describing artifact and connects to rsatoolbox, Brain-Score, himalaya and netrep. The journey below is the verified path through it; the links here are the shortest routes in.
+Comparing a model with brain or behaviour data needs per-layer features for a fixed stimulus set, extracted with the model's own preprocessing, in stimulus order, at a scale of thousands of images, and then handed to the analysis package (RSA, encoding models, shape metrics) that owns the brain side. TorchLens does the network side of that: it loads with your ecosystem's loader, verifies the input pipeline, addresses any layer precisely, extracts in batches to a self-describing artifact and connects to rsatoolbox, Brain-Score, himalaya and netrep. The links here are the shortest routes in; the numbered sections below walk the whole path once.
 
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 02 reads an activation out, 04 keeps memory in check, 09 extracts over thousands of batches and 10 ends on a field experiment.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models. Notebook 02 reads an activation out, 04 keeps memory in check, 09 extracts over thousands of batches and 10 has a neuroscience branch.
 - [Model RDM notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/cog_neuro_rdm.ipynb): a compact representational dissimilarity matrix from one model in a few lines.
 - [Extract features for a stimulus set](../field-guide/extract_features.md): per-layer activations for every stimulus, written with the model's identity and preprocessing.
 - [Loading models for feature extraction](loaders.md): two lines per ecosystem (torchvision, timm, Hugging Face, CLIP and others), each with its matched preprocessing.
@@ -20,24 +20,11 @@ Comparing a model with brain or behaviour data needs per-layer features for a fi
 - [Connectors to other tools](../bridges.md): rsatoolbox, Brain-Score, xarray, Hugging Face and timm loaders, one entry each.
 - Coming from [thingsvision](../migration/from_thingsvision.md), [torchvision feature extraction](../migration/from_torchvision_feature_extraction.md), a [model zoo wrapper](../migration/from_model_zoos.md) or plain [forward hooks](../migration/from_hooks.md).
 
-## The journey
-
-
-Extracting features from models you did not train, to compare against brain
-or behaviour data, has one failure mode worse than any crash: plausible,
-finite, right-shaped features from a silently wrong pipeline. This journey is
-the verified path: load with your ecosystem's own loader, verify the input
-side, address the layer precisely, extract at scale into a self-describing
-artifact, take the features anywhere, and keep the proof.
-
-Every API spelling on this page is documented-unstable and may change in a
-later naming pass; the workflow is the stable part.
+The sections below run in order as one script. The preprocessing audit, the extraction `resume` and `stimulus_ids` options, the extraction loader and structural fingerprints are provisional; their spellings may change.
 
 ## 1. Load
 
-Two lines per ecosystem, using the loader's own preprocessing authority --
-see [loading models](loaders.md). TorchLens hosts no zoo and no recipe table;
-it reads the recipe your loader ships and verifies against it.
+Two lines per ecosystem, using the loader's own preprocessing authority (see [loading models](loaders.md)). TorchLens hosts no zoo and no recipe table; it reads the recipe your loader ships and verifies against it.
 
 ```python
 from torchvision.models import ResNet50_Weights, resnet50
@@ -52,58 +39,49 @@ pre = pp.resolve(weights)
 
 ## 2. Verify the input side
 
-Wrong preprocessing does not error -- it produces materially wrong science.
-Measured on a seeded 128-image sample of diverse natural photographs (COCO
-test2017): skipping normalization on ResNet-50 moved the RDM's Spearman
-correlation against the correct pipeline to 0.70 (Pearson 0.76) and top-1
-agreement to 0.52; wrong geometry (128x128) was comparable (Spearman 0.69).
-Second-order analyses can also be forgiving where first-order ones are not:
-wrong-FAMILY constants (CLIP's constants on an ImageNet CNN) left the RDM
-nearly intact (Pearson 0.99) while CLIP under ImageNet constants dropped
-nearest-neighbour retrieval agreement to 0.55. Severity depends on your
-stimuli's structure and your analysis family -- which is exactly why the
-verifier reports per-field findings with consequences instead of one alarm
-bell.
+Wrong preprocessing does not error; it produces finite, right-shaped, wrong features, and how much it changes an analysis depends on your stimuli and your analysis family. Compare the pipeline you apply with the one the model declares before you extract:
 
 ```python
 report = pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3})
-print(report.verdict)                  # "mismatch"
-print(report.mismatched_fields)        # ("mean", "std")
-
-pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
-# PreprocessingAuditError [preprocessing_audit_mismatch]: strict preprocessing
-# audit found mismatched fields -- mean: authority=(0.485, 0.456, 0.406) ...
+print(report.verdict)                  # mismatch
+print(report.mismatched_fields)        # ('mean', 'std')
 ```
 
-The audit compares configurations against YOUR authority -- it never guesses
-from tensor statistics (measured, those guesses false-alarm on legitimate
-pipelines such as plain fp16 casts while missing genuinely wrong ones), it
-never auto-fixes, and when the authority declares nothing (torchvision
-detection presets) it says `unknown` rather than inventing a reference.
-Opt-in tensor diagnostics (`pp.diagnose`) exist for intrinsic failures
-(non-finite values, integer batches under a float declaration) and can only
-ever contradict -- they have no "match" verdict by construction.
+Strict mode turns the mismatch into an error:
+
+```python
+try:
+    pp.compare(pre, applied={"mean": [0.5] * 3, "std": [0.5] * 3}, strict=True)
+except tl.errors.PreprocessingAuditError as err:
+    print(err)   # strict preprocessing audit found mismatched fields: mean: authority=(0.485, 0.456, 0.406) applied=(0.5, 0.5, 0.5); ...
+```
+
+The audit compares configurations against your declared authority. It never guesses from tensor statistics, never auto-fixes, and reports `unknown` when the authority declares nothing (torchvision detection presets). Opt-in tensor diagnostics (`pp.diagnose`) catch intrinsic failures such as non-finite values or integer batches under a float declaration; they can only contradict a declaration, never confirm one.
 
 ## 3. Address the layer
+
+The stimuli below are flat colour images standing in for your stimulus set; the mechanics are the same for real images.
+
+```python
+import torch
+from PIL import Image
+
+images = [Image.new("RGB", (256, 256), color=c) for c in ("red", "green", "blue", "white")]
+image_ids = ["red", "green", "blue", "white"]
+example_batch = torch.stack([pre.input_transform(image) for image in images])
+```
 
 ```python
 import torchlens.inventory as inv
 
-sites = inv.list_sites(model, example_batch)   # one disclosed real forward
+sites = inv.list_sites(model, example_batch)   # runs one real forward to list the sites
 row = sites.resolve("avgpool")                 # bare leaf names resolve
-print(row.selector, row.shape, row.origin)     # avgpool (2, 2048, 1, 1) module_output
+print(row.selector, row.shape, row.origin)     # avgpool (4, 2048, 1, 1) module_output
 ```
 
-Every selector in the inventory's first column round-trips: `tl.extract`
-returns a dict keyed by the exact string you requested, or the resolver
-raises a typed error whose remedy shows a working spelling. Recurrent sites
-are pass-qualified (`"cell:2"` is pass 2 of a reused module) -- pass indices
-are first-class, never collapsed.
+Every selector in the inventory's first column round-trips: `tl.extract` returns a dict keyed by the exact string you requested, or the resolver raises a typed error whose remedy shows a working spelling. Recurrent sites are pass-qualified: `"cell:2"` is pass 2 of a reused module.
 
-Two transform slots exist and they are not the same: `CaptureOptions(input_transform=)`
-preprocesses INPUTS; `tl.extract_dataset(output_transform=)` post-processes OUTPUT
-activations before storage. For input preprocessing at extraction scale, use
-`input_transform=` (below).
+Two transform slots exist: `CaptureOptions(input_transform=)` preprocesses inputs, and `tl.extract_dataset(output_transform=)` post-processes saved activations before storage. For preprocessing at extraction scale, use `input_transform=` (below).
 
 ## 4. Extract at scale
 
@@ -112,20 +90,15 @@ paths = tl.extract_dataset(
     model,
     images,                       # any iterable: PIL images, tensors, a Dataset
     ["avgpool", "layer3"],
-    batch_size=32,
+    batch_size=2,
     path="features_run",
-    input_transform=pre,          # the authority's OWN transform, applied + recorded
-    stimulus_ids=image_ids,       # row-order authority, digested into the manifest
+    input_transform=pre,          # the authority's own transform, applied and recorded
+    stimulus_ids=image_ids,       # row order, digested into the manifest
     resume=True,                  # continue an interrupted run from its ledger
 )
 ```
 
-The output directory is a self-describing artifact: an append-only fsynced
-shard ledger, a write-once stimulus-id sidecar, per-site identity and axis
-semantics, the resume signature compared field-by-field, and the
-input-preprocessing provenance block (authority + audit + verdict) -- which
-is allowed to say `unknown`, and says exactly that for artifacts written
-before the block existed.
+The output directory is self-describing: a shard ledger, a stimulus-id sidecar, per-site identity and axis semantics, the resume signature, and the input-preprocessing provenance block (authority, audit, verdict), which says `unknown` for artifacts written before the block existed.
 
 ## 5. Take the features anywhere
 
@@ -140,40 +113,28 @@ from torchlens.bridge import xarray as tl_xr
 assembly = tl_xr.data_array("features_run", site="avgpool")  # presentation x neuroid
 ```
 
-Both adapters (and the exporters) share ONE recorded shaping operation, so
-the file route and the in-memory route are numerically identical, row order
-is tied to your stimulus ids, and nobody hand-writes a reshape. For learned
-alignment transforms (including gLocal), export and apply your own -- see
-[bring your own alignment](byo_alignment.md).
+Both adapters and the exporters share one recorded shaping operation, so the file route and the in-memory route are numerically identical and row order follows your stimulus ids. For learned alignment transforms (including gLocal), export and apply your own: [bring your own alignment](byo_alignment.md).
 
 ## 6. Prove it
 
 ```python
+pinned_hash = tl.fingerprint.model(model, example_batch)               # pin this the first time
 print(loaded.manifest["signature"]["model_identity"]["digest"][:16])  # who computed this
 print(loaded.input_preprocessing["verdict"])                          # on what input regime
-tl.fingerprint.assert_unchanged(model, batch, pinned_hash)                        # structure still matches the pinned hash
+tl.fingerprint.assert_unchanged(model, example_batch, pinned_hash)    # structure still matches
 ```
 
-A resumed run refuses typed on ANY semantic signature mismatch (different
-model state, batch size, transform identity -- including the input
-transform), and resume never grafts new provenance onto rows it did not
-compute.
+A resumed run raises a typed error on any signature mismatch (model state, batch size, or the input transform), and never adds new provenance to rows it did not compute.
 
-## Showpiece: recurrent time-courses (CORnet-S)
+## Example: recurrent time-courses (CORnet-S)
 
-Pass-qualified sites make recurrent dynamics one extraction, not a custom
-hook harness -- the representational geometry of each timestep of a reused
-block. CORnet ships no `torch.hub` entry point, so install a pinned checkout
-and import it directly:
+Pass-qualified sites give the representational geometry of each timestep of a reused block from one extraction. CORnet ships no `torch.hub` entry point, so install a pinned checkout and import it directly:
 
 ```text
 pip install "git+https://github.com/dicarlolab/CORnet@d0cc17d4b34ad44dedb01683b70eafd15515adad"
 ```
 
-`cornet.cornet_s()` returns the network inside `nn.DataParallel` (its
-published checkpoint is keyed that way), so load first and trace `.module`.
-`pretrained=True` downloads the published weights (about 200 MB); the
-example below runs the same mechanics on the random initialization.
+`cornet.cornet_s()` returns the network inside `nn.DataParallel` (its published checkpoint is keyed that way), so load first and trace `.module`. `pretrained=True` downloads the published weights (about 200 MB); the example below runs the same mechanics on the random initialization.
 
 ```python
 # recipe-test: tool=cornet expected=(4, 4)
@@ -183,12 +144,12 @@ import torch
 import torchlens as tl
 import torchlens.inventory as inv
 
-model = cornet.cornet_s(pretrained=False).module.eval()  # pretrained=True: published weights
 torch.manual_seed(0)
+model = cornet.cornet_s(pretrained=False).module.eval()  # pretrained=True: published weights
 batch = torch.randn(6, 3, 64, 64)
 sites = inv.list_sites(model, batch[:1])
 v4_passes = [r.selector for r in sites if r.module_address == "V4.output"]
-# ['V4.output:1', 'V4.output:2', 'V4.output:3', 'V4.output:4'] -- one per timestep
+# ['V4.output:1', 'V4.output:2', 'V4.output:3', 'V4.output:4']: one per timestep
 
 log = tl.trace(model, batch, save=tl.module("V4.output"))
 rdms = tl.repgeom.rdm_evolution(log, save=tl.module("V4.output"))  # one RDM per timestep
@@ -199,7 +160,7 @@ The same pass addressing goes further on a recurrent network trained on a task:
 [task RNN circuits](task_rnn_circuits.md) edits windows of timesteps, finds the
 network's fixed points and shows that they hold its memory.
 
-## Showpiece: whole-network geometry in one pass
+## Example: whole-network geometry in one pass
 
 ```python
 log = tl.trace(model, batch)                  # save everything (small batches!)

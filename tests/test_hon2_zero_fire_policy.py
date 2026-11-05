@@ -207,7 +207,7 @@ def test_rerun_door_policy(policy: str) -> None:
                 trace.run(model, new_x, **kwargs)
             assert refused.value.fields["code"] == "rerun_zero_fire"
         else:
-            trace.run(model, new_x, **kwargs)
+            trace = trace.run(model, new_x, **kwargs)
             assert trace.last_run["hooks_unfired"] == 1
             assert trace.last_run["hooks_fired"] == 0
     expected = ["rerun_zero_fire"] if policy == "warn" else []

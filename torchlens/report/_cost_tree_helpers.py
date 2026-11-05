@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, NamedTuple
 
 
 def _structure_digest(
@@ -39,3 +39,22 @@ def _call_display(call: Any) -> str:
     """Display label for one module call (address:pass spelling kept)."""
 
     return str(getattr(call, "label", "?"))
+
+
+class _RemainderMass(NamedTuple):
+    """The conserved mass one REMAINDER row folds in (D5/D6)."""
+
+    flops: int
+    n_ops: int
+    n_unknown: int
+    passes: int | None
+    forward_mac: int = 0
+    backward: int | None = None
+
+
+def _pct(value: int | None, total: int) -> float | None:
+    """Percent of the known partition total (D4); None-safe."""
+
+    if value is None or total <= 0:
+        return None
+    return 100.0 * value / total

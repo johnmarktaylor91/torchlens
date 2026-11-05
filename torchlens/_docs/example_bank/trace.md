@@ -663,7 +663,7 @@ trace = tl.trace(model, x)
 with trace.fork() as scoped:
     scoped.do(tl.func("relu"), tl.zero_ablate())
     print("inside", bool((scoped.ops["relu_1_2"].out == 0).all()))
-scoped.run(model, x)
+scoped = scoped.run(model, x)
 print("rerun after exit", bool((scoped.ops["relu_1_2"].out == 0).all()))
 # Output:
 # inside True
@@ -714,7 +714,7 @@ Rerun an edited trace on a new input; `last_run` and `last_run_records` describe
 ```python
 edit = tl.when(tl.func("relu"), tl.zero_ablate())
 trace = tl.trace(model, x, intervene=edit)
-trace.run(model, torch.randn(3, 4))
+trace = trace.run(model, torch.randn(3, 4))
 print("engine", trace.last_run["engine"])
 print("records", len(trace.last_run_records()))
 print("relu zero", bool((trace.ops["relu_1_2"].out == 0).all()))

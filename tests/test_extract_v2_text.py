@@ -166,7 +166,11 @@ def test_bert_class_left_padding_via_engine_matches_solo(tmp_path: Path) -> None
         extract_dataset(
             model,
             rows,
-            {"h": "encoder.layer.0"},
+            # The layer's feed-forward output module: the block's hidden state
+            # on every transformers band. The 4.x eager ``BertLayer`` also
+            # returns its attention probabilities, so ``encoder.layer.0``
+            # names two ops there and the lookup refuses as ambiguous.
+            {"h": "encoder.layer.0.output"},
             batch_size=3,
             path=tmp_path,
             collate=collate_left,

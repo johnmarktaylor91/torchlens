@@ -206,9 +206,9 @@ def _journal_events(model, inputs) -> list:
     captured: list = []
     original = materialize_module.materialize_from_events
 
-    def spy(trace, events):
+    def spy(trace, events, *rest):
         captured.extend(events.op_events)
-        original(trace, events)
+        original(trace, events, *rest)
 
     postprocess_module.materialize_from_events = spy
     materialize_module.materialize_from_events = spy
@@ -222,17 +222,22 @@ def _journal_events(model, inputs) -> list:
 
 @pytest.mark.heavy
 def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
-    """Every journal record ingests through the generated scatter (P3).
+    """Every journal record ingests exactly once, through the scatter or its capture row (P3, C2c).
 
     ``_fields_from_event`` is deleted; the record-sourced cells of every
-    materialized op flow through ``scatter_record_to_cells`` exactly once per
-    record, and the scatter output lands verbatim in the Op fields ingest
-    hands to construction (spot-checked on identity cells). Byte-identity of
-    the full store/journal/artifact layers vs pre-migration main is carried
-    by the temporal-baseline comparator (P0 archive, 6.2b).
+    materialized op come either from ``scatter_record_to_cells`` (records
+    without a capture row) or from the exhaustive commit's capture row, which
+    ingest adopts (``adopt_capture_row``) instead of scattering the record.
+    Each journal record takes exactly one of the two routes, and the cells
+    land verbatim in the op (spot-checked on identity cells). Cell-for-cell
+    equality of an adopted row with the scatter route is pinned by
+    ``tests/test_capture_row_ingest.py``. Byte-identity of the full
+    store/journal/artifact layers vs pre-migration main is carried by the
+    temporal-baseline comparator (P0 archive, 6.2b).
     """
 
     import torchlens._ir.op_record_scatter as scatter_module
+    import torchlens._postprocess._materialize as materialize_module
 
     from ._models import SCENARIOS
     from ._snapshot import run_scenario
@@ -255,7 +260,21 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
             _sink.append((record.core.label_raw, cells))
             return cells
 
+        original_adopt = materialize_module.adopt_capture_row
+
+        def observing_adopt(
+            row, join_cells, store, op_class, plan, _orig=original_adopt, _sink=scattered
+        ):
+            """Record the identity cells of each adopted capture row, then return its op."""
+
+            op = _orig(row, join_cells, store, op_class, plan)
+            fid = plan.fid_by_name
+            cells = {name: row[fid[name]] for name in ("_label_raw", "type_index")}
+            _sink.append((cells["_label_raw"], cells))
+            return op
+
         scatter_module.scatter_record_to_cells = observing_scatter
+        materialize_module.adopt_capture_row = observing_adopt
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 run = run_scenario(
@@ -266,6 +285,7 @@ def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
                 )
         finally:
             scatter_module.scatter_record_to_cells = original_scatter
+            materialize_module.adopt_capture_row = original_adopt
         assert journal_labels, f"{scenario.name}: no journal rows (vacuous)"
         scattered_labels = [label for label, _ in scattered]
         assert sorted(scattered_labels) == sorted(journal_labels), (

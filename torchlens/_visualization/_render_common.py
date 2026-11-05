@@ -18,8 +18,7 @@ from pathlib import Path
 # `Tuple` are deliberately re-exported through this module's __all__ for the
 # sibling renderers that do `from ._render_common import *`, which still
 # annotate with them. Modernizing the alias here means modernizing every
-# star-import consumer first. (Reworded so this prose line no longer LEXES as
-# a blanket noqa directive — SF-24.)
+# star-import consumer first. (Worded so no prose line lexes as a noqa directive, SF-24.)
 from typing import (  # noqa: UP035
     TYPE_CHECKING,
     Any,
@@ -64,11 +63,13 @@ from .._literals import (
     VisRendererLiteral,
 )
 from .._quantities import Duration
+from .._utils._record_group_table import record_member
 from .._utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from .._utils.env_flags import closed_bool_env
 from ..errors._base import CompatibilityError
 from ._focus_stubs import BoundaryNode
 from ._label_format import (
+    format_collapsed_module_contents,
     format_memory,
     format_module_kwargs,
     format_module_path,
@@ -163,31 +164,6 @@ def strict_collapse_checks_enabled() -> bool:
     return closed_bool_env("TORCHLENS_COLLAPSE_STRICT")
 
 
-def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
-    """Format the operation and buffer counts for a collapsed module.
-
-    Parameters
-    ----------
-    num_layers:
-        Total tensor-layer count already computed for the module.
-    num_buffer_layers:
-        Number of buffer tensor layers within ``num_layers``.
-
-    Returns
-    -------
-    str
-        An honest collapsed-module summary such as ``"2 ops + 6 buffers"``.
-    """
-
-    num_ops = max(0, num_layers - num_buffer_layers)
-    parts: list[str] = []
-    if num_ops:
-        parts.append(f"{num_ops} {'op' if num_ops == 1 else 'ops'}")
-    if num_buffer_layers:
-        parts.append(f"{num_buffer_layers} {'buffer' if num_buffer_layers == 1 else 'buffers'}")
-    return " + ".join(parts)
-
-
 if TYPE_CHECKING:
     from .._data_classes.module import Module
     from .auto_collapse import ModuleRepeatFold
@@ -217,9 +193,9 @@ class FocusNode:
     modules: list[str]
 
     def __getattr__(self, name: str) -> Any:
-        """Delegate unknown attributes to the source node."""
+        """Delegate unknown attributes to the source node, following former flat names."""
 
-        return getattr(self.original, name)
+        return record_member(self.original, name)
 
 
 @dataclass(frozen=True)

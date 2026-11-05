@@ -7,6 +7,8 @@ from typing import Any, Literal
 import torch
 
 from .._utils._multipass_access import is_multipass_layer
+from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils._record_group_table import record_member
 from ._rgb_scale import rgb_unit_hwc
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
@@ -42,7 +44,7 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
             f"Layer {layer_label!r} is recurrent ({num_passes} passes); show() needs a "
             f"single pass. Select one, for example log['{layer_label}:1'].show()."
         )
-    out = getattr(log_entry, "transformed_out", None)
+    out = record_member(log_entry, "transformed_out", None)
     if isinstance(out, torch.Tensor):
         return out
     out = getattr(log_entry, "out", None)
@@ -227,13 +229,13 @@ def show_tensor(
 
     if resolved_method == "hist":
         fig, ax = plt.subplots()
-        ax.hist(data.flatten().numpy(), **kwargs)
+        ax.hist(tensor_to_numpy(data.flatten()), **kwargs)
         ax.set_title(getattr(log_entry, "layer_label", "Tensor"))
         return fig
 
     if resolved_method == "rgb":
         fig, ax = plt.subplots()
-        ax.imshow(rgb_unit_hwc(data[0] if data.ndim == 4 else data).numpy(), **kwargs)
+        ax.imshow(tensor_to_numpy(rgb_unit_hwc(data[0] if data.ndim == 4 else data)), **kwargs)
         ax.axis("off")
         return fig
 
@@ -253,17 +255,15 @@ def show_tensor(
             ax.axis("off")
             return fig
         fig, axes = plt.subplots(1, channels, squeeze=False)
-        for index in range(channels):
-            ax = axes[0][index]
-            ax.imshow(
-                _clip_outliers(channel_data[index], outlier_perc).numpy(), cmap=cmap, **kwargs
-            )
+        for index, ax in enumerate(axes[0]):
+            clipped = _clip_outliers(channel_data[index], outlier_perc)
+            ax.imshow(tensor_to_numpy(clipped), cmap=cmap, **kwargs)
             ax.axis("off")
             ax.set_title(str(index))
         return fig
 
     heatmap_data = _clip_outliers(_to_2d(data), outlier_perc)
     fig, ax = plt.subplots()
-    ax.imshow(heatmap_data.numpy(), cmap=cmap, aspect="auto", **kwargs)
+    ax.imshow(tensor_to_numpy(heatmap_data), cmap=cmap, aspect="auto", **kwargs)
     ax.set_title(getattr(log_entry, "layer_label", "Tensor"))
     return fig

@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.options import CaptureOptions
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 
 class BufferOnlyOutputModel(nn.Module):
@@ -167,11 +167,13 @@ class ForeignTensorBetweenOutputsModel(nn.Module):
         Parameters
         ----------
         foreign_tensor:
-            Tensor that TorchLens should not attribute to a graph producer.
+            Tensor that TorchLens should not attribute to a graph producer. It is
+            held privately: model preparation stamps public module-held tensors as
+            buffer sources, which would give it real provenance.
         """
 
         super().__init__()
-        self.foreign_tensor = foreign_tensor
+        self._foreign_tensor = foreign_tensor
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return attributed, foreign, and attributed tensors.
@@ -189,17 +191,17 @@ class ForeignTensorBetweenOutputsModel(nn.Module):
 
         y1 = x + 1
         y2 = x * 2
-        return y1, self.foreign_tensor, y2
+        return y1, self._foreign_tensor, y2
 
 
 class ForeignTensorOnlyOutputModel(nn.Module):
     """Model returning an untracked foreign tensor as its sole output."""
 
     def __init__(self, foreign_tensor: torch.Tensor) -> None:
-        """Store a tensor created outside the traced model call."""
+        """Store, privately and so unstamped, a tensor created outside the traced call."""
 
         super().__init__()
-        self.foreign_tensor = foreign_tensor
+        self._foreign_tensor = foreign_tensor
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return the foreign tensor directly.
@@ -216,7 +218,7 @@ class ForeignTensorOnlyOutputModel(nn.Module):
         """
 
         del x
-        return self.foreign_tensor
+        return self._foreign_tensor
 
 
 def test_buffer_sole_output_traces_with_output_layer() -> None:
@@ -232,8 +234,8 @@ def test_buffer_sole_output_traces_with_output_layer() -> None:
         # The output node hangs off a real buffer source node, not thin air.
         assert len(output_layer.parents) == 1
         parent = log[output_layer.parents[0]]
-        assert parent.is_buffer
-        assert parent.address == "buf"
+        assert parent.graph.is_buffer
+        assert parent.buffer_address == "buf"
         assert parent.layer_label in {label.rsplit(":", 1)[0] for label in log.buffer_layers} | set(
             log.buffer_layers
         )
@@ -300,13 +302,13 @@ def test_buffer_alongside_computed_outputs_pairs_values_correctly() -> None:
 
         buffer_output = log["output_1"]
         assert torch.equal(buffer_output.out, model.buf)
-        assert buffer_output.io_role == "output.0"
-        assert log[buffer_output.parents[0]].is_buffer
+        assert buffer_output.graph.io_role == "output.0"
+        assert log[buffer_output.parents[0]].graph.is_buffer
 
         computed_output = log["output_2"]
         assert torch.equal(computed_output.out, model.lin(x))
-        assert computed_output.io_role == "output.1"
-        assert not log[computed_output.parents[0]].is_buffer
+        assert computed_output.graph.io_role == "output.1"
+        assert not log[computed_output.parents[0]].graph.is_buffer
 
         assert check_metadata_invariants(log) is True
     finally:
@@ -329,8 +331,8 @@ def test_duplicate_direct_buffer_outputs_share_one_buffer_parent() -> None:
         assert output_1.parents == output_2.parents
 
         buffer_parent = log[output_1.parents[0]]
-        assert buffer_parent.is_buffer
-        assert buffer_parent.address == "buf"
+        assert buffer_parent.graph.is_buffer
+        assert buffer_parent.buffer_address == "buf"
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -349,8 +351,8 @@ def test_prefix_colliding_buffer_outputs_bind_exact_addresses() -> None:
         parent_1 = log[output_1.parents[0]]
         parent_2 = log[output_2.parents[0]]
 
-        assert parent_1.address == "a"
-        assert parent_2.address == "abc"
+        assert parent_1.buffer_address == "a"
+        assert parent_2.buffer_address == "abc"
         assert torch.equal(output_1.out, parent_1.out)
         assert torch.equal(output_2.out, parent_2.out)
         assert check_metadata_invariants(log) is True
@@ -427,14 +429,14 @@ def test_unlogged_buffer_before_reassigned_buffer_output() -> None:
         static_output = log["output_1"]
         assert torch.equal(static_output.out, model.static_buf)
         static_parent = log[static_output.parents[0]]
-        assert static_parent.is_buffer
-        assert static_parent.address == "static_buf"
+        assert static_parent.graph.is_buffer
+        assert static_parent.buffer_address == "static_buf"
 
         state_output = log["output_2"]
         assert torch.equal(state_output.out, model.state)
         state_parent = log[state_output.parents[0]]
-        assert state_parent.is_buffer
-        assert state_parent.address == "state"
+        assert state_parent.graph.is_buffer
+        assert state_parent.buffer_address == "state"
 
         assert check_metadata_invariants(log) is True
     finally:

@@ -579,7 +579,7 @@ compatibility alias.
 
 | Surface | Exact spelling or token | Stability |
 | --- | --- | --- |
-| Facade and computed views | `KernelLaunch`, `AtenOp.gpu_kernels`, `Op.gpu_kernels` | unstable -- no deprecation shim owed |
+| Facade | `KernelLaunch` | unstable -- no deprecation shim owed |
 | Launch fields | `launch_name`, `device`, `stream`, `duration`, `runtime_correlation`, `attribution_status` | unstable -- no deprecation shim owed |
 | Attribution classes | `attributed`, `unavailable`, `ambiguous`, `unattributed` | unstable -- no deprecation shim owed |
 
@@ -588,8 +588,10 @@ compatibility alias.
 `KernelLaunch` is measured profiler evidence, not graph identity or replay authority. The adapter
 places a unique marker around each redispatched ATen call and joins CUDA runtime calls to kernels
 and memory copies through Kineto correlation identifiers; it never joins by operator or launch-name
-substring. `AtenOp.gpu_kernels` exposes the relation for one primitive row, while
-`Op.gpu_kernels` is the deduplicated union across that Op's observed primitive rows.
+substring. The relation persists in the artifact's kernel annotation, but this release has no
+public reader for it: the former per-op and per-call kernel views are removed (see
+[deprecations](deprecations.md)) and refuse with the typed `facade_redirect` error. A public
+kernel-recording switch is planned for a later release.
 
 An unavailable profiler session returns one fact-free row with
 `attribution_status="unavailable"`; it never reports zero kernels. When a parent has a
@@ -802,8 +804,11 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
   - A hit requires all of these to match: the model's tensor content (including device and
     `requires_grad`), training flags, module tree and `forward` code, plain instance attributes,
     user-registered module hooks, inputs, and capture configuration.
-  - Entries are HMAC-authenticated and bounded by entry count and bytes.
-  - `tl.clear_cache()` empties the cache while preserving its secret.
+  - Entries are HMAC-authenticated with a per-user secret kept outside every cache directory
+    (`$XDG_STATE_HOME/torchlens`, default `~/.local/state/torchlens`), so a copied-in or
+    restored cache directory cannot forge entries.
+  - Entries are bounded by entry count and bytes.
+  - `tl.clear_cache()` empties the cache and leaves the secret alone.
 
 ## Replay and intervention
 
@@ -1488,15 +1493,20 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
 
 **color_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(color_by=...)` fills eligible operation nodes from a colorblind-safe sequential ramp,
-  normalized linear min-max over the visible nodes (the legend states the transform).
-  - Missing, non-finite, or rolled-ambiguous values leave nodes unencoded with a legend note.
+  normalized linear min-max over the visible nodes.
+  - The drawn key is a colour bar labelled with the quantity and its units at both ends, and
+    nothing else (no transform, coverage or notes).
+  - The ramp is a stop list blended in OKLab at even perceptual speed (default viridis, dark =
+    high on a light page).
+  - Missing, non-finite, or rolled-ambiguous values leave nodes unencoded.
   - Rolled multi-pass layers: field sources resolve through a name-keyed rolled-aggregate
     allowlist. Per-pass-varying and first-pass-only sources are never painted as if uniform;
-    exact cross-pass totals encode with a mandatory aggregation legend line; unclassified
-    sources refuse (`encoding_source_invalid`).
+    exact cross-pass totals encode (the aggregation is kept on the encoding state, not drawn);
+    unclassified sources refuse (`encoding_source_invalid`).
   - Collapsed draws: module boxes and segments take the exact sum of their member ops for
     additive sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields), with an
-    aggregation legend line; other sources leave them unencoded with a legend note.
+    aggregation line on the encoding state; other sources leave them unencoded with a note on
+    the encoding state.
   - Refusal codes: `encoding_value_invalid` for wrong-typed values; `encoding_callable_error`
     for a raising callable, with the original exception chained.
 
@@ -1507,20 +1517,22 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
     with the same meaning and units), the closed `"dims"` shape token (numel of the non-batch
     output shape), or a callable `node -> scalar`.
   - Collapsed boxes and segments size from the same exact member-op sums as `color_by`.
-  - Label-aware sizes: the median label box among encoded nodes (or a node's own label box when
-    larger) is the smallest-value size, and the largest value gets 4x that area. Emitted sizes
-    are width/height minimums under `fixedsize=false`, so an encoding can never truncate a label
-    and fonts never scale.
+  - Sizes: the smallest value draws at the drawing's typical node size (the median size the
+    nodes' labels need, widened for ellipses and other non-box shapes) and the largest at 2x
+    that area. A node whose text needs more room draws at what its text needs, so one long
+    label never inflates the other nodes.
+  - Emitted sizes are width/height minimums under `fixedsize=false`, so an encoding can never
+    truncate a label and fonts never scale.
   - Rolled multi-pass layers: size refuses where color degrades (`size_by_rolled_varying`). A
     size source that cannot be certified single-valued (marker-varying, first-pass projection,
     varying shape under `"dims"`) has no honest "n/a" rendering. Exact cross-pass totals
-    (`total_*`) encode with a mandatory aggregation legend line; callables bypass the rolled
-    table with a legend disclosure.
+    (`total_*`) encode with a mandatory aggregation line on the encoding state; callables bypass
+    the rolled table with a note on the encoding state.
+  - The drawn key is one line, for example `size: output bytes, 15 KB ... 60 KB`.
 
 **size_scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
 : The size-channel scale transform: `"sqrt"` (default; compresses dynamic range) or `"linear"`
-  (the literal area motif). Log is rejected by design (it flattens 512-vs-4096). Every
-  legend drawn states the active scale.
+  (the literal area motif). Log is rejected by design (it flattens 512-vs-4096).
   - Refusal codes: `scale_requires_size_by` when supplied without `size_by`;
     `encoding_scale_invalid` for an unknown token.
 
@@ -1553,14 +1565,14 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
 **show_legend tri-state**
 : `show_legend` accepts three values. On `Trace.draw` the key sits in the top-left block under
   the header and above the graph, so a top crop keeps both.
-  - `None` (default, AUTO): no legend unless an encoding channel is active, then a channel-only
-    disclosure legend; a `module=` focused draw also gets the key. The `None` value is
+  - `None` (default, AUTO): no legend unless an encoding channel is active, then the channel key
+    alone; a `module=` focused draw also gets the key. The `None` value is
     *(unstable — no deprecation shim owed)*.
   - `True` (the key): one compact row per drawn mark, each drawn with its real shape and fill
     (input, output, trainable and frozen weights, module frame, module run as one op, collapsed
     module, hidden buffers, buffer, true/false test, and mutated parameter or intervention only
-    when the picture has one), plus channel rows when active.
-  - `False`: no legend, honored even with channels active (the encoding is then undisclosed).
+    when the picture has one), plus the channel key when active.
+  - `False`: no legend, honored even with channels active (the key is then not drawn).
 
 **show_containers / container_max_inline (Trace.draw kwargs)**
 : `show_containers` sets how `Trace.draw` shows container structure; `container_max_inline` sets
@@ -1980,8 +1992,8 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
     edits reports `unverifiable`, never `verified` (diagnostic `user_intervention_unsupported`,
     stage `hooked_run_unverified`): it is an edited forward, and no hook-aware check exists yet.
   - Source trace: on a live trace the `fast=True` door returns a new result Trace carrying that
-    `last_run` and leaves the source Trace untouched; the legacy rerun door
-    (`run(model, inputs)` with `engine="rerun"`) still refreshes the source in place.
+    `last_run` and leaves the source Trace untouched; the legacy rerun door (`run(model, x)`)
+    also returns a new Trace and leaves the source untouched.
   - Outputs: output leaves (the model's and each saved module's) are paired with the captured
     output ops by container path through capture's own output walker, so a stock Hugging Face
     forward returning a `DynamicCache` of per-layer key/value tensors reruns fast. A changed
@@ -2334,9 +2346,10 @@ routing-table read without saved router weights or expert indices. Its
     `flop_convention_unavailable` when an op has no MAC split.
 
 **Autograd-saved bytes**
-: `Op.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
-  autograd saved for that op's backward (each storage once within the op; a view counts in full).
-  - Totals: `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
+: `Op.cost.autograd_memory` / `Op.autograd.num_autograd_tensors` count the tensors the captured
+  forward's autograd saved for that op's backward (each storage once within the op; a view
+  counts in full).
+  - Totals: `Layer.cost.total_autograd_memory`, `ModuleCall.autograd_memory`,
     `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op
     bands, so a tensor two ops save counts twice.
   - Frozen Parameters: capture never changes a Parameter's `requires_grad`, so on frozen
@@ -2356,8 +2369,8 @@ routing-table read without saved router weights or expert indices. Its
     trace whose model is gone), never 0.
 
 **Conditional depth**
-: `Op.conditional_depth` and `Layer.conditional_depth` count the distinct conditionals the record
-  takes a direct role in, as listed in `in_conditionals`. Nesting depth is
+: `Op.control_flow.depth` and `Layer.control_flow.depth` count the distinct conditionals the
+  record takes a direct role in, as listed in `in_conditionals`. Nesting depth is
   `len(conditional_branch_stack)`.
   - The `evaluation` role marks the bool an arm's test consumed.
   - The `body` role marks an op an arm's entry edge feeds (an op whose input was computed
@@ -2819,7 +2832,7 @@ carries the same tag at its definition.
   - Descriptive only: inference, variance partitioning, voxel maps and stacked fits stay with
     rsatoolbox, himalaya, scikit-learn and Net2Brain.
 
-**site_key (`Op.site_key`)** — *unstable — no deprecation shim owed*
+**site_key (`Op.graph.site_key`)** — *unstable — no deprecation shim owed*
 : The portable identity of one retained op's structural position (`site_key_v1`). Two
   captures of the same program agree on site keys even when their layer labels disagree.
   - Form: a `"s1|"`-prefixed string of the pass-free module address stack, the normalized op
@@ -2835,7 +2848,7 @@ carries the same tag at its definition.
   - Saving: saved with the trace and recomputed byte-exactly at load; artifacts saved before
     site keys existed are wholly keyless.
 
-**Layer.site_peers** — *unstable — no deprecation shim owed*
+**Layer.graph.site_peers** — *unstable — no deprecation shim owed*
 : Layers sharing any of this layer's site keys within the trace (the reused-relu cohort
   surface), computed live per call and never persisted. Refuses typed `site_key_unavailable`
   on keyless layers, so a legacy artifact never collapses into a `None`-key
@@ -3285,8 +3298,8 @@ carries the same tag at its definition.
     the trace's edge family).
   - Engine: ships on the replay engine only (`edge_intervention_engine_unsupported`
     otherwise; a rerun-engine design is a named future possibility).
-  - Storage: the substituted value lives in the `Op.edge_substitutions` store, saved with the
-    trace together with `Op.edge_replacement_stamps` and `FireRecord.edge_address`. Capture
+  - Storage: the substituted value lives in the `Op.graph.edge_substitutions` store, saved with
+    the trace together with `Op.edge_replacement_stamps` and `FireRecord.edge_address`. Capture
     truth (`saved_args`, `out_versions_by_child`, `parent.out`) is kept unmodified: the
     pre-edit snapshot that makes divergence decidable.
   - Validation: every substitution entry must be corroborated (FireRecord plus stamp, and
@@ -3331,7 +3344,7 @@ carries the same tag at its definition.
     (`label:pass`), the edit lands at every consumption (a parameter has one identity across
     passes), and the pass-qualified replay engine recomputes each pass faithfully.
   - Mechanism: the substitution drives the shipped edge-substitution engine, with
-    `Op.edge_substitutions` entries marked `substitution_kind="param"`, edit-then-scatter
+    `Op.graph.edge_substitutions` entries marked `substitution_kind="param"`, edit-then-scatter
     masking over the param index space, and one replay pass over all consumer origins. Cone
     recomputation re-splices every substitution entry (param, region, and edge kinds), so
     later replays never silently revert any edit; a chained `do(tl.param(p), scale(0.5))`
@@ -3370,8 +3383,10 @@ carries the same tag at its definition.
     does time go?), `"dims"` (what shape is the data?), `"transformer"` (how is attention
     wired?), `"memory"` (what is big in bytes?), `"sequence"` (how do the passes unfold?),
     `"compute"` (where are the FLOPs?) and `"interventions"` (what did the edits change?).
-  - Caption: each view prints its caption lines under the header block, starting with
-    `view: <name> -- <question>`.
+  - Caption: each view prints any caption lines it needs under the header block. The header
+    names the model, the traced network's op count and size (a `module=` draw: that module's;
+    never the drawn boxes), the parameters (compact from 1,000, `11.7M params`) and, on an
+    edited trace, one edit line.
   - Combining: keywords you pass win over the view's own settings, so combinations are spelled
     with keywords, for example `trace.draw(view="debug", show_edge_shapes=True)`. `theme=`
     stays the colour skin and composes with any view.
@@ -3700,8 +3715,7 @@ carries the same tag at its definition.
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
 : The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless an encoding
-  channel is active, then a channel-only disclosure legend. A `module=` focused draw also shows
-  the key.
+  channel is active, then the channel key alone. A `module=` focused draw also shows the key.
   - The reading key (what `@name`, an op name's two counters, the shape and size line and call
     arguments mean) is opt-in: `show_legend=True` adds it to a focused draw.
   - `True`/`False` keep their stable historical meanings.
@@ -4176,7 +4190,7 @@ carries the same tag at its definition.
   other quantity, feature activations included. Refusal code
   `attribution_overlay_graph_mismatch`.
 
-**`tl.attribution.graph.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
+**`tl.attribution.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
 : `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned
   (or the file it wrote) on neuronpedia.org under the account that owns `api_key`, through
   Neuronpedia's documented two-step upload, and returns the graph page's URL.
@@ -4500,10 +4514,21 @@ describe each surface in depth.
 | `AblationControlsReport.survives` | `True` when every family that ran survived |
 | `AbsenceReason.detail` | Human-readable explanation of the absence |
 | `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
+| `AttentionRecording.__iter__` | Iterate the recorded attention-module names in first-call order |
+| `AttentionRecording.__len__` | The number of distinct attention modules recorded |
 | `Attribution.target_repr` | Compact representation of the scalarization target |
 | `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
 | `AttributionGraph.frozen_sites` | Labels of the sites held at their captured values |
 | `AttributionGraph.has_demeaned_logits` | Whether a logit node's value is its logit minus the mean logit |
+| `BindReport.door` | The door the call was bound through (`"call"` or `"generate"`) |
+| `BindReport.duration_s` | Wall time of the bound call in seconds, or `None` when it was not measured |
+| `BindReport.execution_effect` | How a bound call's helpers act: always `"values_replaced_after_execution"` (outputs are replaced after each op runs) |
+| `BindReport.fire_records` | The `FireRecord` objects of every firing during the bound call |
+| `BindReport.fires` | One plain-dict row per firing during the bound call (`fire_records` carries the typed objects) |
+| `BindReport.module_aliases` | Canonical module address to the other addresses the same module object is registered under |
+| `BindReport.resolved_static_targets` | Rule id to the module addresses its static anchor resolved to at bind time |
+| `BindReport.rule_fire_counts` | Rule id to the number of times it fired during the bound call |
+| `BindReport.spec_digest` | Digest of the intervention spec the call was bound with |
 | `CausalAuditSet.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
 | `CausalAuditSet.draw_index` | Index of the random draw (``0`` for ``"top"`` and ``"bottom"``) |
 | `CausalAuditUnit.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
@@ -4559,6 +4584,11 @@ describe each surface in depth.
 | `FacetView.invalidate` | Clear cached computed facet values |
 | `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
+| `FireRecord.call_label` | Label of the call the firing belongs to, or `None` when it is not a call-level site |
+| `FireRecord.replaced` | Whether the firing replaced the tensor at its site, or `None` when not recorded |
+| `FireRecord.target_label` | Label of the op the firing edited |
+| `FireRecord.timing` | Whether the firing ran before (`"pre"`) or after (`"post"`) its op, or `None` when not recorded |
+| `FireRecord.tuple_index` | Position of the edited output in the op's gradient tuple for backward firings, or `None` |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
 | `HeadScores.eligible_rows` | field of `HeadScores` |
 | `HeadScores.module_addresses` | field of `HeadScores` |
@@ -4566,6 +4596,8 @@ describe each surface in depth.
 | `HeadWeightViews.num_kv_heads` | field of `HeadWeightViews` |
 | `HistoryView.run_record` | field of `HistoryView` |
 | `InputProvenance.has_semantic_values` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
+| `InterventionValidationReport.__bool__` | Truth value of the report: `True` when every axis passes |
+| `InterventionValidationReport.passed` | Return the aggregate pass/fail result |
 | `LogitLens.entries` | Per-layer projections in block execution order |
 | `LogitLens.final_logits` | The model's captured real output logits when readable, else ``None`` |
 | `LogitLens.is_validated` | Whether the reconstructed lens was numerically validated against the captured last-block ``resid_post`` -> logits pair |
@@ -4594,13 +4626,48 @@ describe each surface in depth.
 | `PlanSite.transform_seconds` | Measured live transform time at the probe batch (D-15: the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
 | `PlanSite.transformed_bytes` | Post-transform bytes at the probe batch, when a transform ran |
 | `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
+| `Population.__len__` | The number of members in the population |
 | `ProjectionSource.has_fused_qkv` | Whether the role is a column slice of a fused QKV weight |
 | `RandomizationTest.module_addresses` | Randomized modules, top (output side) first |
+| `ReadRow.alias_group` | Ordinal of the `(node, slot)` alias group whose sites share one gradient, or `None` when unshared |
+| `ReadRow.frozen_reached` | Whether a requested freeze actually fired in the target's backward cone; `None` when no backward touched the site |
 | `ReadRow.is_detached` | ``True`` when ``value`` is a detached copy (always true in v1 for carried tensors) |
 | `ReadRow.is_frozen_requested` | field of `ReadRow` |
 | `ReadRow.is_frozen_resolved` | field of `ReadRow` |
 | `ReadRow.is_rescorable` | ``False`` on loaded tables (the runtime registry is not serialized) |
+| `ReadRow.policy_digest` | Digest of the resolved frozen policy this row was measured under |
+| `ReadRow.reduction` | Named scalar reduction that produced `score`, or `None` |
+| `ReadRow.retention` | `'saved'` or `'unsaved'` payload retention at the site |
+| `ReadRow.sample_id` | Nullable sample identity for dataset-mean rows (always `None` in v1) |
+| `ReadRow.status_reason` | Closed reason detail for the row's status (for example `not_upstream_of_target`), or `None` |
+| `ReadRow.target_id` | Stable id of the target this row answers, or `None` for target-free rows |
+| `ReadTable.__iter__` | Iterate the row keys `(target_id, kind, address)` in table order |
+| `ReadTable.__len__` | The number of rows in the table |
+| `ReadTable.aggregate_targets` | Fold multi-target rows into one row per address, explicitly |
+| `ReadTable.collapse_alias_groups` | Explicitly collapse alias groups to one row per `(node, slot)` |
+| `ReadTable.column` | Return one row field as `key -> value` |
 | `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
+| `ReadTable.status_counts` | Return the status histogram over all rows |
+| `ReadTable.trace_token` | Return the trace validity token captured at read time |
+| `Recording.__iter__` | Iterate the retained activation records |
+| `Recording.__len__` | The number of retained activation records |
+| `Recording.by_pass` | Map from pass number to indexes of its retained records |
+| `Recording.orphan_records` | Records that arrived without a matching pass, kept for diagnosis |
+| `RegionBoundary.exits` | The region's exit edges, ordered by consuming-op execution order then occurrence order |
+| `RegionEdge.addresses` | The canonical edge occurrence addresses |
+| `RegionEdge.nested` | Whether any occurrence address has a nested (container) argument |
+| `RegionInstance.exits` | The exit edges of this pass instance; they commit atomically |
+| `RegionTarget.boundary` | The typed, ordered entry/exit `RegionBoundary` of the region |
+| `RegionTarget.region_digest` | Stable digest over members and exit addresses (audit identity) |
+| `RegionTarget.source_slice` | The `TraceSlice` this region was derived from |
+| `Relationship.DIFF_MODEL` | Evidence level: the bundle members come from different models |
+| `Relationship.SAME_MODEL_OBJECT_AT_CAPTURE` | Evidence level: the members were captured from the same model object |
+| `Relationship.SAME_OBJECT` | Evidence level: the members are the same object |
+| `Relationship.SAME_PARAM_SHAPES` | Evidence level: the members' models share parameter shapes only |
+| `Relationship.SHARED_ARCHITECTURE` | Evidence level: the members' models share an architecture |
+| `Relationship.SHARED_GRAPH_DIFFERENT_INPUT` | Evidence level: the members share a graph but ran on different inputs |
+| `Relationship.SHARED_GRAPH_SAME_INPUT` | Evidence level: the members share a graph and ran on the same input |
+| `Relationship.UNKNOWN` | Evidence level: the relationship between the members could not be established |
 | `RunningStats.compute` | Return the finalized spine statistics (`RunningStatsResult`) |
 | `RunningStats.merge` | Fold another spine into this one |
 | `RunningStatsResult.num_finite` | field of `RunningStatsResult` |
@@ -4622,6 +4689,14 @@ describe each surface in depth.
 | `SavePlan.estimated_bytes` | Return the summed payload estimate for the named sites |
 | `SavePlan.module_subtrees` | field of `SavePlan` |
 | `SeriesPoint.is_coarsened` | field of `SeriesPoint` |
+| `SpecCompat.site_diff` | Human-readable site-level diff; empty when neither side has site keys |
+| `TargetManifestDiff.matched_site_keys` | Site keys present in both the saved manifest and the new trace |
+| `TargetManifestDiff.missing_labels` | Labels in the saved manifest that the new trace lacks |
+| `TargetManifestDiff.missing_site_keys` | Site keys in the saved manifest that the new trace lacks |
+| `TargetManifestDiff.new_labels` | Labels in the new trace that the saved manifest lacks |
+| `TargetManifestDiff.new_site_keys` | Site keys in the new trace that the saved manifest lacks |
+| `TargetManifestDiff.selector_resolution_diffs` | Selector to how its resolution differs between the saved manifest and the new trace |
+| `TargetManifestDiff.site_diff_lines` | Render the printed site-level diff (one line per changed site) |
 | `TensorStats.mean_evidence` | `FamilyEvidence` with policy, population, sample size, and reason for the mean |
 | `TensorStats.nonfinite_evidence` | Exact census evidence, unavailable with a reason, or presence-only `verdict` with counts unknown |
 | `TensorStats.finite_min` | Minimum finite value, or `None`; read `extrema_evidence` for its policy |
@@ -4661,6 +4736,17 @@ describe each surface in depth.
 | `TrajectoryStats.module_addresses` | Block addresses in depth order (one row per layer) |
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
 | `TrajectoryStats.num_positions` | Sequence length every batch shared |
+| `ValidationFailure.inf_mismatch` | Whether the saved and recomputed tensors disagree on infinities, or `None` |
+| `ValidationFailure.max_abs_diff` | Largest absolute difference between saved and recomputed values, or `None` |
+| `ValidationFailure.max_rel_diff` | Largest relative difference between saved and recomputed values, or `None` |
+| `ValidationFailure.nan_mismatch` | Whether the saved and recomputed tensors disagree on NaNs, or `None` |
+| `ValidationFailure.recomputed_dtype` | Dtype of the recomputed tensor, or `None` |
+| `ValidationFailure.recomputed_shape` | Shape of the recomputed tensor, or `None` |
+| `ValidationFailure.reduction_depth` | Reduction depth of the failing op used to scale the tolerance, or `None` |
+| `ValidationFailure.saved_dtype` | Dtype of the saved tensor, or `None` |
+| `ValidationFailure.saved_shape` | Shape of the saved tensor, or `None` |
+| `ValidationStatus.__bool__` | Truth value only for completed results: `True` for `passed`, `False` for `failed`; `TypeError` otherwise |
+| `ValidationStatus.passed` | Return whether replay validation ran and passed |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
 | `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
 | `VisualizationOptions.rolled` | ``True`` draws each repeated module once (the rolled graph); ``False`` (default) draws every pass |
@@ -5625,7 +5711,7 @@ alphabetical order.
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
 | `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (accepts `save_grads`; other keywords pass to `torch.Tensor.backward`); returns the Trace |
-| `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
+| `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"`. A trace captured from one photo (a file path or PIL image) draws a thumbnail of it on the input node; `"shape_only"` turns that off |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
 | `Trace.buffer_write_ops` | Labels of buffer Ops that record writes to registered buffers |
@@ -5686,7 +5772,7 @@ alphabetical order.
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
-| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input and refresh this Trace in place; returns the Trace. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
+| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input into a new Trace and return it; this Trace is unchanged (ruled 3 Nov 2026). The result is a fork named `<name>_fork_<n>`, as the `fast=True` door's result is, carrying this Trace's weak live-model reference and staged edits; keep it with `trace = trace.run(x)`. `Trace.append` is the in-place form. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
 | `Trace.run_transaction` | `trace.run_transaction(inputs=..., *, seed=None, fast=False, carry_state=False, until=None, save=None, on_divergence="raise")`: a verified fresh execution on the live model or a loaded artifact; returns a `RunResult` with its report and leaves this Trace unchanged |
 | `Trace.save_visualizations` | Whether rendered visualizations are persisted in bundles |
 | `Trace.saved_grad_module_calls` | Accessor for the ModuleCalls whose outputs include saved gradients |
@@ -5709,245 +5795,293 @@ alphabetical order.
 | --- | --- |
 | `Op.is_router` | Lazy bool identifying gate, normalization and selection ops on a structurally proven expert-routing path; no stored per-op field |
 | `Op.expert` | Lazy zero-based expert number in homogeneous container registration order, or `None` outside an individually executed routed expert, including fused expert ops |
-| `Op.activation_transform` | The callable applied to this Op's output before it is saved, or `None` |
-| `Op.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
-| `Op.arg_names` | Names of the arguments in this Op's function call |
+| `Op.source.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
+| `Op.call.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
-| `Op.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
-| `Op.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
-| `Op.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
-| `Op.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
-| `Op.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
+| `Op.call.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
+| `Op.module_context.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
+| `Op.module_context.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
+| `Op.module_context.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.atomic_module_call_label` | Stable `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.backend_address` | The Op's locator in the backend's own graph, such as `jaxpr:<label>` |
-| `Op.bool_value` | The Python value of this Op's output when it is a scalar bool |
+| `Op.control_flow.bool_value` | The Python value of this Op's output when it is a scalar bool |
+| `Op.buffer_address` | Module address of the buffer this Op reads or writes, such as `bn.running_mean`, or `None` for a non-buffer Op |
 | `Op.buffer_pass` | Pass number of this Op's buffer, as used in the `address:pass` lookup key |
 | `Op.buffer_replay_validated` | Whether replaying this buffer write as an identity from its source matched the recorded value |
-| `Op.buffer_sink_ops` | Accessor over the buffer-write Ops that directly consume this Op |
-| `Op.buffer_source` | Label of the Op that wrote this buffer value, or `None` for a static buffer |
-| `Op.buffer_source_func_name` | Name of the function that produced this buffer value |
-| `Op.buffer_source_ops` | Accessor over the buffer-source Ops that feed this Op |
+| `Op.graph.buffer_sink_ops` | Accessor over the buffer-write Ops that directly consume this Op |
+| `Op.graph.buffer_source` | Label of the Op that wrote this buffer value, or `None` for a static buffer |
+| `Op.graph.buffer_source_func_name` | Name of the function that produced this buffer value |
+| `Op.graph.buffer_source_ops` | Accessor over the buffer-source Ops that feed this Op |
 | `Op.buffer_value_changed` | Whether this buffer write changed the buffer's value |
 | `Op.buffer_write_kind` | Kind of write that produced this buffer version, or `None` for a static buffer |
-| `Op.bytes_delta_at_call` | Change in allocated bytes at the time of this Op's function call |
-| `Op.bytes_peak_at_call` | Peak allocated bytes at the time of this Op's function call |
-| `Op.bytes_read` | Theoretical ideal read-once memory traffic for this operation, in bytes |
-| `Op.bytes_written` | Theoretical ideal write-once memory traffic for this operation, in bytes |
 | `Op.children` | Labels of the Ops that directly consume this Op's output |
-| `Op.co_parents` | Labels of other Ops that share at least one child with this Op |
-| `Op.code_context` | Call-stack frames showing where this Op ran, outermost first: `[0]` is the call site that started the capture and `[-1]` is the frame that ran the Op; `print(op)` shows the innermost frame outside torch itself |
-| `Op.compute_record` | Two-term compute record (`fma_macs` and `other_flops`), derived on read |
-| `Op.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else, fallthrough) and the labels of this Op's children inside each arm |
-| `Op.conditional_branch_depth` | Number of conditional arms this Op is nested inside or guarded by (a `fallthrough` arm guards the code after an early-return chain); 0 when it is in no arm |
-| `Op.conditional_context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
-| `Op.conditional_elif_children` | Dict mapping each elif arm index to the labels of this Op's children in that arm |
-| `Op.conditional_else_children` | Labels of this Op's children that sit in an else arm of a conditional |
-| `Op.conditional_entry_children` | Labels of this Op's children whose edge from it enters a conditional arm |
-| `Op.conditional_then_children` | Labels of this Op's children that sit in a then arm of a conditional |
-| `Op.conditional_wrapper_kind` | Wrapper kind of the conditional that owns this terminal bool, or `None` |
+| `Op.graph.co_parents` | Labels of other Ops that share at least one child with this Op |
+| `Op.source.frames` | Call-stack frames showing where this Op ran, outermost first: `[0]` is the call site that started the capture and `[-1]` is the frame that ran the Op; `print(op)` shows the innermost frame outside torch itself |
+| `Op.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else, fallthrough) and the labels of this Op's children inside each arm |
+| `Op.control_flow.branch_depth` | Number of conditional arms this Op is nested inside or guarded by (a `fallthrough` arm guards the code after an early-return chain); 0 when it is in no arm |
+| `Op.control_flow.branch_stack` | Stack of `(conditional_id, arm_kind)` pairs for the conditional branches this Op is nested inside, outermost first |
+| `Op.control_flow.depth` | Number of distinct conditionals this Op takes part in, derived on read from `in_conditionals` |
+| `Op.control_flow.in_conditionals` | Ids of the conditionals this Op takes part in, as a test or inside an arm |
+| `Op.control_flow.context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
+| `Op.control_flow.elif_children` | Dict mapping each elif arm index to the labels of this Op's children in that arm |
+| `Op.control_flow.else_children` | Labels of this Op's children that sit in an else arm of a conditional |
+| `Op.control_flow.entry_children` | Labels of this Op's children whose edge from it enters a conditional arm |
+| `Op.control_flow.then_children` | Labels of this Op's children that sit in a then arm of a conditional |
+| `Op.control_flow.wrapper_kind` | Wrapper kind of the conditional that owns this terminal bool, or `None` |
 | `Op.container` | Runtime container view for this Op, when available |
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
-| `Op.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
+| `Op.call` | How this Op's function was called: arguments, saved values, RNG and autocast state, and transform boundaries (`tl.types.OpCall`) |
+| `Op.source` | Where this Op's function was called in user code: call-stack frames, argument expressions, assigned variable names and FX identity (`tl.types.OpSource`) |
+| `Op.autograd` | Autograd linkage and saved gradients of this Op: the `grad_fn` node, its class names, saved-gradient records and derived gradients (`tl.types.OpAutograd`) |
+| `Op.call.call_id` | Identifier of the function call that produced this Op; Ops from one call share it |
+| `Op.call.func_transform_kind` | Kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None` |
+| `Op.call.saved_args` | Positional argument values saved for this Op's call, or `None` when not saved |
+| `Op.call.tl_authored_root` | Whether this Op is the root of a TorchLens-authored call rather than a model call |
+| `Op.control_flow` | Conditional-branch facts of this Op: branch membership, terminal bools and arm children (`tl.types.OpControlFlow`) |
+| `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
+| `Op.module_context` | Module-nesting facts of this Op: the module calls active around it, the module calls its output feeds and the module calls it is the output of (`tl.types.OpModuleContext`) |
+| `Op.payload` | Saved transformed payloads of this Op and lazy materialization of bundle-backed payloads (`tl.types.OpPayload`) |
+| `Op.graph` | Graph position of this Op: parent, child, sibling and co-parent relations, input and output ancestry, distances, buffer sources and sinks, and equivalence (`tl.types.OpGraph`) |
+| `Op.cost.activation_memory` | Bytes of this Op's output activation |
+| `Op.cost.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
+| `Op.cost.autograd_memory` | Bytes of the tensors autograd saved for backward at this Op |
+| `Op.cost.bytes_delta_at_call` | Change in allocated bytes at the time of this Op's function call |
+| `Op.cost.bytes_peak_at_call` | Peak allocated bytes at the time of this Op's function call |
+| `Op.cost.bytes_read` | Theoretical ideal read-once memory traffic for this operation, in bytes |
+| `Op.cost.bytes_written` | Theoretical ideal write-once memory traffic for this operation, in bytes |
+| `Op.cost.compute_record` | Two-term compute record (`fma_macs` and `other_flops`), derived on read |
+| `Op.cost.duration` | Time spent in this Op's function call, as a `Duration` |
+| `Op.cost.flops_backward` | Approximate backward FLOPs for this Op |
+| `Op.cost.flops_forward` | Approximate forward FLOPs for this Op |
+| `Op.cost.flops_total` | Approximate total FLOPs for this Op |
+| `Op.cost.input_memory` | Sum of saved activation bytes across this Op's parent Ops |
+| `Op.cost.macs_forward` | True forward multiply-accumulate count for this Op, or `None` |
+| `Op.cost.param_memory` | Bytes used by the parameters consumed by this Op |
+| `Op.cost.transformed_activation_memory` | Bytes of this Op's transformed output activation, if one was kept |
+| `Op.autograd.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
 | `Op.do` | `op.do(edit, /, *, model=None, inputs=None, ...)`: `Trace.do` at this op, forwarding its pass-qualified label; the edit is positional-only |
-| `Op.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
+| `Op.call.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
 | `Op.edge_uses` | Tuple of `EdgeUseRecord` entries, one per parent edge use captured for this Op |
-| `Op.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
-| `Op.equivalent_ops` | Labels of other Ops in the same equivalence class (same function and arguments) |
-| `Op.flops_backward` | Approximate backward FLOPs for this Op |
-| `Op.flops_forward` | Approximate forward FLOPs for this Op |
-| `Op.flops_total` | Approximate total FLOPs for this Op |
-| `Op.func_autocast_state` | Autocast state in effect when this Op's function was called |
-| `Op.func_config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
-| `Op.func_duration` | Time spent in this Op's function call, as a `Duration` |
-| `Op.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
-| `Op.func_non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
-| `Op.func_qualname` | Qualified name of the function this Op called |
-| `Op.func_rng_states` | RNG state snapshots recorded for this Op's function call |
-| `Op.fx_call_index` | Call index in the `torch.fx`-style identity of this Op, when applicable |
+| `Op.graph.edge_substitutions` | Recorded parent-edge substitutions for this Op, keyed by argument slot |
+| `Op.graph.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
+| `Op.graph.equivalent_ops` | Labels of other Ops in the same equivalence class (same function and arguments) |
+| `Op.call.autocast_state` | Autocast state in effect when this Op's function was called |
+| `Op.call.config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
+| `Op.call.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
+| `Op.call.non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
+| `Op.source.func_qualname` | Qualified name of the function this Op called |
+| `Op.call.rng_states` | RNG state snapshots recorded for this Op's function call |
+| `Op.source.fx_call_index` | Call index in the `torch.fx`-style identity of this Op, when applicable |
 | `Op.fx_label` | A `torch.fx`-style label for this Op, or `None` when module context is unavailable |
-| `Op.fx_qualpath` | Module path in the `torch.fx`-style identity of this Op, when applicable |
+| `Op.source.fx_path` | Module path in the `torch.fx`-style identity of this Op, when applicable |
 | `Op.get_children` | Return the child `Op` objects of this Op |
 | `Op.get_parents` | Return the parent `Op` objects of this Op |
-| `Op.grad_dtype` | Dtype of this Op's saved output gradient |
-| `Op.grad_fn_class_name` | Class name of this Op's autograd node |
-| `Op.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
-| `Op.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
-| `Op.grad_fn_object_id` | Python `id()` of the autograd node object; valid only within the same session |
-| `Op.grad_for` | Return the saved gradient tensor for one backward pass |
-| `Op.grad_ref` | Lazy reference to this Op's gradient blob in a saved bundle, or `None`; the gradient loads only when read |
-| `Op.grad_shape` | Shape of this Op's saved output gradient |
+| `Op.autograd.grad_dtype` | Dtype of this Op's saved output gradient |
+| `Op.autograd.grad_fn` | The autograd `grad_fn` node of this Op's output tensor, or `None`; for an in-place write through a view, the base's `CopySlices` node (it runs the write's backward), not the view's regenerated node |
+| `Op.autograd.grad_fn_class_name` | Class name of this Op's autograd node |
+| `Op.autograd.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
+| `Op.autograd.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
+| `Op.autograd.grad_for` | Return the saved gradient tensor for one backward pass |
+| `Op.autograd.grad_shape` | Shape of this Op's saved output gradient |
 | `Op.gradient_memory` | Bytes used by this Op's saved output gradient |
 | `Op.gradient_transform` | Transform used for this Op's saved gradient, or `None` when unset |
-| `Op.grads` | Accessor over the per-backward-pass gradient records saved for this Op |
-| `Op.has_children` | Whether this Op has any child Ops |
-| `Op.has_co_parents` | Whether this Op shares children with other Ops |
+| `Op.autograd.grads` | Accessor over the per-backward-pass gradient records saved for this Op |
+| `Op.graph.has_children` | Whether this Op has any child Ops |
+| `Op.graph.has_co_parents` | Whether this Op shares children with other Ops |
 | `Op.has_frozen_params` | Whether this Op consumes at least one frozen parameter |
 | `Op.has_grad` | Whether a gradient was saved for this Op's output |
-| `Op.has_input_ancestor` | Whether any model input is an ancestor of this Op |
-| `Op.has_internal_source_ancestor` | Whether any internally initialized source Op is an ancestor of this Op |
+| `Op.graph.has_input_ancestor` | Whether any model input is an ancestor of this Op |
+| `Op.graph.has_internal_source_ancestor` | Whether any internally initialized source Op is an ancestor of this Op |
 | `Op.has_out_variations` | Whether different children observed different versions of this Op's output |
-| `Op.has_output_descendant` | Whether any model output is a descendant of this Op |
-| `Op.has_parents` | Whether this Op has any parent Ops |
+| `Op.graph.has_output_descendant` | Whether any model output is a descendant of this Op |
+| `Op.graph.has_parents` | Whether this Op has any parent Ops |
 | `Op.has_saved_activation` | Whether this Op's output activation was saved |
-| `Op.has_saved_args` | Whether this Op's argument values were saved |
-| `Op.has_siblings` | Whether this Op shares parents with other Ops |
+| `Op.call.has_saved_args` | Whether this Op's argument values were saved |
+| `Op.graph.has_siblings` | Whether this Op shares parents with other Ops |
 | `Op.has_trainable_params` | Whether this Op consumes at least one trainable parameter |
 | `Op.in_multi_output` | Whether this Op's output came from a list, tuple, dict or set returned by a function |
 | `Op.in_submodule` | Whether this Op was computed inside a non-root module's forward |
-| `Op.injection_provenance` | Record of which intervention injected this Op and where, or `None` for ordinary model Ops |
+| `Op.call.injection_provenance` | Record of which intervention injected this Op and where, or `None` for ordinary model Ops |
 | `Op.input_activations` | Saved parent activations consumed by this Op, in `parents` order |
 | `Op.input_ancestors` | Labels of the model inputs that are ancestors of this Op |
 | `Op.input_containers` | Input container views consumed by this Op |
-| `Op.input_memory` | Sum of saved activation bytes across this Op's parent Ops |
-| `Op.input_to_module_calls` | Labels of the `ModuleCall` records whose input this Op's output fed |
-| `Op.input_to_modules` | Module addresses, without the pass suffix, whose input this Op's output fed |
+| `Op.module_context.input_to_module_calls` | Labels of the `ModuleCall` records whose input this Op's output fed |
+| `Op.module_context.input_to_modules` | Module addresses, without the pass suffix, whose input this Op's output fed |
 | `Op.input_was_parameter` | Whether this Op is an input boundary whose value was a model parameter |
-| `Op.internal_source_ancestors` | Labels of the internally initialized source Ops that are ancestors of this Op |
-| `Op.internal_source_parents` | Labels of the internally initialized source Ops that are direct parents of this Op |
-| `Op.is_atomic_module` | Whether this Op is the sole operation output of an atomic module call |
-| `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
+| `Op.graph.internal_source_ancestors` | Labels of the internally initialized source Ops that are ancestors of this Op |
+| `Op.graph.internal_source_parents` | Labels of the internally initialized source Ops that are direct parents of this Op |
+| `Op.module_context.is_atomic_module` | Whether this Op is the sole operation output of an atomic module call |
+| `Op.graph.io_role` | Input or output address this boundary Op stands for, or `None` for an interior Op |
+| `Op.graph.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
-| `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
+| `Op.graph.is_compute` | Whether this Op executed a torch function rather than being a boundary sentinel |
 | `Op.is_constant` | Whether this Op is a constant, a closure constant or a literal producer, stamped by the shared constants rule |
-| `Op.is_final_output` | Whether this Op is a final model output |
-| `Op.is_in_conditional` | Whether this Op participates in any conditional role |
-| `Op.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |
-| `Op.is_in_conditional_evaluation` | Whether this Op computes a conditional arm's condition |
+| `Op.graph.is_final_output` | Whether this Op is a final model output |
+| `Op.control_flow.is_in_conditional` | Whether this Op participates in any conditional role |
+| `Op.control_flow.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |
+| `Op.control_flow.is_in_conditional_evaluation` | Whether this Op computes a conditional arm's condition |
 | `Op.is_inplace` | Whether the underlying operation was in-place |
 | `Op.is_input` | Whether this Op is a model input |
 | `Op.is_internal_sink` | Whether this Op's result ends inside the model without reaching an output |
-| `Op.is_internal_source` | Whether this Op was created inside the model, such as by a factory call, rather than fed from an input |
-| `Op.is_internally_initialized` | Alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input |
-| `Op.is_module_input` | Whether this Op's output feeds at least one `ModuleCall` as an input |
-| `Op.is_module_output` | Whether this Op is the output of a `ModuleCall` |
-| `Op.is_orphan` | Whether this Op is disconnected from both the input and output flows |
+| `Op.graph.is_internal_source` | Whether this Op was created inside the model, such as by a factory call, rather than fed from an input |
+| `Op.call.is_internally_initialized` | Alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input |
+| `Op.module_context.is_module_input` | Whether this Op's output feeds at least one `ModuleCall` as an input |
+| `Op.module_context.is_module_output` | Whether this Op is the output of a `ModuleCall` |
+| `Op.graph.is_orphan` | Whether this Op is disconnected from both the input and output flows |
 | `Op.is_output` | Whether this Op is a model output |
-| `Op.is_output_parent` | Whether this Op is directly returned from `forward` |
-| `Op.is_scalar_bool` | Whether this Op's output is a scalar bool |
-| `Op.is_terminal_bool` | Whether this Op is a scalar bool that ends a chain of operations and decides control flow |
-| `Op.is_terminal_conditional_bool` | Whether this terminal bool is the test of a recorded conditional |
-| `Op.is_transform` | Whether this Op is a function-transform boundary node |
+| `Op.graph.is_output_parent` | Whether this Op is directly returned from `forward` |
+| `Op.control_flow.is_scalar_bool` | Whether this Op's output is a scalar bool |
+| `Op.control_flow.is_terminal_bool` | Whether this Op is a scalar bool that ends a chain of operations and decides control flow |
+| `Op.control_flow.is_terminal_conditional_bool` | Whether this terminal bool is the test of a recorded conditional |
+| `Op.call.is_func_transform` | Whether this Op is a function-transform boundary node |
 | `Op.kwargs_summary` | Human-readable summary of this Op's keyword arguments |
-| `Op.kwargs_template` | Structural template of this Op's keyword arguments, used to rebuild the call |
+| `Op.call.kwargs_template` | Structural template of this Op's keyword arguments, used to rebuild the call |
 | `Op.short_label` | Short Op label without the step index, such as `conv2d_1:2` |
 | `Op.short_layer_label` | Short layer label without the pass suffix or step index, such as `conv2d_1` |
 | `Op.lookup_keys` | Alternate keys that resolve to this Op in lookups |
 | `Op.macs_backward` | Backward MACs for this Op; not derivable, so always `None` |
-| `Op.macs_forward` | True forward multiply-accumulate count for this Op, or `None` |
 | `Op.macs_total` | Total MACs for this Op; not derivable, so always `None` |
-| `Op.materialize_grad` | Materialize this Op's saved gradient from a lazy bundle reference |
-| `Op.materialize_out` | Materialize this Op's saved output from a lazy bundle reference |
-| `Op.max_distance_from_input` | Longest graph distance from any model input to this Op |
-| `Op.max_distance_to_output` | Longest graph distance from this Op to any model output |
-| `Op.min_distance_from_input` | Shortest graph distance from any model input to this Op |
-| `Op.min_distance_to_output` | Shortest graph distance from this Op to any model output |
-| `Op.module_call_depth` | Depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`) |
-| `Op.module_entry_arg_keys` | Mapping from `ModuleCall` label to the argument keys this Op filled at module entry |
+| `Op.payload.materialize_grad` | Materialize this Op's saved gradient from a lazy bundle reference |
+| `Op.payload.materialize_out` | Materialize this Op's saved output from a lazy bundle reference |
+| `Op.graph.max_distance_from_input` | Longest graph distance from any model input to this Op |
+| `Op.graph.max_distance_to_output` | Longest graph distance from this Op to any model output |
+| `Op.graph.min_distance_from_input` | Shortest graph distance from any model input to this Op |
+| `Op.graph.min_distance_to_output` | Shortest graph distance from this Op to any model output |
+| `Op.module_context.call_depth` | Depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`) |
+| `Op.module_context.call_stack` | Root-first labels of the `ModuleCall`s active when this Op ran |
+| `Op.module_context.entry_arg_keys` | Mapping from `ModuleCall` label to the argument keys this Op filled at module entry |
 | `Op.multi_output_index` | 0-based position of this Op's output within its multi-output container |
 | `Op.multi_output_name` | Semantic name of this Op's output within its multi-output container, such as a dict key or namedtuple field |
 | `Op.multi_output_type` | Python class of the multi-output container this Op came from, or `None` |
-| `Op.non_tensor_kwargs` | Non-tensor keyword arguments of this Op's function call |
-| `Op.non_tensor_pos_args` | Non-tensor positional arguments of this Op's function call |
-| `Op.num_args_total` | Total number of arguments in this Op's function call |
-| `Op.num_inputs` | Number of parent Ops of this Op |
-| `Op.num_kwargs` | Number of keyword arguments in this Op's function call |
+| `Op.call.non_tensor_kwargs` | Non-tensor keyword arguments of this Op's function call |
+| `Op.call.non_tensor_pos_args` | Non-tensor positional arguments of this Op's function call |
+| `Op.call.num_args_total` | Total number of arguments in this Op's function call |
+| `Op.autograd.num_autograd_tensors` | Number of tensors the captured forward's autograd saved for this Op's backward |
+| `Op.graph.num_inputs` | Number of parent Ops of this Op |
+| `Op.call.num_kwargs` | Number of keyword arguments in this Op's function call |
 | `Op.num_param_tensors_frozen` | Number of frozen parameter tensors consumed by this Op |
 | `Op.num_param_tensors_trainable` | Number of trainable parameter tensors consumed by this Op |
 | `Op.num_params_frozen` | Total number of frozen parameter elements consumed by this Op |
 | `Op.num_params_trainable` | Total number of trainable parameter elements consumed by this Op |
-| `Op.num_pos_args` | Number of positional arguments in this Op's function call |
+| `Op.call.num_pos_args` | Number of positional arguments in this Op's function call |
 | `Op.ordinal_index` | 0-based position of this Op in `trace.ops`; `trace[op.ordinal_index]` returns it |
-| `Op.out_ref` | Lazy reference to this Op's saved output blob in a saved bundle, or `None`; the tensor loads only when read |
 | `Op.output_containers` | Output container views associated with this Op |
 | `Op.output_descendants` | Labels of the model outputs that are descendants of this Op |
-| `Op.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
-| `Op.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
+| `Op.module_context.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
+| `Op.module_context.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
 | `Op.param_dtypes` | Dtypes of the parameters consumed by this Op |
-| `Op.param_memory` | Bytes used by the parameters consumed by this Op |
 | `Op.param_shapes` | Shapes of the parameters consumed by this Op |
-| `Op.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
-| `Op.parent_param_ops` | Mapping from each consumed parameter's identifying barcode to its pass number |
-| `Op.parent_params` | The `nn.Parameter` objects consumed by this Op |
+| `Op.call.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
+| `Op.graph.parent_param_ops` | Mapping from each consumed parameter's identifying barcode to its pass number |
+| `Op.graph.parent_params` | The `nn.Parameter` objects consumed by this Op |
 | `Op.parents` | Labels of the Ops that directly feed this Op |
 | `Op.raw_index` | 1-based raw capture-time counter; may have gaps after orphan removal |
-| `Op.recurrent_ops` | Labels of the Ops in the same recurrent group: equivalent and at a structurally corresponding position |
+| `Op.graph.recurrent_ops` | Labels of the Ops in the same recurrent group: equivalent and at a structurally corresponding position |
 | `Op.resolver_status` | Status of the backend's address resolution for this Op, such as `resolved` |
-| `Op.root_ancestors` | Labels of the root Ops at the start of the graph that this Op descends from |
-| `Op.saved_kwargs` | Keyword argument values saved for this Op's call, or `None` when not saved |
-| `Op.siblings` | Labels of other Ops that share at least one parent with this Op |
-| `Op.terminal_bool_for` | `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm |
+| `Op.graph.root_ancestors` | Labels of the root Ops at the start of the graph that this Op descends from |
+| `Op.call.saved_kwargs` | Keyword argument values saved for this Op's call, or `None` when not saved |
+| `Op.graph.siblings` | Labels of other Ops that share at least one parent with this Op |
+| `Op.graph.site_key` | Portable structural-position identity of this Op (`site_key_v1`, a `"s1|"`-prefixed string), or `None` on a keyless artifact |
+| `Op.control_flow.terminal_bool_for` | `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm |
 | `Op.terminal_conditional_id` | Id of the conditional whose test this terminal bool decides, or `None` |
-| `Op.transform_chain` | Tuple of transform tags applied to the function this Op ran |
-| `Op.transform_config` | Configuration of the function transform for this transform-boundary Op |
-| `Op.transform_fn_name` | Name of the function wrapped by the transform at this boundary Op |
-| `Op.transform_fn_qualname` | Qualified name of the function wrapped by the transform at this boundary Op |
-| `Op.transform_fn_source` | Source location of the function wrapped by the transform at this boundary Op |
-| `Op.transformed_grad_dtype` | Dtype of this Op's saved transformed gradient |
-| `Op.transformed_grad_shape` | Shape of this Op's saved transformed gradient |
+| `Op.call.func_transform_chain` | Tuple of transform tags applied to the function this Op ran |
+| `Op.call.func_transform_config` | Configuration of the function transform for this transform-boundary Op |
+| `Op.call.func_transform_fn_name` | Name of the function wrapped by the transform at this boundary Op |
+| `Op.call.func_transform_fn_qualname` | Qualified name of the function wrapped by the transform at this boundary Op |
+| `Op.call.func_transform_fn_source` | Source location of the function wrapped by the transform at this boundary Op |
+| `Op.payload.transformed_grad` | This Op's saved gradient after the trace's gradient transform, or `None` |
+| `Op.payload.transformed_grad_dtype` | Dtype of this Op's saved transformed gradient |
+| `Op.payload.transformed_grad_shape` | Shape of this Op's saved transformed gradient |
 | `Op.transformed_gradient_memory` | Bytes used by this Op's saved transformed gradient |
-| `Op.transformed_out_dtype` | Dtype of this Op's saved transformed output |
+| `Op.payload.transformed_out` | This Op's saved output after the trace's activation transform, or `None` |
+| `Op.payload.transformed_out_dtype` | Dtype of this Op's saved transformed output |
+| `Op.payload.transformed_out_shape` | Shape of this Op's saved transformed output |
 | `Op.type_index` | 1-based position of this Op among Ops of the same type |
-| `Op.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
-| `Op.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
+| `Op.call.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
+| `Op.source.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
 | `Op.visualizer_path` | PNG path used for the node thumbnail in graph renders, or `None` |
 
 #### `tl.Layer`
 
 | Spelling | Meaning |
 | --- | --- |
-| `Layer.activation_transform` | The callable applied to saved activations before they are stored, or `None` when no transform was set |
-| `Layer.arg_names` | Parameter names from the signature of the function this layer calls |
+| `Layer.call.arg_names` | Parameter names from the signature of the function this layer calls |
 | `Layer.backend_address` | Backend-native address of the op or state this layer stands for, as the capturing backend names it, or `None` |
-| `Layer.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
+| `Layer.control_flow.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
+| `Layer.buffer_address` | Module address of the buffer this layer stands for, such as `bn.running_mean`, or `None` for a non-buffer layer |
 | `Layer.buffer_overwrite_index` | Which overwrite of its buffer this layer represents |
-| `Layer.buffer_pass` | Sequential number of this buffer write among the writes to the same buffer address, starting at 1, or `None` for non-writes |
+| `Layer.graph.buffer_pass` | Sequential number of this buffer write among the writes to the same buffer address, starting at 1, or `None` for non-writes |
 | `Layer.buffer_replay_validated` | Whether replaying this buffer write from its source layer reproduced the saved value, or `None` when not a buffer write |
-| `Layer.buffer_source` | The label of the op that wrote this buffer value, or `None` for static buffers |
-| `Layer.buffer_source_func_name` | Name of the function that produced this buffer write, or `None` when this layer is not a buffer write |
+| `Layer.graph.buffer_source` | The label of the op that wrote this buffer value, or `None` for static buffers |
+| `Layer.graph.buffer_source_func_name` | Name of the function that produced this buffer write, or `None` when this layer is not a buffer write |
 | `Layer.buffer_value_changed` | Whether this buffer write changed the buffer's value, or `None` when this layer is not a buffer write |
 | `Layer.buffer_write_kind` | How the buffer was written, one of `reassign`, `inplace`, `fused` or `data_reassign`, or `None` for a non-write |
 | `Layer.call_labels` | Labels of the ops (one per pass) that make up this layer |
-| `Layer.child_ops_per_layer` | Mapping from each child layer label to the pass numbers of this layer's ops that connect to it |
+| `Layer.graph.child_ops_per_layer` | Mapping from each child layer label to the pass numbers of this layer's ops that connect to it |
 | `Layer.children` | Union of child layer labels across all ops of this layer, without pass suffixes |
-| `Layer.children_per_pass` | Mapping from pass number to the child layer labels (without pass suffixes) of that pass |
+| `Layer.graph.children_per_pass` | Mapping from pass number to the child layer labels (without pass suffixes) of that pass |
 | `Layer.co_parents` | Union across ops of the co-parent layer labels, without pass suffixes |
-| `Layer.code_context` | The captured call stack of the user code that ran this layer's function, for single-pass layers, outermost first with the frame that ran it last |
-| `Layer.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`, `fallthrough`) and the labels of this layer's child ops inside each arm |
-| `Layer.conditional_branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
-| `Layer.conditional_elif_children` | Dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm |
-| `Layer.conditional_else_children` | List of labels of this layer's child ops that sit in an `else` arm of a conditional |
-| `Layer.conditional_entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
-| `Layer.conditional_role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
-| `Layer.conditional_then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.source.frames` | The captured call stack of the user code that ran this layer's function, for single-pass layers, outermost first with the frame that ran it last |
+| `Layer.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`, `fallthrough`) and the labels of this layer's child ops inside each arm |
+| `Layer.control_flow.branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
+| `Layer.control_flow.depth` | Number of distinct conditionals this layer takes part in, derived on read from `in_conditionals` |
+| `Layer.control_flow.in_conditionals` | Ids of the conditionals this layer takes part in, as a test or inside an arm |
+| `Layer.control_flow.elif_children` | Dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm |
+| `Layer.control_flow.else_children` | List of labels of this layer's child ops that sit in an `else` arm of a conditional |
+| `Layer.control_flow.entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
+| `Layer.control_flow.role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
+| `Layer.control_flow.then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.call` | How this layer's function was called: argument counts and names, saved arguments, RNG state and parent argument positions (`tl.types.LayerCall`) |
+| `Layer.source` | Where this layer's function was called in user code: call-stack frames and FX identity, for single-pass layers (`tl.types.LayerSource`) |
+| `Layer.autograd` | Autograd linkage of this layer's output: the `grad_fn` node, its class names and the count of tensors autograd saved (`tl.types.LayerAutograd`) |
+| `Layer.call.saved_args` | Positional arguments captured for this layer's function call, for single-pass layers |
+| `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
+| `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
+| `Layer.module_context` | Module-nesting facts of this layer: its nesting depth, whether it is a single-op module and the modules it is the output of (`tl.types.LayerModuleContext`) |
+| `Layer.payload` | Saved transformed payloads of this layer, read from its single pass (`tl.types.LayerPayload`) |
+| `Layer.graph` | Graph position of this Layer: relations, ancestry, per-pass edge maps and equivalence; per-pass members read the single pass and refuse a multi-pass layer (`tl.types.LayerGraph`) |
+| `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
+| `Layer.cost.autograd_memory` | Bytes autograd saved for backward at the representative pass |
+| `Layer.cost.duration` | Execution time of this layer's function call, for single-pass layers |
+| `Layer.cost.flops_backward` | Backward FLOPs of this layer's representative (first) pass |
+| `Layer.cost.flops_forward` | Forward FLOPs of this layer's representative (first) pass |
+| `Layer.cost.flops_total` | Representative total FLOPs for this layer |
+| `Layer.cost.macs_forward` | True forward multiply-accumulate count of the representative pass, or `None` when unknown |
+| `Layer.cost.total_activation_memory` | Sum of activation memory in bytes across all ops of this layer |
+| `Layer.cost.total_autograd_memory` | Bytes autograd saved for backward, as carried by this layer |
+| `Layer.cost.total_flops` | Sum of forward and backward FLOPs across all ops of this layer |
+| `Layer.cost.total_flops_backward` | Sum of backward FLOPs across all ops of this layer |
+| `Layer.cost.total_flops_forward` | Sum of forward FLOPs across all ops of this layer |
+| `Layer.cost.total_func_duration` | Sum of function-call durations across all ops of this layer |
+| `Layer.cost.total_macs` | Always `None`, because total MACs are not derivable |
+| `Layer.cost.total_macs_forward` | Sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown |
+| `Layer.cost.total_param_memory` | Bytes used by this layer's parameters |
+| `Layer.cost.transformed_activation_memory` | Bytes of the representative pass's transformed output activation |
 | `Layer.do` | `layer.do(edit, /, *, model=None, inputs=None, ...)`: `Trace.do` at this layer; the edit (the value, hook or helper applied there) is positional-only |
 | `Layer.edges_vary_across_ops` | Whether the graph edges of this layer differ between its passes |
-| `Layer.equivalence_class` | Fingerprint string that groups ops repeating the same operation, used for loop detection |
-| `Layer.equivalent_ops` | Labels of the ops that share this layer's equivalence class |
-| `Layer.flops_backward` | Backward FLOPs of this layer's representative (first) pass |
-| `Layer.flops_forward` | Forward FLOPs of this layer's representative (first) pass |
-| `Layer.flops_total` | Representative total FLOPs for this layer |
-| `Layer.func_config` | Non-tensor configuration of the function call, stored as a dict |
-| `Layer.func_duration` | Execution time of this layer's function call, for single-pass layers |
+| `Layer.graph.equivalence_class` | Fingerprint string that groups ops repeating the same operation, used for loop detection |
+| `Layer.graph.equivalent_ops` | Labels of the ops that share this layer's equivalence class |
+| `Layer.call.config` | Non-tensor configuration of the function call, stored as a dict |
 | `Layer.func_qualname` | Qualified name of the function this layer calls |
-| `Layer.func_rng_states` | RNG states captured for this layer's function call, for single-pass layers |
-| `Layer.fx_call_index` | The FX-style call index of a single-op layer |
+| `Layer.call.rng_states` | RNG states captured for this layer's function call, for single-pass layers |
+| `Layer.source.fx_call_index` | The FX-style call index of a single-op layer |
 | `Layer.fx_label` | A `torch.fx`-style label for a single-op layer, or `None` |
-| `Layer.fx_qualpath` | The FX-style qualified path of a single-op layer, or `None` |
+| `Layer.source.fx_path` | The FX-style qualified path of a single-op layer, or `None` |
 | `Layer.get_children` | Return the child `Layer` objects of this layer |
 | `Layer.get_parents` | Return the parent `Layer` objects of this layer |
-| `Layer.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
-| `Layer.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
-| `Layer.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |
-| `Layer.grad_fn_object_id` | The Python `id` of the autograd node object for this layer's output |
-| `Layer.has_children` | Whether any pass of this layer has child layers |
-| `Layer.has_co_parents` | Whether this layer has any co-parent layers besides itself |
+| `Layer.autograd.grad_fn` | The autograd `grad_fn` node of this layer's output tensor, or `None`; for an in-place write through a view, the base's `CopySlices` node (it runs the write's backward), not the view's regenerated node |
+| `Layer.autograd.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
+| `Layer.autograd.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
+| `Layer.autograd.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |
+| `Layer.graph.has_children` | Whether any pass of this layer has child layers |
+| `Layer.graph.has_co_parents` | Whether this layer has any co-parent layers besides itself |
 | `Layer.has_frozen_params` | Whether this layer uses at least one frozen parameter |
 | `Layer.has_grad` | Whether the single pass has a saved gradient |
-| `Layer.has_input_ancestor` | Whether any model input is an ancestor of this layer |
-| `Layer.has_parents` | Whether any pass of this layer has parent layers |
+| `Layer.graph.has_input_ancestor` | Whether any model input is an ancestor of this layer |
+| `Layer.graph.has_parents` | Whether any pass of this layer has parent layers |
 | `Layer.has_saved_activation` | Whether the single pass has a saved output activation |
-| `Layer.has_siblings` | Whether this layer has any sibling layers besides itself |
+| `Layer.graph.has_siblings` | Whether this layer has any sibling layers besides itself |
 | `Layer.has_trainable_params` | Whether this layer uses at least one trainable parameter |
 | `Layer.in_multi_output` | Whether this layer is one output of a function that returns several outputs |
 | `Layer.in_submodule` | Whether this layer was computed inside a submodule |
@@ -5955,71 +6089,68 @@ alphabetical order.
 | `Layer.input_to_module_calls` | Labels of the module calls that this layer's output is fed into |
 | `Layer.input_was_parameter` | Whether this model input was an `nn.Parameter` |
 | `Layer.internal_source_parents` | Labels of the parent layers whose ancestry includes an internal source, a tensor made inside the model rather than passed in |
-| `Layer.is_atomic_module` | Whether this layer's op is the only op of a module call, a single-op leaf module |
-| `Layer.is_buffer` | Whether this layer is a registered-buffer version node, the flag `is_buffer_source` reports |
+| `Layer.module_context.is_atomic_module` | Whether this layer's op is the only op of a module call, a single-op leaf module |
+| `Layer.graph.io_role` | Input or output address this boundary layer stands for, or `None` for an interior layer |
+| `Layer.graph.is_buffer` | Whether this layer is a registered-buffer version node, the flag `is_buffer_source` reports |
 | `Layer.is_buffer_source` | Whether this layer represents a buffer overwrite boundary |
-| `Layer.is_compute_layer` | Whether this layer's representative op is a compute op |
-| `Layer.is_final_output` | Whether this layer is one of the model's final outputs |
-| `Layer.is_in_conditional` | Whether this layer takes part in any conditional role |
-| `Layer.is_in_conditional_body` | Whether this layer sits in the body of a conditional arm |
-| `Layer.is_in_conditional_evaluation` | Whether this layer computes the condition of a conditional arm |
+| `Layer.graph.is_compute` | Whether this layer's representative op is a compute op |
+| `Layer.graph.is_final_output` | Whether this layer is one of the model's final outputs |
+| `Layer.control_flow.is_in_conditional` | Whether this layer takes part in any conditional role |
+| `Layer.control_flow.is_in_conditional_body` | Whether this layer sits in the body of a conditional arm |
+| `Layer.control_flow.is_in_conditional_evaluation` | Whether this layer computes the condition of a conditional arm |
 | `Layer.is_inplace` | Whether this layer's function operates in place |
 | `Layer.is_input` | Whether this layer is a model input |
-| `Layer.is_internal_sink` | Whether this layer's value ends inside the model without reaching any output |
-| `Layer.is_internal_source` | Whether this layer creates a tensor inside the model instead of receiving it from a model input |
-| `Layer.is_module_input` | Whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers |
-| `Layer.is_orphan` | Whether any op in this layer is disconnected from the main graph |
+| `Layer.graph.is_internal_sink` | Whether this layer's value ends inside the model without reaching any output |
+| `Layer.graph.is_internal_source` | Whether this layer creates a tensor inside the model instead of receiving it from a model input |
+| `Layer.module_context.is_module_input` | Whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers |
+| `Layer.graph.is_orphan` | Whether any op in this layer is disconnected from the main graph |
 | `Layer.is_output` | Whether this layer is a model output |
-| `Layer.is_scalar_bool` | Whether this layer's value is a scalar boolean |
-| `Layer.is_terminal_bool` | Whether this layer is a scalar boolean that ends inside the model, such as a branch condition |
+| `Layer.control_flow.is_scalar_bool` | Whether this layer's value is a scalar boolean |
+| `Layer.control_flow.is_terminal_bool` | Whether this layer is a scalar boolean that ends inside the model, such as a branch condition |
 | `Layer.short_label` | The short label of a single-pass layer with its pass suffix, such as `conv2d_1:1` |
 | `Layer.short_layer_label` | The short layer label without a pass suffix, built from the layer type and its type index, such as `conv2d_1` |
 | `Layer.leaf_module_ops` | Set of atomic module calls whose single op belongs to this layer |
 | `Layer.lookup_keys` | Keys that look up this layer in the trace, for single-pass layers |
 | `Layer.macs_backward` | Always `None`, because backward MACs are not derivable |
-| `Layer.macs_forward` | True forward multiply-accumulate count of the representative pass, or `None` when unknown |
 | `Layer.macs_total` | Always `None`, because total MACs are not derivable |
-| `Layer.module_call_depth` | Depth of module nesting around this layer |
+| `Layer.module_context.call_depth` | Depth of module nesting around this layer |
 | `Layer.multi_output_index` | Position of this layer among the outputs of a multi-output function, or `None` |
 | `Layer.multi_output_name` | Name of this output within a multi-output result, derived from its container path, or `None` |
-| `Layer.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
-| `Layer.num_kwargs` | Number of keyword arguments passed to this layer's function |
+| `Layer.call.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
+| `Layer.call.num_kwargs` | Number of keyword arguments passed to this layer's function |
+| `Layer.autograd.num_autograd_tensors` | Number of tensors autograd saved for this layer's backward, as carried by the layer |
 | `Layer.num_param_tensors_frozen` | Number of frozen parameter tensors used by this layer |
 | `Layer.num_param_tensors_trainable` | Number of trainable parameter tensors used by this layer |
 | `Layer.num_params_frozen` | Number of frozen parameter elements used by this layer |
 | `Layer.num_params_trainable` | Number of trainable parameter elements used by this layer |
-| `Layer.num_pos_args` | Number of positional arguments passed to this layer's function |
+| `Layer.call.num_pos_args` | Number of positional arguments passed to this layer's function |
 | `Layer.op_labels` | Labels of the ops that belong to this layer |
 | `Layer.ordinal_index` | Ordinal index of this layer, read from its first op |
 | `Layer.output_descendants` | Labels of the model-output layers reachable downstream of this layer |
-| `Layer.output_of_module_calls` | Labels of the module calls whose output this layer is |
-| `Layer.output_of_modules` | Addresses of the modules whose output this layer is |
+| `Layer.module_context.output_of_module_calls` | Labels of the module calls whose output this layer is |
+| `Layer.module_context.output_of_modules` | Addresses of the modules whose output this layer is |
 | `Layer.param_dtypes` | Dtypes of the parameters used by this layer |
 | `Layer.param_shapes` | Shapes of the parameters used by this layer |
-| `Layer.parent_arg_positions` | Map from argument kind and position to the parent layer label, merged across ops |
-| `Layer.parent_ops_per_layer` | Mapping from each parent layer label to the pass numbers of this layer's ops that connect from it |
+| `Layer.call.parent_arg_positions` | Map from argument kind and position to the parent layer label, merged across ops |
+| `Layer.graph.parent_ops_per_layer` | Mapping from each parent layer label to the pass numbers of this layer's ops that connect from it |
 | `Layer.parent_params` | The parameter objects that feed this layer's operation |
 | `Layer.parents` | Union of parent layer labels across all ops of this layer, without pass suffixes |
-| `Layer.parents_per_pass` | Mapping from pass number to the parent layer labels (without pass suffixes) of that pass |
+| `Layer.graph.parents_per_pass` | Mapping from pass number to the parent layer labels (without pass suffixes) of that pass |
+| `Layer.graph.site_peers` | Layers sharing any of this layer's site keys (live index) |
 | `Layer.raw_index` | Position of this layer's first op in raw capture order |
 | `Layer.resolver_status` | Whether the backend address resolves to a live object, as a string such as `resolved` or `metadata_only` |
-| `Layer.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
+| `Layer.call.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
 | `Layer.siblings` | Union across ops of the sibling layer labels, without pass suffixes |
-| `Layer.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
-| `Layer.total_activation_memory` | Sum of activation memory in bytes across all ops of this layer |
-| `Layer.total_flops_backward` | Sum of backward FLOPs across all ops of this layer |
-| `Layer.total_flops_forward` | Sum of forward FLOPs across all ops of this layer |
-| `Layer.total_flops_total` | Sum of forward and backward FLOPs across all ops of this layer |
-| `Layer.total_func_duration` | Sum of function-call durations across all ops of this layer |
+| `Layer.control_flow.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
 | `Layer.total_gradient_memory` | Sum of gradient memory in bytes across all ops of this layer |
 | `Layer.total_macs_backward` | Always `None`, because backward MACs are not derivable |
-| `Layer.total_macs_forward` | Sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown |
-| `Layer.total_macs_total` | Always `None`, because total MACs are not derivable |
-| `Layer.total_param_memory` | Bytes used by this layer's parameters |
-| `Layer.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
-| `Layer.transformed_grad_shape` | Shape of the saved transformed gradient, or `None` |
+| `Layer.payload.transformed_grad` | Transformed gradient of the single pass, for single-pass layers |
+| `Layer.payload.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
+| `Layer.payload.transformed_grad_shape` | Shape of the saved transformed gradient, or `None` |
 | `Layer.transformed_gradient_memory` | Bytes used by the saved transformed gradient, or `None` |
-| `Layer.transformed_out_dtype` | Dtype of the saved transformed output, or `None` |
+| `Layer.payload.transformed_out` | Transformed output of the single pass, for single-pass layers |
+| `Layer.payload.transformed_out_dtype` | Dtype of the saved transformed output, or `None` |
+| `Layer.payload.transformed_out_shape` | Shape of the saved transformed output, or `None` |
 | `Layer.type_index` | Index of this layer among layers of the same type, counted from 1 in execution order |
 | `Layer.visualizer_path` | Path of the PNG used as this node's thumbnail in graph renders, or `None` |
 
@@ -6915,11 +7046,27 @@ each value as the attribute of the same name, so no keyword row below names a re
 | `tl.types.GradFnCall` | Runtime data for one execution of an autograd `grad_fn_handle` node |
 | `tl.types.GradFn` | Metadata and runtime ops for one autograd `grad_fn_handle` node |
 | `tl.types.InputSpec` | Explicit per-slot input override for the quickstart input grammar |
+| `tl.types.LayerAutograd` | Autograd facts of one Layer |
+| `tl.types.LayerCall` | How one Layer's function was called |
+| `tl.types.LayerControlFlow` | Conditional and branch facts of one Layer |
+| `tl.types.LayerCost` | Compute, memory and timing facts of one Layer |
+| `tl.types.LayerGraph` | Graph position of one Layer: relations, ancestry, per-pass edges and equivalence |
+| `tl.types.LayerModuleContext` | Module-nesting facts of one Layer: its nesting depth and the modules it is the output of |
+| `tl.types.LayerPayload` | Saved transformed payloads of one Layer, read from its single pass |
+| `tl.types.LayerSource` | Where one Layer's call sits in the user's source; per-pass members require a single-pass layer |
 | `tl.types.MergedFinding` | One structured merge finding |
 | `tl.types.MergedTrace` | N rank-local captures stitched at their collective boundaries |
 | `tl.types.ModuleCall` | Per-(module, call_index) data for one invocation of a module |
 | `tl.types.Module` | Aggregate metadata for one nn.Module across all its invocations |
 | `tl.types.NarrationEvent` | One immutable narration record |
+| `tl.types.OpAutograd` | Autograd facts and saved gradients of one Op |
+| `tl.types.OpCall` | How one Op's function was called |
+| `tl.types.OpControlFlow` | Conditional and branch facts of one Op |
+| `tl.types.OpCost` | Compute, memory and timing facts of one Op |
+| `tl.types.OpGraph` | Graph position of one Op: relations, ancestry, distances, buffers and equivalence |
+| `tl.types.OpModuleContext` | Module-nesting facts of one Op: the module calls around it, fed by it and output by it |
+| `tl.types.OpPayload` | Saved payloads of one Op: transformed output and gradient, and lazy materialization |
+| `tl.types.OpSource` | Where one Op's call sits in the user's source |
 | `tl.types.Param` | Metadata about a single model parameter (weight or bias) |
 | `tl.types.PartialTrace` | Thin wrapper around raw capture state from a failed forward pass |
 | `tl.types.PreHookEffect` | Immutable record of one executed user forward pre-hook transition |
@@ -6940,6 +7087,394 @@ each value as the attribute of the same name, so no keyword row below names a re
 | `tl.types.TraceSource` | Source facts of the traced model class: locations, signatures, docstrings |
 | `tl.viz.Drawing` | The picture every draw returns: DOT source (or animation HTML), format, written path; `save(path, editable=)`, `show()`, `close()` (releases a retained trace; idempotent; the `with` block exit calls it); a forward drawing also carries `collapse_plan` and `collapse_schedule` |
 | `tl.viz.NodeSpec` | Graphviz node attributes produced by TorchLens before user customization |
+
+<!-- record group views: Op and Layer concern groups -->
+**`tl.types.LayerCall`**
+: How one Layer's function was called; per-pass members (`saved_args`, `saved_kwargs`, `rng_states`)
+  require a single-pass layer; `layer.call` is the instance a Layer serves.
+  - `LayerCall.arg_names`: parameter names from the signature of the function this layer calls.
+  - `LayerCall.config`: non-tensor configuration of the function call, stored as a dict.
+  - `LayerCall.num_args_total`: total number of positional and keyword arguments passed to this
+    layer's function.
+  - `LayerCall.num_kwargs`: number of keyword arguments passed to this layer's function.
+  - `LayerCall.num_pos_args`: number of positional arguments passed to this layer's function.
+  - `LayerCall.parent_arg_positions`: map from argument kind and position to the parent layer label,
+    merged across ops.
+  - `LayerCall.rng_states`: rNG states captured for this layer's function call, for single-pass
+    layers.
+  - `LayerCall.saved_args`: positional arguments captured for this layer's function call, for
+    single-pass layers.
+  - `LayerCall.saved_kwargs`: keyword arguments captured for this layer's function call, for
+    single-pass layers.
+
+**`tl.types.OpCall`**
+: How one Op's function was called; `op.call` is the instance an Op serves.
+  - `OpCall.arg_names`: names of the arguments in this Op's function call.
+  - `OpCall.args_template`: structural template of this Op's positional arguments, used to rebuild
+    the call.
+  - `OpCall.autocast_state`: autocast state in effect when this Op's function was called.
+  - `OpCall.call_id`: identifier of the function call that produced this Op; Ops from one call share
+    it.
+  - `OpCall.config`: dict of lightweight hyperparameters captured from the call, such as
+    `kernel_size` and `stride`.
+  - `OpCall.dropped_edge_tensor_args`: argument positions, such as `"arg1"`, whose tensor inputs did
+    not become graph edges at capture.
+  - `OpCall.func_id`: portable key identifying the captured function this Op ran: its namespace,
+    qualified name and dispatch kind.
+  - `OpCall.func_transform_chain`: tuple of transform tags applied to the function this Op ran.
+  - `OpCall.func_transform_config`: configuration of the function transform for this
+    transform-boundary Op.
+  - `OpCall.func_transform_fn_name`: name of the function wrapped by the transform at this boundary
+    Op.
+  - `OpCall.func_transform_fn_qualname`: qualified name of the function wrapped by the transform at
+    this boundary Op.
+  - `OpCall.func_transform_fn_source`: source location of the function wrapped by the transform at
+    this boundary Op.
+  - `OpCall.func_transform_kind`: kind of function transform at this boundary Op, such as `vmap` or
+    `grad`, or `None`.
+  - `OpCall.has_saved_args`: whether this Op's argument values were saved.
+  - `OpCall.injection_provenance`: record of which intervention injected this Op and where, or
+    `None` for ordinary model Ops.
+  - `OpCall.is_func_transform`: whether this Op is a function-transform boundary node.
+  - `OpCall.is_internally_initialized`: alias of `is_internal_source`: whether this Op was created
+    inside the model rather than fed from an input.
+  - `OpCall.kwargs_template`: structural template of this Op's keyword arguments, used to rebuild
+    the call.
+  - `OpCall.non_tensor_args`: flat list of all non-tensor arguments of this Op's function call.
+  - `OpCall.non_tensor_kwargs`: non-tensor keyword arguments of this Op's function call.
+  - `OpCall.non_tensor_pos_args`: non-tensor positional arguments of this Op's function call.
+  - `OpCall.num_args_total`: total number of arguments in this Op's function call.
+  - `OpCall.num_kwargs`: number of keyword arguments in this Op's function call.
+  - `OpCall.num_pos_args`: number of positional arguments in this Op's function call.
+  - `OpCall.parent_arg_positions`: mapping from call argument positions, positional and keyword, to
+    the parent Op label used there.
+  - `OpCall.rng_states`: rNG state snapshots recorded for this Op's function call.
+  - `OpCall.saved_args`: positional argument values saved for this Op's call, or `None` when not
+    saved.
+  - `OpCall.saved_kwargs`: keyword argument values saved for this Op's call, or `None` when not
+    saved.
+  - `OpCall.tl_authored_root`: whether this Op is the root of a TorchLens-authored call rather than
+    a model call.
+  - `OpCall.unattributed_tensor_args`: tensor arguments that could not be attributed to a parent Op.
+
+**`tl.types.LayerAutograd`**
+: Autograd linkage of one Layer's output; `layer.autograd` is the instance a Layer serves.
+  - `LayerAutograd.grad_fn`: the autograd `grad_fn` node of this layer's output tensor, or `None`.
+  - `LayerAutograd.grad_fn_class_name`: class name of the autograd node that produced this layer's
+    output, or `None`.
+  - `LayerAutograd.grad_fn_class_qualname`: qualified class name of the autograd node that produced
+    this layer's output, or `None`.
+  - `LayerAutograd.grad_fn_handle`: the live autograd node object for this layer's output, not kept
+    in saved files.
+  - `LayerAutograd.num_autograd_tensors`: number of tensors autograd saved for this layer's
+    backward, as carried by the layer.
+
+**`tl.types.OpAutograd`**
+: Autograd linkage and saved gradients of one Op; `op.autograd` is the instance an Op serves.
+  - `OpAutograd.derived_grad`: backend-owned intermediate gradient payload for this Op, or `None`.
+  - `OpAutograd.grad_dtype`: dtype of this Op's saved output gradient.
+  - `OpAutograd.grad_fn`: the autograd `grad_fn` node of this Op's output tensor, or `None`.
+  - `OpAutograd.grad_fn_class_name`: class name of this Op's autograd node.
+  - `OpAutograd.grad_fn_class_qualname`: qualified class name of this Op's autograd node.
+  - `OpAutograd.grad_fn_handle`: the live PyTorch autograd node object for this Op; not portable.
+  - `OpAutograd.grad_for`: return the saved gradient tensor for one backward pass.
+  - `OpAutograd.grad_shape`: shape of this Op's saved output gradient.
+  - `OpAutograd.grads`: accessor over the per-backward-pass gradient records saved for this Op.
+  - `OpAutograd.num_autograd_tensors`: number of tensors the captured forward's autograd saved for
+    this Op's backward.
+
+**`tl.types.LayerSource`**
+: Where one Layer's function was called in user code; its members require a single-pass layer;
+  `layer.source` is the instance a Layer serves.
+  - `LayerSource.frames`: the captured call stack of the user code that ran this layer's function,
+    for single-pass layers.
+  - `LayerSource.fx_call_index`: the FX-style call index of a single-op layer.
+  - `LayerSource.fx_path`: the FX-style qualified path of a single-op layer, or `None`.
+
+**`tl.types.OpSource`**
+: Where one Op's function was called in user code; `op.source` is the instance an Op serves.
+  - `OpSource.arg_expressions`: source expressions of this Op's call arguments, parsed lazily from
+    `code_context`; an empty list when unavailable.
+  - `OpSource.frames`: call-stack frames showing where this Op ran.
+  - `OpSource.func_qualname`: qualified name of the function this Op called.
+  - `OpSource.fx_call_index`: call index in the `torch.fx`-style identity of this Op, when
+    applicable.
+  - `OpSource.fx_path`: module path in the `torch.fx`-style identity of this Op, when applicable.
+  - `OpSource.var_names`: variable names the Op's result is assigned to at its call site; empty when
+    unresolved.
+
+**`tl.types.LayerModuleContext`**
+: Module-nesting facts of one Layer; `layer.module_context` is the instance a Layer serves.
+  - `LayerModuleContext.call_depth`: depth of module nesting around this layer.
+  - `LayerModuleContext.is_atomic_module`: whether this layer's op is the only op of a module call,
+    a single-op leaf module.
+  - `LayerModuleContext.is_module_input`: whether this layer's representative op feeds into at least
+    one `ModuleCall`, for single-op layers.
+  - `LayerModuleContext.output_of_module_calls`: labels of the module calls whose output this layer
+    is.
+  - `LayerModuleContext.output_of_modules`: addresses of the modules whose output this layer is.
+
+**`tl.types.OpModuleContext`**
+: Module-nesting facts of one Op; `op.module_context` is the instance an Op serves.
+  - `OpModuleContext.atomic_module`: the `Module` record for the atomic module this Op is the output
+    of, or `None`.
+  - `OpModuleContext.atomic_module_address`: module address, without the pass suffix, of the atomic
+    module this Op outputs from, or `None`.
+  - `OpModuleContext.atomic_module_call`: stored `ModuleCall` label for an atomic-module output Op,
+    or `None`.
+  - `OpModuleContext.call_depth`: depth of this Op's active `ModuleCall` nesting (the length of
+    `module_call_stack`).
+  - `OpModuleContext.call_stack`: root-first labels of the `ModuleCall`s active when this Op ran.
+  - `OpModuleContext.entry_arg_keys`: mapping from `ModuleCall` label to the argument keys this Op
+    filled at module entry.
+  - `OpModuleContext.input_to_module_calls`: labels of the `ModuleCall` records whose input this
+    Op's output fed.
+  - `OpModuleContext.input_to_modules`: module addresses, without the pass suffix, whose input this
+    Op's output fed.
+  - `OpModuleContext.is_atomic_module`: whether this Op is the sole operation output of an atomic
+    module call.
+  - `OpModuleContext.is_module_input`: whether this Op's output feeds at least one `ModuleCall` as
+    an input.
+  - `OpModuleContext.is_module_output`: whether this Op is the output of a `ModuleCall`.
+  - `OpModuleContext.output_of_module_calls`: labels of the `ModuleCall` records whose output this
+    Op is.
+  - `OpModuleContext.output_of_modules`: module addresses, without the pass suffix, whose output
+    this Op is.
+
+**`tl.types.LayerPayload`**
+: Saved transformed payloads of one Layer; its output and gradient members require a single-pass
+  layer; `layer.payload` is the instance a Layer serves.
+  - `LayerPayload.transformed_grad`: transformed gradient of the single pass, for single-pass
+    layers.
+  - `LayerPayload.transformed_grad_dtype`: dtype of the saved transformed gradient, or `None`.
+  - `LayerPayload.transformed_grad_shape`: shape of the saved transformed gradient, or `None`.
+  - `LayerPayload.transformed_out`: transformed output of the single pass, for single-pass layers.
+  - `LayerPayload.transformed_out_dtype`: dtype of the saved transformed output, or `None`.
+  - `LayerPayload.transformed_out_shape`: shape of the saved transformed output, or `None`.
+
+**`tl.types.OpPayload`**
+: Saved payloads of one Op; `op.payload` is the instance an Op serves.
+  - `OpPayload.materialize_grad`: materialize this Op's saved gradient from a lazy bundle reference.
+  - `OpPayload.materialize_out`: materialize this Op's saved output from a lazy bundle reference.
+  - `OpPayload.transformed_grad`: this Op's saved gradient after the trace's gradient transform, or
+    `None`.
+  - `OpPayload.transformed_grad_dtype`: dtype of this Op's saved transformed gradient.
+  - `OpPayload.transformed_grad_shape`: shape of this Op's saved transformed gradient.
+  - `OpPayload.transformed_out`: this Op's saved output after the trace's activation transform, or
+    `None`.
+  - `OpPayload.transformed_out_dtype`: dtype of this Op's saved transformed output.
+  - `OpPayload.transformed_out_shape`: shape of this Op's saved transformed output.
+
+**`tl.types.LayerGraph`**
+: Graph position of one Layer, read as `layer.graph`.
+  - `LayerGraph.buffer_pass`: sequential number of this buffer write among the writes to the same
+    buffer address, starting at 1, or `None` for non-writes.
+  - `LayerGraph.buffer_source`: the label of the op that wrote this buffer value, or `None` for
+    static buffers.
+  - `LayerGraph.buffer_source_func_name`: name of the function that produced this buffer write, or
+    `None` when this layer is not a buffer write.
+  - `LayerGraph.child_ops_per_layer`: mapping from each child layer label to the pass numbers of
+    this layer's ops that connect to it.
+  - `LayerGraph.children_per_pass`: mapping from pass number to the child layer labels (without pass
+    suffixes) of that pass.
+  - `LayerGraph.equivalence_class`: fingerprint string that groups ops repeating the same operation,
+    used for loop detection.
+  - `LayerGraph.equivalent_ops`: labels of the ops that share this layer's equivalence class.
+  - `LayerGraph.has_children`: whether any pass of this layer has child layers.
+  - `LayerGraph.has_co_parents`: whether this layer has any co-parent layers besides itself.
+  - `LayerGraph.has_input_ancestor`: whether any model input is an ancestor of this layer.
+  - `LayerGraph.has_parents`: whether any pass of this layer has parent layers.
+  - `LayerGraph.has_siblings`: whether this layer has any sibling layers besides itself.
+  - `LayerGraph.io_role`: input or output address this boundary layer stands for, or `None` for an
+    interior layer.
+  - `LayerGraph.is_buffer`: whether this layer is a registered-buffer version node, the flag
+    `is_buffer_source` reports.
+  - `LayerGraph.is_compute`: whether this layer's representative op is a compute op.
+  - `LayerGraph.is_final_output`: whether this layer is one of the model's final outputs.
+  - `LayerGraph.is_internal_sink`: whether this layer's value ends inside the model without reaching
+    any output.
+  - `LayerGraph.is_internal_source`: whether this layer creates a tensor inside the model instead of
+    receiving it from a model input.
+  - `LayerGraph.is_orphan`: whether any op in this layer is disconnected from the main graph.
+  - `LayerGraph.parent_ops_per_layer`: mapping from each parent layer label to the pass numbers of
+    this layer's ops that connect from it.
+  - `LayerGraph.parents_per_pass`: mapping from pass number to the parent layer labels (without pass
+    suffixes) of that pass.
+  - `LayerGraph.site_peers`: layers sharing any of this layer's site keys (live index).
+
+**`tl.types.OpGraph`**
+: Graph position of one Op, read as `op.graph`.
+  - `OpGraph.buffer_sink_ops`: accessor over the buffer-write Ops that directly consume this Op.
+  - `OpGraph.buffer_source`: label of the Op that wrote this buffer value, or `None` for a static
+    buffer.
+  - `OpGraph.buffer_source_func_name`: name of the function that produced this buffer value.
+  - `OpGraph.buffer_source_ops`: accessor over the buffer-source Ops that feed this Op.
+  - `OpGraph.co_parents`: labels of other Ops that share at least one child with this Op.
+  - `OpGraph.edge_substitutions`: recorded parent-edge substitutions for this Op, keyed by argument
+    slot.
+  - `OpGraph.equivalence_class`: key of the equivalence class that loop detection assigned to this
+    Op.
+  - `OpGraph.equivalent_ops`: labels of other Ops in the same equivalence class (same function and
+    arguments).
+  - `OpGraph.has_children`: whether this Op has any child Ops.
+  - `OpGraph.has_co_parents`: whether this Op shares children with other Ops.
+  - `OpGraph.has_input_ancestor`: whether any model input is an ancestor of this Op.
+  - `OpGraph.has_internal_source_ancestor`: whether any internally initialized source Op is an
+    ancestor of this Op.
+  - `OpGraph.has_output_descendant`: whether any model output is a descendant of this Op.
+  - `OpGraph.has_parents`: whether this Op has any parent Ops.
+  - `OpGraph.has_siblings`: whether this Op shares parents with other Ops.
+  - `OpGraph.internal_source_ancestors`: labels of the internally initialized source Ops that are
+    ancestors of this Op.
+  - `OpGraph.internal_source_parents`: labels of the internally initialized source Ops that are
+    direct parents of this Op.
+  - `OpGraph.io_role`: input or output address this boundary Op stands for, or `None` for an
+    interior Op.
+  - `OpGraph.is_buffer`: stored flag marking this Op as a buffer boundary; `is_buffer_source`
+    exposes it.
+  - `OpGraph.is_compute`: whether this Op executed a torch function rather than being a boundary
+    sentinel.
+  - `OpGraph.is_final_output`: whether this Op is a final model output.
+  - `OpGraph.is_internal_source`: whether this Op was created inside the model, such as by a factory
+    call, rather than fed from an input.
+  - `OpGraph.is_orphan`: whether this Op is disconnected from both the input and output flows.
+  - `OpGraph.is_output_parent`: whether this Op is directly returned from `forward`.
+  - `OpGraph.max_distance_from_input`: longest graph distance from any model input to this Op.
+  - `OpGraph.max_distance_to_output`: longest graph distance from this Op to any model output.
+  - `OpGraph.min_distance_from_input`: shortest graph distance from any model input to this Op.
+  - `OpGraph.min_distance_to_output`: shortest graph distance from this Op to any model output.
+  - `OpGraph.num_inputs`: number of parent Ops of this Op.
+  - `OpGraph.parent_param_ops`: mapping from each consumed parameter's identifying barcode to its
+    pass number.
+  - `OpGraph.parent_params`: the `nn.Parameter` objects consumed by this Op.
+  - `OpGraph.recurrent_ops`: labels of the Ops in the same recurrent group: equivalent and at a
+    structurally corresponding position.
+  - `OpGraph.root_ancestors`: labels of the root Ops at the start of the graph that this Op descends
+    from.
+  - `OpGraph.siblings`: labels of other Ops that share at least one parent with this Op.
+  - `OpGraph.site_key`: portable structural-position identity of this Op (`site_key_v1`, a
+    `"s1|"`-prefixed string), or `None` on a keyless artifact.
+
+**`tl.types.LayerControlFlow`**
+: Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves.
+  - `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`,
+    `elif_N`, `else`) and the labels of this layer's child ops inside each arm.
+  - `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None`
+    otherwise.
+  - `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the
+    sorted pass numbers of this layer that ran under it.
+  - `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on
+    read from `in_conditionals`.
+  - `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this
+    layer's children that sit in that arm.
+  - `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else`
+    arm of a conditional.
+  - `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it
+    enters a conditional arm.
+  - `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test
+    or inside an arm.
+  - `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role.
+  - `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional
+    arm.
+  - `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a
+    conditional arm.
+  - `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean.
+  - `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the
+    model, such as a branch condition.
+  - `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per
+    different nesting, that this layer's passes ran under.
+  - `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or
+    `None`.
+  - `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then`
+    arm of a conditional.
+
+**`tl.types.OpControlFlow`**
+: Conditional-branch facts of one Op; `op.control_flow` is the instance an Op serves.
+  - `OpControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (then, elif_N,
+    else) and the labels of this Op's children inside each arm.
+  - `OpControlFlow.bool_value`: the Python value of this Op's output when it is a scalar bool.
+  - `OpControlFlow.branch_depth`: number of conditional branches this Op is nested inside; 0 when it
+    is not in a conditional body.
+  - `OpControlFlow.branch_stack`: stack of `(conditional_id, arm_kind)` pairs for the conditional
+    branches this Op is nested inside, outermost first.
+  - `OpControlFlow.context_kind`: kind of context (`"if"` or `"while"`) of the conditional that owns
+    this terminal bool, or `None`.
+  - `OpControlFlow.depth`: number of distinct conditionals this Op takes part in, derived on read
+    from `in_conditionals`.
+  - `OpControlFlow.elif_children`: dict mapping each elif arm index to the labels of this Op's
+    children in that arm.
+  - `OpControlFlow.else_children`: labels of this Op's children that sit in an else arm of a
+    conditional.
+  - `OpControlFlow.entry_children`: labels of this Op's children whose edge from it enters a
+    conditional arm.
+  - `OpControlFlow.in_conditionals`: ids of the conditionals this Op takes part in, as a test or
+    inside an arm.
+  - `OpControlFlow.is_in_conditional`: whether this Op participates in any conditional role.
+  - `OpControlFlow.is_in_conditional_body`: whether this Op sits inside the body of a conditional
+    arm.
+  - `OpControlFlow.is_in_conditional_evaluation`: whether this Op computes a conditional arm's
+    condition.
+  - `OpControlFlow.is_scalar_bool`: whether this Op's output is a scalar bool.
+  - `OpControlFlow.is_terminal_bool`: whether this Op is a scalar bool that ends a chain of
+    operations and decides control flow.
+  - `OpControlFlow.is_terminal_conditional_bool`: whether this terminal bool is the test of a
+    recorded conditional.
+  - `OpControlFlow.terminal_bool_for`: `(conditional_id, arm_index)` when this Op is the terminal
+    bool of a conditional arm.
+  - `OpControlFlow.then_children`: labels of this Op's children that sit in a then arm of a
+    conditional.
+  - `OpControlFlow.wrapper_kind`: wrapper kind of the conditional that owns this terminal bool, or
+    `None`.
+
+**`tl.types.OpCost`**
+: Compute, memory and timing facts of one Op; `op.cost` is the instance an Op serves.
+  - `OpCost.activation_memory`: bytes of this Op's output activation.
+  - `OpCost.arithmetic_intensity`: theoretical forward FLOPs per byte of ideal memory traffic, or
+    `None`.
+  - `OpCost.autograd_memory`: bytes of the tensors autograd saved for backward at this Op.
+  - `OpCost.bytes_delta_at_call`: change in allocated bytes at the time of this Op's function call.
+  - `OpCost.bytes_peak_at_call`: peak allocated bytes at the time of this Op's function call.
+  - `OpCost.bytes_read`: theoretical ideal read-once memory traffic for this operation, in bytes.
+  - `OpCost.bytes_written`: theoretical ideal write-once memory traffic for this operation, in
+    bytes.
+  - `OpCost.compute_record`: two-term compute record (`fma_macs` and `other_flops`), derived on
+    read.
+  - `OpCost.duration`: time spent in this Op's function call, as a `Duration`.
+  - `OpCost.flops_backward`: approximate backward FLOPs for this Op.
+  - `OpCost.flops_forward`: approximate forward FLOPs for this Op.
+  - `OpCost.flops_total`: approximate total FLOPs for this Op.
+  - `OpCost.input_memory`: sum of saved activation bytes across this Op's parent Ops.
+  - `OpCost.macs_forward`: true forward multiply-accumulate count for this Op, or `None`.
+  - `OpCost.param_memory`: bytes used by the parameters consumed by this Op.
+  - `OpCost.transformed_activation_memory`: bytes of this Op's transformed output activation, if one
+    was kept.
+
+**`tl.types.LayerCost`**
+: Compute, memory and timing facts of one Layer; single-value members describe the representative
+  (first) pass and `total_*` members sum over every pass; `layer.cost` is the instance a Layer
+  serves.
+  - `LayerCost.activation_memory`: bytes of the representative pass's output activation.
+  - `LayerCost.autograd_memory`: bytes autograd saved for backward at the representative pass.
+  - `LayerCost.duration`: execution time of this layer's function call, for single-pass layers.
+  - `LayerCost.flops_backward`: backward FLOPs of this layer's representative (first) pass.
+  - `LayerCost.flops_forward`: forward FLOPs of this layer's representative (first) pass.
+  - `LayerCost.flops_total`: representative total FLOPs for this layer.
+  - `LayerCost.macs_forward`: true forward multiply-accumulate count of the representative pass, or
+    `None` when unknown.
+  - `LayerCost.total_activation_memory`: sum of activation memory in bytes across all ops of this
+    layer.
+  - `LayerCost.total_autograd_memory`: bytes autograd saved for backward, as carried by this layer.
+  - `LayerCost.total_flops`: sum of forward and backward FLOPs across all ops of this layer.
+  - `LayerCost.total_flops_backward`: sum of backward FLOPs across all ops of this layer.
+  - `LayerCost.total_flops_forward`: sum of forward FLOPs across all ops of this layer.
+  - `LayerCost.total_func_duration`: sum of function-call durations across all ops of this layer.
+  - `LayerCost.total_macs`: always `None`, because total MACs are not derivable.
+  - `LayerCost.total_macs_forward`: sum of true forward MACs across all ops of this layer, or `None`
+    when any pass's split is unknown.
+  - `LayerCost.total_param_memory`: bytes used by this layer's parameters.
+  - `LayerCost.transformed_activation_memory`: bytes of the representative pass's transformed output
+    activation.
+<!-- end record group views -->
 
 ### Keywords
 Every parameter a caller can pass by name to a public callable has a row here (or in the
@@ -6984,7 +7519,7 @@ and have no row.
 | `answer=` | keyword of `tl.mechinterp.direct_logit_contributions` (keyword-only; required): Answer token id(s) -- the logit(s) to decompose; keyword of `tl.mechinterp.inspect_prompt` (keyword-only; default `None`): Optional answer token id(s) to score at `position`; keyword of `tl.mechinterp.test_prompt` (keyword-only; required) |
 | `antialias=` | constructor keyword of `tl.preprocessing.DeclaredPreprocessing` (default `None`): Whether resize applies antialiasing: `True`/`False`, the literal string `"warn"` (torchvision's own legacy sentinel -- antialiasing differs by input type and torchvision warns once; declared as-is rather than coerced into a guessed bool), or `None` (undeclared) |
 | `api=` | keyword of `tl.bridge.huggingface_hub.from_hub` (keyword-only; default `None`): Optional `HfApi`-compatible object exposing `hf_hub_download`, for tests, mirrors or advanced callers; keyword of `tl.bridge.huggingface_hub.push_to_hub` (keyword-only; default `None`): Optional `HfApi`-compatible object for tests or advanced callers |
-| `api_key=` | keyword of `Direction.upload_to_neuronpedia` (keyword-only; required): Your Neuronpedia API key (under Settings on neuronpedia.org) |
+| `api_key=` | keyword of `Direction.upload_to_neuronpedia` (keyword-only; required): Your Neuronpedia API key (under Settings on neuronpedia.org); keyword of `tl.attribution.upload_to_neuronpedia` (keyword-only; required): Your Neuronpedia API key (under Settings on neuronpedia.org), sent in the `x-api-key` header and never written into a message |
 | `applied=` | keyword of `tl.preprocessing.compare` (default `None`): What actually ran: a `Resolution`, declared fields, a declaration mapping, a Compose-shaped pipeline (parsed), an opaque callable (every field `unknown`, never match), or `None` (nothing declared) |
 | `apply_fn=` | constructor keyword of `tl.transforms.TransformDefinition` (required): ` (spec, tensor, ctx) -> tensor` pure application; row count and order preserved |
 | `args=` | keyword of `BackendProtocol.can_handle`, `BackendProtocol.capture`, `BackendProtocol.reference_output`, `HFTrainerWatchCallback.on_train_begin`, `HFTrainerWatchCallback.on_train_end` (required) |
@@ -7051,7 +7586,7 @@ and have no row.
 | `buffers=` | keyword of `Trace.summary` (keyword-only; default `None`): `"summary"` (footer totals; default) \| `"hide"` |
 | `bundle=` | keyword of `Bundle.provenance`, `tl.experiment.retained_bytes` (required); keyword of `Bundle.vary` (required): The receiver (mutating spelling; `bundle.fork().vary(...)` preserves the source); keyword of `Bundle.why` (required): The container whose material record is walked; constructor keyword of `tl.experiment.SweepGrid` (required); keyword of `tl.export.chrome_trace_diff` (required): TorchLens `Bundle` with a `supergraph` accessor; keyword of `tl.viz.bundle_diff` (required): Bundle containing at least two traces |
 | `bundle_id=` | constructor keyword of `tl.Bundle` (keyword-only; default `None`): Load-side carriage for the persisted container identity. `None` (the user door) mints a fresh random id; the artifact loader passes the saved id verbatim |
-| `bwd=` | keyword of `Op.grad_for` (keyword-only; required); keyword of `Trace.draw` (keyword-only; default `None`): Backward and combined graphs: which backward pass or passes to draw; keyword of `tl.debug.bisect_nan_backward` (keyword-only; default `None`): One-based backward pass selector; required when multiple passes were captured (the `grad_health` convention verbatim); keyword of `tl.debug.grad_health` (keyword-only; default `None`): One-based backward pass selector. Required when multiple backward passes are captured |
+| `bwd=` | keyword of `Op.autograd.grad_for` (keyword-only; required); keyword of `Trace.draw` (keyword-only; default `None`): Backward and combined graphs: which backward pass or passes to draw; keyword of `tl.debug.bisect_nan_backward` (keyword-only; default `None`): One-based backward pass selector; required when multiple passes were captured (the `grad_health` convention verbatim); keyword of `tl.debug.grad_health` (keyword-only; default `None`): One-based backward pass selector. Required when multiple backward passes are captured |
 | `by=` | keyword of `Bundle.rank_changes` (keyword-only; default `'site'`): `"site"` keeps one row per site (per pass of a multi-pass op); `"module"` folds them into one row per module address, scored by its most changed site; keyword of `ComponentStack.topk` (keyword-only; default `'norm'`): Scoring reduction: `"norm"` (L2 over the whole row value) is the only v1 option; keyword of `StatsTable.sort_rows` (required): One of the sortable numeric fields (`mean`/`sd`/`min`/`max`/`zero_count`/`nan_count`/ `numel`); keyword of `tl.changed`, `tl.top_changed` (keyword-only; default `'abs'`); keyword of `tl.debug.hot_path` (default `'flops'`): Cost metric: `"flops"`, `"memory"`, or `"duration"`; keyword of `tl.debug.hot_path_rows` (default `'flops'`): Cost metric: `"flops"`, `"memory"`, `"duration"`, or `"device_time"` (joined Kineto device nanoseconds); keyword of `tl.threshold`, `tl.top_fraction`, `tl.top_k` (keyword-only; default `'value'`) |
 | `cache=` | constructor keyword of `tl.options.CaptureOptions` (optional); keyword of `tl.stats.aggregate` (keyword-only; default `False`): `True` keys the run (model contents and code, every batch by value, each accumulator's starting state and encoder, the metric keys, `loss_fn=`, the torchlens and torch versions) and, when the same run was cached before, restores each accumulator's saved final state in place and returns its .. |
 | `cache_dir=` | keyword of `tl.clear_cache` (default `None`): Cache root accepted by `trace(cache_dir=...)`. `None` uses the configured default; keyword of `tl.examples.load` (keyword-only; default `None`): Reserved for future Hub-backed example downloads. Currently unused; constructor keyword of `tl.options.CaptureOptions` (optional); keyword of `tl.stats.aggregate` (keyword-only; default `None`): Cache directory, as for `tl.trace(cache=True)`: default `TORCHLENS_CACHE_DIR` or `~/.cache/torchlens`; entries go in its `aggregate` subdirectory |
@@ -7251,6 +7786,7 @@ and have no row.
 | `expert=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): MoE expert index when the writer is a routed expert; otherwise `None` |
 | `explainer_class=` | keyword of `tl.bridge.shap.explain` (keyword-only; default `None`): Optional explainer class or factory. Defaults to `shap.DeepExplainer` |
 | `exploding_threshold=` | keyword of `ChecksSession.register_magnitude_check` (keyword-only; default `10000.0`); keyword of `tl.debug.grad_health` (keyword-only; default `10000.0`): Norm above which a finite gradient is flagged exploding |
+| `exported=` | keyword of `tl.attribution.upload_to_neuronpedia` (required): The dict `AttributionGraph.to_neuronpedia` returned, or the path of the file it wrote with `path=` |
 | `extra=` | constructor keyword of `tl.attribution.AttributionMetric` (required): Additional disclosure (distributions, probes, qualifications); constructor keyword of `tl.backends.FrameworkRequirement` (required): The pyproject extra that installs the framework (`""` for a base dependency); keyword of `tl.trackers.build_manifest` (keyword-only; default `None`) |
 | `extra_address=` | keyword of `CaptureBackend.log_source_tensor` (default `None`): Optional backend-specific input or buffer address |
 | `extras=` | constructor keyword of `tl.preprocessing.DeclaredPreprocessing` (optional): Adapter-specific disclosures that are NOT compared (kept for the provenance record, e.g. `crop_pct`, processor class names) |
@@ -7291,7 +7827,7 @@ and have no row.
 | `fractions=` | keyword of `tl.mechinterp.circuit_model_difference`, `tl.mechinterp.circuit_performance_ratio` (keyword-only; default `None`): Keyword-only. The edge fractions of a sequence; `None` means the ten MIB fractions (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1) |
 | `frame=` | keyword of `CaptureBackend.pop_module_frame` (required): Expected top frame to pop; keyword of `CaptureBackend.push_existing_module_frame` (required): Existing backend frame to push |
 | `frontier_output=` | constructor keyword of `tl.recording.StopSignal` (default `None`): Optional live output object used by `trace(stop_after=...)` to finalize a partial graph at the halt boundary |
-| `frozen=` | keyword of `tl.attribution.build_graph` (keyword-only; optional): Module names whose outputs are held at their captured values, such as attention-pattern and normalisation-scale modules, op labels for values computed inside a module (`"rsqrt_1_5"`), or facet selectors such as `tl.facet("pattern")`, which hold the op behind that facet in every module that ..; keyword of `tl.attribution.read` (keyword-only; default `torchlens.attribution.onebackward.DEFAULT`): Omitted -> the default MLP-output linearization; `None` -> total derivative; explicit ACT selection/site specs -> exactly that set, replacing the default |
+| `frozen=` | keyword of `tl.attribution.build_graph` (keyword-only; optional): Module names whose outputs are held at their captured values, such as attention-pattern and normalisation-scale modules, op labels for values computed inside a module (`"rsqrt_1_5"`), or facet selectors such as `tl.facet("pattern")`, which hold the op behind that facet in every module that ..; keyword of `tl.attribution.read` (keyword-only; default `torchlens.attribution._onebackward.DEFAULT`): Omitted -> the default MLP-output linearization; `None` -> total derivative; explicit ACT selection/site specs -> exactly that set, replacing the default |
 | `func=` | keyword of `tl.site` (keyword-only; default `None`): TorchLens layer type (`"linear"`, `"relu"`, ...); constructor keyword of `tl.postprocessing.Detector` (required): Detector callable |
 | `func_call_id=` | constructor keyword of `tl.types.OpRef` (keyword-only; required) |
 | `func_event_input=` | keyword of `CaptureBackend.build_record_context`, `CaptureBackend.detect_backend_semantics`, `CaptureBackend.emit_function_outputs` (required) |
@@ -7354,7 +7890,7 @@ and have no row.
 | `idempotent=` | constructor keyword of `tl.agent.AgentToolSpec` (default `True`) |
 | `identifier=` | keyword of `tl.bridge.brain_score.activations_extractor` (keyword-only; default `None`): Brain-Score activations identifier; defaults to the model class name, matching `PytorchWrapper`; constructor keyword of `tl.postprocessing.ResolvedPostprocessing` (required): Model, weights, label bank, or default-policy identifier |
 | `ids=` | constructor keyword of `tl.transformer.TokenAxis` (default `None`): Optional tokenizer ids aligned with `tokens` |
-| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional local image path used by the existing `NodeSpec.image` render hook; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
+| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional picture for the selected nodes: an image file path or a PIL image; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
 | `images=` | keyword of `tl.viz.image_scatter` (keyword-only; default `None`): Optional PIL images to paste at scatter positions; keyword of `tl.viz.montage` (required): Input images to render |
 | `in_progress=` | keyword of `tl.dataset_extraction.open_extraction` (keyword-only; default `False`): Open a still-writing artifact's trusted committed prefix; `reader.refresh()` rescans |
 | `include_activations=` | keyword of `Trace.save` (keyword-only; default `False`): Archive exactly the capture-time `save=`-selected payloads for inspection and eligible byte-exact attestation; those payloads never seed execution; keyword of `Recording.save` (keyword-only; default `False`) |
@@ -7446,7 +7982,7 @@ and have no row.
 | `keep_special_tokens=` | keyword of `tl.attribution.text` (keyword-only; default `True`): Whether pad-style baselines keep special tokens at their true embeddings (scaffolding; the only measured converging encoder baseline) |
 | `keep_values=` | keyword of `tl.attribution.randomization_test` (keyword-only; default `True`): Keep every randomized map in `steps` (default `True`); past 256 MiB of kept maps the test warns once and names `keep_maps=False` |
 | `kernel=` | keyword of `ReceptiveFieldRuleContext.window` (keyword-only; required) |
-| `key=` | keyword of `DoctorReport.check` (required): Row key to look up; keyword of `OptimizerFacts.group_fact`, `TagGrammar.run_health` (required); keyword of `ReceptiveFieldRuleContext.cfg` (required): Salient configuration key; constructor keyword of `tl.types.Site` (required); keyword of `tl.site` (default `None`): A rendered `op.site_key` string (exact match) |
+| `key=` | keyword of `DoctorReport.check` (required): Row key to look up; keyword of `OptimizerFacts.group_fact`, `TagGrammar.run_health` (required); keyword of `ReceptiveFieldRuleContext.cfg` (required): Salient configuration key; constructor keyword of `tl.types.Site` (required); keyword of `tl.site` (default `None`): A rendered `op.graph.site_key` string (exact match) |
 | `key_tokens=` | keyword of `tl.transformer.attention_view`, `tl.transformer.attention_views` (keyword-only; default `None`): Source-axis tokens (cross-attention) |
 | `keys=` | keyword of `AttentionView.crop_to` (required): Source (column) slice to keep; keyword of `tl.dataset_extraction.export_extraction` (keyword-only; default `None`): Optional output-key subset |
 | `kind=` | keyword of `AttributionGraph.node_indices` (required): One of `"feature"`, `"error"`, `"token"` or `"logit"`; keyword of `Bundle.show` (default `None`): `None` (default) or `"graph"`: the merged graph, `draw` with `**kwargs`. `"strip"`: each member's own `Trace.draw` side by side (a given `path` gets `_<member>` appended). `"repr"` / `"html"`: each member's `repr` / HTML text. Any other kind refuses ..; keyword of `CausalAudit.set_of`, `TagGrammar.meta` (required); keyword of `Layer.show`, `Op.show` (default `None`): Picture kind. `None` (the default) or `"auto"` chooses from tensor shape; keyword of `PartialTrace.show` (default `None`): `"graph"` returns DOT, `"repr"` returns `repr(self)`, and `"html"` returns a compact HTML fragment; keyword of `Trace.show` (default `None`): Picture kind. `None` or `"graph"` delegates to `draw`, `"repr"` returns `repr(self)`, and `"html"` returns `_repr_html_()`; constructor keyword of `tl.Selector` (keyword-only; required); constructor keyword of `tl.types.Site` (required); keyword of `tl.func_transform` (default `None`): Optional transform kind to match. Unsanitized and sanitized spellings are both accepted; constructor keyword of `tl.intervention.Population` (required): Closed member-kind vocabulary: `"tensor"` or `"trace"`; constructor keyword of `tl.mechinterp.Coordinate` (default `'writer'`): Row-kind classification (embedding / attention / mlp / writer / constant / unresolved_remainder / residual); keyword of `tl.mechinterp.head_scores` (keyword-only; default `'induction'`): `previous_token` / `duplicate_token` / `induction`, or `FixedPeriodInduction(period=n)` to score the fixed repeat of a sequence with period `n` (destination `i` on source `i - n + 1`, counted when its token equals the token at `i - n`) instead of the token-equality induction mask; keyword of `tl.mechinterp.patch_head` (keyword-only; default `'head'`): `"head"` (z-delta) or `"pattern"` (pattern-delta against the corrupted values). `"q"`/`"k"` refuse: softmax intervenes and no exact lowering exists; constructor keyword of `tl.transformer.Annotation` (required): One of `ANNOTATION_KINDS`; constructor keyword of `tl.types.AttributeWrite` (required): `"added"`, `"replaced"` or `"removed"` |
@@ -7502,7 +8038,7 @@ and have no row.
 | `low=` | keyword of `tl.clamp` (keyword-only; default `None`): Optional lower bound; keyword of `tl.saturated` (keyword-only; default `None`) |
 | `lr=` | keyword of `tl.mechinterp.visualize_feature` (keyword-only; default `0.05`): Finite positive Adam learning rate for unconstrained input ascent |
 | `main_input_numel=` | keyword of `tl.report.flops` (keyword-only; default `None`): Explicit 6ND `D` for the trace door (the comparator's HF applicability cannot be established from a trace alone; the line is OMITTED without it, never guessed) |
-| `map_location=` | keyword of `Op.materialize_grad`, `Op.materialize_out` (keyword-only; default `'cpu'`): Target device for the materialized tensor; keyword of `tl.io.materialize_nested` (keyword-only; default `'cpu'`): Target device for the materialized nested tensors; keyword of `tl.load` (keyword-only; default `'cpu'`): Target device for eager tensor materialization |
+| `map_location=` | keyword of `Op.payload.materialize_grad`, `Op.payload.materialize_out` (keyword-only; default `'cpu'`): Target device for the materialized tensor; keyword of `tl.io.materialize_nested` (keyword-only; default `'cpu'`): Target device for the materialized nested tensors; keyword of `tl.load` (keyword-only; default `'cpu'`): Target device for eager tensor materialization |
 | `mapping=` | keyword of `Bundle.vary` (required): `{member: InterventionSpec \| (selection, edit) \| None}` |
 | `mask=` | keyword of `tl.param` (default `None`); keyword of `tl.positions` (keyword-only; default `None`): `(batch, tokens)` attention mask for `"first"` / `"last"`; keyword of `tl.transformer.attention_view` (keyword-only; default `None`): Explicit user/model mask metadata (source 3 of the hierarchy); bool `[n_destination, n_source]`, True = masked out. Used only when no captured source resolves |
 | `mask_input=` | keyword of `tl.mechinterp.measure_trajectory` (keyword-only; default `False`): `True` bans each row's own input token ids (the model input must be an integer tensor) before every reduction, final output included |
@@ -7722,7 +8258,7 @@ and have no row.
 | `pattern=` | keyword of `tl.label_matches` (required): Regular expression pattern to match against TorchLens labels. The pattern is matched with `search` (partial match) |
 | `pattern_source=` | keyword of `tl.mechinterp.head_scores` (keyword-only; default `None`): Optional callable `module -> [b, head, dst, src]` pattern override (the SSM pseudo-pattern socket); default reads the `pattern` facet |
 | `payload=` | keyword of `CaptureBackend.tensor_ref`, `JSONLSink.emit_graph`, `MemorySink.emit_graph`, `MergedFinding.from_dict`, `SidecarFamily.validate_payload`, `tl.io.attach_sidecar` (required); keyword of `TokenScores.from_attribution` (required): A `TokenAttributionPayload`-shaped object (`display_tokens`, `scores`, `footer_lines`, `score_domain` attributes); keyword of `tl.agent.canonical_dumps` (required): JSON-safe payload (run through `json_safe` first when the value may contain non-finite floats or tuples); keyword of `tl.export.validate_model_explorer_payload` (required): A `{label, graphs, ...}` collection dict (the exporter's output) |
-| `payload_hints=` | keyword of `Op.materialize_grad`, `Op.materialize_out`, `tl.io.materialize_nested` (keyword-only; default `None`): Optional backend payload hints used during materialization; keyword of `tl.load` (keyword-only; default `None`): Optional backend payload hints used during materialization. This is separate from `map_location`; JAX sharding hints must be passed here |
+| `payload_hints=` | keyword of `Op.payload.materialize_grad`, `Op.payload.materialize_out`, `tl.io.materialize_nested` (keyword-only; default `None`): Optional backend payload hints used during materialization; keyword of `tl.load` (keyword-only; default `None`): Optional backend payload hints used during materialization. This is separate from `map_location`; JAX sharding hints must be passed here |
 | `payload_load_status=` | keyword of `ValidationStatus.from_replay_counts`, `ValidationStatus.result`, `ValidationStatus.unavailable_loaded_runtime_stripped`, `ValidationStatus.unverified` (keyword-only; default `None`): Optional payload materialization status attached by `tl.load` |
 | `payload_materialization=` | constructor keyword of `tl.backends.BackendCapabilities` (required): Whether loaded payloads can materialize as runtime arrays |
 | `payload_policy=` | constructor keyword of `tl.options.CaptureOptions` (optional) |
@@ -7805,7 +8341,7 @@ and have no row.
 | `recipe_id=` | keyword of `tl.facets.child_output_spec`, `tl.facets.parameter_spec` (required) |
 | `recipes=` | constructor keyword of `tl.types.InputProvenance` (default `None`): Synthesis recipe rows (rungs 2-3): recipe kind, low, high, dtype, seed. `None` on the gold rung |
 | `reconstruct_sharding=` | constructor keyword of `tl.io.JaxPayloadLoadHint` (default `False`): Whether to reconstruct a saved `NamedSharding` from portable `codec_metadata` |
-| `reconstruction_ready=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
+| `reconstruction_ready=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional): Save every call's arguments verbatim (`save_args` plus `save_rng`). Fused-attention facets (`scores`, `pattern`, `z`, `result`) already reconstruct on a default capture from its recorded inputs; this keeps them available when a selective `save=` does not save the ops producing the kernel's Q, K, V or mask |
 | `record=` | keyword of `Recording.add_grad_record` (required); keyword of `tl.transformer.token_strip_html`, `tl.viz.token_strip` (required): The token-scores record (single- or multi-row) |
 | `recording=` | keyword of `tl.record` (keyword-only; default `None`): Grouped recorder options (`tl.options.RecordingOptions`). The fields `record` reads: `default_op`, `default_module`, `default_grad`, `history_size`, `include_source_events`, `max_predicate_failures`, `on_predicate_error`, `on_forward_error` and `postprocess` (see ..; constructor keyword of `tl.recording.Recorder` (keyword-only; default `None`): `tl.options.RecordingOptions` carrying the recorder's own knobs (`default_op`, `default_module`, `history_size`, `include_source_events`, `max_predicate_failures`, `on_predicate_error`, `on_forward_error`, `default_grad`), the shape `tl.record` takes; `keep_op`, `intervene` and `postprocess` set on it refuse with code `record_capture_option_unsupported` |
 | `records=` | constructor keyword of `tl.observers.TapObserver` (optional) |
@@ -7860,7 +8396,7 @@ and have no row.
 | `row_labels=` | keyword of `tl.viz.heatmap` (keyword-only; default `None`): Optional text labels for the row axis (drawn on the left). For an attention picture these are the QUERY tokens (rows attend from) |
 | `rows=` | keyword of `tl.report.device_peaks` (required) |
 | `rsa_method=` | keyword of `tl.neuro.compare` (keyword-only; default `'spearman'`): `"spearman"`, `"pearson"` or `"kendall"` (tau-a) |
-| `rtol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed relative tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional relative tolerance; supplying either tolerance changes the claim from exact to NUMERICAL repeatability; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-05`): Relative tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only relative tolerance. `None` derives per dtype likewise; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Relative allclose tolerance. `None` (default) derives per gradient dtype, matching `torchlens.validation.backward` |
+| `rtol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed relative tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional relative tolerance; supplying either tolerance changes the claim from exact to NUMERICAL repeatability; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-05`): Relative tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only relative tolerance. `None` derives per dtype likewise; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Relative allclose tolerance. `None` (default) derives per gradient dtype, matching `torchlens.validation._backward` |
 | `rules=` | constructor keyword of `tl.Recipe` (default `()`) |
 | `run=` | keyword of `HistoryView.from_blocks` (required) |
 | `run_ctx=` | keyword of `TapObserver.record_backward` (keyword-only; default `None`): Shared hook run context. Accepted for hook API compatibility |
@@ -7943,7 +8479,7 @@ and have no row.
 | `site_id=` | keyword of `HistoryReader.observations` (keyword-only; default `None`); keyword of `HistoryView.series`, `HistoryView.site_streams`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
 | `site_key=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): Live structural site key for the op (recapture-stable identity) |
 | `sites=` | keyword of `HistoryView.from_blocks`, `tl.trackers.architecture_fingerprint`, `tl.trackers.build_manifest`, `tl.trackers.emission_from_block` (required); keyword of `tl.attribution.deconvolution` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only); keyword of `tl.attribution.guided_backprop` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only -- the module-hook coverage class for reference-implementation parity); keyword of `tl.bridge.brain_score.per_layer` (keyword-only; default `None`): Optional iterable of sites to score: layer labels, selectors, or module dotted paths (the spelling Brain-Score users already write). Defaults to every STIMULUS-INDEXED saved tensor layer except input placeholders, through the core eligibility gate -- a partially saved trace scores its saved sites ..; keyword of `tl.bridge.lit.model` (keyword-only; default `None`): Which activations to expose as LIT `Embeddings` fields: the gate-passed `"blocks"` preset, explicit module addresses (optionally pass-qualified `"address:N"`), or `` for none. Required -- the bridge refuses rather than guesses; constructor keyword of `tl.debug.LivenessProbe`, `tl.mechinterp.SavePlan` (required); keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'resid_pre'`): Facet to patch (`resid_pre` / `attn_out` / `z` / ...); keyword of `tl.neuro.compare` (keyword-only; default `None`): Sites to score (default: every stimulus-indexed saved site, or every mapping key); keyword of `tl.neuro.plan_extraction` (keyword-only; default `'all'`): `"all"` (every saved-activation site on the observed path) or an iterable of layer labels to include; constructor keyword of `tl.options.NarrationOptions` (optional): Narration scope: `True` (every completed tensor-output event plus module structure lines), `"modules"` (structure lines only -- a cheap flight recorder), or any LIVE-evaluable selector/callable (`tl.func`, `tl.in_module`, boolean combinations, bounded `followed_by`). Selectors needing ..; keyword of `tl.mechinterp.ablation_controls` (keyword-only; default `None`): Optional `name -> selector` of neighbouring sites; runs the site family |
-| `size_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Size encoding channel (keyword-only; unstable): a Layer/Op field name, the `"dims"` shape token, or a callable `node -> scalar`. Encoded nodes get width/height minimums (labels are never truncated), clamped to 4x the default area. A rolled multi-pass layer whose source cannot be certified ..; constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE size-channel value source (field, `"dims"`, or callable); see `Trace.draw` |
+| `size_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Size encoding channel (keyword-only; unstable): a Layer/Op field name, the `"dims"` shape token, or a callable `node -> scalar`. Encoded nodes get width/height minimums (labels are never truncated), clamped to 2x the typical node area. A rolled multi-pass layer whose source cannot be certified ..; constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE size-channel value source (field, `"dims"`, or callable); see `Trace.draw` |
 | `sketch=` | keyword of `tl.trackers.correct_histogram`, `tl.trackers.histogram_points` (required) |
 | `skip_fn=` | keyword of `Trace.draw` (keyword-only; default `None`): Per-node styling and selection callbacks (see `tl.viz.nodes`); constructor keyword of `tl.options.VisualizationOptions` (optional): Optional layer skip predicate |
 | `slice_cols=` | constructor keyword of `tl.mechinterp.ProjectionSource` (required): `(start, stop)` column slice into the math-oriented fused weight, `None` for unfused roles |

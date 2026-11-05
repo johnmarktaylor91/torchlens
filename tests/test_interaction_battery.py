@@ -79,7 +79,7 @@ def test_save_x_rerun_refills_the_selected_sites() -> None:
 
     model = LinearReluLinear()
     log = tl.trace(model, X, save=tl.func("relu"))
-    log.run(model, X2)
+    log = log.run(model, X2)
     assert torch.equal(_relu_op(log).out, _relu_of(X2))
 
 
@@ -88,7 +88,7 @@ def test_intervene_x_rerun_applies_the_edit_once() -> None:
 
     model = LinearReluLinear()
     log = tl.trace(model, X, save=tl.func("relu"), intervene=ZERO_RELU)
-    log.run(model, X2)
+    log = log.run(model, X2)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.zeros(1, 4))
     assert len(relu.edits) == 1

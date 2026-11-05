@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 from ._site_key import parse_site_key
 
 if TYPE_CHECKING:
@@ -69,7 +70,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
 
     pd = _require_pandas()
     ops = list(trace._layer_list)
-    keyed = [(key, op) for op in ops if (key := getattr(op, "site_key", None)) is not None]
+    keyed = [(key, op) for op in ops if (key := record_member(op, "site_key", None)) is not None]
     if ops and not keyed:
         raise InvalidArgumentError(
             "This trace's ops carry no site keys: it was captured/saved "

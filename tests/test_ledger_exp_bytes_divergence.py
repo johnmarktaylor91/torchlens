@@ -19,8 +19,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_projection
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.bundle._bytes import (
+    bundle_retained_bytes,
+    preflight_retention_projection,
+)
+from torchlens.errors._episode import BundleExperimentError
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -50,7 +53,7 @@ def test_edited_rerun_strict_does_not_raise() -> None:
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
     fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
-    fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
+    fork = fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
 
 
 # ---------------------------------------------------------------------------

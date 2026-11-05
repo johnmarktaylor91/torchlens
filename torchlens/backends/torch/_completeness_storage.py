@@ -7,7 +7,6 @@ import sys
 import threading
 import warnings
 from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +22,7 @@ from ..._utils._tensor_label import (
     get_tensor_label,
 )
 from ...errors import ScalarEscapeWarning
+from ...errors._base import transparent_contextmanager
 
 __all__ = (
     "_nonowner_storage_observe",
@@ -512,7 +512,7 @@ def _make_plain_scalar_escape_method(
     return wrapper
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     """Warn once when a plain capture reads captured tensor data as Python scalars.
 

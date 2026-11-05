@@ -34,11 +34,12 @@ from .._selection.resolver import _resolve_sites
 from .._selection.selection import Selection, Selector
 from .._selection.selectors import FacetSelector, site as site_selector
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
-from ..errors.episode import BundleExperimentError
-from ..intervention.audit import (
+from ..errors._episode import BundleExperimentError
+from ..intervention._audit import (
     append_event_audit_row,
     event_audit_rows,
     fire_records_since,
@@ -46,10 +47,11 @@ from ..intervention.audit import (
     rules_payload,
     site_keys_for_labels,
 )
+from ..intervention._masked_edit import _derive_masked_edit
+from ..intervention._spec import Recipe, when
+from ..intervention._trace_run import rerun_in_place
+from ..intervention._types import Edit
 from ..intervention.errors import SelectorCapabilityError
-from ..intervention.masked_edit import _derive_masked_edit
-from ..intervention.spec import Recipe, when
-from ..intervention.types import Edit
 from ..options import CaptureOptions
 
 if TYPE_CHECKING:
@@ -275,8 +277,7 @@ def _unit_digest_part(entry: Any) -> Any:
     mask = entry.mask
     if bool(mask.all()):
         return label
-    packed = mask.reshape(-1).cpu().numpy().tobytes()
-    return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
+    return (label, tuple(mask.shape), hashlib.sha256(tensor_payload_bytes(mask)).hexdigest())
 
 
 def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) -> Any:
@@ -290,7 +291,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     keys: list[str] = []
     for label in labels:
         op = baseline.ops[label]
-        key = getattr(op, "site_key", None)
+        key = op.graph.site_key
         if not key:
             raise BundleExperimentError(
                 f"candidate {candidate_id!r} site {label!r} carries no "
@@ -333,8 +334,8 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + _attach_hooks + run). Site-key terms cannot be matched
-    mid-attach (final structural numbering is absent), so they ride the
+    rerun door (fork + _attach_hooks + in-place run). Site-key terms cannot be
+    matched mid-attach (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
     member's own envelope EVENT row stamps lane="capture"; escalation is
@@ -345,18 +346,13 @@ def _run_live_candidate(
         member = baseline.fork(name=candidate.candidate_id)
         member._attach_hooks(spec)
         started = time.monotonic()
-        member.run(model, x)
+        rerun_in_place(member, model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"
     except SelectorCapabilityError:
         from .._user_public_impls import trace as _trace
 
-        member = _trace(
-            model,
-            x,
-            capture=_capture_options_like(baseline),
-            intervene=spec,
-        )
+        member = _trace(model, x, capture=_capture_options_like(baseline), intervene=spec)
         return member, "capture"
 
 

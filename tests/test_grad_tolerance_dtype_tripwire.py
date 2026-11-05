@@ -90,7 +90,7 @@ def _perturb_second_param_grad_census(monkeypatch: pytest.MonkeyPatch, scale: fl
     pipelines without touching either backward implementation.
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     real_param_grads = backward_validation._param_grads
     call_count = {"n": 0}
@@ -116,7 +116,7 @@ def test_fp16_few_ulp_param_grad_agreement_is_not_a_false_fail(
     a few storage ULPs (red-capable: this test FAILS before the wiring).
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     eps16 = float(torch.finfo(torch.float16).eps)
     _perturb_second_param_grad_census(monkeypatch, 1.0 + 2.0 * eps16)

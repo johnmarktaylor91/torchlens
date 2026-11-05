@@ -72,10 +72,10 @@ def grab_journal_events(monkeypatch: Any, producer: str) -> list[Any]:
     original = materialize_module.materialize_from_events
     grabbed: list[Any] = []
 
-    def observing(trace: Any, events: Any) -> None:
+    def observing(trace: Any, events: Any, *rest: Any) -> None:
         if not grabbed:
             grabbed.extend(events.op_events)
-        original(trace, events)
+        original(trace, events, *rest)
 
     monkeypatch.setattr(postprocess_module, "materialize_from_events", observing)
     monkeypatch.setattr(materialize_module, "materialize_from_events", observing)

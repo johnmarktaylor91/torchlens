@@ -20,7 +20,7 @@ import torchlens as tl
 from torchlens._io import ArtifactTooOldError
 from torchlens.bundle import Bundle
 from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 
 
 class _TinyLM(torch.nn.Module):

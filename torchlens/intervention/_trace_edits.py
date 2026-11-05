@@ -35,6 +35,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._do_target_doors import apply_region_target_do, lift_trace_slice
@@ -46,6 +47,7 @@ from ._edit_guards import (
 )
 from ._facet_union import is_facet_union
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
+from ._trace_run import rerun_in_place
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -65,19 +67,23 @@ from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
 from .._selection.selectors import BaseSelector
 from ..backends.torch._trace_backward import _require_live_replay
-from ._param_fingerprint import changed_param_scope
-from .audit import (
+from ._audit import (
     fire_records_since,
     record_intervention_event,
     rules_payload,
     site_keys_for_labels,
 )
+from ._injection import injected_ops as _injected_op_records
+from ._param_fingerprint import changed_param_scope
+from ._save import save_intervention as _save_intervention_recipe
+from ._spec import (
+    Recipe as PublicInterventionSpec,
+    _canonical_repr,
+    addresses_autograd_nodes,
+)
+from ._types import InterventionSpec, TargetSpec
 from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError
 from .hooks import _validate_live_site_target, is_facet_target, lower_record_site_target
-from .injection import injected_ops as _injected_op_records
-from .save import save_intervention as _save_intervention_recipe
-from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
-from .types import InterventionSpec, TargetSpec
 
 
 def _prepare_do(
@@ -262,6 +268,9 @@ def clear_edits(
         mark_intervention_spec_mutated(trace)
         # Removal takes effect at once, in a rerun or backward pass in progress.
         retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
+        mirror = running_result(trace)  # a positional run in progress writes a fork
+        if mirror is not None:
+            clear_edits(mirror, site, handle)
     record_operation(
         trace,
         "detach_hooks",
@@ -476,7 +485,7 @@ def _run_do_transaction(  # noqa: PLR0913 - the transaction's state, threaded fr
             result = push_from_handles(trace, attached_handles, options=intervention_options)
         else:
             assert model is not None
-            result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
+            result = rerun_in_place(trace, model, x, replay=ReplayOptions(strict=strict_value))
     except BaseException as exc:
         _detach_failed_do_hooks(trace, attached_handles, pre_state)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))

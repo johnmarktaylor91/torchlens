@@ -21,8 +21,10 @@ below the depth ceiling.
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
+import stat
 from collections.abc import Callable
 from pathlib import Path
 from typing import IO, Any
@@ -49,6 +51,8 @@ _MAX_JSON_BYTES = 512 * 1024 * 1024
 # worst case near ~2 GiB while sitting far above any real body-index-bounded
 # manifest (which is orders of magnitude smaller).
 _MAX_JSON_NODES = 64_000_000
+#: Text encoding of every JSON file :func:`read_bounded` reads (no caller varies it).
+_JSON_FILE_ENCODING = "utf-8"
 
 _OPEN_BRACKETS = frozenset("[{")
 _CLOSE_BRACKETS = frozenset("]}")
@@ -85,6 +89,52 @@ def _fd_size(handle: IO[Any]) -> int | None:
         return os.fstat(handle.fileno()).st_size
     except (OSError, ValueError, AttributeError):  # non-seekable / pipe / no fileno
         return None
+
+
+def open_regular(path: Path, *, follow_symlinks: bool = True) -> IO[bytes]:
+    """Open ``path`` for reading only if it is a regular file (never a FIFO or device).
+
+    A FIFO named like a JSON file would block ``open()`` forever and a character device
+    would stream without end; both refuse as ``OSError``. The type is checked twice: on a
+    stat before anything is opened (so a device is never opened at all), and again on the
+    opened descriptor, which is opened non-blocking so a path swapped for a FIFO between
+    the two cannot block the open. With ``follow_symlinks=False`` a symlink at the final
+    path component refuses too (``O_NOFOLLOW`` where the platform has it, plus the
+    ``lstat`` check).
+
+    Parameters
+    ----------
+    path:
+        File to open.
+    follow_symlinks:
+        Whether a symlink at ``path`` may be followed to its target.
+
+    Returns
+    -------
+    IO[bytes]
+        A binary read handle on the regular file.
+
+    Raises
+    ------
+    OSError
+        When ``path`` is missing, is not a regular file, or (with
+        ``follow_symlinks=False``) is a symlink.
+    """
+
+    info = os.stat(path) if follow_symlinks else os.lstat(path)
+    if not stat.S_ISREG(info.st_mode):
+        raise OSError(f"{path} is not a regular file")
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+    if not follow_symlinks:
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise OSError(f"{path} is not a regular file")
+        return os.fdopen(descriptor, "rb")
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _bounded_read_bytes(handle: IO[bytes], max_bytes: int) -> bytes:
@@ -264,13 +314,26 @@ def loads_bounded(
 
         raise _refuse(f"manifest JSON contains the non-finite constant {name}", text)
 
+    def _finite_float(token: str) -> float:
+        """Parse one JSON number, refusing an overflow to infinity (``1e999``)."""
+
+        value = float(token)
+        return value if math.isfinite(value) else _reject_constant(token)
+
     try:
         return json.loads(
-            text, parse_constant=_reject_constant, object_pairs_hook=object_pairs_hook
+            text,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            object_pairs_hook=object_pairs_hook,
         )
-    except RecursionError as exc:  # pragma: no cover - prescan normally fires first
+    except (RecursionError, ValueError) as exc:
+        if isinstance(exc, json.JSONDecodeError):
+            raise
+        # RecursionError (the prescan normally fires first) or the interpreter's
+        # integer-digit limit on a huge literal: both refuse through the typed channel.
         raise _refuse(
-            "manifest JSON nesting exceeded the interpreter recursion limit", text
+            f"manifest JSON could not be decoded ({type(exc).__name__}: {str(exc)[:80]})", text
         ) from exc
 
 
@@ -313,10 +376,10 @@ def load_bounded(
 def read_bounded(
     path: Path,
     *,
-    encoding: str = "utf-8",
     max_depth: int = _MAX_JSON_DEPTH,
     max_bytes: int = _MAX_JSON_BYTES,
     max_nodes: int = _MAX_JSON_NODES,
+    follow_symlinks: bool = True,
 ) -> Any:
     """Read and parse a JSON file without ever allocating the whole file first.
 
@@ -330,14 +393,15 @@ def read_bounded(
     ----------
     path:
         JSON file to read.
-    encoding:
-        Text encoding of the file.
     max_depth:
         Maximum permitted bracket nesting depth.
     max_bytes:
         Maximum permitted payload size.
     max_nodes:
         Maximum permitted container-node count.
+    follow_symlinks:
+        Whether a symlink at ``path`` may be followed; ``False`` refuses it as
+        ``OSError``.
 
     Returns
     -------
@@ -351,18 +415,20 @@ def read_bounded(
         handlers at each call site catch it unchanged.
     """
 
-    with path.open("rb") as handle:
+    with open_regular(path, follow_symlinks=follow_symlinks) as handle:
         data = _bounded_read_bytes(handle, max_bytes)
     try:
-        text = data.decode(encoding)
+        text = data.decode(_JSON_FILE_ENCODING)
     except UnicodeDecodeError as exc:
         # Same does-not-parse class as broken JSON (R73): route through the
         # one channel every JSON-boundary handler already catches.
-        raise _refuse(f"manifest bytes are not valid {encoding}: {exc}", "") from exc
+        raise _refuse(f"manifest bytes are not valid {_JSON_FILE_ENCODING}: {exc}", "") from exc
     return loads_bounded(text, max_depth=max_depth, max_bytes=max_bytes, max_nodes=max_nodes)
 
 
-def read_bytes_bounded(path: Path, *, max_bytes: int = _MAX_JSON_BYTES) -> bytes:
+def read_bytes_bounded(
+    path: Path, *, max_bytes: int = _MAX_JSON_BYTES, follow_symlinks: bool = True
+) -> bytes:
     """Read a JSON file's RAW bytes under the same ceiling as :func:`read_bounded`.
 
     For the boundaries that must hash the exact on-disk bytes (the merged-artifact
@@ -376,6 +442,9 @@ def read_bytes_bounded(path: Path, *, max_bytes: int = _MAX_JSON_BYTES) -> bytes
         JSON file to read.
     max_bytes:
         Maximum permitted payload size.
+    follow_symlinks:
+        Whether a symlink at ``path`` may be followed; ``False`` refuses it as
+        ``OSError``.
 
     Returns
     -------
@@ -388,5 +457,5 @@ def read_bytes_bounded(path: Path, *, max_bytes: int = _MAX_JSON_BYTES) -> bytes
         When the payload exceeds ``max_bytes``.
     """
 
-    with path.open("rb") as handle:
+    with open_regular(path, follow_symlinks=follow_symlinks) as handle:
         return _bounded_read_bytes(handle, max_bytes)

@@ -200,7 +200,7 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_VALIDATE_PEAK_MEMORY",
             kind="bool",
-            reader="torchlens.validation.consolidated",
+            reader="torchlens.validation._consolidated",
             description="TRUE additionally measures peak memory during validation runs.",
         ),
         EnvFlagSpec(

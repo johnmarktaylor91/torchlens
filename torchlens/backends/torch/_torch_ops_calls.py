@@ -44,7 +44,11 @@ import torch._ops as _torch_ops
 
 from ... import _state
 from ..._utils._tensor_label import get_tensor_label
-from ._foreign_data import FLASH_ATTENTION_2_CUSTOM_OP, recorded_custom_op_name
+from ._foreign_data import (
+    CALL_OPERATOR_ATTR,
+    FLASH_ATTENTION_2_CUSTOM_OP,
+    recorded_custom_op_name,
+)
 
 _CALL_CLASS_NAMES: tuple[str, ...] = ("OpOverloadPacket", "OpOverload")
 """``torch._ops`` classes whose ``__call__`` user ``torch.ops.*`` calls flow through.
@@ -288,6 +292,7 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
 
     _call_returning_receiver.__name__ = call_operator.__name__
     _call_returning_receiver.__qualname__ = call_operator.__name__
+    setattr(_call_returning_receiver, CALL_OPERATOR_ATTR, call_operator)
     return _call_returning_receiver
 
 

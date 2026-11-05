@@ -59,7 +59,6 @@ import threading
 import time
 import weakref
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any
@@ -81,7 +80,7 @@ from ..._utils._torch_compat import (
     get_funcol_wait_redispatch,
 )
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
-from ...errors._base import CompatibilityError
+from ...errors._base import CompatibilityError, transparent_contextmanager
 from .collectives import (
     COLLECTIVE_BOUNDARY_FASTLOG_UNSUPPORTED,
     _BoundaryScope,
@@ -581,7 +580,7 @@ def active_funcol_session() -> _FuncolCaptureSession | None:
     return _ACTIVE_FUNCOL_SESSION
 
 
-@contextmanager
+@transparent_contextmanager
 def distributed_recording_session(trace: Any) -> Iterator[None]:
     """Install the plane-W completion authority around one armed capture.
 

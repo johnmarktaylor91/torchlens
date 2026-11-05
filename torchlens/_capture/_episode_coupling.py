@@ -8,7 +8,7 @@ a fresh ledger or refuses, and facts across a broken join scope PER SEGMENT
 -- never one whole-episode claim spanning a break.
 
 The live half is one funnel note: every live ``FireRecord`` lands through
-``intervention.runtime._append_active_spec_records``, which notifies the one
+``intervention._runtime._append_active_spec_records``, which notifies the one
 armed coupling session; the session attributes each fire to the live step
 position (the F40c join session's boundary hooks) or to the outside-step
 bucket. The settlement half writes the reserved C07X slots (header
@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._utils.hashing import sha256_canonical_json
-from ..errors.episode import EpisodeCaptureError
+from ..errors._episode import EpisodeCaptureError
 from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
 
 __all__ = [

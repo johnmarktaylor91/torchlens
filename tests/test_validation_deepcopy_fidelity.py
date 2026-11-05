@@ -10,6 +10,12 @@ parameters). These tests pin the fixes and their narrowness.
 
 from __future__ import annotations
 
+import collections
+import copy
+import io
+import random
+import threading
+import types
 from typing import Any
 
 import numpy as np
@@ -17,11 +23,15 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 import torchlens._user_public_impls as user_public_impls
 from torchlens._capture_state_helpers import (
     _ModuleTreePlainAttrSnapshot,
 )
-from torchlens._plain_attr_fidelity import assert_copy_kept_instance_attrs
+from torchlens._plain_attr_fidelity import (
+    assert_copy_kept_instance_attrs,
+    deepcopy_for_validation,
+)
 from torchlens.validation import validate_forward_pass
 
 
@@ -85,16 +95,6 @@ class UncopyableSeanetLikeModel(nn.Module):
         return (recurrent.permute(1, 2, 0) + y) * float(self.hop_length)
 
 
-def _module_with_large_non_alias_tensor_state() -> tuple[nn.Module, set[str]]:
-    """Large tensors that are not registered aliases, alone, mixed and copied."""
-
-    module = nn.Linear(128, 128)
-    module.cache = [torch.zeros(5000)]
-    module.mixed = [module.weight, torch.zeros(5000)]
-    module.copied_weight = module.weight.detach().clone()
-    return module, {"Linear[0].cache", "Linear[0].copied_weight", "Linear[0].mixed"}
-
-
 def _module_with_structured_numpy_void() -> tuple[nn.Module, set[str]]:
     """A structured ``np.void`` is a writable view into its array, not an immutable scalar.
 
@@ -112,19 +112,63 @@ def _module_with_structured_numpy_void() -> tuple[nn.Module, set[str]]:
     return module, {"Module[0].record"}
 
 
+class SlotsState:
+    """Buffer-like state object whose values live in ``__slots__``."""
+
+    __slots__ = ("size", "items", "lock", "spare")
+
+    def __init__(self) -> None:
+        """Fill every slot but ``spare``."""
+
+        self.size = 0
+        self.items: list[torch.Tensor] = []
+        self.lock = threading.RLock()
+
+
+class Group:
+    """Group whose elements point back at it (an equivariant-library idiom)."""
+
+    def __init__(self) -> None:
+        """Make two elements that reference the group."""
+
+        self.order = 2
+        self.elements = [Element(self, index) for index in range(2)]
+
+
+class Element:
+    """Group element holding a back-reference to its group."""
+
+    def __init__(self, group: Group, index: int) -> None:
+        """Store the group and the index."""
+
+        self.group = group
+        self.index = index
+
+
+def _module_with_opaque_state() -> tuple[nn.Module, set[str]]:
+    """C-level values, object arrays and objects used as dict keys stay unsupported."""
+
+    module = nn.Module()
+    module.stream = io.BytesIO(b"state")
+    module.table = np.array([object()], dtype=object)
+    module.by_config = {PlainConfig(): 1}
+    module.ok_slots = SlotsState()
+    return module, {"Module[0].by_config", "Module[0].stream", "Module[0].table"}
+
+
 @pytest.mark.parametrize(
     "build",
-    [_module_with_large_non_alias_tensor_state, _module_with_structured_numpy_void],
-    ids=["large-non-alias-tensors", "structured-numpy-void"],
+    [_module_with_structured_numpy_void, _module_with_opaque_state],
+    ids=["structured-numpy-void", "opaque-state"],
 )
 def test_unsupported_plain_attribute_state_is_still_refused(
     build: Any,
 ) -> None:
     """The deepcopy-fallback snapshot names what it cannot restore instead of copying it.
 
-    Large non-alias tensor state and a structured ``np.void`` are reported as
-    unsupported paths; a silent by-reference copy would hide in-place writes
-    the forward makes to them.
+    A structured ``np.void``, C-level objects, object arrays and objects used
+    as dict keys are reported as unsupported paths; a silent by-reference copy
+    would hide in-place writes the forward makes to them.
     """
 
     module, expected = build()
@@ -236,3 +280,273 @@ def test_registered_tensor_alias_attribute_is_identity_tracked() -> None:
     snapshot.restore_changed_attrs()
     assert linear.__dict__["weight_alias"] is linear.weight
     assert set(linear._parameters) == {"weight", "bias"}  # restore registered nothing new
+
+
+class PlainConfig:
+    """Config object kept as a plain attribute (an ``hp`` / ``cfg`` idiom)."""
+
+    def __init__(self) -> None:
+        """Set a scale and a call counter."""
+
+        self.scale = 0.5
+        self.calls = 0
+
+
+class RichPlainStateModel(nn.Module):
+    """Model whose plain attributes used to refuse the deepcopy fallback.
+
+    It keeps a Python module, a large positional table, dtype and device
+    descriptors, a config object and a NumPy generator as plain attributes, and
+    its forward mutates the table and the config in place.
+    """
+
+    def __init__(self, uncopyable: bool) -> None:
+        """Build the layer and the plain state."""
+
+        super().__init__()
+        self.uncopyable = uncopyable
+        self.F = torch.nn.functional
+        self.lin = nn.Linear(8, 8)
+        self.pe = torch.randn(1024, 8)
+        self._dtype = torch.float32
+        self._device = torch.device("cpu")
+        self.cfg = PlainConfig()
+        self.rng = np.random.RandomState(0)
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> RichPlainStateModel:
+        """Refuse deepcopy when asked to, as a model with an opaque handle does."""
+
+        if self.uncopyable:
+            raise RuntimeError("this model cannot be deep-copied")
+        copied = RichPlainStateModel.__new__(RichPlainStateModel)
+        memo[id(self)] = copied
+        for name, value in self.__dict__.items():
+            copied.__dict__[name] = copy.deepcopy(value, memo)
+        return copied
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Add the table rows, then bump the table and the config in place."""
+
+        out = self.F.relu(self.lin(x.to(self._dtype)) + self.pe[: x.shape[0]] * self.cfg.scale)
+        self.pe.mul_(1.0 + 1e-3)
+        self.cfg.calls += 1
+        self.cfg.scale = self.cfg.scale + 0.25
+        return out
+
+
+def test_module_object_attribute_no_longer_breaks_the_validation_deepcopy() -> None:
+    """A Python module held as an attribute is shared, so the deepcopy succeeds."""
+
+    model = RichPlainStateModel(uncopyable=False)
+    copied = deepcopy_for_validation(model)
+    assert copied.F is torch.nn.functional
+    assert copied.pe is not model.pe and copied.cfg is not model.cfg
+    with pytest.raises(TypeError, match="module"):
+        copy.deepcopy(model)
+
+
+def test_rich_plain_state_validates_through_live_model_fallback() -> None:
+    """Large tensors, descriptors, modules, configs and generators are restored and proven."""
+
+    torch.manual_seed(0)
+    model = RichPlainStateModel(uncopyable=True)
+    snapshot = _ModuleTreePlainAttrSnapshot(model)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    pe, cfg, rng = model.pe, model.cfg, model.rng
+    pe_before = pe.clone()
+    rng_before = rng.get_state(legacy=False)
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert (
+            user_public_impls._validate_forward_pass_torch(
+                model, [torch.randn(4, 8)], {}, validate_metadata=True
+            )
+            is True
+        )
+    # Same objects, holding their pre-forward values: the forwards scaled pe and
+    # bumped cfg in place, and validation put both back.
+    assert model.pe is pe and torch.equal(pe, pe_before)
+    assert model.cfg is cfg and vars(cfg) == {"scale": 0.5, "calls": 0}
+    rng_after = rng.get_state(legacy=False)
+    assert model.rng is rng and rng_after["state"]["pos"] == rng_before["state"]["pos"]
+    assert np.array_equal(rng_after["state"]["key"], rng_before["state"]["key"])
+    assert model._dtype is torch.float32 and model.F is torch.nn.functional
+
+
+def test_in_place_writes_to_rich_plain_state_are_restored_in_place() -> None:
+    """Restores write back into the original objects, so aliases see the old values."""
+
+    model = RichPlainStateModel(uncopyable=True)
+    pe, cfg, rng = model.pe, model.cfg, model.rng
+    pe_before = pe.clone()
+    expected_draw = np.random.RandomState(0).rand()
+    snapshot = _ModuleTreePlainAttrSnapshot(model)
+    pe.add_(1.0)
+    cfg.calls = 7
+    cfg.extra = "added"
+    rng.rand()
+    model._dtype = torch.float64
+    snapshot.restore_changed_attrs()
+    assert model.pe is pe and torch.equal(pe, pe_before)
+    assert model.cfg is cfg and vars(cfg) == {"scale": 0.5, "calls": 0}
+    assert model.rng is rng and rng.rand() == expected_draw
+    assert model._dtype is torch.float32
+    model.cfg = PlainConfig()  # a reassignment is a change even with equal values
+    snapshot.restore_changed_attrs()
+    assert model.cfg is cfg
+
+
+def test_nan_tensor_attribute_compares_unchanged_by_bytes() -> None:
+    """A NaN-holding plain tensor is unchanged when its bytes are, not flagged forever."""
+
+    module = nn.Module()
+    module.table = torch.full((5000,), float("nan"))
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete
+    snapshot.restore_changed_attrs()
+    module.table[0] = 1.0
+    snapshot.restore_changed_attrs()
+    assert torch.isnan(module.table).all()
+
+
+def test_large_non_alias_tensor_state_is_captured_whole() -> None:
+    """Large plain tensors, alone, mixed with a registered alias and copied, are cloned whole."""
+
+    module = nn.Linear(128, 128)
+    module.cache = [torch.zeros(5000)]
+    module.mixed = [module.weight, torch.zeros(5000)]
+    module.copied_weight = module.weight.detach().clone()
+    copied_before = module.copied_weight.clone()
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    module.cache[0].add_(1.0)
+    module.copied_weight.mul_(2.0)
+    snapshot.restore_changed_attrs()
+    assert torch.equal(module.cache[0], torch.zeros(5000))
+    assert torch.equal(module.copied_weight, copied_before)
+
+
+def test_slots_state_is_restored_through_its_slots() -> None:
+    """Slot values are compared and restored in place; an unset slot is cleared again."""
+
+    module = nn.Module()
+    state = module.state = SlotsState()
+    lock = state.lock
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    state.size = 3
+    state.items.append(torch.ones(2))
+    state.spare = "filled"
+    snapshot.restore_changed_attrs()
+    assert module.state is state and state.size == 0 and state.items == []
+    assert state.lock is lock and not hasattr(state, "spare")
+
+
+def test_cyclic_objects_and_simple_namespaces_are_restored() -> None:
+    """Back-references inside an object graph and ``SimpleNamespace`` configs restore."""
+
+    module = nn.Module()
+    group = module.group = Group()
+    config = module.config = types.SimpleNamespace(depth=2, names=["a"])
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    group.elements[1].index = 9
+    group.elements[0].group = Group()
+    config.depth = 5
+    config.names.append("b")
+    snapshot.restore_changed_attrs()
+    assert module.group is group and [e.index for e in group.elements] == [0, 1]
+    assert all(element.group is group for element in group.elements)
+    assert module.config is config and vars(config) == {"depth": 2, "names": ["a"]}
+
+
+class _MutatedStateModel(nn.Module):
+    """Uncopyable model whose forward reads one plain attribute, then mutates it.
+
+    The output depends on the attribute's value before the mutation, so the
+    logged run and the replay reproduce the ground truth only if validation
+    restores the attribute between the runs.
+    """
+
+    def __init__(self, kind: str) -> None:
+        """Build the attribute of the requested kind."""
+
+        super().__init__()
+        self.kind = kind
+        self.lin = nn.Linear(3, 3)
+        self.state = _MUTATED_STATE_BUILDERS[kind]()
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _MutatedStateModel:
+        """Refuse deepcopy so validation takes the live-model fallback."""
+
+        raise RuntimeError("this model cannot be deep-copied")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Shift the linear output by a value read from the state, then mutate it."""
+
+        if self.kind == "torch_device":  # immutable: the mutation is a reassignment
+            value = 2.0 if self.state.index is None else 3.0
+            self.state = torch.device("cpu", 0)
+            return self.lin(x) + value
+        return self.lin(x) + _read_then_mutate(self.kind, self.state)
+
+
+_MUTATED_STATE_BUILDERS: dict[str, Any] = {
+    "deque": lambda: collections.deque([1.0, 2.0], maxlen=8),
+    "torch_generator": lambda: torch.Generator().manual_seed(3),
+    "random_random": lambda: random.Random(5),
+    "numpy_generator": lambda: np.random.default_rng(7),
+    "numpy_array": lambda: np.arange(4, dtype=np.float64),
+    "torch_device": lambda: torch.device("cpu"),
+}
+
+
+def _read_then_mutate(kind: str, state: Any) -> float:
+    """Return a value the state holds now and leave the state changed."""
+
+    if kind == "deque":
+        value = float(len(state))
+        state.append(9.0)
+    elif kind == "torch_generator":
+        value = float(state.initial_seed())
+        state.manual_seed(state.initial_seed() + 1)
+    elif kind in ("random_random", "numpy_generator"):
+        value = float(state.random())
+    elif kind == "numpy_array":
+        value = float(state[0])
+        state += 1.0
+    else:
+        raise AssertionError(kind)
+    return value
+
+
+def _state_fingerprint(state: Any) -> Any:
+    """Return a value-comparable picture of the state's contents."""
+
+    if isinstance(state, collections.deque):
+        return (list(state), state.maxlen)
+    if isinstance(state, torch.Generator):
+        return (state.initial_seed(), state.get_state().tolist())
+    if isinstance(state, random.Random):
+        return state.getstate()
+    if isinstance(state, np.random.Generator):
+        return repr(state.bit_generator.state)
+    if isinstance(state, np.ndarray):
+        return state.tolist()
+    return state
+
+
+@pytest.mark.parametrize("kind", sorted(_MUTATED_STATE_BUILDERS))
+def test_tl_validate_restores_mutated_rich_state_on_the_live_fallback(kind: str) -> None:
+    """Each rich kind a forward mutates is put back, as the same object, by tl.validate."""
+
+    torch.manual_seed(0)
+    model = _MutatedStateModel(kind)
+    state = model.state
+    before = _state_fingerprint(state)
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert tl.validate(model, torch.randn(2, 3), scope="forward") is True
+    if kind == "torch_device":
+        assert model.state == before and model.state.index is None
+    else:
+        assert model.state is state
+        assert _state_fingerprint(state) == before

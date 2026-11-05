@@ -23,8 +23,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.errors import OpaqueCallableError
+from torchlens.intervention._helpers import rebuild_builtin_helper
 from torchlens.intervention._subspace_projection import _mask_digest
-from torchlens.intervention.helpers import rebuild_builtin_helper
 
 _SITE = "linear_1_1"
 _D = 6
@@ -183,7 +183,7 @@ def test_a_reader_without_the_mask_keywords_refuses_typed(
     session = _session(tl.zero_ablate())
     path = tmp_path / "masked.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    masked_spec = importlib.import_module("torchlens.intervention.masked_edit")
+    masked_spec = importlib.import_module("torchlens.intervention._masked_edit")
     monkeypatch.setattr(masked_spec, "split_stored_mask", lambda name, kwargs: (kwargs, None, None))
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)

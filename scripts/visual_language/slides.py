@@ -819,17 +819,19 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": "flops", "show_legend": None},
                 label="its legend",
-                crop=("text:color_by",),
+                crop=("text:flops:",),
             ),
         ),
         keys=(
             Key("Most FLOPs: the darkest fill", "node(text~linear_1_1)"),
-            Key("The encoding legend appears by itself", "graph(label~color_by)", panel="b"),
             Key(
-                "Unencoded nodes stay white and are counted",
-                "graph(label~encoded)",
+                "The key names the field that drives the color", 'graph(label~"flops:")', panel="b"
+            ),
+            Key(
+                "The color bar spans the field's range, in its units",
+                'graph(label~"144 FLOPs")',
                 panel="b",
-                at="encoded",
+                at="144 FLOPs",
             ),
         ),
         rows=("VK01", "VK03", "VK06", "VI02"),
@@ -873,12 +875,16 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"size_by": "dims", "size_scale": "sqrt", "show_legend": None},
                 label="its legend",
-                crop=("text:size_by",),
+                crop=("text:size:",),
             ),
         ),
         keys=(
             Key("Bigger tensor, bigger node", "node(text~linear_1)"),
-            Key("The legend states the size rule", "graph(label~size_by)", panel="b"),
+            Key(
+                "The key names the field that drives the size",
+                'graph(label~"size: output elements")',
+                panel="b",
+            ),
             Key('scale="sqrt" by default; "linear" grows faster', None),
         ),
         rows=("VK04", "VK06"),
@@ -900,12 +906,16 @@ SLIDES: tuple[Slide, ...] = (
                 "Loop2",
                 kwargs={"rolled": False, "stack_by": True, "show_legend": None},
                 label="its legend",
-                crop=("text:stack_by",),
+                crop=("text:aligned:",),
             ),
         ),
         keys=(
             Key("Each pass shares a rank", "node(name=linear_1_1pass2)"),
-            Key("The legend explains the rank rule", "graph(label~stack_by)", panel="b"),
+            Key(
+                "The key names the field that sets the rank",
+                'graph(label~"aligned: same pass")',
+                panel="b",
+            ),
             Key("Sibling ordering is off while stacking", None),
         ),
         footnote="The caption adds the line stacked by pass_index.",
@@ -1281,7 +1291,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The input images as a montage", "node(shape=none)"),
+            Key("The input images as a montage", "node(name=input_1pass1, shape=box)"),
             Key(
                 "preprocess names the transform, UNVERIFIED here",
                 "node(text~preprocess)",
@@ -1428,7 +1438,7 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 #: Unencoded reasons: the exact legend line and when TorchLens writes it.
 UNENCODED: tuple[tuple[str, str], ...] = (
-    ("n/a = unencoded", "a node has no value for the source; the legend counts them"),
+    ("n/a = unencoded", "a node has no value for the source; it stays white"),
     ("rank mapping (ordinal, not ratio)", 'transform="rank": the fill shows order only'),
     ("log scale (scale-invariant; values <= 0 unencoded)", 'transform="log"'),
     ("values <= 0 -- unencoded under the log transform", "a value at or below zero under log"),

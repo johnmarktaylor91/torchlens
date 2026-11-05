@@ -27,7 +27,7 @@ Shape rules (normative, from the fold):
 - **Never ghosted-as-deleted**: execution removal exists in no lane, so no
   wording here (marks, boxes, census) ever uses the banned
   execution-removal verbs -- that vocabulary is unrepresentable by construction
-  (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
+  (:data:`torchlens.intervention._audit.EXECUTION_EFFECTS`).
 - **The census travels with exported figures**: a short form of the census
   (one line per edit, in its own lane's wording) renders under the figure's
   header, and ``Trace.draw(view="interventions")`` (:func:`draw_interventions`)
@@ -47,7 +47,9 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from .._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
     INTERVENTION_SITE_COLOR,
     CollapsedNodeSpecFn,
     NodeSpec,
@@ -134,8 +136,6 @@ _MAX_MARK_ROWS_PER_NODE = 3
 
 #: Capture-status header lines the interventions view leaves to its census:
 #: the header's edit line already says the trace is edited.
-EDIT_VIEW_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
-
 #: Cap on caption census lines before deferring to the sidecar/text form.
 _MAX_CAPTION_LINES = 12
 
@@ -306,7 +306,9 @@ def _fire_marks(trace: Any) -> list[SurgeryMark]:
                 SurgeryMark(
                     layer_label=str(getattr(record, "target_label", None) or op.layer_label),
                     call_label=str(getattr(record, "call_label", None) or label),
-                    site_key=(str(op.site_key) if getattr(op, "site_key", None) else None),
+                    site_key=(
+                        str(op.graph.site_key) if record_member(op, "site_key", None) else None
+                    ),
                     kind="fire",
                     basis="fact",
                     row=f"{verb}: {helper} ({engine} engine)",
@@ -370,7 +372,7 @@ def _mark_for_recorded_label(trace: Any, label: str, *, kind: str, row: str) -> 
         op = None
     if op is not None:
         layer_label = str(getattr(op, "layer_label", layer_label))
-        raw_key = getattr(op, "site_key", None)
+        raw_key = record_member(op, "site_key", None)
         site_key = str(raw_key) if raw_key else None
     return SurgeryMark(
         layer_label=layer_label,
@@ -402,7 +404,7 @@ def _declared_target_marks(
     by_site_key: dict[str, list[Any]] = {}
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        raw_key = getattr(op, "site_key", None)
+        raw_key = record_member(op, "site_key", None)
         if raw_key:
             by_site_key.setdefault(str(raw_key), []).append(op)
     marks: list[SurgeryMark] = []
@@ -530,8 +532,8 @@ class SurgeryCensus:
     def caption_lines(self) -> tuple[str, ...]:
         """The short form drawn on the figure; the full census is the sidecar.
 
-        The outline key (with the changed-op count, or why changed ops are not
-        shown), declared rules that never fired, edited regions and the
+        Facts the key's colour chips cannot give (an inferred edit site, or
+        why changed ops are not shown), declared rules that never fired, edited regions and the
         injected-op count. Lane wording, site keys, the capture-status header
         lines and acknowledgment rows stay in :meth:`to_text`.
         """
@@ -606,7 +608,7 @@ def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
 def _omitted_header_rows(banner_lines: Iterable[str]) -> tuple[str, ...]:
     """The capture-status header lines this view leaves off the figure."""
 
-    return tuple(line for line in banner_lines if line.startswith(EDIT_VIEW_OMITTED_BANNERS))
+    return tuple(line for line in banner_lines if line.startswith(EDITED_HEADER_OMITTED_BANNERS))
 
 
 def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:

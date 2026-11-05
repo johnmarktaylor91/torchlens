@@ -266,7 +266,7 @@ is contract surface. Fast mode
 composes with new run keywords only by explicit matrix entry; silence means typed
 refusal, never undefined behavior.
 
-**Public entry.** The one transactional verb is `Trace.run_transaction` (`Trace.run` refreshes a live Trace in place), whose dispatch ladder and typed
+**Public entry.** The one transactional verb is `Trace.run_transaction` (`Trace.run` reruns a live Trace into a new Trace, the source unchanged), whose dispatch ladder and typed
 keyword-conflict matrix are contract surface: every new keyword lands with its
 conflict-matrix row, and consumers bind totality tests to the CODE list, not a count.
 

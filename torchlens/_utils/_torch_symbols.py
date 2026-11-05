@@ -62,6 +62,8 @@ from typing import Any, cast
 
 import torch
 
+__tl_layer__ = "L0"
+
 
 def torch_attr(name: str) -> Any | None:
     """Resolve one top-level ``torch`` attribute without firing ``torch.__getattr__``.
@@ -83,6 +85,30 @@ def torch_attr(name: str) -> Any | None:
     if "." in name or not name.isidentifier():
         return None
     return torch.__dict__.get(name)
+
+
+def _resolve_dtype(dtype: object | None) -> object | None:
+    """Convert serialized torch dtype names back to dtype objects.
+
+    Parameters
+    ----------
+    dtype
+        Dtype object or serialized dtype name from an event ref.
+
+    Returns
+    -------
+    object | None
+        Runtime dtype when resolvable, otherwise the original value.
+    """
+
+    if dtype is None or not isinstance(dtype, str):
+        return dtype
+    if dtype.startswith("torch."):
+        dtype_name = dtype.split(".", 1)[1]
+        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
+        # fall back to the original string when the name is not a real top-level torch symbol.
+        return torch_attr(dtype_name) or dtype
+    return dtype
 
 
 def torch_dtype_named(name: str) -> torch.dtype | None:

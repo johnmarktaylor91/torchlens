@@ -256,7 +256,7 @@ def mlp() -> Iterator[tuple[nn.Module, torch.Tensor, torch.Tensor]]:
 # ---------------------------------------------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_chunked_rerun_steers_every_row_once(net) -> None:
     """F1: a chunked rerun's rows all match one fresh steered forward.
 
@@ -274,14 +274,14 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     staged = _staged(trace)
     chunked = tl.options.ReplayOptions(chunk_size=2)
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
-        trace.run(model, x, replay=chunked)
+        trace = trace.run(model, x, replay=chunked)
     torch.testing.assert_close(_readout(trace), expected)
-    trace.run(model, x, replay=chunked)
+    trace = trace.run(model, x, replay=chunked)
     torch.testing.assert_close(_readout(trace), expected)
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/binding.py ....
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_content_identity.py, intervention/_helper_fingerprint.py, intervention/_binding.py ....
 def test_bound_executor_repeats_exactly(mlp) -> None:
     """A bound executor gives the hooked answer on every call."""
 
@@ -323,7 +323,7 @@ def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
         )
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/handles.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_handles.py, campaign mutant kills.
 @pytest.mark.parametrize("exit_door", ["context"])
 def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None:
     """F2 / seat 3 F6: attach, rerun, remove, rerun equals a plain run."""
@@ -332,15 +332,15 @@ def test_attach_rerun_then_detach_restores_baseline(net, exit_door: str) -> None
     trace = tl.trace(model, x)
     baseline = _readout(trace).clone()
     handle = trace._attach_hooks(tl.module("fc1"), tl.scale(2.0))
-    trace.run(model, x)
-    trace.run(model, x)
+    trace = trace.run(model, x)
+    trace = trace.run(model, x)
     torch.testing.assert_close(_readout(trace), expected)
     if exit_door == "by_site":
         trace.clear_edits(tl.module("fc1"))
     else:
         trace.clear_edits(handle=handle)
     assert len(trace._intervention_spec.hook_specs) == 0, "detach left hook copies behind"
-    trace.run(model, x)
+    trace = trace.run(model, x)
     torch.testing.assert_close(_readout(trace), baseline)
 
 
@@ -358,7 +358,7 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     )
     staged = _staged(trace)
     for _ in range(3):
-        trace.run(model, x)
+        trace = trace.run(model, x)
         torch.testing.assert_close(_readout(trace), expected)
         assert _staged(trace) == staged
 
@@ -401,12 +401,12 @@ def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseExcept
     assert _staged(trace) == staged, "a failed rerun mutated the staged spec"
     assert _model_state(model) == before
     assert _capture_globals_released()
-    trace.run(model, x)
+    trace = trace.run(model, x)
     torch.testing.assert_close(_readout(trace), expected)
     assert _staged(trace) == staged
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/rerun.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_edits.py, intervention/_rerun.py.
 @pytest.mark.parametrize("failure", [KeyboardInterrupt])
 def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseException]) -> None:
     """Seat 3 F5: a failed ``fork().do(engine="rerun")`` leaves nothing; a retry steers once."""
@@ -431,14 +431,14 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
             model.fc2.forward = original
         assert len(fork._intervention_spec.hook_specs) == 0, "a failed do() left a hook staged"
     plain_fork, retry_fork = forks
-    plain_fork.run(model, x)
+    plain_fork = plain_fork.run(model, x)
     torch.testing.assert_close(_readout(plain_fork), baseline)
     retry_fork.do(tl.module("fc1"), tl.scale(2.0), model=model, inputs=x, intervention=rerun)
     torch.testing.assert_close(_readout(retry_fork), expected)
     torch.testing.assert_close(_readout(parent), baseline)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/save.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_save.py, campaign mutant kills.
 def test_portable_spec_saved_after_reruns_carries_no_duplicates(net, tmp_path) -> None:
     """F4: a spec saved after reruns holds exactly the staged entries."""
 
@@ -447,8 +447,8 @@ def test_portable_spec_saved_after_reruns_carries_no_duplicates(net, tmp_path) -
     model, x, _ = net
     trace = tl.trace(model, x, intervene=_scale_fc1())
     staged_hooks = len(trace._intervention_spec.hook_specs)
-    trace.run(model, x)
-    trace.run(model, x)
+    trace = trace.run(model, x)
+    trace = trace.run(model, x)
     path = tmp_path / "spec.tlspec"
     trace.save_intervention(path, level="portable")
     loaded = load_intervention_spec(path)
@@ -484,8 +484,11 @@ def test_func_selector_rerun_refuses_a_partially_detached_recipe() -> None:
 def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     """Same ops, different rule identity: the refusal blames the changed steer, not the labels."""
 
-    from torchlens.intervention._rerun_predicate import RerunSpecPlan, settle_predicate_rerun
-    from torchlens.intervention.types import HookSpec, InterventionSpec, TargetSpec
+    from torchlens.intervention._rerun_predicate import (
+        RerunSpecPlan,
+        settle_predicate_rerun,
+    )
+    from torchlens.intervention._types import HookSpec, InterventionSpec, TargetSpec
 
     def door_hook(rule_id: str) -> HookSpec:
         return HookSpec(
@@ -532,9 +535,9 @@ def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged
     )
     staged = _staged(trace)
     result = trace.run(model, x2)
-    assert result is trace
+    assert result is not trace
     assert result.last_run["engine"] in {"rerun", "guarded_fast"}
-    assert torch.equal(trace[label].out, value)
+    assert torch.equal(result[label].out, value)
     assert _staged(trace) == staged
 
 
@@ -571,11 +574,11 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
     elif door == "fork_do":
         fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
         fork.do(tl.module("fc1"), tl.scale(2.0))
-        fork.run(model, x)
+        fork = fork.run(model, x)
     elif door == "stage_clear":
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc1"), tl.scale(2.0))
-        trace.run(model, x)
+        trace = trace.run(model, x)
         trace.clear_edits(tl.module("fc1"))
     elif door == "failing_capture":
 
@@ -643,19 +646,19 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc1"), tl.scale(2.0))
     if door == "clear":
-        trace.run(model, x)
+        trace = trace.run(model, x)
         trace.clear_edits(tl.module("fc1"))
         with torch.no_grad():
             expected = model(x)
     with warnings.catch_warnings():
         warnings.simplefilter("error", ControlFlowDivergenceWarning)
         for _ in range(3):
-            trace.run(model, x)
+            trace = trace.run(model, x)
             torch.testing.assert_close(_readout(trace), expected)
             assert trace.last_run["divergence_count"] == 0
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 @pytest.mark.parametrize("staged_edit", [False])
 def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool) -> None:
     """A real control-flow change still discloses, with or without a staged edit."""
@@ -667,7 +670,7 @@ def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool
     if staged_edit:
         _stage(trace, tl.module("fc1"), tl.scale(2.0))
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
-        trace.run(model, negative)
+        trace = trace.run(model, negative)
     assert trace.last_run["divergence_count"] == 1
     strict = tl.trace(model, positive)
     if staged_edit:
@@ -676,7 +679,7 @@ def test_planted_divergence_still_warns_and_raises_when_strict(staged_edit: bool
         strict.run(model, negative, replay=tl.options.ReplayOptions(strict=True))
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py.
 def test_loaded_trace_divergence_check_compares_like_with_like(tmp_path) -> None:
     """Seat 3 F3: a loaded trace has no raw-event hash, so its graph is compared graph to graph.
 
@@ -693,11 +696,11 @@ def test_loaded_trace_divergence_check_compares_like_with_like(tmp_path) -> None
     loaded = tl.load(path)
     with warnings.catch_warnings():
         warnings.simplefilter("error", ControlFlowDivergenceWarning)
-        loaded.run(model, positive)
+        loaded = loaded.run(model, positive)
     assert loaded.last_run["divergence_count"] == 0
     reloaded = tl.load(path)
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
-        reloaded.run(model, negative)
+        reloaded = reloaded.run(model, negative)
 
 
 def _raw_event(
@@ -761,7 +764,7 @@ def _intervened_trace(model: nn.Module, x: torch.Tensor, origin: str) -> Any:
     if origin == "stage":
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc2"), tl.scale(0.5))
-        trace.run(model, x)
+        trace = trace.run(model, x)
         return trace
     fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
     fork.do(tl.module("fc2"), tl.scale(0.5))
@@ -854,7 +857,7 @@ def test_loaded_builtin_recipe_rerun_keeps_the_original_intervention(mlp, tmp_pa
     model, x, x2 = mlp
     loaded = _reload(_intervened_trace(model, x, origin), tmp_path)
     expected = _hooked(model, {"fc2": lambda out: out * 0.5}, x2)
-    loaded.run(model, x2)
+    loaded = loaded.run(model, x2)
     torch.testing.assert_close(loaded.output_ops[0].out, expected)
 
 
@@ -867,9 +870,9 @@ def test_loaded_plain_trace_reruns_with_a_new_edit(mlp, tmp_path) -> None:
     _stage(loaded, tl.module("fc2"), tl.scale(0.5))
     want = _hooked(model, {"fc2": lambda out: out * 0.5}, x2)
     for _ in range(2):
-        loaded.run(model, x2)
+        loaded = loaded.run(model, x2)
         torch.testing.assert_close(loaded.output_ops[0].out, want)
     loaded.clear_edits(tl.module("fc2"))
-    loaded.run(model, x2)
+    loaded = loaded.run(model, x2)
     with torch.no_grad():
         torch.testing.assert_close(loaded.output_ops[0].out, model(x2))

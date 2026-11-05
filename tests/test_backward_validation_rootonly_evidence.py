@@ -21,7 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_BACKWARD
+from torchlens.validation._diagnostics import CHECK_BACKWARD
 
 
 class _RootOnly(nn.Module):

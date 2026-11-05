@@ -238,7 +238,7 @@ Static patching uses the same scatter-back path:
 patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
 edited = log.fork("patched")
 edited.do(tl.facet("q").head(3), patch, intervention=tl.options.InterventionOptions(engine="set_only"))
-edited.run(model, x)
+edited = edited.run(model, x)
 ```
 
 `tl.head(index)` without a facet name targets the default attention projection
@@ -330,18 +330,33 @@ error that includes the `MissingGrad` recapture instruction.
 
 Fused `torch.nn.functional.scaled_dot_product_attention` hides `scores`,
 `pattern`, and `z`. TorchLens reconstructs these as read-only computed facets
-when the SDPA op saved its actual inputs and options:
+from the exact inputs and options the fused kernel received. A default capture
+already records them: the SDPA call's replay argument template holds `scale`,
+`is_causal`, `dropout_p` and `enable_gqa`, and the Q, K, V and mask tensors are
+the saved outputs of the ops that produced them. So a plain trace serves the
+facets:
 
 ```python
-log = tl.trace(model, x, capture=CaptureOptions(reconstruction_ready=True))
+log = tl.trace(model, x)
 pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
+When the default capture did not keep an input (a selective `save=` that does not save
+the op producing Q, K, V or the mask, or a structure-only capture), the facet
+fails closed: `facets.declared()` marks it `needs_capture` and access raises
+`MissingFacetError` naming the missing input. Saving the SDPA call's arguments
+verbatim lifts that requirement:
+
+```python
+log = tl.trace(model, x, save=tl.in_module("blocks.0.attn"),
+               capture=CaptureOptions(reconstruction_ready=True))
+```
+
 `CaptureOptions(reconstruction_ready=True)` enables `save_args=True` and
-`save_rng=True`. The reconstruction uses the SDPA op's saved Q/K/V args,
-so RoPE models use the post-RoPE tensors that actually fed the fused kernel, not
-the q_proj/k_proj outputs.
+`save_rng=True`. Either way the reconstruction uses the tensors that actually fed
+the fused kernel, so RoPE models use the post-RoPE Q and K, not the
+q_proj/k_proj outputs.
 
 Validation is per facet and non-vacuous:
 

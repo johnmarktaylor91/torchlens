@@ -25,11 +25,11 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import SelectionError
-from torchlens.intervention.edge_substitution import (
+from torchlens.intervention._edge_substitution import (
     _reexecute_child_with_substitution,
 )
-from torchlens.intervention.replay import _splice_param_substitutions
-from torchlens.validation.core import _check_edge_intervention_boundary
+from torchlens.intervention._replay import _splice_param_substitutions
+from torchlens.validation._core import _check_edge_intervention_boundary
 
 
 class _Net(nn.Module):
@@ -70,7 +70,7 @@ def test_edge_reexecution_splice_refuses_nested_address(capture) -> None:
 
     model, x, trace = capture
     child = trace.layers["conv2d_2_3"].ops[0]
-    address = (child.func_call_id, "positional", (0, 1))
+    address = (child.call.call_id, "positional", (0, 1))
     with pytest.raises(SelectionError) as excinfo:
         _reexecute_child_with_substitution(trace, child, address, torch.zeros(1), strict=False)
     assert excinfo.value.fields["code"] == "selection_apply_invalid"
@@ -104,11 +104,11 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
     fork = _identity_edge_fork(trace)
     child = fork.layers["conv2d_2_3"].ops[0]
 
-    old_key = next(iter(child.edge_substitutions))
+    old_key = next(iter(child.graph.edge_substitutions))
     arg_kind, arg_path = old_key
     nested_key = (arg_kind, tuple(arg_path) + (1,))
 
-    store = dict(child.edge_substitutions)
+    store = dict(child.graph.edge_substitutions)
     store[nested_key] = store.pop(old_key)
     child._internal_set("edge_substitutions", store)
 
@@ -122,7 +122,7 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
             records.append(
                 dataclasses.replace(
                     record,
-                    edge_address=(child.func_call_id, arg_kind, tuple(arg_path) + (1,)),
+                    edge_address=(child.call.call_id, arg_kind, tuple(arg_path) + (1,)),
                 )
             )
         else:

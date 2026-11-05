@@ -25,7 +25,7 @@ DOCS: dict[str, str] = {
             on correct captures trains users to ignore it.
         verbose, validate_metadata:
             Forwarded unchanged to
-            :func:`torchlens.validation.core.validate_saved_outs`.
+            :func:`torchlens.validation._core.validate_saved_outs`.
         
         Returns
         -------
@@ -74,7 +74,14 @@ DOCS: dict[str, str] = {
         """
     ),
     "run": (
-        """Rerun the live model on new input and refresh this Trace.
+        """Rerun the live model on new input and return a new Trace, leaving this Trace unchanged.
+        
+        The run executes on a fork of this Trace (named ``<name>_fork_<n>``, as
+        the ``fast=True`` door's result is): the fork carries this Trace's
+        weak reference to the live model and its staged edits, and this Trace
+        keeps its saved values, ``last_run`` and input. Keep the result
+        (``trace = trace.run(x)``); to add a batch to this Trace in place, use
+        ``append(inputs)``.
         
         Parameters
         ----------
@@ -111,8 +118,8 @@ DOCS: dict[str, str] = {
         Returns
         -------
         Trace
-            This Trace, refreshed by the rerun. For a verified fresh execution
-            with a report that leaves this Trace unchanged, use
+            A new Trace holding the rerun; this Trace is unchanged. For a
+            verified fresh execution with a report, use
             ``run_transaction(inputs=...)``.
         
         Raises

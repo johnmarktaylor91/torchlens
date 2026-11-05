@@ -42,6 +42,7 @@ from torch import nn
 
 from .. import options as tl_options
 from .._errors import InvalidArgumentError
+from .._utils._numpy_bridge import tensor_to_numpy
 from ..dataset_extraction import extract_dataset
 
 __tl_layer__ = "L6"
@@ -501,7 +502,7 @@ def _probe_once(
             continue
         entry: dict[str, Any] = {
             "label": label,
-            "site_key": getattr(op, "site_key", None),
+            "site_key": op.graph.site_key,
             "shape": tuple(payload.shape),
             "dtype": str(payload.dtype).removeprefix("torch."),
             "bytes": int(payload.numel() * payload.element_size()),
@@ -875,10 +876,7 @@ def export_npz(
         mapping = source
     arrays: dict[str, np.ndarray] = {}
     for label, value in dict(mapping).items():
-        if isinstance(value, torch.Tensor):
-            array = value.detach().cpu().numpy()
-        else:
-            array = np.asarray(value)
+        array = tensor_to_numpy(value.detach()) if torch.is_tensor(value) else np.asarray(value)
         if array.dtype == object:
             raise InvalidArgumentError(
                 f"Site {label!r} holds an object array; npz interchange is "

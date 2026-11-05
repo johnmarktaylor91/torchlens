@@ -152,7 +152,7 @@ def test_unmodified_copy_round_trips(saved, tmp_path, built_counter):
 def test_valid_trace_self_reference_survives_validation(tmp_path, wrapped):
     """Trace identity settles after validation, including inside a pending value record."""
 
-    from torchlens.intervention.types import LiteralValue
+    from torchlens.intervention._types import LiteralValue
 
     trace = save_tiny(tmp_path / "source", "portable")
     trace.annotations["self"] = LiteralValue(trace) if wrapped else trace

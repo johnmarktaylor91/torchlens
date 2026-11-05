@@ -24,7 +24,7 @@ from ..backends.registry import (
 )
 from ..backends.torch.structure_only_belt import structure_only_forward_boundary
 from ..recording._halt import StopSignal
-from ..recording.types import CaptureSpec
+from ..recording._types import CaptureSpec
 from ._weightsfree_admission import weightsfree_forward_scope
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
 from .predicates import _is_halt_only_capture, _module_capture_spec
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._lazy_contexts import LazyContextHistory
 from .._utils.display import _timed_phase
+from ..errors._base import transparent_contextmanager
 
 
 def _cleanup_forward_memory_once(
@@ -94,7 +95,7 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
         yield
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 

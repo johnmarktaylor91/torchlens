@@ -66,7 +66,8 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # a genuine late-binding hazard; fix it, never raise this.
     "B023": 0,
     "B904": 17,
-    "B018": 14,
+    # 14 -> 13 (2026-11-05 pattern-facet-default fixq1): measured at the merged tree.
+    "B018": 13,
     "B007": 16,
     "B008": 3,
     # 2026-08-16 re-true (ipynb-aware parser): shrunk to the corrected
@@ -170,7 +171,9 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # confetti-splitting defect. Union measured at merge atop F06's 199.
     # 2026-08-29 F10 T71d re-reconcile: the union is F16's 200 (its stated
     # site) with F10's paydown holding; measured at the merged tree.
-    "PLR0911": 200,
+    # 200->199 (2026-11-05 B21F): the corpus-w2 perturbation helpers fold their
+    # guard arms into early-classify helpers and a strategy table; measured 199.
+    "PLR0911": 199,
     "PLR0912": 267,
     # 422->423 (same L8 settle): _build_funcol_payload carries the C0 payload
     # argument surface (mirrors the ledgered _build_payload in collectives).
@@ -616,7 +619,7 @@ def check_ignored_codes_all_carry_ceilings() -> None:
 #: completeness_witness.py (three of the most change-heavy capture files) is
 #: permanently invisible to F401. SHRINK-ONLY: converting a blanket to
 #: per-line noqa (the repo's own preferred pattern, see
-#: validation/invariants.py) lowers this; adding a file may never pass
+#: validation/_invariants.py) lowers this; adding a file may never pass
 #: silently.
 _BLANKET_NOQA_CEILING = 9
 

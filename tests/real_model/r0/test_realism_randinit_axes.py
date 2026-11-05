@@ -117,12 +117,27 @@ def test_t5_sdpa_now_builds_upstream():
     the installed package source (FK-transformers re-record, 2026-10-04).
     T5 stays eager-only in FamilySpec.impls: this only pins that
     construction no longer refuses, not a measured sdpa facet floor.
+
+    On a transformers whose T5 class does not declare sdpa support
+    (``t5_supports_sdpa``; the 4.x band) the same request never yields an
+    sdpa model: 4.45.2 and 4.57.6 refuse at construction and 4.55.4 resolves
+    the request to eager, so that branch pins exactly that.
     """
+
+    from tests.support.hf_capabilities import t5_supports_sdpa
 
     spec = FAMILY_BY_NAME["t5"]
     assert spec.impls == ("eager",)
-    model = spec.build("sdpa")
-    assert model.config._attn_implementation == "sdpa"
+    if t5_supports_sdpa():
+        model = spec.build("sdpa")
+        assert model.config._attn_implementation == "sdpa"
+        return
+    try:
+        model = spec.build("sdpa")
+    except ValueError as refusal:
+        assert "scaled_dot_product_attention" in str(refusal) or "sdpa" in str(refusal)
+    else:
+        assert model.config._attn_implementation == "eager"
 
 
 @pytest.mark.parametrize("family", sorted(PRIMARY_LEAF))

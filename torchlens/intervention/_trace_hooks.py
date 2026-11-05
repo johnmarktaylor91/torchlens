@@ -10,13 +10,17 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from .._data_classes._trace_grad_sites import live_backward_graph_available, sticky_hook_entry
+from .._data_classes._trace_grad_sites import (
+    live_backward_graph_available,
+    sticky_hook_entry,
+)
 from .._data_classes._trace_intervention_records import (
     history_site_payload,
     mark_intervention_spec_mutated,
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._facet_union import split_facet_union_entries
@@ -32,12 +36,12 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .errors import HookSignatureError
-from .hooks import expand_facet_hook_entries, normalize_hook_plan
-from .spec import (
+from ._spec import (
     Recipe as PublicInterventionSpec,
     entries_from_spec,
 )
+from .errors import HookSignatureError
+from .hooks import expand_facet_hook_entries, normalize_hook_plan
 
 
 def attach_sticky_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method
@@ -131,5 +135,8 @@ def clear_hooks(trace: Trace) -> Trace:
     mark_intervention_spec_mutated(trace)
     # Removal takes effect at once, in a rerun or backward pass in progress.
     retire_live_hook_handles(handles_before)
+    mirror = running_result(trace)  # a positional run in progress writes a fork
+    if mirror is not None:
+        clear_hooks(mirror)
     record_operation(trace, "clear_hooks")
     return trace

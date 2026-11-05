@@ -134,8 +134,8 @@ def save_trace(
 
     The bundle is loaded back with ``tl.load`` and rerun on ``model`` with ``inputs``
     (``loaded.run``). Every op's saved value in the loaded trace and in the replay must
-    equal the original bitwise, op by op and label by label. A mismatch raises: a replay
-    that differs is a finding to explain, never a tolerance to widen.
+    equal the original exactly (``torch.equal``), op by op and label by label. A mismatch
+    raises.
 
     Parameters
     ----------
@@ -177,7 +177,7 @@ def save_trace(
         _require_same_ops(trace, replayed, f"{path.name} replayed on the model")
     finally:
         replayed.cleanup()
-    print(f"REPLAY: {path.name} loads back and replays bitwise equal ({compared} tensors)")
+    print(f"REPLAY: {path.name} loads back and replays exactly equal ({compared} tensors)")
     return {
         "bundle": path.name,
         "ops": len(trace.ops),
@@ -188,7 +188,7 @@ def save_trace(
 
 
 def _require_same_ops(original: Any, other: Any, what: str) -> int:
-    """Raise unless ``other`` has the original's op labels and bitwise-equal saved values.
+    """Raise unless ``other`` has the original's op labels and exactly equal saved values.
 
     Parameters
     ----------

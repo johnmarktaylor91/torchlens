@@ -20,6 +20,10 @@ facet the freeze would omit reads the checked-in ``FACET_DEFAULTS`` value, as
 the scatter does. The shared function-call ref goes through
 ``_resolve_call_function_ref`` so sibling outputs of one call share it exactly
 as the freeze does (the call box is updated the same way).
+
+The exhaustive commit uses :func:`write_draft_row`, which runs the same fill
+straight into a copy of the layout's constant row template, with the call ref
+the commit already resolved; ``op_row_cells`` is the dict form of that fill.
 """
 
 from __future__ import annotations
@@ -30,238 +34,40 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._ir.op_record import FACET_DEFAULTS
-from ..._ir.op_record_scatter import _function_ref_cells, _resolve_dtype
+from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
 from ..._trace_core.op_store import _MISSING
-from ._ops_capture_records import _resolve_call_function_ref
-from ._ops_container_base import _copy_parent_arg_positions
+from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ..._ir.events import FunctionCallRef
     from ..._ir.intervention import FireResult
+    from ..._trace_core.op_store import OpStoreLayout
 
-__all__ = ("op_row_cells", "write_op_row")
-
-
-def _facet_default(name: str) -> Any:
-    """Return a fresh default instance of one facet (the scatter builds one per absent facet)."""
-
-    return FACET_DEFAULTS[name]()
+__all__ = ("op_row_cells", "write_draft_row", "write_op_row")
 
 
-def _semantics_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the five backend-semantics cells (the freeze's fallback mirrored)."""
-
-    semantics = fields_dict.get("backend_semantics")
-    if semantics is None:
-        return {
-            "bytes_delta_at_call": fields_dict["bytes_delta_at_call"],
-            "bytes_peak_at_call": fields_dict["bytes_peak_at_call"],
-            "autograd_memory": fields_dict["autograd_memory"],
-            "num_autograd_tensors": fields_dict["num_autograd_tensors"],
-            "grad_fn_class_name": fields_dict["grad_fn_class_name"],
-        }
-    return {
-        "bytes_delta_at_call": semantics.bytes_delta_at_call,
-        "bytes_peak_at_call": semantics.bytes_peak_at_call,
-        "autograd_memory": semantics.autograd_memory,
-        "num_autograd_tensors": semantics.num_autograd_tensors,
-        "grad_fn_class_name": semantics.grad_fn_class_name,
-    }
+#: One default instance per optional facet the freeze may omit. The writer reads
+#: only immutable values off them, or copies the mutable ones, so one instance
+#: per process stands in for the instance the scatter builds per absent facet.
+_TRANSFORM_DEFAULT = FACET_DEFAULTS["transform"]()
+_ANCESTRY_DEFAULT = FACET_DEFAULTS["ancestry"]()
+_CONTROL_DEFAULT = FACET_DEFAULTS["control"]()
+_AUTOGRAD_DEFAULT = FACET_DEFAULTS["autograd"]()
+_INTERVENTION_DEFAULT = FACET_DEFAULTS["intervention"]()
+_ANNOTATIONS_DEFAULT = FACET_DEFAULTS["annotations"]()
 
 
-def _transformed_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the transformed-output cells (``None`` when no transformed output)."""
+class _NameKeys(dict[str, str]):
+    """Field-id map of the dict form: every cell name is its own key."""
 
-    payload = fields_dict["transformed_out"]
-    if payload is None:
-        return {
-            "transformed_out_shape": None,
-            "transformed_out_dtype": None,
-            "transformed_activation_memory": None,
-            "transformed_out": None,
-        }
-    return {
-        "transformed_out_shape": fields_dict["transformed_out_shape"],
-        "transformed_out_dtype": _resolve_dtype(str(fields_dict["transformed_out_dtype"])),
-        "transformed_activation_memory": fields_dict["transformed_activation_memory"],
-        "transformed_out": payload,
-    }
+    def __missing__(self, name: str) -> str:
+        """Return ``name`` itself, so ``row[f[name]]`` writes the dict cell ``name``."""
+
+        return name
 
 
-def _transform_cells(fields_dict: Mapping[str, Any], annotations: dict[str, Any]) -> dict[str, Any]:
-    """Return the transform cells, mirroring the freeze's facet presence and config split."""
-
-    user_config = dict(fields_dict.get("transform_config") or {})
-    user_config.pop("_tl_annotations", None)
-    fn_code_location = user_config.pop("fn_code_location", None)
-    is_transform = bool(fields_dict.get("is_transform", False))
-    kind = fields_dict.get("transform_kind")
-    chain = tuple(fields_dict.get("transform_chain") or ())
-    fn_name = fields_dict.get("transform_fn_name")
-    fn_qualname = fields_dict.get("transform_fn_qualname")
-    fn_source = fields_dict.get("transform_fn_source")
-    present = (
-        is_transform
-        or kind is not None
-        or chain
-        or user_config
-        or fn_name is not None
-        or fn_qualname is not None
-        or fn_source is not None
-        or fn_code_location is not None
-    )
-    if not present:
-        default = _facet_default("transform")
-        is_transform = default.is_transform
-        kind = default.transform_kind
-        chain = tuple(default.transform_chain)
-        user_config = dict(default.transform_config)
-        fn_name = default.transform_fn_name
-        fn_qualname = default.transform_fn_qualname
-        fn_source = default.transform_fn_source
-        fn_code_location = default.fn_code_location
-    config_cell: dict[str, object] = dict(user_config)
-    config_cell["_tl_annotations"] = dict(annotations)
-    if fn_code_location is not None:
-        config_cell["fn_code_location"] = fn_code_location
-    return {
-        "is_transform": is_transform,
-        "transform_kind": kind,
-        "transform_chain": chain,
-        "transform_config": config_cell,
-        "transform_fn_name": fn_name,
-        "transform_fn_qualname": fn_qualname,
-        "transform_fn_source": fn_source,
-    }
-
-
-def _ancestry_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the ancestry cells, reading the default facet when the freeze omits it."""
-
-    input_ancestors = frozenset(fields_dict["input_ancestors"])
-    internal_source_ancestors = frozenset(fields_dict["internal_source_ancestors"])
-    root_ancestors = frozenset(fields_dict["root_ancestors"])
-    has_internal = fields_dict["has_internal_source_ancestor"]
-    if not (input_ancestors or internal_source_ancestors or root_ancestors or has_internal):
-        default = _facet_default("ancestry")
-        input_ancestors = default.input_ancestors
-        internal_source_ancestors = default.internal_source_ancestors
-        root_ancestors = default.root_ancestors
-        has_internal = default.has_internal_source_ancestor
-    return {
-        "root_ancestors": set(root_ancestors),
-        "has_input_ancestor": bool(input_ancestors),
-        "input_ancestors": set(input_ancestors),
-        "has_internal_source_ancestor": has_internal,
-        "internal_source_ancestors": set(internal_source_ancestors),
-    }
-
-
-def _internal_source_parent_labels(trace: Trace, parents: list[str]) -> list[str]:
-    """Return the parent labels whose committed op carries internal-source ancestry."""
-
-    require_event = trace.capture_events.live_index.require_event
-    return [label for label in parents if require_event(label).has_internal_source_ancestor]
-
-
-def _facet_value_cells(
-    fields_dict: Mapping[str, Any], fire_results: tuple[FireResult, ...]
-) -> dict[str, Any]:
-    """Return the control, autograd, intervention and annotation cells."""
-
-    is_scalar_bool = fields_dict["is_scalar_bool"]
-    bool_value = fields_dict["bool_value"]
-    if is_scalar_bool is None and bool_value is None:
-        control = _facet_default("control")
-        is_scalar_bool, bool_value = control.is_scalar_bool, control.bool_value
-    qualname = fields_dict["grad_fn_class_qualname"]
-    if qualname is None:
-        qualname = _facet_default("autograd").grad_fn_class_qualname
-    is_edited = fields_dict["is_edited"]
-    if not (fire_results or is_edited):
-        intervention = _facet_default("intervention")
-        fire_results, is_edited = intervention.fire_results, intervention.is_edited
-    annotations = dict(fields_dict.get("annotations") or {})
-    if not annotations:
-        annotations = dict(_facet_default("annotations").annotations)
-    return {
-        "is_scalar_bool": bool(is_scalar_bool),
-        "bool_value": bool_value,
-        "grad_fn_class_qualname": qualname,
-        "is_edited": is_edited,
-        "edits": [
-            result.fire_record
-            for result in fire_results
-            if getattr(result, "fire_record", None) is not None
-        ],
-        "annotations": annotations,
-    }
-
-
-def _output_cells(fields_dict: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the output-ref cells and the pending blob ids."""
-
-    cells = {
-        "has_saved_activation": fields_dict["has_saved_activation"],
-        "output_device": fields_dict["output_device"],
-        "activation_transform": fields_dict["activation_transform"],
-        "detach_saved_activations": fields_dict["detach_saved_activations"],
-        "visualizer_path": fields_dict["visualizer_path"],
-        "in_multi_output": fields_dict["in_multi_output"],
-        "multi_output_index": fields_dict["multi_output_index"],
-        "container_path": tuple(fields_dict["container_path"]),
-        "container_spec": fields_dict["container_spec"],
-    }
-    if fields_dict.get("_pending_blob_id") is not None:
-        cells["_pending_blob_id"] = fields_dict["_pending_blob_id"]
-    if (
-        fields_dict["transformed_out"] is not None
-        and fields_dict.get("_pending_transformed_out_blob_id") is not None
-    ):
-        cells["_pending_transformed_out_blob_id"] = fields_dict["_pending_transformed_out_blob_id"]
-    return cells
-
-
-def _core_graph_cells(trace: Trace, fields_dict: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the core, graph, template and policy cells."""
-
-    layer_type = fields_dict["type"]
-    parents = list(fields_dict["parents"])
-    is_source = bool(fields_dict["is_input"] or fields_dict["is_buffer"])
-    modules = tuple(fields_dict["modules"])
-    return {
-        "_label_raw": fields_dict["_label_raw"],
-        "_layer_label_raw": fields_dict["_layer_label_raw"],
-        "step_index": fields_dict["step_index"] or 0,
-        "raw_index": fields_dict["raw_index"],
-        "type": layer_type,
-        "type_index": fields_dict["type_index"],
-        "pass_number": fields_dict["pass_number"],
-        "_source_trace_ref": weakref.ref(trace),
-        "_tracing_finished": fields_dict["_tracing_finished"],
-        "_construction_done": fields_dict["_construction_done"],
-        "save_grads": fields_dict["save_grads"],
-        "has_saved_args": fields_dict["has_saved_args"],
-        "saved_args": fields_dict["saved_args"],
-        "saved_kwargs": fields_dict["saved_kwargs"],
-        "args_template": fields_dict["args_template"],
-        "kwargs_template": fields_dict["kwargs_template"],
-        "unattributed_tensor_args": tuple(fields_dict.get("unattributed_tensor_args") or ()),
-        "dropped_edge_tensor_args": tuple(fields_dict.get("dropped_edge_tensor_args") or ()),
-        "equivalence_class": fields_dict["equivalence_class"],
-        "parents": parents,
-        "parent_arg_positions": _copy_parent_arg_positions(fields_dict["parent_arg_positions"]),
-        "is_input": layer_type == "input",
-        "input_was_parameter": bool(fields_dict.get("input_was_parameter", False)),
-        "is_output_parent": fields_dict["is_output_parent"],
-        "is_buffer": is_source and layer_type == "buffer",
-        "is_internal_source": layer_type != "input" and not parents,
-        "internal_source_parents": _internal_source_parent_labels(trace, parents),
-        "module": modules[-1] if modules else None,
-        "modules": list(modules),
-        "module_call_stack": list(modules),
-    }
+_NAME_KEYS = _NameKeys()
 
 
 #: Constant-valued cells the scatter seeds for every op (immutable values only).
@@ -331,17 +137,291 @@ _EMPTY_DICT_CELLS: tuple[str, ...] = (
 )
 
 
-def _constant_cells() -> dict[str, Any]:
-    """Return the cells the scatter seeds with constants (fresh containers per op)."""
+def _fill_transform(row: Any, f: Any, fields_dict: Mapping[str, Any], annotations: Any) -> None:
+    """Write the transform cells, mirroring the freeze's facet presence and config split."""
 
-    cells: dict[str, Any] = dict(_SCALAR_CONSTANT_CELLS)
+    user_config = dict(fields_dict.get("transform_config") or {})
+    user_config.pop("_tl_annotations", None)
+    fn_code_location = user_config.pop("fn_code_location", None)
+    is_transform = bool(fields_dict.get("is_transform", False))
+    kind = fields_dict.get("transform_kind")
+    chain = tuple(fields_dict.get("transform_chain") or ())
+    fn_name = fields_dict.get("transform_fn_name")
+    fn_qualname = fields_dict.get("transform_fn_qualname")
+    fn_source = fields_dict.get("transform_fn_source")
+    if not (
+        is_transform
+        or kind is not None
+        or chain
+        or user_config
+        or fn_name is not None
+        or fn_qualname is not None
+        or fn_source is not None
+        or fn_code_location is not None
+    ):
+        default = _TRANSFORM_DEFAULT
+        is_transform = default.is_transform
+        kind = default.transform_kind
+        chain = tuple(default.transform_chain)
+        user_config = dict(default.transform_config)
+        fn_name = default.transform_fn_name
+        fn_qualname = default.transform_fn_qualname
+        fn_source = default.transform_fn_source
+        fn_code_location = default.fn_code_location
+    user_config["_tl_annotations"] = dict(annotations)
+    if fn_code_location is not None:
+        user_config["fn_code_location"] = fn_code_location
+    row[f["is_transform"]] = is_transform
+    row[f["transform_kind"]] = kind
+    row[f["transform_chain"]] = chain
+    row[f["transform_config"]] = user_config
+    row[f["transform_fn_name"]] = fn_name
+    row[f["transform_fn_qualname"]] = fn_qualname
+    row[f["transform_fn_source"]] = fn_source
+
+
+def _fill_facets(
+    row: Any, f: Any, fields_dict: Mapping[str, Any], fire_results: tuple[FireResult, ...]
+) -> Any:
+    """Write the control, autograd, intervention, annotation and ancestry cells.
+
+    Returns the annotations mapping (the transform config cell embeds a copy).
+    """
+    # Cyclomatic grade C on purpose: this runs once per committed op, and one flat
+    # writer saves the per-op calls that split facet helpers would add.
+
+    is_scalar_bool = fields_dict["is_scalar_bool"]
+    bool_value = fields_dict["bool_value"]
+    if is_scalar_bool is None and bool_value is None:
+        is_scalar_bool = _CONTROL_DEFAULT.is_scalar_bool
+        bool_value = _CONTROL_DEFAULT.bool_value
+    qualname = fields_dict["grad_fn_class_qualname"]
+    if qualname is None:
+        qualname = _AUTOGRAD_DEFAULT.grad_fn_class_qualname
+    is_edited = fields_dict["is_edited"]
+    if not (fire_results or is_edited):
+        fire_results = _INTERVENTION_DEFAULT.fire_results
+        is_edited = _INTERVENTION_DEFAULT.is_edited
+    annotations = dict(fields_dict.get("annotations") or {})
+    if not annotations:
+        annotations = dict(_ANNOTATIONS_DEFAULT.annotations)
+    row[f["is_scalar_bool"]] = bool(is_scalar_bool)
+    row[f["bool_value"]] = bool_value
+    row[f["grad_fn_class_qualname"]] = qualname
+    row[f["is_edited"]] = is_edited
+    row[f["edits"]] = (
+        [
+            result.fire_record
+            for result in fire_results
+            if getattr(result, "fire_record", None) is not None
+        ]
+        if fire_results
+        else []
+    )
+    row[f["annotations"]] = annotations
+    input_ancestors = fields_dict["input_ancestors"]
+    internal_source_ancestors = fields_dict["internal_source_ancestors"]
+    root_ancestors = fields_dict["root_ancestors"]
+    has_internal = fields_dict["has_internal_source_ancestor"]
+    if not (input_ancestors or internal_source_ancestors or root_ancestors or has_internal):
+        input_ancestors = _ANCESTRY_DEFAULT.input_ancestors
+        internal_source_ancestors = _ANCESTRY_DEFAULT.internal_source_ancestors
+        root_ancestors = _ANCESTRY_DEFAULT.root_ancestors
+        has_internal = _ANCESTRY_DEFAULT.has_internal_source_ancestor
+    row[f["root_ancestors"]] = set(root_ancestors)
+    row[f["has_input_ancestor"]] = bool(input_ancestors)
+    row[f["input_ancestors"]] = set(input_ancestors)
+    row[f["has_internal_source_ancestor"]] = has_internal
+    row[f["internal_source_ancestors"]] = set(internal_source_ancestors)
+    return annotations
+
+
+def _fill_output(row: Any, f: Any, fields_dict: Mapping[str, Any]) -> None:
+    """Write the output-ref, transformed-output, backend-semantics and pending blob cells."""
+
+    row[f["has_saved_activation"]] = fields_dict["has_saved_activation"]
+    row[f["output_device"]] = fields_dict["output_device"]
+    row[f["activation_transform"]] = fields_dict["activation_transform"]
+    row[f["detach_saved_activations"]] = fields_dict["detach_saved_activations"]
+    row[f["visualizer_path"]] = fields_dict["visualizer_path"]
+    row[f["in_multi_output"]] = fields_dict["in_multi_output"]
+    row[f["multi_output_index"]] = fields_dict["multi_output_index"]
+    row[f["container_path"]] = tuple(fields_dict["container_path"])
+    row[f["container_spec"]] = fields_dict["container_spec"]
+    if fields_dict.get("_pending_blob_id") is not None:
+        row[f["_pending_blob_id"]] = fields_dict["_pending_blob_id"]
+    payload = fields_dict["transformed_out"]
+    if payload is None:
+        row[f["transformed_out_shape"]] = None
+        row[f["transformed_out_dtype"]] = None
+        row[f["transformed_activation_memory"]] = None
+        row[f["transformed_out"]] = None
+    else:
+        if fields_dict.get("_pending_transformed_out_blob_id") is not None:
+            row[f["_pending_transformed_out_blob_id"]] = fields_dict[
+                "_pending_transformed_out_blob_id"
+            ]
+        row[f["transformed_out_shape"]] = fields_dict["transformed_out_shape"]
+        row[f["transformed_out_dtype"]] = _resolve_dtype(str(fields_dict["transformed_out_dtype"]))
+        row[f["transformed_activation_memory"]] = fields_dict["transformed_activation_memory"]
+        row[f["transformed_out"]] = payload
+    semantics = fields_dict.get("backend_semantics")
+    if semantics is None:
+        row[f["bytes_delta_at_call"]] = fields_dict["bytes_delta_at_call"]
+        row[f["bytes_peak_at_call"]] = fields_dict["bytes_peak_at_call"]
+        row[f["autograd_memory"]] = fields_dict["autograd_memory"]
+        row[f["num_autograd_tensors"]] = fields_dict["num_autograd_tensors"]
+        row[f["grad_fn_class_name"]] = fields_dict["grad_fn_class_name"]
+    else:
+        row[f["bytes_delta_at_call"]] = semantics.bytes_delta_at_call
+        row[f["bytes_peak_at_call"]] = semantics.bytes_peak_at_call
+        row[f["autograd_memory"]] = semantics.autograd_memory
+        row[f["num_autograd_tensors"]] = semantics.num_autograd_tensors
+        row[f["grad_fn_class_name"]] = semantics.grad_fn_class_name
+
+
+def _fill_core_graph(row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, Any]) -> None:
+    """Write the core, graph, template and module cells."""
+
+    layer_type = fields_dict["type"]
+    parents = list(fields_dict["parents"])
+    modules = tuple(fields_dict["modules"])
+    require_event = trace.capture_events.live_index.require_event
+    row[f["_label_raw"]] = fields_dict["_label_raw"]
+    row[f["_layer_label_raw"]] = fields_dict["_layer_label_raw"]
+    row[f["step_index"]] = fields_dict["step_index"] or 0
+    row[f["raw_index"]] = fields_dict["raw_index"]
+    row[f["type"]] = layer_type
+    row[f["type_index"]] = fields_dict["type_index"]
+    row[f["pass_number"]] = fields_dict["pass_number"]
+    row[f["_source_trace_ref"]] = weakref.ref(trace)
+    row[f["_tracing_finished"]] = fields_dict["_tracing_finished"]
+    row[f["_construction_done"]] = fields_dict["_construction_done"]
+    row[f["save_grads"]] = fields_dict["save_grads"]
+    row[f["has_saved_args"]] = fields_dict["has_saved_args"]
+    row[f["saved_args"]] = fields_dict["saved_args"]
+    row[f["saved_kwargs"]] = fields_dict["saved_kwargs"]
+    row[f["args_template"]] = fields_dict["args_template"]
+    row[f["kwargs_template"]] = fields_dict["kwargs_template"]
+    row[f["unattributed_tensor_args"]] = tuple(fields_dict.get("unattributed_tensor_args") or ())
+    row[f["dropped_edge_tensor_args"]] = tuple(fields_dict.get("dropped_edge_tensor_args") or ())
+    row[f["equivalence_class"]] = fields_dict["equivalence_class"]
+    row[f["parents"]] = parents
+    row[f["parent_arg_positions"]] = _copy_parent_arg_positions(fields_dict["parent_arg_positions"])
+    row[f["is_input"]] = layer_type == "input"
+    row[f["input_was_parameter"]] = bool(fields_dict.get("input_was_parameter", False))
+    row[f["is_output_parent"]] = fields_dict["is_output_parent"]
+    row[f["is_buffer"]] = bool(fields_dict["is_input"] or fields_dict["is_buffer"]) and (
+        layer_type == "buffer"
+    )
+    row[f["is_internal_source"]] = layer_type != "input" and not parents
+    internal_source_parents: list[str] = []
+    for label in parents:
+        if require_event(label).has_internal_source_ancestor:
+            internal_source_parents.append(label)
+    row[f["internal_source_parents"]] = internal_source_parents
+    row[f["module"]] = modules[-1] if modules else None
+    row[f["modules"]] = list(modules)
+    row[f["module_call_stack"]] = list(modules)
+
+
+def _fill_row(
+    row: Any,
+    f: Any,
+    trace: Trace,
+    fields_dict: Mapping[str, Any],
+    fire_results: tuple[FireResult, ...],
+) -> None:
+    """Write every per-op cell of one exhaustive draft but its function cells into ``row``.
+
+    ``row`` is a layout row (``f`` the layout's field ids) or a cell dict
+    (``f`` maps each name to itself). The scalar constants are not written
+    here: the layout row starts from a template holding them and the dict form
+    adds them first. Fresh empty containers are written per op.
+    """
+
     for name in _EMPTY_LIST_CELLS:
-        cells[name] = []
+        row[f[name]] = []
     for name in _EMPTY_DICT_CELLS:
-        cells[name] = {}
-    cells["output_descendants"] = set()
-    cells["module_entry_arg_keys"] = defaultdict(list)
-    return cells
+        row[f[name]] = {}
+    row[f["output_descendants"]] = set()
+    row[f["module_entry_arg_keys"]] = defaultdict(list)
+    _fill_core_graph(row, f, trace, fields_dict)
+    _fill_output(row, f, fields_dict)
+    _fill_transform(row, f, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
+
+
+class _RowPlan:
+    """One layout's field ids and its row template holding the scalar constant cells."""
+
+    __slots__ = ("layout", "fids", "template")
+
+    def __init__(self, layout: OpStoreLayout) -> None:
+        """Bind ``layout`` and build its template (unset fields stay ``_MISSING``)."""
+
+        self.layout = layout
+        self.fids = layout.fid_by_name
+        template: list[Any] = [_MISSING] * layout.n_fields
+        for name, value in _SCALAR_CONSTANT_CELLS:
+            template[self.fids[name]] = value
+        self.template = template
+
+
+#: Row plans by layout identity (the layout is kept by the plan, so ids are not reused).
+_PLANS: dict[int, _RowPlan] = {}
+
+
+def _plan_for(layout: OpStoreLayout) -> _RowPlan:
+    """Return the cached row plan for ``layout``, building it on first use."""
+
+    plan = _PLANS.get(id(layout))
+    if plan is None or plan.layout is not layout:
+        plan = _RowPlan(layout)
+        _PLANS[id(layout)] = plan
+    return plan
+
+
+def write_draft_row(
+    store: Any,
+    trace: Trace,
+    fields_dict: Mapping[str, Any],
+    fire_results: tuple[FireResult, ...],
+    function: FunctionCallRef,
+) -> int:
+    """Append one exhaustive draft's row to ``store`` and return its index.
+
+    The row holds exactly what ``write_op_row(store, op_row_cells(...))`` holds
+    for the same draft and the same resolved call ref, written straight into a
+    copy of the layout's constant template (no intermediate cell dicts).
+
+    Parameters
+    ----------
+    store
+        A building ``OpRowStore`` (or any store with ``layout`` and ``adopt_row``).
+    trace
+        Active capture trace (the ``source_trace`` cell and the live index).
+    fields_dict
+        The final exhaustive draft, as passed to ``_op_record_from_log``.
+    fire_results
+        Intervention results for this op.
+    function
+        The op's resolved (shared) function-call ref.
+
+    Returns
+    -------
+    int
+        The new row's index.
+    """
+
+    layout = store.layout
+    plan = _PLANS.get(id(layout))
+    if plan is None or plan.layout is not layout:
+        plan = _plan_for(layout)
+    row = plan.template.copy()
+    fids = plan.fids
+    _fill_row(row, fids, trace, fields_dict, fire_results)
+    _write_function_ref_cells(row, fids, function)
+    return int(store.adopt_row(row))
 
 
 def op_row_cells(
@@ -351,6 +431,8 @@ def op_row_cells(
     call_ref_box: list[FunctionCallRef] | None = None,
 ) -> dict[str, Any]:
     """Return one exhaustive op's layout-stored cells without building its record.
+
+    The dict form of :func:`write_draft_row` (same fill, keyed by name).
 
     Parameters
     ----------
@@ -370,17 +452,10 @@ def op_row_cells(
         the frozen record (see the module docstring).
     """
 
-    facet_cells = _facet_value_cells(fields_dict, fire_results)
-    cells = _constant_cells()
-    cells.update(_core_graph_cells(trace, fields_dict))
-    cells.update(_output_cells(fields_dict))
-    cells.update(_transformed_cells(fields_dict))
-    cells.update(_semantics_cells(fields_dict))
-    cells.update(_ancestry_cells(fields_dict))
-    cells.update(_transform_cells(fields_dict, facet_cells["annotations"]))
-    cells.update(facet_cells)
     function = _resolve_call_function_ref(cast(dict[str, Any], fields_dict), call_ref_box)
-    cells.update(_function_ref_cells(function))
+    cells: dict[str, Any] = dict(_SCALAR_CONSTANT_CELLS)
+    _fill_row(cells, _NAME_KEYS, trace, fields_dict, fire_results)
+    _write_function_ref_cells(cells, _NAME_KEYS, function)
     return cells
 
 

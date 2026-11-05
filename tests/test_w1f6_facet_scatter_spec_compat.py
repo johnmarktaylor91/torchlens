@@ -23,13 +23,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._save import check_spec_compat, load_intervention_spec
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     GraphShapeMismatchError,
     ReplayPreconditionError,
 )
 from torchlens.intervention.hooks import normalize_hooks_from_spec
-from torchlens.intervention.save import check_spec_compat, load_intervention_spec
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
@@ -118,7 +118,7 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
 
     zeroed = clean.fork("zero_q_head")
     zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
-    zeroed.run(model, x)
+    zeroed = zeroed.run(model, x)
 
     h0 = zeroed.modules["attn"].facets.head(0).q
     h1 = zeroed.modules["attn"].facets.head(1).q

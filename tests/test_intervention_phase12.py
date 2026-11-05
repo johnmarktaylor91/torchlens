@@ -194,7 +194,7 @@ def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
     log._attach_hooks(
         tl.func("relu"), tl.intervention.scramble_elements(source=torch.zeros(2, 3), seed=1)
     )
-    log.run(model, x)
+    log = log.run(model, x)
 
     with pytest.raises(AppendBatchDependenceError):
         log.append(torch.randn(2, 3), model=model)
@@ -230,7 +230,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     model.eval()
     log = _capture(model, torch.randn(2, 3))
     log._attach_hooks(tl.func("relu"), tl.zero_ablate())
-    log.run(model, torch.randn(2, 3))
+    log = log.run(model, torch.randn(2, 3))
     log.append(torch.randn(1, 3), model=model)
 
     bundle_path = tmp_path / "append_bundle"

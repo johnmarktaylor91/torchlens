@@ -71,10 +71,6 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # from completeness_witness.py, and the stack getter already routes
     # through _torch_compat (get_current_dispatch_mode_stack).
     "torchlens/_utils/_dispatch_modes.py": frozenset({"from torch.utils._python_dispatch"}),
-    # TorchDispatchMode base class of the parameter-as-subclass probe mode:
-    # moved unchanged out of the _torch_compat boundary file by 6f92963911;
-    # same single touch, the repo-wide count of private touches is unchanged.
-    "torchlens/_utils/_kernel_probes.py": frozenset({"from torch.utils._python_dispatch"}),
     # The fail-closed torch.ops enumeration (the TorchDispatchMode base-class
     # import moved to _modes.py with the l3 mode-pop unification).
     "torchlens/backends/torch/completeness_witness.py": frozenset({"import torch._ops"}),
@@ -121,7 +117,7 @@ _ALLOWED_PRIVATE_TOUCHES: dict[str, frozenset[str]] = {
     # moves them the read fails LOUDLY at call time -- there is no
     # silent-degradation path for a capability flag to disclose.
     "torchlens/intervention/_trace_run.py": frozenset({"torch.nn.modules.batchnorm._BatchNorm"}),
-    "torchlens/intervention/rerun.py": frozenset(
+    "torchlens/intervention/_rerun.py": frozenset(
         {
             "torch.nn.modules.batchnorm._BatchNorm",
             "torch.nn.modules.dropout._DropoutNd",

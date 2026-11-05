@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import pytest
 from _exemption_contracts import VALIDATION_CONTRACTS
 
-from torchlens.validation import exemptions as ex
+from torchlens.validation import _exemptions as ex
 
 # ---------------------------------------------------------------------------
 # FINDING B1-06: per-entry closure for the two registries the ledger covered
@@ -100,7 +100,7 @@ class CustomCheckExemption:
     func_name:
         Captured function name, exactly as the registry keys it.
     check:
-        Attribute name in ``torchlens.validation.exemptions`` of the check the
+        Attribute name in ``torchlens.validation._exemptions`` of the check the
         registry must be bound to. Pinned by IDENTITY, so rebinding an op to a
         laxer predicate is red.
     contract:
@@ -471,23 +471,6 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
             "strictly perturbation-tested (the b1p2 D2 narrowing)"
         ),
         refuses="the arg-1 scores, whose values order and gate every kept box",
-    ),
-    StructuralPositionExemption(
-        func_name="deform_conv2d",
-        positions=frozenset({1}),
-        contract=_C2,
-        proof_kind="vehicle_limited",
-        justification=(
-            "the arg-1 sampling offsets ARE value-sensitive, but out-of-domain offsets "
-            "index outside the feature map inside the native kernel and can segfault, "
-            "so the vehicle cannot perturb them safely; forward replay still re-runs "
-            "the real call from the saved offsets. Input, weight, bias, and modulation "
-            "mask stay strictly perturbation-tested"
-        ),
-        refuses=(
-            "the arg-0 input and the weight/bias/mask arguments, whose values flow "
-            "arithmetically into every output element"
-        ),
     ),
     StructuralPositionExemption(
         func_name="roi_align",
@@ -1057,7 +1040,6 @@ STRUCTURAL_KWARG_ALIAS_LEDGER: dict[str, dict[int, frozenset[str]]] = {
     # torchvision coordinate args (b1p2 D2 narrowing): keyword spellings of
     # the SAME audited positions above, nothing wider.
     "nms": {0: frozenset({"boxes"})},
-    "deform_conv2d": {1: frozenset({"offset"})},
     "roi_align": {1: frozenset({"boxes", "rois"})},
     "roi_pool": {1: frozenset({"boxes", "rois"})},
     "ps_roi_align": {1: frozenset({"boxes", "rois"})},
@@ -1277,7 +1259,7 @@ def test_inline_pre_perturbation_predicates_still_exist() -> None:
     grow an unaudited ENTRY, but the citations must not rot.
     """
 
-    from torchlens.validation import core as validation_core
+    from torchlens.validation import _core as validation_core
 
     assert hasattr(validation_core, "_perturbed_parents_only_occupy_out_kwarg")
     assert hasattr(validation_core, "_check_perturbation_exemptions")

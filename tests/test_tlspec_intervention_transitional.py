@@ -13,8 +13,8 @@ from example_models import TinyReluAdd as _ReluModel
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION
 from torchlens.errors import ArtifactTooOldError
-from torchlens.intervention.save import load_intervention_spec as legacy_load_intervention_spec
-from torchlens.intervention.types import InterventionSpec
+from torchlens.intervention._save import load_intervention_spec as legacy_load_intervention_spec
+from torchlens.intervention._types import InterventionSpec
 from torchlens.options import CaptureOptions
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword

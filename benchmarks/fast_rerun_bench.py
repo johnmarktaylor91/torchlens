@@ -38,7 +38,7 @@ if str(REPO_ROOT) not in sys.path:
 
 import torchlens as tl  # noqa: E402
 from benchmarks.host_label import benchmark_host_label  # noqa: E402
-from torchlens.intervention.rerun import run as capture_rerun  # noqa: E402
+from torchlens.intervention._rerun import run as capture_rerun  # noqa: E402
 
 MAGNITUDE = 4.0
 LOGIT_SITE = "logit_readout"

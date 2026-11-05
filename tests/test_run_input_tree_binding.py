@@ -16,6 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.arg_handling import normalize_input_args
 from torchlens.options import CaptureOptions
 
 
@@ -70,3 +71,34 @@ def test_loaded_run_spreads_a_tuple_for_a_two_argument_forward(tmp_path: Path) -
     result = tl.load(path).run_transaction(inputs=(new_y, new_no))
     with torch.no_grad():
         assert torch.allclose(result.output, model(new_y, new_no))
+
+
+class _OneNested(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+
+    def forward(self, x: dict[str, Any]) -> torch.Tensor:
+        return self.lin(x["a"]) + x["b"]["c"]
+
+
+def _nested() -> dict[str, Any]:
+    torch.manual_seed(0)
+    return {"a": torch.randn(2, 3), "b": {"c": torch.randn(2, 3)}}
+
+
+@pytest.mark.parametrize("empty", [[], ()], ids=["list", "tuple"])
+def test_empty_positionals_bind_no_argument_on_a_single_parameter_forward(empty: Any) -> None:
+    """An empty positional sequence means no positional argument, never ``model(empty, x=...)``.
+
+    The former rule wrapped an empty sequence into ``[[]]`` whenever ``forward`` takes one
+    positional parameter, so a keyword-only call raised "got multiple values for argument".
+    """
+    assert normalize_input_args(empty, _OneNested()) == []
+
+
+def test_validate_keyword_only_call_on_a_single_parameter_forward() -> None:
+    """``tl.validate(model, [], {"x": nested})`` reaches ``forward(x=nested)`` once and passes."""
+    torch.manual_seed(0)
+    model = _OneNested().eval()
+    assert tl.validate(model, [], {"x": _nested()}, scope="forward", seed=0) is True

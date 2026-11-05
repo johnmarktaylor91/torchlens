@@ -346,7 +346,7 @@ ROWS: Mapping[str, Row] = {
         "channel.unencoded_reasons",
         "unencoded",
         C,
-        "_encoding:_varying_marker",
+        "_encoding_rolled_marks:_varying_marker",
         caption_variants=(
             "reconciled_aggregate",
             "summed_aggregate",
@@ -586,16 +586,8 @@ LEGEND_ROW_WITNESS: Mapping[str, str] = {
     "accum = gradient accumulation into a leaf": "backward-legend",
     "bwd N = backward pass N; order N = derivative order": "backward-legend",
     "order N = derivative order": "backward-legend",
-    "TorchLens encoding": "color-by",
-    "color_by:": "color-by",
-    "eligible nodes": "color-by",
-    "linear min-max": "color-by",
-    "n/a = unencoded": "color-by",
-    "size_by:": "size-by",
-    "size ~": "size-by",
-    "min": "size-by",
-    "stack_by:": "stack-by",
-    "same rank = same annotation value": "stack-by",
+    "size:": "size-by",
+    "aligned: same": "stack-by",
 }
 
 __all__ = [

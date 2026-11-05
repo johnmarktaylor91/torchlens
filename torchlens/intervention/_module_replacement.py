@@ -37,12 +37,13 @@ import torch
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._selection.target import TargetSpec
+from .._utils._record_group_table import op_attr
 from ._replay_values import rollback_snapshot
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .types import HookSpec
+    from ._types import HookSpec
 
 # This module stays outside the package's import cycle (scripts/checks/layering.py):
 # the record classes it rewrites are matched by their fields, the Layer class is taken
@@ -166,7 +167,7 @@ def _moved_call_labels(site: Op, address: str) -> list[str]:
     module's last op (it computed the pre-edit value).
     """
 
-    calls = list(getattr(site, "output_of_module_calls", None) or ())
+    calls = list(site.module_context.output_of_module_calls or ())
     if address in calls:
         selected = _call_address(address)
     elif address in {_call_address(call) for call in calls}:
@@ -207,7 +208,7 @@ def _mint_replacement(trace: Trace, site: Op, before: dict[str, Any], moved_call
     for name, value in fields.items():
         replacement._internal_set(name, value)
     for name in LAYER_PASS_LOG_FIELD_ORDER:
-        value = getattr(replacement, name, None)
+        value = getattr(replacement, op_attr(name), None)
         if name not in fields and isinstance(value, (list, dict, set)):
             replacement._internal_set(name, copy.copy(value))
     return replacement
@@ -235,7 +236,7 @@ def _identity_fields(trace: Trace, site: Op, before: dict[str, Any]) -> dict[str
         "lookup_keys": [],
         "edits": [r for r in site.edits if not any(r is o for o in before["edits"])],
         "is_edited": True,
-        "equivalence_class": f"{REPLACEMENT_TYPE}::{site.equivalence_class}",
+        "equivalence_class": f"{REPLACEMENT_TYPE}::{site.graph.equivalence_class}",
         "is_input": False,
         "is_output": False,
         "is_final_output": False,
@@ -312,19 +313,19 @@ def _wiring_fields(site: Op, moved_calls: list[str], modules: list[str]) -> dict
         "module": modules[-1] if modules else None,
         "modules": modules,
         "module_call_stack": [
-            m for m in (site.module_call_stack or ()) if not _is_inner_call(m, moved_calls)
+            m for m in (site.module_context.call_stack or ()) if not _is_inner_call(m, moved_calls)
         ],
         "output_of_modules": [_call_address(call) for call in moved_calls],
         "output_of_module_calls": list(moved_calls),
         "is_module_output": True,
-        "input_to_module_calls": list(site.input_to_module_calls or ()),
+        "input_to_module_calls": list(site.module_context.input_to_module_calls or ()),
     }
 
 
 def _replacement_site_key(trace: Trace, modules: list[str]) -> str | None:
     """Mint the structural site key the next replacement at this module position gets."""
 
-    if not any(getattr(op, "site_key", None) for op in trace._layer_list):
+    if not any(op.graph.site_key for op in trace._layer_list):
         return None
     instance = call_instance_id(modules)
     axis = site_axis(modules)
@@ -347,7 +348,9 @@ def _restore_last_op(
         site._internal_set(name, value)
     moved = set(moved_calls)
     moved_addresses = {_call_address(call) for call in moved_calls}
-    remaining = [call for call in (site.output_of_module_calls or ()) if call not in moved]
+    remaining = [
+        call for call in (site.module_context.output_of_module_calls or ()) if call not in moved
+    ]
     site._internal_set("children", (replacement.label,))
     site._internal_set("has_children", True)
     site._internal_set("out_versions_by_child", {})
@@ -355,7 +358,7 @@ def _restore_last_op(
     site._internal_set("output_of_module_calls", remaining)
     site._internal_set(
         "output_of_modules",
-        [a for a in (site.output_of_modules or ()) if a not in moved_addresses],
+        [a for a in (site.module_context.output_of_modules or ()) if a not in moved_addresses],
     )
     site._internal_set("is_module_output", bool(remaining))
     site._internal_set("input_to_module_calls", [])
@@ -412,7 +415,7 @@ def _rewire_consumers(trace: Trace, site: Op, replacement: Op) -> None:
         if child is None:
             continue
         child._internal_set("parents", tuple(new if p in old else p for p in (child.parents or ())))
-        positions = child.parent_arg_positions or {}
+        positions = child.call.parent_arg_positions or {}
         child._internal_set(
             "parent_arg_positions",
             {
@@ -422,8 +425,8 @@ def _rewire_consumers(trace: Trace, site: Op, replacement: Op) -> None:
                 for domain in ("args", "kwargs")
             },
         )
-        child._internal_set("args_template", _rewrite_refs(child.args_template, old, new))
-        child._internal_set("kwargs_template", _rewrite_refs(child.kwargs_template, old, new))
+        child._internal_set("args_template", _rewrite_refs(child.call.args_template, old, new))
+        child._internal_set("kwargs_template", _rewrite_refs(child.call.kwargs_template, old, new))
         child._internal_set(
             "_edge_uses",
             [_rewrite_refs(r, old, new) for r in (child._edge_uses or ())],
@@ -460,7 +463,9 @@ def _splice_into_containers(
         site_keys[:] = [k for k in site_keys if k not in taken]
     trace._layer_num_calls[replacement.layer_label] = 1
     trace._num_ops += 1  # a computational layer, like the capture-time replacement
-    group = trace._graph_op_equivalence_classes.setdefault(replacement.equivalence_class, set())
+    group = trace._graph_op_equivalence_classes.setdefault(
+        replacement.graph.equivalence_class, set()
+    )
     group.add(replacement.label)
     replacement._internal_set("equivalent_ops", group)
     replacement._internal_set("recurrent_ops", [replacement.label])

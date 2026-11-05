@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 from torchlens._selection.selectors import label as label_selector
-from torchlens.intervention.helpers import splice_module
+from torchlens.intervention._helpers import splice_module
 
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning

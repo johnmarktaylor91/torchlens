@@ -36,17 +36,18 @@ from ..._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
+from ...recording._exceptions import PredicateError
 from ...recording._storage_resolver import _resolve_storage
-from ...recording.exceptions import PredicateError
-from ...recording.types import (
+from ...recording._types import (
     CaptureSpec,
     ModuleStackFrame,
     RecordContext,
     StorageIntent,
 )
 from ._aten_capture import _note_aten_owner_verdict
-from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
+from ._ops_arguments import _iter_tree_tensors
 from ._ops_payload_stream import _stream_predicate_payloads
+from ._ops_saved_arg_copies import _copy_saved_arg_tree, _copy_saved_call_args
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

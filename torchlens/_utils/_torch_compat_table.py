@@ -11,6 +11,13 @@ entries of its ``_ATTRIBUTE_PROBES``, behavioural checks as functions). This
 module is data only: it imports nothing from torch or TorchLens, and the
 capture stack never imports it, so tests and tooling read it without growing
 any import closure.
+
+Unflagged fallbacks (no ``HAS_*`` row, because torch has the mechanism and only
+loses it at run time): on torch 2.1 the first ``torch.compile`` strips the
+step-hook wrapper from every torch optimizer class, so registered step hooks
+stop firing. ``torchlens._utils._optimizer_hooks.stripped_step_hook_wrapper``
+detects that per optimizer and ``register_step_hooks`` in the same module binds
+torch's own wrapper on the instance for the life of a TorchLens session.
 """
 
 from __future__ import annotations
@@ -220,11 +227,13 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_LEGACY_CONSTRUCTOR_NEW_PATCH"),
     _row("HAS_MEMORY_PROFILE", measured=False),
     _row("HAS_META_ITEM_GUARD", measured=False),
+    _row("HAS_NUMPY_BRIDGE", measured=False),  # varies with the installed NumPy, not torch
     _row("HAS_MHA_FASTPATH_SWITCH", measured=False),
     _row("HAS_MODULE_CALL_DISPATCH_FRAME", measured=False),
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),
     _row("HAS_NN_ATTENTION_MODULE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_NODE_PREHOOK"),
+    _row("HAS_NODE_SEQUENCE_NR", measured=False),
     _row("HAS_ORIGINAL_VIEW_TRACKING", measured=False),
     _row(
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
@@ -232,6 +241,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_PIPELINING"),
     _row("HAS_REDUCE_TUPLE_DIM", absent_on=("2.1.2",)),
+    _row("HAS_REV_VIEW_FUNC_UNSAFE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_MPS_MEMORY_QUERY", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_RMSNORM_MODULE", absent_on=("2.1.2", "2.2.2", "2.3.1")),
     _row("HAS_SAFE_WEIGHTS_ONLY_LOAD", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
@@ -241,7 +251,10 @@ _ROWS: tuple[CapabilityRow, ...] = (
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1"),
     ),
     _row("HAS_SCRIPT_FUNCTION_CALL_HOOK"),
+    _row("HAS_SDPA_EMPTY_ROW_ZERO", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
+    _row("HAS_SDPA_GQA", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_SET_STANCE", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
+    _row("HAS_SPARSE_INVARIANT_CHECK"),
     _row("HAS_SPARSE_SPSOLVE_CUDA", measured=False),
     _row(
         "HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE",
@@ -249,6 +262,9 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_TENSORBASE_CLASS"),
     _row("HAS_TENSOR_SEQUENCE_SLOT_FIX"),
+    # Measured with current setuptools installed, as a pip install carries it; with no
+    # setuptools at all the import also fails on 2.2.2 through 2.9.1.
+    _row("HAS_TORCH_CPP_EXTENSION", absent_on=("2.1.2",)),
     _row("HAS_TORCH_FUNC"),
     _row("HAS_TORCH_FUNCTION_STACK_SURGERY"),
     _row("HAS_TORCH_VF"),

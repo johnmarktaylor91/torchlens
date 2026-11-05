@@ -100,6 +100,24 @@ def assign_to_sequence_or_dict(obj_: Any, ind: int, new_value: Any) -> Any:
     return obj_
 
 
+def read_at_path(container: Any, path: tuple[Any, ...]) -> Any:
+    """Return the leaf of a nested container at ``path`` (one key per level)."""
+
+    value = container
+    for key in path:
+        value = value[key]
+    return value
+
+
+def replace_at_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
+    """Return ``container`` with the leaf at ``path`` replaced (tuples rebuilt)."""
+
+    if not path:
+        return value
+    child = replace_at_path(container[path[0]], path[1:], value)
+    return assign_to_sequence_or_dict(container, path[0], child)
+
+
 def _path_component_key(component: Any) -> Any:
     """Return the native key/index represented by an output path component.
 

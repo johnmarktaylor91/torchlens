@@ -5,6 +5,8 @@ from __future__ import annotations
 from html import escape
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 
 def pass_animation_html(trace: Any, site: Any) -> str:
     """Return a self-contained HTML animation of the passes at ``site``.
@@ -36,7 +38,7 @@ def pass_animation_html(trace: Any, site: Any) -> str:
             "pass": int(getattr(entry, "pass_index", index + 1) or index + 1),
             "label": str(getattr(entry, "layer_label", base_label)),
             "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-            "memory": str(getattr(entry, "activation_memory", "")),
+            "memory": str(record_member(entry, "activation_memory", "")),
         }
         for index, entry in enumerate(pass_entries)
     ]

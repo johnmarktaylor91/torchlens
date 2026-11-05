@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -50,9 +52,11 @@ def _geometry_args_snapshot(op: Op) -> tuple[object, ...]:
     """
 
     return (
-        _snapshot_mapping(getattr(op, "func_config", None)),
-        tuple(_snapshot_value(value) for value in getattr(op, "non_tensor_pos_args", ()) or ()),
-        _snapshot_mapping(getattr(op, "non_tensor_kwargs", None)),
+        _snapshot_mapping(record_member(op, "func_config", None)),
+        tuple(
+            _snapshot_value(value) for value in record_member(op, "non_tensor_pos_args", ()) or ()
+        ),
+        _snapshot_mapping(record_member(op, "non_tensor_kwargs", None)),
     )
 
 
@@ -83,7 +87,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(op.parents),
             tuple(op.children),
             tuple(op.shape) if op.shape is not None else None,
-            op.io_role,
+            op.graph.io_role,
             op.func_name,
             _geometry_args_snapshot(op),
             _edge_uses_snapshot(op),

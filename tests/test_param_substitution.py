@@ -21,7 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import SelectionError
-from torchlens.validation.core import _check_edge_intervention_boundary
+from torchlens.validation._core import _check_edge_intervention_boundary
 
 
 class _Net(nn.Module):
@@ -122,7 +122,7 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
         assert torch.allclose(relu_op.out, relu, atol=1e-6), f"pass {k} relu out is stale/wrong"
         fires = [r for r in lin_op.edits if r.edge_address is not None]
         assert len(fires) == 1, f"pass {k} must carry its OWN occurrence FireRecord"
-        payload = lin_op.edge_substitutions[next(iter(lin_op.edge_substitutions))]
+        payload = lin_op.graph.edge_substitutions[next(iter(lin_op.graph.edge_substitutions))]
         assert payload["substitution_kind"] == "param"
     assert torch.allclose(fork.output_ops[0].out, expected[-1][1], atol=1e-6)
     audit = fork.intervention_audit[-1]["params"][0]
@@ -218,8 +218,8 @@ def test_fire_record_and_store_mark_param_kind(capture):
     fork = trace.fork()
     fork.do(tl.param("fc1.weight"), tl.scale(0.5))
     child = fork.ops["fc1"]
-    (store_key,) = child.edge_substitutions.keys()
-    payload = child.edge_substitutions[store_key]
+    (store_key,) = child.graph.edge_substitutions.keys()
+    payload = child.graph.edge_substitutions[store_key]
     assert payload["substitution_kind"] == "param"
     assert payload["param_address"] == "fc1.weight"
     stamp = child.edge_replacement_stamps[store_key]

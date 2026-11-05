@@ -23,11 +23,11 @@ Key entry points:
   `tl.report.doctor()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
   (`backends/_protocol.py`) stays torch's internal orchestration adapter.
 - Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
-  retained op carries the portable structural-position key `op.site_key`
+  retained op carries the portable structural-position key `op.graph.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
-  `Layer.site_peers` / `Layer.shape_summary` are the Layer surface (typed
-  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].site_key`); `grouping=` is the closed-vocabulary knob
+  `Layer.graph.site_peers` / `Layer.shape_summary` are the Layer surface (typed
+  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].graph.site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
   refuse typed pre-D1/S2) mirrored on
@@ -232,7 +232,7 @@ Key entry points:
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
   the replay engine only (`edge_intervention_engine_unsupported`
-  otherwise); the substituted value rides `Op.edge_substitutions` (+
+  otherwise); the substituted value rides `Op.graph.edge_substitutions` (+
   `edge_replacement_stamps`, `FireRecord.edge_address`; persisted as of
   tlspec v8) while capture truth stays unmodified, and uncorroborated
   entries FAIL validation (`edge_intervention_boundary`).
@@ -291,12 +291,9 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  `AtenOp.gpu_kernels` is the GPU kernel launches one ATen call made, matched to it by
-  the profiler's correlation id; `Op.gpu_kernels` is the deduplicated union of those
-  across the op's ATen calls. With telemetry off each returns one row with
-  `attribution_status="unavailable"`, never an empty tuple. Both are declared on their
-  classes and reach `torchlens._kernel_telemetry` by module name only when read; the views sit over
-  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
+  `torchlens._kernel_telemetry` correlates CUDA launches to rows of
+  the ATen execution profile (no public reader: the former per-op and per-call kernel views
+  are removed and refuse typed; `_aten_gpu_kernels` / `_op_gpu_kernels` are the private readers) (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
   keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
   from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
@@ -320,23 +317,24 @@ Key entry points:
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
-  Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
+  Spec persistence is one path: `intervention/_save.py` owns the `.tlspec` directory,
   tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
   encoder and decoder with the `format_version` table (`SPEC_FORMAT_VERSIONS`);
   `intervention/_spec_values.py` holds the value wrapper grammar and the import-ref
   trust gate. `_io/injection_codec.py` is the separate bundle-row envelope.
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
-  (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
-  the tri-state `show_legend` (`None`=AUTO channel-only legend, plus the key on a `module=` focus; `True`/`False` historical; explicit
+  (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), keyed via
+  the tri-state `show_legend` (`None`=AUTO plain channel key, method details in the graph
+  `comment` via `_encoding_key`, plus the key on a `module=` focus; `True`/`False` historical; explicit
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
-  legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
+  method-record note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
   Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`
-  (size refuses where color degrades); `total_*` sums encode + aggregation legend line; the
+  (size refuses where color degrades); `total_*` sums encode + aggregation method-record line; the
   funnel drops NodeSpec width/height on image nodes; `scale=` without `size_by` refuses
   `scale_requires_size_by`. Wave-1 rank channel `Trace.draw(stack_by=...)` (UNSTABLE,
   strictly opt-in): annotation -> `rank=same` groups (`newrank=true`); `True`/`"auto"` is

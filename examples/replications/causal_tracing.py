@@ -257,8 +257,9 @@ def trace_fact(
     }
 
 
-#: Corrupted and restored runs keep only the logits (the metric's input) and each MLP's
-#: ``c_proj`` output (the restored ``down_out`` facet's home), not every op of the batch.
+#: The corrupted and restored runs save only the logits (the metric's input) and each MLP's
+#: ``c_proj`` output (the restored ``down_out`` facet's home); the ``save=`` list above does
+#: that, and this default options object is passed explicitly beside it.
 _LOGITS_AND_MLPS = tl.options.CaptureOptions()
 
 

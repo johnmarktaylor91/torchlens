@@ -20,7 +20,8 @@ from _hermetic_counters import quiet_gc
 import torchlens as tl
 from torchlens._data_classes import cleanup
 from torchlens._postprocess import control_flow
-from torchlens.intervention.types import ParentRef, Unsupported
+from torchlens._utils._record_group_table import record_member
+from torchlens.intervention._types import ParentRef, Unsupported
 
 
 class _RepeatedSites(torch.nn.Module):
@@ -84,7 +85,7 @@ def test_branch_attribution_runs_once_per_distinct_stack(monkeypatch: pytest.Mon
         trace = tl.trace(_BranchedRepeatedSites().eval(), torch.randn(2, 4))
     attributed = [_frame_position_key(args[0]) for args in calls]
     assert len(trace.ops) >= 12
-    assert any(op.conditional_branch_stack for op in trace.ops), "step 5 must attribute"
+    assert any(op.control_flow.branch_stack for op in trace.ops), "step 5 must attribute"
     assert len(attributed) == len(set(attributed)), "a stack was attributed twice"
     assert 0 < len(attributed) < len(trace.ops) // 2
 
@@ -99,9 +100,9 @@ def test_branch_stacks_are_private_per_op(monkeypatch: pytest.MonkeyPatch) -> No
         real(self, events_by_key)
         for label in self._raw_graph_ws.raw_layer_labels_list:
             layer = self[label]
-            if getattr(layer, "is_orphan", False):
+            if record_member(layer, "is_orphan", False):
                 continue
-            stack = layer.conditional_branch_stack
+            stack = layer.control_flow.branch_stack
             seen["ids"].append(id(stack))
             seen["nonempty"].append(len(stack))
 
@@ -131,8 +132,20 @@ class _Wrapper:
     note: str = "n"
 
 
+class _Entry(SimpleNamespace):
+    """Stand-in Op: the call-group templates live under their storage attributes."""
+
+    @property
+    def args_template(self) -> Any:
+        return self._call_args_template
+
+    @property
+    def kwargs_template(self) -> Any:
+        return self._call_kwargs_template
+
+
 def _entry(args_template: Any, kwargs_template: Any) -> SimpleNamespace:
-    return SimpleNamespace(args_template=args_template, kwargs_template=kwargs_template)
+    return _Entry(_call_args_template=args_template, _call_kwargs_template=kwargs_template)
 
 
 def test_scrub_still_replaces_removed_parent_refs_at_any_depth() -> None:

@@ -12,6 +12,7 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
+from ..._utils._numpy_bridge import tensor_to_numpy
 from ...options import CaptureOptions
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
@@ -159,7 +160,7 @@ class TorchProtocol(SpecBackedProtocol):
         tensor = value.detach().cpu()
         if tensor.dtype == torch.bfloat16:
             tensor = tensor.float()
-        return tensor.numpy().copy()
+        return tensor_to_numpy(tensor).copy()
 
     def realize_once(self, values: Sequence[Any]) -> None:
         """Eager framework: no evaluation step."""

@@ -143,7 +143,8 @@ def test_report_keeps_per_layer_rows_under_fused_attention():
     The report counted layers by attention modules exposing the head vocabulary, so
     under SDPA every ``{L}`` row vanished. Each row now appears at every layer, live
     where the eager twin is live, and the attention pattern (no softmax op under a
-    fused kernel) answers non-live with a remedy instead of being dropped.
+    fused kernel) answers as the read-only reconstruction a default capture serves
+    instead of being dropped.
     """
 
     import families
@@ -158,7 +159,7 @@ def test_report_keeps_per_layer_rows_under_fused_attention():
             for name in ("layers_output", "attentions_output", "mlps_input"):
                 assert report[f"{name}[{layer}]"].status in LIVE, name
             probs = report[f"attention_probabilities[{layer}]"]
-            assert probs.status not in LIVE and probs.remedy
+            assert probs.status == "reconstructed_read_only" and probs.facet == "pattern"
         two_x = mi.alias_report(trace, generation="2.x")
         assert sum(1 for r in two_x if r.query.startswith("blocks.1.")) >= 10
     finally:

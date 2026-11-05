@@ -10,6 +10,7 @@ from typing import Any
 
 import graphviz
 
+from .._utils._record_group_table import record_member
 from ._render_utils import html_escape
 from ._typography import edge_annotation_pt
 
@@ -40,7 +41,7 @@ def _parent_occurrence_labels(node: Any) -> list[str]:
     rendered fan-in counts one entry per attributed position (one for an unattributed parent).
     """
 
-    positions = getattr(node, "parent_arg_positions", None) or {}
+    positions = record_member(node, "parent_arg_positions", None) or {}
     counts = Counter(
         label for domain in ("args", "kwargs") for label in (positions.get(domain) or {}).values()
     )
@@ -124,9 +125,9 @@ def _bump_deduped_edge_multiplicity(
     base_label = entry["base_label"]
     if base_label and str(base_label).startswith("<"):
         # A pre-existing HTML label keeps the historical concatenation.
-        entry["edge_dict"]["label"] = f"{base_label} x{count}"
+        entry["edge_dict"]["label"] = f"{base_label} x{count:,}"
     else:
-        text = f"{base_label} x{count}" if base_label else f"x{count}"
+        text = f"{base_label} x{count:,}" if base_label else f"x{count:,}"
         entry["edge_dict"]["label"] = _html_multiplicity_edge_label(text)
     body_index = entry["body_index"]
     if body_index is None:

@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from .spec import Rule
-    from .types import InterventionDecision
+    from ._spec import Rule
+    from ._types import InterventionDecision
 
 
 def _match_rules(rules: Iterable[Rule], ctx: Any) -> Rule | None:

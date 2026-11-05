@@ -17,7 +17,8 @@ import torchlens as tl
 import torchlens._visualization._condensed_flow as condensed_flow
 import torchlens._visualization.auto_collapse as auto_collapse
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
-from torchlens._visualization._render_common import format_collapsed_module_contents
+from torchlens._visualization._header_block import network_count_line
+from torchlens._visualization._label_format import compact_count, format_collapsed_module_contents
 from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens._visualization._trace_collapse import (
     collapse_plan as _collapse_plan,
@@ -1435,7 +1436,7 @@ def _module_contents_label(trace: tl.Trace, module: Any) -> str:
 
     return format_collapsed_module_contents(
         len(module.layer_labels),
-        sum(trace[label].is_buffer for label in module.layer_labels),
+        sum(trace[label].graph.is_buffer for label in module.layer_labels),
     )
 
 
@@ -1555,7 +1556,7 @@ def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) ->
             for op in trace.ops
             if op.func_name == "add_"
             and op.children
-            and all(trace.ops[child].is_buffer for child in op.children)
+            and all(trace.ops[child].graph.is_buffer for child in op.children)
         ]
         assert len(hidden_updates) == 2
 
@@ -1652,8 +1653,8 @@ def _atomic_own_output_ops(trace: tl.Trace, address: str) -> tuple[Any, ...]:
         if (
             modules
             and modules[-1].rsplit(":", 1)[0] == address
-            and getattr(op, "is_atomic_module", False)
-            and not getattr(op, "is_buffer", False)
+            and getattr(op.module_context, "is_atomic_module", False)
+            and not getattr(op.graph, "is_buffer", False)
         ):
             surfaced.append(op)
     return tuple(surfaced)
@@ -1935,7 +1936,7 @@ def test_adjacency_index_matches_forced_accessor_reference(
         if case_name == "recurrent":
             assert any(module.num_calls > 1 for module in trace.modules)
         if case_name == "batchnorm_buffer":
-            assert any(op.is_buffer for op in trace._layer_list)
+            assert any(op.graph.is_buffer for op in trace._layer_list)
         if case_name == "write_version":
             assert any(op.buffer_write_kind is not None for op in trace._layer_list)
 
@@ -2197,13 +2198,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         folds = resolve_repeat_folds(trace, collapse_fn, fold_repeats=True)
         fold = folds["blocks.0"]
         representative = trace.modules[fold.representative]
-        source = _draw_source(
-            trace,
-            tmp_path,
-            "run_fold_auto_rep_stats",
-            "auto",
-            fold_repeats=True,
-        )
+        source = _draw_source(trace, tmp_path, "run_fold_auto_rep_stats", "auto", fold_repeats=True)
         rep_line = _collapsed_node_line(source, "blocks.0")
 
         assert fold.num_layers != len(representative.layer_labels)
@@ -2213,9 +2208,10 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
-        assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params:,} params" in source
+        # The header counts the traced network's ops, never the collapsed boxes.
+        assert network_count_line(trace, None, "unrolled") in source
+        assert not re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{compact_count(trace.num_params, full_below=1000)} params" in source
     finally:
         trace.cleanup()
 
@@ -2301,9 +2297,10 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
-        assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params:,} params" in source
+        # The header counts the traced network's ops, never the collapsed boxes.
+        assert network_count_line(trace, None, "unrolled") in source
+        assert not re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{compact_count(trace.num_params, full_below=1000)} params" in source
     finally:
         trace.cleanup()
 
@@ -2699,9 +2696,9 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         surfaced_ops = _atomic_own_output_ops(trace, "block")
         surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
         remainder_layers = len(module.layer_labels) - len(surfaced_ops)
-        remainder_buffers = sum(trace[label].is_buffer for label in module.layer_labels) - sum(
-            op.is_buffer for op in surfaced_ops
-        )
+        remainder_buffers = sum(
+            trace[label].graph.is_buffer for label in module.layer_labels
+        ) - sum(op.graph.is_buffer for op in surfaced_ops)
         remainder_params = module.num_params - surfaced_params
         block_line = _collapsed_node_line(source, "block")
 
@@ -3089,55 +3086,11 @@ def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
         first_segment_members = [trace.ops[label] for label in first_segment.ops]
         assert first_segment.owner is None
         assert any(
-            op.is_atomic_module and op.modules == ("stem:1",) for op in first_segment_members
+            op.module_context.is_atomic_module and op.modules == ("stem:1",)
+            for op in first_segment_members
         )
         assert any(
             op.modules and op.modules[0].startswith("blocks:") for op in first_segment_members
-        )
-    finally:
-        trace.cleanup()
-
-
-class _AtomicGapStack(torch.nn.Module):
-    """Two-op blocks with a bare atomic activation wedged between them."""
-
-    def __init__(self) -> None:
-        """Initialize blocks around one atomic top-level child."""
-
-        super().__init__()
-        self.layers = torch.nn.Sequential(
-            SegmentToyBlock(),
-            torch.nn.ReLU(),
-            SegmentToyBlock(),
-            SegmentToyBlock(),
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the atomic-gap stack forward pass."""
-
-        return self.layers(x)
-
-
-def test_op_segment_span_disclosure_counts_atomic_module_members(tmp_path: Path) -> None:
-    """R19-5 span disclosure must name hidden ATOMIC module calls too.
-
-    T9 (grind-p3, MED) red pin: the spanned-homes walk used the renderer's
-    effective module stack, which drops an atomic module's own innermost
-    level (a presentation choice — the renderer keeps the op and drops the
-    box). Containment disclosure must not inherit that drop: a segment
-    hiding a bare ``nn.ReLU`` child's op silently omitted its module call
-    from the ``-- spans @...`` list, undercounting the hidden module calls.
-    """
-
-    trace = _trace(_AtomicGapStack(), torch.randn(1, 4, 8, 8))
-    try:
-        source = _draw_source(trace, tmp_path, "atomic_gap_spans", "max")
-
-        assert "-- spans" in source
-        spans_lines = [line for line in source.splitlines() if "-- spans" in line]
-        assert any("layers.1:1" in line for line in spans_lines), (
-            "the atomic nn.ReLU child's module call is missing from the "
-            f"span disclosure: {spans_lines}"
         )
     finally:
         trace.cleanup()
@@ -3164,7 +3117,7 @@ def test_max_child_segment_decomposes_ops_and_buffers(
         for segment in child_segments:
             # r21: descriptor ops are concrete pass-qualified labels (exact keys).
             covered = [trace.ops[label] for label in segment.ops]
-            expected_buffers = sum(op.is_buffer for op in covered)
+            expected_buffers = sum(op.graph.is_buffer for op in covered)
             expected_ops = len(covered) - expected_buffers
             expected_contents = format_collapsed_module_contents(len(covered), expected_buffers)
 

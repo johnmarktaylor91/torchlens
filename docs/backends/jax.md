@@ -8,6 +8,12 @@ supported control-flow regions disclose partial replay verification.
 
 ## Tutorial
 
+Install the runtime first:
+
+```bash
+pip install "torchlens[jax]"
+```
+
 ```python
 # tutorial: executed by tests/test_jax_docs_page.py under the backend_jax marker
 import jax.numpy as jnp

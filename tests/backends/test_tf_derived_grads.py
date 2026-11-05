@@ -9,6 +9,7 @@ import pytest
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
+from torchlens._utils._record_group_table import op_attr
 from torchlens.backends.tf import GradOptions
 from torchlens.backends.tf.backend import TFBackend
 from torchlens.backends.tf.derived_grads import (
@@ -249,7 +250,7 @@ def test_tf_duplicate_trace_signature_group_is_ambiguous() -> None:
 
     trace = tl.trace(model, tf.ones((2, 2), dtype="float32"), backend="tf")
     relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
-    relu_ops[1].func_call_id = relu_ops[0].func_call_id
+    setattr(relu_ops[1], op_attr("func_call_id"), relu_ops[0].call.call_id)
     relu_ops[1].parents = tuple(relu_ops[0].parents)
     groups = _tf_trace_intermediate_signatures(trace)
     # Torch parity: ``op.parents`` holds FINAL labels (every op's edges are

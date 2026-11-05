@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from .._output_slot import OutputSlot
     from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
-    from ..intervention.types import FrozenInterventionSpec, TargetSpec
+    from ..intervention._types import FrozenInterventionSpec, TargetSpec
     from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
@@ -93,7 +93,7 @@ from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
-from ..intervention.types import (
+from ..intervention._types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
@@ -168,11 +168,12 @@ from .param import ParamAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
+    from PIL import Image
 
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
-    from ..intervention.types import FireRecord
+    from ..intervention._types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
         ReceptiveFieldProfile,
@@ -181,7 +182,7 @@ if TYPE_CHECKING:
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
     from ..report._trace_facts import _CallableDict
-    from ..validation.status import ValidationStatus
+    from ..validation._status import ValidationStatus
     from ..viz._drawing import Drawing
     from .aten_op import AtenOp, _ModePausedInteriorGap
     from .buffer import BufferAccessor
@@ -1338,7 +1339,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         selector: Any,
         *,
         data: Any = None,
-        image: str | Path | None = None,
+        image: "str | Path | Image.Image | None" = None,
         max_fanout: int = 1_000_000,
         copy: bool = False,
     ) -> "Trace":
@@ -1353,8 +1354,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             payloads are persisted under ``_annotation_blobs`` and are supported
             only for torch traces.
         image:
-            Optional local image path used by the existing ``NodeSpec.image``
-            render hook.
+            Optional picture for the selected nodes: an image file path or a PIL image.
         max_fanout:
             Explicit maximum number of selected sites. The default is
             intentionally large so annotation can fan out across many layers.
@@ -2017,7 +2017,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     @property
     def _graph_has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.is_in_conditional_body for entry in self._layer_list)
+        return any(entry.control_flow.is_in_conditional_body for entry in self._layer_list)
 
     @property
     def _graph_has_conditionals(self) -> bool:
@@ -2119,9 +2119,9 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
-                entry.flops_backward
+                entry.cost.flops_backward
                 for entry in self._layer_list
-                if entry.flops_backward is not None
+                if entry.cost.flops_backward is not None
             )
         )
 
@@ -3069,7 +3069,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace":
-        """Rerun the live model on new input and refresh this Trace."""
+        """Rerun the live model on new input and return a new Trace; this Trace is unchanged."""
         options = {k: v for k, v in locals().items() if k not in ("self", "model", "x")}
         result = _doors.intervention()._trace_run.run(self, model, x, **options, transaction=False)
         return cast("Trace", result)

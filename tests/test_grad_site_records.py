@@ -17,8 +17,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import helpers as helper_module
-from torchlens.intervention.types import Edit
+from torchlens.intervention import _helpers as helper_module
+from torchlens.intervention._types import Edit
 
 _CAPTURE = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
 

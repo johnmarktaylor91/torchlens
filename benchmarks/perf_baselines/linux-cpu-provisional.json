@@ -5532,6 +5532,8 @@
             "files_written": 9,
             "fsync_calls": 14,
             "metadata_writes": 1,
+            "pathlib_read_opens": 8,
+            "pathlib_write_opens": 8,
             "read_opens": 9,
             "timing_floats_by_file": {
               "records/module.json": 60,

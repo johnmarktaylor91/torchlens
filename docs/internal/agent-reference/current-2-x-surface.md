@@ -103,7 +103,7 @@ expert contributions from routing indices alone.
   output-difference metrics (relative metrics anchored on the first argument).
 - Relation accessors on FINISHED traces return IMMUTABLE views (authorized public type
   break, decided 2026-08-12): label sequences (`op.parents`, `op.children`, `op.modules`,
-  `op.module_call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
+  `op.module_context.call_stack`, conditional child lists, `Layer.parents`/`Layer.children`, ...)
   are `tuple`; label sets (`input_ancestors`, `output_descendants`, `root_ancestors`,
   `internal_source_ancestors`) are `frozenset`. Reads are identity-stable, in-place
   mutation (`op.children.append(...)`) raises, direct assignment still works on `Op`
@@ -561,12 +561,18 @@ expert contributions from routing indices alone.
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
+- A trace captured from one photo (`tl.trace(model, "cat.jpg")` or a PIL image, kept as
+  `trace.input`) draws a PNG thumbnail of it (at most 160 px) above the input node's rows
+  (`torchlens/_visualization/_input_photo.py`); tensor inputs, several input nodes and
+  `batch_render="shape_only"` keep the plain node. A saved trace keeps the bounded copy the
+  `save_raw_input="small"` policy writes (at most 256 px), which still draws after loading.
 - `Trace.draw(view=...)` (keyword-only; default `None`, the plain graph) draws a premade view,
   each answering one question: `"overview"`, `"debug"`, `"speed"`, `"dims"`, `"transformer"`,
   `"memory"`, `"sequence"`, `"compute"`, `"interventions"` (spelled once in
   `torchlens/_literals.py` `DrawViewLiteral`; door `torchlens/_visualization/_view_door.py`).
-  Each view prints caption lines under the header block, first line
-  `view: <name> -- <question>`. Explicit keywords win over the view's settings, so combinations
+  Each view prints any caption lines it needs under the header block (no `view:` line; the
+  header is model, the traced network's op count and size (the focused module's on a `module=` draw; never drawn boxes), compact params, and one edit line when edited).
+  Explicit keywords win over the view's settings, so combinations
   are keywords (`trace.draw(view="debug", show_edge_shapes=True)`); `theme=` stays the colour
   skin and composes with any view; `"speed"`/`"memory"`/`"compute"` turn on
   `node_style="profiling"` rows themselves. `"transformer"` focuses on the first repeated block
@@ -589,17 +595,20 @@ expert contributions from routing indices alone.
 - `Trace.draw(color_by=...)` (UNSTABLE spelling, keyword-only, no deprecation shim owed until
   the naming session ratifies it) is the v1 encoding channel: a record field name, scalar
   builtin (`time`/`flops`/`bytes`/`magnitude`/`grad_norm`), or callable `node -> value` fills
-  eligible op nodes from a colorblind-safe sequential ramp (linear min-max, legend-disclosed).
+  eligible op nodes from a colorblind-safe sequential ramp (OKLab-blended stop list, default
+  viridis, dark = high on a light page, `_ramps.DEFAULT_RAMP_FAMILY`; YlOrBr is the named
+  alternative; linear min-max). The drawn key is plain (a colour bar labelled at both ends with
+  units, one `size: ...` line) and nothing else; no method details are drawn or kept.
   Channels are dot-layout-only (AUTO forces dot with a notice; explicit `layout="rank"` refuses
   `encoding_requires_dot_layout`) and presentation-only (collapse plan and Trace untouched).
   On rolled multi-pass layers, field sources resolve through the name-keyed rolled-aggregate
   allowlist in `torchlens/_visualization/_encoding.py`: marker-varying and mirrored
   first-pass-only numerics (`raw_index`, `step_index`, `ordinal_index`, `grad_fn_object_id`,
   `buffer_pass`, `transformed_gradient_memory`, `conditional_depth`) stay UNENCODED with a
-  legend note — an encoding must never imply uniformity it cannot prove (tripwire class);
+  note on the encoding state — an encoding must never imply uniformity it cannot prove (tripwire class);
   exact cross-pass totals (`total_*`, the autograd trio) encode with a mandatory aggregation
-  legend line; unclassified sources refuse `encoding_source_invalid`. `show_legend` is now
-  tri-state: `None` (default, AUTO) draws a channel-only disclosure legend iff a channel is
+  line on the encoding state; unclassified sources refuse `encoding_source_invalid`. `show_legend` is now
+  tri-state: `None` (default, AUTO) draws the channel key iff a channel is
   active; `True`/`False` keep their historical meanings, and explicit `False` is honored even
   with channels active. Typed refusals: `encoding_source_invalid`, `encoding_value_invalid`
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
@@ -611,16 +620,20 @@ expert contributions from routing indices alone.
   the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: base box =
-  per-dimension max(median label box, own label box), area grows linearly to
-  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value); collapsed
+  render-IR pass `_encoding_size_layout.layout_encoded_sizes`: the base is the typical node
+  size, per dimension the median label need over encoded nodes, where label need is the padded
+  label box from DejaVu Sans metrics (`_label_width`) times the shape's Graphviz fit factor
+  (sqrt 2 for ellipses); area grows linearly from the base at the smallest value to
+  `SIZE_BY_MAX_AREA_MULT` (2.0) x the base at the top value, and each node is then grown per
+  dimension to its own label need, so labels always fit at the normal font and one long label
+  never inflates the others); collapsed
   boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified
   single-valued (marker-varying reconciled fields, mirrored/per-pass projections, varying
   shape under `"dims"` — the refusal fires BEFORE dims resolution, so the honest-aggregate
   range strings are unreachable). Summed-family sources (`total_*`) encode with a mandatory
-  aggregation legend line. The spec funnel DROPS NodeSpec width/height when `spec.image` is
+  aggregation line on the encoding state. The spec funnel DROPS NodeSpec width/height when `spec.image` is
   set (an image node's size is pixel-derived); `extra_attrs` stays the power-valve override
   and wins on key conflicts by merge order. `scale=` without `size_by` refuses
   `scale_requires_size_by`; unknown scale tokens refuse `encoding_scale_invalid`.
@@ -638,6 +651,15 @@ expert contributions from routing indices alone.
   `newrank=true` (cross-cluster constraints are silently ignored without it). While stacking
   is active the sibling-ordering post-pass NO-OPS (two rank-constraint systems would fight);
   collapsed boxes and fold reps stay un-annotated in v1; v1 has exactly ONE cohort.
+- ANNOTATION PICTURES: `trace.annotate(label, image=...)` takes a path to any image Pillow
+  opens (PNG, JPEG, WebP, ...) or a PIL image; a path that does not open refuses
+  `image_path_unreadable` at annotate time. The record keeps the caller's path
+  (`annotations["user"]["image"]`), so a saved trace carries a path, never pixels. At draw
+  time a `.png` path goes to Graphviz as is and any other format is written as a PNG copy
+  into the trace's visualizer scratch folder (`annotation_images/`), since some Graphviz
+  builds cannot read JPEG. A PIL image is written there as a PNG at annotate time and its
+  path stored; that file lives only as long as the trace object (annotate again after a
+  load). Code: `torchlens/_data_classes/_annotation_image.py`.
 - CHECKED SUPPRESSION (UNSTABLE spelling `show_redundant_args`, DEFAULT-ON): `draw()` node
   labels omit a module constructor arg exactly when the equality check licenses it — the arg
   value provably equals the captured shape dimension it duplicates on THIS trace (closed torch
@@ -870,7 +892,7 @@ expert contributions from routing indices alone.
   analysis-only); `"health_facts"` and `"capture_advisories"` are reserved annotation
   families with their validation rows; and three ENTRY-DARK slots are declared with
   fail-closed load validation so their Phase-3 writers need no further bump:
-  `Op.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
+  `Op.call.injection_provenance` (F01 log_injections), `Trace.source.snapshots` (F30),
   `Trace.graph.structure_evidence` (F33). Contract of record:
   `torchlens/schemas/writer_contract_v10.json` (the v9 and v8 contracts left with the 2.x readers);
   the C07-adjudicated field-intent census is maintained privately. The C07X
@@ -897,21 +919,21 @@ expert contributions from routing indices alone.
   entry-dark slots with fail-closed validation: `Trace.provenance.root_entry_point` (the closed
   `module_call|bound_method|function_call` root descriptor, written UNCONDITIONALLY on
   every capture; joined to the rerun identity gate FAIL-CLOSED — the F41 bullet above),
-  `Op.episode_step` (F-EPISODE writes), `Op.tl_authored_root` (F41 writes it on
+  `Op.episode_step` (F-EPISODE writes), `Op.call.tl_authored_root` (F41 writes it on
   bound-method captures, live). The Bundle-side ledger rows
   join (foldB s4.4 item 12) SPLIT OFF per the review proviso: the C07 ledger shape stays
   unresolved pre-F03 and must not hold the amendment past V9-FREEZE.
 - SITE KEYS + GROUPING SURFACE (L1 wave 0; every spelling DOCUMENTED-UNSTABLE
   pending naming-session/S2 ratification): every retained op carries
-  `op.site_key` (`site_key_v1`) — a portable, policy-independent
+  `op.graph.site_key` (`site_key_v1`) — a portable, policy-independent
   STRUCTURAL-POSITION identity minted at grouping time on every backend
   (`"s1|" + module-site/type/slot/ordinal`, percent-escaped; ordinals restart
   per pass-qualified innermost call instance, so reused-module calls share
   keys across instances). It is a BRIDGING relation (cross-capture joins on
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
-  internal until S2). Per-pass keys read as `layer.ops[k].site_key`
-  (within-call recurrence groups span sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
+  internal until S2). Per-pass keys read as `layer.ops[k].graph.site_key`
+  (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The
@@ -1147,7 +1169,7 @@ expert contributions from routing indices alone.
   design is an escalated named future) — the child re-executes from the
   substituted input (node-level `is_edited` never fires for
   edges), the substituted value rides the tier-(ii) store
-  `Op.edge_substitutions` (+ `edge_replacement_stamps`,
+  `Op.graph.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary
   saves of edge-intervened traces proceed), and capture truth
   (saved_args / out_versions_by_child / parent.out) is retained unmodified
@@ -1169,7 +1191,7 @@ expert contributions from routing indices alone.
   is substituted at its derived occurrence address and the live
   `nn.Parameter` is NEVER written (bit-identical pinned). Parameters are NOT
   in the edge family (LiteralTensor template components, not EdgeUseRecords),
-  so `intervention/param_substitution.py` DERIVES the addresses
+  so `intervention/_param_substitution.py` DERIVES the addresses
   (`Param.used_by_ops` + template identity/barcode match, FAIL-CLOSED:
   nested positions, released legacy captures, bare pass-ambiguous
   multi-pass consumer spellings, and consumer inventories omitting a pass
@@ -1849,7 +1871,7 @@ expert contributions from routing indices alone.
   `trace.draw(color_by=graph)` paints each site holding feature or error nodes with the
   `abs_sum` total of its nodes' influence (a site-to-value mapping paints feature activations
   or any other quantity).
-  `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
+  `tl.attribution.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
   layer=None, hook_type="resid_post", default_steering_strength=1.0)` publishes a vector through "Create
@@ -1906,7 +1928,33 @@ expert contributions from routing indices alone.
   group views a Trace serves are `tl.types.TraceProvenance`, `tl.types.TraceSettings`,
   `tl.types.TraceCost`, `tl.types.TraceSource`, `tl.types.TraceHealth`, `tl.types.TraceGraph` and
   `tl.types.TraceAutograd` (`trace.provenance`, `trace.options`, `trace.cost`, `trace.source`,
-  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. The backend registry
+  `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. Op and
+  Layer group their fields by concern the same way: `op.cost` (`tl.types.OpCost`) and `layer.cost`
+  (`tl.types.LayerCost`) hold compute, memory and timing facts (`op.cost.flops_forward`,
+  `op.cost.duration`, `layer.cost.total_flops_forward`), and `op.control_flow`
+  (`tl.types.OpControlFlow`) and `layer.control_flow` (`tl.types.LayerControlFlow`) hold
+  conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`), and
+  `op.call` (`tl.types.OpCall`) and `layer.call` (`tl.types.LayerCall`) hold how the function was
+  called (`op.call.call_id`, `op.call.saved_args`, `layer.call.num_pos_args`), `op.source`
+  (`tl.types.OpSource`) and `layer.source` (`tl.types.LayerSource`) hold where it was called
+  (`op.source.frames`, `op.source.arg_expressions`, `layer.source.fx_path`), and `op.autograd`
+  (`tl.types.OpAutograd`) and `layer.autograd` (`tl.types.LayerAutograd`) hold autograd linkage and
+  saved gradients (`op.autograd.grad_fn_class_name`, `op.autograd.grads`,
+  `op.autograd.grad_for(bwd=0)`), and `op.module_context` (`tl.types.OpModuleContext`) and
+  `layer.module_context` (`tl.types.LayerModuleContext`) hold module nesting
+  (`op.module_context.call_stack`, `op.module_context.atomic_module`,
+  `layer.module_context.output_of_modules`), and `op.payload` (`tl.types.OpPayload`) and
+  `layer.payload` (`tl.types.LayerPayload`) hold the transformed payloads and lazy materialization
+  (`op.payload.transformed_out`, `op.payload.materialize_out()`), and `op.graph`
+  (`tl.types.OpGraph`) and `layer.graph` (`tl.types.LayerGraph`) hold graph position
+  (`op.graph.has_parents`, `op.graph.min_distance_from_input`, `layer.graph.is_orphan`); a Layer group reads an
+  Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
+  flat spelling such as `op.cost.flops_forward` refuses typed (`facade_redirect`) and names the new one.
+  `op.buffer_address` and `layer.buffer_address` are renamed `op.buffer_address` and `layer.buffer_address`; the
+  removed flat members refuse the same way and name their remedy: `activation_transform`,
+  `detach_saved_activations` and `output_device` are capture settings read from `trace.options`,
+  the `out_ref` and `grad_ref` refs give way to `op.out` / `op.payload.materialize_out()` and
+  `op.grad` / `op.payload.materialize_grad()`, and `grad_fn_object_id` to `op.autograd.grad_fn`. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`

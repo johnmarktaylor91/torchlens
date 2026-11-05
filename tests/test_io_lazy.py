@@ -242,7 +242,7 @@ def test_lazy_materialize_honors_cuda_map_location(tmp_path: Path) -> None:
     lazy_log = load(bundle_path, lazy=True)
     layer = _first_saved_layer(lazy_log)
 
-    tensor = layer.materialize_out(map_location="cuda")
+    tensor = layer.payload.materialize_out(map_location="cuda")
 
     assert tensor.device.type == "cuda"
 
@@ -326,7 +326,7 @@ def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None
 
     bundle_path, _ = _save_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    ref = _first_saved_layer(lazy_log).out_ref
+    ref = _first_saved_layer(lazy_log)._out_ref
     assert ref is not None
 
     # Collect first: garbage left by earlier tests may still hold a file that

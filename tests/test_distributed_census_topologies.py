@@ -262,7 +262,43 @@ class TestCensusReportGenerator:
 # ===========================================================================
 
 
+def _funcol_wait_interposition_present() -> bool:
+    """Return whether torch has the ``_c10d_functional`` wait op the counters interpose on."""
+
+    from torchlens._utils._torch_compat import probe_funcol_wait_interposition
+
+    return probe_funcol_wait_interposition()
+
+
+_REQUIRES_FUNCOL_WAIT_INTERPOSITION = pytest.mark.skipif(
+    not _funcol_wait_interposition_present(),
+    reason="HAS_FUNCOL_WAIT_INTERPOSITION is False: funcol waits do not reach "
+    "_c10d_functional::wait_tensor on this torch",
+)
+
+
+def test_capture_interposition_installs_exactly_where_torch_has_the_wait_op():
+    """The capture session installs its wait wrapper with the flag and names the flag without it."""
+
+    from torchlens.backends.torch.funcol import _FuncolCaptureSession
+
+    session = _FuncolCaptureSession(trace=None)
+    session.install_interposition()
+    try:
+        if _funcol_wait_interposition_present():
+            assert session.interposition_status == "installed"
+        else:
+            assert session.interposition_status == (
+                "unavailable: HAS_FUNCOL_WAIT_INTERPOSITION is False"
+            )
+            assert session._library is None
+    finally:
+        session.teardown_interposition()
+    assert session._library is None
+
+
 @pytest.mark.heavy
+@_REQUIRES_FUNCOL_WAIT_INTERPOSITION
 class TestDualChannelBareLeg:
     def test_interposition_fires_and_tears_down_clean(self, single_rank_world):
         dist = single_rank_world

@@ -7,7 +7,9 @@ from collections.abc import Iterable
 from typing import Any, Final, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.refs import journal_record
 
+# record-groups: keep-flat (vocabulary module: no record-table import; reads stay getattr)
 from ._errors import CaptureNotActiveError
 
 ActivationT = TypeVar("ActivationT")
@@ -153,8 +155,10 @@ class TraceLike:
         if events is None:
             return _event_tuple((), "OpEvents", "events")
         if hasattr(events, "amended_op_records"):
-            return _event_tuple(events.amended_op_records(), "OpEvents", "events")
-        return _event_tuple(events.op_events, "OpEvents", "events")
+            return _event_tuple(
+                map(journal_record, events.amended_op_records()), "OpEvents", "events"
+            )
+        return _event_tuple(map(journal_record, events.op_events), "OpEvents", "events")
 
     @property
     def backward_events(self) -> tuple[Any, ...]:
@@ -344,8 +348,17 @@ class TraceLike:
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
             return getattr(ctx, "address", None)
-        buffer_address = getattr(activation, "address", None)
-        if getattr(activation, "is_buffer", False) and isinstance(buffer_address, str):
+        # Op and Layer keep ``is_buffer`` in their graph group and name the buffer
+        # ``buffer_address``; other activations carry both flat. Read them directly
+        # so this vocabulary module stays free of record-table imports.
+        graph = getattr(activation, "graph", None)
+        if graph is not None:
+            is_buffer = getattr(graph, "is_buffer", False)
+            buffer_address = getattr(activation, "buffer_address", None)
+        else:
+            is_buffer = getattr(activation, "is_buffer", False)
+            buffer_address = getattr(activation, "address", None)
+        if is_buffer and isinstance(buffer_address, str):
             return buffer_address
         module = getattr(activation, "module", None)
         if not isinstance(module, str):

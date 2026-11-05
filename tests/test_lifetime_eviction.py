@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import RecordBindingError
+from torchlens._utils._record_group_table import record_member
 
 
 class _StackNet(nn.Module):
@@ -48,7 +49,7 @@ def _nested_arg_tensor_refs(trace) -> list[weakref.ref]:
 
     for op in trace.ops.values():
         for field_name in ("saved_args", "input_activations"):
-            _collect(getattr(op, field_name, None))
+            _collect(record_member(op, field_name, None))
     return refs
 
 
@@ -71,7 +72,7 @@ def test_nested_container_payloads_evict_with_last_owner() -> None:
         "through the retained Op facade"
     )
     # Metadata stays readable on the retained facade; evicted slots read None.
-    saved = retained_op.saved_args
+    saved = retained_op.call.saved_args
     assert saved is not None
     assert not any(
         isinstance(item, torch.Tensor)

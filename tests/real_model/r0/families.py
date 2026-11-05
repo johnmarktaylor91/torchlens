@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -53,17 +54,27 @@ def load_vendored_gpt2_tokenizer(tmp_dir: str) -> Any:
     to fit the repo's 500 KB large-file gate; the decompressed digest is
     ledgered in ``vendored/PROVENANCE.jsonl``. transformers 5.x builds fast
     tokenizers from in-memory ``vocab``/``merges`` objects, so the loader
-    parses the vendored files itself (``tmp_dir`` kept for interface
-    stability with file-based tokenizer families).
+    parses the vendored files itself; the 4.x band only builds from file
+    paths, so there the decompressed vocabulary and the merges are written
+    into ``tmp_dir`` and passed by path
+    (``gpt2_fast_tokenizer_takes_in_memory_vocab`` decides).
     """
 
     import gzip
 
     from transformers import GPT2TokenizerFast
 
-    del tmp_dir
-    vocab = json.loads(gzip.decompress((VENDORED_DIR / "gpt2" / "vocab.json.gz").read_bytes()))
+    from tests.support.hf_capabilities import gpt2_fast_tokenizer_takes_in_memory_vocab
+
+    vocab_bytes = gzip.decompress((VENDORED_DIR / "gpt2" / "vocab.json.gz").read_bytes())
     merges_text = (VENDORED_DIR / "gpt2" / "merges.txt").read_text(encoding="utf-8")
+    if not gpt2_fast_tokenizer_takes_in_memory_vocab():
+        vocab_file = Path(tmp_dir) / "vocab.json"
+        merges_file = Path(tmp_dir) / "merges.txt"
+        vocab_file.write_bytes(vocab_bytes)
+        merges_file.write_text(merges_text, encoding="utf-8")
+        return GPT2TokenizerFast(vocab_file=str(vocab_file), merges_file=str(merges_file))
+    vocab = json.loads(vocab_bytes)
     merges = [
         tuple(line.split(" ", 1))
         for line in merges_text.splitlines()

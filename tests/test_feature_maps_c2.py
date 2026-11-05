@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageDraw
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import (
+from torchlens.viz._feature_maps import (
     _feature_map_payload_for_node,
     _render_feature_map_grid,
     feature_map_node_spec,
@@ -179,10 +179,12 @@ def test_feature_map_node_spec_renders_one_image_and_overlay_differs_from_fallba
     # (T9, grind-p3): the mkdtemp root no longer appears in the source AT
     # ALL — it reaches Graphviz as the render subprocess cwd, so user-saved
     # DOT stays renderable after the trace's scratch dir is GC'd.
+    # The picture is the node's top table cell (rounded-box layout, Lead's
+    # 5 Nov input-photo handoff), so the relative path is the IMG source.
     relative_image = image_paths[0].relative_to(trace._visualizer_dir)
-    assert f'image="{relative_image}"' in dot
+    assert f'<IMG SRC="{relative_image}"' in dot
     assert "imagepath" not in dot
-    assert f'image="{image_paths[0]}"' not in dot
+    assert str(image_paths[0]) not in dot
     image = Image.open(image_paths[0])
     assert image.size == (72, 148)
 
@@ -220,7 +222,7 @@ def test_import_feature_maps_does_not_import_matplotlib() -> None:
     """Importing feature maps should not import matplotlib."""
 
     code = (
-        "import sys; import torchlens.viz.feature_maps; "
+        "import sys; import torchlens.viz._feature_maps; "
         "raise SystemExit(1 if 'matplotlib' in sys.modules else 0)"
     )
     result = subprocess.run([sys.executable, "-c", code], check=False)

@@ -1,20 +1,19 @@
 """Label-aware node geometry for the ``size_by`` channel (render-IR post-pass).
 
 Graphviz treats an encoded width/height as a MINIMUM (``fixedsize=false``):
-a node is never smaller than its label. Sized from Graphviz's bare default
-box (0.75 x 0.5 in), every multi-row TorchLens label outgrows the minimum and
-the label, not the value, sets the node's size. This pass makes the value
-set the size: once every node's label is resolved, it estimates each label
-box, takes the MEDIAN box among the size-encoded nodes as the reference, and
-scales ``max(reference, own label box)`` (per dimension) by the node's
-normalized value, so the largest-value node has ``SIZE_BY_MAX_AREA_MULT``
-times the area of its base. Nodes with typical labels share one base and are
-exactly comparable by area; a node whose label is wider or taller than the
-median starts from its own label box (never clipped) and still grows by the
-same factor. Using the median rather than the largest label keeps one long
-argument row from inflating every node in the graph.
+a node is never smaller than what its label needs. Once every node's label is
+resolved, this pass estimates the node size each label needs (the label box,
+padded the way Graphviz pads it and widened for the node's shape, e.g. an
+ellipse needs sqrt(2) times its label box). The typical node size of the
+drawing (the median need, per dimension) is the base: the smallest value draws
+at that normal size and the largest at ``SIZE_BY_MAX_AREA_MULT`` (2x) its
+area, with the default sqrt value scale in between. A node whose own text needs
+more room than its value's size draws at what its text needs, so labels keep
+the default font size and always fit, and one long label never inflates the
+other nodes. Equal values draw equal sizes whenever both labels fit the
+value's size.
 
-Leaf module by design: no runtime imports from the visualization package.
+Leaf module by design: its only package import is the leaf ``_label_width``.
 """
 
 from __future__ import annotations
@@ -26,6 +25,8 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
 
+from ._label_width import text_width_em
+
 # ---------------------------------------------------------------------------
 # SIZE channel constants (the default area-only mapping).
 # ---------------------------------------------------------------------------
@@ -34,11 +35,10 @@ from typing import Any
 #: flattens 512-vs-4096 and defeats the size motif.
 SIZE_SCALE_VOCABULARY = ("sqrt", "linear")
 
-#: Max clamp in value space: encoded node area never exceeds this multiple of
-#: the default node area. PROVISIONAL value per the design memo (4.0), to be
-#: tuned once at a rendered-candidates review; the min clamp is free
-#: (fixedsize=false -- the box only ever GROWS from the label's natural size).
-SIZE_BY_MAX_AREA_MULT = 4.0
+#: Max clamp in value space: the largest value's node has this multiple of the
+#: typical node's area (the smallest value's node has the typical area). 2.0 keeps
+#: a sized drawing near its plain size, so labels stay readable at page width.
+SIZE_BY_MAX_AREA_MULT = 2.0
 
 #: Graphviz's own default node geometry in inches (dot default width=0.75,
 #: height=0.5). Emitted sizes are MINIMUMS scaled from this baseline with the
@@ -67,15 +67,57 @@ def non_batch_numel(shape: tuple[int, ...]) -> float:
 
 #: Graphviz's default node font size in points (no TorchLens theme sets one).
 DEFAULT_FONT_PT = 14.0
-#: Conservative average glyph advance for the node font, in ems. Erring wide
-#: only makes encoded nodes a little larger; it can never clip a label.
-CHAR_WIDTH_EM = 0.6
 #: Row height in ems plus the label table's 2 pt cell padding on each side.
 ROW_HEIGHT_EM = 1.2
 CELL_PADDING_PT = 2.0
 #: Graphviz default node margins (inches, each side) plus a box3d allowance.
 MARGIN_X_IN = 0.11 + 0.06
 MARGIN_Y_IN = 0.055 + 0.06
+#: Graphviz draws each extra periphery 4 pt outside the last, on every side.
+PERIPHERY_GAP_IN = 4.0 / 72.0
+
+#: Shapes whose node box is the padded label box itself.
+_BOX_SHAPES = frozenset(
+    {
+        "box",
+        "rect",
+        "rectangle",
+        "square",
+        "box3d",
+        "plaintext",
+        "plain",
+        "none",
+        "note",
+        "tab",
+        "folder",
+        "component",
+        "underline",
+        "Msquare",
+    }
+)
+#: Ellipse-family shapes: Graphviz fits the label box inside, sqrt(2) wider and taller.
+_ELLIPSE_SHAPES = frozenset({"ellipse", "oval", "circle", "egg", "doublecircle", "Mcircle"})
+#: Other polygons: the ellipse fit, widened by 1 / cos(pi / sides) as Graphviz does.
+_POLYGON_SIDES = {
+    "triangle": 3,
+    "invtriangle": 3,
+    "diamond": 4,
+    "Mdiamond": 4,
+    "trapezium": 4,
+    "invtrapezium": 4,
+    "parallelogram": 4,
+    "pentagon": 5,
+    "house": 5,
+    "invhouse": 5,
+    "hexagon": 6,
+    "septagon": 7,
+    "octagon": 8,
+    "doubleoctagon": 8,
+    "tripleoctagon": 8,
+}
+_EXTRA_PERIPHERIES = {"doublecircle": 1, "doubleoctagon": 1, "tripleoctagon": 2}
+#: Fit factor for a shape outside the tables: a diamond's, the widest four-sided fit.
+UNKNOWN_SHAPE_FACTOR = 2.0
 
 
 _MARKUP = re.compile(r"<[^>]*>")
@@ -87,24 +129,77 @@ def _visible_text(line: Any) -> str:
     return html.unescape(_MARKUP.sub("", str(line)))
 
 
-def _median(values: list[float]) -> float:
-    """Return the median of a non-empty list."""
+def estimate_label_box(lines: Iterable[Any], font_pt: float) -> tuple[float, float]:
+    """Return a conservative padded (width, height) in inches for a node label.
 
-    ordered = sorted(values)
+    The first row draws bold (the node title); widths come from
+    :func:`._label_width.text_width_em`, which never falls short of Graphviz's
+    measure for the node font.
+    """
+
+    rows = [_visible_text(line) for line in lines] or [""]
+    longest = max(text_width_em(row, bold=index == 0) for index, row in enumerate(rows))
+    width_pt = longest * font_pt + 2 * CELL_PADDING_PT
+    height_pt = len(rows) * (ROW_HEIGHT_EM * font_pt + 2 * CELL_PADDING_PT)
+    return (width_pt / 72.0 + 2 * MARGIN_X_IN, height_pt / 72.0 + 2 * MARGIN_Y_IN)
+
+
+def shape_fit_factor(shape: str | None) -> float:
+    """Return how much wider and taller than its padded label box a node of ``shape`` is.
+
+    ``None`` is Graphviz's default node shape, the ellipse.
+    """
+
+    if shape is None:
+        return math.sqrt(2.0)
+    if shape in _BOX_SHAPES:
+        return 1.0
+    if shape in _ELLIPSE_SHAPES:
+        return math.sqrt(2.0)
+    sides = _POLYGON_SIDES.get(shape)
+    if sides is None:
+        return UNKNOWN_SHAPE_FACTOR
+    return math.sqrt(2.0) / math.cos(math.pi / sides)
+
+
+def node_size_needed(box: tuple[float, float], shape: str | None) -> tuple[float, float]:
+    """Return the smallest (width, height) a node of ``shape`` needs around ``box``."""
+
+    factor = shape_fit_factor(shape)
+    extra = 2 * PERIPHERY_GAP_IN * _EXTRA_PERIPHERIES.get(shape or "", 0)
+    return (box[0] * factor + extra, box[1] * factor + extra)
+
+
+def growth_factor(fraction: float, max_area_mult: float) -> float:
+    """Return the linear scale that grows a box's area by ``1 + fraction * (mult - 1)``."""
+
+    return math.sqrt(1.0 + fraction * (max_area_mult - 1.0))
+
+
+def typical_base(needs: dict[str, tuple[float, float]]) -> tuple[float, float]:
+    """Return the drawing's typical node size: the median label need, per dimension."""
+
+    widths = sorted(need[0] for need in needs.values())
+    heights = sorted(need[1] for need in needs.values())
+    return (_median(widths), _median(heights))
+
+
+def _median(ordered: list[float]) -> float:
+    """Return the median of an already sorted, non-empty list."""
+
     middle = len(ordered) // 2
     if len(ordered) % 2:
         return ordered[middle]
     return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 
-def estimate_label_box(lines: Iterable[Any], font_pt: float) -> tuple[float, float]:
-    """Return a conservative (width, height) in inches for a node label."""
+def fitted_size(
+    base: tuple[float, float], need: tuple[float, float], fraction: float, max_area_mult: float
+) -> tuple[float, float]:
+    """Return the value-scaled base, grown per dimension to what the node's text needs."""
 
-    rows = [_visible_text(line) for line in lines] or [""]
-    longest = max(len(row) for row in rows)
-    width_pt = longest * CHAR_WIDTH_EM * font_pt + 2 * CELL_PADDING_PT
-    height_pt = len(rows) * (ROW_HEIGHT_EM * font_pt + 2 * CELL_PADDING_PT)
-    return (width_pt / 72.0 + 2 * MARGIN_X_IN, height_pt / 72.0 + 2 * MARGIN_Y_IN)
+    scaled = scaled_size(base, fraction, max_area_mult)
+    return (max(scaled[0], round(need[0], 3)), max(scaled[1], round(need[1], 3)))
 
 
 def scaled_size(
@@ -112,7 +207,7 @@ def scaled_size(
 ) -> tuple[float, float]:
     """Scale the reference box so its area grows linearly with ``fraction``."""
 
-    factor = math.sqrt(1.0 + fraction * (max_area_mult - 1.0))
+    factor = growth_factor(fraction, max_area_mult)
     return (round(reference[0] * factor, 3), round(reference[1] * factor, 3))
 
 
@@ -146,6 +241,22 @@ def _rewrite_node(node: Any, provisional: tuple[float, float], final: Any) -> tu
     return replace(node, node_calls=tuple(calls), owned_node_args=tuple(owned)), True
 
 
+def _node_shape(node: Any) -> str | None:
+    """Return the Graphviz shape a render-IR node is drawn with (``None``: Graphviz default)."""
+
+    spec = node.node_spec
+    if spec is not None:
+        return str(spec.extra_attrs.get("shape", spec.shape))
+    for call in node.node_calls:
+        shape = dict(call.attrs).get("shape")
+        if shape is not None:
+            return str(shape)
+    for _owner, args in node.owned_node_args:
+        if "shape" in args:
+            return str(args["shape"])
+    return None
+
+
 def layout_encoded_sizes(nodes: tuple[Any, ...], state: Any, context: Any) -> tuple[Any, ...]:
     """Return render-IR nodes with label-aware ``size_by`` geometry.
 
@@ -155,7 +266,7 @@ def layout_encoded_sizes(nodes: tuple[Any, ...], state: Any, context: Any) -> tu
         Resolved render-IR nodes (their specs carry the final label rows).
     state:
         The draw's encoding state, or ``None`` (nodes pass through). Segment
-        capsules in ``state.aggregates`` join the reference and receive their
+        capsules in ``state.aggregates`` share the base and receive their
         final size through ``state.final_sizes``.
     context:
         Render request; ``font_size`` (when set) is the node font size.
@@ -166,24 +277,29 @@ def layout_encoded_sizes(nodes: tuple[Any, ...], state: Any, context: Any) -> tu
 
     font_pt = float(getattr(context, "font_size", None) or DEFAULT_FONT_PT)
     labels: dict[str, tuple[Any, ...]] = {}
+    shapes: dict[str, str | None] = {}
     for node in nodes:
         key = state.unit_keys.get(node.name)
         if key in state.size_fractions and key in state.sizes:
             spec = node.node_spec
             labels[key] = tuple(spec.lines) if spec is not None else tuple(node.label_spans)
+            shapes[key] = _node_shape(node)
     for target in getattr(state.aggregates, "segments", ()) or ():
         if target.key in state.size_fractions:
+            # Segment capsules are emitted as boxes (``_render_nodes``).
             labels[target.key] = target.label_lines
+            shapes[target.key] = "box"
     if not labels:
         return nodes
-    boxes = {key: estimate_label_box(lines, font_pt) for key, lines in labels.items()}
-    reference = (
-        _median([box[0] for box in boxes.values()]),
-        _median([box[1] for box in boxes.values()]),
-    )
-    for key, box in boxes.items():
-        base = (max(reference[0], box[0]), max(reference[1], box[1]))
-        state.final_sizes[key] = scaled_size(base, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT)
+    needs = {
+        key: node_size_needed(estimate_label_box(lines, font_pt), shapes[key])
+        for key, lines in labels.items()
+    }
+    base = typical_base(needs)
+    for key, need in needs.items():
+        state.final_sizes[key] = fitted_size(
+            base, need, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT
+        )
     out = []
     for node in nodes:
         key = state.unit_keys.get(node.name)

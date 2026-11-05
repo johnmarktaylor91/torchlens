@@ -20,10 +20,11 @@ profiler warmup, and profiler teardown when capture raises. The design and CPU/f
 must not be read as empirical validation of those real-device cases.
 
 The public record facade is `KernelLaunch`. Its measured fields are `launch_name`, `device`,
-`stream`, `duration`, `runtime_correlation`, and `attribution_status`. The computed
-`AtenOp.gpu_kernels` view returns rows related to one primitive call; `Op.gpu_kernels` returns their
-deduplicated union for one user Op. All names and status tokens are listed in the glossary's
-documented-unstable index.
+`stream`, `duration`, `runtime_correlation`, and `attribution_status`. The launch rows and their
+relation to primitive calls persist in the artifact's kernel annotation. This release has no public
+reader for them: the former `AtenOp.gpu_kernels` and `Op.gpu_kernels` views were removed and refuse
+with the typed `facade_redirect` error; a public kernel-recording switch is planned for a later
+release. All names and status tokens are listed in the glossary's documented-unstable index.
 
 ## Availability and lower bounds
 

@@ -11,6 +11,7 @@ with ``measure_host_peak_memory=True`` (measure.2), which the rerun inherits.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -58,7 +59,7 @@ def _rerun_log(
     assert (log.cost.forward_peak_memory is None) == (first == 0)
     _measure(monkeypatch, rerun)
     log.do({tl.func("relu"): tl.zero_ablate()}, intervention=_STAGE)
-    log.run(model, torch.randn(2, 3))
+    log = log.run(model, torch.randn(2, 3))
     return log, model
 
 
@@ -93,3 +94,66 @@ def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> 
     assert int(trace._cost_forward_peak_memory) == 200
     assert trace._cost_forward_peak_memory_reason is None
     assert trace._provenance_forward_memory_backend == "cuda"
+
+
+def test_bracket_never_writes_onto_the_forward_exception() -> None:
+    """The bracket's cleanup leaves the user's in-flight exception untouched.
+
+    ``contextlib.contextmanager`` re-assigns ``__traceback__`` on the exception it
+    re-raises (Python 3.11+); an exception whose ``__setattr__`` refuses writes was
+    then replaced by that ``AttributeError``. The bracket still records its fields.
+    """
+
+    class _LockedError(Exception):
+        """An exception that refuses every attribute write."""
+
+        __slots__ = ()
+
+        def __setattr__(self, name: str, value: object) -> None:
+            """Refuse the write."""
+
+            raise AttributeError("locked")
+
+    trace = SimpleNamespace(measure_host_peak_memory=False, measure_python_peak_memory=False)
+    bracket = capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cpu"))
+    with pytest.raises(_LockedError), bracket:
+        raise _LockedError("boom")
+    assert trace._provenance_forward_memory_backend == "cpu"
+
+
+def test_transparent_contextmanager_keeps_contextlib_exit_semantics() -> None:
+    """Suppression, re-raise and clean exit match ``contextlib``; nothing is written."""
+
+    from torchlens.errors._base import transparent_contextmanager
+
+    events: list[str] = []
+
+    class _Locked(Exception):
+        """Exception that refuses every attribute write."""
+
+        def __setattr__(self, name: str, value: object) -> None:
+            """Refuse the write."""
+
+            raise AttributeError("locked")
+
+    @transparent_contextmanager
+    def _bracket(suppress: bool) -> Iterator[str]:
+        """Record entry and exit; optionally swallow ``_Locked``."""
+
+        events.append("enter")
+        try:
+            yield "value"
+        except _Locked:
+            events.append("caught")
+            if not suppress:
+                raise
+        finally:
+            events.append("exit")
+
+    with _bracket(False) as value:
+        assert value == "value"
+    with _bracket(True):
+        raise _Locked("swallowed")
+    with pytest.raises(_Locked), _bracket(False):
+        raise _Locked("passes through")
+    assert events == ["enter", "exit", "enter", "caught", "exit", "enter", "caught", "exit"]

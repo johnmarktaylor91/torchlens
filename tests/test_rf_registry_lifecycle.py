@@ -95,7 +95,7 @@ def test_builtin_rule_pack_reimport_is_idempotent() -> None:
 
     before_rules = dict(_rules._RF_RULES)
     before_epoch = _rules._RF_RULES_EPOCH
-    pack = importlib.import_module("torchlens.receptive_field.rules")
+    pack = importlib.import_module("torchlens.receptive_field._builtin_rules")
 
     importlib.reload(pack)
 

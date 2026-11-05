@@ -392,6 +392,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_VARIABLE_FUNCTIONS": True,
         "HAS_TORCH_VF": True,
         "HAS_TORCH_FUNC": True,
+        "HAS_SPARSE_INVARIANT_CHECK": True,
         "HAS_FUNCTORCH_APIS": True,
         "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
         "HAS_FUNCTORCH_INTERPRETER_STACK_API": True,
@@ -418,6 +419,10 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
         # The unchecked view replay; older torch spells it ``_view_func``.
         "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
+        # Newer-torch surfaces a model may call (torch 2.3+ and 2.5+): absence is healthy.
+        "HAS_REV_VIEW_FUNC_UNSAFE": tc.HAS_REV_VIEW_FUNC_UNSAFE,
+        "HAS_SDPA_GQA": tc.HAS_SDPA_GQA,
+        "HAS_SDPA_EMPTY_ROW_ZERO": tc.HAS_SDPA_EMPTY_ROW_ZERO,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
@@ -445,6 +450,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # values so floor legs stay green.
         "HAS_GRADIENT_EDGE": tc.HAS_GRADIENT_EDGE,
         "HAS_NODE_PREHOOK": tc.HAS_NODE_PREHOOK,
+        # The in-place view-write rebind proves its binding from node creation
+        # order; without it the rebind refuses. Mirror the live value (not
+        # measured on the floor matrix).
+        "HAS_NODE_SEQUENCE_NR": tc.HAS_NODE_SEQUENCE_NR,
         # L8 floor fixes: deterministic uninit-memory fill, device-agnostic
         # GradScaler, torch.nn.attention, torch.nn.RMSNorm, and tuple-dim
         # any()/all() all postdate the torch>=2.1 floor (OPTIONAL flags --
@@ -485,6 +494,11 @@ def test_torch_capability_snapshot_contract() -> None:
         # through to a generic NotImplementedError instead). Build-dependent,
         # so mirror the live post-snapshot capability.
         "HAS_META_ITEM_GUARD": tc.HAS_META_ITEM_GUARD,
+        # torch builds compiled against NumPy 1.x (torch 2.1-2.2) lose the
+        # torch<->numpy bridge under NumPy 2. Every CI row pairs a working
+        # build, but the value is environment-dependent: mirror it.
+        "HAS_NUMPY_BRIDGE": tc.HAS_NUMPY_BRIDGE,
+        "HAS_TORCH_CPP_EXTENSION": tc.HAS_TORCH_CPP_EXTENSION,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
@@ -736,7 +750,7 @@ def test_capability_warning_category_is_typed(monkeypatch: pytest.MonkeyPatch) -
 def test_tf_runtime_support_is_feature_probed() -> None:
     """r-b4 R26-6b: an odd version string no longer disables backend='tf'."""
 
-    from torchlens.backends.default_specs import _tf_runtime_supported
+    from torchlens.backends._default_specs import _tf_runtime_supported
 
     class _Backend:
         @staticmethod
@@ -838,6 +852,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_MPS_MEMORY_QUERY"] == tc.HAS_MPS_MEMORY_QUERY
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
     assert snapshot["HAS_SPARSE_SPSOLVE_CUDA"] == tc.HAS_SPARSE_SPSOLVE_CUDA
+    assert snapshot["HAS_SPARSE_INVARIANT_CHECK"] is True
 
 
 def test_read_fill_uninitialized_memory_returns_none_when_absent(

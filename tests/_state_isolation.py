@@ -57,7 +57,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens._quickstart._gate", "_WARNED_TRACE_IDS", set()),
     # F04 one-backward reads: the once-per-process frozen-default disclosure
     # (read_frozen_default_linearization) resets per test.
-    ("torchlens.attribution.onebackward._frozen", "_DISCLOSURE_WARNED", set()),
+    ("torchlens.attribution._onebackward._frozen", "_DISCLOSURE_WARNED", set()),
     ("torchlens._utils._torch_compat", "_warned_missing_capabilities", set()),
     # Capture-scoped CUDA RNG retry latch (grind p5, B2P3-16): re-armed per
     # capture in the package, and reset per test here so a test that trips it
@@ -95,15 +95,24 @@ def _isolated_torchlens_cache(tmp_path_factory: pytest.TempPathFactory):
     first-capture cache-miss assertion into a phantom failure. Every test session
     gets its own empty cache root instead; the prior environment is restored on
     teardown so the suite never leaks state into the invoking shell.
+
+    ``XDG_STATE_HOME`` gets the same treatment: the capture-cache HMAC secret lives
+    in the per-user state directory (outside every cache directory), and the suite
+    must neither create nor reuse the invoking user's real secret.
     """
 
-    prior = os.environ.get("TORCHLENS_CACHE_DIR")
-    os.environ["TORCHLENS_CACHE_DIR"] = str(tmp_path_factory.mktemp("torchlens_cache"))
+    isolated = {
+        "TORCHLENS_CACHE_DIR": str(tmp_path_factory.mktemp("torchlens_cache")),
+        "XDG_STATE_HOME": str(tmp_path_factory.mktemp("xdg_state")),
+    }
+    prior = {name: os.environ.get(name) for name in isolated}
+    os.environ.update(isolated)
     yield
-    if prior is None:
-        os.environ.pop("TORCHLENS_CACHE_DIR", None)
-    else:
-        os.environ["TORCHLENS_CACHE_DIR"] = prior
+    for name, value in prior.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
 
 
 def _copy_sentinel_value(value: object) -> object:
@@ -260,6 +269,7 @@ _CAPABILITY_DEPENDENT_CACHES: tuple[tuple[str, str], ...] = (
     # keeps this list complete.
     ("torchlens._runnable.state_context", "_fake_tensor_mode_class"),
     ("torchlens._runnable.state_context", "_count_bounded_fake_tensor_mode_class"),
+    ("torchlens._utils._autograd_view_nodes", "_aten_view_op_names"),
 )
 
 
@@ -320,6 +330,47 @@ def _restore_wrapper_diagnostic_modes() -> Iterator[None]:
                 wrappers._configure_escape_detector(saved_escape)
             if _state._completeness_witness_mode != saved_witness:
                 wrappers._configure_completeness_witness(saved_witness)
+
+
+def _dynamo_event_count() -> int | None:
+    """Return the total of Dynamo's event counters, or ``None`` when Dynamo is not loaded.
+
+    Reads the counters only from an already imported ``torch._dynamo.utils``:
+    a process that never imported Dynamo compiled nothing, and the fixture must
+    not import Dynamo itself (plain captures are pinned not to load it). The
+    total covers every group, not only ``frames``: the compile an eager
+    ``while_loop`` runs moves ``stats`` but no frame counter.
+    """
+
+    utils = sys.modules.get("torch._dynamo.utils")
+    counters = getattr(utils, "counters", None)
+    if counters is None:
+        return None
+    return sum(sum(group.values()) for group in list(counters.values()))
+
+
+@pytest.fixture(autouse=True)
+def _reset_dynamo_after_compiling_tests() -> Iterator[None]:
+    """Drop Dynamo's compiled-graph caches after a test that compiled.
+
+    Dynamo keeps every compiled graph, with the fake example tensors it traced
+    (symbolic shapes such as ``s13`` or unbacked ``u0``), in its per-code cache
+    until ``torch.compiler.reset()``. A ``torch.compile`` recompile on a new
+    shape, or the compile an eager ``while_loop`` runs, left those fake tensors
+    alive for every later test on the same xdist worker, so a later test that
+    walks ``gc.get_objects()`` met a ``SymInt`` shape and failed with
+    ``unhashable type: non-nested SymInt`` depending on test order. Resetting
+    only after a test that moved a Dynamo counter keeps the other tests' cost
+    at two counter sums.
+    """
+
+    before = _dynamo_event_count()
+    try:
+        yield
+    finally:
+        after = _dynamo_event_count()
+        if after is not None and after != before:
+            torch.compiler.reset()
 
 
 @pytest.fixture(autouse=True)

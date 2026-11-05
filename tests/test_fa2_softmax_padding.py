@@ -23,11 +23,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.support.scoped_library import scoped_cpu_op
 from torchlens.backends.torch import _torch_ops_calls
 from torchlens.backends.torch._foreign_data import FLASH_ATTENTION_2_FUNC_NAME
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
+from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 
 _SCHEMA = (
     "_flash_attn_forward(Tensor q, Tensor k, Tensor v, float dropout_p, float softmax_scale, "
@@ -74,13 +75,8 @@ def _padded_kernel(
 def _scoped_standin(namespace: str) -> Iterator[Any]:
     """Yield ``torch.ops.<namespace>._flash_attn_forward`` backed by the padded stand-in."""
 
-    with torch.library._scoped_library(namespace, "FRAGMENT") as lib:
-        if not hasattr(getattr(torch.ops, namespace), "_flash_attn_forward"):
-            lib.define(_SCHEMA)
-        torch.library.register_kernel(
-            f"{namespace}::_flash_attn_forward", "cpu", _padded_kernel, lib=lib
-        )
-        yield getattr(torch.ops, namespace)._flash_attn_forward
+    with scoped_cpu_op(namespace, _SCHEMA, _padded_kernel) as op:
+        yield op
 
 
 @pytest.fixture

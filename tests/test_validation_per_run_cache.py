@@ -19,7 +19,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._state import pause_logging
 from torchlens.options import CaptureOptions
-from torchlens.validation import core as validation_core
+from torchlens.validation import _core as validation_core
 
 _INDEX_KEY = "_validation_orphan_candidate_index"
 

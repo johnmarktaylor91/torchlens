@@ -633,18 +633,21 @@ def _persistent_slot_names(descriptor: Mapping[str, Any]) -> set[str]:
 
 
 def check_runnable_slots(root: Path, manifest: Mapping[str, Any]) -> None:
-    """Cross-check the runnable descriptor's weight slots against the shipped state family.
-
-    With ``payload_layers.weights.present`` true, the names of ``runnable.state_dict_tensors``
-    must equal the descriptor's persistent slot names: a deleted family (a missing entry) or a
-    relabelled entry refuses typed ``manifest_schema_invalid``. Without the flag the family
-    must be absent. An artifact without a runnable object has nothing to check.
-    """
+    """Cross-check the listed runnable descriptor's weight slots against the state family:
+    with ``payload_layers.weights.present`` true the ``runnable.state_dict_tensors`` names must
+    equal its persistent slot names (else ``manifest_schema_invalid``), else be absent."""
 
     runnable = manifest.get("runnable")
     if not isinstance(runnable, Mapping):
         return
-    descriptor_path = root / f"{contract.RUNNABLE_DIR}/descriptor.json"
+    descriptor_path = root / (descriptor_rel := f"{contract.RUNNABLE_DIR}/descriptor.json")
+    if descriptor_rel not in manifest["files"]:  # only listed, digest-checked files are read
+        raise artifact_error(
+            f"Runnable descriptor {descriptor_path} is not listed in the manifest's files.",
+            code=_CODES["manifest_invalid"],
+            remedy="re-save the trace with trace.save()",
+            file_path=str(descriptor_path),
+        )
     descriptor, _ = read_json_file(descriptor_path, code=_CORRUPT, what="runnable descriptor")
     layers = descriptor.get("payload_layers") if isinstance(descriptor, Mapping) else None
     weights = layers.get("weights") if isinstance(layers, Mapping) else None
@@ -688,9 +691,8 @@ def validate_records(
 ) -> None:
     """Run every cross-record invariant over the decoded tables; refuse on the first failure.
 
-    Runs after the reader resolved every reference (so dangling labels and
-    indices have already refused) and before any record's state hook runs;
-    ``objects`` holds the settled record objects the reference cells now name.
+    Runs after the reader resolved every reference (dangling labels and indices already
+    refused) and before any state hook; ``objects`` holds the settled record objects.
     """
 
     _check_manifest_rows(tables, manifest, root)

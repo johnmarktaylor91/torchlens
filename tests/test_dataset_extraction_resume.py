@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_substrate import ExtractionArtifactError, read_trusted_rows
 from torchlens._extraction.resume import MANIFEST_FILENAME
+from torchlens._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from torchlens.dataset_extraction import (
     load_extraction,
 )
@@ -235,6 +236,9 @@ def test_resume_with_iterable_stimuli_skips_consumed_prefix(tmp_path: Path) -> N
     assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
 
 
+@pytest.mark.skipif(
+    not HAS_SAFE_WEIGHTS_ONLY_LOAD, reason=".pt shards need torch 2.6+ (CVE-2025-32434)"
+)
 @pytest.mark.heavy
 def test_hard_process_death_mid_shard_write_then_resume(tmp_path: Path) -> None:
     """A child hard-dies (``os._exit``) mid ``torch.save``; resume heals the run.

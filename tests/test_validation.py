@@ -6,6 +6,7 @@ in ``tests/test_validation_perturbation_units.py``.
 """
 
 import copy
+import io
 import threading
 import warnings
 from collections import defaultdict, deque, namedtuple
@@ -16,6 +17,7 @@ from typing import Any, cast
 import pytest
 import torch
 import torch.nn as nn
+from _record_fakes import FlatNamespace
 
 import torchlens as tl
 import torchlens._capture.run_entry as run_entry
@@ -27,6 +29,7 @@ import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils._record_group_table import record_member
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens._validation_status import (
     REGION_REPLAY_CLASS,
@@ -41,7 +44,7 @@ from torchlens.errors import (
     MetadataInvariantError,
     TraceNotReproducibleWarning,
 )
-from torchlens.intervention.types import DictKey
+from torchlens.intervention._types import DictKey
 from torchlens.options import CaptureOptions
 from torchlens.recording import RecordContext
 from torchlens.report import ValidationDiagnostic
@@ -53,6 +56,25 @@ from torchlens.validation import (
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
+from torchlens.validation._core import (
+    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
+    ValidationDecisionRecorder,
+    _check_perturbation_exemptions,
+    _check_whether_func_on_saved_parents_yields_saved_tensor,
+    _deep_numeric_replay_matches_saved,
+    _dispatch_op_count_matches_capture,
+    _execute_func_with_restored_state,
+    _op_reduction_depth,
+    _restore_live_parameter_args_for_replay,
+    validate_parents_of_saved_layer,
+)
+from torchlens.validation._exemptions import (
+    CUSTOM_EXEMPTION_CHECKS,
+    SKIP_PERTURBATION_ENTIRELY,
+    SKIP_VALIDATION_ENTIRELY,
+    STRUCTURAL_ARG_POSITIONS,
+    posthoc_perturb_check,
+)
 from torchlens.validation._invariants_connectivity import (
     _check_graph_connectivity,
     _check_lookup_key_consistency,
@@ -68,25 +90,6 @@ from torchlens.validation._invariants_topology import (
     _check_capture_edge_survival,
     _check_graph_topology,
     _check_special_layer_lists,
-)
-from torchlens.validation.core import (
-    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
-    ValidationDecisionRecorder,
-    _check_perturbation_exemptions,
-    _check_whether_func_on_saved_parents_yields_saved_tensor,
-    _deep_numeric_replay_matches_saved,
-    _dispatch_op_count_matches_capture,
-    _execute_func_with_restored_state,
-    _op_reduction_depth,
-    _restore_live_parameter_args_for_replay,
-    validate_parents_of_saved_layer,
-)
-from torchlens.validation.exemptions import (
-    CUSTOM_EXEMPTION_CHECKS,
-    SKIP_PERTURBATION_ENTIRELY,
-    SKIP_VALIDATION_ENTIRELY,
-    STRUCTURAL_ARG_POSITIONS,
-    posthoc_perturb_check,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -629,7 +632,7 @@ def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     saved_parent = live_param.detach().clone()
     saved_param = live_param.detach().clone()
     input_args = {"args": [saved_parent, saved_param], "kwargs": {}}
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         is_inplace=False,
         _param_logs=[SimpleNamespace(handle=live_param)],
         parent_arg_positions={"args": {0: "input_1"}, "kwargs": {}},
@@ -644,7 +647,7 @@ def test_validation_replay_restores_unchanged_live_parameter_args() -> None:
     with torch.no_grad():
         live_param.add_(1.0)
     stale_args = {"args": [stale_snapshot], "kwargs": {}}
-    stale_layer = SimpleNamespace(
+    stale_layer = FlatNamespace(
         is_inplace=False,
         _param_logs=[SimpleNamespace(handle=live_param)],
         parent_arg_positions={"args": {}, "kwargs": {}},
@@ -1033,7 +1036,7 @@ def test_posthoc_perturb_constant_check_supports_complex_outputs() -> None:
     dtypes without raising and returns a structured decision.
     """
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func_name="fft",
         saved_args=(torch.ones(4, dtype=torch.complex64),),
         saved_kwargs={},
@@ -1064,7 +1067,7 @@ def _cast_layer(source: torch.Tensor, target: object) -> SimpleNamespace:
     """
 
     out = source.to(target) if isinstance(target, torch.dtype) else source
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name="to",
         saved_args=(source, target),
         saved_kwargs={},
@@ -1114,21 +1117,21 @@ def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> N
     keyword, feeds real values and must NOT be exempt.
     """
 
-    from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
+    from torchlens.validation._core import _perturbed_parents_only_occupy_out_kwarg
 
-    pure_out = SimpleNamespace(
+    pure_out = FlatNamespace(
         parent_arg_positions={"args": {0: "data_1"}, "kwargs": {"out": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["dest_1"]) is True
     # The data parent stays strict even on the same op.
     assert _perturbed_parents_only_occupy_out_kwarg(pure_out, ["data_1"]) is False
 
-    also_positional = SimpleNamespace(
+    also_positional = FlatNamespace(
         parent_arg_positions={"args": {0: "dest_1"}, "kwargs": {"out": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(also_positional, ["dest_1"]) is False
 
-    other_kwarg = SimpleNamespace(
+    other_kwarg = FlatNamespace(
         parent_arg_positions={"args": {}, "kwargs": {"out": "dest_1", "src": "dest_1"}}
     )
     assert _perturbed_parents_only_occupy_out_kwarg(other_kwarg, ["dest_1"]) is False
@@ -1156,7 +1159,7 @@ def test_validation_recompute_selects_dict_output_by_container_path() -> None:
 
         return {"hidden": x.relu(), "logits": x.sigmoid()}
 
-    layer = SimpleNamespace(
+    layer = FlatNamespace(
         func=return_dict,
         func_rng_states=None,
         func_autocast_state=None,
@@ -1376,21 +1379,21 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
 
 
-def test_validate_forward_pass_replay_copy_fallback_fails_for_lock_attr() -> None:
-    """An opaque lock makes fallback state restoration unverifiable."""
+def test_validate_forward_pass_replay_copy_fallback_fails_for_opaque_generator_attr() -> None:
+    """An opaque generator object makes fallback state restoration unverifiable."""
 
-    class LockBackedModel(nn.Module):
-        """Model holding an uncopyable external resource."""
+    class GeneratorBackedModel(nn.Module):
+        """Model holding an uncopyable object with hidden iteration state."""
 
         def __init__(self) -> None:
-            """Initialize the lock and a simple registered buffer."""
+            """Initialize the generator and a simple registered buffer."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.register_buffer("bias", torch.ones(3))
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Use registered tensor state without mutating the lock."""
+            """Use registered tensor state without advancing the generator."""
 
             return x + cast(torch.Tensor, self.bias)
 
@@ -1398,7 +1401,7 @@ def test_validate_forward_pass_replay_copy_fallback_fails_for_lock_attr() -> Non
         RuntimeWarning,
         match="cannot prove model-state restoration",
     ):
-        assert validate_forward_pass(LockBackedModel(), torch.randn(3)) is False
+        assert validate_forward_pass(GeneratorBackedModel(), torch.randn(3)) is False
 
 
 def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
@@ -1669,7 +1672,7 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
             """Initialize opaque state that fallback snapshotting cannot represent."""
 
             super().__init__()
-            self.opaque_state = object()
+            self.opaque_state = (step for step in range(3))
 
         def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableOpaqueState":
             """Reject isolated ground-truth copies."""
@@ -1695,14 +1698,14 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
 def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
     """An opaque fallback attribute can never produce a bare validation success."""
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1715,7 +1718,7 @@ def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = user_public_impls._validate_forward_pass_torch(
-            LockBackedToggle(),
+            OpaqueBackedToggle(),
             torch.randn(3),
         )
 
@@ -1743,14 +1746,14 @@ def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     ``last_validation_failure()`` side channel.
     """
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1765,7 +1768,7 @@ def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         result = user_public_impls._validate_forward_pass_torch(
-            LockBackedToggle(),
+            OpaqueBackedToggle(),
             torch.randn(3),
             _trace_observer=observed_traces.append,
         )
@@ -1811,14 +1814,14 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             self.use_mul = True
             return out
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1848,7 +1851,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         assert (
-            user_public_impls._validate_forward_pass_torch(LockBackedToggle(), torch.randn(3))
+            user_public_impls._validate_forward_pass_torch(OpaqueBackedToggle(), torch.randn(3))
             is False
         )
         refusal = get_validation_failure(None)
@@ -1860,8 +1863,8 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
 def test_uncopyable_opaque_branch_state_fails_closed() -> None:
     """Opaque state cannot hide a branch-changing fallback validation."""
 
-    class OpaqueBox:
-        """Mutable opaque state holder."""
+    class OpaqueBox(io.BytesIO):
+        """Mutable state holder with a C-level base the snapshot cannot see through."""
 
         def __init__(self) -> None:
             """Initialize the branch counter."""
@@ -2139,9 +2142,9 @@ def test_validation_dispatch_op_count_backstop_rejects_synthetic_missed_op() -> 
     try:
         trace._validation_captured_dispatchable_op_count = len(
             {
-                getattr(op, "func_call_id")
+                record_member(op, "func_call_id")
                 for op in trace._layer_list
-                if isinstance(getattr(op, "func_call_id", None), int)
+                if isinstance(record_member(op, "func_call_id", None), int)
             }
         )
         trace._validation_dispatch_op_count = trace._validation_captured_dispatchable_op_count + 1
@@ -2269,7 +2272,7 @@ def _backstop_op(
 ) -> SimpleNamespace:
     """Build a minimal layer-op stand-in for the completeness backstop census."""
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_call_id=func_call_id,
         transform_kind=transform_kind,
         func_name=func_name,
@@ -2910,7 +2913,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
         relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
         relu_op.func = None
         relu_op.func_name = "input"
-        relu_op.is_internal_source = True
+        relu_op._graph_is_internal_source = True
 
         ground_truth = [model(x).detach().clone()]
         result = trace.validate_forward_pass(ground_truth, validate_metadata=False)
@@ -2959,8 +2962,11 @@ def test_replay_validation_detects_corrupted_third_recurrent_pass_inputs() -> No
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     third_pass = next(op for op in trace._layer_list if op.label == "linear_1_1:3")
-    assert third_pass.saved_args is not None
-    third_pass.saved_args = (third_pass.saved_args[0] + 1.0, *third_pass.saved_args[1:])
+    assert third_pass.call.saved_args is not None
+    third_pass._call_saved_args = (
+        third_pass.call.saved_args[0] + 1.0,
+        *third_pass.call.saved_args[1:],
+    )
 
     decision_recorder = ValidationDecisionRecorder()
     result = validate_parents_of_saved_layer(
@@ -3019,10 +3025,10 @@ def test_perturbation_validation_catches_spurious_third_recurrent_pass_edge() ->
     )
     third_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:3")
     first_pass = next(op for op in trace._layer_list if op.label == "nantonum_1_1:1")
-    assert third_pass.saved_args is not None
-    third_pass.saved_args.append(first_pass.out.detach().clone())
+    assert third_pass.call.saved_args is not None
+    third_pass.call.saved_args.append(first_pass.out.detach().clone())
     third_pass.parents = tuple(third_pass.parents) + (first_pass.label,)
-    third_pass.parent_arg_positions["args"][1] = first_pass.label
+    third_pass.call.parent_arg_positions["args"][1] = first_pass.label
 
     decision_recorder = ValidationDecisionRecorder()
     result = validate_parents_of_saved_layer(
@@ -3284,7 +3290,7 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
     # b1p2 D2 narrowing: torchvision ops skip ONLY the coordinate/offset arg
     # (native-kernel OOB segfault safety); everything else stays tested.
     assert STRUCTURAL_ARG_POSITIONS["nms"] == {0}
-    assert STRUCTURAL_ARG_POSITIONS["deform_conv2d"] == {1}
+    assert "deform_conv2d" not in STRUCTURAL_ARG_POSITIONS  # arg 1 is the weight: still tested
     for tv_op in ("roi_align", "roi_pool", "ps_roi_align", "ps_roi_pool"):
         assert STRUCTURAL_ARG_POSITIONS[tv_op] == {1}
 
@@ -3309,7 +3315,7 @@ def test_copy_source_is_value_sensitive_and_destination_is_structural() -> None:
     )
     healthy_copy = next(op for op in healthy_trace._layer_list if op.func_name == "copy_")
 
-    assert set(healthy_copy.parent_arg_positions["args"]) == {0, 1}
+    assert set(healthy_copy.call.parent_arg_positions["args"]) == {0, 1}
     assert (
         healthy_trace.validate_forward_pass(
             [healthy_trace[healthy_trace.output_layers[0]].out.detach().clone()],
@@ -3858,7 +3864,7 @@ def _assert_custom_exemption_for_arg(
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         layer = _only_layer_with_func_name(trace, func_name)
-        parent = layer.parent_arg_positions["args"][arg_position]
+        parent = layer.call.parent_arg_positions["args"][arg_position]
 
         assert CUSTOM_EXEMPTION_CHECKS[func_name](trace, layer, [parent]) is expected
         assert _check_perturbation_exemptions(trace, layer, [parent]) is expected
@@ -3949,14 +3955,14 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
         factory_layer = _only_layer_with_func_name(trace, factory_name)
         fill_domain = "kwargs" if use_keyword else "args"
         fill_position: str | int = "fill_value" if use_keyword else 1
-        fill_parent = factory_layer.parent_arg_positions[fill_domain][fill_position]
+        fill_parent = factory_layer.call.parent_arg_positions[fill_domain][fill_position]
 
         assert fill_parent in factory_layer.parents
-        assert factory_layer.unattributed_tensor_args == ()
+        assert factory_layer.call.unattributed_tensor_args == ()
         if factory_name == "full":
             assert factory_layer.parents == (fill_parent,)
         else:
-            assert set(factory_layer.parent_arg_positions["args"]) >= {0}
+            assert set(factory_layer.call.parent_arg_positions["args"]) >= {0}
             assert len(factory_layer.parents) == 2
 
         expected_output = model(x).detach().clone()
@@ -3999,7 +4005,7 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
 
 
 # ---------------------------------------------------------------------------
-# Reduction-depth band-C eligibility predicate (validation/core.py)
+# Reduction-depth band-C eligibility predicate (validation/_core.py)
 #
 # Band C grants a relaxed deep-numeric replay tolerance ONLY to ops that are
 # reductions with per-output accumulation depth >= 64 (the depth at which FP32
@@ -4025,7 +4031,7 @@ def _make_deep_numeric_layer(
     suffices and keeps the predicate tests fast and capture-independent.
     """
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name=func_name,
         saved_args=saved_args,
         saved_kwargs=saved_kwargs or {},
@@ -4508,7 +4514,7 @@ def test_ground_truth_output_check_is_dtype_aware() -> None:
     rounding difference (~7800x tighter than bf16 eps).
     """
 
-    from torchlens.validation.core import _ground_truth_output_matches_saved
+    from torchlens.validation._core import _ground_truth_output_matches_saved
 
     # fp64: 5e-7 relative divergence must now FAIL.
     f64 = torch.tensor([1.0, 2.0], dtype=torch.float64)
@@ -4547,7 +4553,7 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     from support.fp8_guard import permit_cpu_float8_allocation
 
     from torchlens._utils.tensor_utils import get_fp8_dtypes
-    from torchlens.validation.core import _ground_truth_output_matches_saved
+    from torchlens.validation._core import _ground_truth_output_matches_saved
 
     fp8_dtypes = get_fp8_dtypes()
     if not fp8_dtypes:
@@ -4790,8 +4796,8 @@ def test_validation_with_setitem_slice_full_overwrite() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         setitem_layer = _only_layer_with_func_name(trace, "__setitem__")
-        destination_parent = setitem_layer.parent_arg_positions["args"][0]
-        replacement_parent = setitem_layer.parent_arg_positions["args"][2]
+        destination_parent = setitem_layer.call.parent_arg_positions["args"][0]
+        replacement_parent = setitem_layer.call.parent_arg_positions["args"][2]
 
         assert _check_perturbation_exemptions(trace, setitem_layer, [destination_parent]) is True
         assert _check_perturbation_exemptions(trace, setitem_layer, [replacement_parent]) is False
@@ -4839,8 +4845,8 @@ def test_validation_with_index_put_destination_full_overwrite() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        destination_parent = index_put_layer.parent_arg_positions["args"][0]
-        replacement_parent = index_put_layer.parent_arg_positions["args"][2]
+        destination_parent = index_put_layer.call.parent_arg_positions["args"][0]
+        replacement_parent = index_put_layer.call.parent_arg_positions["args"][2]
 
         assert (
             CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [destination_parent])
@@ -4891,7 +4897,7 @@ def test_index_put_partial_overwrite_destination_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        destination_parent = index_put_layer.parent_arg_positions["args"][0]
+        destination_parent = index_put_layer.call.parent_arg_positions["args"][0]
 
         # Tripwire: the influential (partially-surviving) destination is NOT exempt.
         assert (
@@ -4953,7 +4959,7 @@ def test_index_put_value_parent_equal_to_destination_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        arg_positions = index_put_layer.parent_arg_positions["args"]
+        arg_positions = index_put_layer.call.parent_arg_positions["args"]
         destination_parent = arg_positions[0]
         value_parent = arg_positions[2]
 
@@ -5103,7 +5109,7 @@ def test_index_put_index_parent_is_not_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         index_put_layer = _only_layer_with_func_name(trace, "index_put_")
-        index_parent = index_put_layer.parent_arg_positions["args"][(1, 0)]
+        index_parent = index_put_layer.call.parent_arg_positions["args"][(1, 0)]
 
         assert (
             CUSTOM_EXEMPTION_CHECKS["index_put_"](trace, index_put_layer, [index_parent]) is False
@@ -5196,7 +5202,7 @@ def test_trace_save_arg_values_handles_namedtuple_tensor_arguments() -> None:
     )
 
     cat_layer = _only_layer_with_func_name(trace, "cat")
-    arg_positions = cat_layer.parent_arg_positions["args"]
+    arg_positions = cat_layer.call.parent_arg_positions["args"]
 
     assert set(arg_positions) == {(0, 0), (0, 1)}
     assert {
@@ -5238,7 +5244,7 @@ def test_where_different_branches_are_not_condition_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        condition_parent = where_layer.parent_arg_positions["args"][0]
+        condition_parent = where_layer.call.parent_arg_positions["args"][0]
 
         assert CUSTOM_EXEMPTION_CHECKS["where"](trace, where_layer, [condition_parent]) is False
         assert _check_perturbation_exemptions(trace, where_layer, [condition_parent]) is False
@@ -5319,8 +5325,8 @@ def test_where_branch_selectedness_uses_saved_condition_not_parent_out() -> None
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        condition_parent = where_layer.parent_arg_positions["args"][0]
-        true_parent = where_layer.parent_arg_positions["args"][1]
+        condition_parent = where_layer.call.parent_arg_positions["args"][0]
+        true_parent = where_layer.call.parent_arg_positions["args"][1]
         # Layer.out is read-only under cert10 strict accessors; simulate the
         # mutated parent out through the per-pass Op record instead.
         condition_op = trace.layers[condition_parent].ops[0]
@@ -5341,7 +5347,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         where_layer = _only_layer_with_func_name(trace, "where")
-        unselected_parent = where_layer.parent_arg_positions["args"][2]
+        unselected_parent = where_layer.call.parent_arg_positions["args"][2]
 
         assert _check_perturbation_exemptions(trace, where_layer, [unselected_parent]) is True
 
@@ -5352,7 +5358,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
         placeholder.is_edited = False
-        placeholder.is_internal_source = False
+        placeholder._graph_is_internal_source = False
 
         # Layer 1 of the tripwire: the metadata invariant itself still rejects
         # a functionless computational op in plain capture.
@@ -5388,7 +5394,7 @@ def test_remainder_divisor_not_exempt_when_output_differs_from_dividend() -> Non
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         remainder_layer = _only_layer_with_func_name(trace, "remainder")
-        divisor_parent = remainder_layer.parent_arg_positions["args"][1]
+        divisor_parent = remainder_layer.call.parent_arg_positions["args"][1]
         ground_truth = [model(x).detach().clone()]
 
         # PosthocPerturbDecision API (74318b5d): the divisor perturbation must
@@ -5418,7 +5424,7 @@ def test_new_tensor_data_arg_is_not_structural_exempt() -> None:
     trace = trace_fn(model, x, capture=tl.options.CaptureOptions(save_args=True, seed=123))
     try:
         new_tensor_layer = _only_layer_with_func_name(trace, "new_tensor")
-        data_parent = new_tensor_layer.parent_arg_positions["args"][1]
+        data_parent = new_tensor_layer.call.parent_arg_positions["args"][1]
 
         assert _check_perturbation_exemptions(trace, new_tensor_layer, [data_parent]) is False
     finally:
@@ -5815,9 +5821,9 @@ def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.buffer_source is not None
+        assert write_version.graph.buffer_source is not None
 
-        write_version.buffer_source = "missing_raw_label"
+        write_version._graph_buffer_source = "missing_raw_label"
 
         with pytest.raises(MetadataInvariantError, match="unresolved buffer_source"):
             check_metadata_invariants(log)
@@ -5834,11 +5840,11 @@ def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.buffer_source is not None
-        assert write_version.saved_args
+        assert write_version.graph.buffer_source is not None
+        assert write_version.call.saved_args
 
         write_version.buffer_replay_validated = True
-        write_version.saved_args = []
+        write_version._call_saved_args = []
 
         with pytest.raises(MetadataInvariantError, match="saved source argument"):
             check_metadata_invariants(log)
@@ -5856,7 +5862,7 @@ def test_buffer_integrity_preconditions_reach_real_trace() -> None:
         assert any(version.buffer_write_kind is None for version in buffer.versions)
         assert any(version.buffer_write_kind is not None for version in buffer.versions)
         assert {version.buffer_pass for version in buffer.versions} == {1, 2}
-        assert any(version.buffer_source is not None for version in buffer.versions)
+        assert any(version.graph.buffer_source is not None for version in buffer.versions)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -5883,9 +5889,9 @@ def test_edge_use_invariant_rejects_missing_parent_arg_reference() -> None:
 
     log = _make_clean_log()
     try:
-        layer = next(layer for layer in log._layer_list if layer.parent_arg_positions["args"])
-        first_position = next(iter(layer.parent_arg_positions["args"]))
-        layer.parent_arg_positions["args"][first_position] = "missing_parent_label"
+        layer = next(layer for layer in log._layer_list if layer.call.parent_arg_positions["args"])
+        first_position = next(iter(layer.call.parent_arg_positions["args"]))
+        layer.call.parent_arg_positions["args"][first_position] = "missing_parent_label"
 
         with pytest.raises(MetadataInvariantError, match="references missing parent"):
             check_metadata_invariants(log)
@@ -5902,7 +5908,7 @@ def test_edge_use_parent_arg_preconditions_reach_real_trace() -> None:
         parent_arg_layers = [
             layer
             for layer in log._layer_list
-            if layer.parent_arg_positions["args"] or layer.parent_arg_positions["kwargs"]
+            if layer.call.parent_arg_positions["args"] or layer.call.parent_arg_positions["kwargs"]
         ]
         assert edge_use_layers
         assert parent_arg_layers
@@ -6034,10 +6040,12 @@ def test_payload_metadata_invariant_rejects_transformed_shape_mismatch() -> None
         capture=CaptureOptions(activation_transform=lambda tensor: tensor.mean(), seed=42),
     )
     try:
-        victim = next(layer for layer in log._layer_list if layer.transformed_out is not None)
-        assert victim.transformed_out_shape == ()
+        victim = next(
+            layer for layer in log._layer_list if layer.payload.transformed_out is not None
+        )
+        assert victim.payload.transformed_out_shape == ()
 
-        victim.transformed_out_shape = (999,)
+        victim._payload_transformed_out_shape = (999,)
 
         with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
             check_metadata_invariants(log)
@@ -6053,7 +6061,7 @@ def test_payload_metadata_invariant_rejects_present_raw_memory_mismatch() -> Non
         victim = next(layer for layer in log._layer_list if layer.has_saved_activation)
         assert victim.out is not None
 
-        victim.activation_memory = 999
+        victim._cost_activation_memory = 999
 
         with pytest.raises(MetadataInvariantError, match="payload_metadata_invariants"):
             check_metadata_invariants(log)
@@ -6071,7 +6079,7 @@ def test_payload_metadata_preconditions_reach_real_saved_payload_trace() -> None
     )
     try:
         assert any(layer.out is not None for layer in log._layer_list)
-        assert any(layer.transformed_out is not None for layer in log._layer_list)
+        assert any(layer.payload.transformed_out is not None for layer in log._layer_list)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -6106,10 +6114,10 @@ def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
             layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
         victim.grad = None
-        victim.transformed_grad = None
+        victim._payload_transformed_grad = None
         victim.has_grad = False
-        victim.grad_shape = (2, 3)
-        victim.grad_dtype = torch.float32
+        victim._autograd_grad_shape = (2, 3)
+        victim._autograd_grad_dtype = torch.float32
         victim.gradient_memory = 24
 
         assert check_metadata_invariants(log) is True
@@ -6125,9 +6133,9 @@ def test_func_call_id_invariant_rejects_missing_id_in_plain_capture() -> None:
         victim = next(
             layer for layer in log._layer_list if not layer.is_input and not layer.is_output
         )
-        assert victim.func_call_id is not None
+        assert victim.call.call_id is not None
 
-        victim.func_call_id = None
+        victim._call_call_id = None
 
         with pytest.raises(MetadataInvariantError, match="has no func_call_id"):
             check_metadata_invariants(log)
@@ -6142,7 +6150,7 @@ def test_func_call_id_invariant_rejects_plain_group_func_name_mismatch() -> None
     try:
         split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
-        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert len({layer.call.call_id for layer in split_layers}) == 1
 
         split_layers[1].func_name = "chunk"
 
@@ -6159,7 +6167,7 @@ def test_func_call_id_plain_preconditions_reach_real_trace() -> None:
     try:
         split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
         assert len(split_layers) == 2
-        assert len({layer.func_call_id for layer in split_layers}) == 1
+        assert len({layer.call.call_id for layer in split_layers}) == 1
         assert all(layer.container_path for layer in split_layers)
         assert check_metadata_invariants(log) is True
     finally:
@@ -6180,8 +6188,8 @@ def test_func_call_id_invariant_allows_sparse_recording_projection() -> None:
             layer for layer in log._layer_list if not (layer.is_input or layer.is_output)
         ]
         assert compute_layers
-        assert any(layer.func_call_id is not None for layer in compute_layers)
-        assert all(layer.args_template is None for layer in compute_layers)
+        assert any(layer.call.call_id is not None for layer in compute_layers)
+        assert all(layer.call.args_template is None for layer in compute_layers)
         assert all(layer.container_spec is None for layer in compute_layers)
         result = check_func_call_id_invariant(log)
         assert result.passed is True
@@ -6292,8 +6300,8 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
             position for position in trigger_positions if position is not None
         )
         assert any(
-            layer.grad_fn_object_id is not None
-            and layer.grad_fn is None
+            layer._grad_fn_object_id is not None
+            and layer.autograd.grad_fn is None
             and layer.step_index > last_trigger_position
             for layer in log._layer_list
         )
@@ -6343,8 +6351,8 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         try:
             log.backward(log.output_ops[0].out.sum())
             dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
-            assert dead.grad_fn_object_id is not None
-            assert dead.grad_fn is None
+            assert dead._grad_fn_object_id is not None
+            assert dead.autograd.grad_fn is None
             assert check_metadata_invariants(log) is True
         finally:
             log.cleanup()
@@ -6378,8 +6386,8 @@ def test_dead_branch_exemption_does_not_disarm_contributing_backpointers() -> No
     try:
         log.backward(log.output_ops[0].out.sum())
         victim = next(layer for layer in log._layer_list if layer.label.startswith("linear"))
-        assert victim.grad_fn is not None
-        victim.grad_fn = None
+        assert victim.autograd.grad_fn is not None
+        victim._autograd_grad_fn = None
 
         with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
             check_metadata_invariants(log)
@@ -6396,9 +6404,9 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
         victim = next(
             layer
             for layer in log._layer_list
-            if layer.grad_fn_object_id is not None and layer.grad_fn is not None
+            if layer._grad_fn_object_id is not None and layer.autograd.grad_fn is not None
         )
-        victim.grad_fn = None
+        victim._autograd_grad_fn = None
 
         with pytest.raises(MetadataInvariantError, match="missing its GradFn backpointer"):
             check_metadata_invariants(log)
@@ -6632,10 +6640,10 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
         victim = next(layer for layer in log._layer_list if layer.module)
         victim.module = None
         victim.modules = []
-        victim.module_call_stack = []
-        victim.output_of_modules = []
-        victim.output_of_module_calls = []
-        victim.atomic_module_call = None
+        victim._module_context_call_stack = []
+        victim._module_context_output_of_modules = []
+        victim._module_context_output_of_module_calls = []
+        victim._module_context_atomic_module_call = None
 
         with pytest.raises(MetadataInvariantError, match="module_attribution"):
             check_metadata_invariants(log)
@@ -6882,7 +6890,7 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
 def test_corruption_loop_detection_slo_empty():
     """Empty recurrent_ops triggers loop_detection error."""
     log = _make_clean_log()
-    log._layer_list[0].recurrent_ops = []
+    log._layer_list[0]._graph_recurrent_ops = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6903,8 +6911,8 @@ def test_corruption_loop_detection_self_exclusion_into_seen_group() -> None:
     try:
         donor, victim = log._layer_list[0], log._layer_list[1]
         assert donor.label != victim.label
-        assert victim.label not in donor.recurrent_ops
-        victim.recurrent_ops = list(donor.recurrent_ops)
+        assert victim.label not in donor.graph.recurrent_ops
+        victim._graph_recurrent_ops = list(donor.graph.recurrent_ops)
 
         with pytest.raises(MetadataInvariantError, match="not in its own recurrent_ops"):
             check_metadata_invariants(log)
@@ -6919,7 +6927,7 @@ def test_corruption_loop_detection_slo_asymmetry():
     for lpl in log._layer_list:
         if lpl.num_passes > 1:
             # Remove one member from slo
-            lpl.recurrent_ops = [lpl.layer_label]
+            lpl._graph_recurrent_ops = [lpl.layer_label]
             break
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
@@ -6944,11 +6952,11 @@ def test_corruption_distance_min_gt_max():
     # Find a non-input layer with distances set
     for lpl in log._layer_list:
         if (
-            lpl.min_distance_from_input is not None
-            and lpl.max_distance_from_input is not None
-            and lpl.min_distance_from_input > 0
+            lpl.graph.min_distance_from_input is not None
+            and lpl.graph.max_distance_from_input is not None
+            and lpl.graph.min_distance_from_input > 0
         ):
-            lpl.min_distance_from_input = lpl.max_distance_from_input + 1
+            lpl._graph_min_distance_from_input = lpl.graph.max_distance_from_input + 1
             break
     else:
         # A silent `return` here is a VACUOUS PASS that can green out a
@@ -6970,8 +6978,8 @@ def test_corruption_distance_input_nonzero():
         pytest.skip("mark_layer_depths is off; input-distance plant has no target")
     for label in log.input_layers:
         lpl = log._layer_dict_all_keys[label]
-        lpl.min_distance_from_input = 5
-        lpl.max_distance_from_input = 5
+        lpl._graph_min_distance_from_input = 5
+        lpl._graph_max_distance_from_input = 5
         break
     with pytest.raises(MetadataInvariantError, match="distance_invariants"):
         check_metadata_invariants(log)
@@ -6987,8 +6995,8 @@ def test_corruption_distance_ancestor_flag():
         log.cleanup()
         pytest.skip("mark_layer_depths is off; ancestor-flag plant has no target")
     for lpl in log._layer_list:
-        if lpl.has_input_ancestor and len(lpl.input_ancestors) > 0:
-            lpl.has_input_ancestor = False
+        if lpl.graph.has_input_ancestor and len(lpl.input_ancestors) > 0:
+            lpl._graph_has_input_ancestor = False
             break
     with pytest.raises(MetadataInvariantError, match="distance_invariants"):
         check_metadata_invariants(log)
@@ -7011,7 +7019,7 @@ def test_corruption_raw_label_in_elif_children_dict():
     from torchlens.validation._invariants_equivalence import _check_graph_ordering
 
     log = _make_clean_log()
-    log._layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
+    log._layer_list[1]._control_flow_elif_children = {0: ["relu_1_1_raw"]}
     with pytest.raises(MetadataInvariantError, match="Raw label"):
         _check_graph_ordering(log)
     with pytest.raises(MetadataInvariantError):
@@ -7030,9 +7038,9 @@ def test_corruption_raw_label_in_parent_arg_positions_key():
     """
 
     log = _make_clean_log()
-    positions = dict(log._layer_list[1].parent_arg_positions or {})
+    positions = dict(log._layer_list[1].call.parent_arg_positions or {})
     positions["linear_1_1_raw"] = 0
-    log._layer_list[1].parent_arg_positions = positions
+    log._layer_list[1]._call_parent_arg_positions = positions
     with pytest.raises(MetadataInvariantError, match="parent_arg_positions"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7111,7 +7119,7 @@ def test_raw_label_survival_roster_is_closed():
     """
 
     from torchlens import _constants as constants
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants import (
         _RAW_LABEL_BEARING_DICT_FIELDS,
         _RAW_LABEL_BEARING_LIST_FIELDS,
         _RAW_LABEL_BEARING_SCALAR_FIELDS,
@@ -7153,13 +7161,13 @@ def test_raw_label_survival_roster_is_closed():
     for lpl in log._layer_list:
         foreign = labels - {lpl.layer_label, lpl.label}
         for field in fields - rostered - allowlist:
-            hits = _collect_strings(getattr(lpl, field, None)) & foreign
+            hits = _collect_strings(record_member(lpl, field, None)) & foreign
             if hits:
                 offenders.setdefault(field, sorted(hits)[:3])
     log.cleanup()
     assert not offenders, (
         "label-bearing fields outside the raw-label survival roster (add them "
-        f"to a roster shape in validation/invariants.py): {offenders}"
+        f"to a roster shape in validation/_invariants.py): {offenders}"
     )
 
 
@@ -7208,12 +7216,12 @@ def test_corruption_equivalence_symmetry_one_sided_group():
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(seed=42),
     )
-    groups = [op for op in log.compute_ops if op.equivalent_ops]
+    groups = [op for op in log.compute_ops if op.graph.equivalent_ops]
     assert groups, "expected an equivalence group from the repeated layer"
     victim = groups[0]
-    members = set(victim.equivalent_ops)
+    members = set(victim.graph.equivalent_ops)
     assert len(members) >= 2, "equivalence group too small to break one-sidedly"
-    victim.equivalent_ops = members - {sorted(members)[-1]}
+    victim._graph_equivalent_ops = members - {sorted(members)[-1]}
     with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7280,18 +7288,18 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
     for lpl in log._layer_list:
         if (
             not lpl.is_input
-            and not lpl.is_buffer
+            and not lpl.graph.is_buffer
             and not lpl.is_output
-            and not lpl.is_internal_source
+            and not lpl.graph.is_internal_source
             and lpl.parents
         ):
             for p_label in lpl.parents:
                 parent = log._layer_dict_all_keys[p_label]
                 parent.children = [c for c in parent.children if c != lpl.layer_label]
-                parent.has_children = len(parent.children) > 0
+                parent._graph_has_children = len(parent.children) > 0
             lpl.parents = []
             for arg_domain in ("args", "kwargs"):
-                lpl.parent_arg_positions.get(arg_domain, {}).clear()
+                lpl.call.parent_arg_positions.get(arg_domain, {}).clear()
             # has_parents is a read-only property derived from parents
             #
             # Since the edge-occurrence multiplicity witness (b9-opus R75-1)
@@ -7416,7 +7424,7 @@ def test_corruption_functionless_sentinel_on_computational_op() -> None:
         lpl = next(
             lpl
             for lpl in log._layer_list
-            if not (lpl.is_input or lpl.is_buffer or lpl.is_output)
+            if not (lpl.is_input or lpl.graph.is_buffer or lpl.is_output)
             and callable(lpl.func)
             and lpl.func_name
         )
@@ -7459,13 +7467,13 @@ def test_corruption_capture_witnessed_slot_permutation_is_rejected() -> None:
     try:
         target = None
         for op in log._layer_list:
-            positions = (op.parent_arg_positions or {}).get("args") or {}
+            positions = (op.call.parent_arg_positions or {}).get("args") or {}
             if len(set(positions.values())) >= 2:
                 target = (op, sorted(positions)[:2])
                 break
         assert target, "fixture produced no op with two distinct args-slot parents"
         op, (slot_a, slot_b) = target
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         positions[slot_a], positions[slot_b] = positions[slot_b], positions[slot_a]
         with pytest.raises(MetadataInvariantError, match="dropped or rewired"):
             _check_capture_edge_survival(log)
@@ -7507,7 +7515,7 @@ def test_corruption_plain_parent_witnessed_edge_drop_is_rejected() -> None:
                 break
         assert target, "fixture produced no witnessed args edge to reshape"
         op, raw_label, parent_raw = target
-        dropped = op.parent_arg_positions["args"].pop(0, None)
+        dropped = op.call.parent_arg_positions["args"].pop(0, None)
         assert dropped is not None
         # Reshape the sealed witness for this op to the plain-parent form of
         # the SAME true edge, and scrub the recorded graph surfaces.
@@ -7552,8 +7560,6 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
     ``keep_orphans=True`` capture.
     """
 
-    from torchlens.options import CaptureOptions
-
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
@@ -7573,8 +7579,6 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
 @pytest.mark.smoke
 def test_connectivity_retained_orphan_mapped_to_live_final_label_is_rejected() -> None:
     """Excusing retained islands must not excuse a mapping onto a LIVE label."""
-
-    from torchlens.options import CaptureOptions
 
     log = trace_fn(
         _PrunedOrphanModel(),
@@ -7948,9 +7952,9 @@ def test_plain_trace_vmap_mask_has_no_functionless_replacement() -> None:
     assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
 
     # The mask is instead logged as a transform boundary node with a clean parent edge.
-    transform_ops = [op for op in log.ops if getattr(op, "is_transform", False)]
+    transform_ops = [op for op in log.ops if record_member(op, "is_transform", False)]
     assert [op.type for op in transform_ops] == ["vmap"]
-    assert transform_ops[0].transform_chain == ("vmap", "vmap")
+    assert transform_ops[0].call.func_transform_chain == ("vmap", "vmap")
     assert transform_ops[0].parents
     assert all(parent.startswith("arange_") for parent in transform_ops[0].parents)
     transform_label = transform_ops[0].label.split(":")[0]
@@ -7999,7 +8003,7 @@ def test_plain_trace_mistral_has_no_functionless_replacement():
 def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
     """Build a minimal ``where`` op layer mock for the one-arg index discriminator."""
 
-    return SimpleNamespace(
+    return FlatNamespace(
         func_name="where",
         saved_args=saved_args,
         saved_kwargs=saved_kwargs,
@@ -8013,7 +8017,7 @@ def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
 def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
     """One-arg positional ``torch.where(cond)`` (nonzero index form) is recognized."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((torch.tensor([1, 0, 1, 0], dtype=torch.int64),), {})
     assert _check_one_arg_where_index_exempt(layer) is True
@@ -8022,7 +8026,7 @@ def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
 def test_one_arg_where_keyword_nonzero_is_index_exempt() -> None:
     """Keyword ``torch.where(condition=cond)`` nonzero index form is recognized."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((), {"condition": torch.tensor([1, 0, 1, 0], dtype=torch.int64)})
     assert _check_one_arg_where_index_exempt(layer) is True
@@ -8034,7 +8038,7 @@ def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
     kwargs, captured as len(saved_args)==1 with int output) must NOT be treated as the
     one-arg index form -- the tripwire must stay armed for a genuine value-dependent branch."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer(
         (torch.tensor([True, False, True, False]),),
@@ -8049,7 +8053,7 @@ def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
 def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None:
     """A 3-arg positional value-select ``where`` is never the one-arg index form."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer(
         (
@@ -8066,7 +8070,7 @@ def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None
 def test_float_output_where_is_not_one_arg_index_exempt() -> None:
     """A non-integer output ``where`` is never treated as the one-arg index form."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((torch.tensor([1.0, 0.0, 1.0, 0.0]),), {}, dtype=torch.float32)
     assert _check_one_arg_where_index_exempt(layer) is False
@@ -8110,7 +8114,7 @@ def test_plain_trace_internal_source_final_output_is_exempted() -> None:
     try:
         assert log.output_layers == ["output_1"]
         output_parent = log[log["output_1"].parents[0]]
-        assert output_parent.is_internal_source
+        assert output_parent.graph.is_internal_source
         check_metadata_invariants(log)
         assert validate_forward_pass(model, [x], input_kwargs={})
     finally:
@@ -8175,7 +8179,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
         # A genuine functionless replacement placeholder IS present here...
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         # ...and validation must PASS (exemption scoped to genuine replacements).
         check_metadata_invariants(log)
     finally:
@@ -8240,7 +8244,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         check_metadata_invariants(log)
     finally:
         log.cleanup()
@@ -8290,7 +8294,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         # The placeholder has no owning submodule -- it must carry `module=None`,
         # not a bogus `("", index)`/`":index"` label.
         assert all(op.module is None for op in placeholders)
@@ -8353,7 +8357,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     try:
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
-        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        internal_sources = [op for op in log.ops if record_member(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
         check_metadata_invariants(log)
@@ -8386,7 +8390,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         # The untraceable output is an honest internal source (func_name "none").
-        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        internal_sources = [op for op in log.ops if record_member(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
         # Metadata invariants pass (a graph source, not a placeholder); forward
@@ -8412,7 +8416,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     from torchlens.validation._invariants_backward_flow import _is_func_call_id_exempt
 
     base = {"is_input": False, "is_output": False, "is_buffer": False, "func": None}
-    genuine = SimpleNamespace(
+    genuine = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=True,
         is_internal_source=False,
@@ -8421,7 +8425,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
     assert _is_func_call_id_exempt(genuine) is True
 
     # Same func_name but NOT flagged as replaced -> not a genuine replacement.
-    not_replaced = SimpleNamespace(
+    not_replaced = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=False,
         is_internal_source=False,
@@ -8431,7 +8435,7 @@ def test_func_call_id_exemption_is_scoped_to_genuine_replacement() -> None:
 
     # Same func_name + replaced but IS an internal source -> not a genuine
     # user replacement (internal sources carry func_name "none" in practice).
-    internal = SimpleNamespace(
+    internal = FlatNamespace(
         func_name="intervention_replacement",
         is_edited=True,
         is_internal_source=True,
@@ -8562,7 +8566,7 @@ def _first_computational_layer(log):
     """Return the first non-boundary layer of a clean single-pass capture."""
 
     return next(
-        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.graph.is_buffer)
     )
 
 
@@ -8665,7 +8669,7 @@ def test_corruption_arm_graph_topology_slot_names_non_parent() -> None:
         ops = list(log._layer_list)
         relu_op = next(op for op in ops if op.label.startswith("relu"))
         tanh_op = next(op for op in ops if op.label.startswith("tanh"))
-        positions = relu_op.parent_arg_positions["args"]
+        positions = relu_op.call.parent_arg_positions["args"]
         positions[next(iter(positions))] = tanh_op.label
         with pytest.raises(MetadataInvariantError, match="which is not a recorded parent"):
             _check_graph_topology(log)

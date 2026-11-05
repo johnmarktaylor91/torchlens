@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from torchlens.agent import _init_block as init_block, cli
+from torchlens.agent import _cli as cli, _init_block as init_block
 
 BLOCK = init_block.render_block(Path("/site/torchlens/_docs/AGENT_INDEX.md"), "9.9.9")
 

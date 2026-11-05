@@ -369,7 +369,7 @@ def _seed_input(op: Op) -> _InputState:
     """
 
     shape = tuple(op.shape)
-    role = op.io_role or op.label
+    role = op.graph.io_role or op.label
     identity = _Mapped(_Affine(Fraction(1), Fraction(0)), _Affine(Fraction(1), Fraction(0)))
     return _InputState(
         input_op_label=op.label,
@@ -1380,7 +1380,7 @@ def _edge_is_geometry_neutral(
     edge_kinds = tuple(getattr(record, "edge_use", None) for record in records)
     if all(kind == "control" for kind in edge_kinds):
         return True
-    if tuple(parent.shape) or op.source_trace._provenance_backend != TORCH_BACKEND_NAME:
+    if parent.shape != () or op.source_trace._provenance_backend != TORCH_BACKEND_NAME:
         return False
     for record, edge_kind in zip(records, edge_kinds):
         if edge_kind == "control":

@@ -46,6 +46,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.hf_capabilities import moe_router_aux_loss_runs_on_cpu
 from torchlens.backends.torch._foreign_data import (
     FLASH_ATTENTION_4_EXIT,
     FLASH_ATTENTION_4_INTERFACE_MODULE,
@@ -119,20 +120,33 @@ def _router_logits(output: Any) -> list[torch.Tensor]:
 @pytest.mark.heavy
 @pytest.mark.parametrize("family", ["mixtral", "qwen2_moe", "olmoe"])
 def test_router_logit_outputs_capture_exactly_and_validate(family: str) -> None:
-    """``output_router_logits=True`` traces to the exact return and replays."""
+    """``output_router_logits=True`` traces to the exact return and replays.
+
+    Where the family's CausalLM cannot compute its router auxiliary loss on
+    CPU (the 4.x olmoe and qwen2_moe loss indexes by a CPU device's ``None``
+    index), the upstream call itself raises ``TypeError``; that refusal is
+    asserted, and the router-logit capture is proven on the decoder the
+    CausalLM wraps, which returns the same per-layer router logits without
+    the loss.
+    """
 
     model = _moe_model(family)
     input_ids = torch.randint(0, 128, (1, 7), generator=torch.Generator().manual_seed(1))
     kwargs = {"input_ids": input_ids, "output_router_logits": True}
+    target, leaf = model, "logits"
+    if not moe_router_aux_loss_runs_on_cpu(family):
+        with torch.no_grad(), pytest.raises(TypeError, match="NoneType"):
+            model(**kwargs)
+        target, leaf = model.model, "last_hidden_state"
     with torch.no_grad():
-        direct = model(**kwargs)
+        direct = target(**kwargs)
     direct_router = _router_logits(direct)
     assert len(direct_router) == 2, "precondition: one router-logit tensor per MoE layer"
 
-    trace = tl.trace(model, (), input_kwargs=dict(kwargs))
+    trace = tl.trace(target, (), input_kwargs=dict(kwargs))
     try:
         assert trace.outcome.status.name == "COMPLETE"
-        assert torch.equal(trace.output.logits, direct.logits)
+        assert torch.equal(getattr(trace.output, leaf), getattr(direct, leaf))
         traced_router = _router_logits(trace.output)
         assert len(traced_router) == len(direct_router)
         assert all(torch.equal(a, b) for a, b in zip(traced_router, direct_router, strict=True))
@@ -143,7 +157,7 @@ def test_router_logit_outputs_capture_exactly_and_validate(family: str) -> None:
             ), "a router-logit tensor is missing from the trace's output ops"
     finally:
         trace.cleanup()
-    assert tl.validate(model, (), dict(kwargs), scope="forward") is True
+    assert tl.validate(target, (), dict(kwargs), scope="forward") is True
 
 
 class _ShardedMLP(torch.nn.Module):
@@ -269,7 +283,7 @@ def _fa4_boundary_ops(trace: tl.Trace) -> list[Any]:
         op
         for op in trace._layer_list
         if op.func_name == FOREIGN_FUNCTION_FUNC_NAME
-        and op.transform_config.get("exits") == [FLASH_ATTENTION_4_EXIT]
+        and op.call.func_transform_config.get("exits") == [FLASH_ATTENTION_4_EXIT]
     ]
 
 
@@ -286,19 +300,23 @@ def _assert_fa4_boundary_shape(trace: tl.Trace, direct: torch.Tensor, num_layers
     assert trace.outcome.status.name == "COMPLETE"
     assert torch.equal(trace.output.logits, direct)
     boundaries = _fa4_boundary_ops(trace)
-    calls = {op.func_call_id for op in boundaries}
+    calls = {op.call.call_id for op in boundaries}
     assert len(calls) == num_layers, calls
     for op in boundaries:
-        assert op.transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
-        assert op.transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+        assert op.call.func_transform_kind == FOREIGN_FUNCTION_TRANSFORM_KIND
+        assert (
+            op.call.func_transform_config["function_module"] == FLASH_ATTENTION_4_INTERFACE_MODULE
+        )
         assert is_foreign_function_recorder(op.func)
-        assert "self_attn" in str(op.module_call_stack), op.module_call_stack
-        assert sorted(op.parent_arg_positions["args"]) == [0, 1, 2], op.parent_arg_positions
+        assert "self_attn" in str(op.module_context.call_stack), op.module_context.call_stack
+        assert sorted(op.call.parent_arg_positions["args"]) == [0, 1, 2], (
+            op.call.parent_arg_positions
+        )
         assert len(op.parents) == 3, op.parents
     attention_interiors = [
         op.label
         for op in trace._layer_list
-        if op.type in {"empty", "detach"} and "self_attn" in str(op.module_call_stack)
+        if op.type in {"empty", "detach"} and "self_attn" in str(op.module_context.call_stack)
     ]
     assert attention_interiors == []
     return boundaries
@@ -414,7 +432,7 @@ def test_flash_attention_4_boundary_owns_every_dispatch() -> None:
         assert trace.completeness_diagnostics == [], facts
         owners = {entry["owner_wrapper"] for entry in trace.health.completeness_decompositions}
         assert FOREIGN_FUNCTION_WRAPPER_NAME in owners
-        boundary_ids = {op.func_call_id for op in _fa4_boundary_ops(trace)}
+        boundary_ids = {op.call.call_id for op in _fa4_boundary_ops(trace)}
         owned = {
             entry["owner_func_call_id"]
             for entry in trace.health.completeness_decompositions
@@ -476,12 +494,12 @@ def _assert_fa2_capture_shape(trace: tl.Trace, direct: torch.Tensor, num_layers:
     assert trace.outcome.status.name == "COMPLETE"
     assert torch.equal(trace.output.logits, direct)
     kernel_ops = _fa2_kernel_ops(trace)
-    calls = {op.func_call_id for op in kernel_ops}
+    calls = {op.call.call_id for op in kernel_ops}
     assert len(calls) == num_layers, calls
     assert len(kernel_ops) == 4 * num_layers, [op.label for op in kernel_ops]
     for op in kernel_ops:
-        assert op.transform_kind != FOREIGN_FUNCTION_TRANSFORM_KIND, op.label
-        assert "self_attn" in str(op.module_call_stack), op.module_call_stack
+        assert op.call.func_transform_kind != FOREIGN_FUNCTION_TRANSFORM_KIND, op.label
+        assert "self_attn" in str(op.module_context.call_stack), op.module_context.call_stack
         assert len(op.parents) == 3, (op.label, op.parents)
         if op.multi_output_index == 0:
             assert op.dtype == torch.bfloat16 and op.children, op.label
@@ -633,7 +651,7 @@ def test_flash_attention_2_dropout_replays_exactly(seq: int) -> None:
 
     from torchlens.options import CaptureOptions
     from torchlens.validation import last_validation_failure
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 

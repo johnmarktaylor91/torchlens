@@ -56,6 +56,7 @@ from torchlens._ir.op_record import (
     OpRecord,
     apply_patch_items,
 )
+from torchlens._ir.refs import journal_record
 
 # Journal SHAPES for the fold-routing tests (P7 deleted the legacy torch
 # producer): "decomposed" = captured OpRecord rows; "legacy" = genuine compat
@@ -134,13 +135,17 @@ def _spy_append_amendment(observations: list[_Observation], failures: list[str])
         family = amendment.family
         label_raw = amendment.target_label_raw
         folded = real_append(self, amendment)
+        # A row-journal handle (capture C2b) stands for the record it builds:
+        # the shape and facet checks below read that record, and the flat
+        # reads still go through the handle's own overlay.
+        record = journal_record(folded)
         observations.append(
             _Observation(
                 site=site,
                 family=family,
                 kwarg_names=tuple(PATH_TO_FLAT[path] for path, _ in amendment.patch),
                 label_raw=label_raw,
-                record_type=type(folded).__name__,
+                record_type=type(record).__name__,
             )
         )
         if site not in _TRANSPORT_SITES:
@@ -166,10 +171,10 @@ def _spy_append_amendment(observations: list[_Observation], failures: list[str])
                     f"{site}: flat field {flat!r} does not carry the emitted "
                     f"value (got {landed!r}, sent {value!r})"
                 )
-            if isinstance(folded, OpRecord):
+            if isinstance(record, OpRecord):
                 owner, _, field_name = path.partition(".")
                 holder = (
-                    folded.core if owner == "core" else getattr(folded, _FACET_ATTRIBUTES[owner])
+                    record.core if owner == "core" else getattr(record, _FACET_ATTRIBUTES[owner])
                 )
                 if holder is None:
                     failures.append(f"{site}: facet {owner!r} absent after folding {path!r}")
@@ -387,10 +392,10 @@ def _journal_templates(monkeypatch: pytest.MonkeyPatch, producer: str) -> list[A
     original = materialize_module.materialize_from_events
     grabbed: list[Any] = []
 
-    def observing(trace: Any, events: Any) -> None:
+    def observing(trace: Any, events: Any, *rest: Any) -> None:
         if not grabbed:
             grabbed.extend(events.op_events)
-        original(trace, events)
+        original(trace, events, *rest)
 
     monkeypatch.setattr(postprocess_module, "materialize_from_events", observing)
     monkeypatch.setattr(materialize_module, "materialize_from_events", observing)

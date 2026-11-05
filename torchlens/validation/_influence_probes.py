@@ -30,6 +30,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._raw_pointer_denial import refuse_pointer_keywords
+from .._utils._record_group_table import record_member
+from .._utils._sparse_invariant_guard import call_with_sparse_invariants, refuse_invariant_switch
 from ._replay_warnings import replay_warnings_ignored
 
 if TYPE_CHECKING:
@@ -126,7 +129,7 @@ def _flat_slot_of(layer: Op, label: str) -> Slot | None:
     not a value operand.
     """
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     slots: list[Any] = [k for k, v in (positions.get("args") or {}).items() if v == label]
     slots += [k for k, v in (positions.get("kwargs") or {}).items() if v == label]
     if len(slots) != 1 or isinstance(slots[0], tuple) or slots[0] == "out":
@@ -140,8 +143,8 @@ def _probe_call(layer: Op, layers_to_perturb: list[str]) -> _ProbeCall | None:
     slot = _flat_slot_of(layer, layers_to_perturb[0]) if len(layers_to_perturb) == 1 else None
     if slot is None:
         return None
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     kwargs = {name: value for name, value in saved_kwargs.items() if name != "out"}
     present = 0 <= slot < len(args) if isinstance(slot, int) else slot in kwargs
     return _ProbeCall(args, kwargs, slot) if present else None
@@ -160,6 +163,9 @@ def _substitutes_move_output(
         return None
     from .._utils.tensor_utils import tensor_nanequal
 
+    # Raised OUTSIDE the probe refusals: a probe that cannot run keeps an exemption.
+    refuse_pointer_keywords(layer, call.kwargs)
+    refuse_invariant_switch(layer, call.kwargs)
     try:
         with torch.no_grad(), replay_warnings_ignored():
             substitutes = build_substitutes()
@@ -167,7 +173,7 @@ def _substitutes_move_output(
                 return None
             for substitute in substitutes:
                 args, kwargs = call.substituted(substitute)
-                probe_output = func(*args, **kwargs)
+                probe_output = call_with_sparse_invariants(func, args, kwargs)
                 if not isinstance(probe_output, torch.Tensor):
                     return None
                 if not tensor_nanequal(probe_output, saved_output, allow_tolerance=False):

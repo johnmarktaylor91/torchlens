@@ -95,10 +95,12 @@ def bundle_fork(self: Bundle, name: str | None = None) -> Bundle:
 
 
 def bundle_run(self: Bundle, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
-    """Run all member logs with a supplied model and input."""
+    """Run all member logs with a supplied model and input, refreshing each member in place."""
+
+    from ..intervention._trace_run import rerun_in_place
 
     for member in self._members.values():
-        member.run(model, x, **kwargs)
+        rerun_in_place(member, model, x, **kwargs)
     return self
 
 
