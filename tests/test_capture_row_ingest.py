@@ -251,16 +251,31 @@ def test_adopted_capture_row_equals_the_record_path_cells(
 
 @pytest.mark.parametrize("name", _SUBJECT_NAMES)
 def test_no_unbuilt_handle_reads_an_adopted_row(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
-    """Every row handle left over a row the trace adopted was built before ingest wrote it."""
+    """Every row handle left over a row the trace adopted was built before ingest wrote it.
+
+    The handles are read at the hand-off and checked right after it returns:
+    the trace ends with ``release_runtime_sidecars``, which replaces the
+    capture's op lane and live index with payload-free records, so no handle
+    is left to inspect once ``tl.trace`` returns.
+    """
 
     sources: list[Any] = []
+    handles: list[Any] = []
+    unbuilt_rows: list[list[Any]] = []
     original_hand_off = postprocess_module.hand_off_capture_rows
 
     def recording_hand_off(session: Any, source: Any, clone: Callable[[Any], Any]) -> Any:
-        """Record the capture's events, then hand its rows off."""
+        """Record the capture's row handles, hand its rows off, then note which stay unbuilt."""
 
         sources.append(source)
-        return original_hand_off(session, source, clone)
+        handles.extend(
+            event
+            for event in (*source.op_events, *source.live_index.by_raw_label.values())
+            if type(event) is _row_journal._RowOpRecord
+        )
+        result = original_hand_off(session, source, clone)
+        unbuilt_rows.extend(handle._row for handle in handles if handle._row is not None)
+        return result
 
     adopted: list[list[Any]] = []
     original_adopt = OpRowStore.adopt_row
@@ -278,14 +293,8 @@ def test_no_unbuilt_handle_reads_an_adopted_row(monkeypatch: pytest.MonkeyPatch,
     tl.trace(model, x)
 
     adopted_ids = {id(cells) for cells in adopted}
-    handles = [
-        event
-        for source in sources
-        for event in (*source.op_events, *source.live_index.by_raw_label.values())
-        if type(event) is _row_journal._RowOpRecord
-    ]
     assert sources and handles
-    reading = [handle for handle in handles if id(handle._row) in adopted_ids]
+    reading = [row for row in unbuilt_rows if id(row) in adopted_ids]
     assert reading == []
 
 
