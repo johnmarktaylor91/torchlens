@@ -47,7 +47,7 @@ from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import get_memory_amount, safe_copy
 from ._completeness_origins import internal_scalar_read
-from ._user_grad_fn import stamp_user_grad_fn
+from ._user_grad_fn import rebind_rebased_view_producers, stamp_user_grad_fn
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 
@@ -153,7 +153,7 @@ def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
     return not lazy_at_prep
 
 
-def same_object_logging_copy(out_orig: Any) -> Any:
+def same_object_logging_copy(out_orig: Any, trace: Any = None, was_inplace: bool = False) -> Any:
     """Return the distinct tensor a same-object return is logged against.
 
     Logging against the live receiver would clobber its label with the op's. The
@@ -165,9 +165,13 @@ def same_object_logging_copy(out_orig: Any) -> Any:
     phantom handle. The ``grad_fn`` read is marked as TorchLens bookkeeping: for
     a same-object in-place return the output IS the user's receiver (a registered
     buffer for BN's ``num_batches_tracked.add_(1)``), and an unmarked read would
-    record a phantom declared-state fact.
+    record a phantom declared-state fact. An in-place write through a view first
+    moves the ops whose node autograd discarded onto the base's new ``CopySlices``
+    (``rebind_rebased_view_producers``).
     """
 
+    if was_inplace and trace is not None:
+        rebind_rebased_view_producers(trace, out_orig)
     with internal_scalar_read():
         live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
     logged = safe_copy(out_orig)

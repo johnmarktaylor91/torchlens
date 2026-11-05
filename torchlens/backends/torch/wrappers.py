@@ -1561,7 +1561,7 @@ def torch_func_decorator(
         # otherwise the module exit re-reads the input's label and the boundary
         # node (e.g. identity_1_2) never attaches to the module's output_ops.
         if same_object_returned:
-            out_orig = _same_object_logging_copy(out_orig)
+            out_orig = _same_object_logging_copy(out_orig, trace, was_inplace)
             # A nested bottom-level write already recorded this Parameter
             # mutation; the enclosing initializer keeps its Parameter return
             # and logs nothing (``nested_write_relabeled_receiver``).
