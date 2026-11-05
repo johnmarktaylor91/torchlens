@@ -30,6 +30,7 @@ from unittest import mock
 import pytest
 import torch
 from torch import nn
+from torchlens.validation.diagnostics import get_validation_diagnostics
 
 import torchlens._user_funcs as user_funcs
 import torchlens.backends.torch._ops_exhaustive
@@ -37,7 +38,6 @@ import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
 from torchlens import _state, _user_public_impls, _validation_argument_references as arg_references
 from torchlens.backends.torch import _ops_saved_arg_copies as saved_arg_copies
-from torchlens.validation.diagnostics import get_validation_diagnostics
 
 
 def _validate(
@@ -92,7 +92,8 @@ def _ops_by_label(trace: Any) -> dict[str, Any]:
 def _slot_value(op: Any, domain: str, location: Any) -> Any:
     """Read the saved argument at one parent slot of ``op``."""
 
-    container = list(op.saved_args or ()) if domain == "args" else dict(op.saved_kwargs or {})
+    call = op.call
+    container = list(call.saved_args or ()) if domain == "args" else dict(call.saved_kwargs or {})
     path = location if isinstance(location, tuple) else (location,)
     value: Any = container
     for key in path:
@@ -106,7 +107,7 @@ def _parent_slots(trace: Any) -> list[tuple[Any, Any, torch.Tensor]]:
     by_label = _ops_by_label(trace)
     slots = []
     for op in trace._layer_list:
-        positions = getattr(op, "parent_arg_positions", None) or {}
+        positions = op.call.parent_arg_positions or {}
         for domain in ("args", "kwargs"):
             for location, label in (positions.get(domain) or {}).items():
                 parent = by_label.get(label)
@@ -126,7 +127,7 @@ def _saved_arg_only_storage(trace: Any, model: nn.Module) -> tuple[int, int]:
     held |= {_ptr(p) for p in model.parameters()}
     storages: dict[int, int] = {}
     for op in trace._layer_list:
-        for tensor in _iter_tensors((op.saved_args, op.saved_kwargs)):
+        for tensor in _iter_tensors((op.call.saved_args, op.call.saved_kwargs)):
             ptr = _ptr(tensor)
             if ptr and ptr not in held:
                 storages[ptr] = tensor.untyped_storage().nbytes()
@@ -500,7 +501,7 @@ def _validate_with_corrupted_argmax_input(
         trace = real_runner(*args, **kwargs)
         if kwargs.get("save_args"):
             argmax = next(op for op in trace._layer_list if op.func_name == "argmax")
-            write(argmax.saved_args[0])
+            write(argmax.call.saved_args[0])
         return trace
 
     def observe(trace: Any) -> None:
