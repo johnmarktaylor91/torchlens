@@ -1135,7 +1135,7 @@ torchlens/intervention/_runtime.py::_execute_hook	80
 torchlens/intervention/_runtime.py::_validate_grad_tuple	66
 torchlens/intervention/_runtime.py::validate_hook_output	70
 torchlens/intervention/_runtime_probes.py::_apply_inplace_replacement_to_mutated_storage	72
-torchlens/intervention/_save.py	803
+torchlens/intervention/_save.py	824
 torchlens/intervention/_save.py::_build_target_manifest	73
 torchlens/intervention/_save.py::save_intervention	131
 torchlens/intervention/_spec_codec.py::_deserialize_intervention_spec	72
@@ -1316,7 +1316,7 @@ torchlens/report/_cost_perf.py::roofline	116
 torchlens/report/_cost_scaling.py::padding_waste	78
 torchlens/report/_cost_tree.py	826
 torchlens/report/_cost_tree.py::_TreeBuilder._emit_call	62
-torchlens/report/_explain.py	904
+torchlens/report/_explain.py	922
 torchlens/report/_explain.py::_anomaly_lines	74
 torchlens/report/_explain.py::_capture_status_lines	72
 torchlens/report/_explain.py::explain	72

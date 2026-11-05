@@ -1,4 +1,4 @@
-"""Partial-trace detection and diagnosis sections for explain()."""
+"""Partial-capture boundary and diagnosis sections for explain()."""
 
 from __future__ import annotations
 
@@ -50,25 +50,6 @@ def _partial_sections(diagnosis: dict[str, Any]) -> list[tuple[str, list[str]]]:
             ],
         ),
     ]
-
-
-def _is_partial_trace(log: Any) -> bool:
-    """Return whether ``log`` is a :class:`PartialTrace` instance.
-
-    Parameters
-    ----------
-    log:
-        Candidate capture object.
-
-    Returns
-    -------
-    bool
-        Whether the object is a failed partial capture wrapper.
-    """
-
-    from .._partial import PartialTrace
-
-    return isinstance(log, PartialTrace)
 
 
 def _last_partial_op(log: Any) -> Any | None:

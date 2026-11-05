@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 import torch
 
 from .._utils._torch_compat import tensor_any_over_dims
-from ._types import GridLayout
 
 if TYPE_CHECKING:
-    pass
+    from ._types import GridLayout
 
 
 def _support_ranges(mask: torch.Tensor) -> tuple[tuple[int, int], ...] | None:

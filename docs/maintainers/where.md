@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1620 modules, 683414 lines, 0 modules without a docstring.
+83 packages, 1620 modules, 683406 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5558 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3055 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 85 | 37469 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 85 | 37457 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1924 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -82,17 +82,17 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4148 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 32 | 14090 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 32 | 14089 |
 | `torchlens.receptive_field._builtin_rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1966 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 28 | 7665 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3903 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14505 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 38 | 14504 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2236 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 18 | 7260 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5270 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5420 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 78 | 32306 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 78 | 32312 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4771 |
 
 ## Modules by package
@@ -1744,7 +1744,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3055 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (85 modules, 37469 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (85 modules, 37457 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1808,11 +1808,11 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_run_staged` | Apply a trace's staged intervention spec on a ''run_transaction(inputs=)'' live forward. | 222 |
 | `_runtime` | Runtime context ownership for TorchLens intervention execution. | 1588 |
 | `_runtime_gradient` | Backward-pass and hook-identity helpers for live intervention hooks. | 300 |
-| `_runtime_hook_copy` | Copy helpers for a validated live hook result: reused tensors and replacement attributes. | 71 |
+| `_runtime_hook_copy` | Copy helpers for a validated live hook result: reused tensors and replacement attributes. | 63 |
 | `_runtime_probes` | Storage-mutation probes for live intervention hook outputs. | 199 |
 | `_runtime_sites` | Site-scope and provisional-site helpers for live intervention hooks. | 321 |
-| `_save` | Persistence for TorchLens intervention specifications. | 815 |
-| `_save_function_keys` | Function registry key serialization for saved intervention specs. | 61 |
+| `_save` | Persistence for TorchLens intervention specifications. | 836 |
+| `_save_fs_guards` | Filesystem guards shared by intervention spec save and recipe io. | 36 |
 | `_site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `_site_signal` | Site-signal classification: which pass a selector site lives in. | 106 |
 | `_spec` | The ONE immutable public intervention spec ( substrate). | 801 |
@@ -1939,7 +1939,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (9 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (32 modules, 14090 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (32 modules, 14089 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1957,7 +1957,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (32 modules, 14090
 | `_gradient` | Autograd-backed receptive-field probes with capture-side-effect suppression. | 815 |
 | `_gradient_forward` | Saved-graph double-VJP probes for projective receptive fields. | 530 |
 | `_gradient_live` | Resolve the graph-connected tensor behind a same-object logging copy. | 127 |
-| `_gradient_support` | Support ranges and spatial support of a gradient receptive field. | 62 |
+| `_gradient_support` | Support ranges and spatial support of a gradient receptive field. | 61 |
 | `_index_set` | Index sets of the per-unit receptive-field walks. | 232 |
 | `_influence` | Unit-level influence as a selection: the ENGINE behind the field views' ''.of''. | 602 |
 | `_layer_fields` | Layer receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 46 |
@@ -2045,7 +2045,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (38 modules, 14505 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (38 modules, 14504 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2062,8 +2062,8 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_cost_tree_helpers` | Pure helpers for the cost tree view (digests and label spellings). | 60 |
 | `_doctor` | Environment and model compatibility diagnostics, without executing user models. | 99 |
 | `_environment` | Environment health checks behind ''tl.report.doctor''. | 532 |
-| `_explain` | Plain-language reports for completed TorchLens logs. | 913 |
-| `_explain_partial` | Partial-trace detection and diagnosis sections for explain. | 159 |
+| `_explain` | Plain-language reports for completed TorchLens logs. | 931 |
+| `_explain_partial` | Partial-capture boundary and diagnosis sections for explain. | 140 |
 | `_factcore` | FactCore: the ONE numbers substrate (sumfam item 7, megaplan ). | 493 |
 | `_flops_report` | The one-call paper number: ''flops'' (costreport -). | 441 |
 | `_health` | Serialized HealthFacts + the three-state nonfinite verdict (sumfam 8). | 321 |
@@ -2197,7 +2197,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (78 modules, 32306 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (78 modules, 32312 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2210,7 +2210,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_consolidated` | Consolidated validation entry point for TorchLens 2.0. | 734 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 41 |
 | `_core` | Core validation logic for verifying saved activations. | 3689 |
-| `_core_arg_slots` | Slot-level evidence readers for the unattributed-arg-slot sweep. | 99 |
+| `_core_arg_slots` | Slot-level evidence readers for the unattributed-arg-slot sweep. | 101 |
 | `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'' and integer saturation. | 246 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |
 | `_descriptor_versions` | Runnable descriptor version tripwire shared by the sparse-descriptor and artifact validators. | 67 |
@@ -2224,7 +2224,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
 | `_exemption_table` | The declared table of validation exemptions. | 91 |
 | `_exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2532 |
-| `_exemptions_arg_slots` | Arg-slot locators for perturbed parents in the perturbation exemption checks. | 95 |
+| `_exemptions_arg_slots` | Arg-slot locators for perturbed parents in the perturbation exemption checks. | 99 |
 | `_foreign_kernel_dependence` | Pre-perturbation check for the declared per-output dependence of known foreign kernels. | 139 |
 | `_grad_flags` | Captured ''requires_grad'' flags of replay arguments. | 83 |
 | `_index_domain` | Index-domain perturbation probes for index/target-consuming ops. | 428 |

@@ -8,14 +8,6 @@ import torch
 
 from .._state import pause_logging
 from ..backends.torch._tl import copy_replacement_meta
-from ._module_boundary import (
-    _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
-    _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
-    _peek_tensor_live_fire_results as _peek_tensor_live_fire_results,
-    _record_module_intervention_parent_labels as _record_module_intervention_parent_labels,
-    _record_tensor_live_fire_results as _record_tensor_live_fire_results,
-    _replace_tensor_outputs as _replace_tensor_outputs,
-)
 
 
 def _copy_reused_live_hook_result(out: torch.Tensor, result: torch.Tensor) -> torch.Tensor:

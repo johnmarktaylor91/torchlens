@@ -18,7 +18,6 @@ from .._capture_honesty import (
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
 from ._explain_partial import (
-    _is_partial_trace,
     _partial_diagnosis,
     _partial_sections,
 )
@@ -229,6 +228,25 @@ def _budgeted_report(
         if not remaining:
             return _render_report(kept, dropped, max_tokens, below_floor=True)
         dropped.append(remaining[0])
+
+
+def _is_partial_trace(log: Any) -> bool:
+    """Return whether ``log`` is a :class:`PartialTrace` instance.
+
+    Parameters
+    ----------
+    log:
+        Candidate capture object.
+
+    Returns
+    -------
+    bool
+        Whether the object is a failed partial capture wrapper.
+    """
+
+    from .._partial import PartialTrace
+
+    return isinstance(log, PartialTrace)
 
 
 def _capture_verification(log: Any) -> dict[str, Any]:

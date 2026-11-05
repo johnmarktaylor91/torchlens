@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from .._data_classes.op import Op
+from typing import TYPE_CHECKING
+
 from .._utils._record_group_table import record_member
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _perturbed_parent_is_arg_position(

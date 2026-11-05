@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._data_classes.op import Op
 from .._utils.tensor_utils import tensor_all_nan
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _tensor_arg_value_is_trivial(value: torch.Tensor) -> bool:
