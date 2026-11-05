@@ -37,7 +37,7 @@ lists them.
 | A gradient at one module: `tl.trace` with gradients saved, then backward | 34x (117.50 ms) | 12x (980.27 ms) | 62x (551.37 ms) | not measured | not measured |
 | A forward replay check, `tl.validate(model, x, scope="forward")` | not measured | 361x (5.42 s) | 1107x (2.55 s) | not measured | not measured |
 | Stopping the forward early, `stop_after=` | not measured | not measured | not measured | not measured | not measured |
-| A fast rerun of a trace on new inputs, `trace.run_transaction(inputs=..., fast=True)` | not measured | not measured | not measured | not measured | not measured |
+| A fast rerun of a trace on new inputs, `trace.run_transaction(inputs=..., fast=True)` (measured on 2026-11-05 on other workloads; see [Reruns of a finished trace](#reruns-of-a-finished-trace)) | not measured | not measured | not measured | not measured | not measured |
 | A trace of metadata only, no activations saved | not measured | not measured | not measured | not measured | not measured |
 | Recording a generation (measured on Pythia-70M only; see [its section](#recording-a-generation)) | not measured | not measured | not measured | not measured | not measured |
 
@@ -148,6 +148,186 @@ and a trace keeping one module 381.29 ms; on the LSTM tagger on CPU 81.38 ms and
 
 Known costs: the trace's fixed cost dominates on small models (the LSTM tagger's 1.5 ms forward
 becomes about 80 ms).
+
+## Reruns of a finished trace
+
+Measured on 2026-11-05, on a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 19. Python 3.10, torch 2.13.0 (CPU build), transformers 5.18.0,
+and a development build of TorchLens (2.38.1) from that day. Raw data:
+[`data/capture_2026-11-05-rerun.json`](data/capture_2026-11-05-rerun.json). Each LSTM tagger and
+ResNet-18 row is three processes (GPT-2 two); each process times up to 15 samples after 3 warmup
+calls (GPT-2: up to 5 after 1) and reports its median, and the table gives the median of the
+process medians with the lowest and highest in brackets. The GPT-2 small rows use the GPT-2 small
+architecture with random weights (no download). The timing script is not yet part of
+`benchmarks/`. The forward-hook rows ran
+in a second job on the same worker; each one names that job's own plain forward.
+
+What it does: `trace.run(model, new_x)` reruns the model on new input and returns a new trace with
+the same saved sites. On a trace that saved a selection of sites (`save=tl.module(...)` or
+`tl.func(...)`) it takes the guarded fast rerun, the model's native forward with the staged hooks, if
+any, writing the saved sites into a new trace, with or without a staged edit; a trace that saved
+every activation recaptures, and when a guard refuses (a changed call structure, a value
+replacement, a non-module target) it falls back to recapturing the whole forward, with the reason in
+`last_run["fast_refused"]`. The tables below were measured on the earlier build, in which an
+unedited `trace.run` recaptured and then copied each operation's state into the new trace, costing
+1.69 times a fresh `tl.trace` on ResNet-18, 1.57 times on GPT-2 small and 1.53 times on the LSTM
+tagger; the fast engine's timings are in the next subsection. `trace.run_transaction(inputs=new_x,
+fast=True)` takes the same engine whether or not an edit is staged, as long as the capture saved a
+selection, and raises instead of falling back.
+
+When to use it: to read the same sites on many new inputs, or to rerun a staged edit,
+`run_transaction(inputs=new_x, fast=True)` costs 1.3 to 3 times a plain forward on these models.
+
+Correctness: the fast rerun with a staged edit matched a plain forward with the same edit applied
+by a forward hook (largest absolute difference 0 on GPT-2 small and ResNet-18, 1.9e-08 on the LSTM
+tagger), and the unedited fast rerun's saved site matched a fresh `tl.trace` of the new input
+exactly on all three models.
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | plain forward, nothing attached | 14.20 ms (13.30 ms to 14.26 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | forward hook on the saved module (second job; its plain forward: 14.39 ms) | 14.56 ms (14.20 ms to 18.52 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 405.28 ms (395.31 ms to 408.93 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace` saving every listed module | 417.94 ms (402.45 ms to 665.18 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 684.49 ms (622.50 ms to 693.68 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x)` | 855.95 ms (849.77 ms to 898.79 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 18.85 ms (18.19 ms to 19.18 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 452.97 ms (444.02 ms to 521.99 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a trace with a staged edit | 49.66 ms (48.54 ms to 56.45 ms) |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 19.36 ms (19.35 ms to 22.06 ms) |
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | plain forward, nothing attached | 1.64 s (1.63 s to 1.65 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | forward hook on the saved module (second job; its plain forward: 1.63 s) | 1.34 s (1.33 s to 1.35 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 2.99 s (2.91 s to 3.07 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace` saving every listed module | 4.28 s (4.21 s to 4.34 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 4.71 s (4.65 s to 4.77 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x)` | 7.86 s (7.71 s to 8.01 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 1.33 s (1.33 s to 1.34 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 3.17 s (3.05 s to 3.29 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a trace with a staged edit | 1.41 s (1.38 s to 1.45 s) |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 1.32 s (1.28 s to 1.37 s) |
+
+| Workload (model, device, repeats) | Tool | Median (lowest to highest process median) |
+| --- | --- | --- |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | plain forward, nothing attached | 1.08 ms (1.03 ms to 1.46 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | forward hook on the saved module (second job; its plain forward: 1.07 ms) | 1.11 ms (1.08 ms to 1.13 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 43.16 ms (42.24 ms to 44.64 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace` saving every listed module | 43.95 ms (43.04 ms to 45.28 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 66.08 ms (65.84 ms to 66.79 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x)` | 82.67 ms (80.72 ms to 82.98 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 3.11 ms (3.09 ms to 3.23 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 51.34 ms (47.44 ms to 53.41 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a trace with a staged edit | 8.89 ms (8.74 ms to 14.64 ms) |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 3.32 ms (3.30 ms to 3.75 ms) |
+
+Saving more sites on the rerun, `trace.run_transaction(inputs=new_x, save=[...module addresses])`,
+took about as long as the same saves, measured on a second worker (two processes each; plain
+forward 10.61 and 10.73 ms on ResNet-18): ResNet-18
+637.45 and 731.43 ms against
+692.01 and 719.65 ms; LSTM tagger
+58.84 and 58.65 ms against
+60.71 and 60.09 ms. `trace.run` takes no `save=`.
+
+Known costs: on GPT-2 small the plain-forward arm timed slower than the forward-hook and fast
+arms in both jobs, and the cause was not found; compare GPT-2 rows with the fresh trace rather
+than the plain forward. A `save=` selector such as `tl.module(...)` on `run_transaction` is
+refused in this build (module addresses work). The first capture in a process took 1.7 to 2.4 s
+on ResNet-18, 1.3 to 2.7 s on the LSTM tagger and 4.9 to 5.5 s on GPT-2 small (one call each,
+installing the torch wrappers).
+
+### `trace.run` on new inputs with the fast engine (development build)
+
+A development build of TorchLens (2.38.1, not yet released) sends `trace.run(model, new_x)` on an
+unedited trace that saved a selection through the guarded fast engine instead of a full recapture.
+Both builds were timed in two jobs that ran at the same time on the same shared 32-core Intel Xeon
+2.80 GHz Linux CPU worker (one torch thread per process, load average 6 to 15), with the same
+models, inputs, repeats and saved site as the tables above. The plain forward timed differently in
+the two jobs, so compare the "times plain forward" columns, not the milliseconds across columns.
+
+Correctness: the run reported engine `rerun` before and `guarded_fast` after on every call, with no
+fallback. Before and after, the saved site of the new trace equalled a fresh `tl.trace` of the new
+input exactly (largest absolute difference 0) on all three models, and the new trace's output
+matched a plain forward (0 on ResNet-18 and GPT-2 small, 3.0e-08 on the LSTM tagger).
+
+After the change, `trace.run` costs less than a fresh `tl.trace` on every model (0.11 times on
+ResNet-18, 0.51 on GPT-2 small, 0.16 on the LSTM tagger) but still more than
+`run_transaction(inputs=new_x, fast=True)` on the two small models (about 28 ms more on ResNet-18
+and 7 ms more on the LSTM tagger per call).
+
+| Workload (model, device, repeats) | Tool | Before: median (lowest to highest) | Before: times plain forward | After: median (lowest to highest) | After: times plain forward |
+| --- | --- | --- | --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | plain forward, nothing attached | 22.68 ms (20.90 ms to 23.02 ms) | 1.00x | 14.42 ms (14.28 ms to 15.26 ms) | 1.00x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 508.54 ms (490.37 ms to 709.94 ms) | 22.4x | 442.97 ms (423.87 ms to 442.99 ms) | 30.7x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)`, no edit staged | 651.95 ms (649.85 ms to 1.08 s) | 28.7x | 47.48 ms (46.99 ms to 48.89 ms) | 3.29x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 19.70 ms (18.89 ms to 29.97 ms) | 0.87x | 19.18 ms (19.15 ms to 19.80 ms) | 1.33x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | plain forward, nothing attached | 1.29 s (1.28 s to 1.30 s) | 1.00x | 1.32 s (1.31 s to 1.34 s) | 1.00x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 2.91 s (2.86 s to 2.96 s) | 2.26x | 2.95 s (2.87 s to 3.03 s) | 2.23x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)`, no edit staged | 4.28 s (4.28 s to 4.29 s) | 3.32x | 1.50 s (1.47 s to 1.54 s) | 1.13x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 1.45 s (1.45 s to 1.45 s) | 1.12x | 1.47 s (1.47 s to 1.47 s) | 1.11x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | plain forward, nothing attached | 1.04 ms (1.04 ms to 1.07 ms) | 1.00x | 1.67 ms (1.62 ms to 1.67 ms) | 1.00x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 42.45 ms (42.11 ms to 43.35 ms) | 40.7x | 70.56 ms (67.46 ms to 71.20 ms) | 42.4x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)`, no edit staged | 64.86 ms (64.10 ms to 90.98 ms) | 62.2x | 11.58 ms (10.93 ms to 12.07 ms) | 6.96x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 3.00 ms (2.97 ms to 3.04 ms) | 2.88x | 4.66 ms (4.45 ms to 4.85 ms) | 2.80x |
+
+### Stopping a rerun early
+
+`trace.run_transaction(inputs=new_x, fast=True, until=<saved module>)` stops the fast rerun once
+that module has run. The stopped module's output equalled a fresh `tl.trace` of the new input
+exactly on all three models. Without `fast=True` the same `until=` still costs about a full trace.
+Same worker and build as above; each row is the median of up to 15 samples (GPT-2: 5) in one
+process.
+
+| Workload (model, device, repeats) | Tool | Median |
+| --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 13.65 ms |
+| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 20.30 ms |
+| ResNet-18, CPU, one 64x64 image, one process | the same with `until="layer1"` | 6.16 ms |
+| ResNet-18, CPU, one 64x64 image, one process | the same with `until="layer2"` | 8.43 ms |
+| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, until="layer1")`, without `fast=True` | 434.31 ms |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 1.62 s |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 1.51 s |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | the same with `until="transformer.h.1"` | 161.36 ms |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until="transformer.h.1")`, without `fast=True` | 3.40 s |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.01 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 3.36 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | the same with `until="embed"` | 0.77 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until="embed")`, without `fast=True` | 51.97 ms |
+
+### Replaying a saved trace without the model
+
+A trace captured with `CaptureOptions(replayable=True)` and saved with
+`trace.save(path, level="runnable", include_weights=True)` can be loaded with `tl.load(path)` and
+run on new input with `loaded.run_transaction(inputs=new_x)`, with no model object. Without
+`include_weights=True` the file holds no weights and the replay runs on a fresh random
+initialization (TorchLens warns `runnable_random_init_run`). With the weights, the replay's
+output equalled `model(new_x)` (largest absolute difference 0 on ResNet-18 and GPT-2 small, 3e-08
+on the LSTM tagger), and every run reported path faithfulness `verified` with the state taken from
+the file. Measured on 2026-11-05 on a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 21, same build as above, in one process per model (median
+of up to 15 samples, GPT-2 up to 5). The worker was busier than for the rows above, so compare
+these rows with each other only.
+
+| Workload (model, device, repeats) | Tool | Median |
+| --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 20.47 ms |
+| ResNet-18, CPU, one 64x64 image, one process | fresh `tl.trace(model, x)` | 694.92 ms |
+| ResNet-18, CPU, one 64x64 image, one process | fresh capture with `CaptureOptions(replayable=True)` | 3.37 s |
+| ResNet-18, CPU, one 64x64 image, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 583.57 ms |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 2.34 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh `tl.trace(model, x)` | 5.27 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 17.56 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 10.40 s |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.59 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh `tl.trace(model, x)` | 66.93 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 290.84 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 58.86 ms |
+
+One-time costs per model: ResNet-18 save with weights 5.08 s (a 46.3 MiB file) and load 3.31 s;
+GPT-2 small 26.85 s (627.8 MiB) and 14.42 s; LSTM tagger 1.15 s (1.7 MiB) and 498 ms. The replay
+costs about what a fresh trace does on ResNet-18 and the LSTM tagger (0.84 and 0.88 times) and
+about twice a fresh trace on GPT-2 small; the replayable capture itself is 4 to 5 times a default
+trace. GPT-2 small saves only with `use_cache=False`: with the default key-value cache the save is
+refused (`output_container_contract_missing`).
 
 ## Edit sweeps with a recording per edit
 
@@ -286,8 +466,10 @@ What this means in practice:
 
 ## Not measured yet
 
-- Stopping the forward early with `stop_after=`.
-- A fast rerun of a trace on new inputs, `trace.run_transaction(inputs=..., fast=True)`.
+- Stopping a fresh capture early with `stop_after=` (stopping a fast rerun early is in
+  [Stopping a rerun early](#stopping-a-rerun-early)).
+- A fast rerun of a trace on new inputs on the 3 Nov workloads (the 5 Nov reruns are in
+  [Reruns of a finished trace](#reruns-of-a-finished-trace)).
 - A trace of metadata only, saving no activations.
 - `tl.record` on the LSTM tagger on CPU, and every kind except the recorder, the trace and the
   sweeps on GPT-2 small (the GPT-2 runs used their own workloads and had no plain-forward arm).
@@ -317,6 +499,7 @@ Each run's result file names its host and versions; the page's tables quote the 
 - Third run versions on both GPU nodes: Python 3.10, torch 2.13.0 built for CUDA 12.6,
   transformers 5.18.0, nnsight 0.8.1, TransformerLens 4.3.0, and a development build of TorchLens
   from that day.
+- Reruns of a finished trace (2026-11-05): see [their section](#reruns-of-a-finished-trace).
 - Recording a generation: see [its section](#recording-a-generation).
 
 Method. Each LSTM tagger and ResNet-18 row is three separate processes (two for some first-run

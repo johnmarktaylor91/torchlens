@@ -1,0 +1,777 @@
+{
+ "measured_on": "2026-11-05",
+ "host": {
+  "name": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 19"
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CPU build)",
+  "transformers": "5.18.0",
+  "torchlens": "2.38.1 (development branch, 2026-11-05)"
+ },
+ "harness": "standalone timing script (rerun_bench): per variant 3 warmups then up to 15 samples within 20 s (GPT-2: 1 warmup, up to 5 samples within 60 s); median per process; GPT-2 small built from GPT2Config() with random weights",
+ "correctness": {
+  "staged_fast_rerun_vs_hooked_edit_max_abs_diff": {
+   "gpt2-small": 0.0,
+   "resnet18": 0.0,
+   "lstm-tagger": 1.86e-08
+  },
+  "unedited_fast_rerun_saved_site_vs_fresh_trace_max_abs_diff": {
+   "gpt2-small": 0.0,
+   "resnet18": 0.0,
+   "lstm-tagger": 0.0
+  }
+ },
+ "engines": {
+  "trace.run unedited": "rerun",
+  "trace.run staged edit": "guarded_fast",
+  "run_transaction fast=True": "guarded_fast"
+ },
+ "more_saves_second_worker": {
+  "lstm-tagger": [
+   {
+    "plain_forward": 0.74,
+    "trace_one_site": 29.99,
+    "run_transaction_new_inputs_same_saves": 60.71,
+    "run_transaction_new_inputs_more_saves_by_address": 58.84
+   },
+   {
+    "plain_forward": 0.73,
+    "trace_one_site": 31.18,
+    "run_transaction_new_inputs_same_saves": 60.09,
+    "run_transaction_new_inputs_more_saves_by_address": 58.65
+   }
+  ],
+  "resnet18": [
+   {
+    "plain_forward": 10.61,
+    "trace_one_site": 294.02,
+    "run_transaction_new_inputs_same_saves": 692.01,
+    "run_transaction_new_inputs_more_saves_by_address": 637.45
+   },
+   {
+    "plain_forward": 10.73,
+    "trace_one_site": 291.9,
+    "run_transaction_new_inputs_same_saves": 719.65,
+    "run_transaction_new_inputs_more_saves_by_address": 731.43
+   }
+  ]
+ },
+ "rerun": {
+  "resnet18": {
+   "plain_forward": {
+    "process_medians_ms": [
+     13.302,
+     14.259,
+     14.203
+    ],
+    "job": "rerun"
+   },
+   "forward_hook_one_site": {
+    "process_medians_ms": [
+     14.202,
+     14.563,
+     18.525
+    ],
+    "job": "hook"
+   },
+   "trace_one_site": {
+    "process_medians_ms": [
+     395.311,
+     408.932,
+     405.281
+    ],
+    "job": "rerun"
+   },
+   "trace_more_sites": {
+    "process_medians_ms": [
+     402.448,
+     417.936,
+     665.181
+    ],
+    "job": "rerun"
+   },
+   "run_new_inputs_same_saves": {
+    "process_medians_ms": [
+     622.499,
+     684.487,
+     693.682
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_new_inputs_same_saves": {
+    "process_medians_ms": [
+     849.769,
+     898.791,
+     855.946
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_unstaged": {
+    "process_medians_ms": [
+     18.186,
+     19.183,
+     18.85
+    ],
+    "job": "rerun"
+   },
+   "trace_with_staged_edit": {
+    "process_medians_ms": [
+     444.02,
+     521.988,
+     452.971
+    ],
+    "job": "rerun"
+   },
+   "run_staged_edit_new_inputs": {
+    "process_medians_ms": [
+     48.541,
+     56.453,
+     49.665
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_staged_edit": {
+    "process_medians_ms": [
+     19.365,
+     22.056,
+     19.349
+    ],
+    "job": "rerun"
+   },
+   "first_trace_in_process_ms": [
+    1710,
+    1922,
+    2380
+   ]
+  },
+  "gpt2-small": {
+   "plain_forward": {
+    "process_medians_ms": [
+     1628.389,
+     1645.837
+    ],
+    "job": "rerun"
+   },
+   "forward_hook_one_site": {
+    "process_medians_ms": [
+     1345.331,
+     1331.539
+    ],
+    "job": "hook"
+   },
+   "trace_one_site": {
+    "process_medians_ms": [
+     3074.091,
+     2913.988
+    ],
+    "job": "rerun"
+   },
+   "trace_more_sites": {
+    "process_medians_ms": [
+     4214.117,
+     4336.59
+    ],
+    "job": "rerun"
+   },
+   "run_new_inputs_same_saves": {
+    "process_medians_ms": [
+     4768.862,
+     4650.859
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_new_inputs_same_saves": {
+    "process_medians_ms": [
+     7710.558,
+     8009.907
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_unstaged": {
+    "process_medians_ms": [
+     1326.296,
+     1343.557
+    ],
+    "job": "rerun"
+   },
+   "trace_with_staged_edit": {
+    "process_medians_ms": [
+     3052.274,
+     3291.442
+    ],
+    "job": "rerun"
+   },
+   "run_staged_edit_new_inputs": {
+    "process_medians_ms": [
+     1447.357,
+     1378.131
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_staged_edit": {
+    "process_medians_ms": [
+     1279.876,
+     1365.769
+    ],
+    "job": "rerun"
+   },
+   "first_trace_in_process_ms": [
+    4886,
+    5465
+   ]
+  },
+  "lstm-tagger": {
+   "plain_forward": {
+    "process_medians_ms": [
+     1.026,
+     1.464,
+     1.078
+    ],
+    "job": "rerun"
+   },
+   "forward_hook_one_site": {
+    "process_medians_ms": [
+     1.11,
+     1.081,
+     1.129
+    ],
+    "job": "hook"
+   },
+   "trace_one_site": {
+    "process_medians_ms": [
+     43.161,
+     42.243,
+     44.638
+    ],
+    "job": "rerun"
+   },
+   "trace_more_sites": {
+    "process_medians_ms": [
+     43.949,
+     45.283,
+     43.035
+    ],
+    "job": "rerun"
+   },
+   "run_new_inputs_same_saves": {
+    "process_medians_ms": [
+     66.791,
+     66.084,
+     65.837
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_new_inputs_same_saves": {
+    "process_medians_ms": [
+     82.665,
+     82.979,
+     80.717
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_unstaged": {
+    "process_medians_ms": [
+     3.234,
+     3.107,
+     3.087
+    ],
+    "job": "rerun"
+   },
+   "trace_with_staged_edit": {
+    "process_medians_ms": [
+     53.411,
+     51.34,
+     47.439
+    ],
+    "job": "rerun"
+   },
+   "run_staged_edit_new_inputs": {
+    "process_medians_ms": [
+     14.644,
+     8.888,
+     8.736
+    ],
+    "job": "rerun"
+   },
+   "run_transaction_fast_staged_edit": {
+    "process_medians_ms": [
+     3.746,
+     3.301,
+     3.323
+    ],
+    "job": "rerun"
+   },
+   "first_trace_in_process_ms": [
+    2704,
+    1397,
+    1341
+   ]
+  }
+ },
+ "page_rows": [
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | plain forward, nothing attached | 14.20 ms (13.30 ms to 14.26 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | forward hook on the saved module (second job; its plain forward: 14.39 ms) | 14.56 ms (14.20 ms to 18.52 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 405.28 ms (395.31 ms to 408.93 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace` saving every listed module | 417.94 ms (402.45 ms to 665.18 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 684.49 ms (622.50 ms to 693.68 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x)` | 855.95 ms (849.77 ms to 898.79 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 18.85 ms (18.19 ms to 19.18 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 452.97 ms (444.02 ms to 521.99 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)` on a trace with a staged edit | 49.66 ms (48.54 ms to 56.45 ms) |"
+  },
+  {
+   "section": "rerun_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 19.36 ms (19.35 ms to 22.06 ms) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | plain forward, nothing attached | 1.64 s (1.63 s to 1.65 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | forward hook on the saved module (second job; its plain forward: 1.63 s) | 1.34 s (1.33 s to 1.35 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 2.99 s (2.91 s to 3.07 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace` saving every listed module | 4.28 s (4.21 s to 4.34 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 4.71 s (4.65 s to 4.77 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x)` | 7.86 s (7.71 s to 8.01 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 1.33 s (1.33 s to 1.34 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 3.17 s (3.05 s to 3.29 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)` on a trace with a staged edit | 1.41 s (1.38 s to 1.45 s) |"
+  },
+  {
+   "section": "rerun_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 1.32 s (1.28 s to 1.37 s) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | plain forward, nothing attached | 1.08 ms (1.03 ms to 1.46 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | forward hook on the saved module (second job; its plain forward: 1.07 ms) | 1.11 ms (1.08 ms to 1.13 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 43.16 ms (42.24 ms to 44.64 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace` saving every listed module | 43.95 ms (43.04 ms to 45.28 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a finished trace (earlier build: recaptures) | 66.08 ms (65.84 ms to 66.79 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x)` | 82.67 ms (80.72 ms to 82.98 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 3.11 ms (3.09 ms to 3.23 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(..., intervene=tl.when(...))` | 51.34 ms (47.44 ms to 53.41 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)` on a trace with a staged edit | 8.89 ms (8.74 ms to 14.64 ms) |"
+  },
+  {
+   "section": "rerun_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 3.32 ms (3.30 ms to 3.75 ms) |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 13.65 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 20.30 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | the same with `until=\"layer1\"` | 6.16 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | the same with `until=\"layer2\"` | 8.43 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, until=\"layer1\")`, without `fast=True` | 434.31 ms |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 1.62 s |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 1.51 s |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | the same with `until=\"transformer.h.1\"` | 161.36 ms |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until=\"transformer.h.1\")`, without `fast=True` | 3.40 s |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.01 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 3.36 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | the same with `until=\"embed\"` | 0.77 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until=\"embed\")`, without `fast=True` | 51.97 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 20.47 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | fresh `tl.trace(model, x)` | 694.92 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | fresh capture with `CaptureOptions(replayable=True)` | 3.37 s |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 583.57 ms |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 2.34 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh `tl.trace(model, x)` | 5.27 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 17.56 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 10.40 s |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.59 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh `tl.trace(model, x)` | 66.93 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 290.84 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 58.86 ms |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | plain forward, nothing attached | 22.68 ms (20.90 ms to 23.02 ms) | 1.00x | 14.42 ms (14.28 ms to 15.26 ms) | 1.00x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 508.54 ms (490.37 ms to 709.94 ms) | 22.4x | 442.97 ms (423.87 ms to 442.99 ms) | 30.7x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)`, no edit staged | 651.95 ms (649.85 ms to 1.08 s) | 28.7x | 47.48 ms (46.99 ms to 48.89 ms) | 3.29x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 19.70 ms (18.89 ms to 29.97 ms) | 0.87x | 19.18 ms (19.15 ms to 19.80 ms) | 1.33x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | plain forward, nothing attached | 1.29 s (1.28 s to 1.30 s) | 1.00x | 1.32 s (1.31 s to 1.34 s) | 1.00x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 2.91 s (2.86 s to 2.96 s) | 2.26x | 2.95 s (2.87 s to 3.03 s) | 2.23x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)`, no edit staged | 4.28 s (4.28 s to 4.29 s) | 3.32x | 1.50 s (1.47 s to 1.54 s) | 1.13x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 1.45 s (1.45 s to 1.45 s) | 1.12x | 1.47 s (1.47 s to 1.47 s) | 1.11x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | plain forward, nothing attached | 1.04 ms (1.04 ms to 1.07 ms) | 1.00x | 1.67 ms (1.62 ms to 1.67 ms) | 1.00x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 42.45 ms (42.11 ms to 43.35 ms) | 40.7x | 70.56 ms (67.46 ms to 71.20 ms) | 42.4x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)`, no edit staged | 64.86 ms (64.10 ms to 90.98 ms) | 62.2x | 11.58 ms (10.93 ms to 12.07 ms) | 6.96x |"
+  },
+  {
+   "section": "trace_run_fast_engine",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 3.00 ms (2.97 ms to 3.04 ms) | 2.88x | 4.66 ms (4.45 ms to 4.85 ms) | 2.80x |"
+  }
+ ],
+ "early_stop": {
+  "equality": "the stopped site equals a fresh tl.trace of the new input (max abs diff 0) on all three models",
+  "engine": "guarded_fast with fast=True"
+ },
+ "model_free_replay": {
+  "host": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 21",
+  "route": "tl.trace(model, x, capture=CaptureOptions(replayable=True)); trace.save(path, level='runnable', include_weights=True); tl.load(path).run_transaction(inputs=new_x)",
+  "one_time": {
+   "resnet18": "save with weights 5.08 s (46.3 MiB), load 3.31 s",
+   "gpt2-small": "save with weights 26.85 s (627.8 MiB), load 14.42 s",
+   "lstm-tagger": "save with weights 1.15 s (1.7 MiB), load 498 ms"
+  },
+  "equality_vs_model_new_x": {
+   "resnet18": "max abs diff 0",
+   "gpt2-small": "max abs diff 0",
+   "lstm-tagger": "max abs diff 3e-08"
+  },
+  "report": "path_faithfulness verified, numeric_attestation not_applicable, state_source embedded_capture_state on all three",
+  "warnings": "none from the replay; GPT-2's default trace warned that it kept 1.46 GiB of saved activations"
+ },
+ "trace_run_fast_engine": {
+  "builds": {
+   "before": "TorchLens 2.38.1 development build, trace.run on an unedited trace recaptures",
+   "after": "TorchLens 2.38.1 development build with the guarded fast engine for unedited trace.run"
+  },
+  "host": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 6 to 15, both jobs at the same time",
+  "engines": {
+   "before": {
+    "trace.run": "rerun",
+    "run_transaction_fast": "guarded_fast"
+   },
+   "after": {
+    "trace.run": "guarded_fast",
+    "run_transaction_fast": "guarded_fast"
+   }
+  },
+  "correctness": {
+   "saved_site_vs_fresh_trace_max_abs_diff": 0.0,
+   "output_vs_plain_forward_max_abs_diff": {
+    "resnet18": 0.0,
+    "gpt2-small": 0.0,
+    "lstm-tagger": 2.98e-08
+   }
+  },
+  "raw": {
+   "before": {
+    "resnet18/plain_forward": {
+     "median_ms": 22.679,
+     "lowest_ms": 20.903,
+     "highest_ms": 23.024,
+     "processes": 3
+    },
+    "resnet18/fresh_trace_one_site": {
+     "median_ms": 508.542,
+     "lowest_ms": 490.371,
+     "highest_ms": 709.936,
+     "processes": 3
+    },
+    "resnet18/trace_run_new_inputs": {
+     "median_ms": 651.953,
+     "lowest_ms": 649.854,
+     "highest_ms": 1075.59,
+     "processes": 3
+    },
+    "resnet18/run_transaction_fast": {
+     "median_ms": 19.7,
+     "lowest_ms": 18.892,
+     "highest_ms": 29.971,
+     "processes": 3
+    },
+    "gpt2-small/plain_forward": {
+     "median_ms": 1289.405,
+     "lowest_ms": 1282.959,
+     "highest_ms": 1295.852,
+     "processes": 2
+    },
+    "gpt2-small/fresh_trace_one_site": {
+     "median_ms": 2911.838,
+     "lowest_ms": 2860.185,
+     "highest_ms": 2963.492,
+     "processes": 2
+    },
+    "gpt2-small/trace_run_new_inputs": {
+     "median_ms": 4284.328,
+     "lowest_ms": 4281.158,
+     "highest_ms": 4287.499,
+     "processes": 2
+    },
+    "gpt2-small/run_transaction_fast": {
+     "median_ms": 1448.925,
+     "lowest_ms": 1445.931,
+     "highest_ms": 1451.919,
+     "processes": 2
+    },
+    "lstm-tagger/plain_forward": {
+     "median_ms": 1.043,
+     "lowest_ms": 1.04,
+     "highest_ms": 1.073,
+     "processes": 3
+    },
+    "lstm-tagger/fresh_trace_one_site": {
+     "median_ms": 42.446,
+     "lowest_ms": 42.111,
+     "highest_ms": 43.348,
+     "processes": 3
+    },
+    "lstm-tagger/trace_run_new_inputs": {
+     "median_ms": 64.859,
+     "lowest_ms": 64.104,
+     "highest_ms": 90.975,
+     "processes": 3
+    },
+    "lstm-tagger/run_transaction_fast": {
+     "median_ms": 3.001,
+     "lowest_ms": 2.97,
+     "highest_ms": 3.04,
+     "processes": 3
+    }
+   },
+   "after": {
+    "resnet18/plain_forward": {
+     "median_ms": 14.422,
+     "lowest_ms": 14.278,
+     "highest_ms": 15.259,
+     "processes": 3
+    },
+    "resnet18/fresh_trace_one_site": {
+     "median_ms": 442.968,
+     "lowest_ms": 423.869,
+     "highest_ms": 442.994,
+     "processes": 3
+    },
+    "resnet18/trace_run_new_inputs": {
+     "median_ms": 47.482,
+     "lowest_ms": 46.988,
+     "highest_ms": 48.89,
+     "processes": 3
+    },
+    "resnet18/run_transaction_fast": {
+     "median_ms": 19.179,
+     "lowest_ms": 19.154,
+     "highest_ms": 19.801,
+     "processes": 3
+    },
+    "gpt2-small/plain_forward": {
+     "median_ms": 1324.271,
+     "lowest_ms": 1309.242,
+     "highest_ms": 1339.3,
+     "processes": 2
+    },
+    "gpt2-small/fresh_trace_one_site": {
+     "median_ms": 2950.042,
+     "lowest_ms": 2868.602,
+     "highest_ms": 3031.482,
+     "processes": 2
+    },
+    "gpt2-small/trace_run_new_inputs": {
+     "median_ms": 1502.593,
+     "lowest_ms": 1469.545,
+     "highest_ms": 1535.641,
+     "processes": 2
+    },
+    "gpt2-small/run_transaction_fast": {
+     "median_ms": 1470.533,
+     "lowest_ms": 1470.425,
+     "highest_ms": 1470.641,
+     "processes": 2
+    },
+    "lstm-tagger/plain_forward": {
+     "median_ms": 1.665,
+     "lowest_ms": 1.624,
+     "highest_ms": 1.667,
+     "processes": 3
+    },
+    "lstm-tagger/fresh_trace_one_site": {
+     "median_ms": 70.559,
+     "lowest_ms": 67.465,
+     "highest_ms": 71.195,
+     "processes": 3
+    },
+    "lstm-tagger/trace_run_new_inputs": {
+     "median_ms": 11.584,
+     "lowest_ms": 10.925,
+     "highest_ms": 12.074,
+     "processes": 3
+    },
+    "lstm-tagger/run_transaction_fast": {
+     "median_ms": 4.659,
+     "lowest_ms": 4.451,
+     "highest_ms": 4.852,
+     "processes": 3
+    }
+   }
+  }
+ }
+}
