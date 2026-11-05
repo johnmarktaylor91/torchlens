@@ -27,7 +27,7 @@ from .._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from . import _column_passes
+from . import _column_passes, _column_passes_graph
 from ._buffer_addresses import _recorded_buffer_address
 from ._orphan_seeds import (
     _expand_seen_nodes_to_complete_func_call_groups,
@@ -576,28 +576,8 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     """
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
-    nodes_seen = set()
-    node_stack = _orphan_flood_seeds(self)
-    # Shadow sets over the two trace-level list[str] sink ledgers: per-node
-    # `label not in <list>` scans would be O(k^2) in sink count.
-    # The lists stay the portable source of truth.
-    seen_sink_labels = set(self.internal_sink_ops)
-    seen_terminated_bool_labels = set(self.internally_terminated_bool_ops)
-    while len(node_stack) > 0:
-        tensor_label = node_stack.pop()
-        nodes_seen.add(tensor_label)
-        layer_entry = self._raw_graph_ws.raw_layer_dict[tensor_label]
-        if (len(layer_entry.children) == 0) and (not layer_entry.is_output):
-            _log_internally_terminated_tensor(
-                self,
-                tensor_label,
-                seen_sink_labels=seen_sink_labels,
-                seen_terminated_bool_labels=seen_terminated_bool_labels,
-            )
-        # Follow BOTH directions to ensure full bidirectional reachability.
-        for next_label in layer_entry.children + layer_entry.parents:
-            if next_label not in nodes_seen:
-                node_stack.append(next_label)
+    # Flood body (column view, facade fallback) lives in ``_column_passes_graph``.
+    nodes_seen = _column_passes_graph.flood_orphan_reachability(self, _orphan_flood_seeds(self))
 
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
@@ -884,19 +864,11 @@ def _log_internally_terminated_tensor(
     seen_sink_labels: set[str],
     seen_terminated_bool_labels: set[str],
 ) -> None:
-    """Mark a tensor as terminated inside the model (no children reaching an output node).
+    """Mark a tensor as terminated inside the model (body in ``_column_passes_graph``)."""
 
-    ``seen_sink_labels`` / ``seen_terminated_bool_labels`` are the caller's
-    persistent shadow sets over ``internal_sink_ops`` /
-    ``internally_terminated_bool_ops``; the membership guards read them
-    instead of rescanning the growing lists once per visited node.
-    """
-    layer_entry = self[tensor_label]
-    layer_entry.is_internal_sink = True
-    if tensor_label not in seen_sink_labels:
-        seen_sink_labels.add(tensor_label)
-        self.internal_sink_ops.append(tensor_label)
-        if layer_entry.is_scalar_bool and (tensor_label not in seen_terminated_bool_labels):
-            seen_terminated_bool_labels.add(tensor_label)
-            self.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry.is_terminal_bool = True
+    _column_passes_graph.log_internally_terminated_tensor(
+        self,
+        tensor_label,
+        seen_sink_labels=seen_sink_labels,
+        seen_terminated_bool_labels=seen_terminated_bool_labels,
+    )
