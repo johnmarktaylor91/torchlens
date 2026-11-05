@@ -541,8 +541,8 @@ def _probe_flash_attention_4_interface() -> bool:
 
 def _probe_safe_weights_only_load() -> bool:
     """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe (see the leaf)."""
-
-    return bool(_real_op_probe_leaf().probe_safe_weights_only_load())
+    handler = _import_module_attr_or_none("torch._weights_only_unpickler", "get_globals_in_pkl")
+    return bool(_real_op_probe_leaf().probe_safe_weights_only_load(handler))
 
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:

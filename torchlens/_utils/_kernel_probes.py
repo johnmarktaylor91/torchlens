@@ -556,7 +556,7 @@ def probe_attention_causal_bias() -> bool:
         return False
 
 
-def probe_safe_weights_only_load() -> bool:
+def probe_safe_weights_only_load(globals_in_pkl: object | None) -> bool:
     """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
 
     CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
@@ -580,6 +580,13 @@ def probe_safe_weights_only_load() -> bool:
     embedded load on a safe torch, whereas admitting it on a vulnerable torch would
     reopen the RCE.
 
+    Parameters
+    ----------
+    globals_in_pkl:
+        ``torch._weights_only_unpickler.get_globals_in_pkl``, or ``None`` when absent.
+        ``_torch_compat`` resolves it (the private import stays in that module) and
+        passes it in; this leaf checks only the public half.
+
     Returns
     -------
     bool
@@ -587,12 +594,11 @@ def probe_safe_weights_only_load() -> bool:
     """
 
     try:
-        import torch._weights_only_unpickler as _weights_only_unpickler
         import torch.serialization as _serialization
-    except Exception:  # pragma: no cover - defensive; both import on supported torch.
+    except Exception:  # pragma: no cover - defensive; imports on supported torch.
         return False
-    return hasattr(_serialization, "get_unsafe_globals_in_checkpoint") and hasattr(
-        _weights_only_unpickler, "get_globals_in_pkl"
+    return globals_in_pkl is not None and hasattr(
+        _serialization, "get_unsafe_globals_in_checkpoint"
     )
 
 
