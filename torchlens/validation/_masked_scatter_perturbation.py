@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -72,7 +74,7 @@ def masked_scatter_mask_values(
 def _is_mask_operand(layer: Op, parent_label: str) -> bool:
     """Return whether ``parent_label`` is registered at the mask argument."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     if (positions.get("args", {}) or {}).get(_MASK_POSITION) == parent_label:
         return True
     return (positions.get("kwargs", {}) or {}).get("mask") == parent_label
@@ -86,8 +88,8 @@ def _source_covers_one_more_entry(layer: Op, mask: torch.Tensor) -> bool:
     factor.
     """
 
-    args = tuple(getattr(layer, "saved_args", None) or ())
-    kwargs = dict(getattr(layer, "saved_kwargs", None) or {})
+    args = tuple(record_member(layer, "saved_args", None) or ())
+    kwargs = dict(record_member(layer, "saved_kwargs", None) or {})
     source = args[_SOURCE_POSITION] if len(args) > _SOURCE_POSITION else kwargs.get("source")
     target = args[0] if args else kwargs.get("input")
     if not isinstance(source, torch.Tensor) or not isinstance(target, torch.Tensor):
