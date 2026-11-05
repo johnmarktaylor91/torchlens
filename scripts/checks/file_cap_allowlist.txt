@@ -263,7 +263,6 @@ torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	96
-torchlens/_io/state_contract.py::inspect_state_contract	108
 torchlens/_io/streaming.py	992
 torchlens/_io/streaming.py::BundleStreamWriter.__init__	83
 torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62
@@ -426,9 +425,9 @@ torchlens/_runnable/verification.py::_attestation_state_matches	61
 torchlens/_runnable/verification.py::_value_at_path	78
 torchlens/_runnable/witness_contracts.py::_tensor_derived_scalar_stale	69
 torchlens/_runnable/witness_contracts.py::_unbound_state_escape_stale	63
-torchlens/_save_budget.py	970
+torchlens/_save_budget.py	967
 torchlens/_save_budget.py::SaveBudget._message	69
-torchlens/_save_budget.py::_retained_storage_identities	68
+torchlens/_save_budget.py::_retained_storage_identities	64
 torchlens/_save_budget.py::resolve_save_budget	83
 torchlens/_selection/align.py::_target_op_for_entry	68
 torchlens/_selection/compare.py	949
@@ -528,7 +527,7 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1860
+torchlens/_utils/tensor_utils.py	1859
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	72
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	179
@@ -864,13 +863,13 @@ torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	120
 torchlens/backends/torch/_ops_finalize.py::_raise_if_nonfinite_requested	119
-torchlens/backends/torch/_ops_interventions.py	826
+torchlens/backends/torch/_ops_interventions.py	825
 torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_legacy	114
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	72
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	105
 torchlens/backends/torch/_ops_interventions.py::_record_predicate_intervention_spec	85
 torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fields	97
-torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	64
+torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	62
 torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	175
 torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
@@ -907,7 +906,7 @@ torchlens/backends/torch/backward.py::_walk_and_hook_backward_graph	202
 torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1772
+torchlens/backends/torch/buffer_writes.py	1770
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
@@ -959,7 +958,7 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2846
+torchlens/backends/torch/wrappers.py	2843
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84

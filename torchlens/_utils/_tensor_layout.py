@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import torch
 
+from ._torch_symbols import tensor_reads
+
 CaptureLayout = tuple[tuple[int, ...], tuple[int, ...], int]
 """``(shape, stride, storage_offset)`` of a tensor argument at capture."""
 
@@ -59,13 +61,16 @@ def layout_of(value: object) -> CaptureLayout | None:
     if not _plain_strided(value):
         return None
     tensor: torch.Tensor = value  # type: ignore[assignment]
-    if tensor.numel() == 0 or tensor.is_contiguous():
+    numel, is_contiguous, storage_offset = tensor_reads(
+        tensor, "numel", "is_contiguous", "storage_offset"
+    )
+    if numel(tensor) == 0 or is_contiguous(tensor):
         return None
     shape = tuple(int(size) for size in tensor.shape)
     stride = tuple(int(step) for step in tensor.stride())
     if not _non_overlapping(shape, stride):
         return None
-    return shape, stride, int(tensor.storage_offset())
+    return shape, stride, int(storage_offset(tensor))
 
 
 def relay_to_layout(value: object, layout: CaptureLayout | None) -> object:
