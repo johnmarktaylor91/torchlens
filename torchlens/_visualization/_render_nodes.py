@@ -1074,8 +1074,7 @@ def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Ima
     images = []
     for item in shown:
         item = _normalize_image_tensor(item)
-        if item.shape[0] == 1:
-            item = item.expand(3, -1, -1)  # grey to RGB, as Image.convert("RGB") replicates L
+        item = item.expand(3, -1, -1) if item.shape[0] == 1 else item  # grey to RGB, like convert
         array = (tensor_to_numpy(item.permute(1, 2, 0)) * 255).astype("uint8")
         images.append(Image.fromarray(array, mode="RGB"))
     return images
