@@ -3713,14 +3713,6 @@
  },
  {
   "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_postprocess/finalization.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
   "field": "params",
   "file": "torchlens/_postprocess/finalization.py",
   "has_default": false,

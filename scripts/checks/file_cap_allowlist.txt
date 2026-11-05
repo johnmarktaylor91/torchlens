@@ -323,13 +323,13 @@ torchlens/_observe/_timeline.py::_persistent_events	63
 torchlens/_observe/_timeline.py::memory_timeline_v2	65
 torchlens/_options_validation.py::_validate_capture_values	71
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
-torchlens/_postprocess/__init__.py::_postprocess_body	135
+torchlens/_postprocess/__init__.py::_postprocess_body	133
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
-torchlens/_postprocess/_materialize.py	1744
+torchlens/_postprocess/_materialize.py	1715
 torchlens/_postprocess/_materialize.py::_apply_join_cells	219
 torchlens/_postprocess/_materialize.py::_buffer_write_fields	63
 torchlens/_postprocess/_materialize.py::_module_output_fields	74
-torchlens/_postprocess/_materialize.py::ingest_op_records	122
+torchlens/_postprocess/_materialize.py::ingest_op_records	116
 torchlens/_postprocess/_primitive_profile.py::_materialize_backward_primitive_profile	64
 torchlens/_postprocess/_recurrence.py::_build_preview_recurrence_graph	111
 torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
@@ -344,9 +344,8 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1761
+torchlens/_postprocess/finalization.py	1555
 torchlens/_postprocess/finalization.py::_build_conditional_records	159
-torchlens/_postprocess/finalization.py::_build_layer_logs	113
 torchlens/_postprocess/finalization.py::_build_module_logs	206
 torchlens/_postprocess/finalization.py::_build_root_module_log	102
 torchlens/_postprocess/finalization.py::_build_submodule_call_logs	116
