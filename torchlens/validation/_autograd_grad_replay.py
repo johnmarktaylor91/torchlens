@@ -449,7 +449,10 @@ class _SubgraphReplay:
         written_at = layout_of(replayed)
         if layout is not None and written_at is not None:
             if written_at == slot_capture_layout(parent, "args", 0):
-                return replayed.as_strided(*layout)
+                # On the root base: as_strided differentiates only over the elements
+                # of the tensor it is called on, and the written view covers fewer.
+                base = replayed._base if replayed._base is not None else replayed
+                return base.as_strided(*layout)
         if tuple(replayed.shape) != shape:
             raise AutogradGradReplayError(
                 f"subgraph op {op.label!r} reads a storage alias written by "

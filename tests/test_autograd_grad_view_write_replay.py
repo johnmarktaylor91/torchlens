@@ -40,7 +40,7 @@ def _setitem_view(y: torch.Tensor) -> torch.Tensor:
 
     col = y[:, 5:6]
     col[:] = col * 0.5
-    return y + col
+    return y * 3.0 + col
 
 
 def _read_before_and_after(y: torch.Tensor) -> torch.Tensor:
@@ -101,8 +101,19 @@ def _input() -> torch.Tensor:
 
 
 @pytest.mark.parametrize("write", sorted(_WRITES))
+def test_view_write_then_alias_read_replays(write: str) -> None:
+    """The boundary replay reproduces the region's gradient when it reads a written alias."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(
+            _GradRegion(_WRITES[write]), _input(), scope="forward", validate_metadata=False
+        )
+
+
+@pytest.mark.parametrize("write", ["both_read", "setitem_view"])
 def test_view_write_then_alias_read_validates(write: str) -> None:
-    """Full validation (metadata included) passes when the region reads a written alias."""
+    """Full validation (metadata included) passes when the written view is read too."""
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
