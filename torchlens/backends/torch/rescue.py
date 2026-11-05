@@ -41,6 +41,7 @@ from torch.overrides import TorchFunctionMode
 
 from ... import _state
 from ..._errors import CaptureGapWarning, OutputAttributionError
+from ..._utils._deferred_warnings import defer_warning_category, flush_deferred_warnings
 from ..._utils.display import user_stacklevel
 from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ...errors._base import TorchLensWarning
@@ -203,22 +204,8 @@ def _defer_capture_failed_warnings(
     every re-raising path and drops it when the rescue succeeds.
     """
 
-    forward = warnings.showwarning
-
-    def hold(message: Any, category: Any, *args: Any, **kwargs: Any) -> None:
-        """Park capture-failed advisories in ``deferred``; forward the rest."""
-
-        if isinstance(category, type) and issubclass(category, CaptureAttemptFailedWarning):
-            deferred.append((message, category, args, kwargs))
-            return
-        forward(message, category, *args, **kwargs)
-
-    warnings.showwarning = hold
-    try:
+    with defer_warning_category(CaptureAttemptFailedWarning, deferred):
         yield
-    finally:
-        if warnings.showwarning is hold:
-            warnings.showwarning = forward
 
 
 def _flush_deferred_warnings(
@@ -226,9 +213,7 @@ def _flush_deferred_warnings(
 ) -> None:
     """Re-emit parked advisories through the current warning handler."""
 
-    for message, category, args, kwargs in deferred:
-        warnings.showwarning(message, category, *args, **kwargs)
-    deferred.clear()
+    flush_deferred_warnings(deferred)
 
 
 def _escape_signal(trace: Trace) -> str | None:

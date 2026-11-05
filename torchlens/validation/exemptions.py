@@ -51,9 +51,7 @@ from ._exemption_table import (
     skip_perturbation_justifications,
     skip_validation_justifications,
 )
-from ._foreign_kernel_dependence import (  # noqa: F401  (resolved through globals())
-    check_foreign_kernel_dependence_exempt,
-)
+from ._foreign_kernel_dependence import check_foreign_kernel_dependence_exempt  # noqa: F401
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _index_domain_size,
@@ -66,6 +64,7 @@ from ._influence_probes import (
     binary_extrema_crossing_probe,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
+from ._mask_builder_dependence import check_mask_builder_unread_exempt  # noqa: F401
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
 from ._norm_zero_weight_proof import (
     _batch_norm_weight_operand,

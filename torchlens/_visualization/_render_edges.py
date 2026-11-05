@@ -19,6 +19,7 @@ from ._edge_multiplicity import (
     _bump_deduped_edge_multiplicity,
     _html_argument_edge_label,
     _merge_parallel_arg_midpoint,
+    _parent_occurrence_labels,
     _register_arg_midpoint_edge,
     _register_deduped_edge,
     _set_argument_edge_label,
@@ -1656,20 +1657,14 @@ def _visible_parent_count_unrolled(
         child_node: The child Op node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
-    num_parents_shown = len(child_node.parents)
-
-    if show_buffer_layers != "always":
-        num_parents_shown -= sum(
-            [
-                int(
-                    self.layers[parent].is_buffer
-                    and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
-                )
-                for parent in child_node.parents
-            ]
-        )
-
-    return num_parents_shown
+    parents = _parent_occurrence_labels(child_node)  # one entry per drawn edge occurrence
+    if show_buffer_layers == "always":
+        return len(parents)
+    return len(parents) - sum(
+        bool(self.layers[parent].is_buffer)
+        and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
+        for parent in parents
+    )
 
 
 def _visible_parent_count_rolled(

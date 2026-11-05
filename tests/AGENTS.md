@@ -169,6 +169,12 @@ exported as `TORCHLENS_TEST_OUTPUTS_DIR`):
 - New model class: add to `tests/example_models.py` unless the test needs a one-off local class.
 - New fields: test metadata, FIELD_ORDER consistency, pandas/export behavior when user-facing.
 - Visualization changes: run targeted render tests and inspect generated artifacts when needed.
+- Patching a name in `_render_common`, `_render_dot`, `_render_edges`, `_render_flow`,
+  `_render_leaf` or `_render_nodes`: first load `torchlens._visualization._render_entrypoints`
+  at the test module's top. These modules star-import each other; one loaded for the first time
+  while a name is patched copies the patch, `monkeypatch` never restores that copy, and the patch
+  tripwire in `tests/_leak_guards.py` fails only on xdist orderings where no earlier test on the
+  worker drew.
 - Portable I/O changes: include save/load, lazy, corruption/security, and backcompat coverage.
 - Intervention changes: test selector resolution, hook behavior, save-level behavior, and bundle
   comparisons where relevant.

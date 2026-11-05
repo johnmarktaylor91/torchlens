@@ -11,7 +11,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import TorchLensError
 from torchlens.intervention.errors import AppendStreamingUnsupportedError
-from torchlens.options import CaptureOptions, ReplayOptions, StorageOptions
+from torchlens.options import CaptureOptions, StorageOptions
 
 
 class _StreamingAppendModel(nn.Module):
@@ -58,7 +58,7 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
 
     try:
         with pytest.raises(TorchLensError, match="to_disk") as info:
-            trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+            trace.append(torch.randn(1, 3), model=model)
         assert info.value.fields.get("code") == "trace_option_unsupported"
     finally:
         # The deferred grad stream keeps its writer thread until backward finalizes it.
@@ -94,7 +94,7 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
 
     assert received
     with pytest.raises(AppendStreamingUnsupportedError, match="on_save streaming"):
-        trace.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+        trace.append(torch.randn(1, 3), model=model)
 
 
 def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
@@ -111,7 +111,7 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
     )
     loaded = tl.load(bundle_path)
 
-    loaded.run(model, torch.randn(1, 3), replay=ReplayOptions(append=True))
+    loaded.append(torch.randn(1, 3), model=model)
 
     assert loaded.provenance.is_appended is True
     assert loaded._append_sequence_id == 1
