@@ -267,7 +267,7 @@ def _slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout |
 
     # Read by attribute: importing the template types here would join this module
     # to the intervention package's import cycle.
-    template = getattr(layer, "args_template", None)
+    template = record_member(layer, "args_template", None)
     if arg_type not in ("args", "kwargs"):
         return None
     component: Any = getattr(template, arg_type, None)

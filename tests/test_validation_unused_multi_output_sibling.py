@@ -67,4 +67,4 @@ def test_unused_sign_is_an_internal_sink() -> None:
     assert len(slogdet_ops) == 2
     unused = [op for op in slogdet_ops if not op.children]
     assert len(unused) == 1
-    assert unused[0].is_internal_sink
+    assert unused[0].graph.is_internal_sink
