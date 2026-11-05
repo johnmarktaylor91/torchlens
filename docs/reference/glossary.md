@@ -4501,7 +4501,6 @@ describe each surface in depth.
 | `tl.viz.site_detail` | Render the per-site detail sheet: every stream on one step axis |
 | `tl.viz.timeline` | Render one timeline v2 artifact as deterministic standalone SVG text |
 | `tl.viz.token_strip` | Render the paper-format token strip via matplotlib |
-
 ### Fields and methods
 | Spelling | Meaning |
 | --- | --- |
@@ -5014,7 +5013,6 @@ The sections above describe each surface in depth.
 | `tl.types.RunnableDiagnostic` | Structured diagnostic shared by preflight, readiness, and run reports |
 | `torchlens._user_funcs.CaptureNotActiveError` | The same class as `tl.errors.CaptureNotActiveError` |
 | `torchlens._user_funcs.UserTransformError` | The same class as `tl.errors.UserTransformError` |
-
 ### Members
 | Spelling | Meaning |
 | --- | --- |
@@ -5393,7 +5391,6 @@ The sections above describe each surface in depth.
 | `ValidationStatus.unverified_reason_counts` | Stable reason-code counts for nodes that replay could not verify |
 | `WatchdogSnapshot.is_tripped` | Whether the watchdog fired |
 | `WatchdogSnapshot.backwards_since_accepted` | Backward passes seen since the last accepted step |
-
 ### Members by class
 Members of classes whose public home changed, one entry per class.
 
