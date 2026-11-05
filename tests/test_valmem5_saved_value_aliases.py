@@ -14,13 +14,17 @@ that saved output instead of a second copy. These tests pin, on the CPU:
   dropped (a planted capture bug);
 * replay never writes through an alias (versions and bytes are unchanged after
   validation, with in-place ops consuming aliased arguments), and a write into
-  an alias during the capture makes validation rerun with every argument copied;
+  an alias during the capture makes validation rerun with every argument copied,
+  also when the write skips the version counter (``.data``, a raw storage write);
+* view-context receivers, conj and neg bits and tensor subclasses are never
+  aliased, and an exception while aliasing falls back to the copy;
 * with grad disabled, where the parent's saved output is still a pending
   clone-on-write alias of the live tensor, the argument's alias is registered
   under the same key: a no-grad fan-out holds fewer saved-argument storages, an
   in-place write after the save copies the pre-write bytes out of both, the
   storage-alias label scan never sees the alias and the graph is unchanged, the
-  planted negatives still fail, and a write into the alias reruns validation.
+  planted negatives still fail, and a write into the alias reruns validation,
+  also when it skips the version counter.
 """
 
 from __future__ import annotations
@@ -28,17 +32,20 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable, Iterator
 from typing import Any
+from unittest import mock
 
 import pytest
 import torch
 from torch import nn
 
+import torchlens._user_funcs as user_funcs
 import torchlens.backends.torch._ops_exhaustive
 import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
 import torchlens.backends.torch.wrappers
 from torchlens import _state, _user_public_impls, _validation_argument_references as arg_references
-from torchlens.validation import get_validation_diagnostics
+from torchlens.backends.torch import _ops_saved_arg_copies as saved_arg_copies
+from torchlens.validation._diagnostics import get_validation_diagnostics
 
 
 def _validate(
@@ -581,6 +588,9 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
 
     monkeypatch.setattr(torchlens.backends.torch.wrappers, "overlapping_labeled_aliases", scan)
 
+    diagnostics: list[Any] = []
+    copied_out: list[bool] = []
+
     def observe(key: str) -> Callable[[Any], None]:
         def record(trace: Any) -> None:
             graphs[key] = _graph(trace)
@@ -588,6 +598,13 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
                 (op.layer_label, parent.layer_label): value.detach().clone()
                 for op, parent, value in _parent_slots(trace)
             }
+            if key == "alias":
+                diagnostics.extend(get_validation_diagnostics(trace) or ())
+                copied_out.extend(
+                    not _shares_parent_output(value, parent)
+                    for _, parent, value in _parent_slots(trace)
+                    if parent.layer_label.startswith("relu")
+                )
 
         return record
 
@@ -611,6 +628,39 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
     assert readers, values["alias"].keys()
     for key in readers:
         assert torch.equal(values["alias"][key], relu), key
+    # Copied out by the write, the aliases still match the digest of their pre-write bytes:
+    # validation's first attempt stands, with no rerun.
+    assert copied_out and all(copied_out), copied_out
+    assert not [d for d in diagnostics if d.check_name == arg_references.FALLBACK_CHECK]
+
+
+def test_a_host_write_into_a_registered_alias_is_caught_by_its_digest() -> None:
+    real_runner = user_funcs._run_model_and_save_specified_outs
+    written: list[int] = []
+    diagnostics: list[Any] = []
+
+    def runner(*args: Any, **kwargs: Any) -> Any:
+        trace = real_runner(*args, **kwargs)
+        if kwargs.get("save_args"):
+            for _, parent, value in _parent_slots(trace):
+                if parent.layer_label.startswith("relu") and _shares_parent_output(value, parent):
+                    before = value._version
+                    value.detach().numpy()[...] += 1.0  # a host write: no dispatch, no version
+                    assert value._version == before
+                    written.append(before)
+                    break
+        return trace
+
+    torch.manual_seed(0)
+    model = _NoGradFanOut(write_after=False)
+    x = torch.randn(8, 16)
+    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", runner):
+        verdict = _validate(model, x, lambda t: diagnostics.extend(get_validation_diagnostics(t)))
+    assert written, "no registered alias still shared the live storage: inconclusive"
+    assert verdict is True
+    fallbacks = [d for d in diagnostics if d.check_name == arg_references.FALLBACK_CHECK]
+    assert len(fallbacks) == 1, diagnostics
+    assert "without a version change" in fallbacks[0].extra["reason"]
 
 
 @pytest.mark.parametrize("planted", ["wrong-parent", "dropped-version-record"])
@@ -736,3 +786,177 @@ def test_the_registered_alias_check_reads_the_registry_state() -> None:
     assert guard.first_change() is None
     alias.add_(1.0)
     assert guard.first_change() is not None
+
+
+# ---------------------------------------------------------------------------
+# Writes that skip the version counter, refusal pins, fail-closed alias
+# ---------------------------------------------------------------------------
+
+
+class _ArgmaxOfInput(nn.Module):
+    """A replay-less parent (the input) read by a consumer blind to a uniform shift."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return x.argmax(dim=1)
+
+
+def _write_through_data(value: torch.Tensor) -> None:
+    value.data.add_(1.0)
+
+
+def _write_into_storage(value: torch.Tensor) -> None:
+    with torch.no_grad():
+        raw = torch.empty(0, dtype=value.dtype, device=value.device)
+        raw.set_(value.untyped_storage(), value.storage_offset(), value.shape, value.stride())
+        raw.add_(1.0)
+
+
+def _validate_with_corrupted_argmax_input(
+    write: Callable[[torch.Tensor], None], *, copy_only: bool = False
+) -> tuple[bool, list[Any]]:
+    """Validate ``_ArgmaxOfInput``, writing into the argmax's saved input before replay."""
+
+    real_runner = user_funcs._run_model_and_save_specified_outs
+    diagnostics: list[Any] = []
+
+    def runner(*args: Any, **kwargs: Any) -> Any:
+        trace = real_runner(*args, **kwargs)
+        if kwargs.get("save_args"):
+            argmax = next(op for op in trace._layer_list if op.func_name == "argmax")
+            write(argmax.call.saved_args[0])
+        return trace
+
+    def observe(trace: Any) -> None:
+        diagnostics.extend(get_validation_diagnostics(trace) or ())
+
+    torch.manual_seed(0)
+    x = torch.randn(4, 6, requires_grad=True)
+    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", runner):
+        verdict = _validate(_ArgmaxOfInput(), x, observe, copy_only=copy_only)
+    return verdict, diagnostics
+
+
+@pytest.mark.parametrize(
+    "write", [_write_through_data, _write_into_storage], ids=["data", "storage"]
+)
+def test_a_write_that_skips_the_version_counter_still_fails(
+    write: Callable[[torch.Tensor], None],
+) -> None:
+    shared: list[bool] = []
+
+    def observe(trace: Any) -> None:
+        shared.extend(
+            _shares_parent_output(value, parent)
+            for op, parent, value in _parent_slots(trace)
+            if op.func_name == "argmax"
+        )
+
+    torch.manual_seed(0)
+    x = torch.randn(4, 6, requires_grad=True)
+    assert _validate(_ArgmaxOfInput(), x, observe) is True
+    assert shared == [True], "the argmax slot was not aliased: inconclusive"
+    assert _validate_with_corrupted_argmax_input(write, copy_only=True)[0] is False
+    verdict, diagnostics = _validate_with_corrupted_argmax_input(write)
+    assert verdict is False
+    fallbacks = [d for d in diagnostics if d.check_name == arg_references.FALLBACK_CHECK]
+    assert len(fallbacks) == 1, diagnostics
+    assert "without a version change" in fallbacks[0].extra["reason"]
+
+
+class _Sub(torch.Tensor):
+    """A tensor subclass: never aliased, whichever side it is on."""
+
+
+def test_the_guard_refuses_tensor_subclasses() -> None:
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    saved = torch.arange(6.0)
+    with _state.pause_logging():
+        assert guard.value_alias(saved.clone().as_subclass(_Sub), saved, "p") is None
+        assert guard.value_alias(saved.clone(), saved.clone().as_subclass(_Sub), "p") is None
+        assert guard.value_alias(saved.clone(), saved, "p") is not None
+
+
+def _conj_case() -> tuple[torch.Tensor, torch.Tensor]:
+    base = torch.complex(torch.arange(4.0), torch.arange(4.0) + 1.0)
+    return base.conj(), base.clone()
+
+
+def _neg_case() -> tuple[torch.Tensor, torch.Tensor]:
+    base = torch.arange(4.0) + 1.0
+    return torch._neg_view(base), base.clone()
+
+
+@pytest.mark.parametrize("case", [_conj_case, _neg_case], ids=["conj", "neg"])
+def test_the_guard_refuses_conj_and_neg_bits_even_when_the_raw_bytes_match(
+    case: Callable[[], tuple[torch.Tensor, torch.Tensor]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tensor, saved = case()
+    assert tensor.is_conj() or tensor.is_neg()
+    # The physical bytes are the same; the logical values differ by the lazy bit.
+    monkeypatch.setattr(arg_references, "_same_bits", lambda tensor, saved_value: True)
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    with _state.pause_logging():
+        assert guard.value_alias(tensor, saved, "p") is None
+        assert guard.value_alias(tensor.resolve_conj().resolve_neg(), saved, "p") is not None
+
+
+def test_a_view_context_receiver_is_never_a_saved_value_alias() -> None:
+    base = torch.arange(8.0)
+    receiver = base[2:]
+    payload = receiver.clone()
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    with _state.pause_logging():
+        copied = saved_arg_copies._parameter_alias(
+            guard,
+            receiver,
+            True,
+            receiver_copy=saved_arg_copies._copy_receiver_with_view_context,
+            parent=("p", payload),
+        )
+    assert copied.untyped_storage().data_ptr() != payload.untyped_storage().data_ptr()
+    assert not guard.is_value_alias(copied)
+    assert torch.equal(copied, payload)
+
+
+def test_a_view_context_receiver_on_a_parameter_is_copied_not_aliased() -> None:
+    model = nn.Linear(4, 4)
+    receiver = model.weight[1:]
+    guard = arg_references.ParameterArgumentReferences(
+        arg_references._parameter_owners(model), alias_saved_values=True
+    )
+    token = arg_references._ACTIVE.set(guard)
+    try:
+        copied = saved_arg_copies._copy_saved_arg_tree(
+            receiver, True, receiver_copy=saved_arg_copies._copy_receiver_with_view_context
+        )
+    finally:
+        arg_references._ACTIVE.reset(token)
+    weight_ptr = model.weight.untyped_storage().data_ptr()
+    assert copied.untyped_storage().data_ptr() != weight_ptr
+    assert torch.equal(copied, receiver)
+
+
+def test_an_exception_while_aliasing_falls_back_to_the_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raised: list[int] = []
+
+    def boom(*args: Any) -> bool:
+        raised.append(1)
+        raise RuntimeError("unexpected tensor")
+
+    monkeypatch.setattr(arg_references, "_value_alias_eligible", boom)
+    shared: list[bool] = []
+
+    def observe(trace: Any) -> None:
+        shared.extend(
+            _shares_parent_output(value, parent) for _, parent, value in _parent_slots(trace)
+        )
+
+    torch.manual_seed(0)
+    model = _FanOut()
+    x = torch.randn(8, 16)
+    copy_verdict = _validate(model, x, lambda trace: None, copy_only=True)
+    assert _validate(model, x, observe) is copy_verdict is True
+    assert raised, "the planted exception never ran: inconclusive"
+    assert shared and not any(shared), shared
