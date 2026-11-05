@@ -2,10 +2,6 @@
 
 Short answers, each with a link to the page that covers the topic in full.
 
-<!-- Links point at the repository on GitHub because most target pages are not
-published on the site yet (docs/_site_map.yaml); switch a link to a relative
-path when its page gets publish: true. -->
-
 ## What distinguishes TorchLens from other packages?
 
 Most tools for looking inside a PyTorch model attach hooks to modules, so they see what each module
@@ -109,9 +105,11 @@ of the data.
 
 ## Can I use it inside a training loop?
 
-Yes. With `capture=tl.options.CaptureOptions(backward_ready=True)`, saved outputs stay connected to
-the autograd graph, so a loss built from them backpropagates into the model: auxiliary losses,
-probes on a frozen backbone, losses at several layers, and distillation. The
+Yes. Saved outputs stay connected to the autograd graph by default, and
+`capture=tl.options.CaptureOptions(backward_ready=True)` declares a training capture (it keeps that
+connection on every save path and is what the training tutorial uses), so a loss built from saved
+outputs backpropagates into the model: auxiliary losses, probes on a frozen backbone, losses at
+several layers, and distillation. The
 [training tutorial](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/training_tutorial.ipynb)
 works through each pattern. A full trace costs many forwards' worth of time, so in a loop save
 only the layers the loss needs.

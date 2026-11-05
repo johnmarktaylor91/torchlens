@@ -2,7 +2,7 @@
 
 Patching each of the 144 heads' values from "The capital of France is" into
 "The capital of Italy is" ranks the heads by how far they move the prediction from
-" Rome" toward " Paris", and patching just the top two flips the model to " Paris".
+" Rome" toward " Paris"; patching the top two together makes the model prefer " Paris".
 
 Run (downloads GPT-2 small, about 550 MB, on first use)::
 
@@ -36,7 +36,7 @@ heads = {
 effects = {
     bh: paris_vs_rome(italy.fork().do(head, tl.patch_from(france))) for bh, head in heads.items()
 }
-print(max(effects, key=effects.get))  # (9, 8): the head that matters most
+print(sorted(effects, key=effects.get)[-2:])  # [(10, 0), (9, 8)]: the two heads that matter most
 
 # fork a copy of the Italy run; .do() patches in heads (9, 8) and (10, 0) from France,
 # then reruns every operation after them
