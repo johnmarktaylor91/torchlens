@@ -5547,3 +5547,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 4864fa282472ae7a65271aefa7aae71ead417e2e (dirty)
 recorded: 2026-11-05T10:25:41.634463+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq6: fixq5 90b883b32c + train c05f143f33 (pattern-facet-default), moved-member port; the _sdpa_call_args flat getattr reads move to record_member
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e076e514aca85202fd8b72816a0ac03c941eefad (dirty)
+recorded: 2026-11-05T10:58:55.445593+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq6: fixq5 90b883b32c + train c05f143f33 (pattern-facet-default), moved-member port; the _sdpa_call_args flat getattr reads move to record_member
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e076e514aca85202fd8b72816a0ac03c941eefad (dirty)
+recorded: 2026-11-05T10:59:01.594518+00:00

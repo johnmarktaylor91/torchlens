@@ -21,12 +21,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError, InvalidArgumentError
 from torchlens._utils._record_group_table import (
+    _RESOLVER_CACHE_MAX,
     ACTIVE_GROUPS,
     LAYER_MEMBER_MOVES,
     LAYER_MOVED_MEMBERS,
     OP_MEMBER_MOVES,
     OP_MOVED_MEMBERS,
     PENDING_REMOVALS,
+    _resolve_stored_member,
     record_member,
 )
 
@@ -465,3 +467,23 @@ def test_multi_pass_layer_group_refuses_per_pass_members() -> None:
             _ = layer.source.frames
     finally:
         captured.cleanup()
+
+
+def test_member_resolver_cache_stays_within_the_group_table(trace: tl.Trace) -> None:
+    """The (record class, member) resolver cache is bounded by the group table's size.
+
+    ``record_member`` accepts any object and name, so arbitrary lookups after a
+    capture must not grow the cache past its bound (CR6 memoization census row).
+    """
+
+    assert _resolve_stored_member.cache_info().maxsize == _RESOLVER_CACHE_MAX
+    op = next(iter(trace.ops.values()))
+    layer = next(iter(trace.layers.values()))
+    for index in range(2 * _RESOLVER_CACHE_MAX):
+        name = f"not_a_member_{index}"
+        assert record_member(op, name, None) is None
+        assert record_member(layer, name, None) is None
+        assert record_member(type(f"Duck{index}", (), {})(), name, None) is None
+    for _old, _group, leaf in OP_MEMBER_MOVES:
+        record_member(op, leaf, None)
+    assert _resolve_stored_member.cache_info().currsize <= _RESOLVER_CACHE_MAX

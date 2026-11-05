@@ -493,7 +493,17 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         return default
 
 
-@functools.cache
+#: Bound of the ``_resolve_stored_member`` cache: the group table's size. Readers pass
+#: code-owned names, but ``record_member`` accepts any object, so the cache is bounded.
+_RESOLVER_CACHE_MAX = (
+    len(OP_MEMBER_MOVES)
+    + len(LAYER_MEMBER_MOVES)
+    + len(OP_STORAGE_ATTRS)
+    + len(LAYER_STORAGE_ATTRS)
+)
+
+
+@functools.lru_cache(maxsize=_RESOLVER_CACHE_MAX)
 def _resolve_stored_member(cls: type, name: str) -> str | None:
     """Return the attribute ``record_member`` reads for ``name`` on ``cls``, or ``None``.
 
