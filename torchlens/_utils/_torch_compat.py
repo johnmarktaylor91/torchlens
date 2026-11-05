@@ -65,6 +65,7 @@ __all__ = [
     "HAS_C10D_GROUP_SEQ",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -342,6 +343,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_ACCUMULATE_GRAD_CLASS": ("torch:_C._functions.AccumulateGrad",),
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
+    "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -1033,9 +1035,7 @@ def _probe_gradient_edge() -> bool:
             # practice None the same as any other probe failure below.
             return False
         torch.autograd.grad(
-            [GradientEdge(h.grad_fn, h.output_nr)],
-            [x],
-            grad_outputs=[torch.ones(1)],
+            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
         )
     except Exception:
         return False
@@ -1399,6 +1399,7 @@ HAS_DEVICE_CONSTRUCTORS: bool = _probe_attribute_paths("HAS_DEVICE_CONSTRUCTORS"
 HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CLASS")
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
+HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1596,6 +1597,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_ACCUMULATE_GRAD_CLASS",
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
+    "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -2113,13 +2115,11 @@ def get_optional_torch_namespace(namespace_name: str) -> Any | None:
         return submodule
     if namespace is None and namespace_name == "torch.func":
         mark_torch_capability_missing(
-            "HAS_TORCH_FUNC",
-            "skipping torch.func transform-boundary decoration",
+            "HAS_TORCH_FUNC", "skipping torch.func transform-boundary decoration"
         )
     elif namespace is None and namespace_name == "torch._functorch.apis":
         mark_torch_capability_missing(
-            "HAS_FUNCTORCH_APIS",
-            "skipping torch._functorch.apis transform-boundary decoration",
+            "HAS_FUNCTORCH_APIS", "skipping torch._functorch.apis transform-boundary decoration"
         )
     return namespace
 
@@ -2160,6 +2160,11 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
     return _resolve_or_mark_missing(
         "HAS_CURRENT_AUTOGRAD_NODE", "executed backward FLOPs read unknown, not per node"
     )
+
+
+def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
+    """Return autograd's original-view-tracking context manager, or ``None`` (flag flipped)."""
+    return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
 def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
@@ -2277,8 +2282,7 @@ def get_current_function_mode_stack() -> Iterable[Any] | None:
     )
     if stack_getter is None:
         mark_torch_capability_missing(
-            "HAS_DEVICE_CONTEXT_DISPATCH",
-            "torch.device context stack introspection is disabled",
+            "HAS_DEVICE_CONTEXT_DISPATCH", "torch.device context stack introspection is disabled"
         )
         return None
     return stack_getter()
@@ -2385,8 +2389,7 @@ def get_tensorbase_class() -> type[Any] | None:
         _TENSORBASE_CLASS_PROBED = True
     if _TENSORBASE_CLASS is None:
         mark_torch_capability_missing(
-            "HAS_TENSORBASE_CLASS",
-            "C-level tensor-base introspection is unavailable",
+            "HAS_TENSORBASE_CLASS", "C-level tensor-base introspection is unavailable"
         )
     return _TENSORBASE_CLASS
 
@@ -3099,8 +3102,7 @@ def get_fsdp_wrapper_type(*, force_probe: bool = False) -> type[Any] | None:
     fsdp_wrapper_type = _FSDP_WRAPPER_TYPE
     if fsdp_wrapper_type is None:
         mark_torch_capability_missing(
-            "HAS_FSDP_WRAPPER",
-            "FSDP wrapper detection and rejection are disabled",
+            "HAS_FSDP_WRAPPER", "FSDP wrapper detection and rejection are disabled"
         )
         return None
     return fsdp_wrapper_type
@@ -3764,9 +3766,7 @@ def get_dynamo_explain() -> Callable[..., Any] | None:
 
 
 def run_dynamo_explain(
-    model: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    model: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
 ) -> Any:
     """Execute Dynamo explain across old and new invocation conventions.
 
