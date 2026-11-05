@@ -3252,7 +3252,7 @@
   "field": "modules",
   "file": "torchlens/_plain_attr_fidelity.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -4342,6 +4342,14 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/_semantic/_sdpa_call_args.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
