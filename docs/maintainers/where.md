@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1592 modules, 679806 lines, 0 modules without a docstring.
+83 packages, 1593 modules, 680095 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6505 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8512 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57337 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57339 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5418 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 74 | 31998 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 75 | 32285 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4767 |
 
 ## Modules by package
@@ -1347,7 +1347,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (122 modules, 57337 lines)
+Torch backend implementation package for TorchLens capture. (122 modules, 57339 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1441,7 +1441,7 @@ Torch backend implementation package for TorchLens capture. (122 modules, 57337 
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 513 |
 | `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 145 |
 | `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 167 |
-| `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 510 |
+| `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 512 |
 | `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 70 |
 | `_view_writeback` | Storage-alias helpers for view mutations. | 141 |
 | `_weightsfree_ctx` | The capture-owned factory-device slot (-CTX, weightsfree ). | 78 |
@@ -2173,7 +2173,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (74 modules, 31998 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (75 modules, 32285 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2191,7 +2191,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 614 |
 | `_edge_boundary` | Edge-intervention boundary validation (L6 4.3), split out of ''core.py''. | 344 |
 | `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 643 |
-| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 485 |
+| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 497 |
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
 | `_exemption_table` | The declared table of validation exemptions. | 91 |
 | `_foreign_kernel_dependence` | Pre-perturbation check for the declared per-output dependence of known foreign kernels. | 138 |
@@ -2218,6 +2218,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_layer_grad_report` | Layer-gradient parity report for PATH E module-output validation. | 322 |
 | `_live_model_state` | Restore a validated model's state without writing into unchanged tensors. | 163 |
 | `_loaded_callables` | Resolve a loaded trace's op callables from their recorded function identities. | 155 |
+| `_mask_builder_dependence` | Pre-perturbation check for the declared unread arguments of known transformers mask builders. | 276 |
 | `_membership_perturbation` | Membership-toggling parent perturbation for ''torch.isin''. | 152 |
 | `_non_pass_record` | Close ''validate_saved_outs'' so every non-passing status carries a recorded failure. | 136 |
 | `_norm_running_var_proof` | Value proof for an eval-mode batch_norm whose input sits exactly at its running mean. | 173 |
@@ -2248,7 +2249,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `consolidated` | Consolidated validation entry point for TorchLens 2.0. | 734 |
 | `core` | Core validation logic for verifying saved activations. | 3767 |
 | `diagnostics` | Structured replay-failure diagnostics for forward validation. | 577 |
-| `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2615 |
+| `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2614 |
 | `invariants` | Metadata invariant checks for ''Trace'' and its sub-objects. | 490 |
 | `status` | Replay-validation status objects. | 698 |
 
