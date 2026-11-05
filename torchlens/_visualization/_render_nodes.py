@@ -413,6 +413,7 @@ def _add_node_to_graphviz(
     encoding: Any | None = None,
     suppressed_args: Mapping[int, frozenset[str]] | None = None,
     show_saved_for_backward: bool = False,
+    show_arg_labels: bool = True,
 ) -> None:
     """Adds a node and its relevant edges to the graphviz figure.
 
@@ -532,6 +533,7 @@ def _add_node_to_graphviz(
         rolled_maps,
         deduped_edge_registry,
         label_color=label_ink,
+        show_arg_labels=show_arg_labels,
     )
 
 

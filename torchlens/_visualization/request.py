@@ -109,6 +109,7 @@ class ResolvedRenderRequest:
     # True/False keep their historical meanings; explicit False is honored
     # even with channels active (a deliberate act).
     show_edge_shapes: bool = False
+    show_arg_labels: bool = True
     show_legend: bool | None = None
     # Encoding channel core (DOCUMENTED-UNSTABLE until ratified):
     # ``color_by``/``size_by``/``scale`` are the raw user sources;

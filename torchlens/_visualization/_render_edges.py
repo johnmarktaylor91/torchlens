@@ -891,6 +891,7 @@ def _add_edges_for_node(
     rolled_maps: "_RolledEdgeMaps | None" = None,
     deduped_edge_registry: dict[tuple[Any, ...], dict[str, Any]] | None = None,
     label_color: str | None = None,
+    show_arg_labels: bool = True,
 ) -> None:
     """Add forward (and optionally grad) edges from a parent node to all its children.
 
@@ -1244,7 +1245,8 @@ def _add_edges_for_node(
         )
         arg_label_channel: str | None = None
         if (
-            not edge_is_self_loop
+            show_arg_labels
+            and not edge_is_self_loop
             and not child_is_collapsed_module
             and metadata_child is not None
             and not edge_has_boundary

@@ -5,7 +5,7 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-474 examples, 1212 public names, 147 tasks.
+475 examples, 1213 public names, 147 tasks.
 
 ## By task
 
@@ -47,7 +47,7 @@ By name lists the 3 most focused examples first;
 | diff | namespaces.md#namespaces-differential |
 | distributed | namespaces.md#namespaces-distributed, toplevel.md#toplevel-merge-ranks-refuses-local, toplevel.md#toplevel-merge-report-refuses-local |
 | doctor | namespaces.md#namespaces-report, tasks.md#tasks-doctor |
-| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-edge-shapes, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
+| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-edge-shapes, options.md#options-vis-arg-labels, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
 | episode | trace.md#trace-episode |
 | errors | namespaces.md#namespaces-errors, traps.md#traps-error-fields |
 | examples | namespaces.md#namespaces-examples |
@@ -141,7 +141,7 @@ By name lists the 3 most focused examples first;
 | steer-once | bundle.md#bundle-add-alternative, tasks.md#tasks-steer-once, toplevel.md#toplevel-edit-steer |
 | stop | namespaces.md#namespaces-experimental |
 | structure | options.md#options-structure-only, trace.md#trace-structure-only |
-| style | options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings |
+| style | options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-arg-labels |
 | subgraph | trace.md#trace-between, trace.md#trace-subgraph |
 | summary | bundle.md#bundle-summary, tasks.md#tasks-summary, toplevel.md#toplevel-summary-text, trace.md#trace-facts-counts, trace.md#trace-summary, trace.md#trace-to-pandas, trace.md#trace-to-agent-json, trace.md#trace-explain, trace.md#trace-capabilities, trace.md#trace-bill-of-materials, trace.md#trace-narrate |
 | sweep | bundle.md#bundle-why-provenance, bundle.md#bundle-effects, tasks.md#tasks-sweep, toplevel.md#toplevel-sweep-values |
@@ -1364,6 +1364,7 @@ By name lists the 3 most focused examples first;
 | `VisualizationOptions.order_siblings` | options.md#options-vis-direction-layout |
 | `VisualizationOptions.renderer` | options.md#options-vis-direction-layout |
 | `VisualizationOptions.rolled` | options.md#options-vis-rolled |
+| `VisualizationOptions.show_arg_labels` | options.md#options-vis-arg-labels |
 | `VisualizationOptions.show_buffers` | options.md#options-vis-buffers |
 | `VisualizationOptions.show_cone` | options.md#options-vis-intervention-args |
 | `VisualizationOptions.show_edge_shapes` | options.md#options-vis-edge-shapes |

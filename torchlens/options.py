@@ -137,6 +137,7 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "file_format",
     "show_buffers",
     "show_edge_shapes",
+    "show_arg_labels",
     "direction",
     "graph_overrides",
     "node_style",
@@ -922,6 +923,10 @@ class VisualizationOptions(_OptionsDisplay):
         Buffer visibility policy.
     show_edge_shapes:
         Label forward dataflow edges with their producer output shapes (default False).
+    show_arg_labels:
+        Label the edges into a multi-input operation with the argument position each
+        parent fills (``arg 0``, ``arg (0, 1)``); ``False`` draws no argument labels
+        (default True).
     direction:
         Graph layout direction.
     graph_overrides:
@@ -1005,6 +1010,7 @@ class VisualizationOptions(_OptionsDisplay):
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
     show_edge_shapes: bool = False
+    show_arg_labels: bool = True
     direction: VisDirectionLiteral = "bottomup"
     graph_overrides: dict[str, Any] | None = None
     node_style: VisNodeModeLiteral = "default"
@@ -1045,6 +1051,7 @@ class VisualizationOptions(_OptionsDisplay):
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         show_edge_shapes: bool | MissingType = MISSING,
+        show_arg_labels: bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
         graph_overrides: dict[str, Any] | None | MissingType = MISSING,
         node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1094,6 +1101,9 @@ class VisualizationOptions(_OptionsDisplay):
             ),
             "show_edge_shapes": _resolve_option_value(
                 "show_edge_shapes", show_edge_shapes, False, specified_fields
+            ),
+            "show_arg_labels": _resolve_option_value(
+                "show_arg_labels", show_arg_labels, True, specified_fields
             ),
             "show_buffers": _resolve_option_value(
                 "show_buffers", show_buffers, "meaningful", specified_fields
@@ -1194,7 +1204,7 @@ class VisualizationOptions(_OptionsDisplay):
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
-        values = {"show_edge_shapes": False, **values}
+        values = {"show_edge_shapes": False, "show_arg_labels": True, **values}
         values["layout"] = _normalize_layout(values["layout"])
         _validate_visualization_values(values)
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)

@@ -3420,6 +3420,12 @@ carries the same tag at its definition.
 : Opt-out for the default-on, checked suppression of redundant constructor-argument label rows.
   See the "show_redundant_args" entry above.
 
+**show_arg_labels (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
+: `Trace.draw(show_arg_labels=False)` draws no argument-position labels (`arg 0`,
+  `arg (0, 1)`) on the edges into multi-input operations such as `cat`; the default `True`
+  keeps them. Also `VisualizationOptions(show_arg_labels=False)`. A draw-only flag: capture
+  never reads it.
+
 **direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
 : The fourth layout direction on `Trace.draw(direction=)` for the forward, backward and
   combined graphs: edges flow right to left (Graphviz `rankdir=RL`), beside `"bottomup"`,
@@ -8451,6 +8457,7 @@ and have no row.
 | `share=` | keyword of `tl.transforms.srp` (default `'by_extent'`): `"by_extent"` (default; equal-width sites share one matrix) or `"by_site"` (adds the stable site identity to the key) |
 | `share_draw=` | constructor keyword of `tl.intervention.SamplingPlan` (required); keyword of `tl.intervention.sample_from` (keyword-only; default `'per_firing'`): Recorded draw-sharing policy: `"per_firing"` (default), `"per_rule"`, or `"per_group"` |
 | `share_safe=` | constructor keyword of `tl.options.HtmlReportOptions` (default `False`) |
+| `show_arg_labels=` | keyword of `Trace.draw` (keyword-only; default `True`): Label the edges into a multi-input operation with the argument position each parent fills; `False` draws no argument labels; constructor keyword of `tl.options.VisualizationOptions` (optional; default `True`): The same switch |
 | `show_axes=` | keyword of `tl.viz.image_scatter` (keyword-only; default `True`): Whether to draw faint central guide axes |
 | `show_axis_thumbnails=` | keyword of `tl.viz.nodes.rdm` (keyword-only; default `True`): Whether to use matching raw PIL image stimuli as symmetric axis thumbnails when available |
 | `show_buffers=` | keyword of `Trace.draw` (keyword-only; default `'meaningful'`): Buffer visibility: `"never"`, `"meaningful"` or `"always"`; keyword of `tl.export.netron` (keyword-only; default `'meaningful'`): The existing tri-state buffer policy (`never\|meaningful\|always`); `meaningful` also drops counter-update chains and disclosed hidden counts ride the owning function docString and the model metadata; constructor keyword of `tl.options.VisualizationOptions` (optional): Buffer visibility policy |

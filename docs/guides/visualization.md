@@ -461,6 +461,7 @@ These keywords of `Trace.draw` are not pictured above:
 | `fold_patterns` | fold named linear paths into one node: `"idiomatic"` for the curated conv-bn-relu preset, or a mapping such as `{"ConvBnRelu": "conv2d > batch_norm > relu"}`; not combined with automatic `collapse` |
 | `collapse_fn`, `skip_fn` | your own predicates for which modules collapse and which operations are left out (see `tl.viz.nodes`) |
 | `show_edge_shapes` | label each forward edge with the producer's output shape |
+| `show_arg_labels` | label the edges into a multi-input operation (`cat`, a two-input function) with the argument position each parent fills (default `True`); `False` draws none |
 | `show_input_transform_summary` | add a row summarizing the input preprocessing |
 | `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
 | `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"as_node"` |

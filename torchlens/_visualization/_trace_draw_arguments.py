@@ -47,6 +47,7 @@ def _forward_render_arguments(
         "node_overlay": options["node_overlay"],
         "node_label_fields": options["node_label_fields"],
         "show_edge_shapes": options["show_edge_shapes"],
+        "show_arg_labels": options["show_arg_labels"],
         "show_legend": options["show_legend"],
         "font_size": options["font_size"],
         "dpi": options["dpi"],
