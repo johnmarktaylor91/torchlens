@@ -133,7 +133,7 @@ def _in_other_scratch_folder(trace: Any, source: str) -> bool:
     path = Path(source)
     if not any(part.startswith(VISUALIZER_DIR_PREFIX) for part in path.parts):
         return False
-    own = getattr(trace, "_visualizer_dir", None)
+    own = trace._visualizer_dir
     return own is None or not path.is_relative_to(own)
 
 
