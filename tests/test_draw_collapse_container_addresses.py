@@ -10,6 +10,7 @@ an ``nn.TransformerEncoder``.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -119,6 +120,13 @@ def _assert_container_addresses_unrecorded(trace: Trace) -> None:
         assert "body.stages.a.0" in recorded
 
 
+def _assert_complete_digraph(dot: str) -> None:
+    """Assert the drawing is one complete Graphviz digraph (after its comment header)."""
+
+    assert re.search(r"^(strict )?digraph \S+ \{$", dot, re.MULTILINE)
+    assert dot.rstrip().endswith("}")
+
+
 @pytest.mark.parametrize("rolled", (False, True))
 @pytest.mark.parametrize("collapse", COLLAPSE_SETTINGS)
 def test_every_collapse_setting_draws_container_models(
@@ -130,7 +138,7 @@ def test_every_collapse_setting_draws_container_models(
     drawing = container_trace.draw(
         path=str(tmp_path / "graph"), collapse=collapse, rolled=rolled, file_format="dot"
     )
-    assert drawing.dot.lstrip().startswith(("digraph", "strict digraph"))
+    _assert_complete_digraph(drawing.dot)
 
 
 @pytest.mark.parametrize("rolled", (False, True))
@@ -147,7 +155,7 @@ def test_max_collapse_draws_with_every_container_display(
         show_containers=show_containers,
         file_format="dot",
     )
-    assert drawing.dot.lstrip().startswith(("digraph", "strict digraph"))
+    _assert_complete_digraph(drawing.dot)
 
 
 def test_edge_owner_backs_off_past_container_prefixes() -> None:
