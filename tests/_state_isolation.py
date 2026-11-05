@@ -322,24 +322,26 @@ def _restore_wrapper_diagnostic_modes() -> Iterator[None]:
                 wrappers._configure_completeness_witness(saved_witness)
 
 
-def _dynamo_frames_compiled() -> int | None:
-    """Return Dynamo's frame-compilation count, or ``None`` when Dynamo is not loaded.
+def _dynamo_event_count() -> int | None:
+    """Return the total of Dynamo's event counters, or ``None`` when Dynamo is not loaded.
 
     Reads the counters only from an already imported ``torch._dynamo.utils``:
     a process that never imported Dynamo compiled nothing, and the fixture must
-    not import Dynamo itself (plain captures are pinned not to load it).
+    not import Dynamo itself (plain captures are pinned not to load it). The
+    total covers every group, not only ``frames``: the compile an eager
+    ``while_loop`` runs moves ``stats`` but no frame counter.
     """
 
     utils = sys.modules.get("torch._dynamo.utils")
     counters = getattr(utils, "counters", None)
     if counters is None:
         return None
-    return int(counters["frames"]["total"])
+    return sum(sum(group.values()) for group in list(counters.values()))
 
 
 @pytest.fixture(autouse=True)
 def _reset_dynamo_after_compiling_tests() -> Iterator[None]:
-    """Drop Dynamo's compiled-frame caches after a test that compiled a frame.
+    """Drop Dynamo's compiled-graph caches after a test that compiled.
 
     Dynamo keeps every compiled graph, with the fake example tensors it traced
     (symbolic shapes such as ``s13`` or unbacked ``u0``), in its per-code cache
@@ -348,14 +350,15 @@ def _reset_dynamo_after_compiling_tests() -> Iterator[None]:
     alive for every later test on the same xdist worker, so a later test that
     walks ``gc.get_objects()`` met a ``SymInt`` shape and failed with
     ``unhashable type: non-nested SymInt`` depending on test order. Resetting
-    only after a test that compiled keeps the other tests' cost at two reads.
+    only after a test that moved a Dynamo counter keeps the other tests' cost
+    at two counter sums.
     """
 
-    before = _dynamo_frames_compiled()
+    before = _dynamo_event_count()
     try:
         yield
     finally:
-        after = _dynamo_frames_compiled()
+        after = _dynamo_event_count()
         if after is not None and after != before:
             torch.compiler.reset()
 
