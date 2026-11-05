@@ -153,7 +153,7 @@ def _badge_row(labels: tuple[AxisLabel, ...]) -> str:
 
 @dataclass(frozen=True)
 class GridBudgets:
-    """Explicit truncation budgets for one grid render (memo 3.5).
+    """Explicit truncation budgets for one grid render.
 
     The defaults are the ArrayAutovisualizer numbers; every render passes
     them explicitly to the ported protocol through this record.
@@ -183,7 +183,7 @@ def array_grid_html(
         :func:`torchlens.report._notebook._axis_labels.axis_labels`).
     budgets:
         Truncation budgets, passed EXPLICITLY to the ported protocol
-        (defaults to the ArrayAutovisualizer numbers; memo 3.5).
+        (defaults to the ArrayAutovisualizer numbers).
     stats:
         Optional ``TensorStats`` record supplying exact bounds/moments; when
         absent, bounds come from the VISIBLE cells only, disclosed.

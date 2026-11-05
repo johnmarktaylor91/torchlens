@@ -140,6 +140,6 @@ def sync_backward_projection_if_needed(trace: Trace) -> None:
     # A read from INSIDE an engine invocation journals but must not
     # materialize while the close's FINALIZE step is still pending:
     # materializing there would publish records ahead of the R36-1 D2H
-    # fence (L9 memo 1.2). The first post-pass read finalizes fully.
+    # fence. The first post-pass read finalizes fully.
     if not _backward_finalize_pending(trace):
         _materialize_backward_projections(trace)

@@ -1,4 +1,4 @@
-"""Training sanity checks -- the torcheck niche, honestly redefined (F23).
+"""Training sanity checks -- the torcheck niche, honestly redefined.
 
 A standalone, CAPTURE-FREE check registry on one shared loop-session
 chassis (checks memo D1): the chassis owns the step axis, the three hook

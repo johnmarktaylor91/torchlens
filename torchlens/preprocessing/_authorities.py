@@ -791,7 +791,7 @@ def resolve(
     Resolution
         Authority record + declared fields + transform (when the authority
         ships one). Nothing resolving is the honest ``unknown``, never a
-        TorchLens-authored recipe (memo D7/D9).
+        TorchLens-authored recipe.
 
     Examples
     --------

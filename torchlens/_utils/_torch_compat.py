@@ -1802,7 +1802,7 @@ class TorchCapabilityWarning(TorchLensWarning):
     editing the wording would have turned every legitimate matrix degradation
     into a suite-wide error under ``error::UserWarning:torchlens``). Subclasses
     ``TorchLensWarning`` (itself a ``UserWarning``), so existing category
-    filters keep matching and the documented root covers it (R64-1).
+    filters keep matching and the documented root covers it.
 
     Examples
     --------

@@ -111,7 +111,7 @@ def _eager_copy(value: Any, translate: Callable[[Any], Any] | None) -> Any:
 
     Same result as ``cow_copy_value``, restructured for the sweep's value
     population: empty containers and containers of exact atomics copy at C
-    speed (the overwhelmingly common case — the F8 census counts ~11 empty
+    speed (the overwhelmingly common case — the census counts ~11 empty
     plus ~16 small flat containers per op), atomic members skip the
     per-item call entirely, and nested mutable containers recurse through
     the same fast paths. Only tuples/frozensets and non-container members

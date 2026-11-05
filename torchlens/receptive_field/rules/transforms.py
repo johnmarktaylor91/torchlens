@@ -45,7 +45,7 @@ def _axis_map_result(
     selected_parent_indices:
         Normalized integer index per scalar-selected parent axis. A recorded
         index lets the query walk narrow the axis to its exact singleton
-        instead of the conservative full-extent bound (R20-3).
+        instead of the conservative full-extent bound.
     blocks:
         Mixed reshape blocks ``(parent axes, out axes)`` whose coordinates are
         a row-major regrouping. The per-unit walks enumerate them exactly; the

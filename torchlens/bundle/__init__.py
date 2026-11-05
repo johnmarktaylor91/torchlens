@@ -500,7 +500,7 @@ class Bundle:
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
     relation_grades = _bundle_relation_grades  # derived row grades, never stored
-    # The provenance join (F03 item 4): pure derived views, never stored.
+    # The provenance join: pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
     # One explicit edit or identity per member; broadcast do
@@ -1336,7 +1336,7 @@ class Bundle:
 
         Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
         (topology -> model-axis floor -> site line-up: proven-equal input values
-        or equal graph-shape hashes, per operand pair; A-GATE, foldB D6/D18).
+        or equal graph-shape hashes, per operand pair; A-GATE).
 
         Parameters
         ----------

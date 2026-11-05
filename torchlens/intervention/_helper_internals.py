@@ -673,10 +673,10 @@ def _source_mean_spec(
 
         return _hook
 
-    # DERIVED, never tabled (edits memo D18): True only when the fill value
+    # DERIVED, never tabled: True only when the fill value
     # provably never reads the traced batch. An external source qualifies;
     # the self-mean reads every batch row and fails closed, and couples the
-    # rows (D34), so a chunked capture refuses it at attach.
+    # rows, so a chunked capture refuses it at attach.
     batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",

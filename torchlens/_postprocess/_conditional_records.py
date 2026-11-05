@@ -161,7 +161,7 @@ def _roles_by_label(
 ) -> dict[str, list[ConditionalRoleRef]]:
     """Return each layer label's conditional roles (``role_ref`` instances) per arm bucket.
 
-    Inverted role index (r8 R60-7): the per-layer triple loop with an innermost
+    Inverted role index: the per-layer triple loop with an innermost
     list-membership check was O(N_layers x Sum|role lists|) whenever a
     conditional's entry-edge children were numerous (an ``if`` in a hot unrolled
     loop). One pass over the role buckets builds the same per-layer role lists in

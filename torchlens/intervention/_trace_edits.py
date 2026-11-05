@@ -298,7 +298,7 @@ def settle_selection_do(
 
     Selection edits propagate (or deliberately do not) inside the mutation step;
     no hook targets exist to push. A non-staged edit perturbed this product's
-    values, so inherited episode step evidence no longer describes it (lane F42).
+    values, so inherited episode step evidence no longer describes it.
     Hooks a set-only ``do`` staged are flagged so the next propagating ``do``
     starts its replay at their sites too.
     """
@@ -396,7 +396,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     elif selected_engine == "replay":
         # Capture gates (N3, N5, structure-only, stats) run before any site resolves.
         _require_live_replay(trace)
-    # C03: ONE transaction envelope per do() attempt, written on success, no-fire AND
+    # ONE transaction envelope per do attempt, written on success, no-fire AND
     # failure; the monotonic bound scopes exactly this transaction's FireRecords.
     txn = _DoTransaction(
         site=site,
@@ -482,7 +482,7 @@ def _run_do_transaction(  # noqa: PLR0913 - the transaction's state, threaded fr
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
         raise
     record_do_intervention_event(trace, txn, status=None)
-    # F42: the cone was perturbed; quarantine episode evidence and re-derive the decode.
+    # the cone was perturbed; quarantine episode evidence and re-derive the decode.
     settle_edited_product(result)
     return result
 

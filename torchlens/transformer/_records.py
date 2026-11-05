@@ -463,7 +463,7 @@ class AttentionView:
     gqa:
         Optional grouped-query-attention disclosure.
     episode:
-        Optional episode coordinates (tviz memo D22).
+        Optional episode coordinates.
 
     Examples
     --------

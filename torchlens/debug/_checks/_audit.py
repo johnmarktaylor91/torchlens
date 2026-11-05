@@ -1,4 +1,4 @@
-"""``param_health`` -- the one-shot parameter/buffer-space scan (memo D15).
+"""``param_health`` -- the one-shot parameter/buffer-space scan.
 
 Mapping-only, no policy: an ``nn.Module`` or ANY name->tensor Mapping enters
 through the same door (state_dicts, flattened optimizer state, EMA shadows,
@@ -8,7 +8,7 @@ phase-sensitive (a checkpoint verdict must not depend on WHEN you called
 it), and the caller who names the mapping owns the phase label.
 
 Knob parity with ``tl.debug.dtype_range`` is pinned by test against
-:mod:`torchlens.debug._checks._constants` (one constants module, memo 4.4).
+:mod:`torchlens.debug._checks._constants` (one constants module).
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ def _validate_names(
 ) -> list[str]:
     """Validate exact qualified names against the inventory, refusing typed.
 
-    Unknown names REFUSE (memo 4.4): a silently ignored name is the
+    Unknown names REFUSE: a silently ignored name is the
     silent-no-op defect class the checks kit exists to kill.
     """
 
@@ -345,7 +345,7 @@ def param_health(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
     max_fraction: float = MAX_FRACTION_DEFAULT,
     subnormal_fraction_threshold: float = SUBNORMAL_FRACTION_THRESHOLD_DEFAULT,
 ) -> ParamHealthReport:
-    """Audit parameter/buffer space for numeric-health findings (memo 4.4).
+    """Audit parameter/buffer space for numeric-health findings.
 
     Parameters
     ----------

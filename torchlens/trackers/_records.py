@@ -301,7 +301,7 @@ def running_stats_scalars(running_stats: RunningStatsResult) -> dict[str, float]
 
     ``std`` comes from the stable Chan moments (``m2 / num_finite``);
     ``norm`` is the L2 norm from ``sum_squares``. Absent floats (empty
-    finite population) are simply omitted -- missing is never zero (D6).
+    finite population) are simply omitted -- missing is never zero.
 
     Examples
     --------

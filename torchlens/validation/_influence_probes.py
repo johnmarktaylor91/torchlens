@@ -292,7 +292,7 @@ def _bool_probe_battery(parent_saved: torch.Tensor) -> tuple[torch.Tensor, ...]:
 
 
 def _bool_predicate_influence_probe(layer: Op, layers_to_perturb: list[str]) -> bool | None:
-    """Probe a NON-comparison bool-output op with a substitution battery (R08-2).
+    """Probe a NON-comparison bool-output op with a substitution battery.
 
     The comparison family gets the threshold-straddle probe; the rest of the
     bool universe (``logical_*``, ``isnan``/``isfinite``, ``isclose``,

@@ -335,7 +335,7 @@ class CapabilityRow:
 
 @dataclass(frozen=True)
 class CapabilityCard:
-    """The registry filtered by the object in hand (D24): metadata-only.
+    """The registry filtered by the object in hand: metadata-only.
 
     Examples
     --------

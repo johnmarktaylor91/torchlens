@@ -259,7 +259,7 @@ def _emit_predicate_operation_events(
                         tensor=out,
                         predicate_matched=False,
                     )
-                # Echo narrator slot (snoop D1): exactly once per committed event, after the
+                # Echo narrator slot: exactly once per committed event, after the
                 # append, outside the predicate-failure pipeline (a narrator failure
                 # warns-and-disables inside the session; only the typed stats-budget refusal
                 # propagates). Duck-typed session read: the hot path imports nothing.

@@ -1070,7 +1070,7 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
             if watched_lazy_slots is not None and t in watched_lazy_slots:
                 late_register_forward_created_parameter(trace, t)
             continue
-        # The r81 identity ladder + F20 lazy late-index live in
+        # The identity ladder + F20 lazy late-index live in
         # buffer_writes.resolve_or_late_index_buffer_address.
         address = resolve_or_late_index_buffer_address(trace, t)
         if address is not None and get_tensor_label(t) is None:
@@ -1315,7 +1315,7 @@ def torch_func_decorator(
             )
 
         # Reset barcode; skip metadata-only functions that would cause recursion.
-        # R16-5: ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
+        # ``as_subclass`` (and ``__index__``) is barcode-TRANSPARENT. Torch's default
         # ``__torch_function__`` return conversion calls ``ret.as_subclass(cls)``
         # INSIDE the enclosing wrapped call (``torch.tanh(subclass_tensor)``),
         # which used to steal the enclosing call's bottom-level barcode: the
@@ -2491,7 +2491,7 @@ def _unwrap_torch_locked() -> None:
         current = getattr(local_func_namespace, func_name)
         orig = _state._decorated_to_orig.get(id(current))
         if orig is None:
-            # B8-6: a drifted slot whose foreign wrapper chains to a live
+            # a drifted slot whose foreign wrapper chains to a live
             # torchlens wrapper is rebased onto the restored original; only a
             # burial that survives the rebase is reported (at the very end).
             if (
@@ -2571,7 +2571,7 @@ def _unwrap_torch_locked() -> None:
     _renormalize_released_models_after_flip()
 
     # Teardown is complete here; the report may raise under a warning filter,
-    # so it comes after the flag flip and the cache clears (B8-6).
+    # so it comes after the flag flip and the cache clears.
     warn_buried_sites(buried_sites)
 
 
@@ -2674,7 +2674,7 @@ def _reinstall_torch_func_wrappers() -> None:
     """
 
     for namespace_name, func_name in get_orig_torch_funcs():
-        # r-b4 R26-5b: install tolerates namespace drift; teardown/re-install must
+        # install tolerates namespace drift; teardown/re-install must
         # too, or unwrap_torch() dies mid-loop on the exact drift install absorbs,
         # leaving torch partially wrapped (a process-global leak).
         local_func_namespace = get_optional_torch_namespace(namespace_name)

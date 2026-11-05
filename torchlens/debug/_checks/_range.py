@@ -1,4 +1,4 @@
-"""Live semantic-range and liveness probes over the PUBLIC phase seam (D14).
+"""Live semantic-range and liveness probes over the PUBLIC phase seam.
 
 The value-probing ``capture.hooks`` path is public and adds ZERO ops to a
 trace (measured 13/13/13, BatchNorm included), so what was missing is only
@@ -7,7 +7,7 @@ integration. These probes are implemented 100% over that public seam --
 plain ``fn(out, *, ctx)`` callables handed to
 ``CaptureOptions(hooks=probe.hook_plan())`` -- and that implementation IS
 the seam's CI conformance test: if a probe ever needs private capture
-state, the seam is too weak and gets fixed (memo D14).
+state, the seam is too weak and gets fixed.
 
 Liveness records ONLY zero-fraction / running-max facts and points at
 ``tl.dead``: its multi-sample upper-bound epistemics stay the ONLY dead-unit
@@ -42,7 +42,7 @@ def _fired_label(hook_ctx: Any, fallback: str) -> str:
 
 
 class RangeProbe:
-    """Opt-in live semantic range check per site (memo D14).
+    """Opt-in live semantic range check per site.
 
     Parameters
     ----------
@@ -179,7 +179,7 @@ class RangeProbe:
 
 
 class LivenessProbe:
-    """Liveness STATISTIC recorder -- never a verdict (memo D14).
+    """Liveness STATISTIC recorder -- never a verdict.
 
     Records per-site zero-fraction and running-max across fires. Findings
     never contain the word "dead": ``tl.dead(samples=...)`` keeps the only

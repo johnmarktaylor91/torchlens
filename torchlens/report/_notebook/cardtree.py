@@ -1,4 +1,4 @@
-"""CardTree: presentation-only HTML card IR + native safe renderer (B1, lane C05).
+"""CardTree: presentation-only HTML card IR + native safe renderer (B1).
 
 The treescope-grade card substrate (treescope memo decision 3). CardTree is
 presentation STRUCTURE only -- fold state, access expressions, child
@@ -97,7 +97,7 @@ class CardKey:
 
 @dataclass(frozen=True)
 class CardHtml:
-    """One TRUSTED pre-rendered fragment from a TorchLens emitter (F16).
+    """One TRUSTED pre-rendered fragment from a TorchLens emitter.
 
     The escaping contract moves, never weakens: the producing emitter
     (e.g. the native array grid) escapes its own data at ITS leaf
@@ -237,7 +237,7 @@ def card_css(theme: str = "torchlens") -> str:
         f"{scope} .tl-record-facts th"
         "{font-weight:400;width:9ch;padding-right:1ch;white-space:nowrap}"
         f"{scope} .tl-record-facts td{{white-space:pre-wrap}}"
-        # Native array grid + six-state motif styles (F16): motifs are
+        # Native array grid + six-state motif styles: motifs are
         # PATTERN glyphs, so these classes only set weight/color contrast.
         f"{scope} .tl-grid-table{{border-collapse:collapse;margin:4px 0}}"
         f"{scope} .tl-grid-cell{{width:10px;height:10px;font-size:7px;"

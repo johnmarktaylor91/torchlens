@@ -1460,7 +1460,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     from .._capture.outcome import outcome_for
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
-    # F44: the streamed writer skips the save door that appends the injected family.
+    # the streamed writer skips the save door that appends the injected family.
     refuse_injection_logged_stream_finalize(self)
     settle_live_side(self)
     record_pairs: list[tuple[Any, Any]] = []

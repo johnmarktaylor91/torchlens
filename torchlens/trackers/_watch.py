@@ -153,7 +153,7 @@ def _foreign_watch_prefixes(model: torch.nn.Module) -> tuple[str, ...]:
 @dataclass
 class CloseReport:
     """The close report: every scheduled observation ends as data, an
-    enumerated presence/skip outcome, or an exception (memo 3.13).
+    enumerated presence/skip outcome, or an exception.
 
     Examples
     --------
@@ -1091,91 +1091,91 @@ def watch(
     facets: Mapping[str, Any] | None = None,
     allow_forward_wrap: bool = False,
 ) -> WatchSession:
-    """Attach once; three disclosed cost tiers; loud failures (memo 3.13).
+    """Attach once; three disclosed cost tiers; loud failures.
 
-    Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
+        Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
-    Parameters
-    ----------
-    model:
-        The live module to watch. Never wrapped, never re-traced: tier P
-        installs optimizer hooks only, tier M ordinary module hooks.
-    to:
-        One sink or a tuple of sinks implementing the documented protocol
-        (:class:`~torchlens.trackers.TensorBoardSink`,
-        :class:`~torchlens.trackers.WandbSink`,
-        :class:`~torchlens.trackers.JSONLSink`, or your own).
-    signals:
-        Subset of :data:`SIGNALS`. Default watches parameter gradients.
-    select:
-        Site selection (module path prefixes / parameter names). REQUIRED
-        for activations; optional narrowing for parameter streams. At
-        ``grain="op"`` strings are module path prefixes (OR-ed
-        ``tl.in_module``) and any selector-algebra object (``tl.func(...)``,
-        composed predicates) passes through as the op-tier ``save=``.
-    optimizer:
-        The optimizer whose step boundary anchors parameter streams.
-    step:
-        Optional zero-argument callable returning the caller's global step
-        (the unchanged-loop spelling). The explicit ``watch.step(n)`` scope
-        is authoritative and REQUIRED for resume.
-    every:
-        Scalar cadence on the caller's step axis (first and last eligible
-        steps always sample).
-    hist_every:
-        Histogram cadence; may run coarser than scalars. ``None`` disables
-        the sketch tier (scalars remain).
-    name:
-        Multi-model tag component distinguishing sessions that share a sink
-        (memo 3.4).
-    namespace:
-        Tag re-rooting remedy for layout collisions in a shared sink
-        (memo 3.4).
-    inputs:
-        Attach-time discovery batch (required for activations).
-    grain:
-        ``None`` (module grain) or ``"op"``: per-op activations through the
-        Route-B op-tier collector, behind ``allow_forward_wrap=True``. Only
-        ``signals=("activations",)``; ``inputs=`` and ``select=``
-        required; only the first forward of a sampled step is observed.
-    descriptor:
-        Histogram grid override. Only when both this and ``settings`` are
-        None does the first sink offering ``default_histogram_descriptor()``
-        supply the grid (``WandbSink``: ``WANDB_SAFE_DESCRIPTOR``, 497
-        buckets), and that one grid then applies to every sink; otherwise the
-        caller's grid, or the C06 default grid, applies and each sink's
-        preflight judges it.
-    budgets:
-        Hard caps checked against the plan as preflight FACTS:
-        ``max_sites``, ``max_bytes_per_step``, ``max_elements_per_step``.
-    allow_missing_phases:
-        Demote the missing-optimizer-phase refusal to a named skip (mixed
-        train/eval loops).
-    event_stream:
-        A C06 chassis stream whose check verdicts serialize as
-        ``torchlens/check/<name>`` rows.
-    settings:
-        Advanced C06 collector plumbing (ring capacity, output_dir, ...).
-    facets:
-        ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
-        of op sites (``torchlens._observability.split_heads(n)`` slices
-        attention heads); each slice is its own series under
-        ``<op label>/<facet>``.
-    allow_forward_wrap:
-        ``grain="op"`` only: explicit consent to wrap the root module's
-        forward. Attach then calibrates the wrap (plain vs wrapped forward on
-        ``inputs``, RNG and buffers restored) and discloses the cost
-        in ``plan_report()``, the tracker rows and one warning.
+        Parameters
+        ----------
+        model:
+            The live module to watch. Never wrapped, never re-traced: tier P
+            installs optimizer hooks only, tier M ordinary module hooks.
+        to:
+            One sink or a tuple of sinks implementing the documented protocol
+            (:class:`~torchlens.trackers.TensorBoardSink`,
+            :class:`~torchlens.trackers.WandbSink`,
+            :class:`~torchlens.trackers.JSONLSink`, or your own).
+        signals:
+            Subset of :data:`SIGNALS`. Default watches parameter gradients.
+        select:
+            Site selection (module path prefixes / parameter names). REQUIRED
+            for activations; optional narrowing for parameter streams. At
+            ``grain="op"`` strings are module path prefixes (OR-ed
+            ``tl.in_module``) and any selector-algebra object (``tl.func(...)``,
+            composed predicates) passes through as the op-tier ``save=``.
+        optimizer:
+            The optimizer whose step boundary anchors parameter streams.
+        step:
+            Optional zero-argument callable returning the caller's global step
+            (the unchanged-loop spelling). The explicit ``watch.step(n)`` scope
+            is authoritative and REQUIRED for resume.
+        every:
+            Scalar cadence on the caller's step axis (first and last eligible
+            steps always sample).
+        hist_every:
+            Histogram cadence; may run coarser than scalars. ``None`` disables
+            the sketch tier (scalars remain).
+        name:
+            Multi-model tag component distinguishing sessions that share a sink
+    .
+        namespace:
+            Tag re-rooting remedy for layout collisions in a shared sink
+    .
+        inputs:
+            Attach-time discovery batch (required for activations).
+        grain:
+            ``None`` (module grain) or ``"op"``: per-op activations through the
+            Route-B op-tier collector, behind ``allow_forward_wrap=True``. Only
+            ``signals=("activations",)``; ``inputs=`` and ``select=``
+            required; only the first forward of a sampled step is observed.
+        descriptor:
+            Histogram grid override. Only when both this and ``settings`` are
+            None does the first sink offering ``default_histogram_descriptor()``
+            supply the grid (``WandbSink``: ``WANDB_SAFE_DESCRIPTOR``, 497
+            buckets), and that one grid then applies to every sink; otherwise the
+            caller's grid, or the default grid, applies and each sink's
+            preflight judges it.
+        budgets:
+            Hard caps checked against the plan as preflight FACTS:
+            ``max_sites``, ``max_bytes_per_step``, ``max_elements_per_step``.
+        allow_missing_phases:
+            Demote the missing-optimizer-phase refusal to a named skip (mixed
+            train/eval loops).
+        event_stream:
+            A C06 chassis stream whose check verdicts serialize as
+            ``torchlens/check/<name>`` rows.
+        settings:
+            Advanced C06 collector plumbing (ring capacity, output_dir, ...).
+        facets:
+            ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
+            of op sites (``torchlens._observability.split_heads(n)`` slices
+            attention heads); each slice is its own series under
+            ``<op label>/<facet>``.
+        allow_forward_wrap:
+            ``grain="op"`` only: explicit consent to wrap the root module's
+            forward. Attach then calibrates the wrap (plain vs wrapped forward on
+            ``inputs``, RNG and buffers restored) and discloses the cost
+            in ``plan_report()``, the tracker rows and one warning.
 
-    Examples
-    --------
-    >>> from torchlens.trackers import MemorySink
-    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
-    >>> sink = MemorySink()
-    >>> with watch(net, to=sink, signals=("gradients",), optimizer=opt, every=1) as session, session.step(0):
-    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
-    >>> any(p.tag.startswith("gradients/") for p in sink.scalars)
-    True
+        Examples
+        --------
+        >>> from torchlens.trackers import MemorySink
+        >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+        >>> sink = MemorySink()
+        >>> with watch(net, to=sink, signals=("gradients",), optimizer=opt, every=1) as session, session.step(0):
+        ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+        >>> any(p.tag.startswith("gradients/") for p in sink.scalars)
+        True
     """
 
     sinks = tuple(to) if isinstance(to, (tuple, list)) else (to,)

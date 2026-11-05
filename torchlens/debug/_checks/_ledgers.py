@@ -76,7 +76,7 @@ class ScaleLedgerSnapshot:
 
 
 class ScaleLedger:
-    """The decrement-counting AMP skip ledger (memo D10).
+    """The decrement-counting AMP skip ledger.
 
     ``read()`` is called once per observed backward (the S-A counting tier
     supplies the cadence); ``accepted()`` once per optimizer post-step. The
@@ -196,7 +196,7 @@ def _exact_event_count(scale: float, last: float, factor: float) -> int:
 
 @dataclass(frozen=True)
 class WatchdogSnapshot:
-    """Frozen death-spiral watchdog state (memo D11).
+    """Frozen death-spiral watchdog state.
 
     Examples
     --------
@@ -222,7 +222,7 @@ class WatchdogSnapshot:
 
 
 class Watchdog:
-    """Death-spiral watchdog: warns when no step is ever accepted (D11).
+    """Death-spiral watchdog: warns when no step is ever accepted.
 
     S-A fires on skipped attempts and S-B does not, so "N backwards since
     the last accepted step exceeding K x factor" detects scale collapse even
@@ -279,7 +279,7 @@ class Watchdog:
 
 @dataclass(frozen=True)
 class ClipLedgerSnapshot:
-    """Frozen clip-saturation facts (memo D12), tiered and honest.
+    """Frozen clip-saturation facts, tiered and honest.
 
     Examples
     --------
@@ -319,7 +319,7 @@ class ClipLedgerSnapshot:
 
 
 class ClipLedger:
-    """Clip-saturation evidence in three tiers, never a silent guess (D12).
+    """Clip-saturation evidence in three tiers, never a silent guess.
 
     (a) with the magnitude tier armed, the exact applied-clip-factor series
     (pre-clip vs post-clip totals); (b) with ``clip_norm=`` declared, the

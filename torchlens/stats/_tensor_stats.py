@@ -344,7 +344,7 @@ def tensor_stats(
         Payload to summarize. Never mutated; autograd state untouched.
     _identity:
         Internal: stable record identity (op label / site key) seeding the gathered
-        sampler (D21) so sampled families are deterministic per record.
+        sampler so sampled families are deterministic per record.
     role:
         Graph-proven semantic role passthrough (``embedding_index`` etc.);
         the kernel never invents one.

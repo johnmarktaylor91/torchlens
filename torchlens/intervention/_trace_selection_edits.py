@@ -1,6 +1,6 @@
 """Selection-kind ``do`` bodies of ``Trace`` (record rebuild destination).
 
-The selection-batch door (D33), the cross-kind batch transaction, the
+The selection-batch door, the cross-kind batch transaction, the
 single-selection plan, and the EDGE, PARAM and leaf-site edit paths, moved
 verbatim from the trace intervention mixin as functions taking the trace
 first. ``_trace_edits.apply_do_mutation`` dispatches here; hooks attach
@@ -59,7 +59,7 @@ from .types import Edit
 
 
 def is_selection_batch(value: Any) -> bool:
-    """Whether a ``do()`` input is a selection-batch pair list (D33).
+    """Whether a ``do`` input is a selection-batch pair list.
 
     A non-empty list/tuple of 2-item pairs with at least one explicit
     ``Selection``/``ResolvedSelection``/``TraceSlice`` in a pair's first
@@ -101,7 +101,7 @@ def apply_selection_batch_do(
     detaches everything already attached), the per-pair ACT audit rows
     append only after every attachment succeeded, and the caller's single
     engine pass propagates the whole batch in ONE replay. Donor sharing
-    across clauses is plan OBJECT identity (D8): one ``SamplingPlan``
+    across clauses is plan OBJECT identity: one ``SamplingPlan``
     reused in several pairs carries one content-digest ``donor_group_id``;
     distinct equal-content plan objects are disambiguated here by the
     batch normalizer (``assign_batch_donor_groups``,
@@ -411,7 +411,7 @@ def apply_selection_param_do(  # noqa: PLR0913 - trace stands in for self on the
     The edit is applied "as if" the parameter were changed: every
     consumption of the parameter is substituted at its derived occurrence
     address on the replay engine, and the live parameter object is never
-    written (decided 2026-08-17, superseding the D3 typed-refusal
+    written (decided 2026-08-17, superseding the typed-refusal
     default on the replay path; rerun/set_only keep refusing typed).
     """
 

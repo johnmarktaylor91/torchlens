@@ -10,7 +10,7 @@ budget, resolve the deepest informative rung of the view ladder --
 4. ELISION on the appropriate rung: protected, totals-conserving
    accounting rows replace the lowest-share contiguous runs -- never
    truncation, so no model at any budget collapses to opaque containers.
-Identity-partition law (memo 3.1): every executed compute-op event and
+Identity-partition law: every executed compute-op event and
 every parameter identity is owned by exactly one accounting row at every
 depth, fold, and elision; fold representatives own all members' events;
 elision rows own everything they hide; root-level remainders are owned by

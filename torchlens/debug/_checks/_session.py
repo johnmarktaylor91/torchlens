@@ -11,7 +11,7 @@ family uses only public optimizer/tensor hooks -- the deliberate Recorder
 guards that refuse checks-only construction and compiled models are exactly
 why the mount fork dissolved 3-0 for standalone, memo section 8).
 
-Contracts, all tested (memo 4.2): every hook handle removed on every exit
+Contracts, all tested: every hook handle removed on every exit
 path; all check arithmetic under ``torch.no_grad()`` + ``pause_logging()``;
 zero user-RNG consumption; a check that cannot run emits ``unavailable``
 with a reason, never silence; tied tensors dedup by identity with every
@@ -63,7 +63,7 @@ from ._scan import scan_named_tensors, tensor_digest
 
 __tl_layer__ = "L5"
 
-#: Capability flag for the ``mode="all"`` fallback mechanism (memo D9).
+#: Capability flag for the ``mode="all"`` fallback mechanism.
 #: The fallback on older torch must be LOUD: absence is visible here and in
 #: the attach-time capability disclosures.
 HAS_MULTI_GRAD_HOOK = hasattr(torch.autograd.graph, "register_multi_grad_hook")
@@ -99,7 +99,7 @@ def _synced_scalars(stats: list[tuple[str, torch.Tensor]]) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class _RatioObservation:
-    """One parameter's update-ratio facts at an accepted step (memo D13)."""
+    """One parameter's update-ratio facts at an accepted step."""
 
     ratio: float
     lr: float | None
@@ -171,20 +171,20 @@ class ChecksSession:
     optimizer:
         One optimizer or a sequence. Step-family checks refuse at attach
         without one; overlapping param ownership across several refuses
-        typed (explicit ownership required, memo 4.2).
+        typed (explicit ownership required).
     scaler:
         The loop's ``GradScaler`` handle, or ``None`` as the DECLARATION
-        that this loop runs no scaler (first-class disclosure, memo D10).
+        that this loop runs no scaler (first-class disclosure).
     clip_norm:
-        Declared ``clip_grad_norm_`` max_norm (clip tier b, memo D12).
+        Declared ``clip_grad_norm_`` max_norm (clip tier b).
     accumulation_steps:
         Declared static accumulation factor K (watchdog threshold + exact
         boundary grouping).
     event_stream:
         Optional external :class:`EventStream`; by default the session owns
-        one (the trackers seam subscribes to it, memo 4.7).
+        one (the trackers seam subscribes to it).
 
-    Construction is SILENT and does no device work (memo D20): no hooks, no
+    Construction is SILENT and does no device work: no hooks, no
     syncs, no stdout. ``estimated_snapshot_bytes`` is pure metadata;
     ``profile()`` runs the measured scan on demand.
 
@@ -359,7 +359,7 @@ class ChecksSession:
         window: tuple[int, int] | None = None,
         action: str = "warn",
     ) -> None:
-        """Register the params-change fact vocabulary (memo D2/D3).
+        """Register the params-change fact vocabulary.
 
         The primary detector is the GRADIENT FACT (``grad is None`` /
         ``grad_norm == 0``) on a sustained M-of-N window; exact cross-step
@@ -380,7 +380,7 @@ class ChecksSession:
         snapshot_kind: str = "clone",
         action: str = "raise",
     ) -> None:
-        """Register the declared-frozen invariant (memo D5).
+        """Register the declared-frozen invariant.
 
         ``snapshot_kind="clone"`` (default) keeps exact detached dtype-preserving
         snapshots and can SHOW the offending delta; ``snapshot_kind="digest"`` is
@@ -415,7 +415,7 @@ class ChecksSession:
         bounds: tuple[float | None, float | None] | None = None,
         action: str = "collect",
     ) -> None:
-        """Register the update-to-weight ratio (memo D13).
+        """Register the update-to-weight ratio.
 
         Reports the raw Karpathy ratio AND the lr-normalized companion. NO
         default band ships (a healthy model measured a 38x spread across
@@ -431,7 +431,7 @@ class ChecksSession:
         )
 
     def register_nonfinite_grad_check(self, *, action: str = "raise") -> None:
-        """Register the live parameter-gradient nonfinite check (memo D6).
+        """Register the live parameter-gradient nonfinite check.
 
         Site-conditional by construction: at S-A nonfinite gradients are
         COLLECTED into the skip ledger (under a GradScaler they are the
@@ -450,7 +450,7 @@ class ChecksSession:
         include_buffers: bool = True,
         action: str = "raise",
     ) -> None:
-        """Register the scheduled parameter/buffer nonfinite scan (memo D7).
+        """Register the scheduled parameter/buffer nonfinite scan.
 
         Runs the shared scan kernel every ``every`` accepted steps at the
         safe post-mutation boundary (S-C); corrupt weights make every later
@@ -476,7 +476,7 @@ class ChecksSession:
         exploding_threshold: float = 1e4,
         action: str = "collect",
     ) -> None:
-        """Arm the S-A pre-clip magnitude pass (memo D8/D9).
+        """Arm the S-A pre-clip magnitude pass.
 
         Magnitude evidence lives ONLY at the pre-clip S-A site: the
         optimizer step site is post-clip, where clipping pins the total to
@@ -578,7 +578,7 @@ class ChecksSession:
                     )
                 except RuntimeError as exc:
                     # A non-leaf or otherwise unhookable tensor never fires;
-                    # disclosed, never silent (memo 4.2).
+                    # disclosed, never silent.
                     self._unavailable[f"counting_hook::{name}"] = str(exc)
                     continue
                 self._handles.append(handle)
@@ -669,7 +669,7 @@ class ChecksSession:
             )
 
     def _collect_disclosures(self) -> None:
-        """Record membership / train-eval / precondition disclosures (D4).
+        """Record membership / train-eval / precondition disclosures.
 
         Disclosures carry NO severity and NO action: they are the coverage
         plumbing the parameter checks depend on -- ``requires_grad=False``
@@ -788,7 +788,7 @@ class ChecksSession:
         self._pending_scale = None
 
     def _flush_magnitude(self, coverage: str) -> None:
-        """Run the armed magnitude pass: ONE sync, pre-clip verdicts (D8)."""
+        """Run the armed magnitude pass: ONE sync, pre-clip verdicts."""
 
         if self._magnitude is None:
             return
@@ -798,7 +798,7 @@ class ChecksSession:
             stage, provenance = "pre_clip_scaled", "gradscaler"
         else:
             # scaler=None at construction is the user's declaration that this
-            # loop runs no GradScaler; disclosed, never guessed (memo D10).
+            # loop runs no GradScaler; disclosed, never guessed.
             stage, provenance = "pre_clip_unscaled", "unscaled"
         for name, norm in synced.items():
             unscaled = norm / scale if scale else norm
@@ -812,7 +812,7 @@ class ChecksSession:
             if verdict is None:
                 continue
             if verdict == "nonfinite" and self._scale_ledger.is_enabled:
-                # The mechanism working (memo D6): collected into the ledger,
+                # The mechanism working: collected into the ledger,
                 # never raised, never a finding flood.
                 continue
             self._record(
@@ -845,7 +845,7 @@ class ChecksSession:
         )
 
     def _warn_watchdog(self) -> None:
-        """Emit the death-spiral watchdog warning (memo D11)."""
+        """Emit the death-spiral watchdog warning."""
 
         snapshot = self._watchdog.snapshot()
         finding = CheckFinding(
@@ -922,7 +922,7 @@ class ChecksSession:
             self._raise_on_nonfinite_grads()
 
     def _raise_on_nonfinite_grads(self) -> None:
-        """The D6 raise: pre-write, weights bitwise clean, batch re-runnable."""
+        """The raise: pre-write, weights bitwise clean, batch re-runnable."""
 
         if self._nonfinite_grad is None:
             return
@@ -1053,7 +1053,7 @@ class ChecksSession:
         return _synced_scalars(stats)
 
     def _commit_no_grad_windows(self) -> None:
-        """Update the gradient-fact windows on this accepted step (D2)."""
+        """Update the gradient-fact windows on this accepted step."""
 
         if self._change is None:
             return
@@ -1163,7 +1163,7 @@ class ChecksSession:
                 )
 
     def _commit_update_ratios(self, delta_stats: dict[str, float], optimizer: Any) -> None:
-        """Record raw + lr-normalized update ratios (memo D13)."""
+        """Record raw + lr-normalized update ratios."""
 
         if self._ratio is None or not delta_stats:
             return
@@ -1222,7 +1222,7 @@ class ChecksSession:
     def _emit_ratio_finding(
         self, name: str, obs: _RatioObservation, check: UpdateRatioCheck
     ) -> None:
-        """Record (and possibly warn) one ratio finding (memo D13)."""
+        """Record (and possibly warn) one ratio finding."""
 
         # Plain assignments keep BOTH codes visible to the contract
         # lockstep scanner (a conditional expression hides the second
@@ -1277,7 +1277,7 @@ class ChecksSession:
                 )
 
     def _commit_frozen(self, delta_stats: dict[str, float]) -> None:
-        """Enforce the declared-frozen invariant after the write (memo D5)."""
+        """Enforce the declared-frozen invariant after the write."""
 
         if self._frozen is None:
             return
@@ -1346,7 +1346,7 @@ class ChecksSession:
                 )
 
     def _commit_clip_ledger(self) -> None:
-        """Feed the clip ledger with this accepted step's totals (D12)."""
+        """Feed the clip ledger with this accepted step's totals."""
 
         grad_norms = [
             value for key, value in self._prestep_stats.items() if key.startswith("grad_norm::")
@@ -1380,7 +1380,7 @@ class ChecksSession:
             )
 
     def _scheduled_scan(self) -> None:
-        """The S-C scheduled parameter/buffer scan (memo D7): safe raise."""
+        """The S-C scheduled parameter/buffer scan: safe raise."""
 
         if self._nonfinite_param is None:
             return
@@ -1435,7 +1435,7 @@ class ChecksSession:
             )
 
     # ------------------------------------------------------------------
-    # Events (the trackers seam, memo 4.7)
+    # Events (the trackers seam)
     # ------------------------------------------------------------------
 
     def _axis_provenance(self) -> str:
@@ -1469,7 +1469,7 @@ class ChecksSession:
         )
 
     def _publish_step_events(self) -> None:
-        """Publish the per-accepted-step scalar series (memo 4.7)."""
+        """Publish the per-accepted-step scalar series."""
 
         provenance = self._axis_provenance()
         common: dict[str, Any] = {
@@ -1545,7 +1545,7 @@ class ChecksSession:
         self._disclosures[key] = value
 
     def report(self, *, finalized_reason: str = "on_demand") -> CheckReport:
-        """Assemble the deterministic check report (memo 4.5).
+        """Assemble the deterministic check report.
 
         Callable at any time; the session also finalizes one automatically
         on scope exit including exceptional exit (``final_report``).
@@ -1602,7 +1602,7 @@ class ChecksSession:
         return self._final_report
 
     def overhead(self) -> dict[str, Any]:
-        """Run the measured scan on demand (memo D20/D21).
+        """Run the measured scan on demand.
 
         Cost numbers are DATA at named shapes on this machine state --
         min-of-3 wall time with the load average recorded in the artifact;
@@ -1632,7 +1632,7 @@ class ChecksSession:
 
 
 class _PausedScope:
-    """Context manager for ``session.paused()`` (memo 4.5)."""
+    """Context manager for ``session.paused``."""
 
     def __init__(self, session: ChecksSession) -> None:
         self._session = session

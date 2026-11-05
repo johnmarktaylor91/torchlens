@@ -356,7 +356,7 @@ def disabled() -> Iterator[None]:
 
 
 def status() -> BridgeStatus:
-    """Report the bridge's live state (memo 3.1).
+    """Report the bridge's live state.
 
     Returns
     -------

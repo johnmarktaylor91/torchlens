@@ -1,4 +1,4 @@
-"""Columnar row store backing the ``Op`` facade (the M5 seam).
+"""Columnar row store backing the ``Op`` facade (the seam).
 One ``OpRowStore`` per captured trace holds every stored ``Op`` field cell;
 ``Op`` itself is a two-word ``(_core, _row)`` facade whose generated data
 descriptors read and write cells here. ``DetachedOpStore`` is the single-row

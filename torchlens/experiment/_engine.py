@@ -1,4 +1,4 @@
-"""The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
+"""The private candidate engine + the ``site_sweep`` face.
 ONE engine, three customers: the ``site_sweep`` face, the
 tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an

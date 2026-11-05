@@ -132,27 +132,27 @@ class ProfileReport:
     ) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
 
-        The stamped capture-honesty facts and the column-additivity map
-        (D5) ride ``DataFrame.attrs`` so the exported table carries the
-        same disclosures the repr shows.
+                The stamped capture-honesty facts and the column-additivity map
+         ride ``DataFrame.attrs`` so the exported table carries the
+                same disclosures the repr shows.
 
-        Parameters
-        ----------
-        include_totals:
-            Append the explicit ``TOTAL`` row (``kind="total"``): the
-            additive families carry the whole-capture partition totals --
-            the sort/top_k view above it never changes these denominators
-            (D6).
-        include_evidence:
-            Interleave per-cell evidence columns (``<column>_evidence``)
-            into the frame (costreport D9's inline form). The labels are
-            the same :meth:`honesty` projection; the ``TOTAL`` row carries
-            no evidence labels.
+                Parameters
+                ----------
+                include_totals:
+                    Append the explicit ``TOTAL`` row (``kind="total"``): the
+                    additive families carry the whole-capture partition totals --
+                    the sort/top_k view above it never changes these denominators
+        .
+                include_evidence:
+                    Interleave per-cell evidence columns (``<column>_evidence``)
+                    into the frame (costreport D9's inline form). The labels are
+                    the same :meth:`honesty` projection; the ``TOTAL`` row carries
+                    no evidence labels.
 
-        Returns
-        -------
-        pandas.DataFrame
-            Resource profile rows.
+                Returns
+                -------
+                pandas.DataFrame
+                    Resource profile rows.
         """
         frame = self.frame.copy()
         if include_evidence:
@@ -911,7 +911,7 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     the ONE canonical aggregation; module/call rows carry BOTH families --
     ``flops`` (inclusive subtree, NON-additive there) and ``flops_self``
     (exclusive, additive, sums to the partition total) -- with roles and
-    column additivity stamped on every export (D5).
+    column additivity stamped on every export.
 
     Examples
     --------

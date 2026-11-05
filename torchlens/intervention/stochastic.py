@@ -1087,7 +1087,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
     matching:
         Subject datums: ``PerRowDatums`` (one per batch row) or ``OneDatum``.
     strict:
-        Refuse agreement classes of size 1 (D15).
+        Refuse agreement classes of size 1.
 
     Examples
     --------

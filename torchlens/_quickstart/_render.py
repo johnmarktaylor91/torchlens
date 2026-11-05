@@ -1,4 +1,4 @@
-"""The one-call picture door ``tl.draw`` (B15, memo D12-D14).
+"""The one-call picture door ``tl.draw`` (B15).
 
 ``draw`` is a curated facade over the input resolver, the concrete capture
 primitive, the theme registry, and the EXISTING renderer -- never a second
@@ -6,7 +6,7 @@ renderer. It is the ONLY default route to ``collapse="auto"`` anywhere
 (decided: here and only here); ``Trace.draw()`` keeps ``collapse="none"``
 and the legacy wrapper keeps its own defaults.
 
-Viewer policy (D14): never auto-open, anywhere, by default -- ``open_viewer=True``
+Viewer policy: never auto-open, anywhere, by default -- ``open_viewer=True``
 is explicit opt-in. Notebook policy (settled 3:0): inline display, no
 implicit file, no viewer. Script policy is maintainer fork F1; branch A (the panel's
 2:1 recommendation) ships as the default, switched by ONE constant below.
@@ -116,14 +116,14 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     file_format:
         Format for a path with no extension (an extension picks it): ``"svg"`` inline, else ``"pdf"``.
     open_viewer:
-        Explicit opt-in to open the written file with the system viewer. Never the default (memo D14).
+        Explicit opt-in to open the written file with the system viewer. Never the default.
     **draw_kwargs:
         Passed unchanged to ``Trace.draw``; the dials above use its spellings and pass once.
 
     Returns
     -------
     Drawing
-        The detached picture (memo D13). Never ``None``.
+        The detached picture. Never ``None``.
     """
 
     return _capture_and_render(**locals())
@@ -185,7 +185,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
         call_kwargs["module"] = module
     if depth is not None:
         call_kwargs["depth"] = depth
-    call_kwargs["open_viewer"] = False  # never auto-open (D14); open_viewer= is handled below
+    call_kwargs["open_viewer"] = False  # never auto-open; open_viewer= is handled below
     # An explicit path keeps the caller's file_format: Trace.draw takes the format from its extension.
     call_kwargs["file_format"] = fileformat if path is None else file_format
 

@@ -297,7 +297,7 @@ def _forward_keyword_names(model: nn.Module) -> tuple[frozenset[str], bool]:
 
 
 def parse_input_size(input_size: Any, model: nn.Module) -> ParsedInputSize:
-    """Parse and validate the ``input_shape=`` argument (the D4 grammar).
+    """Parse and validate the ``input_shape=`` argument (the grammar).
 
     Parameters
     ----------

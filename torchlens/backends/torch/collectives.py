@@ -292,7 +292,7 @@ def _digest_tensor(tensor: torch.Tensor) -> str:
     """Byte-exact SHA-256 of a tensor's values (dtype-agnostic)."""
 
     # detach-ok: read-only digest snapshot; no retained gradient payload crosses this boundary.
-    # Buffer-protocol digest (r7 R35-3): identical bytes to the old
+    # Buffer-protocol digest: identical bytes to the old
     # ``tobytes`` spelling (this digest PERSISTS in collective annotations,
     # so byte identity is load-bearing) without the whole-payload copy.
     return hashlib.sha256(digest_byte_view(tensor)).hexdigest()

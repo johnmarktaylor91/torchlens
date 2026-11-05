@@ -89,7 +89,7 @@ class SixNDFacts:
 
 @dataclass(frozen=True)
 class FlopsReport:
-    """The detached one-call cost report (D10). Raw ints or None only.
+    """The detached one-call cost report. Raw ints or None only.
 
     Examples
     --------

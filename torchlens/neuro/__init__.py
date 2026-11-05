@@ -203,7 +203,7 @@ _REFUSALS: dict[str, str] = {
 _DEPENDENCIES: dict[str, _DependencyGate] = {
     "datasets": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
     "rdms": _DependencyGate("rsatoolbox", _INSTALL_NEURO, _check_rsatoolbox_conflict),
-    # Gated on brainscore_vision ALONE (memo D17/4.3): brainscore_core is
+    # Gated on brainscore_vision ALONE: brainscore_core is
     # named nowhere -- pinning brainscore-vision gets core for free.
     "activations_extractor": _DependencyGate("brainscore_vision", _INSTALL_BRAINSCORE),
     "get_activations_fn": _DependencyGate("brainscore_vision", _INSTALL_BRAINSCORE),

@@ -136,7 +136,7 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     handle, a torchvision model whose loaded state equals a cached preset
     checkpoint, a timm ``default_cfg``), the network-gated HF processor fetch
     last; a fetch failure yields ``unknown``, never a silently substituted
-    lower tier (memo D8). Nothing resolved refuses ``preprocessing_unresolved``
+    lower tier. Nothing resolved refuses ``preprocessing_unresolved``
     naming the explicit ImageNet-default opt-in.
     """
 

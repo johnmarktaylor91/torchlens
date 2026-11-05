@@ -222,7 +222,7 @@ class PreprocessingComparison:
     authority_status:
         The authority's standing (``authoritative`` / ``unverified_fallback``
         / ``unknown``); a non-authoritative reference caps the verdict below
-        ``verified`` (memo D9).
+        ``verified``.
 
     Examples
     --------

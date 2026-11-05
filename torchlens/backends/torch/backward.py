@@ -941,7 +941,7 @@ def _materialize_backward_projections(trace: Any) -> None:
 def _bind_backward_epoch(
     trace: Any, *, fold_rows: tuple[list[Any], ...] | None, revision: Any, watermark: Any
 ) -> None:
-    """Bind the projected backward records to the core's backward epoch (M9).
+    """Bind the projected backward records to the core's backward epoch.
 
     Runs AFTER a successful projection and BEFORE the trace-side stamp
     publication. The swap is genuinely atomic: a full rebuild adopts every
@@ -2022,7 +2022,7 @@ def _memory_snapshot(device: torch.device) -> tuple[str, int]:
 def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str, int]:
     """Return the pre-pass memory baseline WITHOUT resetting peak tracking.
 
-    R36-2: this used to call ``torch.cuda.reset_peak_memory_stats`` on every
+    this used to call ``torch.cuda.reset_peak_memory_stats`` on every
     ``backward``, clobbering the caller's process-wide high-water counter.
     The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
     a backward that pushes a new device peak reports the exact excess over

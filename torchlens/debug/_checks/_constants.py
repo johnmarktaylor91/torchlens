@@ -22,7 +22,7 @@ SUBNORMAL_FRACTION_THRESHOLD_DEFAULT = 0.1
 WARN_WINDOW_DEFAULT = (5, 8)
 
 #: Watchdog threshold: warn when backwards since the last accepted step
-#: exceed ``accumulation_steps * WATCHDOG_FACTOR`` (memo D11).
+#: exceed ``accumulation_steps * WATCHDOG_FACTOR``.
 WATCHDOG_FACTOR = 4
 
 __all__ = [

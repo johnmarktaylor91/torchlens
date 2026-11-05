@@ -257,7 +257,7 @@ def correct_histogram(sketch: HistogramResult, scale: float) -> HistogramResult:
     shifted below the grid fold into the per-side underflow specials (their
     corrected magnitudes genuinely lie below ``2**lo_exp``); zero / NaN /
     +-inf specials are invariant. Non-power-of-two scales refuse: they have
-    no exact shift and rebinning is banned (C06 D9).
+    no exact shift and rebinning is banned.
 
     Examples
     --------

@@ -1,4 +1,4 @@
-"""Balanced truncation budgets, ported from treescope (B3, lane F16).
+"""Balanced truncation budgets, ported from treescope (B3).
 
 The two-stage truncation protocol is a NAMED CODE BORROW from treescope
 (Daniel D. Johnson, Google DeepMind; Apache License 2.0), ported per the
@@ -21,9 +21,9 @@ installed:
 The default budgets are treescope's ``ArrayAutovisualizer`` defaults
 (4,000 cells / 128 per axis / 5 edge items) -- NOT ``render_array``'s
 10,000/512/5, which an implementer calling upstream directly must override
-explicitly (memo 3.5).
+explicitly.
 
-Truncation-mask law (memo 3.5): a truncation band travels as
+Truncation-mask law: a truncation band travels as
 ``mask=False``, never as a data zero -- an unmasked zero band renders as
 the NEUTRAL color on a diverging map, a fabricated "nothing here".
 
@@ -46,7 +46,7 @@ __all__ = [
     "truncate_tensor_with_mask",
 ]
 
-#: ArrayAutovisualizer default budgets (memo 3.5) -- the numbers every
+#: ArrayAutovisualizer default budgets -- the numbers every
 #: TorchLens truncation call passes EXPLICITLY.
 CELL_BUDGET_DEFAULT = 4_000
 PER_AXIS_BUDGET_DEFAULT = 128

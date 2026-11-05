@@ -73,7 +73,7 @@ _NO_GRADS_HINT = (
     "trace.backward(loss)"
 )
 
-#: Closed classification bases (D17): total-norm default, RMS opt-in.
+#: Closed classification bases: total-norm default, RMS opt-in.
 _BASES = ("total_norm", "rms")
 
 

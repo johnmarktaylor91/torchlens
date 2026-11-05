@@ -1,4 +1,4 @@
-"""Typed refusal classes for the training-checks kit (lane F23).
+"""Typed refusal classes for the training-checks kit.
 
 Every raise site in ``torchlens.debug._checks`` carries a stable ``fields["code"]``
 plus a non-empty ``fields["remedy"]`` and is ledgered in

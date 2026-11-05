@@ -174,7 +174,7 @@ def _disclosure_lines(view: AttentionView, annotation: Annotation | None) -> lis
 
 
 def _outline_step_row(ax: Any, view: AttentionView) -> None:
-    """Outline the last query row of a decode step's view (tviz memo D22).
+    """Outline the last query row of a decode step's view.
 
     A cached decode forward computes exactly one row, the newest position,
     which is the last row of the view; the prefill computes every row and

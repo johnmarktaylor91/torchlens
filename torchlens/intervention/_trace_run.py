@@ -378,7 +378,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     if seed is not None:
         # r77 nit + r79 hardening: validate ``seed`` at the run door so junk
         # raises the typed precondition lane instead of escaping as torch's
-        # raw ``RuntimeError``. r79 extends the r77 non-int check to the two
+        # raw ``RuntimeError``. r79 extends the non-int check to the two
         # escapes r78 found: ``bool`` (an int subclass that
         # ``Generator.manual_seed`` rejects) and an int outside torch's
         # accepted long range (pybind overflow). The failed call is
@@ -413,7 +413,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     # refuses typed. Narrow by design: unmeasured/legacy episode
     # artifacts keep their shipped replay behavior.
     refuse_broken_join_claim(trace)
-    # Coupled-episode replay gate (lane F42), beside the join gate: a
+    # Coupled-episode replay gate, beside the join gate: a
     # COUPLED product's ledger attests one PERTURBED execution, and no
     # run provider re-arms the capture-time intervention, so no engine
     # can derive a fresh ledger -- the verdict's refusal arm. Uncoupled

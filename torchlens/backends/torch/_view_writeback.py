@@ -81,7 +81,7 @@ def overlapping_labeled_aliases(
     """
 
     try:
-        # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
+        # Meta-safe key: data_ptr reads 0 for EVERY meta storage.
         storage_ptr = storage_alias_index_key(mutated.untyped_storage())
     except Exception:
         return []

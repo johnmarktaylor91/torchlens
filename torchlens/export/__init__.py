@@ -772,7 +772,7 @@ def xarray(trace: Any) -> Any:
     >>> dataset["out"].sizes["presentation"]
     1
     """
-    # D15: a Recording cooks first; the value-payload capability refuses (no synthetic array).
+    # a Recording cooks first; the value-payload capability refuses (no synthetic array).
     trace = _cook_recording(trace)
     _require_structure_only_capability(trace, "value_payloads")
 

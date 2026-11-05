@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import sys
 
-# STRUCTURAL close of the denylist-completeness class (r31). The explicit
+# STRUCTURAL close of the denylist-completeness class. The explicit
 # ``_DENIED_MODULES`` denylist above is inherently incomplete: successive audits kept
-# finding *more* resolvable stdlib/builtin gadgets (r26 exec/spawn; r28
+# finding *more* resolvable stdlib/builtin gadgets (r26 exec/spawn
 # ``_frozen_importlib``; r30 ``_imp`` / ``zipimport`` / ``io`` / ``linecache`` /
 # ``fileinput`` / ``py_compile`` / ``compileall`` / ``gc`` / ``mmap`` / ``fcntl`` ...).
 # Chasing modules one at a time never terminates. Instead we close the CLASS with a

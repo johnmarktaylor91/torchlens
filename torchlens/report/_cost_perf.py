@@ -80,7 +80,7 @@ CACHE_RESIDENT_BYTES_DEFAULT: int = 4 * 1024 * 1024
 
 @dataclass(frozen=True)
 class PeakRow:
-    """One advertised dense per-mode peak with full provenance (D18).
+    """One advertised dense per-mode peak with full provenance.
 
     Examples
     --------
@@ -102,7 +102,7 @@ class PeakRow:
 
 @dataclass(frozen=True)
 class DevicePeaks:
-    """An explicit peaks catalog: constructed, never auto-selected (D18).
+    """An explicit peaks catalog: constructed, never auto-selected.
 
     Examples
     --------
@@ -387,7 +387,7 @@ def attributed_kernel_utilization(*_args: Any, **_kwargs: Any) -> Any:
 
 @dataclass(frozen=True)
 class CleanStepTime:
-    """One opt-in clean-step measurement (D16): method fully disclosed.
+    """One opt-in clean-step measurement: method fully disclosed.
 
     Examples
     --------
@@ -698,7 +698,7 @@ def roofline(
 
 @dataclass(frozen=True)
 class MachineBalance:
-    """A roofline ceiling pair and its ridge point (D18): basis disclosed.
+    """A roofline ceiling pair and its ridge point: basis disclosed.
 
     Examples
     --------
@@ -870,7 +870,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
 
 @dataclass(frozen=True)
 class CostTierMeasurement:
-    """One measured tier: absolute time first, ratio derived (D24).
+    """One measured tier: absolute time first, ratio derived.
 
     Examples
     --------
@@ -887,7 +887,7 @@ class CostTierMeasurement:
 
 @dataclass(frozen=True)
 class OverheadReport:
-    """Measured capture costs on the USER'S model and host (D27).
+    """Measured capture costs on the USER'S model and host.
 
     Examples
     --------

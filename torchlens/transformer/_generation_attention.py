@@ -1,4 +1,4 @@
-"""Per-step attention pictures from a recorded generation (tviz memo D22).
+"""Per-step attention pictures from a recorded generation.
 
 A generation recorded with ``tl.record(model, input_ids, save=tl.func("softmax"),
 generate_kwargs={...})`` keeps every attention softmax each forward ran. The
