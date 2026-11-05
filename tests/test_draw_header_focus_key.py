@@ -3,11 +3,11 @@
 - Both draw doors (``Trace.draw`` and ``Bundle.draw``) take the format from the
   path extension; a ``file_format`` that disagrees refuses
   (``draw_format_mismatch``), so the extension never loses silently.
-- The header's count names what it counts, and the count and the byte total
-  cover the same nodes: the drawn nodes that show a tensor size (a focus's
-  input and output stubs show none and are not counted). A rolled draw also
-  counts the op passes its layers cover and sums the size over every pass, so
-  its size equals the unrolled header's.
+- The header's count reports the traced network (a ``module=`` draw: that
+  module), never the drawn boxes: its ops plus the input and output tensors and
+  their summed size, whatever the drawing collapses (a focus's input and output
+  stubs are outside the module and not counted). A rolled draw also names the
+  layers those ops form, and its size equals the unrolled header's.
 - Parameter counts carry thousands separators; every drawn size divides by
   1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
