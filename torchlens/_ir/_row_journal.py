@@ -211,12 +211,6 @@ def journal_record(event: Any) -> Any:
     return event
 
 
-def fold_journal_patch(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
-    """Fold ordered facet-path updates onto a row handle (the overlay fold)."""
-
-    return event.with_patch(items)
-
-
 def _parent_edges(
     parents: list[str], positions: dict[str, dict[Any, str]]
 ) -> tuple[ParentEdge, ...]:
