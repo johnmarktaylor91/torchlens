@@ -488,7 +488,7 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4286
+torchlens/_utils/_torch_compat.py	4330
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -925,7 +925,7 @@ torchlens/backends/torch/funcol.py	1016
 torchlens/backends/torch/funcol.py::_build_funcol_payload	130
 torchlens/backends/torch/funcol.py::_make_funcol_wrap	178
 torchlens/backends/torch/funcol.py::_make_funcol_wrap.wrapped_funcol	155
-torchlens/backends/torch/identity_shims.py	993
+torchlens/backends/torch/identity_shims.py	956
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70

@@ -25,6 +25,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 import torchlens as tl  # noqa: E402
+from torchlens._utils._torch_compat import get_device_mesh_type  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     is_vetted_build,
@@ -66,6 +67,10 @@ def gloo_world(tmp_path):
             dist.destroy_process_group()
 
 
+@pytest.mark.skipif(
+    get_device_mesh_type(force_probe=True) is None,
+    reason="torch.distributed.device_mesh postdates the torch 2.1 floor (HAS_DEVICE_MESH)",
+)
 class TestShardedPredicate:
     """The Shard / Replicate / mixed matrix, pinned explicitly (plan 3.3)."""
 

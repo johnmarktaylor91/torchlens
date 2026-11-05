@@ -28,6 +28,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import HAS_SDPA_EMPTY_ROW_ZERO
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
@@ -186,11 +187,25 @@ def test_dead_sdpa_edge_over_two_keys_still_fails(slot: int) -> None:
     _assert_dead_edge_fails(trace, op, slot)
 
 
+def _assert_empty_row_precondition(op: Any) -> None:
+    """Pin what SDPA writes for a query row with no admissible key, over a zero ``v``.
+
+    Torch 2.5+ leaves the row equal to ``v`` (zero), so only the precondition under test
+    can refuse the edge; older torch writes NaN (``HAS_SDPA_EMPTY_ROW_ZERO``). Either
+    way the planted dead edge must still fail.
+    """
+
+    if HAS_SDPA_EMPTY_ROW_ZERO:
+        assert bool((op.out == 0).all()), "precondition: an empty softmax row still equals v"
+    else:
+        assert bool(op.out.isnan().any()), "precondition: this torch leaves the empty row NaN"
+
+
 def test_dead_sdpa_key_edge_with_a_non_finite_key_still_fails() -> None:
     key_scale = torch.ones(8)
     key_scale[0] = float("-inf")
     trace, op = _sdpa_trace(_FewKeyAttention(keys=1, key_scale=key_scale, zero_value=True))
-    assert bool((op.out == 0).all()), "precondition: an empty softmax row still equals v"
+    _assert_empty_row_precondition(op)
     _assert_dead_edge_fails(trace, op, 1)
 
 
@@ -198,7 +213,7 @@ def test_dead_sdpa_key_edge_with_a_fully_masked_row_still_fails() -> None:
     mask = torch.ones(4, 1, dtype=torch.bool)
     mask[0] = False
     trace, op = _sdpa_trace(_FewKeyAttention(keys=1, zero_value=True, mask=mask))
-    assert bool((op.out == 0).all()), "precondition: an empty softmax row still equals v"
+    _assert_empty_row_precondition(op)
     _assert_dead_edge_fails(trace, op, 1)
 
 

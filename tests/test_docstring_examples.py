@@ -380,3 +380,37 @@ def test_optional_examples_run(module: str) -> None:
         if result.status not in {"ok", "refused"}:
             failures.append(f"{result.path} ({result.status}):\n{result.detail}")
     assert not failures, f"{len(failures)} examples did not run:\n" + "\n".join(failures)
+
+
+def test_unvetted_collective_build_route_accepts_only_the_arm_refusal() -> None:
+    """Graceful floor test for the ``is_vetted_build`` route the distributed examples use.
+
+    On a torch whose collective census is not vetted, ``arm()`` refuses with the typed
+    layer-1 ``UncapturedCollectiveOpError`` and the route accepts exactly that; on a
+    vetted torch the route accepts nothing, so an example there must run to the end.
+    """
+
+    from tests.support.capability_routes import ROUTES
+    from torchlens import distributed
+
+    route = ROUTES["is_vetted_build"]
+    assert not route.accepts(RuntimeError("unrelated"))
+    if distributed.is_vetted_build():
+        assert not route.accepts(_unvetted_refusal_stand_in())
+        return
+    with pytest.raises(RuntimeError) as excinfo:
+        distributed.arm()
+    assert route.accepts(excinfo.value)
+
+
+def _unvetted_refusal_stand_in() -> BaseException:
+    """Build the layer-1 arm refusal without needing an unvetted torch."""
+
+    from torchlens.distributed._recognizer import (
+        UNCAPTURED_COLLECTIVE_OP,
+        UncapturedCollectiveOpError,
+    )
+
+    return UncapturedCollectiveOpError(
+        "stand-in", kind=UNCAPTURED_COLLECTIVE_OP, layer=1, mismatches={}
+    )

@@ -527,6 +527,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/_utils/_torch_compat.py", "_SPARSE_SPSOLVE_CUDA_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_META_ITEM_GUARD"),
         ("torchlens/_utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
+        # torch.utils.cpp_extension import probe (torch 2.1 imports pkg_resources,
+        # which current setuptools no longer ships): lazy so a plain import never
+        # loads setuptools; same shape as every other row in this class.
+        ("torchlens/_utils/_torch_compat.py", "HAS_TORCH_CPP_EXTENSION"),
+        ("torchlens/_utils/_torch_compat.py", "_TORCH_CPP_EXTENSION_PROBED"),
         # ratchet2 ci-fix (2026-10-01): the MHA fastpath-switch probe joined
         # the lazy pattern (was eager at import, tripping the import-hygiene
         # duration budget on the torch>=2.1 floor's py3.10 leg); same shape

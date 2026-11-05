@@ -19,6 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._debug_report import display_source_line
+from torchlens._utils._torch_compat import get_cpu_half_kernels_support
 
 THIS_FILE = os.path.basename(__file__)
 
@@ -296,6 +297,10 @@ def test_lineage_rows_name_their_columns_and_source() -> None:
     assert f"{THIS_FILE}:" in str(report)
 
 
+@pytest.mark.skipif(
+    not get_cpu_half_kernels_support(),
+    reason="torch 2.1-2.2 has no CPU float16 addmm kernel, so the half model cannot run",
+)
 def test_dtype_range_prints_its_card() -> None:
     """dtype_range's str() is the card; repr stays one line."""
 
