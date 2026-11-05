@@ -920,7 +920,7 @@ torchlens/backends/torch/completeness_witness.py	1622
 torchlens/backends/torch/completeness_witness.py::_CompletenessDispatchMode.__torch_dispatch__	168
 torchlens/backends/torch/completeness_witness.py::_storage_disposition_rows	79
 torchlens/backends/torch/escape_detection.py	946
-torchlens/backends/torch/escape_detection.py::capture_escape_guard	120
+torchlens/backends/torch/escape_detection.py::capture_escape_guard	119
 torchlens/backends/torch/funcol.py	1015
 torchlens/backends/torch/funcol.py::_build_funcol_payload	130
 torchlens/backends/torch/funcol.py::_make_funcol_wrap	178

@@ -871,10 +871,9 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
             _install_detector(guard)
         yield
     finally:
-        # Clear the thread-local guard BEFORE the uninstall and fence the uninstall
-        # itself: a raise inside ``_uninstall_detector`` used to skip
-        # ``_THREAD_STATE.guard = None`` and every diagnostic write below it, stranding a
-        # torn-down guard as this thread's live guard for the rest of the process.
+        # Clear the thread-local guard BEFORE the uninstall and fence the uninstall itself: a raise
+        # in ``_uninstall_detector`` used to skip ``_THREAD_STATE.guard = None`` and every
+        # diagnostic write below, leaving a torn-down guard as this thread's live guard for good.
         _THREAD_STATE.guard = None
         _THREAD_STATE.tokens = []
         if mode == "shadow":
