@@ -9,8 +9,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from .. import _user_public_impls
 from .._selection.selectors import facet
-from .._user_public_impls import trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import _CAPTURE_FIELDS, CaptureOptions
 from ._input_patching import _model_input_home_role, _patch_input_leaf
@@ -466,7 +466,7 @@ def _baseline_traces(
         def _run() -> Any:
             """Reset the model/RNG state to the pristine snapshot and trace once."""
             guard.reset()
-            return trace(model, inputs, **kwargs)
+            return _user_public_impls.trace(model, inputs, **kwargs)  # looked up per call
 
         return _run
 
