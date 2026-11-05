@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1594 modules, 680080 lines, 0 modules without a docstring.
+83 packages, 1593 modules, 680036 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,14 +15,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26670 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 52 | 26669 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 105 | 40070 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10675 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 37008 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10673 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 37006 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8995 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11740 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
@@ -38,9 +38,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3030 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4500 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 57 | 18398 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18401 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6361 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46757 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46754 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 756 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2300 |
@@ -49,7 +49,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 197 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 16 | 5541 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
-| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15097 |
+| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15093 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2542 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3863 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 18 | 7001 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57337 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8889 |
-| `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2743 |
+| `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2740 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2032 |
@@ -70,16 +70,16 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 5 | 1428 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
-| `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2046 |
+| `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2045 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5541 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37382 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37381 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 29 | 9989 |
-| `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4151 |
+| `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4148 |
 | `torchlens.postprocessing` | Output decoding provenance: the public home of custom output detectors. | 1 | 61 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2763 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 31 | 14062 |
@@ -90,10 +90,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2238 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 18 | 7260 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
-| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5422 |
+| `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5421 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6106 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 74 | 31998 |
-| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4775 |
+| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 11 | 4750 |
 
 ## Modules by package
 
@@ -212,7 +212,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (52 modules, 26670 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (52 modules, 26669 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -223,7 +223,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_episode_coupling` | Attested episode-intervention coupling. | 536 |
 | `_episode_derivation` | Episode step-output derivation: the declaration-driven evidence readers. | 726 |
 | `_episode_fold` | The -floor episode fold: member outcomes -> a DERIVED episode status. | 228 |
-| `_episode_join` | Episode join arms (lane F40c): live + settlement ''step_join''. | 1307 |
+| `_episode_join` | Episode join arms (lane F40c): live + settlement ''step_join''. | 1306 |
 | `_episode_ledger` | Episode ledger: per-step status disclosure for ''capture_kind=episode''. | 1985 |
 | `_episode_ledger_anchors` | Load-time anchors: does a grammatically valid episode ledger describe THIS product? | 188 |
 | `_flops_shape_rules` | Shape helpers and the shape-derived FLOP rules for weighted, recurrent and chained calls. | 298 |
@@ -429,7 +429,7 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 606 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10675 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10673 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -440,7 +440,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10675 lines)
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 218 |
 | `engine` | The extraction v2 store pipeline and run engines (extract + ). | 1847 |
 | `envelope` | The typed batch envelope and the collate door (extract + item 5). | 687 |
-| `export` | Read-only streaming exporters + the self-contained contract. | 760 |
+| `export` | Read-only streaming exporters + the self-contained contract. | 758 |
 | `harvest_schema` | Counterfactual-harvest schema (leverage B17 / ): fields land NOW. | 216 |
 | `intervened` | Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE). | 412 |
 | `pool` | Pool presets: axis-explicit, mask-aware, refuse ambiguity (extract ). | 397 |
@@ -455,7 +455,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10675 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (62 modules, 37008 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (62 modules, 37006 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -504,7 +504,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `lazy` | Lazy out reference placeholders for portable TorchLens bundles. | 380 |
 | `manifest` | Portable bundle manifest schema and compatibility policy. | 976 |
 | `paths` | Path validation helpers for portable TorchLens bundles. | 215 |
-| `payload_codec` | Backend-neutral payload codecs for portable bundle writes. | 1916 |
+| `payload_codec` | Backend-neutral payload codecs for portable bundle writes. | 1914 |
 | `payload_reader` | Scoped, NON-attaching payload reads for analytics over lazy artifacts. | 142 |
 | `prerelease` | Pre-release field registrar: sprint-gated fields under a frozen tlspec. | 301 |
 | `rehydrate` | Portable state rehydration for TorchLens model logs. | 1366 |
@@ -859,12 +859,11 @@ Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (57 modules, 18398 lines)
+Shared helpers used by two or more TorchLens packages. (56 modules, 18401 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Shared helpers used by two or more TorchLens packages. | 28 |
-| `_attention_bias_probe` | Import-free probe for ''torch.nn.attention.bias.CausalBias'' (stdlib only). | 54 |
 | `_call_site` | Call-site keys for layer grouping (step 7, ''detector="callsite_v1"''). | 258 |
 | `_callable_safety` | Security gate deciding which resolved callables are pure forward/tensor ops. | 1562 |
 | `_cuda_probe` | CUDA availability and initialization probes, cached once per process. | 69 |
@@ -886,7 +885,7 @@ Shared helpers used by two or more TorchLens packages. (57 modules, 18398 lines)
 | `_mps_memory` | MPS headroom query behind the ''HAS_MPS_MEMORY_QUERY'' capability flag. | 27 |
 | `_multipass_access` | Multi-pass-safe attribute access for aggregate (recurrent) ''Layer'' objects. | 134 |
 | `_mutation_names` | Operator-name mutation signatures shared by capture and saved-output bookkeeping. | 38 |
-| `_numpy_bridge` | Bridge-aware tensor/NumPy conversion (the one authority). | 104 |
+| `_numpy_bridge` | Bridge-aware tensor/NumPy conversion (the one authority). | 124 |
 | `_onramp` | Convenience helpers documented at ''torchlens._utils''. | 477 |
 | `_package_frames` | Which Python frames belong to TorchLens itself. | 78 |
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
@@ -899,10 +898,10 @@ Shared helpers used by two or more TorchLens packages. (57 modules, 18398 lines)
 | `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
 | `_tensor_layout` | Capture-time argument layouts for saved-DAG replay. | 93 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4396 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4394 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 256 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
-| `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 259 |
+| `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 302 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_uninit_alloc` | Uninitialized-memory value-source family ( hon_2): ONE closed table. | 226 |
@@ -917,8 +916,8 @@ Shared helpers used by two or more TorchLens packages. (57 modules, 18398 lines)
 | `input_leaves` | Leaf-preserving copies and device moves of grad-tracked model inputs. | 163 |
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1097 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
-| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 158 |
-| `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1861 |
+| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 155 |
+| `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1860 |
 | `torchvision_weights` | Recover the torchvision weights preset a model was built with, from its state. | 172 |
 
 ### `torchlens._utils.rng`
@@ -947,7 +946,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (89 modules, 46757 lines)
+Computational graph visualization via Graphviz. (89 modules, 46754 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1004,7 +1003,7 @@ Computational graph visualization via Graphviz. (89 modules, 46757 lines)
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2198 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_names` | Render names shared by the renderer and the lens and surgery layers above it. | 39 |
-| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2084 |
+| `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2081 |
 | `_render_ordering` | Sibling-ordering resolution and verification for the forward DOT pipeline. | 714 |
 | `_render_regions` | Nested module-cluster (region) emission for the forward DOT pipeline. | 517 |
 | `_render_utils` | Internal Graphviz rendering helpers shared across rendering paths. | 676 |
@@ -1141,7 +1140,7 @@ The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.name
 
 ### `torchlens.attribution`
 
-Input-attribution methods for TorchLens. (31 modules, 15097 lines)
+Input-attribution methods for TorchLens. (31 modules, 15093 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1163,7 +1162,7 @@ Input-attribution methods for TorchLens. (31 modules, 15097 lines)
 | `_eval_maps` | Shared helpers for the attribution evaluation battery. | 328 |
 | `_gradient_shap` | GradientShap: expected gradients over a baseline pool (attrib ). | 594 |
 | `_guided` | Guided backpropagation and deconvolution: strict exact-ReLU, op-level. | 544 |
-| `_layer` | Native layer-attribution methods for TorchLens. | 1257 |
+| `_layer` | Native layer-attribution methods for TorchLens. | 1253 |
 | `_metrics` | Attribution quality metrics: infidelity and sensitivity (-). | 806 |
 | `_noise_tunnel` | Noise tunnel: run ANY kit method on noised input copies and aggregate. | 366 |
 | `_occlusion` | Occlusion attribution: scalar trace occlusion and the direct input map. | 694 |
@@ -1513,12 +1512,12 @@ External-tool bridge namespace. (28 modules, 8889 lines)
 
 ### `torchlens.bridge.lit`
 
-LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2743 lines)
+LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2740 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | LIT (Google PAIR Language Interpretability Tool) bridge. | 421 |
-| `_adapters` | Real ''lit_nlp.api.model.Model'' adapters over a live torch model. | 1046 |
+| `_adapters` | Real ''lit_nlp.api.model.Model'' adapters over a live torch model. | 1043 |
 | `_pooling` | Explicit, mask-aware pooling for LIT ''Embeddings'' fields. | 182 |
 | `_refusals` | Typed teaching refusals for the LIT bridge. | 448 |
 | `_runtime` | Tokenization, padding conventions, state guard, and the traced forward. | 275 |
@@ -1667,13 +1666,13 @@ Example-loading namespace for small TorchLens artifacts. (1 modules, 84 lines)
 
 ### `torchlens.experiment`
 
-torchlens.experiment: multi-run experiments as first-class objects. (5 modules, 2046 lines)
+torchlens.experiment: multi-run experiments as first-class objects. (5 modules, 2045 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.experiment: multi-run experiments as first-class objects. | 83 |
 | `_effects` | The effect table read view: ''EffectsView'' and ''bundle_effects''. | 205 |
-| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 924 |
+| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 923 |
 | `_grid` | ''sweep_grid'': named axes over the candidate engine, a labeled N-dimensional result. | 690 |
 | `_head_sugar` | Head-ablation sugar ( item 7b): the canonical mechinterp move, guarded. | 144 |
 
@@ -1688,11 +1687,11 @@ Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 374 l
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (14 modules, 5541 lines)
+Static export helpers for TorchLens logs. (14 modules, 5540 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Static export helpers for TorchLens logs. | 1346 |
+| `__init__` | Static export helpers for TorchLens logs. | 1345 |
 | `_common` | Shared export helpers (subpackage promotion, item 18). | 233 |
 | `_graphs` | Foreign graph-viewer export targets (bridge tier; item 18). | 18 |
 | `_naming` | Small naming and sanitizing helpers shared by the timeline and flamegraph exporters. | 78 |
@@ -1732,7 +1731,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37382 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37381 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1812,7 +1811,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `spec` | The ONE immutable public intervention spec ( substrate). | 801 |
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 339 |
-| `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1421 |
+| `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1420 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 560 |
 | `types` | Shared dataclass ownership for TorchLens intervention schemas. | 857 |
 
@@ -1883,12 +1882,12 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (29 modules, 
 
 ### `torchlens.neuro`
 
-torchlens.neuro: the treaty desk between network and brain (neuro memo). (7 modules, 4151 lines)
+torchlens.neuro: the treaty desk between network and brain (neuro memo). (7 modules, 4148 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 343 |
-| `_brainpipe` | Planned whole-model extraction: plan, table, run, npz. | 983 |
+| `_brainpipe` | Planned whole-model extraction: plan, table, run, npz. | 980 |
 | `_compare` | One call: RSA, cross-validated ridge and linear CKA on one extraction. | 594 |
 | `_conflicts` | Known extras conflicts of the neuro desk, diagnosed from package metadata. | 284 |
 | `_datasets` | ''torchlens.neuro.datasets'': the per-site rsatoolbox Dataset handoff. | 320 |
@@ -2133,7 +2132,7 @@ Trackers: one engine, first-party sinks, measured relays. (15 modules, 5269 line
 
 ### `torchlens.transformer`
 
-torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5422 lines)
+torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5421 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2148,7 +2147,7 @@ torchlens.transformer -- transformer pictures (tviz memo). (15 modules, 5422 lin
 | `_mpl` | matplotlib gate + shared figure chrome (tviz /, FORK-T1 branch A). | 220 |
 | `_predictions` | Prediction pictures: ribbon, answer trajectory, rank panel, top-k table. | 563 |
 | `_receipts` | Causal receipt grids: attachment validation + visual grammar (-). | 527 |
-| `_records` | Typed display records for transformer pictures (tviz ). | 1322 |
+| `_records` | Typed display records for transformer pictures (tviz ). | 1321 |
 | `_render_attention` | Attention picture renderers: single head, grids, atlas (tviz roster). | 495 |
 | `_strip` | Colored-token strips: matplotlib paper path + zero-dependency emitters. | 296 |
 | `_wording` | Exact rendered disclosure wording for transformer pictures (tviz memo). | 96 |
@@ -2256,7 +2255,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 
 ### `torchlens.viz`
 
-Visualization convenience namespace for TorchLens. (11 modules, 4775 lines)
+Visualization convenience namespace for TorchLens. (11 modules, 4750 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2265,9 +2264,9 @@ Visualization convenience namespace for TorchLens. (11 modules, 4775 lines)
 | `_heatmap_axes` | Heatmap axis-label layout: margins, overlap selection, honest omission. | 698 |
 | `_node_visualizers` | Node visualizer factories for ''trace.draw(node_spec_fn=...)'' (''torchlens.viz.nodes''). | 379 |
 | `_rgb_scale` | Scale a three-channel image into ''[0, 1]'' for display. | 56 |
-| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 272 |
+| `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 268 |
 | `_tensor_images` | Image views of a bare tensor: ''rgb'' and ''chans'' (views.4). | 150 |
 | `batch_summary` | Reusable batch summary renderers for TorchLens visualizations. | 121 |
-| `feature_maps` | Trace-aware activation feature-map node visualizations. | 1047 |
-| `node_plots` | PIL-only render primitives for compact node visualizations. | 1418 |
+| `feature_maps` | Trace-aware activation feature-map node visualizations. | 1045 |
+| `node_plots` | PIL-only render primitives for compact node visualizations. | 1399 |
 | `nodes` | Node visualizer factories: callbacks that draw one graph node's picture. | 67 |

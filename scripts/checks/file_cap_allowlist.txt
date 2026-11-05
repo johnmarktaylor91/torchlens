@@ -203,7 +203,7 @@ torchlens/_io/manifest.py	976
 torchlens/_io/manifest.py::Manifest.from_dict	180
 torchlens/_io/manifest.py::TensorEntry.from_dict	90
 torchlens/_io/paths.py::resolve_bundle_blob_path	61
-torchlens/_io/payload_codec.py	1915
+torchlens/_io/payload_codec.py	1914
 torchlens/_io/payload_codec.py::JaxPayloadCodec.from_numpy	82
 torchlens/_io/payload_codec.py::materialize_transport_tensor	73
 torchlens/_io/rehydrate.py	1366
@@ -489,7 +489,7 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4388
+torchlens/_utils/_torch_compat.py	4386
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -581,7 +581,7 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2083
+torchlens/_visualization/_render_nodes.py	2081
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	236
 torchlens/_visualization/_render_nodes.py::_build_layer_node	168
@@ -977,7 +977,7 @@ torchlens/bridge/depyf.py::dump	69
 torchlens/bridge/huggingface_hub.py::push_to_hub	97
 torchlens/bridge/inseq.py::attribute	67
 torchlens/bridge/lit/__init__.py::model	107
-torchlens/bridge/lit/_adapters.py	1045
+torchlens/bridge/lit/_adapters.py	1043
 torchlens/bridge/lit/_adapters.py::_TorchLensLitModel._salience_values	77
 torchlens/bridge/profiler.py::_assign_op_types	68
 torchlens/bridge/profiler.py::join	92
@@ -1058,7 +1058,7 @@ torchlens/experiment/_engine.py	912
 torchlens/experiment/_engine.py::sweep_sites	81
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	74
 torchlens/export/__init__.py	1168
-torchlens/export/__init__.py::xarray	116
+torchlens/export/__init__.py::xarray	115
 torchlens/export/_model_explorer/_build.py::build_rolled_graph	86
 torchlens/export/_model_explorer/_collection.py::to_model_explorer_dict	100
 torchlens/export/_model_explorer/_diff.py::model_explorer_diff	61
@@ -1196,11 +1196,11 @@ torchlens/mechinterp/_residual.py::residual_accumulation	68
 torchlens/mechinterp/_residual.py::residual_decomposition	81
 torchlens/mechinterp/_scores.py::head_scores	105
 torchlens/mechinterp/_walk.py::walk_spine	107
-torchlens/neuro/_brainpipe.py	938
+torchlens/neuro/_brainpipe.py	936
 torchlens/neuro/_brainpipe.py::ExtractionPlan.run	69
 torchlens/neuro/_brainpipe.py::_build_plan_sites	74
 torchlens/neuro/_brainpipe.py::_write_per_stimulus_npz	70
-torchlens/neuro/_brainpipe.py::export_npz	105
+torchlens/neuro/_brainpipe.py::export_npz	102
 torchlens/neuro/_brainpipe.py::plan_extraction	179
 torchlens/neuro/_compare.py::_analysis_runners	69
 torchlens/neuro/_compare.py::compare	115
@@ -1471,13 +1471,13 @@ torchlens/viz/_heatmap_axes.py::_heatmap_axis_selection_fits	88
 torchlens/viz/_heatmap_axes.py::_select_heatmap_axis_indices	76
 torchlens/viz/_node_visualizers.py::channel_grid	75
 torchlens/viz/_node_visualizers.py::histogram	62
-torchlens/viz/_tensor_display.py::show_tensor	92
-torchlens/viz/feature_maps.py	1029
+torchlens/viz/_tensor_display.py::show_tensor	90
+torchlens/viz/feature_maps.py	1028
 torchlens/viz/feature_maps.py::_render_feature_map_grid	84
 torchlens/viz/feature_maps.py::feature_map_node_spec	139
 torchlens/viz/feature_maps.py::feature_map_node_spec.node_spec_fn	87
 torchlens/viz/feature_maps.py::feature_maps	123
-torchlens/viz/node_plots.py	1394
+torchlens/viz/node_plots.py	1376
 torchlens/viz/node_plots.py::_spread_close_centers	67
 torchlens/viz/node_plots.py::heatmap	141
 torchlens/viz/node_plots.py::image_scatter	106
