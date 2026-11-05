@@ -17,10 +17,11 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._facet_union import split_facet_union_entries
-from ._live_hook_plan import retire_live_hook_handles, running_result, sticky_handle_ids
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_edits import (
     ensure_intervention_spec,
     target_spec_from_site,

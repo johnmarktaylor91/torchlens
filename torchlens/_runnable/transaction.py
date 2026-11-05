@@ -52,6 +52,7 @@ from .state import (
     PreparedRunnableState,
     RunResourceCeiling,
     runnable_tensor_byte_digest,
+    snapshot_live_declared_state,
 )
 from .state_live import LiveStateRestoreFailure, restore_live_declared_state
 
@@ -1070,11 +1071,9 @@ def run_live_trace(
     # snapshot is validated before the fork and any forward; carry_state=True skips it.
     state_snapshot = None
     if not carry_state:
-        from .state import snapshot_live_declared_state
-
         state_snapshot = snapshot_live_declared_state(model)
     prior_log_ids = frozenset(id(log) for log in _state.list_logs())
-    fork = trace._fork_trace(name=_run_fork_name(trace))
+    fork = _run_result_fork(trace)
     finalize_ctx = _LiveFinalizeContext(
         trace=trace,
         seed=seed,
@@ -1251,7 +1250,7 @@ from .verification import (  # noqa: E402
     _contract_check,
     _raise_failed_contract_as_divergence,
     _raise_numeric_attestation_failure,
-    _run_fork_name,
+    _run_result_fork,
 )
 from .witness_contracts import (  # noqa: E402
     _tensor_derived_scalar_stale,

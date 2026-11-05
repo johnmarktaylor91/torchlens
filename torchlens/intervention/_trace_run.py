@@ -9,7 +9,7 @@ from __future__ import annotations
 import importlib
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from torch import nn
 
@@ -54,7 +54,7 @@ from .._runnable.execution import (
 )
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
-from .._runnable.verification import _run_fork_name
+from .._runnable.verification import _run_result_fork, run_result_fork
 from .._trace_state import TraceState
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
@@ -66,7 +66,6 @@ from ..errors import (
 )
 from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
-from ._live_hook_plan import run_result_fork
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
 from .rerun import _append_rerun, run as _rerun_impl
@@ -141,7 +140,7 @@ def run_fast_live_trace(
     ):
         if hasattr(session, "close"):
             session.close()
-        result_fork = trace._fork_trace(name=_run_fork_name(trace))
+        result_fork = _run_result_fork(trace)
         session = _FastLiveSession(trace, model, target=result_fork)
         trace.__dict__["_fast_run_session"] = session
     return session.run(inputs, seed=seed, until=until)
@@ -654,12 +653,10 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     return result
 
 
-def rerun_in_place(trace: Trace, model: nn.Module, x: Any, **options: Any) -> Trace:
+def rerun_in_place(trace: Trace, model: nn.Module | None, x: Any, **options: Any) -> Trace:
     """Rerun ``trace`` itself, for internal engines on their own fork (``Trace.run`` forks)."""
 
-    result = run(trace, model, x, transaction=False, in_place=True, **options)
-    assert not isinstance(result, RunResult)
-    return result
+    return cast("Trace", run(trace, model, x, transaction=False, in_place=True, **options))
 
 
 def _live_rerun_engine(
@@ -674,7 +671,7 @@ def _live_rerun_engine(
     """Run the guarded fast engine for a steered rerun, else the capture rerun, on a new Trace.
 
     ``call`` is ``(model, transformed_input, user_input)``. Both engines run on
-    a fork of ``trace`` (the fast door's result fork, names.9): the source stays
+    a fork of ``trace``, as the fast door's result fork is: the source stays
     untouched, and the fork carries its live-model weak reference and staged
     edits; ``in_place=True`` runs on ``trace`` itself. The guarded fast engine is
     a native forward with the staged spec applied at real module boundaries,

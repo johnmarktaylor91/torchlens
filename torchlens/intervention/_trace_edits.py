@@ -35,6 +35,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._do_target_doors import apply_region_target_do, lift_trace_slice
@@ -45,7 +46,7 @@ from ._edit_guards import (
     warn_if_root_mutation,
 )
 from ._facet_union import is_facet_union
-from ._live_hook_plan import retire_live_hook_handles, running_result, sticky_handle_ids
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_run import rerun_in_place
 from ._trace_selection_edits import (
     apply_selection_batch_do,
