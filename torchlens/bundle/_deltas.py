@@ -721,6 +721,8 @@ def _stand_in_reader(bundle: Bundle) -> Callable[[str, Any, Any], torch.Tensor |
     """Read a member op's field, or its module edit's replacement where the member has one."""
 
     def read(member: str, op: Any, on: Any) -> torch.Tensor | None:
+        """Read ``on`` from ``op``'s edited stand-in in ``member``'s trace."""
+
         return bundle._comparison_field(edited_stand_in(op, bundle._members[member]), on)
 
     return read
