@@ -1751,6 +1751,11 @@ def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
     assert _directional_step_perturb(flags, "lift_min_entry").tolist() == [True, True]
     all_true = torch.tensor([True, True])
     assert _directional_step_perturb(all_true, "lift_min_entry").tolist() == [False, True]
+    complex_values = torch.tensor([1 + 1j, 2 - 1j])
+    assert torch.equal(
+        _directional_step_perturb(complex_values, "lift_min_entry"),
+        _directional_step_perturb(complex_values, "step_up"),
+    )
     huge = torch.tensor([-3.0e38, 3.0e38])
     assert torch.equal(
         _directional_step_perturb(huge, "lift_min_entry"),
