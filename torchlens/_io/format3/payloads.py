@@ -10,6 +10,8 @@ inline. Design:
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -72,13 +74,66 @@ def host_tensor(tensor: torch.Tensor) -> torch.Tensor:
         activation do); a complex tensor becomes its real view.
     """
 
+    return _owning_copy(_host_view(tensor), tensor)
+
+
+def _host_view(tensor: torch.Tensor) -> torch.Tensor:
+    """Return the contiguous CPU tensor a payload is written as; it may alias ``tensor``."""
+
     source = tensor.detach().resolve_conj().resolve_neg()
     host = torch.view_as_real(source) if source.is_complex() else source
-    host = host.contiguous().cpu()
+    return host.contiguous().cpu()
+
+
+def _owning_copy(host: torch.Tensor, tensor: torch.Tensor) -> torch.Tensor:
+    """Return ``host`` when it owns its storage apart from ``tensor``, else a clone of it."""
+
     owns_storage = host.untyped_storage().nbytes() == host.numel() * host.element_size()
     if owns_storage and host.untyped_storage().data_ptr() != tensor.untyped_storage().data_ptr():
         return host
     return host.clone()
+
+
+def payload_identity(tensor: torch.Tensor, host: torch.Tensor, kind: str) -> tuple[Any, ...] | None:
+    """Return the key under which byte-identical payloads share one stored entry.
+
+    Two payloads share an entry only when their kind, dtype, shape, strides,
+    device, ``requires_grad``, codec and the SHA-256 of the written bytes all
+    agree, so every reference to the entry declares the same tensor (the
+    reader checks repeated references agree) and each still loads as a tensor
+    of its own.
+
+    Parameters
+    ----------
+    tensor:
+        Payload tensor as captured.
+    host:
+        Its written form (:func:`_host_view`).
+    kind:
+        Logical tensor kind of the payload.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        The identity, or ``None`` for a tensor whose bytes are not compared
+        (a subclass, a non-strided layout or a quantized tensor); such a
+        payload is always stored as an entry of its own.
+    """
+
+    plain = type(host) is torch.Tensor and type(tensor) in (torch.Tensor, torch.nn.Parameter)
+    if not plain or tensor.layout != torch.strided or host.is_quantized:
+        return None
+    data = host.reshape(-1).view(torch.uint8).numpy()
+    return (
+        kind,
+        str(tensor.dtype),
+        tuple(tensor.shape),
+        tuple(tensor.stride()),
+        str(tensor.device),
+        bool(tensor.requires_grad),
+        TORCH_CODEC,
+        hashlib.sha256(data).hexdigest(),
+    )
 
 
 class ChunkWriter:
@@ -203,6 +258,11 @@ class PayloadStore:
         #: its helper as both ``hook`` and ``helper``, every fire record the edit
         #: again). Holding the tensor keeps its ``id()`` from being reused in one save.
         self._recipe_refs: dict[int, tuple[torch.Tensor, dict[str, Any]]] = {}
+        #: Payload identity (:func:`payload_identity`) to its stored ``(chunk, key)``.
+        self._payload_keys: dict[tuple[Any, ...], tuple[str, str]] = {}
+        #: Payloads ``submitted`` and entries ``stored`` by :meth:`submit_payload`.
+        self.payload_counts: dict[str, int] = {"submitted": 0, "stored": 0}
+        self._share = True
 
     def recipe_writer(self) -> ChunkWriter:
         """Return the writer of the intervention recipe's tensors (``recipe-<nnnn>``).
@@ -234,6 +294,47 @@ class PayloadStore:
         """Store one host tensor; return ``(chunk relative path, key)``."""
 
         return self.writer(codec).submit(tensor)
+
+    def submit_payload(self, tensor: torch.Tensor, *, kind: str) -> tuple[str, str, int]:
+        """Store one torch payload, once per :func:`payload_identity`.
+
+        Parameters
+        ----------
+        tensor:
+            Payload tensor as captured.
+        kind:
+            Logical tensor kind of the payload.
+
+        Returns
+        -------
+        tuple[str, str, int]
+            Chunk relative path, key and the payload's written byte count; a
+            byte-identical earlier payload's chunk and key when one was stored.
+        """
+
+        host = _host_view(tensor)
+        identity = payload_identity(tensor, host, kind) if self._share else None
+        self.payload_counts["submitted"] += 1
+        stored = self._payload_keys.get(identity) if identity is not None else None
+        if stored is None:
+            stored = self.submit(_owning_copy(host, tensor), codec=TORCH_CODEC)
+            self.payload_counts["stored"] += 1
+            if identity is not None:
+                self._payload_keys[identity] = stored
+        return stored[0], stored[1], int(host.numel() * host.element_size())
+
+    def unshared(self) -> PayloadStore:
+        """Return a view of this store whose payloads never share an entry.
+
+        For a caller that edits a reference after the store answers (a fast
+        copy takes its source's device), so no other reference can name its
+        entry. The view shares the writers, key counter, identities and
+        counters; it is used for payload submissions only.
+        """
+
+        view = copy.copy(self)
+        view._share = False
+        return view
 
     def recipe_reference(self, tensor: torch.Tensor) -> dict[str, Any]:
         """Store one recipe tensor once per tensor object; return its reference.
@@ -444,6 +545,10 @@ def submit_tensor_payload(
 ) -> dict[str, Any]:
     """Queue one torch tensor payload into the artifact's chunk files.
 
+    A payload byte-identical to one already stored (same
+    :func:`payload_identity`) references that entry instead of writing the
+    bytes again.
+
     Parameters
     ----------
     store:
@@ -463,8 +568,7 @@ def submit_tensor_payload(
     """
 
     blob_id, tensor = blob_spec.blob_id, blob_spec.value
-    host = host_tensor(tensor)
-    blob, key = store.submit(host, codec=TORCH_CODEC)
+    blob, key, nbytes = store.submit_payload(tensor, kind=str(blob_spec.kind))
     tensor_refs[blob_id] = tensor_reference(tensor, blob=blob, key=key)
     return {
         "blob_id": blob_id,
@@ -476,7 +580,7 @@ def submit_tensor_payload(
         "dtype": str(tensor.dtype).replace("torch.", ""),
         "device_at_save": str(tensor.device),
         "layout": str(tensor.layout).replace("torch.", ""),
-        "bytes": int(host.numel() * host.element_size()),
+        "bytes": nbytes,
         "sha256": "",
         "requires_grad": bool(tensor.requires_grad),
     }
