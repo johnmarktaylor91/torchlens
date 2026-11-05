@@ -7560,8 +7560,6 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
     ``keep_orphans=True`` capture.
     """
 
-    from torchlens.options import CaptureOptions
-
     log = trace_fn(
         _PrunedOrphanModel(),
         torch.randn(5, 5),
@@ -7581,8 +7579,6 @@ def test_connectivity_accepts_retained_orphan_islands_with_final_labels() -> Non
 @pytest.mark.smoke
 def test_connectivity_retained_orphan_mapped_to_live_final_label_is_rejected() -> None:
     """Excusing retained islands must not excuse a mapping onto a LIVE label."""
-
-    from torchlens.options import CaptureOptions
 
     log = trace_fn(
         _PrunedOrphanModel(),

@@ -533,7 +533,7 @@ _MAX_LEDGER_SLACK = 100
 #: 2026-11-03 test shrink: test_real_world_models 5100->3250 (measured 3247
 #: after per-id deletions). Next 50-line step above the measurement.
 _TEST_FILE_CEILINGS: dict[str, int] = {
-    "tests/test_validation.py": 8750,
+    "tests/test_validation.py": 8747,
     "tests/example_models.py": 5500,
     "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
