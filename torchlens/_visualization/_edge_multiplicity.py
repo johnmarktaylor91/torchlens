@@ -5,6 +5,7 @@ visual dedupe merges genuinely distinct dataflow edges, the emitted edge
 gains an ``xN`` label instead of silently collapsing them.
 """
 
+from collections import Counter
 from typing import Any
 
 import graphviz
@@ -17,6 +18,7 @@ __all__ = [
     "_bump_deduped_edge_multiplicity",
     "_html_argument_edge_label",
     "_merge_parallel_arg_midpoint",
+    "_parent_occurrence_labels",
     "_register_arg_midpoint_edge",
     "_register_deduped_edge",
     "_set_argument_edge_label",
@@ -29,6 +31,20 @@ __all__ = [
 _MULTIPLICITY_LABEL_PAD = 2
 # Sized from the active edge typography (vizmech D29): the draw's edge font
 # setting when one is given, else the theme's annotation size.
+
+
+def _parent_occurrence_labels(node: Any) -> list[str]:
+    """Return ``node.parents`` with each parent repeated once per argument position it fills.
+
+    ``parents`` lists a repeated operand once, yet ``cat([x, x])`` draws two edges, so the
+    rendered fan-in counts one entry per attributed position (one for an unattributed parent).
+    """
+
+    positions = getattr(node, "parent_arg_positions", None) or {}
+    counts = Counter(
+        label for domain in ("args", "kwargs") for label in (positions.get(domain) or {}).values()
+    )
+    return [parent for parent in node.parents for _ in range(counts.get(parent) or 1)]
 
 
 def _html_multiplicity_edge_label(text: str) -> str:
