@@ -1,0 +1,52 @@
+"""Copy out deferred payloads before a tensor's storage is handed to the host zero-copy.
+
+A plain capture saves an op's out as a clone-on-write alias of the live storage and
+copies it out only before a wrapped call that can write that storage. A raw pointer
+(``data_ptr``), a storage handle, a DLPack capsule or a NumPy view lets code outside
+torch dispatch write the bytes later (a warp or numba kernel, ctypes, an ndarray
+assignment) with no interception and no version bump, so the saved out would show the
+later write. The wrapper of each export method therefore copies out the pending
+aliases of the receiver's storage before handing it over, for user calls only:
+TorchLens's own bookkeeping reads run paused or under the internal-read marker.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any
+
+from ... import _state
+from ..._utils._internal_read import _internal_read_state
+from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
+
+__all__ = ["STORAGE_EXPORT_FUNC_NAMES", "materialize_deferred_for_export"]
+
+STORAGE_EXPORT_FUNC_NAMES: frozenset[str] = frozenset(
+    {
+        "data_ptr",
+        "untyped_storage",
+        "storage",
+        "_typed_storage",
+        "__dlpack__",
+        "numpy",
+        "__array__",
+        "__cuda_array_interface__",
+    }
+)
+"""Tensor methods that hand the host a zero-copy view of the receiver's storage."""
+
+
+def materialize_deferred_for_export(args: Sequence[Any]) -> None:
+    """Copy out pending payload aliases of the receiver's storage before an export.
+
+    Parameters
+    ----------
+    args:
+        Positional arguments of the export call; the receiver is ``args[0]``.
+    """
+
+    if not _DEFER_PENDING or not args or _state._pause_depth > 0:
+        return
+    if getattr(_internal_read_state, "depth", 0):
+        return
+    materialize_deferred_for_call(args[:1])
