@@ -180,10 +180,7 @@ def test_equal_valued_storage_swap_keeps_its_own_version_node() -> None:
     """A recorded write never merges into the read before it, even when values agree."""
 
     trace = tl.trace(
-        _fill_buffers(_DataSwapToZeros(), 0.0),
-        torch.rand(4),
-        capture=_SAVE_ALL,
-        save="all",
+        _fill_buffers(_DataSwapToZeros(), 0.0), torch.rand(4), capture=_SAVE_ALL, save="all"
     )
     try:
         buffer_ops = [op for op in trace._layer_list if op.graph.is_buffer]

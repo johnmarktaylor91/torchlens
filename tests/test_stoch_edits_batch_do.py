@@ -317,8 +317,7 @@ def test_batch_failure_mid_attach_detaches_earlier_pairs() -> None:
 
 
 @pytest.mark.parametrize(
-    "order",
-    [("ACT", "PARAM", "EDGE"), ("EDGE", "ACT", "PARAM"), ("PARAM", "EDGE", "ACT")],
+    "order", [("ACT", "PARAM", "EDGE"), ("EDGE", "ACT", "PARAM"), ("PARAM", "EDGE", "ACT")]
 )
 def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...]) -> None:
     """A batch mixing ACT, PARAM and EDGE equals one do() per pair, in order, exactly."""

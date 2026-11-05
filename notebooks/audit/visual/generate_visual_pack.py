@@ -230,9 +230,7 @@ def _raw_input_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         return tl.trace(
-            m,
-            x,
-            capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5),
+            m, x, capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5)
         )
 
     return _build
@@ -418,10 +416,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard("dpi", "tiny_mlp", {"dpi": 100}, {"dpi": 200}, file_bytes=True),
     VacuousDemoGuard("for_paper", "tiny_mlp", {}, {"theme": "paper"}),
     VacuousDemoGuard(
-        "order_siblings",
-        "mini_inception",
-        {"order_siblings": False},
-        {"order_siblings": True},
+        "order_siblings", "mini_inception", {"order_siblings": False}, {"order_siblings": True}
     ),
     VacuousDemoGuard(
         "vis_node_placement",
@@ -430,10 +425,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         {"layout": "rank"},
     ),
     VacuousDemoGuard(
-        "vis_graph_overrides",
-        "tiny_mlp",
-        {},
-        {"graph_overrides": {"bgcolor": "#FFFBE6"}},
+        "vis_graph_overrides", "tiny_mlp", {}, {"graph_overrides": {"bgcolor": "#FFFBE6"}}
     ),
     VacuousDemoGuard(
         "vis_edge_overrides",
@@ -954,9 +946,7 @@ SECTIONS: list[Section] = [
                         kwargs={"order_siblings": True},
                     ),
                     Panel(
-                        "order_siblings=False",
-                        "mini_inception",
-                        kwargs={"order_siblings": False},
+                        "order_siblings=False", "mini_inception", kwargs={"order_siblings": False}
                     ),
                 ],
                 covers=["order_siblings:on", "order_siblings:off", "topology:parallel"],

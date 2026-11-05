@@ -38,10 +38,7 @@ def test_multi_output_op_fires_once_per_output_slot_with_forward_labels() -> Non
     split_labels = [label for label in base.layer_labels if label.startswith("split")]
     assert len(split_labels) == 2
     trace = tl.trace(
-        _Split(),
-        x,
-        capture=_CAPTURE,
-        intervene=tl.when(tl.grad(tl.func("split")), tl.scale(0.5)),
+        _Split(), x, capture=_CAPTURE, intervene=tl.when(tl.grad(tl.func("split")), tl.scale(0.5))
     )
     trace.backward(trace[trace.output_layers[0]].out)
     records = [record for record in trace._intervention_spec.records if record.signal == "backward"]
@@ -104,15 +101,7 @@ def test_rule_has_no_direction_field_and_the_site_decides_the_pass() -> None:
 
 
 @pytest.mark.parametrize(
-    "removed",
-    [
-        "zero_grad",
-        "scale_grad",
-        "clamp_grad",
-        "add_grad_noise",
-        "clip_grad",
-        "hook_grad",
-    ],
+    "removed", ["zero_grad", "scale_grad", "clamp_grad", "add_grad_noise", "clip_grad", "hook_grad"]
 )
 def test_removed_gradient_helpers_are_gone_and_refuse_on_load(removed: str) -> None:
     assert removed not in helper_module.__all__

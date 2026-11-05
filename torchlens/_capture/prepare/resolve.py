@@ -315,11 +315,7 @@ def _record_capture_intervention_event(
 
 
 def _settle_unfired_spec_rules(
-    trace: Trace,
-    intervene_request: Any,
-    unfired_rules: tuple[Rule, ...],
-    *,
-    any_fired: bool,
+    trace: Trace, intervene_request: Any, unfired_rules: tuple[Rule, ...], *, any_fired: bool
 ) -> None:
     """Settle a public spec's unfired rules under the capture's ``on_zero_fire``.
 

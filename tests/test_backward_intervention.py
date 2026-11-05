@@ -420,10 +420,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "count_none",
-            signal="backward",
-            factory=factory,
-            metadata={"mount_shape": "tuple"},
+            "count_none", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     hook = _make_grad_fn_hook(trace_stub, 1)
@@ -467,10 +464,7 @@ def test_backward_invalid_replacement_tuple_raises_before_recording_success() ->
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "bad_shape",
-            signal="backward",
-            factory=factory,
-            metadata={"mount_shape": "tuple"},
+            "bad_shape", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     hook = _make_grad_fn_hook(trace_stub, 1)
@@ -538,10 +532,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     _state._active_hook_plan = normalize_hook_plan(
         tl.grad_fn(name="relu"),
         _helper_spec(
-            "none_prehook",
-            signal="backward",
-            factory=factory,
-            metadata={"mount_shape": "tuple"},
+            "none_prehook", signal="backward", factory=factory, metadata={"mount_shape": "tuple"}
         ),
     )
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)

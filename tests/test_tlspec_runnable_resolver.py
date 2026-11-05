@@ -244,10 +244,7 @@ def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
         ),
         (
             FunctionRegistryKey(
-                "custom",
-                "special_erf",
-                "function",
-                import_path="torch._C._special:special_erf",
+                "custom", "special_erf", "function", import_path="torch._C._special:special_erf"
             ),
             "torch._C._special.special_erf",
         ),

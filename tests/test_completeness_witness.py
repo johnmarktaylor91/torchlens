@@ -994,9 +994,7 @@ def test_index_boundary_excuses_only_the_scalar_read_under_its_token() -> None:
         func_call_id=1,
     )
     trace = SimpleNamespace(
-        completeness_diagnostics=[],
-        _health_completeness_decompositions=[],
-        _options_mode=None,
+        completeness_diagnostics=[], _health_completeness_decompositions=[], _options_mode=None
     )
     state = cw._WitnessState(trace=trace, owner_thread_id=0, guard_pass_index=1)
     state.events.extend(

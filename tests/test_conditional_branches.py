@@ -1369,8 +1369,7 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
     positive_log = _log_model(NestedQualnameModel(), torch.ones(2, 2))
     negative_log = _log_model(NestedQualnameModel(), -torch.ones(2, 2))
     root_events = sorted(
-        positive_log.graph.conditional_records,
-        key=lambda event: event.function_qualname,
+        positive_log.graph.conditional_records, key=lambda event: event.function_qualname
     )
     relu_layer = _find_only_layer(positive_log, "relu")
     square_layer = _find_only_layer(negative_log, "square")
