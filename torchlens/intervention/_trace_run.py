@@ -174,10 +174,8 @@ def try_guarded_fast_rerun(
         because the fallback replaces its state.
     """
 
-    # The legacy door leaves no TorchLens hook on the user's model between
-    # calls (the rerun hook-staging contract), so the session is built for the
-    # run and closed after it; the explicit fast=True door keeps its cached
-    # session as before.
+    # The legacy door leaves no TorchLens hook on the user's model between calls, so
+    # the session is built for the run and closed after it; fast=True keeps its own.
     close_fast_run_session(trace)
     session: _FastLiveSession | None = None
     try:
@@ -370,24 +368,23 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     on_zero_fire: str | MissingType = MISSING,
     transaction: bool = True,
     append: bool = False,
+    in_place: bool = False,
 ) -> Trace | RunResult:
     """Body of ``Trace.run`` (``transaction=False``), ``Trace.run_transaction`` and ``Trace.append``.
 
-    The methods carry the documented contracts: ``run`` reruns the live model
-    and returns a new Trace, the source untouched; ``run_transaction`` returns a
-    ``RunResult`` and leaves the source Trace unchanged; ``append=True``
-    (``Trace.append``) stacks the new batch onto the Trace through the same gates.
+    ``run`` reruns the live model into a new Trace, the source untouched; ``in_place=True``
+    (internal engines that run their own fork) refreshes ``trace`` itself; ``run_transaction``
+    returns a ``RunResult`` and leaves the source unchanged; ``append=True`` (``Trace.append``)
+    stacks the new batch onto the Trace through the same gates.
     """
 
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
     if seed is not None:
-        # r77 nit + r79 hardening: validate ``seed`` at the run door so junk
-        # raises the typed precondition lane instead of escaping as torch's
-        # raw ``RuntimeError``. r79 extends the r77 non-int check to the two
-        # escapes r78 found: ``bool`` (an int subclass that
-        # ``Generator.manual_seed`` rejects) and an int outside torch's
-        # accepted long range (pybind overflow). The failed call is
-        # transactional either way (global torch RNG untouched).
+        # Validate ``seed`` at the run door so junk raises the typed precondition
+        # lane instead of torch's raw ``RuntimeError``: non-int, ``bool`` (an int
+        # subclass ``Generator.manual_seed`` rejects) and an int outside torch's
+        # long range (pybind overflow). The failed call leaves global torch RNG
+        # untouched.
         validate_run_seed(seed)
     # R06: the settled-outcome gate is the FIRST authority on run(). The
     # outcome sidecar lives in ``__dict__`` and survives cleanup()-husking,
@@ -437,8 +434,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
         }
     )
     if use_unified_provider and not transaction:
-        # Trace.run never returns a RunResult: a loaded artifact has no live
-        # model to rerun, so its fresh execution is run_transaction.
+        # Trace.run never returns a RunResult: a loaded artifact's fresh execution is run_transaction.
         raise RunCapabilityUnavailableError(
             "trace.run(...) reruns the live model into a new Trace, and a loaded artifact "
             "has no live model to rerun; its verified fresh execution is "
@@ -651,9 +647,18 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 replay_options=replay_options,
                 chunk_paths=chunk_paths,
                 output_transform=resolved_output_transform,
+                in_place=in_place,
             )
     # The atomic swap rebuilt state; keep the new user input for draw and save.
     result.input = user_input
+    return result
+
+
+def rerun_in_place(trace: Trace, model: nn.Module, x: Any, **options: Any) -> Trace:
+    """Rerun ``trace`` itself, for internal engines on their own fork (``Trace.run`` forks)."""
+
+    result = run(trace, model, x, transaction=False, in_place=True, **options)
+    assert not isinstance(result, RunResult)
     return result
 
 
@@ -664,13 +669,14 @@ def _live_rerun_engine(
     replay_options: ReplayOptions,
     chunk_paths: Any | None,
     output_transform: Callable[[Any], Any] | None,
+    in_place: bool = False,
 ) -> Trace:
     """Run the guarded fast engine for a steered rerun, else the capture rerun, on a new Trace.
 
     ``call`` is ``(model, transformed_input, user_input)``. Both engines run on
     a fork of ``trace`` (the fast door's result fork, names.9): the source stays
     untouched, and the fork carries its live-model weak reference and staged
-    edits. The guarded fast engine is a native forward with the staged spec
+    edits; ``in_place=True`` runs on ``trace`` itself. The guarded fast engine is a native forward with the staged spec
     applied at real module boundaries, guarded by the sealed call fingerprint;
     any typed refusal falls back to the capture rerun with the code in
     ``last_run``. A trace with nothing staged keeps the capture rerun.
@@ -678,7 +684,7 @@ def _live_rerun_engine(
 
     run_model, transformed_input, user_input = call
     close_fast_run_session(trace)  # no fast-door hook stays armed on the model
-    result = trace._fork_trace(name=_run_fork_name(trace))
+    result = trace if in_place else trace._fork_trace(name=_run_fork_name(trace))
     try:
         fast_refused: str | None = None
         if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
@@ -699,7 +705,8 @@ def _live_rerun_engine(
             fast_refused=fast_refused,
         )
     except BaseException:
-        unregister_log(result)
+        if result is not trace:
+            unregister_log(result)
         raise
 
 

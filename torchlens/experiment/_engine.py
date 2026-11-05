@@ -38,6 +38,7 @@ from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
 from ..errors.episode import BundleExperimentError
+from ..intervention._trace_run import rerun_in_place
 from ..intervention.audit import (
     append_event_audit_row,
     event_audit_rows,
@@ -333,8 +334,8 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + _attach_hooks + run). Site-key terms cannot be matched
-    mid-attach (final structural numbering is absent), so they ride the
+    rerun door (fork + _attach_hooks + run in place). Site-key terms cannot be matched mid-attach
+    (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
     member's own envelope EVENT row stamps lane="capture"; escalation is
@@ -345,7 +346,7 @@ def _run_live_candidate(
         member = baseline.fork(name=candidate.candidate_id)
         member._attach_hooks(spec)
         started = time.monotonic()
-        member.run(model, x)
+        rerun_in_place(member, model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"
     except SelectorCapabilityError:

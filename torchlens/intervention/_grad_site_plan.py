@@ -36,6 +36,7 @@ from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
 from ._edit_guards import detach_handles, internal_mutation
 from ._rerun_predicate import raw_live_labels
+from ._trace_run import rerun_in_place
 from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
@@ -359,7 +360,7 @@ def arm_signal_plan(
     if engine == "rerun":
         forced = force_backward_ready(trace)
         drop_inherited_backward(trace)
-        trace.run(model, x, replay=ReplayOptions(strict=strict))
+        rerun_in_place(trace, model, x, replay=ReplayOptions(strict=strict))
     assert plan.backward is not None
     site, edit = plan.backward
     with internal_mutation():

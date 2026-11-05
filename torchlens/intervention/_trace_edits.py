@@ -46,6 +46,7 @@ from ._edit_guards import (
 )
 from ._facet_union import is_facet_union
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
+from ._trace_run import rerun_in_place
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -476,7 +477,7 @@ def _run_do_transaction(  # noqa: PLR0913 - the transaction's state, threaded fr
             result = push_from_handles(trace, attached_handles, options=intervention_options)
         else:
             assert model is not None
-            result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
+            result = rerun_in_place(trace, model, x, replay=ReplayOptions(strict=strict_value))
     except BaseException as exc:
         _detach_failed_do_hooks(trace, attached_handles, pre_state)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
