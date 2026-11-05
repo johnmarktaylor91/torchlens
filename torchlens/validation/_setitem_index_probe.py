@@ -1,4 +1,4 @@
-"""In-domain index probe for integer index components of ``Tensor.__setitem__``.
+"""In-domain index probe for integer and bool-mask index components of ``__setitem__``.
 
 ``dest[index] = value`` reads an integer index component whose VALUES decide
 which destination cells are written, inside a domain bounded by the destination
@@ -12,8 +12,9 @@ steps can leave such a write unchanged even though the edge is real:
   ``i + 1`` are already ``-1``).
 
 This probe moves ONE in-domain entry of the component to another in-domain
-position, and picks the first move (in a fixed, bounded order) whose plain
-write on the saved call arguments differs from the unperturbed write. It is an
+position (for a bool mask component: flips one mask entry), and picks the first
+such change (in a fixed, bounded order) whose plain write on the saved call
+arguments differs from the unperturbed write. It is an
 extra probe for the replay retry ladder, not a proof: the verdict still comes
 from the replay, and a dead index edge (no in-domain position changes the
 write, for example a destination that already holds the value everywhere) has
@@ -36,8 +37,8 @@ from ._saved_value_proofs import _index_component_dims
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
-#: Integer dtypes indexing accepts as positions (``uint8`` indexes as a mask, never probed).
-_INTEGER_INDEX_DTYPES = frozenset({torch.int32, torch.int64})
+#: Index dtypes probed: integer positions and bool masks (``uint8`` masks are never probed).
+_PROBED_INDEX_DTYPES = frozenset({torch.int32, torch.int64, torch.bool})
 
 #: Most single-entry moves simulated per probe.
 _MAX_CANDIDATE_MOVES = 64
@@ -111,7 +112,7 @@ def setitem_index_probe_values(
     parent_label: str,
     parent_values: torch.Tensor,
 ) -> torch.Tensor | None:
-    """Return the parent's index values with one entry moved so the write changes.
+    """Return the parent's index values with one entry changed so the write changes.
 
     Parameters
     ----------
@@ -126,10 +127,11 @@ def setitem_index_probe_values(
     -------
     torch.Tensor or None
         The index tensor with exactly one entry moved to another position of
-        its destination dim, chosen as the first move whose write on the saved
-        destination and value differs from the unperturbed write; ``None`` when
-        the parent is not a lone integer index component, the saved call cannot
-        be rebuilt, or no bounded in-domain move changes the write.
+        its destination dim (one entry flipped for a bool mask), chosen as the
+        first change whose write on the saved destination and value differs
+        from the unperturbed write; ``None`` when the parent is not a lone
+        integer or bool index component, the saved call cannot be rebuilt, or
+        no bounded change alters the write.
     """
 
     call = _setitem_call(layer, parent_label, parent_values)
@@ -139,7 +141,11 @@ def setitem_index_probe_values(
     baseline = _simulated_write(destination, components, value)
     if baseline is None:
         return None
-    for candidate in _single_entry_moves(parent_values, domain_size, destination.numel()):
+    if parent_values.dtype == torch.bool:
+        candidates = _single_flips(parent_values, destination.numel())
+    else:
+        candidates = _single_entry_moves(parent_values, domain_size, destination.numel())
+    for candidate in candidates:
         moved = components[:position] + (candidate,) + components[position + 1 :]
         written = _simulated_write(destination, moved, value)
         if written is not None and not tensor_nanequal(written, baseline, allow_tolerance=False):
@@ -150,7 +156,7 @@ def setitem_index_probe_values(
 def _setitem_call(
     layer: Op, parent_label: str, parent_values: torch.Tensor
 ) -> tuple[torch.Tensor, tuple[Any, ...], int, Any, int] | None:
-    """Rebuild the saved ``__setitem__`` call around one integer index component.
+    """Rebuild the saved ``__setitem__`` call around one integer or bool index component.
 
     Parameters
     ----------
@@ -165,8 +171,9 @@ def _setitem_call(
     -------
     tuple or None
         ``(destination, components, position, value, domain_size)`` with the
-        saved parent values at ``components[position]``, or ``None`` when the
-        call is not a probeable integer index write.
+        saved parent values at ``components[position]`` (``domain_size`` is the
+        size of the first addressed dim), or ``None`` when the call is not a
+        probeable integer or bool-mask index write.
     """
 
     key = setitem_index_component_key(layer, parent_label)
@@ -175,7 +182,7 @@ def _setitem_call(
         return None
     if not isinstance(parent_values, torch.Tensor):
         return None
-    if parent_values.dtype not in _INTEGER_INDEX_DTYPES or parent_values.numel() == 0:
+    if parent_values.dtype not in _PROBED_INDEX_DTYPES or parent_values.numel() == 0:
         return None
     destination, index = args[0], args[1]
     if key == 1:
@@ -192,7 +199,7 @@ def _setitem_call(
     if dim is None:
         return None
     domain_size = int(destination.shape[dim])
-    if domain_size < 2:
+    if domain_size < 2 and parent_values.dtype != torch.bool:
         return None
     return destination, components, position, args[2], domain_size
 
@@ -234,6 +241,32 @@ def _single_entry_moves(
             moved[entry] = (int(flat[entry]) % domain_size + shift) % domain_size
             moves.append(moved.reshape(index.shape))
     return moves
+
+
+def _single_flips(mask: torch.Tensor, destination_numel: int) -> list[torch.Tensor]:
+    """Return bounded single-entry flips of a bool mask component, in order.
+
+    Parameters
+    ----------
+    mask:
+        Saved bool mask component.
+    destination_numel:
+        Destination element count; bounds how many writes are simulated.
+
+    Returns
+    -------
+    list of torch.Tensor
+        The mask with only its first, second, ... entry flipped.
+    """
+
+    budget = _SIMULATED_ELEMENT_BUDGET // max(destination_numel, 1)
+    flat = mask.reshape(-1)
+    flips: list[torch.Tensor] = []
+    for entry in range(min(flat.numel(), max(1, min(_MAX_CANDIDATE_MOVES, budget)))):
+        flipped = flat.clone()
+        flipped[entry] = not bool(flat[entry])
+        flips.append(flipped.reshape(mask.shape))
+    return flips
 
 
 def _simulated_write(

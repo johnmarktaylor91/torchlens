@@ -1,4 +1,4 @@
-"""In-domain index probe for integer index components of ``__setitem__``.
+"""In-domain index probe for integer and bool-mask index components of ``__setitem__``.
 
 Forward validation proves each saved parent influences its op by perturbing
 it. For ``dest[index] = value`` the default draw and the uniform value steps
@@ -146,16 +146,28 @@ _MASK = torch.tensor([True, False, True])
 @pytest.mark.parametrize(
     ("index", "positions", "label", "values"),
     [
-        ((_ROWS, _MASK), {(1, 1): "mask"}, "mask", _MASK),
         ((_ROWS, slice(None)), {(1, 0): "rows", 0: "rows"}, "rows", _ROWS),
         (_ROWS.to(torch.uint8), {1: "index"}, "index", _ROWS.to(torch.uint8)),
         (_ROWS.float(), {1: "index"}, "index", _ROWS.float()),
     ],
-    ids=["bool-mask", "parent-in-two-slots", "uint8-mask-dtype", "float-index"],
+    ids=["parent-in-two-slots", "uint8-mask-dtype", "float-index"],
 )
 def test_probe_refuses_components_it_does_not_model(index, positions, label, values) -> None:
     layer = _setitem_layer(torch.zeros(3, 3), index, 1.0, positions)
     assert setitem_index_probe_values(layer, label, values) is None
+
+
+def test_mask_flip_reaches_a_column_that_changes_the_write() -> None:
+    """Row 2 holds -1 except in column 2; only flipping that mask entry changes the write."""
+
+    state = torch.full((4, 3), -1.0)
+    state[2, 2] = 1.0
+    mask = torch.tensor([True, False, False])
+    layer = _setitem_layer(state, (torch.tensor(2), mask), -1.0, {(1, 1): "mask"})
+    flipped = setitem_index_probe_values(layer, "mask", mask)
+    assert flipped is not None and flipped.tolist() == [True, False, True]
+    dead = _setitem_layer(torch.full((4, 3), -1.0), (torch.tensor(2), mask), -1.0, {(1, 1): "mask"})
+    assert setitem_index_probe_values(dead, "mask", mask) is None
 
 
 def test_probe_finds_no_move_when_the_destination_already_holds_the_value() -> None:
