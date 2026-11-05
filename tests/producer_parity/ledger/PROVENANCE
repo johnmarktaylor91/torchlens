@@ -4980,6 +4980,14 @@ torch: 2.13.0+cpu
 source: a53c2c42d570aaa3075213245af43e4a6b21be7d (dirty)
 recorded: 2026-11-04T21:03:14.077438+00:00
 ---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: walk2-names: GenerationStep.pass_index renamed pass_number (static read-site field rename, one site)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 066a2717711be44c3993753ba0f1999e8934a66c (clean)
+recorded: 2026-11-03T02:40:58.089039+00:00
+---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: column-b2-graph: postprocess step 3 flood and step 5 arm loops moved from graph_traversal.py and control_flow.py to _column_passes_graph.py; their Op field read and write sites moved files
@@ -4987,6 +4995,38 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: unknown (git unavailable)
 recorded: 2026-11-04T23:51:09.753298+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: column-b2-finalize: step 15.5 body moved to _postprocess/_column_passes_finalize.py; the multi-pass reconcile reads Op fields through a getattr-shaped reader, so finalization.py's literal getattr(op, 'modules', None) consumer site is gone (the read is unchanged, now read(op, 'modules', None))
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c0c8aa65138fc044ad84009de0f5627151b7c88a (dirty)
+recorded: 2026-11-04T23:59:41.530652+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mkldnn-shared-state-edges: freeze reads pooled parent_arg_positions; render fan-in per occurrence
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9fafd8a32ddcc11606181671ada6e4481a7753c2 (dirty)
+recorded: 2026-11-04T23:20:01.058453+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture C2a adds the row-direct op cell writer torchlens/backends/torch/_ops_row_cells.py: new read sites of the exhaustive draft fields (the fields _op_record_from_log and scatter_record_to_cells read), no production call site yet; no site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d73312e7cd372988ddcd509aeadfd972f1b1a25f (dirty)
+recorded: 2026-11-05T00:29:01.078553+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture C2a adds the row-direct op cell writer torchlens/backends/torch/_ops_row_cells.py: new read sites of the exhaustive draft fields (the fields _op_record_from_log and scatter_record_to_cells read), no production call site yet; no site moved
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d73312e7cd372988ddcd509aeadfd972f1b1a25f (dirty)
+recorded: 2026-11-05T00:29:07.575634+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
@@ -5019,3 +5059,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 623779e24cab88bd771807a016777062cbc4715b (clean)
 recorded: 2026-11-05T01:07:28.641924+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c234-fixq1: comparison reads look up a module edit replacement op (new torchlens/_data_classes/_module_edit_sites.py reads op label, layer_label, num_passes, parents, children, func_name); static producer scan refreshed for those sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3440ebe0d4b52a85728369374cd12cfec73415fd (dirty)
+recorded: 2026-11-05T04:25:12.154296+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c234-fixq1: comparison reads look up a module edit replacement op (new torchlens/_data_classes/_module_edit_sites.py reads op label, layer_label, num_passes, parents, children, func_name); static producer scan refreshed for those sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3440ebe0d4b52a85728369374cd12cfec73415fd (dirty)
+recorded: 2026-11-05T04:25:16.733999+00:00

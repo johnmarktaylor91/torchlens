@@ -9,6 +9,7 @@ import torch
 
 from .._comparison_tensor import _comparison_tensor
 from .._data_classes._lookup_kinds import op_at
+from .._data_classes._module_edit_sites import edited_stand_in, is_mapped_replacement
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
@@ -134,6 +135,35 @@ def _compute_ops(trace: Trace) -> list[Op]:
     """
 
     return [op for op in _ordered_ops(trace) if int(getattr(op, "step_index", 0) or 0) > 0]
+
+
+def _compared_site_ops(trace: Trace) -> dict[str, Any]:
+    """Return the compute ops a cross-trace comparison pairs, keyed by pass-qualified label.
+
+    A module edit records its edited value in a replacement op after the
+    module's last op (``_data_classes._module_edit_sites``); the unedited
+    trace has no such op. The edited site is therefore compared at the last
+    op's label with the replacement's value, so the row names the edited
+    module's op and the edited value, and the replacement gets no row of its
+    own. A replacement that does not record its parent keeps its own row.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+
+    Returns
+    -------
+    dict[str, Any]
+        Label to the op whose value the comparison reads, in execution order.
+    """
+
+    ops = _compute_ops(trace)
+    return {
+        _op_label(op): edited_stand_in(op, trace)
+        for op in ops
+        if not is_mapped_replacement(op, trace)
+    }
 
 
 def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
