@@ -15,6 +15,7 @@ _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
 _SLOTS = "tests/test_validation_structural_slots.py::"
 _KERNEL = "tests/test_foreign_kernel_dependence.py::"
+_MASKS = "tests/test_validation_mask_builder_table.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
 _EX = "torchlens.validation.exemptions:"
 _CORE = "torchlens.validation.core:"
@@ -474,6 +475,17 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         "mask depend on q and k, not v; the rng state on none of q, k, v); the attention "
         "output, other operators and undeclared positions stay strict",
         _KERNEL + "test_undeclared_custom_op_unmoved_sibling_output_still_fails",
+    ),
+    _custom(
+        "vmap",
+        "check_mask_builder_unread_exempt",
+        "a perturbed parent of a vmap boundary over a known transformers mask builder, at the "
+        "position the mask-builder table declares unread (head_idx, position 1)",
+        "ruling d-aad71aaad45648ba93beaf7e05f2a1bb: declared per-argument use for known mask "
+        "builders, identified by callable identity and composition; any composed function "
+        "outside the table, a builder whose code reads head_idx and every other position stay "
+        "strict",
+        _MASKS + "test_and_mask_with_a_user_function_keeps_the_head_edge_strict",
     ),
     _custom(
         "expand",

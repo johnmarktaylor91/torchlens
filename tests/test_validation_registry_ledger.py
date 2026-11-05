@@ -1003,6 +1003,28 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         ),
     ),
     CustomCheckExemption(
+        func_name="vmap",
+        check="check_mask_builder_unread_exempt",
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "transformers builds its eager and sdpa masks as nested torch.vmap over a mask "
+            "function f(batch_idx, head_idx, q_idx, kv_idx), one vmap boundary op whose four "
+            "positional parents are the aranges; the mask-builder table (ruling "
+            "d-aad71aaad45648ba93beaf7e05f2a1bb) declares head_idx, position 1, unread by "
+            "and_mask, causal_mask_function and the packed-sequence, padding and sliding-window "
+            "inner masks, identified by callable identity in transformers.masking_utils; a "
+            "parent is excused only when it sits at position 1 alone"
+        ),
+        refuses=(
+            "every parent at positions 0, 2 and 3; an and_mask composing any function outside "
+            "the table (a user mask function, or_masks, the chunked overlays, offsets); a leaf "
+            "whose code references its head_idx parameter; a callable that is not a chain of "
+            "instrumented vmap layers (a loaded bundle, another transform); a keyword call or "
+            "another arity; and a parent that also sits at another slot or a keyword"
+        ),
+    ),
+    CustomCheckExemption(
         func_name="expand",
         check="check_expand_pinned_size_exempt",
         contract=_C2,
