@@ -188,37 +188,51 @@ def test_planted_wrong_binding_fails_validation(case: str) -> None:
 def test_snapshot_that_matches_its_parent_is_not_questioned() -> None:
     """A snapshot equal to its parent's saved out needs no explanation (contract snapshots)."""
 
+    from torchlens.validation._core import _saved_out_payload
     from torchlens.validation._snapshot_binding import snapshot_binding_explained
 
     trace = _trace(_Binary(), torch.randn(3, 8))
     child = _op(trace, "sub")
     parent = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
     parent.out_versions_by_child[child.layer_label] = parent.out.detach().clone()
-    assert snapshot_binding_explained(trace, child, parent)
-
-
-class _TwoViewWrites(nn.Module):
-    """Two disjoint views of one base, each written in place, read by one call."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Write ``u`` and ``w`` in place, then subtract them."""
-
-        y = x * 2.0
-        u = y[:, :4]
-        w = y[:, 4:]
-        u.add_(1.0)
-        w.mul_(2.0)
-        return torch.sub(u, w)
+    assert snapshot_binding_explained(
+        child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
+    )
 
 
 def test_known_blind_spot_two_same_shape_inplace_parents_swapped() -> None:
-    """KNOWN BLIND SPOT: swapping two same-shape in-place parents still validates.
+    """KNOWN BLIND SPOT: the snapshot check accepts two same-shape in-place parents swapped.
 
     A snapshot of an in-place parent may legitimately differ from its saved out (a reader
     of the base, or of another alias of the view it wrote through, is bound to the write),
     and the record keeps no storage geometry to tell that alias apart from a swapped
-    operand of the same shape. This pins the gap so a stricter check shows up here.
+    operand of the same shape, so the check explains both swapped snapshots. This pins
+    the gap so a stricter check shows up here.
     """
 
-    assert _validate(_TwoViewWrites(), None)
-    assert _validate(_TwoViewWrites(), _swap("sub", 0, 1))
+    from torchlens.validation._core import _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    class _TwoBaseWrites(nn.Module):
+        """Two bases, each written in place, read by one call."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Write ``p`` and ``q`` in place, then subtract them."""
+
+            p = x * 2.0
+            q = x * 3.0
+            p.add_(1.0)
+            q.mul_(2.0)
+            return torch.sub(p, q)
+
+    trace = _trace(_TwoBaseWrites(), torch.randn(3, 8))
+    _swap("sub", 0, 1)(trace)
+    child = _op(trace, "sub")
+    parents = [_op_for_validation_label(trace, label) for label in child.parents]
+    assert all(parent.is_inplace for parent in parents)
+    assert all(
+        snapshot_binding_explained(
+            child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
+        )
+        for parent in parents
+    )

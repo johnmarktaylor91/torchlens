@@ -27,6 +27,7 @@ fails. The check only adds failures; it never validates what failed before.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -37,7 +38,6 @@ from ._replay_storage_context import receiver_lineage
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
-    from .._data_classes.trace import Trace
 
 
 def child_version_snapshot(parent_layer: Op, target_layer: Op) -> Any:
@@ -54,17 +54,24 @@ def child_version_snapshot(parent_layer: Op, target_layer: Op) -> Any:
     return None
 
 
-def snapshot_binding_explained(trace: Trace, target_layer: Op, parent_layer: Op) -> bool:
+def snapshot_binding_explained(
+    target_layer: Op,
+    parent_layer: Op,
+    saved_out: Callable[[Op], Any],
+    resolve: Callable[[str], Any],
+) -> bool:
     """Return whether ``parent_layer``'s snapshot for ``target_layer`` follows from the graph.
 
     Parameters
     ----------
-    trace:
-        Trace being validated.
     target_layer:
         Child op whose argument binding is checked.
     parent_layer:
         Parent op bound to one or more of the child's argument slots.
+    saved_out:
+        Returns an op's retained saved out, or ``None`` when capture omitted it.
+    resolve:
+        Resolves a recorded parent label to its op.
 
     Returns
     -------
@@ -74,10 +81,8 @@ def snapshot_binding_explained(trace: Trace, target_layer: Op, parent_layer: Op)
         recorded in-place write explains the difference; ``False`` otherwise.
     """
 
-    from ._core import _saved_out_payload  # deferred: cycle validation
-
     snapshot = child_version_snapshot(parent_layer, target_layer)
-    saved = _saved_out_payload(parent_layer)
+    saved = saved_out(parent_layer)
     if not isinstance(snapshot, torch.Tensor) or not isinstance(saved, torch.Tensor):
         return True
     same_geometry = tuple(snapshot.shape) == tuple(saved.shape) and snapshot.dtype == saved.dtype
@@ -85,22 +90,17 @@ def snapshot_binding_explained(trace: Trace, target_layer: Op, parent_layer: Op)
         return True
     if record_member(parent_layer, "is_inplace", False):
         return True
-    return same_geometry and _consumed_write_reaches(trace, target_layer, parent_layer)
+    return same_geometry and _consumed_write_reaches(target_layer, parent_layer, resolve)
 
 
-def _consumed_write_reaches(trace: Trace, target_layer: Op, parent_layer: Op) -> bool:
+def _consumed_write_reaches(
+    target_layer: Op, parent_layer: Op, resolve: Callable[[str], Any]
+) -> bool:
     """Return whether an in-place parent of ``target_layer`` wrote through ``parent_layer``.
 
     The write is the in-place op's receiver chain (the view it wrote through, back to
     its base); ``parent_layer`` must sit on it, and the child must consume the write.
     """
-
-    from ._core import _op_for_validation_label  # deferred: cycle validation
-
-    def resolve(label: str) -> Any:
-        """Resolve a recorded parent label to its op."""
-
-        return _op_for_validation_label(trace, label)
 
     for label in target_layer.parents:
         writer = resolve(label)
