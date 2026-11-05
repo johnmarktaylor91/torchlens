@@ -781,8 +781,6 @@ def _render_raw_input(
     max_items = _batch_render_limit(batch_render)
     if max_items == 0:
         return None
-    if isinstance(value, Image.Image):  # one photo (a path or PIL input) is a batch of one
-        return _render_raw_input_image_batch(trace, [value], max_items=1, total=1)
     if isinstance(value, str):
         text = _truncate_raw_input_text(value, limit=80)
         return {
@@ -797,10 +795,10 @@ def _render_raw_input(
             max_items=max_items,
             include_more=include_more,
         )
-    sequence = _raw_input_sequence(value)
+    sequence = [value] if isinstance(value, Image.Image) else _raw_input_sequence(value)
     if sequence is None:
         return None
-    if len(sequence) == 1:
+    if len(sequence) == 1 and not isinstance(sequence[0], Image.Image):  # one photo: batch of one
         return _render_raw_input(trace, sequence[0], batch_render="first")
     if all(isinstance(item, str) for item in sequence):
         strings = cast(Sequence[str], sequence)
