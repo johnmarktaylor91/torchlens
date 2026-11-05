@@ -42,6 +42,7 @@ from .._vocab.node_spec import (
 from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
 from ._edit_highlighter import highlighter_rgba
 from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
+from ._endpoint_rings import endpoint_ring_swatch
 from ._focus_scope import focus_address, scope_caption_head
 from ._fonts import _FONT_DIR
 from ._frame_penwidth import MODULE_PENWIDTH
@@ -461,8 +462,6 @@ def key_swatches(
         if swatch is not None
     ]
     if endpoint_rings:
-        from ._endpoint_rings import endpoint_ring_swatch
-
         swatches = [endpoint_ring_swatch(theme, swatch) for swatch in swatches]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
