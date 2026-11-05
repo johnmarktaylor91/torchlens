@@ -132,7 +132,7 @@ def payload_identity(tensor: torch.Tensor, host: torch.Tensor, kind: str) -> tup
         str(tensor.device),
         bool(tensor.requires_grad),
         TORCH_CODEC,
-        hashlib.sha256(data).hexdigest(),
+        hashlib.sha256(data.data).hexdigest(),
     )
 
 
