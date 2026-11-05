@@ -23,6 +23,12 @@ from the op. A mutating operator returning nothing that cannot be recorded that 
 logged op recorded) is disclosed as a ``source_provenance`` gap instead of vanishing from
 the graph.
 
+An operator outside the ATen and prims namespaces may write an argument its schema does
+not mark (a C++ extension registered without alias annotations: torch_scatter's
+``scatter_max`` fills its ``optional_out``), so before such a call the pending payload
+aliases of its tensor arguments are copied out, and a deferred saved out never shows
+the later write.
+
 Calls that TorchLens or torch itself makes are never recorded: a ``torch.ops`` call inside
 a wrapped torch function's original (a decomposition, a custom op's body) is detected by a
 frame walk, the dispatcher-census handler re-executes the operator it observed inside
@@ -44,6 +50,7 @@ import torch._ops as _torch_ops
 
 from ... import _state
 from ..._utils._tensor_label import get_tensor_label
+from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
 from ._foreign_data import (
     CALL_OPERATOR_ATTR,
     FLASH_ATTENTION_2_CUSTOM_OP,
@@ -75,6 +82,9 @@ _UNRECORDED_NAMESPACES: frozenset[str] = frozenset(
     }
 )
 """Operator namespaces whose direct calls keep their dedicated (unrecorded) path."""
+
+_DECLARED_WRITE_NAMESPACES: frozenset[str] = frozenset({"aten", "prims"})
+"""Operator namespaces whose schemas annotate every argument write (``Tensor(a!)``)."""
 
 _CALL_ATTR = "__call__"
 _ORIGINAL_CALLS: dict[type, Callable[..., Any]] = {}
@@ -440,6 +450,28 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[...,
     return decorated, mutation
 
 
+def _copy_out_before_undeclared_writes(
+    op: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> None:
+    """Copy out pending payload aliases of an extension operator's tensor arguments.
+
+    An operator registered from C++ without alias annotations (torch_scatter's
+    ``scatter_max(src, index, dim, Tensor? optional_out, ...)`` fills ``optional_out`` in
+    place) has a schema that declares no write, so the wrapper's write triggers never
+    fire and a deferred saved out aliasing the written tensor would show the later
+    bytes. ATen and prims schemas declare every write; any other namespace is not
+    trusted, and its arguments' pending aliases are copied out before the call (a
+    spurious copy-out costs one clone, never a value). Runs on the logged path only.
+    """
+
+    if not _DEFER_PENDING or _qualified_name(op).split("::", 1)[0] in _DECLARED_WRITE_NAMESPACES:
+        return
+    values = [*args, *kwargs.values()]
+    # Operator arguments are flat: tensors, or a ``Tensor[]`` list of them.
+    nested = [item for value in values if isinstance(value, (list, tuple)) for item in value]
+    materialize_deferred_for_call(v for v in (*values, *nested) if isinstance(v, torch.Tensor))
+
+
 def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
     """Wrap a ``torch._ops`` class ``__call__`` so logged user calls are recorded.
 
@@ -467,6 +499,7 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
         ):
             return original(self, *args, **kwargs)
         decorated, mutation = _decorated_for(self, original)
+        _copy_out_before_undeclared_writes(self, args, kwargs)
         if mutation == _MUTATION_NONE:
             return decorated(*args, **kwargs)
         if mutation == _MUTATION_RECEIVER and args and isinstance(args[0], torch.Tensor):
