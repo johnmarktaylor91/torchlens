@@ -5688,8 +5688,8 @@
         "tests/test_validation_deform_conv_slots.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_order_count_probes.py",
-        "tests/test_validation_set_receiver.py",
-        "tests/test_validation_zero_source_add.py"
+        "tests/test_validation_retrace_saves.py",
+        "tests/test_validation_set_receiver.py"
       ],
       "torchlens/_user_public_impls.py": [
         "tests/test_bug_fixes_phase14.py",
@@ -5698,8 +5698,8 @@
         "tests/test_validation_deform_conv_slots.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_order_count_probes.py",
-        "tests/test_validation_set_receiver.py",
-        "tests/test_validation_zero_source_add.py"
+        "tests/test_validation_retrace_saves.py",
+        "tests/test_validation_set_receiver.py"
       ],
       "torchlens/_utils/__init__.py": [
         "tests/test_distributed_c0_core.py",
@@ -6320,8 +6320,8 @@
         "tests/test_intervention_phase5.py",
         "tests/test_r18h_introspect_hash.py",
         "tests/test_r18p_streaming_lazy.py",
-        "tests/test_record_fork_do.py",
         "tests/test_utility_validation_runner_regressions.py",
+        "tests/test_validation_retrace_saves.py",
         "tests/test_w3_structural_hardening.py"
       ],
       "torchlens/_utils/input_leaves.py": [
@@ -6575,14 +6575,17 @@
         "tests/test_valmem5_saved_value_aliases.py"
       ],
       "torchlens/_validation_divergence.py": [
+        "tests/test_validation_retrace_saves.py"
+      ],
+      "torchlens/_validation_retrace_saves.py": [
         "tests/test_bug_fixes_phase14.py",
         "tests/test_validation.py",
         "tests/test_validation_deepcopy_fidelity.py",
         "tests/test_validation_deform_conv_slots.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_order_count_probes.py",
-        "tests/test_validation_set_receiver.py",
-        "tests/test_validation_zero_source_add.py"
+        "tests/test_validation_retrace_saves.py",
+        "tests/test_validation_set_receiver.py"
       ],
       "torchlens/_validation_entry_options.py": [
         "tests/test_bug_fixes_phase14.py",
@@ -14278,7 +14281,7 @@
         "tests/test_validation_deform_conv_slots.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_order_count_probes.py",
-        "tests/test_validation_set_receiver.py"
+        "tests/test_validation_retrace_saves.py"
       ],
       "torchlens/report/_summary_ladder.py": [
         "tests/test_summary_rebuild_config.py",
@@ -14968,7 +14971,7 @@
         "tests/test_validation_deform_conv_slots.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_order_count_probes.py",
-        "tests/test_validation_set_receiver.py"
+        "tests/test_validation_retrace_saves.py"
       ],
       "torchlens/validation/_consolidated.py": [
         "tests/test_autograd_grad_boundary.py",

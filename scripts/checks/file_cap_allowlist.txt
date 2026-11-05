@@ -486,7 +486,7 @@ torchlens/_user_funcs.py::trace	222
 torchlens/_user_public_graph_impls.py::show_model_graph	117
 torchlens/_user_public_impls.py	1503
 torchlens/_user_public_impls.py::_validate_forward_pass_torch	522
-torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	138
+torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	137
 torchlens/_user_public_impls.py::summary	151
 torchlens/_user_public_impls.py::validate_backward_pass	70
 torchlens/_user_public_impls.py::validate_forward_pass	78
