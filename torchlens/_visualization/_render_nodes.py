@@ -1229,10 +1229,8 @@ def _format_label_score_row(label: Any, score: int | float) -> str:
     """
 
     label_text = _truncate_raw_input_text(str(label), limit=48)
-    if 0 <= float(score) <= 1:
-        score_text = format_percent(float(score))
-    else:
-        score_text = f"{float(score):.3g}"
+    value = float(score)
+    score_text = format_percent(value) if 0 <= value <= 1 else f"{value:.3g}"
     return f"{label_text} {score_text}"
 
 
