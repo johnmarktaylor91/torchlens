@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._data_classes._state_adapter import state_items
+from ..._utils.hashing import sha256_file
 from .. import _json
 from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
@@ -325,13 +326,18 @@ def write_record_files(root: Path, files: Mapping[str, Mapping[str, Any]]) -> di
 
 
 def file_digests(root: Path) -> dict[str, dict[str, Any]]:
-    """Return ``{relpath: {sha256, bytes}}`` for every file except the manifest."""
+    """Return ``{relpath: {sha256, bytes}}`` for every file except the manifest.
+
+    Each file is hashed in blocks, never read whole into memory (a payload
+    chunk is up to 256 MiB).
+    """
 
     digests: dict[str, dict[str, Any]] = {}
     for path in sorted(root.rglob("*")):
         if not path.is_file() or path.parent == root and path.name in _UNDIGESTED_ROOT_FILES:
             continue
-        digests[path.relative_to(root).as_posix()] = _digest(path.read_bytes())
+        relative = path.relative_to(root).as_posix()
+        digests[relative] = {"sha256": sha256_file(path), "bytes": path.stat().st_size}
     return digests
 
 
