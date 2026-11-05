@@ -6,7 +6,7 @@
   regenerate with `tools/generate_record_schema.py`); Trace fields have a declared
   component ownership map (`_trace_components.py`).
 - `_trace_core/` - private columnar store substrate (columns, pools, edge-occurrence
-  table, payload arena, overlays, `TraceCore`). The M5 Op seam is LIVE: every captured
+  table, payload arena, overlays, `TraceCore`). The Op seam is LIVE: every captured
   `Op` is a two-word `(_core, _row)` facade over the per-trace `OpRowStore`
   (`op_store.py`) held at `trace._trace_core` (declared `FieldPolicy.DROP`); rows are
   row-major lists while building and seal after the final step, key 20 (columnar transpose with
@@ -33,7 +33,7 @@
   wrapped call also share ONE journal-side `FunctionCallRef`.
   During postprocess the staging containers remain real mutable builtins; legacy
   list/set state normalizes on load.
-  M8 remaining kinds: `Layer` is an AGGREGATE FACADE — the ~86 representative
+  remaining kinds: `Layer` is an AGGREGATE FACADE — the ~86 representative
   fields the dict era copied from the first pass are class-level mirror
   descriptors reading through to `ops[0]` (with the exact copy-time
   normalizations); writes shadow per-layer in `__dict__`, deletes tombstone,
@@ -43,21 +43,21 @@
   adopted by the build passes and sealed with the core; preview backends and
   loads stay detached-backed). The canonical label -> op-row index binds at
   the freeze as `TraceCore.label_rows`.
-  M9 backward epochs: `GradFn`/`GradFnCall`/`BackwardPass` are row facades;
+  backward epochs: `GradFn`/`GradFnCall`/`BackwardPass` are row facades;
   each successful backward projection binds an atomic `BackwardEpoch`
   (`TraceCore.backward_epochs`) — a full rebuild atomically replaces the
   epoch list, a clean tail fold extends the live epoch — whose per-kind row
   stores back the projected records. The lazy watermark/revision
   invalidation stays trace-side and byte-identical; loaded/preview traces
   keep detached-backed backward records.
-  M10: `TraceBuildState` is GONE — its transient fields dissolved into three
+  `TraceBuildState` is GONE — its transient fields dissolved into three
   named per-phase workspaces (`ir/workspaces.py`: `RawGraphWorkspace` for
   capture ingress + steps 0-11, `ModuleCaptureWorkspace` for module
   prep/stack capture consumed at step 16, `WrapperRuntimeWorkspace` for the
   wrapper hot path), each dropped at the transient-state cleanup seam; the
   backend `finalize_forward_session` protocol takes the raw-graph workspace
   as its ownership token.
-  M11: `Trace.fork()` is COPY-ON-WRITE (`data_classes/_trace_fork.py`): the
+  `Trace.fork()` is COPY-ON-WRITE (`data_classes/_trace_fork.py`): the
   fork core wraps the sealed op store and every kind table in per-fork
   `OpStoreView`s (own overlay; base overlay/rows snapshot at fork;
   eager fork-time isolation of exact builtin mutable containers with
@@ -81,7 +81,7 @@
 - `intervention/` - selectors, sites, hooks, helpers, Bundle, fork/replay/rerun/save.
 - `intervention/_super/` - internal Bundle-level Super* aligned views and accessors.
 - `intervention/_topology/` - internal bundle supergraph and topology diff support.
-- `merged/` - cross-rank merging (C1): `tl.merge_ranks`/`tl.merge_report`, the
+- `merged/` - cross-rank merging: `tl.merge_ranks`/`tl.merge_report`, the
   `MergedTrace` presenter, frozen merge vocabularies, and the merged-directory
   artifact (routes 2 of the 87 `__all__` names; own AGENTS.md).
 - `distributed/` - explicit-collective capture support: `tl.distributed.arm()`,

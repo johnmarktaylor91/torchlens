@@ -84,7 +84,7 @@ def ops(trace: Trace) -> TraceOpAccessor:
     # DIRECT equal-length in-place edits of ``layer_list``, but priced
     # every memo HIT at O(n), turning hot ``trace.ops`` sweeps O(n^2)
     # (measured exponent ~2.1) and regressing ``tl.trace`` itself
-    # 6-10% (r3 R52-1/R28-1); the r3 fixplan prescribes this identity+len
+    # 6-10%; the fixplan prescribes this identity+len
     # key. Direct user in-place mutation of this build product is outside
     # the memo's auto-detection contract -- the supported spellings are
     # reassignment or the explicit invalidator.

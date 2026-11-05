@@ -3031,7 +3031,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         ported truncation protocol. Never raises: any internal failure
         degrades to a one-line ``card unavailable`` fragment, and the
         treescope-bridge suppression sentinel replaces the card exactly
-        when the bridge just rendered this object (memo 3.6).
+        when the bridge just rendered this object.
         """
 
         from ..report._notebook.cards import op_repr_html

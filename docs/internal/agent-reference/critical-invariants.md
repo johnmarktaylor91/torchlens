@@ -39,10 +39,10 @@
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
     annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
-    `Trace.source.snapshots` (F30), `Trace.graph.structure_evidence` (F33) validate fail-closed.
+    `Trace.source.snapshots`, `Trace.graph.structure_evidence` validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
-9c. The C07X amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
+9c. The amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
     grammar v2 (required/optional split; `successor_of` optional evidence envelope +
     `carry_mode` (closed `none`/`verbatim`/`summarized`)/`state_source`/`seams`; item origin
     `class` (seven kinds, required under reserved schemas); closed claim grades + contracted
@@ -55,7 +55,7 @@
     bare-unknown refuse `bundle_section_unknown`), reserved IDs (`version_boundary_v1`/
     `turn_boundary_v1`; sidecar families `torchlens.input_origin`/`input_digest`/
     `boundary_facts`), episode ledger grammar v2 (`episode_ledger_version=2`; declared
-    `step_output_kind` with the F40b declaration-driven derivation — `step_output_from`
+    `step_output_kind` with the declaration-driven derivation — `step_output_from`
     source disclosure, tail-aligned `step_axis`, minted `capture_digest`; generic
     `step_output`; `cache_len` DELETED for the channel-keyed
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
@@ -164,7 +164,7 @@
 16. Smart-collapse metadata is computed, not serialized: `Module.collapse_score`,
     `Trace.module_collapse_order`, and the per-mode ranking `Drawing.collapse_plan` carries
     (the public per-mode order accessor and its documented-inert `weights=` are gone, collapse
-    memo D9) must stay
+    memo) must stay
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
    it never executes the DAG or writes values into the sparse core. User staging overrides the

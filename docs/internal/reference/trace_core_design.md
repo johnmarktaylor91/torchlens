@@ -66,7 +66,7 @@ defaults: 44 entries (22 list / 12 dict / 5 set / 5 tuple), ~39 of them mutable,
 shallow Op = 1512 B/op; construction 126-206 us/op; deep probe ~42 KB/layer on a
 19-layer CNN including per-trace fixed overhead. The transient 183-key `fields_dict`
 at the single Op construction site costs ~9-10 KB/op at peak. All numeric targets are
-stated against these measurements, re-verified at M0; prose counts are never copied
+stated against these measurements, re-verified; prose counts are never copied
 forward without a re-probe.
 
 ## 3. The agreed architecture
@@ -125,12 +125,12 @@ coordination only, so it never becomes a generic dict-driven GodStore. Component
   record per group. Op rows keep only output-specific facts. A direct write to one Op of
   a shared call group creates a PER-OP overlay, never mutates the shared group row.
   `_copy_shared_fields_for_output` dies here.
-  M7 as-landed disposition: Equivalence/Recurrence ship as `MembershipGroups`/`GroupRef`
+  as-landed disposition: Equivalence/Recurrence ship as `MembershipGroups`/`GroupRef`
   live views (`groups.py`); FunctionCall call-facts and the ParamAlias value block ship
   as shared-fact column families (`fact_blocks.py`, `_FACT` member cells, per-row
   hydration on the facade); conditional source/span groups need NO separate group table
   — every per-op conditional relation container is already an interned immutable view
-  (M6, equal views share ONE object through the intern pool) and the dense-id primary
+  (equal views share ONE object through the intern pool) and the dense-id primary
   conditional records live on the Trace side (M10 decomposition territory), so a
   conditional group block would duplicate existing sharing without deleting any copy.
 - **Payload arena**: preserves IDENTITY, not equality. Same tensor object = same handle;
@@ -167,7 +167,7 @@ Freeze is PER-PLANE, not one switch:
 - Derived caches stay disposable.
 
 The review's minority position (retain the mutable object graph through postprocess, PACK after
-step 20) is not the plan; its gating conditions are adopted verbatim as the M5 seam's
+step 20) is not the plan; its gating conditions are adopted verbatim as the seam's
 own acceptance evidence: "phase read/write contracts cover every Step 0-20 access; a
 row-protocol prototype passes the complete surface/alias/artifact oracle for Op, partial
 capture, streamed payload eviction, refresh, and repeated backward; peak memory improves
@@ -181,9 +181,9 @@ Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.par
 and `on_divergence="return"` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
 (observers, `tap()`, `span()`, validation internals, bridge adapters) is
-inventoried at M0 and covered by oracle scenarios.
+inventoried at and covered by oracle scenarios.
 
-"C10" is split (opus's adjudication): "no transient fat-Op graph" is IN (the M5 seam);
+"C10" is split (opus's adjudication): "no transient fat-Op graph" is IN (the seam);
 "capture writes semantic columns with no journal at all" is OUT permanently — the
 journal is a separate authority; merge law, partial capture, and replay depend on it.
 
@@ -226,9 +226,9 @@ private; computed collapse metadata stays out of serialization.
 - **Facade identity cache — strong-then-weak.** The observable contract is
   `trace["x"] is trace["x"]` while any reference is live; mutations live in the core, so
   identity is a UX nicety, not a correctness carrier. The review's lifetime point is honored by
-  sequencing: the first production cutover (M5) lands a STRONG per-core cache
+  sequencing: the first production cutover lands a STRONG per-core cache
   (byte-identical lifetime behavior — an Op stays alive while its Trace lives, exactly as
-  today), then the cache flips to weak-valued within the sprint once the M0 lifetime
+  today), then the cache flips to weak-valued within the sprint once the lifetime
   inventory and the aliases-v1 oracle prove no observable behavior depends on facades
   surviving with zero user references. Weak-valued is the end state (r2 majority:
   fable + opus): a strong table makes "near-zero retained objects per uninspected row"
@@ -266,12 +266,12 @@ private; computed collapse metadata stays out of serialization.
 - **The two group-membership fields** (`equivalent_ops`, `recurrent_ops`): DECIDED
   2026-08-12 — LIVE group-membership views (immutable, backed by the shared group row;
   reads reflect group state, caller mutation impossible), replacing the historical
-  fresh-mutable-copy-per-read barrier. Lands in M7 with the group tables.
+  fresh-mutable-copy-per-read barrier. Lands in with the group tables.
 - **`Op._copy_with_shallow_fields()`**: internal output-node synthesis is a builder row append seeded from
   the source row; public `.copy()` is a detached one-row core honoring today's EXACT
   selective share/deep policy (deep metadata; share func/handles/source_trace/RNG
   snapshots/saved args/params/payloads per the documented policy). Copies never share
-  overlays or group-membership mutation state. The subclass contract is FORK-6.
+  overlays or group-membership mutation state. The subclass contract is.
 - **`Trace.fork()`**: core-level COW — share frozen base + pools; new facade cache, new
   overlay, detached backward epochs, independent intervention/history state, payload
   handles per today's fork policy. Transactions checkpoint overlay + epochs; rollback
@@ -309,11 +309,11 @@ PRODUCTION-WIRED (single truth; every live write path routes through it, and
 the pickle/state stream serializes FROM it — a `__dict__` shadow of a
 declared field can neither shadow the live read nor the serialized value):
 `OpRowStore` for every captured `Op` (row-major under 512 rows, columnar
-transpose above — object fields stay object columns by design); the M8 kind
+transpose above — object fields stay object columns by design); the kind
 tables (`Param`/`Buffer`/`FuncCallLocation`/`ModuleCall`/`Module`); the M9
-atomic backward epochs; the M6/M7 relation planes (edge-occurrence CSR,
+atomic backward epochs; the relation planes (edge-occurrence CSR,
 interned views, group tables, shared-fact blocks); `TraceCore.label_rows`;
-the M10 step write-audit (assignment + in-place content).
+the step write-audit (assignment + in-place content).
 
 SUBSTRATE-ONLY (constructed, unit-proven in `test_trace_core_substrate.py`,
 NOT yet production-wired — each names its wave): the identity-preserving
@@ -338,7 +338,7 @@ unlanded slices above (on-demand facades + typed column packing + event
 droppability policy), not reachable by spot fixes; no current number should
 be read as that metric being met.
 
-Container-cell pooling (grind r1 M14 slice, 2026-08-13): the freeze-seam
+Container-cell pooling (grind slice, 2026-08-13): the freeze-seam
 compaction now also replaces exact builtin mutable-container CELLS whose
 full content is provably immutable AND either empty or repeated 3+ times
 with one shared `PooledCell` per distinct content (`op_store.PooledCell`;
@@ -350,7 +350,7 @@ marginal census (model tail included): 602-op Linear/ReLU stack
 The remaining core-store tail is eager facades/accessors and per-record
 instance dicts — still owned by the on-demand facade slice.
 
-Singleton-label compaction (grind r2 M14 slice, 2026-08-13): per-record
+Singleton-label compaction (grind slice, 2026-08-13): per-record
 one-element label lists in the kind tables (param
 `all_addresses`/`all_module_addresses`/`co_parent_params`, module
 `all_addresses`/`call_labels`, module_call `all_addresses`) have distinct
@@ -365,12 +365,12 @@ the same in-store alias census guards aliased lists. Disclosed sliver: an
 out-of-contract user write of the EXACT registered str object back into its
 own compacted cell reads as the hydrated list rather than the raw str.
 Census: linear602 102.5 → 99.1 obj/op (core store 45.5 → 42.1). The grind
-r2 AST-cache seal also removed the transformer census elephant
+AST-cache seal also removed the transformer census elephant
 (`postprocess/ast_branches.py` hot/cold split: 563.9 → 131.9 obj/op).
 
 ### 3.7 Trace decomposition (THE deliverable) and TraceBuildState
 
-M10 as-landed disposition (2026-08-12): `TraceBuildState` is dissolved — its
+as-landed disposition (2026-08-12): `TraceBuildState` is dissolved — its
 transient fields live in three named per-phase workspaces
 (`ir/workspaces.py`: `RawGraphWorkspace` / `ModuleCaptureWorkspace` /
 `WrapperRuntimeWorkspace`), each owned by exactly one phase family, dropped at
@@ -414,12 +414,12 @@ decoder; deletion of superseded storage/copy/compaction code; docs lockstep; de-
 
 OUT (documented handoffs, never silent):
 - **Journal columnarization** (2-1 HOLD, fable+opus over sol). Reopening condition,
-  verbatim: "Reopens only if W0 shows retained journal bytes on a 100K-op capture >2x
+  verbatim: "Reopens only if shows retained journal bytes on a 100K-op capture >2x
   the semantic store AND lane-columnar beats incremental drain on the same measurement."
 - **Streaming/bounded-drain lane** (`topology_complete=False` incremental journal
   drain): a separate ship (r2 majority: opus + sol), parallelizable any time after the
   substrate wave; additive capability, never leaves a half-migrated representation. If
-  sprint capacity remains after M13 it may be picked up; otherwise it is the first named
+  sprint capacity remains after it may be picked up; otherwise it is the first named
   handoff.
 - **`Recording`/`RecordingState`/`ActivationRecord`/`GradRecord` tables**: same
   anti-pattern, sparse product (K rows, not 10^4-10^6); RAM win negligible, surface risk
@@ -429,22 +429,22 @@ OUT (documented handoffs, never silent):
   interpreter's input schema. M0 measures sol's retention allegation (one context per
   event; `recent_events`/`recent_ops` duplicate windows); if retention is O(events), a
   targeted retention fix that does NOT touch the frozen contract lands mid-sprint; the
-  cursor/range restructure waits for the C1 contract to soak.
+  cursor/range restructure waits for the contract to soak.
 - **No-journal capture writer** (capture writes semantic columns directly): OUT
   permanently, per section 3.3.
-- New physical columnar `.tlspec` (FORK-3); Arrow core dependency; global interning;
+- New physical columnar `.tlspec`; Arrow core dependency; global interning;
   `torchlens/projection/` package (the 26 declared steps' order is load-bearing; the substance —
   declared per-step read/write sets — lands without the relocation); UI regrouping
-  implementation (plan-only, FORK-2); `replayable` rename (separate
+  implementation (plan-only); `replayable` rename (separate
   authorization).
 
 Any capacity cut happens at a completed wave boundary, named plainly — never mid-fan-out,
 never a half-migrated family (where a false-VERIFIED hole would hide).
 
-M11 dependency analysis (2026-08-12, named cut): the COW `Trace.fork()` +
+dependency analysis (2026-08-12, named cut): the COW `Trace.fork()` +
 forkcopier deletion + strong->weak facade flip are BLOCKED on the Trace
-label-map relocation (the M10 physical-decomposition slice). Concretely:
-(a) a COW fork's writes must land in a FORK-LOCAL overlay, but the M5 facade
+label-map relocation (the physical-decomposition slice). Concretely:
+(a) a COW fork's writes must land in a FORK-LOCAL overlay, but the facade
 binds `op._core` to the shared `OpRowStore` whose overlay is store-owned —
 COW needs a per-trace store VIEW layering a fork overlay over the shared
 base; (b) the fork's records must be FRESH facades over that view, but every
@@ -459,7 +459,7 @@ then per-trace store views + COW fork + transactions, then forkcopier
 deletion with the fork/rollback/payload-alias/parent-run/GC parity proof,
 then the weak-valued flip against the aliases-v1 lifetime rows.
 
-M11 as-landed disposition (2026-08-12): dependency (b) resolved WITHOUT the
+as-landed disposition (2026-08-12): dependency (b) resolved WITHOUT the
 full trace-side map relocation — the maps' object entries already carry
 their row ids, so the fork MATERIALIZES fresh facades by row (two-word
 shells over `OpStoreView`s; a record-identity translator remaps every
@@ -467,7 +467,7 @@ record reference reached through cells, hydrated fact blocks, and the
 policy-driven trace-field pass), which is exactly "resolving through the
 core index" with the parent object as carrier. Public map types are
 unchanged (`FieldPolicy.KEEP`, surface-v1-pinned); the maps->indexes
-relocation proper stays with the named M10 physical-decomposition slice
+relocation proper stays with the named physical-decomposition slice
 (the 220-property component move) and no longer blocks anything.
 `OpStoreView` supplies dependency (a): sealed-base sharing, per-fork
 overlay, base-overlay/row snapshot at fork, copy-on-first-read isolation
@@ -581,7 +581,7 @@ NO DOT in the cross-process streams — visualization identity is a SEPARATE ora
 (forward/rolled DOT hashes cross-process; backward/combined in-process only, because
 grad_fn names embed `id()`s, with its own two-process baseline-vs-baseline control run
 first); perf measurements stay outside identity bytes; a real PyCharm + VS Code
-expansion/completion session on Trace/Op/Layer/Module/GradFn at M0, the Op cutover, and
+expansion/completion session on Trace/Op/Layer/Module/GradFn, the Op cutover, and
 final acceptance.
 
 ## 7. Wave plan (merged M0-M13)
@@ -591,23 +591,23 @@ final acceptance.
 | **M0** | Merged oracle (section 6) over the scenario matrix; refreshed `op_slots_baseline` + deep-reachable-memory scale baseline (1K/10K/100K/1M synthetic + recurrent + branched; capture peak vs finalized steady state; facade-free vs fully-iterated); direct-mutation + alias + escape-path inventory (test-only tripwire descriptors across not-slow — this list IS the overlay-policy and sanctioned-writer spec); real-IDE session; the A2 (journal-bytes) and A3 (RecordContext retention) measurement probes; ancestor-bitset stress synthetic. No production change | baseline-vs-baseline control green |
 | **M1** | **Keystone**: extend `RecordFieldPolicy` with `StorageBinding` axes; invert the derivation; assert generated == checked-in literal bidirectionally, all 11 classes | byte-identical, equality-proven |
 | **M2** | **Compiler**: generate `__tl_state_items__`/`__tl_state_restore__` (closes the CRITICAL state-adapter hole, 13 consumers, BEFORE any field moves), checked-in annotated descriptors, `to_pandas` row, `.pyi`; regenerate-and-diff CI. Still object-backed | byte-identical |
-| **M3** (parallel lanes) | (a) slot dict-backed classes from the table with `__slots__`+`"__dict__"` (laziness measured); (b) `FunctionCallRef`/`ArgTemplateRef` identity-assumption grep (precondition for M7) | byte-identical |
+| **M3** (parallel lanes) | (a) slot dict-backed classes from the table with `__slots__`+`"__dict__"` (laziness measured); (b) `FunctionCallRef`/`ArgTemplateRef` identity-assumption grep (precondition for) | byte-identical |
 | **M4** | `_trace_core/` substrate, zero consumers: ids, columns, pools, edge-occurrence + CSR, ancestor-closure pool, groups, overlays, payload arena, facade cache. Executable prototypes immediately: `Op.copy` policy, COW fork + rollback, payload identity, parallel-edge order, partial capture, mutable-container hydration, GC lifetime | standalone unit suite |
 | **M5** | **The seam**: `_materialize.py` switches to builder ingress; Op facades authoritative (strong cache); scalars columnar, relations staged mutable; per-plane freeze lands; pools absorb `_compact_op_metadata`, bitsets absorb `_compact_ancestor_sets`; kills the `fields_dict` + 39-container transient; partial/no-op/error paths facade-backed. Shadow dual-write parity oracle runs one full CI cycle INSIDE this wave, then is deleted | dual-path parity, deletion proof, scale benchmark, classics corpus spot-check |
 | **M6** | Relations family-by-family: parents/children + arg positions -> module membership/stacks -> conditionals -> param uses/aliases; each family compared old-vs-new before its legacy container dies; ancestor closures wired; relation accessors become IMMUTABLE views (FORK-1 decided) | aliases-v1 green per family |
 | **M7** | Groups: FunctionCall/Equivalence/Recurrence/ParamAlias/conditional group blocks + group_id columns; delete `_copy_shared_fields_for_output`; journal-side shared `FunctionCallRef` per call; `equivalent_ops`/`recurrent_ops` become LIVE group-membership views (FORK-1 decided) | byte-identical |
 | **M8** | Layer as aggregate facade over layer->op relations (kills the ~78-field per-pass copy); Module/ModuleCall/Param/Buffer/FuncCallLocation tables + facades; live-handle/lazy-grad/version/release semantics preserved; Module responsibility decomposition; Trace label maps -> core indexes | per-class oracle |
 | **M9** | **Backward, last**: GradFn/GradFnCall/BackwardPass tables; atomic backward EPOCHS preserving the exact watermark/revision invalidation; projection + validation consumers migrate in ONE commit; no mixed object/core backward state survives | repeated-backward oracle cases |
-| **M10** (parallel from M2) | **Trace decomposition — the deliverable**: 220 fields -> header + owned components; `TraceBuildState` -> named per-phase workspaces; POSTPROCESS_STEP_CONTRACTS become enforced declared read/write sets; C2-style private-family collapses only as lockstep table diffs if needed | <=~60 fields per component |
-| **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op._copy_with_shallow_fields()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the M0 lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
-| **M12** | Reserved for the streaming lane ONLY if capacity remains (see section 4; the r2 majority ships it separately). Cut-first, by name | additive only |
+| **M10** (parallel) | **Trace decomposition — the deliverable**: 220 fields -> header + owned components; `TraceBuildState` -> named per-phase workspaces; POSTPROCESS_STEP_CONTRACTS become enforced declared read/write sets; C2-style private-family collapses only as lockstep table diffs if needed | <=~60 fields per component |
+| **M11** | Cutover + deletions: COW `Trace.fork()` + transactions; exact public `Op._copy_with_shallow_fields()`; direct semantic serialization (byte-identical artifacts; old-golden loads); facade cache flips strong -> weak-valued (per the lifetime evidence); DELETE forkcopier, standalone compaction passes, legacy writers, the generic core-record state walker | artifacts-v1 + old-golden matrix |
+| **M12** | Reserved for the streaming lane ONLY if capacity remains (see section 4; the majority ships it separately). Cut-first, by name | additive only |
 | **M13** | De-bloat with LOC delta reported first-class; docs lockstep (glossary -> canonical copy, CLAUDE.md, AGENTS.md, notebooks/audit, examples); FORK-2 UI-regrouping plan doc; full classics corpus plus downstream Model Menagerie validation; final real-IDE gate | grep-clean of retired names |
 
 Sequencing rules baked in: keystone/compiler enablers before anything structural; the
 ONE seam riskiest-first-at-narrowest (Op has one construction site and the largest
 payoff); fan-out by construction-site count; GradFn LAST (the lazy watermark/revision
 projection is the most delicate, and its 3 construction sites migrate with their
-validation consumers atomically); Trace decomposition parallel from M2, never queued;
+validation consumers atomically); Trace decomposition parallel, never queued;
 each family switches AND deletes its legacy container within its own wave — per-wave
 shadow parity oracles are migration tooling and never survive the sprint.
 
@@ -617,7 +617,7 @@ Per-wave standard block (every commit; `CUDA_VISIBLE_DEVICES=""`,
 `PYTHONDONTWRITEBYTECODE=1`, fresh `TORCHLENS_CACHE_DIR`):
 `ruff check . --fix` && `mypy torchlens/`; smoke tier; `tests/godobject_oracle/`;
 `tests/test_gc.py`; `tests/capture_oracle/`; `benchmarks/op_slots_baseline.py`
-(bytes/op + objects/op improve MONOTONICALLY after the M5 cutover).
+(bytes/op + objects/op improve MONOTONICALLY after the cutover).
 
 Entity/serialization boundaries add the field-contract battery
 (`test_field_order_contract`, `test_record_field_policy`, `test_schema_audit`,
@@ -634,11 +634,11 @@ separate from structural metadata. Perf claims by `time.process_time` CPU A/B on
 never cProfile.
 
 Model corpus: the classics corpus tier (`tests/classics_corpus/`, smoke subset per step,
-comprehensive tier after M5/M8/M9/M11 and after the facade cutover); one forced full
+comprehensive tier after and after the facade cutover); one forced full
 downstream catalog validation (the Model Menagerie battery) before merge — zero new failure /
 timeout / unverifiable / topology-digest / metadata-invariant regressions vs its ledger.
 
-Success metrics (targets set at M0 from measured baselines, not folklore): <=1 KiB
+Success metrics (targets set at from measured baselines, not folklore): <=1 KiB
 deep-retained structural metadata per uninspected op row (target: hundreds of bytes);
 <10 retained structural Python objects per uninspected row (target ~0 beyond shared
 tables); hand-written schema declarations -> 0; <=~60 fields per owned Trace component;

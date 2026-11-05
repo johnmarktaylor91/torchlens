@@ -634,7 +634,7 @@ and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refu
 1. Writer stream: `schema.py`, `values.py`, `payloads.py`, then `writer.py` behind a private
    flag; the reload check uses a minimal decoder in `values.py` until the reader lands.
    Regenerates the bindings page when it adds the io.2 and backends.2 columns (bumps
-   `tlspec_version`). The behaviour net's F7 cells assert the persisted recipe.
+   `tlspec_version`). The behaviour net's cells assert the persisted recipe.
 2. Reader stream: `reader.py`, `validate.py` (moving the two lists of section 9), then
    switches `tl.load` and deletes section 10's modules and tests in the same change set that
    reads the regenerated goldens.

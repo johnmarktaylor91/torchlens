@@ -1,7 +1,7 @@
 # Lens gallery + naive-battery specification (NORMATIVE)
 
 This document is the normative gallery and evaluation matrix for the lens
-roster (themes memo sections 7-9). It is the contract D03 executes: which
+roster (themes memo sections 7-9). It is the contract executes: which
 artifacts exist, what each must disclose, and what gates them. The memo
 section is the authority; this spec operationalizes it.
 
@@ -13,7 +13,7 @@ sprint scratch, NEVER the repo.
 Real weights, real processors and inputs, eval mode, fixed seeds, pinned
 revisions. The manifest names the EXACT checkpoint.
 
-- Core real (D03, pinned revisions): torchvision `resnet18` + `resnet50`
+- Core real (pinned revisions): torchvision `resnet18` + `resnet50`
   (pinned weight enums, one real ImageNet image); HF
   `openai-community/gpt2` + `distilbert/distilgpt2` (>= 8-token prompt);
   `google/vit-base-patch16-224` with its real processor; `t5-small`

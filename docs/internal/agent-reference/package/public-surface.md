@@ -58,7 +58,7 @@ alias topology and zero-tensor-leaf or instance-stateful container outputs refus
 (`state_alias_topology_unsupported` / `output_container_contract_missing`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
 (`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
-(r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
+(numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
 model-attribute state digest -- NO process-wide gc scan; unseeded-construction `randbits` entropy;
 `datetime`/`localtime` clocks; an externally-held generator on a pre-existing non-hooked thread is
 a documented residual, and a benign background thread never ceilings a capture); tensor->host VALUE escapes are caught by dual observer routes (aten
@@ -120,7 +120,7 @@ suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
 
 Current 2.x backend surface: torch eager is the stable default; MLX, JAX, tinygrad, Paddle, and
-TensorFlow are technical previews behind `BackendSpec`. Paddle M3 is dygraph/eager only, uses
+TensorFlow are technical previews behind `BackendSpec`. Paddle is dygraph/eager only, uses
 `tl.backends.paddle.GradOptions` for derived-gradient previews, materializes `.tlspec` array
 payloads through the Paddle codec, and does not provide true backward capture.
 TensorFlow preview targets Keras 3 on TF>=2.16 with

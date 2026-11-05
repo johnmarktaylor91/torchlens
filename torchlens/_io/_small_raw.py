@@ -272,7 +272,7 @@ def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
     data = value.get("data")
     if not isinstance(data, bytes):
         return value
-    # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
+    # SECURITY. ``data`` is attacker-controlled bytes on a plain
     # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
     # save-time "small" policy, so this sink must re-impose the SAME canonical
     # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /

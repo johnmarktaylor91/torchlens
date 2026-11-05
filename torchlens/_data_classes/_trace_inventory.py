@@ -185,9 +185,9 @@ def build_bill_of_materials(
         ``buffers``, ``activations``, ``backward``, and ``annotations``.
     """
 
-    # BOM is a THIN PROJECTION of FactCore (sumfam item 14 / D16): its
+    # BOM is a THIN PROJECTION of FactCore (sumfam item 14 /): its
     # counts and parameter facts read the one numbers substrate; its
-    # payload figures keep the D8 retained_now scope. It mints nothing.
+    # payload figures keep the retained_now scope. It mints nothing.
     # ``core``, ``poison_facts`` and ``advisories`` arrive from the caller
     # (``report._trace_facts``) so this L1 module imports nothing above itself.
     memory_facts = core.memory

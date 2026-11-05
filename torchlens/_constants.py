@@ -1202,8 +1202,8 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
     ("torch.Tensor", "H"),
-    # r45: ``mH`` is wrapped like ``H`` / ``mT``; unwrapped, ``x.mH`` recorded as an unattributed
-    # literal and the runnable artifact could not save or run (r44 corr1_1 / secF_1).
+    # ``mH`` is wrapped like ``H`` / ``mT``; unwrapped, ``x.mH`` recorded as an unattributed
+    # literal and the runnable artifact could not save or run.
     ("torch.Tensor", "mH"),
     # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
     # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.

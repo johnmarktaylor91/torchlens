@@ -924,7 +924,7 @@ def _store_batch(
     """Run the store pipeline on one batch (in order, after the model call).
 
     pool (captured dtype, raw axes, mask) -> postprocess -> row validation -> ragged trim
-    -> save-dtype cast -> snapshot (a host copy in disk mode); the D7 value reduction runs
+    -> save-dtype cast -> snapshot (a host copy in disk mode); the value reduction runs
     ON the tensor's device BEFORE any host copy, so a later corruption stays catchable.
 
     Parameters

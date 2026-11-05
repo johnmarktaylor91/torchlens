@@ -113,7 +113,7 @@ class MergedTraceError(TorchLensError):
 
 class MergeInputError(MergedTraceError, ValueError):
     """A merge input is unusable: not a rank capture, duplicate rank,
-    missing distributed evidence, or an out-of-scope (C1) boundary.
+    missing distributed evidence, or an out-of-scope boundary.
 
     Examples
     --------

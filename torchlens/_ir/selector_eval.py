@@ -1597,7 +1597,7 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
     if shorthand is not None:
         return shorthand
     # An ``Op``/``Layer`` RECORD is the most precise site spelling a user can
-    # hold (AUD-CODE 4.10, W051-REPLAY out-of-fence item 1). Lower it to its
+    # hold (W051-REPLAY out-of-fence item 1). Lower it to its
     # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set_only`` do door,
     # ``_resolve_sites(record)`` and the mutator site validation all address
     # exactly the pass(es) the record names -- never the bare ``layer_label``

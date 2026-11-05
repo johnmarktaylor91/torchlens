@@ -23,7 +23,7 @@ def _sanitize_pickled_verification(state: dict[str, Any]) -> None:
     state : dict
         Pickle state being normalized in place.
     """
-    # grind-r5 P7 (b3 opus R10-1 / b6 opus R16-1): the producer's NEGATIVE
+    # The producer's NEGATIVE
     # verification claim persists -- a capture TorchLens itself refused to
     # bless must not round-trip into "no claim". A POSITIVE claim never
     # persists (a tampered artifact could otherwise forge verified=True;

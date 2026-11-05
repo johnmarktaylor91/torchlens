@@ -227,7 +227,7 @@ def _run_refresh_forward(
             inference_only=self._options_inference_only,
             # A refresh retains payloads like any capture: keep the configured budget.
             save_budget=getattr(self, "save_budget", "auto"),
-            # A refresh re-arms the nonfinite tripwire (F2).
+            # A refresh re-arms the nonfinite tripwire.
             raise_on_nan=bool(self._options_on_nonfinite),
             # A refresh measures CPU peaks only if the source opted in.
             measure_host_peak_memory=bool(getattr(self, "measure_host_peak_memory", False)),

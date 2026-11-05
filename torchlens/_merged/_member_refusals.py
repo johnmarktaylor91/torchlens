@@ -18,7 +18,7 @@ from .._io.format3.contract import FORMAT_NAME, MANIFEST_FILE
 # Bundle-load failures that are INTEGRITY signals (tamper), not environmental
 # degradation. A guarded-unpickler denylist refusal / corrupt pickle stream is
 # raised as ``pickle.UnpicklingError``/``EOFError`` and, at the ``bundle.load``
-# boundary, wrapped into a ``ArtifactError`` tagged with this code (A-R58-1).
+# boundary, wrapped into a ``ArtifactError`` tagged with this code.
 _BUNDLE_INTEGRITY_CODE = "bundle_metadata_integrity_refused"
 
 #: The 2.x metadata carrier. The current writer never produces it, so inside a current-format

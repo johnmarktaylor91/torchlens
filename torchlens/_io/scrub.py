@@ -1272,7 +1272,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_validation_replay_status",
         "_capture_parent_edge_truth",
         "_orphan_pruned_func_call_ids",
-        # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
+        # `_tl_predicate_intervention_{spec,target}_keys`,
         # `_source_bundle_{path,manifest_sha256}` and the output-parent retention
         # flag (now inside `_rerun_save_request`) moved out of this allowance into
         # declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is consulted
@@ -1405,7 +1405,7 @@ def _scrub_field(
     """Scrub one object field according to its effective field policy.
 
     An effective ``DROP``/``WEAKREF_STRIP`` wins before every field-specific
-    serializer (r69 E): the sparse-runnable effective policy drops ``input`` and
+    serializer: the sparse-runnable effective policy drops ``input`` and
     ``transformed_output``, so a runnable save scrubs both to ``None`` whatever the
     ``save_raw_input``/``save_transformed_output`` policy says, and no nested tensor
     reaches the sparse core (``assert_sparse_core_has_no_tensor_payload``). Otherwise

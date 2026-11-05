@@ -391,7 +391,7 @@ def _is_hf_model_output_type(container_type: type[Any]) -> bool:
 def _is_trusted_transformers_output_type(container_type: type[Any], spec: Any | None) -> bool:
     """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
 
-    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
+    mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
     resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
     class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
     (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine

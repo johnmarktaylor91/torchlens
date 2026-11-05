@@ -4,7 +4,7 @@ Three entry-time guards that run before (or instead of) the per-trace save
 pipeline: the two PERMANENT erasure-prevention invariants (edge-substitution
 carriers and the shard-local disclosure, both keyed on the ACTIVE SCHEMA so a
 regression re-fires them), and the Bundle container-door delegation that
-routes ``bundle.save(path, ...)`` through ``Bundle.save`` (foldB D8/D9); plus
+routes ``bundle.save(path, ...)`` through ``Bundle.save``; plus
 the blob-loop refusal of a tensor a strict (portable) save cannot write. Split
 out of ``torchlens/_io/bundle.py`` to respect its size ceiling (R43
 split-never-raise); ``bundle.py`` re-exports these names, so the monkeypatch
@@ -307,7 +307,7 @@ _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
     """Refuse a runnable payload family whose entry labels load would reject.
 
-    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
+    (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
     ``register_parameter``'s empty-name validation, captures, and SAVED an
     artifact whose weight tensor entry carried label ``""`` -- which
     ``validate_tlspec`` categorically refuses at load ("requires a canonical
@@ -632,7 +632,7 @@ def _warn_nonpersistent_buffer_disclosure_once() -> None:
 
 
 def _warn_unattestable_activation_archive_once() -> None:
-    """Disclose an activation archive saved without any original-input eligibility (r6 H2).
+    """Disclose an activation archive saved without any original-input eligibility.
 
     ``_capture_activation_blob_specs`` can only record ``original_input_digests`` /
     ``input_fingerprints`` for a model input that the capture actually SELECTED. With a

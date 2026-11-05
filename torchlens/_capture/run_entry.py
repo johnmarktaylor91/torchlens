@@ -635,7 +635,7 @@ def _run_resolved_request(r: SimpleNamespace) -> Trace:
         try:
             _forward_under_minter(trace, r, reservation_token)
         except BaseException as exc:
-            # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+            # Crash tail (snoop tail 2): synchronous flush; note rides PEP 678.
             echo_forward_failure(echo_session, exc)
             _abort_streaming_writer(trace, exc)
             raise

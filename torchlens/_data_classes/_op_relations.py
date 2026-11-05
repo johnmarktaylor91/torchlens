@@ -265,7 +265,7 @@ def _resolve_relation_record(op: Op, label: str) -> Op | None:
     The 62aba742 orphan tolerance stopped at the label aggregates: on a
     ``keep_orphans=True`` trace the aggregates include an orphan's label
     while the OBJECT-resolving surfaces crashed on the bare mainline
-    lookup (b3 R05-N2). Mirror the per-op ``siblings`` behavior: fold
+    lookup. Mirror the per-op ``siblings`` behavior: fold
     the ``orphans`` fallback, skip what neither surface resolves.
     """
 

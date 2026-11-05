@@ -109,7 +109,7 @@ def summary(fn: Callable[[Any], Any], *, name: str | None = None) -> SummaryTran
             model, x,
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(lambda t: torch.histc(t.float(), 64)),
-                save_raw_activations=False,   # reduce-only: raw clone skipped (P2)
+                save_raw_activations=False,   # reduce-only: raw clone skipped
                 backward_ready=True,
             ),
         )

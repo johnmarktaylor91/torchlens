@@ -91,7 +91,7 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
   only measured candidate that cannot degenerate; linear min-max painted
   77-99% of real-model nodes into the bottom decile. Degenerate domains
   (min == max) render UNENCODED with a note, never mid-ramp.
-- **Skins are live (N4).** Semantic role colours resolve through the
+- **Skins are live.** Semantic role colours resolve through the
   active skin's palette at the one theme seam. The default `torchlens` skin keeps the
   released look: light green input, salmon output, light grey trainable and darker grey
   frozen weights, yellow branch tests (the label reads `IF: TRUE` or `IF: FALSE`) and every

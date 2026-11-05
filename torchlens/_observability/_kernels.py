@@ -185,7 +185,7 @@ class RunningStatsResult:
 
     Integer counts are exact. Floating fields carry the recorded reduction
     dtype and merge with a documented stable pairwise algorithm; they are
-    never claimed exact across merges (D8).
+    never claimed exact across merges.
 
     Examples
     --------
@@ -448,7 +448,7 @@ class HistogramResult:
 
 
 class Histogram:
-    """Fixed signed-log2 grid histogram accumulator (StreamingStat; D9).
+    """Fixed signed-log2 grid histogram accumulator (StreamingStat).
 
     Examples
     --------

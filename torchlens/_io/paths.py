@@ -171,7 +171,7 @@ def reanchor_visualizer_paths(trace: Any, bundle_path: Path) -> None:
     ``resolve_bundle_blob_path`` + ``_reject_symlink_path``: it was persisted as an
     absolute path and flowed verbatim into Graphviz ``image=`` on ``.draw()`` with
     only a ``.png`` suffix check. A hostile bundle could therefore name ANY local
-    ``.png`` and have ``tl.load(evil).draw()`` disclose it (B8-9).
+    ``.png`` and have ``tl.load(evil).draw()`` disclose it.
 
     On load we discard whatever directory the bundle claimed and re-anchor to
     ``<bundle>/visualizers/<basename>``, then containment-check that it resolves

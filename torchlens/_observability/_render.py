@@ -773,7 +773,7 @@ def render_contact_sheet(
     tiles_per_page: int = 12,
     width: int = 900,
 ) -> ContactSheet:
-    """Render one page of the ranked overview contact sheet (D24).
+    """Render one page of the ranked overview contact sheet.
 
     Hierarchically ordered tiles (catalog order within equal rank), ranked
     by :data:`RANKING_SCORE` with nonfinite events first; a mandatory

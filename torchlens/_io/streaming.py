@@ -136,7 +136,7 @@ class BundleStreamWriter:
         self._finalized = False
         self._tensor_entries: list[TensorEntry] = []
         self._entries_by_blob_id: dict[str, TensorEntry] = {}
-        self._tensor_entry_indexes: dict[str, int] = {}  # r8 R29: no O(B^2) relabel scan
+        self._tensor_entry_indexes: dict[str, int] = {}  # No O(B^2) relabel scan
         # Entry maps, tensor references and the id reservation set are
         # worker-mutated when the async engine is active: guarded by this lock.
         self._entries_lock = threading.Lock()
@@ -147,7 +147,7 @@ class BundleStreamWriter:
         self._payload_store = PayloadStore(self.tmp_path)
         self._store_lock = threading.Lock()
         self._async_engine: AsyncWriteEngine | None = None
-        # WT1 A-IV item 18: finalize STAGES the bundle (chunks closed, manifest base built,
+        # A-IV item 18: finalize STAGES the bundle (chunks closed, manifest base built,
         # scrubbed state held); the publish writes the record tables once the capture
         # outcome settles. A capture that settles FAILED never publishes (PARTIAL debris).
         self._staged_scrubbed_state: dict[str, Any] | None = None
@@ -160,7 +160,7 @@ class BundleStreamWriter:
             self.tmp_path.parent.mkdir(parents=True, exist_ok=True)
             self.tmp_path.mkdir()
             self.blobs_path.mkdir()
-            # Permission parity with Trace.save (B8-10): tighten against the
+            # Permission parity with Trace.save: tighten against the
             # ambient umask; the publish rename preserves the mode.
             _restrict_mode(self.tmp_path, 0o700)
             _restrict_mode(self.blobs_path, 0o700)
@@ -265,7 +265,7 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from exc
         except BaseException as exc:
-            # Safety net (round-8 F3): any other failure (a bare KeyError from
+            # Safety net: any other failure (a bare KeyError from
             # safetensors, a SystemExit mid-write) marks the ``.tmp`` dir PARTIAL;
             # non-Exception BaseExceptions re-raise unwrapped.
             reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
@@ -372,7 +372,7 @@ class BundleStreamWriter:
         injected) and the 3.0 manifest, reloads them once, fsyncs, and
         renames. A capture failure between staging and settlement aborts the
         writer instead, so a FAILED capture never leaves a publishable
-        artifact (WT1 A-IV item 18). Until the publish, ``manifest.json``
+        artifact. Until the publish, ``manifest.json``
         holds the manifest base (no record tables yet).
 
         Parameters
@@ -428,7 +428,7 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from exc
         except BaseException as exc:
-            # Safety net (round-8 F3): any failure marks the ``.tmp`` dir PARTIAL.
+            # Safety net: any failure marks the ``.tmp`` dir PARTIAL.
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
@@ -933,7 +933,7 @@ class BundleStreamWriter:
         n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
         layer_list = scrubbed_state.get("_layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
-        # Disclose the harvested module-attribute and buffer channels (R62): every save
+        # Disclose the harvested module-attribute and buffer channels: every save
         # writes both disclosures and honors the same opt-outs and warnings as Trace.save.
         from .bundle import (
             _buffer_values_disclosure,

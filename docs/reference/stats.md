@@ -246,7 +246,7 @@ extrema, the sum and the mean equal `RunningStats().update(out)` on the full
 capture's activation exactly. The reducer folds each activation in chunks of 2^16 values,
 so its largest working tensor is 512 KiB whatever the activation's size (where
 `RunningStats.update` holds full-size float64 copies); the sum of squares, the sum
-of absolute values and M2 are therefore bit-equal for activations up to one chunk
+of absolute values and are therefore bit-equal for activations up to one chunk
 and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
 `RunningStats.update` in the last bits. The returned spines are live accumulators:

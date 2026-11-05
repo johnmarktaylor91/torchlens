@@ -22,7 +22,7 @@ Key entry points:
   same case ids; the record ships as `torchlens/backends/<name>/scorecard.json` and surfaces as
   `tl.report.doctor()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
   (`backends/_protocol.py`) stays torch's internal orchestration adapter.
-- Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
+- Site keys + grouping surface (DOCUMENTED-UNSTABLE): every
   retained op carries the portable structural-position key `op.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
@@ -36,7 +36,7 @@ Key entry points:
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
   machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
-- Quickstart input ladder (F17; spellings DOCUMENTED-UNSTABLE): trace/summary/
+- Quickstart input ladder (spellings DOCUMENTED-UNSTABLE): trace/summary/
   render share one resolver -- real input XOR `input_shape=` (flat tuple /
   sequence / keyword-to-shape mapping; seed-0 local synthesis; fail-closed
   dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
@@ -50,7 +50,7 @@ Key entry points:
   never auto-opens). Lazy: gold/declared rungs materialize during the one
   captured forward with truthful totals; zero-arg refuses before probing.
   Doc: `docs/quickstart.md`.
-- Summary rebuild (F08; spellings DOCUMENTED-UNSTABLE pending naming
+- Summary rebuild (spellings DOCUMENTED-UNSTABLE pending naming
   ratification): bare `trace.summary()` / `tl.summary(model, x)` render the
   auto view ladder (coalesced hybrid -> strictly folded module tree ->
   descending depth -> protected totals-conserving elision) under a derived
@@ -85,7 +85,7 @@ Key entry points:
   `.tlspec` artifacts + environment (doctor / api_map / load_overview /
   agent_dump / explain); no user-code execution, no mutation.
   Doc: `docs/for-ai-agents.md`.
-- Neuro treaty desk (F22; every spelling DOCUMENTED-UNSTABLE pending the
+- Neuro treaty desk (every spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `torchlens.neuro` is a thin landing zone with NO
   repgeom/stats re-exports. `tl.neuro.datasets(...)` converts every
   stimulus-indexed saved site (Trace / LoadedExtraction / extraction dir)
@@ -111,7 +111,7 @@ Key entry points:
   saved traces, buffers never scored, module dotted paths accepted;
   `per_layer` returns `ScoreParts` per layer (`raw` always named,
   `ceiling_normalised`/`ceiling`/`error` beside it; `score_parts(score)`
-  reads one Brain-Score `Score`). Reliable comparison (neuro.1):
+  reads one Brain-Score `Score`). Reliable comparison:
   `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))` is
   ungated and numpy-only, reads each site once (never re-runs the model),
   and returns descriptive scores plus `table()`/`disagreement()`/`to_dict()`;
@@ -126,7 +126,7 @@ Key entry points:
   under matplotlib renderers resolved at CALL time (`tv_matplotlib_missing`
   prints the `torchlens[viz]` install command; zero-dependency SVG/HTML token
   emitters keep bare installs alive). Attention views read the semantic
-  `pattern` facet with D6 mask provenance (SDPA call args / eager additive
+  `pattern` facet with mask provenance (SDPA call args / eager additive
   operand keyed on `finfo.min` / user metadata; zeros inference banned);
   renderers are rect meshes never `imshow`, zero `<image>` elements in SVG,
   pagination never silently drops. Causal receipt grids validate fires + both
@@ -139,7 +139,7 @@ Key entry points:
   cells, separate `row_labels=`/`col_labels=`, post-selection omission
   marker). Doc: `docs/reference/tviz.md`.
 - Structure-only capture (DOCUMENTED-UNSTABLE; D8 GRANTED — weights-free
-  admission live, F33): `tl.trace(model, x,
+  admission live): `tl.trace(model, x,
   capture=CaptureOptions(structure_only=True))` records structure +
   shape/dtype HYPOTHESES, never values; META-BUILT models are admitted
   under this contract with a uniform substrate (mixed cells refuse
@@ -152,7 +152,7 @@ Key entry points:
   persisted envelope; `tl.summary(meta_model, input_shape=...)` and
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.
-- Selection algebra (L6; core spellings slate-ratified subject to D7, rest
+- Selection algebra (core spellings slate-ratified, rest
   DOCUMENTED-UNSTABLE): `tl.Selector` (composable query AST) /
   `trace[selector]` -> `tl.Selection` (frozen, trace-bound,
   session-only). Operators `| & - ~` + reflected, no `__xor__`; two-level
@@ -224,7 +224,7 @@ Key entry points:
   string/`tl.label` addressing; `selection_unresolvable` /
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
-- Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
+- Edge substitution (DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
   dataflow edge family (EdgeUseRecords; requires an `replayable`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
@@ -234,7 +234,7 @@ Key entry points:
   `edge_replacement_stamps`, `FireRecord.edge_address`; persisted as of
   tlspec v8) while capture truth stays unmodified, and uncorroborated
   entries FAIL validation (`edge_intervention_boundary`).
-- Backward residuals (L9; DOCUMENTED-UNSTABLE): per-fire timing -- one clock
+- Backward residuals (DOCUMENTED-UNSTABLE): per-fire timing -- one clock
   (`perf_counter`), per-node keyed-LIFO pairing, stamps on the runtime
   `GradFnFired` event only; live-only `trace.autograd.grad_fn_fire_timings` (loaded
   traces refuse `grad_fn_fire_timing_unavailable`); as of the tlspec v8
@@ -330,7 +330,7 @@ Key entry points:
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
-  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
+  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`
@@ -349,7 +349,7 @@ Key entry points:
   `Trace.draw(collapse="none"|"auto"|"max"|t, fold_repeats=None|True|False)` controls v2 smart
   collapse for rolled and unrolled graphs, where float `t` in `[0.0, 1.0]` follows the public
   monotone schedule (`0.0 == "none"`, `1.0 == "max"`). `auto` IS the first schedule point whose
-  visible count enters the readable band (unfrozen, F11 memo D8: auto, float levels, and the
+  visible count enters the readable band (unfrozen: auto, float levels, and the
   public schedule all read one typed event ladder; interior t maps geometrically in realized
   count; band misses serve the disclosed strongest point).
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
@@ -359,7 +359,7 @@ Key entry points:
   the diagnostic plan it rendered from (mode = the draw's `collapse=`, context = the render
   request the draw resolved), and `Drawing.collapse_schedule` returns the float schedule
   metadata under that context. Smart-collapse
-  admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
+  admission gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
@@ -397,7 +397,7 @@ patched = tl.trace(
 streamed = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("streamed.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
-# D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
+# eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
 # (code "buffer_sink_routing_unsupported", provisional/documented-unstable).
 run_result = torch_trace.run_transaction(inputs=x, seed=42)

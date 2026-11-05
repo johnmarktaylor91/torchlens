@@ -60,7 +60,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         for barcode in getattr(record, "_param_barcodes", ()) or ():
             register_barcode(barcode)
 
-    # R29 (b4, 4th round): the all-P alternation regex trialed every one of P
+    # R29 (4th round): the all-P alternation regex trialed every one of P
     # branches at essentially every position of every param-FREE record's
     # guaranteed-miss key -- O(V_paramfree x P), ~40s of pure regex misses per
     # portable save at 100k ops / 2k params. Live barcodes are exactly 8
@@ -99,7 +99,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     def canonical_equivalence_key(value: Any) -> Any:
         """Remap AND canonically order the ``param_NNNNNN`` run in an equiv key.
 
-        R21-1: an ``op_equivalence_classes`` key is
+        an ``op_equivalence_classes`` key is
         ``f"{layer_type}_{'_'.join(sorted(raw_barcodes))}"`` -- but the raw barcodes
         are per-capture RANDOM, so weight-vs-bias order in the key was a coin flip
         per capture. The op-level ``equivalence_class`` field is re-sorted into

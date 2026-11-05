@@ -1,6 +1,6 @@
 # Experiments remember: lineage, vary, site sweeps and grids
 
-**Doc of record for the F03 surface. Every spelling DOCUMENTED-UNSTABLE
+**Doc of record for the surface. Every spelling DOCUMENTED-UNSTABLE
 pending naming-session ratification.** The design law: *the Bundle is the
 record* — the material record of an experiment, always on, travelling with
 the artifact: lineage, the operation chronology, and the complete
@@ -21,7 +21,7 @@ removed on 1 Nov 2026 (`deprecations.md`, "Experiment Ledger"), and every
   containers. All of it persists in `bundle.json` (optional writer-owned
   sections, fail-closed load validation, `bundle_lineage_invalid`).
 - **Transaction envelopes.** Every intervention transaction writes one
-  `intervention_event_v2` envelope (the C03 substrate); experiment-layer
+  `intervention_event_v2` envelope (the substrate); experiment-layer
   doors additionally land the canonical `kind="EVENT"` audit row with its
   `seq`/`prev_event_digest` hash chain (the tlspec-v9 admission's writer).
 - **The provenance join.** `bundle.why(member[, relative_to])` walks ORDERED

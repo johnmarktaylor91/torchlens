@@ -33,7 +33,7 @@ __tl_layer__ = "L5"
 
 
 class WatchRenderError(ObservabilityError):
-    """Raised for watch renderer / derived-read refusals (lane F25).
+    """Raised for watch renderer / derived-read refusals.
 
     Examples
     --------

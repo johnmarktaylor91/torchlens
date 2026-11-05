@@ -46,7 +46,7 @@ no FIELD_ORDER change:
    `StorageBinding` axes with a `ui_group` column) so the compiler generates
    both surfaces and the lockstep tests police them; no hand-maintained
    duplicate lists.
-5. Rollout gate: a real-IDE completion session (the M0/M13 gate) comparing
+5. Rollout gate: a real-IDE completion session comparing
    completion noise before/after, plus the DX oracle.
 
 ## Explicitly out

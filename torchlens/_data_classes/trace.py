@@ -284,7 +284,7 @@ class ConditionalEvent:
 
     # Declared so the scrubber walks this record field-by-field: ``source_file`` is the
     # ABSOLUTE forward-module path, and without a spec the relativizer never ran, leaking
-    # host paths at every save level (B8-18). ``_apply_conditional_source_policy`` scrubs
+    # host paths at every save level. ``_apply_conditional_source_policy`` scrubs
     # it; every other field is portable. ``ClassVar`` so ``@dataclass`` ignores it.
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
@@ -1213,11 +1213,11 @@ class Trace(TraceOutputMixin, TraceLike):
         self._backward_pass_logs: dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
-        # r79: the RECORDED prep inventories of stamped parameters/buffers, the source
+        # The RECORDED prep inventories of stamped parameters/buffers, the source
         # for stamp cleanup; emptied by ``_cleanup_model_session``. Never portable.
         self._session_param_inventory: list[Any] = []
         self._session_buffer_inventory: list[Any] = []
-        # r81: id(tensor) -> _SessionBufferStamp for every buffer stamp written this
+        # Id(tensor) -> _SessionBufferStamp for every buffer stamp written this
         # session (storage-identity belt); emptied by ``_cleanup_model_session``.
         self._session_buffer_identity: dict[int, Any] = {}
         self._autograd_backward_root_grad_fn_object_ids: list[int] = []
@@ -2967,7 +2967,7 @@ class Trace(TraceOutputMixin, TraceLike):
         )
 
     def _fork_trace(self, *, name: str | None) -> "Trace":
-        """Build a copy-on-write fork of this Trace (the M11 builder)."""
+        """Build a copy-on-write fork of this Trace (the builder)."""
 
         return build_fork(self, name=name)
 
@@ -3361,7 +3361,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self,
         level: str | None = None,
         *,
-        # Rebuilt grammar (F08; summary memo 3.10). Spellings
+        # Rebuilt grammar (summary memo 3.10). Spellings
         # DOCUMENTED-UNSTABLE pending naming-session ratification.
         view: str | None = None,
         depth: Any = None,

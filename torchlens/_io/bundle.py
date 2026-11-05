@@ -936,7 +936,7 @@ def _load_216_intervention_spec(
 
     from ..intervention.save import load_intervention_spec
 
-    # Typed boundary (r7 R73): a trace manifest whose ``tlspec_version``
+    # Typed boundary: a trace manifest whose ``tlspec_version``
     # key was lost still carries ``kind``, so format detection
     # classifies it as a v2.16 intervention spec and the spec loader
     # then surfaced a RAW FileNotFoundError for the spec.json the
@@ -1730,7 +1730,7 @@ def _bind_archived_activation_payload(
             resolved_blobs_dir=resolved_blobs_dir,
         )
         tensor = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
-        # r6 M4: the file ``sha256`` above attests the BLOB against the MANIFEST, but the
+        # The file ``sha256`` above attests the BLOB against the MANIFEST, but the
         # member's ``byte_digest`` -- the value republished on the public
         # ``ArchivedActivation.byte_digest`` beside ``.value`` -- was never checked
         # against what actually loaded. Editing one member digest (blobs untouched) loaded
@@ -3575,7 +3575,7 @@ _OPCODE_CEILING_CODE = "metadata_object_count_exceeded"
 def _opcode_ceiling_error(metadata_path: Path, *, code: str) -> ArtifactError:
     """Return the refusal for a metadata pickle above the opcode allocation ceiling.
 
-    The byte ceiling alone does not bound allocation (R60/F6): a pickle packed
+    The byte ceiling alone does not bound allocation: a pickle packed
     with tiny values expands many times its byte size into RSS before any
     structural check can refuse it. The unpickler's pre-scan counts opcodes
     before anything is built; this names the refusal on the artifact channel.

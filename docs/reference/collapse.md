@@ -120,7 +120,7 @@ or total that the hidden content does not support.*
 ## The compute ceiling
 
 Smart-collapse admission is now gated on the RENDERED UNIVERSE, not raw op count
-(collapse memo D5): the gate variable is `U` — the full plan's rendered node count after
+(collapse): the gate variable is `U` — the full plan's rendered node count after
 `module=` focus, `depth=`, and rolled reductions — tiered by a measured
 `(U, W)` work estimator (`0.0095 * U**1.43 * W**1.02` ms, W = widest rendered sibling
 group). `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) survives as the defensive constant: the

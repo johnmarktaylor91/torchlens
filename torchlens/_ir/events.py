@@ -262,8 +262,7 @@ class ParamGradObserved:
 @dataclass(frozen=True, slots=True)
 class BackwardPassEnd:
     """Core event marking completion of one autograd engine invocation.
-    ``close_path`` is the implicit-pass close-path disclosure (L9 memo 1.2;
-    provisional spelling, DOCUMENTED-UNSTABLE pending naming-session/S2
+    ``close_path`` is the implicit-pass close-path disclosure (provisional spelling, DOCUMENTED-UNSTABLE pending naming-session/S2
     routing): ``"engine_drain"`` when the queued engine final callback
     journaled the close, ``"sync_point"`` for every backstop path, ``None``
     for explicit (non-implicit) passes. Sidecar-event-only in wave 2 -- the

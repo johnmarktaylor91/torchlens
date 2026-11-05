@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# The M8 facades: declared stored fields become row-cell descriptors; the
+# The facades: declared stored fields become row-cell descriptors; the
 # instance dict keeps the store binding, user extras, and the handful of
 # names whose access paths hardcode ``__dict__`` (the template/source-trace/
 # facets slots poked directly by their properties).

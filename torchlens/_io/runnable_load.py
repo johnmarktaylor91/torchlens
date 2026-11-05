@@ -2562,7 +2562,7 @@ def _resolve_exact_key(
     if property_getter is not None:
         return property_getter, f"torch.Tensor.{key.qualname}"
     if key.namespace in ALLOWED_EXACT_ROOTS:
-        # r49 secF_1: resolve through the shared allowlisted reader, which special-cases the
+        # resolve through the shared allowlisted reader, which special-cases the
         # top-level ``torch`` root to ``torch_attr`` (no PEP-562 lazy ``torch.__getattr__``
         # submodule import / deprecated ``replacement()``). The prior direct
         # ``getattr(ALLOWED_EXACT_ROOTS[key.namespace], ...)`` fired that lazy hazard on an

@@ -26,7 +26,7 @@ __all__ = [
 def compute_record(op: Op) -> Any | None:
     """Two-term compute record (fma_macs / other_flops), derived on read.
 
-    DOCUMENTED-UNSTABLE spelling (A07 numbers-truth lane; the C02 FactCore
+    DOCUMENTED-UNSTABLE spelling (A07 numbers-truth lane; the FactCore
     substrate consumes this). ``None`` for boundary pseudo-rows and ops
     with unknown FLOPs. See ``torchlens._capture.flops.ComputeRecord``.
     """
