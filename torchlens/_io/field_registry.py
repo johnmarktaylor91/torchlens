@@ -93,6 +93,13 @@ COMPONENT_SPEC_MODULES: tuple[str, ...] = (
     "torchlens._kernel_telemetry",
 )
 
+#: Contract name of a component-spec module that 3.0 made private: the writer contract
+#: keeps the module path it was digested under, so a private-submodule rename never
+#: changes the contract digest (and same-version artifacts keep loading).
+_CONTRACT_MODULE_NAMES: dict[str, str] = {
+    "torchlens.intervention._types": "torchlens.intervention.types",
+}
+
 #: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
 #: r2-corrected). Everything not listed is FACT by conservative default:
 #: treating a derived field as fact never loses truth, while the reverse
@@ -199,7 +206,8 @@ def component_spec_tables() -> dict[str, dict[str, str]]:
             spec = obj.__dict__.get("_PORTABLE_STATE_SPEC")
             if not isinstance(spec, dict) or not spec:
                 continue
-            qualname = f"{obj.__module__}.{obj.__qualname__}"
+            module_path = _CONTRACT_MODULE_NAMES.get(obj.__module__, obj.__module__)
+            qualname = f"{module_path}.{obj.__qualname__}"
             tables[qualname] = {name: policy.value for name, policy in sorted(spec.items())}
     return tables
 

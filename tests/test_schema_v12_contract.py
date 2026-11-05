@@ -96,3 +96,26 @@ def test_v12_reader_floor_moves_with_the_contract() -> None:
     assert v12["min_tlspec_version"] == 12
     assert v11["tlspec_version"] == 11, "v11 stays frozen"
     assert v11["min_tlspec_version"] == 11, "v11 stays frozen"
+
+
+def test_component_spec_keys_keep_the_persisted_intervention_module_path() -> None:
+    """Edit and FireRecord stay keyed by the module path the contract was digested under.
+
+    ``torchlens.intervention.types`` became private (``intervention._types``); the
+    writer contract keeps the persisted path, so the move cannot change the digest
+    and artifacts saved before it keep loading at the same tlspec version.
+    """
+
+    from torchlens._io.field_registry import component_spec_tables
+    from torchlens._io.writer_contract import writer_contract_digest
+    from torchlens.intervention._types import Edit, FireRecord
+
+    tables = component_spec_tables()
+    committed = _document(V12_CONTRACT)["contract"]["component_specs"]
+    for cls in (Edit, FireRecord):
+        assert cls.__module__ == "torchlens.intervention._types"
+        persisted = f"torchlens.intervention.types.{cls.__qualname__}"
+        assert persisted in tables
+        assert f"{cls.__module__}.{cls.__qualname__}" not in tables
+        assert tables[persisted] == committed[persisted]
+    assert writer_contract_digest() == _document(V12_CONTRACT)["writer_contract_digest"]

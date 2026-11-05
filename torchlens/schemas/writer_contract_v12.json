@@ -1262,7 +1262,7 @@
     "_launches": "keep",
     "_relations": "keep"
    },
-   "torchlens.intervention._types.Edit": {
+   "torchlens.intervention.types.Edit": {
     "args": "keep",
     "factory": "drop",
     "is_batch_independent": "keep",
@@ -1274,7 +1274,7 @@
     "selection_recipe": "blob_recursive",
     "signal": "keep"
    },
-   "torchlens.intervention._types.FireRecord": {
+   "torchlens.intervention.types.FireRecord": {
     "backward_pass_number": "keep",
     "call_index": "keep",
     "call_label": "keep",
@@ -4018,5 +4018,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "71ff6412070ae128cae563b9a57bc07f5521e6739c7cc96675c55e8aceed9bf9"
+ "writer_contract_digest": "169ad49c0c99dbb733f8c034005727323b93b5642b86f658cbce0ba07b31d42d"
 }
