@@ -366,7 +366,9 @@ def test_rich_plain_state_validates_through_live_model_fallback() -> None:
     # bumped cfg in place, and validation put both back.
     assert model.pe is pe and torch.equal(pe, pe_before)
     assert model.cfg is cfg and vars(cfg) == {"scale": 0.5, "calls": 0}
-    assert model.rng is rng and rng.get_state(legacy=False)["state"] == rng_before["state"]
+    rng_after = rng.get_state(legacy=False)
+    assert model.rng is rng and rng_after["state"]["pos"] == rng_before["state"]["pos"]
+    assert np.array_equal(rng_after["state"]["key"], rng_before["state"]["key"])
     assert model._dtype is torch.float32 and model.F is torch.nn.functional
 
 
