@@ -571,7 +571,7 @@ expert contributions from routing indices alone.
   `"memory"`, `"sequence"`, `"compute"`, `"interventions"` (spelled once in
   `torchlens/_literals.py` `DrawViewLiteral`; door `torchlens/_visualization/_view_door.py`).
   Each view prints any caption lines it needs under the header block (no `view:` line; the
-  header is model, drawn count and size, compact params, and one edit line when edited).
+  header is model, the traced network's op count and size (the focused module's on a `module=` draw; never drawn boxes), compact params, and one edit line when edited).
   Explicit keywords win over the view's settings, so combinations
   are keywords (`trace.draw(view="debug", show_edge_shapes=True)`); `theme=` stays the colour
   skin and composes with any view; `"speed"`/`"memory"`/`"compute"` turn on

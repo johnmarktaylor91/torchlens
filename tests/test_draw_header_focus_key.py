@@ -36,9 +36,9 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import (
     KEY_TABLE_ID,
-    drawn_count_line,
     drawn_module_marks,
     key_swatches,
+    network_count_line,
     params_caption_detail,
 )
 from torchlens._visualization._label_format import binary_size, compact_count, format_memory
@@ -248,29 +248,51 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         loop.cleanup()
 
 
-def _count_unit(kind: str, node: object) -> SimpleNamespace:
-    return SimpleNamespace(
-        kind=kind, emission=SimpleNamespace(node=node, call=None), source_nodes=(node,)
-    )
+def _fake_trace(ops: dict[str, object], inputs: tuple[str, ...] = ()) -> SimpleNamespace:
+    return SimpleNamespace(ops=ops, input_layers=inputs, output_layers=())
 
 
-def test_rolled_count_line_keeps_singular_forms() -> None:
-    op = SimpleNamespace(activation_memory=16)
-    one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
-    assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
-    # In the unrolled view the drawn node is the op itself.
-    one_op = SimpleNamespace(units=(_count_unit("raw_op", op),))
-    assert drawn_count_line(None, one_op, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
-    box = SimpleNamespace(units=(_count_unit("module_box", op),))
-    assert drawn_count_line(None, box, "rolled") == "1 node (16 B)"  # type: ignore[arg-type]
+def _op(layer: str, memory: int = 16, modules: tuple[str, ...] = ()) -> SimpleNamespace:
+    return SimpleNamespace(activation_memory=memory, layer_label=layer, modules=modules)
+
+
+def test_count_line_keeps_singular_forms() -> None:
+    one = _fake_trace({"a:1": _op("a")})
+    assert network_count_line(one, None, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
+    assert network_count_line(one, None, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
+    two_passes = _fake_trace({"a:1": _op("a"), "a:2": _op("a")})
+    assert network_count_line(two_passes, None, "rolled") == "1 layer (2 ops, 32 B)"  # type: ignore[arg-type]
 
 
 def test_header_counts_print_compact_from_ten_thousand() -> None:
-    op = SimpleNamespace(activation_memory=0)
-    many = SimpleNamespace(units=tuple(_count_unit("raw_op", op) for _ in range(12_345)))
-    assert drawn_count_line(None, many, "unrolled") == "12.3K ops (0 B)"  # type: ignore[arg-type]
-    some = SimpleNamespace(units=tuple(_count_unit("raw_op", op) for _ in range(9_999)))
-    assert drawn_count_line(None, some, "unrolled") == "9,999 ops (0 B)"  # type: ignore[arg-type]
+    many = _fake_trace({f"o{i}": _op(f"o{i}", 0) for i in range(12_345)})
+    assert network_count_line(many, None, "unrolled") == "12.3K ops (0 B)"  # type: ignore[arg-type]
+    some = _fake_trace({f"o{i}": _op(f"o{i}", 0) for i in range(9_999)})
+    assert network_count_line(some, None, "unrolled") == "9,999 ops (0 B)"  # type: ignore[arg-type]
+
+
+def test_focus_count_line_counts_the_module_ops_only() -> None:
+    ops = {
+        "x": _op("x"),
+        "a": _op("a", 8, ("enc:1", "enc.mlp:1")),
+        "b": _op("b", 8, ("enc:1", "enc.mlp:2")),
+        "c": _op("c", 8, ("enc:1",)),
+    }
+    trace = _fake_trace(ops, inputs=("x",))
+    assert network_count_line(trace, "enc.mlp", "unrolled") == "2 ops (16 B)"  # type: ignore[arg-type]
+    assert network_count_line(trace, None, "unrolled") == "4 ops (40 B)"  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("module", [None, _FOCUS])
+def test_count_line_reports_the_network_whatever_the_drawing_collapses(
+    trace: tl.Trace, tmp_path: Path, module: str | None
+) -> None:
+    """depth=1 collapses boxes but the header still counts the network's (or module's) ops."""
+
+    full = _COUNT.search(_header(_dot(trace, tmp_path, "full", module=module))).group(0)  # type: ignore[union-attr]
+    shallow = _header(_dot(trace, tmp_path, "shallow", module=module, depth=1))
+    assert _COUNT.search(shallow).group(0) == full  # type: ignore[union-attr]
+    assert not re.search(r"\d nodes? \(", shallow), shallow
 
 
 def _param_trace(total: int, trainable: int) -> SimpleNamespace:

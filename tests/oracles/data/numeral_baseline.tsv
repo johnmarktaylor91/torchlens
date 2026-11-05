@@ -7060,7 +7060,6 @@ package-docstrings	torchlens/_visualization/_encoding.py	3.1
 package-docstrings	torchlens/_visualization/_encoding.py	3.2
 package-docstrings	torchlens/_visualization/_focus_scope.py	1_1
 package-docstrings	torchlens/_visualization/_focus_scope.py	203
-package-docstrings	torchlens/_visualization/_focus_scope.py	480.0
 package-docstrings	torchlens/_visualization/_focus_stubs.py	1_1
 package-docstrings	torchlens/_visualization/_fonts.py	1.1,
 package-docstrings	torchlens/_visualization/_fonts.py	2.1.5
@@ -7086,7 +7085,6 @@ package-docstrings	torchlens/_visualization/_header_block.py	149
 package-docstrings	torchlens/_visualization/_header_block.py	1_1
 package-docstrings	torchlens/_visualization/_header_block.py	2026
 package-docstrings	torchlens/_visualization/_header_block.py	29
-package-docstrings	torchlens/_visualization/_header_block.py	48
 package-docstrings	torchlens/_visualization/_label_format.py	0.87,
 package-docstrings	torchlens/_visualization/_label_format.py	0.95
 package-docstrings	torchlens/_visualization/_label_format.py	1.02,

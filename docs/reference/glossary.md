@@ -3096,7 +3096,8 @@ deprecation shim owed*
   data?), `"transformer"` (how is attention wired?), `"memory"` (what is big in bytes?),
   `"sequence"` (how do the passes unfold?), `"compute"` (where are the FLOPs?) and
   `"interventions"` (what did the edits change?). Each view prints any caption lines it needs
-  under the header block, which names the model, the drawn count and size, the parameters
+  under the header block, which names the model, the traced network's op count and size (a `module=` draw: that
+  module's; never the drawn boxes), the parameters
   (compact from 1,000, `11.7M params`) and, on an edited trace, one edit line. Keywords you pass win over
   the view's own settings, so combinations are spelled with keywords, for example
   `trace.draw(view="debug", show_edge_shapes=True)`. `theme=` stays the colour skin and
