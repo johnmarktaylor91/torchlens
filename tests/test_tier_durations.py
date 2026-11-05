@@ -131,6 +131,59 @@ def test_balanced_shards_cover_every_file_once_and_spread_the_seconds() -> None:
     assert shards == td.balanced_shards(rows, 4, files)
 
 
+def test_item_shards_weigh_only_the_selection_and_split_a_file_that_fills_a_shard(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A file measured mostly by deselected slow tests no longer fills a shard alone."""
+
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_matrix.py").write_text("@pytest.mark.slow\ndef test_a(): ...\n")
+    (tests / "test_models.py").write_text("@pytest.mark.heavy\ndef test_a(): ...\n")
+    rows = [
+        td.FileRow("tests/test_matrix.py", 1000, 10000.0, 400.0, "slow"),
+        td.FileRow("tests/test_models.py", 100, 4000.0, 50.0, "heavy"),
+    ] + [td.FileRow(f"tests/test_{i:02d}.py", 50, 50.0, 2.0, "unmarked") for i in range(40)]
+    items = [
+        td.ShardItem("tests/test_matrix.py", f"tests/test_matrix.py::t[{n}]") for n in range(160)
+    ]
+    items += [
+        td.ShardItem("tests/test_models.py", f"tests/test_models.py::t[{n}]") for n in range(80)
+    ]
+    items += [
+        td.ShardItem(f"tests/test_{i:02d}.py", f"tests/test_{i:02d}.py::t[{n}]")
+        for i in range(40)
+        for n in range(50)
+    ]
+    weights = td.item_weights(rows, items, tmp_path)
+    assert weights["tests/test_matrix.py::t[0]"] == td.SMOKE_DURATION_BUDGET_SECONDS
+    assert weights["tests/test_models.py::t[0]"] == td.HEAVY_DURATION_BUDGET_SECONDS
+    assert weights["tests/test_00.py::t[0]"] == 1.0
+    assignment = td.balanced_item_shards(rows, 8, items, tmp_path)
+    assert set(assignment) == {item.nodeid for item in items}
+    assert assignment == td.balanced_item_shards(rows, 8, list(reversed(items)), tmp_path)
+    counts = [sum(1 for shard in assignment.values() if shard == i) for i in range(8)]
+    assert min(counts) >= 0.75 * len(items) / 8
+    matrix_shards = {assignment[i.nodeid] for i in items if i.file == "tests/test_matrix.py"}
+    assert len(matrix_shards) == 8
+    whole = {assignment[i.nodeid] for i in items if i.file == "tests/test_00.py"}
+    assert len(whole) == 1
+
+    listing = tmp_path / "collected.txt"
+    listing.write_text("\n".join(i.nodeid for i in items) + "\n\n2240 tests collected in 1.00s\n")
+    assert td.read_collected_items(listing) == items
+    durations = tmp_path / "durations.csv"
+    td.write_rows(rows, durations)
+    args = ["shards", "--count", "8", "--items", str(listing), "--durations", str(durations)]
+    assert td.main(args) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 8 and all("estimated" in line for line in lines)
+    cli = td.balanced_item_shards(rows, 8, items)
+    assert td.main([*args, "--index", "3"]) == 0
+    printed = capsys.readouterr().out.split()
+    assert printed == [i.nodeid for i in items if cli[i.nodeid] == 3]
+
+
 def test_check_command_exit_status_and_files_command(
     planted: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -241,8 +294,8 @@ def test_committed_durations_file_is_well_formed_and_small() -> None:
     assert td.read_meta()["source_commit"]
 
 
-def test_tier_shard_option_partitions_every_file_exactly_once() -> None:
-    """``--tier-shard I/N`` keeps the files ``shards --count N --index I`` prints, disjointly."""
+def test_tier_shard_option_partitions_every_selected_test_exactly_once() -> None:
+    """``--tier-shard I/N`` keeps the tests ``shards --count N --items`` assigns to I, disjointly."""
 
     from types import SimpleNamespace
 
@@ -250,17 +303,21 @@ def test_tier_shard_option_partitions_every_file_exactly_once() -> None:
 
     files = td.test_files_on_disk()
     stray = td.REPO_ROOT / "tests" / "not_a_listed_test_module.py"
-    items = [SimpleNamespace(path=td.REPO_ROOT / f) for f in files] + [SimpleNamespace(path=stray)]
-    expected = td.balanced_shards(td.read_rows(), 4, files)
-    seen: list[Path] = []
+    paths = [td.REPO_ROOT / f for f in files] + [stray]
+    items = [
+        SimpleNamespace(path=path, nodeid=f"{path.relative_to(td.REPO_ROOT).as_posix()}::test_{n}")
+        for path in paths
+        for n in range(2)
+    ]
+    selected = [td.ShardItem(item.nodeid.split("::")[0], item.nodeid) for item in items]
+    expected = td.balanced_item_shards(td.read_rows(), 4, selected)
+    seen: list[str] = []
     for index in range(4):
         kept, dropped = tier_shard_items(items, index, 4, td.REPO_ROOT)
         assert len(kept) + len(dropped) == len(items)
-        kept_files = [Path(item.path).relative_to(td.REPO_ROOT).as_posix() for item in kept]
-        extra = [stray.relative_to(td.REPO_ROOT).as_posix()] if index == 0 else []
-        assert sorted(kept_files) == sorted(expected[index] + extra)
-        seen += [Path(item.path) for item in kept]
-    assert sorted(seen) == sorted(Path(item.path) for item in items)
+        assert all(expected[item.nodeid] == index for item in kept)
+        seen += [item.nodeid for item in kept]
+    assert sorted(seen) == sorted(item.nodeid for item in items)
     assert parse_tier_shard("3/8") == (3, 8)
     for bad in ("8/8", "-1/8", "1", "a/b", "1/0"):
         with pytest.raises(pytest.UsageError):
