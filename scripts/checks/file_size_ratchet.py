@@ -337,7 +337,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4600 -> 4450 (cond-validate): the runnable alias resolver moved to its own
     # module _utils/_runnable_alias_resolver.py, making room for the HOP rule
     # accessors; measured 4398.
-    "torchlens/_utils/_torch_compat.py": 4450,
+    # 4450 -> 4300 (floor K2): a lazily latched real-op probe moved to the
+    # _utils/_kernel_probes.py leaf, making room for the floor capability flags;
+    # measured 4300.
+    "torchlens/_utils/_torch_compat.py": 4300,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

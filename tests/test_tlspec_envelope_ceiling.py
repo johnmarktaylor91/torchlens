@@ -150,7 +150,7 @@ def test_oracle_minor_mismatch_filter_matches_each_loader_and_nothing_else(subje
         warnings_module.simplefilter("always")
         with expect_bundle_minor_version_mismatch():
             check_runtime_identity(subject=subject, **stamps)
-            warnings_module.warn(f"{subject} unrelated advisory", TorchLensWarning)
+            warnings_module.warn(f"{subject} unrelated advisory", TorchLensWarning, stacklevel=1)
     assert [str(item.message) for item in caught] == [f"{subject} unrelated advisory"]
 
 

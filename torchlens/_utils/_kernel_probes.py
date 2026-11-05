@@ -309,7 +309,7 @@ def _redispatch_probe_mode(mode_base: type[Any]) -> Any:
         A fresh mode instance, entered with ``with``.
     """
 
-    class _RedispatchProbeMode(mode_base):  # type: ignore[misc, valid-type]
+    class _RedispatchProbeMode(mode_base):
         """Redispatch operations unchanged for the Parameter subclass capability probe."""
 
         def __torch_dispatch__(
