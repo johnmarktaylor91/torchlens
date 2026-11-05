@@ -616,18 +616,9 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "foreign_kernel_boundary warning in this capture (once per class)"
     ),
     "_foreign_departures": (
-        "torch capture (backends/torch/_foreign_data.py): tensors that left torch in "
-        "plain forward code (numpy / dlpack / tolist exports outside any Function), "
-        "matched by later host constructors and popped by postprocess step 3"
-    ),
-    "_exported_storages": (
-        "torch capture (backends/torch/_storage_exports.py): storages handed to the host "
-        "zero-copy in plain forward code, holding each exported tensor, popped by "
-        "postprocess step 3"
-    ),
-    "_foreign_written_slots": (
-        "torch capture (backends/torch/_storage_exports.py): version snapshots whose "
-        "slot sat on an exported storage, keyed by raw parent and child label, read by "
-        "forward validation (validation/_snapshot_binding.py)"
+        "torch capture (backends/torch/_foreign_data.py ForeignJournal): tensors that "
+        "left torch in plain forward code (numpy / dlpack / tolist exports outside any "
+        "Function), matched by later host constructors, and storages exported zero-copy; "
+        "postprocess step 3 keeps only the exact-slot marks forward validation reads"
     ),
 }

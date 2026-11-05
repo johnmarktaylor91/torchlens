@@ -73,8 +73,10 @@ def _run_remove_orphan_nodes(ctx: StepContext) -> None:
     """Drop raw nodes that reach no model output."""
 
     with _vtimed(ctx.trace, "  Step 3: Remove orphan nodes", bucket="remove_orphan_nodes"):
-        ctx.trace.__dict__.pop("_foreign_departures", None)  # capture-time journal ends here
-        ctx.trace.__dict__.pop("_exported_storages", None)  # releases the held exports
+        journal = ctx.trace.__dict__.pop("_foreign_departures", None)
+        kept = journal.end_capture() if journal is not None else None  # slot marks only
+        if kept is not None:
+            ctx.trace.__dict__["_foreign_departures"] = kept
         graph_traversal._remove_orphan_nodes(ctx.trace)
 
 

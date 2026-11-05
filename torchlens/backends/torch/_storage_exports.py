@@ -18,7 +18,7 @@ op recorded after the kernel's write, and an ordinary Function's interior keeps 
 census tripwire, so a foreign write there still reaches the interior's saved outs.
 
 The same export also records the receiver's storage for the capture
-(:func:`note_storage_export`). A later call that reads a tensor on that storage with a
+(:func:`note_storage_export`, in the capture's ``ForeignJournal``). A later call that reads a tensor on that storage with a
 value other than its producer's saved out stores a per-child version snapshot like any
 changed parent; the write that changed it ran outside torch and is in no recorded op.
 :func:`note_foreign_written_snapshot` marks that snapshot with the exact argument slots
@@ -37,21 +37,14 @@ from ... import _state
 from ..._utils._internal_read import _internal_read_state
 from ..._utils.collections import index_nested
 from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
+from ._foreign_data import FOREIGN_DATA_DEPARTURES_ATTR, ForeignJournal, foreign_journal
 
 __all__ = (
-    "EXPORTED_STORAGES_ATTR",
-    "FOREIGN_WRITTEN_SLOTS_ATTR",
     "STORAGE_EXPORT_FUNC_NAMES",
     "materialize_deferred_for_export",
     "note_foreign_written_snapshot",
     "note_storage_export",
 )
-
-EXPORTED_STORAGES_ATTR = "_exported_storages"
-"""Session-time Trace attribute: exported storage key to the exported tensor (popped in step 3)."""
-
-FOREIGN_WRITTEN_SLOTS_ATTR = "_foreign_written_slots"
-"""Trace attribute: ``(parent raw label, child raw label)`` to the parent's bound slots."""
 
 STORAGE_EXPORT_FUNC_NAMES: frozenset[str] = frozenset(
     {
@@ -132,7 +125,7 @@ def note_storage_export(trace: Any, args: Sequence[Any]) -> None:
     if key is not None:
         # The tensor is held so its storage pointer cannot be reused by a later
         # allocation and taken for an exported one.
-        trace.__dict__.setdefault(EXPORTED_STORAGES_ATTR, {})[key] = args[0]
+        foreign_journal(trace).exported[key] = args[0]
 
 
 def note_foreign_written_snapshot(
@@ -161,8 +154,8 @@ def note_foreign_written_snapshot(
         The child's live positional and keyword arguments.
     """
 
-    exported = trace.__dict__.get(EXPORTED_STORAGES_ATTR)
-    if not exported:
+    journal = trace.__dict__.get(FOREIGN_DATA_DEPARTURES_ATTR)
+    if not isinstance(journal, ForeignJournal) or not journal.exported:
         return
     slots = [
         (kind, position)
@@ -171,6 +164,7 @@ def note_foreign_written_snapshot(
         if label == parent_label
     ]
     sources = dict(zip(("args", "kwargs"), live_args, strict=True))
-    if any(_storage_key(_slot_value(sources[kind], pos)) in exported for kind, pos in slots):
-        marks = trace.__dict__.setdefault(FOREIGN_WRITTEN_SLOTS_ATTR, {})
-        marks[(parent_label, child_label)] = frozenset(slots)
+    if any(
+        _storage_key(_slot_value(sources[kind], pos)) in journal.exported for kind, pos in slots
+    ):
+        journal.written_slots[(parent_label, child_label)] = frozenset(slots)
