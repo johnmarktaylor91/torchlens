@@ -15,7 +15,6 @@ from PIL import Image, ImageDraw
 
 from .._plots import node_plots
 from .._plots.node_plots import image_scatter, lineplot
-from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
@@ -27,6 +26,7 @@ from ._geometry import (
     _validate_variance_threshold,
     rank_transform_rdm,
 )
+from ._node_keys import annotation_key_candidates, node_caption, node_shape, node_source_trace
 
 __tl_layer__ = "L6"
 
@@ -40,12 +40,12 @@ def mds_scatter_node_spec(
 ) -> Callable[[Any, Any], Any | None]:
     """Return a draw-time node callback for stored MDS scatter annotations.
 
-    The returned callback reads ``layer:<layer_label>`` or ``op:<op.label>``
-    coordinate tensors from ``trace._annotation_blobs`` and composes a fresh
-    PIL PNG every time a graph is drawn. When ``trace.input`` is a PIL image
-    batch with the same leading count as the coordinates, thumbnails are pasted
-    at the normalized MDS positions. Otherwise, the callback renders an explicit
-    point-cloud fallback image.
+    The callback reads the ``op:<pass label>`` (the pass an unrolled node draws)
+    or ``layer:<layer_label>`` coordinates in ``trace._annotation_blobs`` and
+    draws a fresh PNG per draw: thumbnails at the MDS positions when
+    ``trace.input`` is a matching PIL batch, else a point cloud. As
+    ``collapsed_node_spec_fn`` it decorates a collapsed box with its call's
+    output-op coordinates.
 
     Parameters
     ----------
@@ -94,7 +94,7 @@ def mds_scatter_node_spec(
         Parameters
         ----------
         layer:
-            Layer or op-like render node passed by TorchLens.
+            Layer or op node, or the Module of a collapsed box.
         spec:
             Default ``NodeSpec`` to mutate by replacement.
 
@@ -104,7 +104,7 @@ def mds_scatter_node_spec(
             Updated spec when coordinates are available, otherwise ``None``.
         """
 
-        trace = getattr(layer, "source_trace", None)
+        trace = node_source_trace(layer)
         if trace is None:
             return None
         key, coords = _mds_scatter_coords_for_node(trace, layer)
@@ -132,11 +132,11 @@ def mds_scatter_node_spec(
         if more_count > 0:
             tooltip = f"{tooltip}; +{more_count} more"
 
-        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        caption = node_caption(layer, key)
         return spec.replace(
             lines=[caption],
             image=str(image_path),
-            shape="box",
+            shape=node_shape(layer, spec),
             tooltip=tooltip,
             extra_attrs={
                 **getattr(spec, "extra_attrs", {}),
@@ -225,7 +225,7 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
         Parameters
         ----------
         layer:
-            Layer or op-like render node passed by TorchLens.
+            Layer or op node, or the Module of a collapsed box.
         spec:
             Default ``NodeSpec`` to mutate by replacement.
 
@@ -235,7 +235,7 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
             Updated spec when an RDM is available, otherwise ``None``.
         """
 
-        trace = getattr(layer, "source_trace", None)
+        trace = node_source_trace(layer)
         if trace is None:
             return None
         key, matrix = _rdm_matrix_for_node(trace, layer)
@@ -267,11 +267,11 @@ def rdm_node_spec(  # noqa: PLR0913 -- draw-time producer: six all-defaulted pre
             f"RDM heatmap for {key}: metric=precomputed{display_text}, "
             f"N={matrix.shape[0]} stimuli{more_text}"
         )
-        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        caption = node_caption(layer, key)
         return spec.replace(
             lines=[caption],
             image=str(image_path),
-            shape="box",
+            shape=node_shape(layer, spec),
             tooltip=tooltip,
             extra_attrs={
                 **getattr(spec, "extra_attrs", {}),
@@ -341,7 +341,7 @@ def scree_node_spec(
         Parameters
         ----------
         layer:
-            Layer or op-like render node passed by TorchLens.
+            Layer or op node, or the Module of a collapsed box.
         spec:
             Default ``NodeSpec`` to mutate by replacement.
 
@@ -352,7 +352,7 @@ def scree_node_spec(
             ``None``.
         """
 
-        trace = getattr(layer, "source_trace", None)
+        trace = node_source_trace(layer)
         if trace is None:
             return None
         key, eigenvalues = _scree_eigenvalues_for_node(trace, layer)
@@ -371,7 +371,7 @@ def scree_node_spec(
             variance_threshold=variance_threshold,
         )
         image_path = _write_node_plot_image(trace, "scree", key, image)
-        caption = str(getattr(layer, "layer_label", None) or getattr(layer, "label", key))
+        caption = node_caption(layer, key)
         threshold_percent = int(round(variance_threshold * 100.0))
         tooltip = (
             f"Scree plot for {key}: PR={info['participation_ratio']:.2f}, "
@@ -381,7 +381,7 @@ def scree_node_spec(
         return spec.replace(
             lines=[caption],
             image=str(image_path),
-            shape="box",
+            shape=node_shape(layer, spec),
             tooltip=tooltip,
             extra_attrs={
                 **getattr(spec, "extra_attrs", {}),
@@ -417,16 +417,7 @@ def _scree_eigenvalues_for_node(trace: Any, node: Any) -> tuple[str | None, np.n
         blobs = None
     if not isinstance(blobs, dict):
         return None, None
-    candidates = []
-    # A rolled multi-pass Layer has no single per-pass label; plain getattr
-    # would leak the multi-pass ValueError tripwire and kill the whole draw.
-    label = get_multipass_attr(node, "label", None, multipass=None)
-    if label is not None:
-        candidates.append(f"op:{label}")
-    layer_label = get_multipass_attr(node, "layer_label", None, multipass=None)
-    if layer_label is not None:
-        candidates.append(f"layer:{layer_label}")
-    for key in candidates:
+    for key in annotation_key_candidates(node):
         value = blobs.get(f"scree:{key}")
         if value is None:
             continue
@@ -526,16 +517,7 @@ def _rdm_matrix_for_node(trace: Any, node: Any) -> tuple[str | None, np.ndarray 
         blobs = None
     if not isinstance(blobs, dict):
         return None, None
-    candidates = []
-    # A rolled multi-pass Layer has no single per-pass label; plain getattr
-    # would leak the multi-pass ValueError tripwire and kill the whole draw.
-    label = get_multipass_attr(node, "label", None, multipass=None)
-    if label is not None:
-        candidates.append(f"op:{label}")
-    layer_label = get_multipass_attr(node, "layer_label", None, multipass=None)
-    if layer_label is not None:
-        candidates.append(f"layer:{layer_label}")
-    for key in candidates:
+    for key in annotation_key_candidates(node):
         value = blobs.get(f"rdm:{key}")
         if value is None:
             continue
@@ -568,16 +550,7 @@ def _mds_scatter_coords_for_node(trace: Any, node: Any) -> tuple[str | None, np.
         blobs = None
     if not isinstance(blobs, dict):
         return None, None
-    candidates = []
-    # A rolled multi-pass Layer has no single per-pass label; plain getattr
-    # would leak the multi-pass ValueError tripwire and kill the whole draw.
-    label = get_multipass_attr(node, "label", None, multipass=None)
-    if label is not None:
-        candidates.append(f"op:{label}")
-    layer_label = get_multipass_attr(node, "layer_label", None, multipass=None)
-    if layer_label is not None:
-        candidates.append(f"layer:{layer_label}")
-    for key in candidates:
+    for key in annotation_key_candidates(node):
         value = blobs.get(f"mds:{key}")
         if value is None:
             continue
