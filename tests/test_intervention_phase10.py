@@ -586,13 +586,13 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     assert not (path / "spec.json").exists()
 
     # A recipe stamped with a format this TorchLens does not read refuses typed.
-    recipe_json["format_version"] = 4
+    recipe_json["format_version"] = 5
     recipe_path.write_text(json.dumps(recipe_json), encoding="utf-8")
     redigest(path, "intervention.json")
     with pytest.raises(ArtifactError) as excinfo:
         load_intervention_spec(path)
     assert excinfo.value.fields["code"] == "bundle_load_failed"
-    assert "recipe format_version 4" in str(excinfo.value)
+    assert "recipe format_version 5" in str(excinfo.value)
 
 
 def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:

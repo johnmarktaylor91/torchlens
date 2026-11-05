@@ -1128,7 +1128,7 @@ torchlens/intervention/_runtime.py::_execute_hook	80
 torchlens/intervention/_runtime.py::_validate_grad_tuple	66
 torchlens/intervention/_runtime.py::validate_hook_output	70
 torchlens/intervention/_runtime_probes.py::_apply_inplace_replacement_to_mutated_storage	72
-torchlens/intervention/_save.py	824
+torchlens/intervention/_save.py	817
 torchlens/intervention/_save.py::_build_target_manifest	73
 torchlens/intervention/_save.py::save_intervention	131
 torchlens/intervention/_spec_codec.py::_deserialize_intervention_spec	72
@@ -1150,11 +1150,11 @@ torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
 torchlens/intervention/_trace_selection_edits.py::apply_selection_do	78
 torchlens/intervention/_types.py	824
-torchlens/intervention/hooks.py	1709
+torchlens/intervention/hooks.py	1706
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63
-torchlens/intervention/hooks.py::expand_facet_hook_entries	70
+torchlens/intervention/hooks.py::expand_facet_hook_entries	68
 torchlens/intervention/hooks.py::normalize_hook_plan	69
 torchlens/intervention/stochastic.py	1374
 torchlens/intervention/stochastic.py::_resolve_over_axes	61

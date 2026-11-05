@@ -2080,7 +2080,9 @@ docs-md	docs/internal/agent-reference/critical-invariants.md	30
 docs-md	docs/internal/agent-reference/critical-invariants.md	33
 docs-md	docs/internal/agent-reference/critical-invariants.md	37
 docs-md	docs/internal/agent-reference/critical-invariants.md	40
+docs-md	docs/internal/agent-reference/critical-invariants.md	45648
 docs-md	docs/internal/agent-reference/critical-invariants.md	71
+docs-md	docs/internal/agent-reference/critical-invariants.md	93
 docs-md	docs/internal/agent-reference/current-2-x-surface.md	0.1.3
 docs-md	docs/internal/agent-reference/current-2-x-surface.md	0.1.5
 docs-md	docs/internal/agent-reference/current-2-x-surface.md	0.3.2
@@ -2863,8 +2865,8 @@ docs-md	docs/maintainers/where.md	169
 docs-md	docs/maintainers/where.md	17
 docs-md	docs/maintainers/where.md	170
 docs-md	docs/maintainers/where.md	171
+docs-md	docs/maintainers/where.md	1717
 docs-md	docs/maintainers/where.md	172
-docs-md	docs/maintainers/where.md	1720
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	174
 docs-md	docs/maintainers/where.md	1741
@@ -2981,6 +2983,7 @@ docs-md	docs/maintainers/where.md	256
 docs-md	docs/maintainers/where.md	257
 docs-md	docs/maintainers/where.md	258
 docs-md	docs/maintainers/where.md	2592
+docs-md	docs/maintainers/where.md	26
 docs-md	docs/maintainers/where.md	260
 docs-md	docs/maintainers/where.md	261
 docs-md	docs/maintainers/where.md	262
@@ -3256,7 +3259,6 @@ docs-md	docs/maintainers/where.md	577
 docs-md	docs/maintainers/where.md	581
 docs-md	docs/maintainers/where.md	582
 docs-md	docs/maintainers/where.md	584
-docs-md	docs/maintainers/where.md	585
 docs-md	docs/maintainers/where.md	586
 docs-md	docs/maintainers/where.md	587
 docs-md	docs/maintainers/where.md	588
@@ -3412,6 +3414,7 @@ docs-md	docs/maintainers/where.md	836
 docs-md	docs/maintainers/where.md	84
 docs-md	docs/maintainers/where.md	843
 docs-md	docs/maintainers/where.md	85
+docs-md	docs/maintainers/where.md	8512
 docs-md	docs/maintainers/where.md	857
 docs-md	docs/maintainers/where.md	86
 docs-md	docs/maintainers/where.md	861
@@ -8937,6 +8940,11 @@ package-docstrings	torchlens/validation/_invariants_topology.py	26
 package-docstrings	torchlens/validation/_invariants_topology.py	29
 package-docstrings	torchlens/validation/_layer_grad_report.py	100
 package-docstrings	torchlens/validation/_layer_grad_report.py	32
+package-docstrings	torchlens/validation/_mask_builder_dependence.py	2026
+package-docstrings	torchlens/validation/_mask_builder_dependence.py	4.57
+package-docstrings	torchlens/validation/_mask_builder_dependence.py	45648
+package-docstrings	torchlens/validation/_mask_builder_dependence.py	71
+package-docstrings	torchlens/validation/_mask_builder_dependence.py	93
 package-docstrings	torchlens/validation/_membership_perturbation.py	0..10
 package-docstrings	torchlens/validation/_norm_running_var_proof.py	1.0,
 package-docstrings	torchlens/validation/_norm_running_var_proof.py	86
@@ -10987,6 +10995,7 @@ test-docstrings	tests/test_validation_hardening.py	49,
 test-docstrings	tests/test_validation_hardening.py	50
 test-docstrings	tests/test_validation_key_forgery.py	11
 test-docstrings	tests/test_validation_key_forgery.py	51
+test-docstrings	tests/test_validation_mask_builder_table.py	4.57
 test-docstrings	tests/test_validation_perturbation_units.py	16
 test-docstrings	tests/test_validation_perturbation_units.py	21
 test-docstrings	tests/test_validation_perturbation_units.py	32

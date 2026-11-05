@@ -72,6 +72,7 @@ from ._influence_probes import (
     binary_extrema_crossing_probe,
 )
 from ._integer_mod_proof import integer_mod_by_unit_is_identically_zero
+from ._mask_builder_dependence import check_mask_builder_unread_exempt  # noqa: F401
 from ._norm_running_var_proof import batch_norm_input_at_running_mean
 from ._norm_zero_weight_proof import (
     _batch_norm_weight_operand,
