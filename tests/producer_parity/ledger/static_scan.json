@@ -4516,7 +4516,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 16,
+  "sites": 19,
   "via_getattr": false
  },
  {
@@ -6723,14 +6723,6 @@
   "ambiguous": true,
   "field": "function",
   "file": "torchlens/backends/torch/_completeness_finalize.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/torch/_completeness_hop.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
