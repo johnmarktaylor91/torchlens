@@ -138,7 +138,7 @@ def test_draw_combined_rolled_raises_notimplementederror() -> None:
     """Combined rolled rendering is explicitly deferred."""
     trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError, match="pass rolled=False"):
         trace.draw(graph="combined", rolled=True)
 
 

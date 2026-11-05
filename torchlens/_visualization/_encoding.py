@@ -1147,7 +1147,7 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1237,7 +1237,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
         f"rolled multi-pass node {_node_key(node)!r}: {why}{detail}",
         code="size_by_rolled_varying",
         remedy=(
-            "unroll the graph (vis_mode='unrolled') to size each pass by its "
+            "unroll the graph (rolled=False) to size each pass by its "
             "own value, choose a cross-pass total (total_*), or pass a "
             "callable asserting your own aggregate semantics"
         ),
@@ -1256,7 +1256,7 @@ def _require_size_rolled_row(node: Any, field_name: str) -> str:
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
