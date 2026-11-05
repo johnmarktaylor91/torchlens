@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1660 modules, 693297 lines, 0 modules without a docstring.
+85 packages, 1660 modules, 693328 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -56,7 +56,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3862 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 19 | 6957 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 927 |
-| `torchlens.backends.jax` | JAX backend preview exports. | 11 | 8955 |
+| `torchlens.backends.jax` | JAX backend preview exports. | 11 | 8963 |
 | `torchlens.backends.mlx` | Technical-preview MLX backend for TorchLens. | 17 | 6976 |
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6498 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5263 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5419 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 79 | 32991 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 79 | 33014 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2752 |
 
 ## Modules by package
@@ -1318,13 +1318,13 @@ Per-backend ''BackendProtocol'' objects, kept import-light. (8 modules, 927 line
 
 ### `torchlens.backends.jax`
 
-JAX backend preview exports. (11 modules, 8955 lines)
+JAX backend preview exports. (11 modules, 8963 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | JAX backend preview exports. | 7 |
 | `_closure_consts` | Closure-constant readability check for a JAX function-root capture. | 49 |
-| `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 291 |
+| `_perturbation_probes` | Perturbation candidates for the JAX preview backend's parent-influence oracle. | 299 |
 | `_site_dialect` | THE JAX SITE DIALECT for ''site_key_v1'' minting. | 72 |
 | `_source_path_components` | Source-path component normalization for JAX equation captures. | 44 |
 | `_trace_graph_helpers` | Trace-graph helpers for the JAX preview backend's validation oracles. | 534 |
@@ -2253,7 +2253,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (79 modules, 32991 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (79 modules, 33014 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2263,7 +2263,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 111 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 240 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 39 |
-| `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'', saturation and clamp bounds. | 471 |
+| `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'', saturation and clamp bounds. | 485 |
 | `_ctc_lengths_perturbation` | Sum-preserving length perturbation for ''ctc_loss''. | 78 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |
 | `_descriptor_versions` | Runnable descriptor version tripwire shared by the sparse-descriptor and artifact validators. | 67 |
@@ -2323,7 +2323,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 269 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 290 |
 | `_setitem_index_probe` | In-domain index probe for integer and bool-mask index components of ''__setitem__''. | 299 |
-| `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 306 |
+| `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 315 |
 | `_source_provenance` | Source-provenance completeness: fail forward validation on source-less tensor args. | 127 |
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
 | `_structural_slot_checks` | Pre-perturbation checks for argument slots whose value is pinned by structure. | 171 |
