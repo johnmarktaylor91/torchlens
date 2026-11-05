@@ -26,11 +26,6 @@ def child_module(module: Any, child_name: str) -> Any | None:
     trace = getattr(module, "_source_trace", None)
     if trace is None:
         return None
-    if isinstance(module, CallBoundModule) and "." in child_name:
-        # A call records only its direct child calls: walk the path one level at a time.
-        head, rest = child_name.split(".", 1)
-        parent = child_module(module, head)
-        return None if parent is None else child_module(parent, rest)
     child_address = child_name if module.address == "self" else f"{module.address}.{child_name}"
     try:
         child = trace.modules[child_address]
@@ -38,8 +33,25 @@ def child_module(module: Any, child_name: str) -> Any | None:
         return None
     if isinstance(module, CallBoundModule):
         # One call of a reused module: read the child's call made inside it.
-        return bound_child(module, child)
+        return _bound_path(module, child_name)
     return child
+
+
+def _bound_path(subject: CallBoundModule, child_name: str) -> Any | None:
+    """Return the descendant at ``child_name`` bound call by call under ``subject``.
+
+    A call records only its direct child calls, so a dotted path (an HF
+    wrapper's ``self.query``) is bound one level at a time. ``None`` when a
+    level ran no call inside its parent's call.
+    """
+
+    node: Any = subject
+    for part in child_name.split("."):
+        child = child_module(node._module, part)
+        node = None if child is None else bound_child(node, child)
+        if node is None:
+            return None
+    return node
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
