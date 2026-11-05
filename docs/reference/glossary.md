@@ -709,8 +709,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : The opt-in `cache=True` content-hash store of finished captures. A hit requires the model's
   tensor content (including device and `requires_grad`), training flags, module tree and
   `forward` code, plain instance attributes, user-registered module hooks, inputs, and capture
-  configuration to all match. Entries are HMAC-authenticated, bounded by entry count and bytes,
-  and `tl.clear_cache()` empties the cache while preserving its secret.
+  configuration to all match. Entries are HMAC-authenticated with a per-user secret kept outside
+  every cache directory (`$XDG_STATE_HOME/torchlens`, default `~/.local/state/torchlens`), so a
+  copied-in or restored cache directory cannot forge entries; they are bounded by entry count and
+  bytes, and `tl.clear_cache()` empties the cache and leaves the secret alone.
 
 ## Replay and intervention
 

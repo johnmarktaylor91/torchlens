@@ -194,7 +194,7 @@ def _read_json_object_if_present(path: Path) -> dict[str, Any] | None:
     """
 
     _reject_symlinked_metadata_path(path)
-    if not path.exists():
+    if not path.is_file():  # absent, a directory, or a FIFO/device whose open() would block
         return None
     try:
         with path.open("r", encoding="utf-8") as handle:

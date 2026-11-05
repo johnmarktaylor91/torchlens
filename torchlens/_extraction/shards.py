@@ -22,6 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._weights_only_policy import weights_only_load_is_safe
 from .ragged import RaggedBatch
 
 __tl_layer__ = "L5"
@@ -58,17 +59,28 @@ def validate_shard_format(shard_format: Any) -> str:
     Raises
     ------
     torchlens.errors.InvalidArgumentError
-        ``extraction_shard_format_invalid`` outside the vocabulary.
+        ``extraction_shard_format_invalid`` outside the vocabulary, or ``"pt"`` on a torch
+        whose ``weights_only`` loader is bypassable (CVE-2025-32434): such a torch could
+        never read the shards back, so the write refuses too.
     """
 
-    if shard_format in SHARD_FORMATS:
-        return str(shard_format)
-    raise InvalidArgumentError(
-        f"shard_format= value {shard_format!r} is not in the closed vocabulary {SHARD_FORMATS}.",
-        code="extraction_shard_format_invalid",
-        remedy="pass 'safetensors' (default) or 'pt'",
-        value=repr(shard_format),
-    )
+    if shard_format not in SHARD_FORMATS:
+        raise InvalidArgumentError(
+            f"shard_format= value {shard_format!r} is not in the closed vocabulary "
+            f"{SHARD_FORMATS}.",
+            code="extraction_shard_format_invalid",
+            remedy="pass 'safetensors' (default) or 'pt'",
+            value=repr(shard_format),
+        )
+    if shard_format == "pt" and not weights_only_load_is_safe():
+        raise InvalidArgumentError(
+            "shard_format='pt' needs torch 2.6 or newer: this torch's weights_only loader is "
+            "not safe against crafted files (CVE-2025-32434), so .pt shards are never read.",
+            code="extraction_shard_format_invalid",
+            remedy="pass shard_format='safetensors' (default), or upgrade torch to 2.6+",
+            value=repr(shard_format),
+        )
+    return str(shard_format)
 
 
 def shard_extension(shard_format: str) -> str:
@@ -219,6 +231,15 @@ def _read_pt_shard(path: Path, keys: list[str] | None) -> dict[str, torch.Tensor
     # torch<2.3's mmap path requires a literal str filename (``ValueError: f
     # must be a string filename``); a plain str is accepted on every
     # supported torch version, so this is not a version branch.
+    if not weights_only_load_is_safe():
+        # CVE-2025-32434: ``weights_only=True`` is bypassable on torch <= 2.5.1, and a shard
+        # is artifact bytes, so on such a torch a ``.pt`` shard is never unpickled.
+        raise InvalidArgumentError(
+            f"Refusing to read .pt shard {path.name!r}: this torch's weights_only loader is "
+            "not safe against crafted files (CVE-2025-32434).",
+            code="extraction_shard_format_invalid",
+            remedy="upgrade torch to 2.6 or newer, or re-extract with shard_format='safetensors'",
+        )
     raw = torch.load(str(path), weights_only=True, mmap=True)
     out: dict[str, torch.Tensor | RaggedBatch] = {}
     for key, value in raw.items():

@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._state import pause_logging
+from .._utils._raw_pointer_denial import refuse_pointer_keywords
 from .._utils._record_group_table import record_member
 from .._utils._tensor_layout import CaptureLayout, layout_of, relay_to_layout
 from .._utils.collections import assign_to_sequence_or_dict
@@ -650,6 +651,7 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
         The func's return value, restored RNG and autocast state applied.
     """
 
+    refuse_pointer_keywords(layer, input_args["kwargs"])
     if is_autograd_grad_recorder(layer.func):
         # An autograd.grad call cannot have run under inference_mode, and an
         # ambient one would leave the rebuilt subgraph without autograd graph.
