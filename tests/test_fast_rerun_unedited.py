@@ -13,6 +13,7 @@ refusals name ``save=``, not ``until=``.
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import weakref
 from typing import Any
@@ -25,6 +26,7 @@ import torchlens as tl
 from torchlens._data_classes._trace_rerun_state import copy_rerun_value
 from torchlens._fast_live_steer import legacy_rerun_tries_fast_engine, saved_a_selection
 from torchlens.errors import InvalidArgumentError, RunCapabilityUnavailableError
+from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
 _DIM = 8
 
@@ -177,7 +179,9 @@ def test_changed_call_structure_falls_back_to_the_capture_rerun() -> None:
     source = tl.trace(model, _x(1, sign=1.0), save=selection)
     x_neg = _x(2, sign=-1.0)
 
-    result = source.run(model, x_neg)
+    # The recapture's own detector reports the changed graph, as every structural rerun does.
+    with pytest.warns(ControlFlowDivergenceWarning):
+        result = source.run(model, x_neg)
 
     assert result.last_run["engine"] == "rerun"
     refused = result.last_run["fast_refused"]
@@ -244,6 +248,21 @@ def _helper() -> None:
     """A function value for the copy test."""
 
 
+@dataclasses.dataclass(frozen=True)
+class _FrozenRecord:
+    """A frozen record for the copy test."""
+
+    name: str
+    sizes: tuple[int, ...]
+
+
+@dataclasses.dataclass
+class _MutableRecord:
+    """A mutable record for the copy test."""
+
+    name: str
+
+
 def test_copy_rerun_value_hands_atomic_values_over_and_rebuilds_sets() -> None:
     """Values a deep copy returns unchanged pass through; sets are rebuilt, same type."""
 
@@ -261,3 +280,12 @@ def test_copy_rerun_value_hands_atomic_values_over_and_rebuilds_sets() -> None:
     nested = {"k": [1, {2}]}
     copied_nested = copy_rerun_value(None, nested)
     assert copied_nested == nested and copied_nested["k"] is not nested["k"]
+    frozen_record = _FrozenRecord("a", (1, 2))
+    assert copy_rerun_value(None, frozen_record) is frozen_record
+    mutable_record = _MutableRecord("a")
+    copied_record = copy_rerun_value(None, mutable_record)
+    assert copied_record == mutable_record and copied_record is not mutable_record
+    from torchlens._quantities import Bytes
+
+    size = Bytes(12)
+    assert copy_rerun_value(None, size) is size

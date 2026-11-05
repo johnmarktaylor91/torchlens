@@ -226,7 +226,11 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_rerun_honors_metadata_only_save_scope() -> None:
-    """Rerun of a metadata-only trace does not save every activation."""
+    """Rerun of a metadata-only trace does not save every activation.
+
+    A trace that saved no activation left every op unsaved, so the rerun takes
+    the guarded fast engine (no site to refresh beyond the boundary ops).
+    """
 
     x = torch.randn(2, 3)
     log = tl.trace(ReluAdd(), x, save=lambda _ctx: False)
@@ -236,7 +240,7 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     log = log.run(ReluAdd(), x + 1)
 
     assert len(log.saved_ops) == 0
-    assert log.last_run["engine"] == "rerun"
+    assert log.last_run["engine"] == "guarded_fast", log.last_run.get("fast_refused")
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.

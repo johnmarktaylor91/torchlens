@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
-from .._quantities import Bytes
+from .._quantities import Bytes, Quantity
 from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils.fail_open import fail_open
 from . import _doors
@@ -433,6 +433,20 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
     trace.facet_functions = getattr(new_log, "facet_functions", None)
 
 
+_FROZEN_DATACLASS_TYPES: dict[type, bool] = {}
+
+
+def _is_frozen_dataclass_instance(value: Any) -> bool:
+    """Return whether ``value`` is an instance of a frozen dataclass (cached per type)."""
+
+    kind = type(value)
+    frozen = _FROZEN_DATACLASS_TYPES.get(kind)
+    if frozen is None:
+        params = getattr(kind, "__dataclass_params__", None)
+        frozen = _FROZEN_DATACLASS_TYPES[kind] = bool(getattr(params, "frozen", False))
+    return frozen
+
+
 def copy_rerun_value(trace: Trace, value: Any) -> Any:
     """Copy rerun metadata while keeping tensor payload identities.
 
@@ -452,8 +466,10 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
 
     if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
         return value
-    if isinstance(value, enum.Enum):
-        return value  # a member's deep copy is itself
+    if isinstance(value, (enum.Enum, Quantity)):
+        return value  # a member's deep copy is itself; a quantity is an immutable number
+    if _is_frozen_dataclass_instance(value):
+        return value  # a frozen record read from a discarded capture; nothing rebinds its fields
     if isinstance(value, (set, frozenset)):
         return type(value)(copy_rerun_value(trace, item) for item in value)
     if isinstance(value, list):
