@@ -13,10 +13,8 @@ from typing import Any
 
 import pytest
 
-from torchlens.intervention._intervened_rerun_guard import (
-    _carries_intervened_values,
-    refuse_unpersisted_intervention_rerun,
-)
+from torchlens._runnable.seam import carries_intervened_values
+from torchlens.intervention._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
 from torchlens.intervention.errors import EngineDispatchError
 
 
@@ -55,7 +53,7 @@ def _act_row(sites: list[dict[str, Any]]) -> dict[str, Any]:
 def test_audit_row_kind_decides_whether_values_were_intervened(
     row: dict[str, Any], intervened: bool
 ) -> None:
-    assert _carries_intervened_values(_loaded_trace(row)) is intervened
+    assert carries_intervened_values(_loaded_trace(row)) is intervened
 
 
 def test_staged_only_do_row_lets_the_loaded_plain_trace_rerun() -> None:

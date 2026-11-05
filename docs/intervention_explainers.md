@@ -318,7 +318,7 @@ mask's sha256 the same way and saves at `level="portable"`; an edit that needs u
 refuses `intervention_spec_not_portable`.
 `tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
 (`artifact.subspace(site, positions=...)` and `artifact.edit`); see
-[from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
+[from pyvene](migration/from_pyvene.md#pyvene-feeds-torchlens).
 
 ```python
 # docs-test: expected=[True, True, True]

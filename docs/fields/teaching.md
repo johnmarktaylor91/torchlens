@@ -1,6 +1,6 @@
 # TorchLens for teaching how networks work
 
-Teaching needs a picture of the whole computation, not a module list: every operation the forward pass actually ran, in order, with the shapes flowing between them, so a student can follow a residual connection, an attention head or a recurrent loop from input to output. TorchLens draws that picture from one call on any PyTorch model, lets a student click into any single operation to see its inputs, outputs and source line, and does the same for a 1958 perceptron and a modern transformer alike.
+Teaching needs a picture of the whole computation, not a module list: every operation the forward pass actually ran, in order, with the shapes flowing between them, so a student can follow a residual connection, an attention head or a recurrent loop from input to output. TorchLens draws that picture from one call on any PyTorch model, lets a student click into any single operation to see its inputs, outputs and source line, and does the same for a 1943 threshold-neuron network and a modern transformer alike.
 
 The lists below start with drawing and inspecting, then move to the tutorial notebooks and the Model Menagerie. Every link is to a file in this repository or to the Menagerie site.
 
@@ -40,7 +40,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 ## The Model Menagerie
 
-- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,000 neural network architectures, from Rosenblatt's 1958 perceptron to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across seven decades of designs.
+- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,400 neural network architectures, from McCulloch and Pitts's 1943 network of threshold neurons to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across eight decades of designs.
 - [The same three lines on any architecture](../gallery/any_architecture.md): the trace, draw and edit calls on six architecture families from the Menagerie, the shortest proof that the tool works on whatever a student brings.
 - [Model summaries](../reference/summary.md): a one-call table of every layer with shapes and parameter counts, for the first lecture before the graph.
 

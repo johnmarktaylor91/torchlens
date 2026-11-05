@@ -418,6 +418,26 @@ palette does not (its frozen grey and input green, for example, can look alike):
 
 `trace.draw(theme='colorblind')`
 
+## What a node can show
+
+Beyond its label, a node can carry content of its own. `trace.annotate(selector, data=..., image=...)`
+attaches your own data or an image file to the selected operations before drawing. `tl.viz.feature_maps`
+renders a saved activation as an image grid. `tl.viz.nodes` holds the hooks (`node_spec_fn=`) that
+restyle each node from its record, which is also how a plot of a layer's representation (an MDS
+scatter, an RDM) ends up inside its node. Models TorchLens recognizes
+(for example Hugging Face image classifiers) also label output nodes with their class names; see
+[model conveniences](model_conveniences.md).
+
+## Comparing runs
+
+A `tl.Bundle` of traces draws as one picture with the same path and format rules as `Trace.draw`.
+`bundle.draw(graph="diff")` draws the model once with each operation colored by how much its
+output changed between the members (`metric="relative_l2"` by default, measured `on="out"`);
+`members=` restricts the comparison to some of the traces. `graph="forward"`, `"backward"` and
+`"combined"` draw the members' union graph for that pass, marking which members ran each node.
+The [Compare runs tutorial](../../notebooks/learn/07_compare_runs.ipynb) walks through it, and the
+glossary's `Bundle.draw` entry lists every keyword.
+
 ## Other options
 
 These keywords of `Trace.draw` are not pictured above:
@@ -434,7 +454,15 @@ These keywords of `Trace.draw` are not pictured above:
 | `font_size` | node font size |
 | `stack_by`, `node_overlay` | stack repeated structure into columns; add an overlay row of scores to each node |
 | `node_spec_fn`, `collapsed_node_spec_fn`, `backward_node_spec_fn` | a function that restyles each node |
-| `graph_overrides`, `node_overrides`, `edge_overrides`, `module_overrides` | raw Graphviz attributes for the graph, edges and module boxes |
+| `graph_overrides`, `edge_overrides`, `grad_edge_overrides`, `module_overrides` | raw Graphviz attributes for the graph, forward edges, gradient edges and module boxes |
+| `renderer` | `"graphviz"` (default) or a renderer registered out of tree |
+| `fold_patterns` | fold named linear paths into one node: `"idiomatic"` for the curated conv-bn-relu preset, or a mapping such as `{"ConvBnRelu": "conv2d > batch_norm > relu"}`; not combined with automatic `collapse` |
+| `collapse_fn`, `skip_fn` | your own predicates for which modules collapse and which operations are left out (see `tl.viz.nodes`) |
+| `show_edge_shapes` | label each forward edge with the producer's output shape |
+| `show_input_transform_summary` | add a row summarizing the input preprocessing |
+| `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
+| `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"cone"` |
+| `bwd`, `intervening_cluster` | backward and combined graphs: which backward pass or passes to draw, and where backward-only nodes sit (`"upstream"`, `"outside"`, `"downstream"` or `"own"`) |
 
 To put a picture on a node, annotate it before drawing: `trace.annotate(label, image=...)`
 takes a path to any image file Pillow can open (PNG, JPEG, WebP, ...) or a PIL image. A PNG

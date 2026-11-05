@@ -221,7 +221,9 @@ Key entry points:
   `ControlFlowDivergenceWarning` is gone. A bare layer label naming a
   multi-pass layer refuses typed with a teaching message naming every
   pass-qualified spelling (`multipass_bare_label_ambiguous` on
-  string/`tl.label` addressing; `selection_unresolvable` /
+  `do` string targets and `tl.label`; `trace.ops` refuses
+  `ambiguous_op_lookup`; `trace[label]` gives the aggregate Layer;
+  `selection_unresolvable` /
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
 - Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the

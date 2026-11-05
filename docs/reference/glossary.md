@@ -1349,7 +1349,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   encoding state; callables bypass the rolled table with a note on the encoding state. The drawn key
   is one line, for example `size: output bytes, 15 KB ... 60 KB`.
 
-**scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
+**size_scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
 : The size-channel scale transform: `"sqrt"` (default; compresses dynamic range) or `"linear"`
   (the literal area motif). Log is rejected by design (flattens 512-vs-4096). Supplied without
   `size_by` it refuses (`scale_requires_size_by`); an unknown token refuses
@@ -1692,9 +1692,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
   keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
-  addressed pass and recompute every downstream pass; a bare label naming a multi-pass
-  layer refuses `multipass_bare_label_ambiguous` (single-pass bare labels stay
-  accepted). Replay disclosures (`last_run` origins/cone, `_replay_frontier` keys) spell
+  addressed pass and recompute every downstream pass. An edit or selector that names a
+  multi-pass layer by its bare label (a `do` string target, `tl.label(label)`, so
+  `trace[tl.label(label)]`) refuses `multipass_bare_label_ambiguous`, and
+  `trace.ops[label]` refuses `ambiguous_op_lookup`; single-pass bare labels stay
+  accepted. Reading is not refused: `trace[label]` returns the aggregate Layer, and
+  `trace["label:N"]` or `trace["label:last"]` gives one pass's Op. Replay disclosures (`last_run` origins/cone, `_replay_frontier` keys) spell
   multi-pass ops pass-qualified and keep bare labels for single-pass layers.
   Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
   chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
@@ -3090,10 +3093,10 @@ deprecation shim owed*
 : The v1 encoding-channel value source on `Trace.draw` (L5 channel core). See
   the "color_by" entry above for semantics.
 
-**size_by / scale (draw kwargs)** — *unstable — no deprecation shim owed; keyword-only*
+**size_by / size_scale (draw kwargs)** — *unstable — no deprecation shim owed; keyword-only*
 : The wave-1 size encoding channel on `Trace.draw` (D4 default-applied: sqrt +
   conservative area-only mapping + typed refusal on rolled varying sources).
-  See the "size_by" and "scale (size channel)" entries above for semantics.
+  See the "size_by" and "size_scale (size channel)" entries above for semantics.
 
 **view (draw kwarg): the premade views** — *keyword-only*
 : `Trace.draw(view=...)` draws one premade view: a bundle of draw settings plus evidence

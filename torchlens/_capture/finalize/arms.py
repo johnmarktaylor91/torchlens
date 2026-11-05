@@ -378,9 +378,15 @@ def finalize_failed(result: ForwardResult) -> NoReturn:
         # or the payload-bearing event stream).
         settle_failed(trace, result.session, e, num_committed_ops=committed_ops)
         _scrub_failed_capture_transients(trace)
-    if escaping is e:
-        raise e
-    raise escaping from e
+    try:
+        if escaping is e:
+            raise e
+        raise escaping from e
+    finally:
+        # This frame sits on the raised error's traceback: locals reaching the
+        # error would make it, and the partial trace it carries, a reference
+        # cycle that only the cyclic collector frees.
+        del escaping, e, result, trace
 
 
 def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:
