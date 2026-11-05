@@ -315,7 +315,7 @@ spec = tl.when(site, tl.steer(direction, strength=4.0, dim=-1))
 trace = tl.trace(model, ids, save=site | head, intervene=spec)
 bound = spec.bind(model)
 for _ in range(3):
-    trace.run(model, ids)  # the steered forward on the longer input, saved sites refreshed
+    trace = trace.run(model, ids)  # the steered forward on the longer input, as a new Trace
     assert trace.last_run["engine"] == "guarded_fast"
     assert trace.last_run["fast_refused"] is None
     logits = trace.find_sites(head).first().out[:, -1]

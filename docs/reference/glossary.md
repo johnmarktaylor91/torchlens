@@ -1743,8 +1743,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
   it is an edited forward, and no hook-aware check exists yet. On a live trace the
   `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
-  Trace untouched (JMT, Sun 1 Nov 2026); the legacy rerun door (`run(model, inputs)` with
-  `engine="rerun"`) still refreshes the source in place. Output leaves (the model's and each saved module's) are paired
+  Trace untouched (JMT, Sun 1 Nov 2026); the legacy rerun door (`run(model, x)`) also returns a new
+  Trace and leaves the source untouched (ruled 3 Nov 2026). Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
   fast; a changed leaf count or an unmatched path still refuses
@@ -5146,7 +5146,7 @@ alphabetical order.
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
-| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input and refresh this Trace in place; returns the Trace. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
+| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input into a new Trace and return it; this Trace is unchanged (ruled 3 Nov 2026). The result is a fork named `<name>_fork_<n>`, as the `fast=True` door's result is, carrying this Trace's weak live-model reference and staged edits; keep it with `trace = trace.run(x)`. `Trace.append` is the in-place form. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
 | `Trace.run_transaction` | `trace.run_transaction(inputs=..., *, seed=None, fast=False, carry_state=False, until=None, save=None, on_divergence="raise")`: a verified fresh execution on the live model or a loaded artifact; returns a `RunResult` with its report and leaves this Trace unchanged |
 | `Trace.save_visualizations` | Whether rendered visualizations are persisted in bundles |
 | `Trace.saved_grad_module_calls` | Accessor for the ModuleCalls whose outputs include saved gradients |
