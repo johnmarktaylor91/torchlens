@@ -14,7 +14,6 @@ import warnings
 import weakref
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -33,6 +32,7 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
+from ._transparent_context import transparent_contextmanager
 from ._utils._package_frames import is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
@@ -440,7 +440,7 @@ def _make_compiled_callable_bypass(
     return bypass
 
 
-@contextmanager
+@transparent_contextmanager
 def bypass_compiled_plain_callables(model: nn.Module) -> Iterator[None]:
     """Temporarily route direct compiled attributes through a logging pause.
 
@@ -513,7 +513,7 @@ def _restore_callable_swaps(swaps: Any, *, only_if_bypassed: bool) -> None:
         raise first_error
 
 
-@contextmanager
+@transparent_contextmanager
 def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     """Prepare compiled submodules and plain callables for honest eager capture.
 
@@ -557,7 +557,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
                     )
 
 
-@contextmanager
+@transparent_contextmanager
 def unwrap_compiled_submodules(model: nn.Module) -> Iterator[None]:
     """Temporarily replace compiled child slots with their eager source modules.
 

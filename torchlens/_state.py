@@ -8,10 +8,10 @@ WARNING — No torchlens imports at module level:
     Every other torchlens module imports from here.  If this module imported
     back, Python's import machinery would hit a circular dependency before any
     code ran.  Type-hint-only imports are safe inside ``TYPE_CHECKING`` guards
-    because they are never evaluated at runtime.  The ONE sanctioned runtime
-    exception is ``errors._base``: it is an import leaf (typing only, no
-    torchlens imports), so pulling the taxonomy base classes from it can never
-    close a cycle.
+    because they are never evaluated at runtime.  The sanctioned runtime
+    exceptions are ``errors._base`` and ``_transparent_context``: each is an
+    import leaf (stdlib and typing only, no torchlens imports), so importing
+    from them can never close a cycle.
 
 Design rationale:
     The "toggle architecture" means every torch function is wrapped once (on first
@@ -45,8 +45,8 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-# Sanctioned exception to the no-torchlens-imports rule (see module docstring):
-# ``errors._base`` imports nothing from torchlens, so this cannot form a cycle.
+# Sanctioned leaf imports (see module docstring): neither imports torchlens.
+from ._transparent_context import transparent_contextmanager
 from .errors._base import CaptureError
 
 if TYPE_CHECKING:
@@ -1176,7 +1176,7 @@ def call_fingerprinting() -> Iterator[CallFingerprint]:
         _call_fingerprint = previous
 
 
-@contextmanager
+@transparent_contextmanager
 def active_logging(trace: "Trace") -> Iterator[None]:
     """Activate logging for the duration of a forward pass.
 

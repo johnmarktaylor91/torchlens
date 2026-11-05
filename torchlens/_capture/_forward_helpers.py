@@ -8,7 +8,7 @@ import sys
 import time
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping
-from typing import TYPE_CHECKING, Any, ParamSpec, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from torchlens import _state
 from torchlens._capture import peak_memory
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from .._capture_state_helpers import CompiledCapturePrep
     from .._data_classes.trace import Trace
     from ._lazy_contexts import LazyContextHistory
+from .._transparent_context import transparent_contextmanager
 from .._utils.display import _timed_phase
 
 
@@ -92,55 +93,7 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
         yield
 
 
-_BracketParams = ParamSpec("_BracketParams")
-
-
-class _FinallyOnlyContext:
-    """Run a ``try: yield / finally:`` generator without touching the in-flight exception.
-
-    ``contextlib.contextmanager`` throws the forward's exception into the generator
-    and, on Python 3.11+, assigns ``exc.__traceback__`` when it re-raises; a user
-    exception whose ``__setattr__`` refuses writes was then replaced by that
-    ``AttributeError``. A generator whose exit work is only ``finally`` cleanup runs
-    the same cleanup on ``close()``, so the exception propagates as raised.
-    """
-
-    __slots__ = ("_generator",)
-
-    def __init__(self, generator: Iterator[None]) -> None:
-        """Hold the started-on-enter cleanup generator."""
-
-        self._generator = generator
-
-    def __enter__(self) -> None:
-        """Run the generator up to its ``yield``."""
-
-        next(self._generator)
-
-    def __exit__(self, *exc_info: object) -> bool:
-        """Run the generator's ``finally`` cleanup and never suppress."""
-
-        cast(Any, self._generator).close()
-        return False
-
-
-def _finally_only_context(
-    func: Callable[_BracketParams, Iterator[None]],
-) -> Callable[_BracketParams, _FinallyOnlyContext]:
-    """Decorate a cleanup-only generator as an exception-neutral context manager."""
-
-    def _open(*args: _BracketParams.args, **kwargs: _BracketParams.kwargs) -> _FinallyOnlyContext:
-        """Build the context for one bracket."""
-
-        return _FinallyOnlyContext(func(*args, **kwargs))
-
-    _open.__doc__ = func.__doc__
-    _open.__name__ = func.__name__
-    _open.__qualname__ = func.__qualname__
-    return _open
-
-
-@_finally_only_context
+@transparent_contextmanager
 def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "Iterator[None]":
     """Record forward-pass peak memory around the model forward call.
 

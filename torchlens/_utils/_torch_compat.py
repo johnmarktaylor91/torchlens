@@ -50,6 +50,7 @@ from typing import Any
 
 import torch
 
+from .._transparent_context import transparent_contextmanager
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
@@ -3237,7 +3238,7 @@ def warm_lazy_torch_imports() -> None:
     _LAZY_TORCH_IMPORTS_WARMED = import_first_capture_lazy_modules()
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def force_eager_stance_scope() -> Iterator[bool]:
     """Force compiled callables to run their original eager Python for a scope.
 
@@ -3252,17 +3253,15 @@ def force_eager_stance_scope() -> Iterator[bool]:
 
     Notes
     -----
-    The stance (public API, torch >= 2.6; verified experimentally in the
-    2026-08-12 design-review compile reconcile) runs the ORIGINAL Python inside every
-    compiled callable reached in the scope, triggers zero new compiles during
-    the scope (including on never-seen input shapes), and leaves every warm
-    compiled artifact reproduced bitwise after exit. Reading the probe never
-    imports ``torch._dynamo``. Skipping the stance when Dynamo is absent is
-    exact for every callable that EXISTS at scope entry (compiling one imports
-    Dynamo), but NOT for a callable created inside the scope: a forward whose
-    first ``torch.compile`` happens mid-capture imports Dynamo after this
-    check, so that callable runs compiled and is bypassed-and-disclosed
-    (``dynamo_region_not_logged``) rather than eager-logged.
+    The stance (public API, torch >= 2.6; verified experimentally in the 2026-08-12
+    design-review compile reconcile) runs the ORIGINAL Python inside every compiled callable
+    reached in the scope, triggers zero new compiles during the scope (including on never-seen
+    input shapes), and leaves every warm compiled artifact reproduced bitwise after exit.
+    Reading the probe never imports ``torch._dynamo``. Skipping the stance when Dynamo is absent
+    is exact for every callable that EXISTS at scope entry (compiling one imports Dynamo), but
+    NOT for a callable created inside the scope: a forward whose first ``torch.compile`` happens
+    mid-capture imports Dynamo after this check, so that callable runs compiled and is
+    bypassed-and-disclosed (``dynamo_region_not_logged``) rather than eager-logged.
     """
 
     if not HAS_SET_STANCE or "torch._dynamo" not in sys.modules:

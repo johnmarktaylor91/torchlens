@@ -52,6 +52,7 @@ from typing import Any, Final
 import torch
 
 from ... import _state
+from ..._transparent_context import transparent_contextmanager
 from ..._utils._exception_notes import defer_failure_note
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
@@ -330,7 +331,7 @@ def _install_property_belt(
         property_restores[name] = (shadowed, descriptor)
 
 
-@contextmanager
+@transparent_contextmanager
 def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     """LAYER 1: install the escalated escape belt for one capture.
 

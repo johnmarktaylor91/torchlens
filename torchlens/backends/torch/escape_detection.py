@@ -6,7 +6,6 @@ completeness without the separate dispatcher witness.
 
 from __future__ import annotations
 
-import contextlib
 import inspect
 import sys
 import threading
@@ -15,7 +14,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
@@ -24,6 +23,7 @@ import torch
 from ... import _state
 from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
+from ..._transparent_context import transparent_contextmanager
 from ..._utils._display_bounded import short_dataclass_repr
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
@@ -823,7 +823,7 @@ def _copy_recording_diagnostics(trace: Any) -> None:
             object.__setattr__(recording, recording_name, getattr(trace, trace_name))
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_escape_guard(trace: Any) -> Iterator[None]:
     """Record owner-thread qualification and optionally arm shadow detection.
 
@@ -885,7 +885,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 # blessed verdict. Disclose, demote every authority field this guard
                 # owns, and best-effort clear the one residual we can still see.
                 if sys.getprofile() is _profile_callback:
-                    with contextlib.suppress(Exception):
+                    with suppress(Exception):
                         sys.setprofile(guard.prior_profile)
                 trace._health_escape_detector_verified = False
                 if trace.__dict__.get("_health_completeness_verified") is True:

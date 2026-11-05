@@ -5,7 +5,6 @@ from __future__ import annotations
 import threading
 import warnings
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
 from typing import Any, cast
 
 import torch
@@ -13,6 +12,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import CaptureGapWarning
+from ..._transparent_context import transparent_contextmanager
 from ..._utils._package_frames import external_warning_stacklevel
 from ..._utils._torch_symbols import torch_attr
 from ._completeness_hop import register_witness_hop_rules
@@ -491,7 +491,7 @@ def _finalize_witness(state: _WitnessState, trace: Any, mode: str, *, runnable: 
     _finalize_plane_p(state)
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_completeness_witness(trace: Any) -> Iterator[None]:
     """Optionally run an aten census around one active-logging forward.
 

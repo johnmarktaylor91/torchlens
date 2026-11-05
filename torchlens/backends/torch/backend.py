@@ -20,6 +20,7 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._transparent_context import transparent_contextmanager
 from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -231,7 +232,7 @@ class TorchBackend:
     def active_logging(self, session: object) -> AbstractContextManager[None]:
         """Compose owner-thread/detector guard with the logging context."""
 
-        @contextlib.contextmanager
+        @transparent_contextmanager
         def guarded_logging() -> Iterator[None]:
             """Enter detector state before enabling wrapper logging."""
 

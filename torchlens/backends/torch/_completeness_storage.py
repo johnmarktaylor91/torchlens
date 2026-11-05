@@ -7,7 +7,6 @@ import sys
 import threading
 import warnings
 from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._transparent_context import transparent_contextmanager
 from ..._utils import _exception_notes
 from ...errors import ScalarEscapeWarning
 from ._tl import (
@@ -512,7 +512,7 @@ def _make_plain_scalar_escape_method(
     return wrapper
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     """Warn once when a plain capture reads captured tensor data as Python scalars.
 

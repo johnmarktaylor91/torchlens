@@ -59,13 +59,13 @@ import threading
 import time
 import weakref
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any
 
 import torch
 
+from ..._transparent_context import transparent_contextmanager
 from ...errors._base import CompatibilityError
 from .collectives import (
     COLLECTIVE_BOUNDARY_FASTLOG_UNSUPPORTED,
@@ -570,7 +570,7 @@ def active_funcol_session() -> _FuncolCaptureSession | None:
     return _ACTIVE_FUNCOL_SESSION
 
 
-@contextmanager
+@transparent_contextmanager
 def distributed_recording_session(trace: Any) -> Iterator[None]:
     """Install the plane-W completion authority around one armed capture.
 
