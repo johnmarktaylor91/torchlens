@@ -252,6 +252,10 @@ DOCS: dict[str, str] = {
         show_edge_shapes:
             Label forward dataflow edges with producer output shapes (default False);
             multi-output calls label each tensor slot separately.
+        show_arg_labels:
+            Label the edges into a multi-input operation with the argument position each
+            parent fills (``arg 0``, ``arg (0, 1)``); ``False`` draws no argument labels
+            (default True).
         show_legend:
             Tri-state legend visibility. ``None`` (default) draws a legend only
             when an encoding channel is active, and the key on a ``module=``

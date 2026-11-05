@@ -636,6 +636,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 encoding=request.encoding,
                 suppressed_args=suppressed_args,
                 show_saved_for_backward=request.show_saved_for_backward,
+                show_arg_labels=request.show_arg_labels,
             )
     draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
     (container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes) = (
@@ -1257,6 +1258,7 @@ def draw(
     node_overlay: "str | OverlayScores | Callable[[Any], Any] | None" = None,
     node_label_fields: list[str] | None = None,
     show_edge_shapes: bool = False,
+    show_arg_labels: bool = True,
     show_legend: bool | None = None,
     font_size: int | None = None,
     dpi: int | None = None,
@@ -1330,6 +1332,7 @@ def draw(
         node_overlay=node_overlay,
         node_label_fields=tuple(node_label_fields) if node_label_fields is not None else None,
         show_edge_shapes=show_edge_shapes,
+        show_arg_labels=show_arg_labels,
         show_legend=show_legend,
         font_size=font_size,
         dpi=dpi,
