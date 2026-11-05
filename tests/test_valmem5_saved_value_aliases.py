@@ -406,14 +406,11 @@ def _saved_slot_values(trace: Any, func_name: str) -> list[tuple[torch.Tensor, b
     ]
 
 
-@pytest.mark.parametrize(
-    ("model_type", "func_name", "shape"),
-    [(_NoGradChain, "__add__", (3, 5)), (_StorageContextReceiver, "as_strided_", (4, 4))],
-    ids=["pending-clone-on-write-parent", "storage-context-receiver"],
-)
-def test_refused_slots_keep_their_copy_with_the_same_verdict(
+def _slot_values_by_path(
     model_type: type[nn.Module], func_name: str, shape: tuple[int, ...]
-) -> None:
+) -> tuple[bool, dict[str, list[tuple[torch.Tensor, bool]]]]:
+    """Validate on the copy-only path and the alias path; return the verdict and slot values."""
+
     torch.manual_seed(0)
     x = torch.randn(*shape)
     seen: dict[str, list[tuple[torch.Tensor, bool]]] = {}
@@ -427,10 +424,25 @@ def test_refused_slots_keep_their_copy_with_the_same_verdict(
     copy_verdict = _validate(model_type(), x, observe("copy"), copy_only=True)
     assert _validate(model_type(), x, observe("alias")) is copy_verdict
     assert seen["alias"], seen
-    assert not any(aliased for _, aliased in seen["alias"]), seen["alias"]
     assert len(seen["alias"]) == len(seen["copy"])
     for (alias_value, _), (copy_value, _) in zip(seen["alias"], seen["copy"], strict=True):
         assert torch.equal(alias_value, copy_value)
+    return copy_verdict, seen
+
+
+def test_a_storage_context_receiver_keeps_its_copy_with_the_same_verdict() -> None:
+    _, seen = _slot_values_by_path(_StorageContextReceiver, "as_strided_", (4, 4))
+    assert not any(aliased for _, aliased in seen["alias"]), seen["alias"]
+
+
+def test_a_pending_parent_read_before_an_in_place_write_keeps_its_pre_write_bytes() -> None:
+    _, seen = _slot_values_by_path(_NoGradChain, "__add__", (3, 5))
+    # ``parity + 1`` read parity before ``parity.mul_(3)``: its alias was copied out with
+    # the pre-write bytes. The final add's slots were never written after, so stay aliased.
+    (first, first_aliased), *rest = seen["alias"]
+    assert not first_aliased
+    assert torch.equal(first, seen["alias"][-1][0] // 3)
+    assert rest and all(aliased for _, aliased in rest), seen["alias"]
 
 
 def test_a_grad_alias_is_a_non_leaf_that_takes_the_clones_in_place_write() -> None:
