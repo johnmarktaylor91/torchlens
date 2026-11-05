@@ -10,7 +10,9 @@ missing, so any other failure still surfaces.
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import sys
+import types
 from collections.abc import Callable
 from typing import Any
 
@@ -283,6 +285,31 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
     return True
 
 
+def probe_numpy_bridge() -> bool:
+    """Return whether torch's C-level NumPy bridge works in this process.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.from_numpy`` and ``Tensor.numpy()`` both round-trip
+        a one-element array. torch wheels compiled against NumPy 1.x (torch 2.1
+        and 2.2) import under NumPy 2 with a "Failed to initialize NumPy"
+        warning, after which every bridge call raises ``RuntimeError: Numpy is
+        not available``. Measured 2026-10-31: torch 2.1.2 + NumPy 2.2.6 fails;
+        torch 2.3.1 and 2.4.1 + NumPy 2.2.6 pass. Feature-detected, never parsed
+        from version strings.
+    """
+
+    try:
+        import numpy as np
+
+        torch.from_numpy(np.zeros(1, dtype=np.float32))
+        torch.zeros(1).numpy()
+    except (ImportError, RuntimeError):
+        return False
+    return True
+
+
 def probe_gradient_edge() -> bool:
     """Return whether torch's GradientEdge surface actually WORKS end to end.
 
@@ -548,3 +575,82 @@ def probe_attention_causal_bias() -> bool:
         return importlib.util.find_spec("torch.nn.attention.bias") is not None
     except (ImportError, AttributeError, ValueError):
         return False
+
+
+def probe_safe_weights_only_load(globals_in_pkl: object | None) -> bool:
+    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
+
+    CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
+    2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
+    even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
+    bypassed. TorchLens no longer hands file bytes to ``torch.load`` (the metadata
+    unpickler refuses ``torch.storage._load_from_bytes`` by name; plain metadata
+    tensors use its own inline reduction); ``.pt`` extraction shards and pyreft weight
+    files, the last artifact bytes handed to ``torch.load``, refuse when it is false.
+
+    The patched behavior is internal to the unpickler and has NO version-string-
+    free *behavioral* signature we can cheaply exercise, so -- consistent with this
+    module's feature-detect convention (never parse ``torch.__version__`` for a
+    behavioral branch) -- we probe the 2.6.0 serialization-hardening SURFACE that
+    shipped *in* the fix release: the public
+    ``torch.serialization.get_unsafe_globals_in_checkpoint`` inspection API plus the
+    rewritten ``torch._weights_only_unpickler.get_globals_in_pkl`` GLOBAL-opcode
+    handler. Both are ABSENT on every affected version (<= 2.5.1) and PRESENT on
+    2.6.0+ (verified against the v2.5.1 and v2.6.0 sources). Requiring BOTH is the
+    conservative, fail-closed direction: a false negative merely refuses an
+    embedded load on a safe torch, whereas admitting it on a vulnerable torch would
+    reopen the RCE.
+
+    Parameters
+    ----------
+    globals_in_pkl:
+        ``torch._weights_only_unpickler.get_globals_in_pkl``, or ``None`` when absent.
+        ``_torch_compat`` resolves it (the private import stays in that module) and
+        passes it in; this leaf checks only the public half.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the running torch carries the CVE-2025-32434 fix.
+    """
+
+    try:
+        import torch.serialization as _serialization
+    except Exception:  # pragma: no cover - defensive; imports on supported torch.
+        return False
+    return globals_in_pkl is not None and hasattr(
+        _serialization, "get_unsafe_globals_in_checkpoint"
+    )
+
+
+def probe_saved_tensors_hooks_patchable() -> bool:
+    """Return whether the saved-tensors-hooks context class accepts an init patch.
+
+    ``torch.autograd.graph.saved_tensors_hooks`` is the public context manager that installs user
+    pack/unpack hooks (``save_on_cpu`` and the non-reentrant checkpoint hook subclass it).
+    TorchLens scopes user hook bodies as autograd-internal during an active capture by patching the
+    class ``__init__`` (construction-time scoping) AND ``__enter__`` (use-time re-scoping, covering
+    contexts constructed before the first capture) at wrap time, so the patch needs a plain-Python
+    ``__init__`` with the ``(self, pack_hook, unpack_hook)`` shape and a plain-Python ``__enter__``
+    taking only ``self``. Probe the shape behaviorally; never parse ``torch.__version__``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the class exists and both ``__init__`` and ``__enter__``
+        are patchable Python functions with the expected shapes.
+    """
+
+    hooks_cls = getattr(getattr(torch.autograd, "graph", None), "saved_tensors_hooks", None)
+    if not isinstance(hooks_cls, type):
+        return False
+    init = hooks_cls.__dict__.get("__init__")
+    enter = hooks_cls.__dict__.get("__enter__")
+    if not isinstance(init, types.FunctionType) or not isinstance(enter, types.FunctionType):
+        return False
+    try:
+        init_params = list(inspect.signature(init).parameters)
+        enter_params = list(inspect.signature(enter).parameters)
+    except (TypeError, ValueError):
+        return False
+    return init_params == ["self", "pack_hook", "unpack_hook"] and enter_params == ["self"]

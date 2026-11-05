@@ -21,6 +21,7 @@ from typing import Any
 
 import torch
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._errors import refuse
 from ._mpl import DIVERGING_CMAP, figure, require_matplotlib, save_figure
 from ._records import SavedFigure, ScoreDecomposition
@@ -195,7 +196,7 @@ def render_neuron_card(
     axes = fig.subplots(len(bands), 1, sharex=True)
     cmap = matplotlib.colormaps[DIVERGING_CMAP]
     for ax, (label, vector) in zip(axes, bands, strict=True):
-        data = vector.unsqueeze(0).numpy()
+        data = tensor_to_numpy(vector.unsqueeze(0))
         scale = max(1e-12, float(vector.abs().max()))
         ax.pcolormesh(data, cmap=cmap, vmin=-scale, vmax=scale, rasterized=False)
         ax.set_yticks([0.5])

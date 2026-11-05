@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw
 from .._entry_refusals import refuse_feature_map_site, refuse_feature_maps_not_spatial
 from .._plots.node_plots import _apply_colormap, _normalize_finite
 from .._utils._multipass_access import get_multipass_attr
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.display import ensure_trace_visualizer_dir
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..repgeom import _commit_annotation_tensors, _matching_pil_image_batch, _selected_mds_sites
@@ -598,7 +599,7 @@ def _top_channel_indices(activations: torch.Tensor, *, top_k: int) -> torch.Tens
         Channel ids with shape ``[S, top_k]``. Ties prefer lower channel index.
     """
 
-    scores = activations.abs().mean(dim=(2, 3)).detach().cpu().numpy()
+    scores = tensor_to_numpy(activations.abs().mean(dim=(2, 3)).detach())
     selected = []
     for row in scores:
         indices = np.arange(row.shape[0], dtype=np.int64)
@@ -859,9 +860,7 @@ def _map_to_heatmap_image(map_tensor: torch.Tensor, *, cmap: str, cell_size: int
     # computed over FINITE values only (one Inf must not floor everything
     # else) and non-finite pixels get the dedicated nan color instead of
     # being laundered into real values.
-    array = np.asarray(
-        map_tensor.detach().to(device="cpu", dtype=torch.float32).numpy(), dtype=np.float64
-    )
+    array = tensor_to_numpy(map_tensor.detach().float().double())  # float32 values, float64 array
     normalized = _normalize_finite(array, None, None)
     colors = _apply_colormap(normalized, cmap)
     colors[~np.isfinite(array)] = np.asarray(_NONFINITE_COLOR, dtype=np.uint8)

@@ -8,6 +8,7 @@ from collections.abc import Callable
 import torch
 from PIL import Image, ImageDraw
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._feature_maps import _draw_more_marker
 
 _HEATMAP_COLORS = (
@@ -327,7 +328,7 @@ def _array_to_grayscale_image(data: torch.Tensor) -> Image.Image:
         Grayscale image.
     """
 
-    scaled = (_normalize_2d(data) * 255).to(dtype=torch.uint8).numpy()
+    scaled = tensor_to_numpy((_normalize_2d(data) * 255).to(dtype=torch.uint8))
     return Image.fromarray(scaled, mode="L")
 
 
@@ -352,7 +353,7 @@ def _array_to_heatmap_image(data: torch.Tensor) -> Image.Image:
     weights = (scaled - low_indices.to(dtype=torch.float32)).unsqueeze(-1)
     palette = torch.tensor(_HEATMAP_COLORS, dtype=torch.float32)
     colors = palette[low_indices] * (1 - weights) + palette[high_indices] * weights
-    return Image.fromarray(colors.to(dtype=torch.uint8).numpy(), mode="RGB")
+    return Image.fromarray(tensor_to_numpy(colors.to(dtype=torch.uint8)), mode="RGB")
 
 
 def _resize_image(image: Image.Image, *, max_size: int) -> Image.Image:

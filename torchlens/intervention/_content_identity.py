@@ -16,6 +16,7 @@ from typing import Any
 import torch
 
 from .._state import pause_logging
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.tensor_leaves import flat_byte_view
 from ._types import Edit, InterventionDecision
 
@@ -77,7 +78,7 @@ def tensor_content_sha(tensor: torch.Tensor) -> str:
             if data.layout is not torch.strided:
                 data = data.to_dense()
             flat = data.resolve_conj().resolve_neg().cpu().contiguous().reshape(-1)
-            raw = flat_byte_view(flat).numpy()
+            raw = tensor_to_numpy(flat_byte_view(flat))
         except (RuntimeError, TypeError, NotImplementedError):
             return "repr-" + hashlib.sha256(repr(data).encode()).hexdigest()[:16]
     return hashlib.sha256(raw.data).hexdigest()[:16]

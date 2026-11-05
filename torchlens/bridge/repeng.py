@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._utils._numpy_bridge import tensor_to_numpy
 
 
 def from_direction(
@@ -68,7 +69,7 @@ def from_direction(
             code="direction_model_type_unknown",
             remedy="pass model_type= (for example 'llama')",
         )
-    values = direction.vector.detach().cpu().float().numpy()
+    values = tensor_to_numpy(direction.vector.detach().cpu().float())
     return repeng.ControlVector(model_type=found, directions={index: values})
 
 
