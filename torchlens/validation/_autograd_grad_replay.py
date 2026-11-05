@@ -30,7 +30,7 @@ import torch
 
 from .._state import pause_logging
 from .._utils._record_group_table import record_member
-from .._utils._tensor_layout import relay_to_layout
+from .._utils._tensor_layout import CaptureLayout, layout_of, relay_to_layout
 from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, recorder_signature
@@ -39,7 +39,11 @@ from ..backends.torch._autograd_grad_marker import (
     is_autograd_grad_recorder,
 )
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
-from ._replay_storage_context import check_view_context_receiver, slot_capture_layout
+from ._replay_storage_context import (
+    check_view_context_receiver,
+    replayed_storage_alias,
+    slot_capture_layout,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -47,6 +51,9 @@ if TYPE_CHECKING:
 
 _ParamLeaves = dict[int, torch.Tensor]
 """``id(live parameter) -> replay leaf`` for the parameters a replay differentiates."""
+
+_LINEAGE_BOUND = 64
+"""Longest receiver chain searched for the storage alias a view write reached."""
 
 
 class AutogradGradReplayError(RuntimeError):
@@ -389,18 +396,78 @@ class _SubgraphReplay:
                 replayed = self._connected_value(parent_label)
                 if replayed is None:
                     continue
-                if is_inplace:
+                layout = slot_capture_layout(op, arg_domain, key)
+                key_path = key if isinstance(key, tuple) else (key,)
+                saved = _read_path(input_args[arg_domain], key_path)
+                replayed = self._written_alias(op, parent_label, replayed, (saved, layout))
+                if is_inplace and replayed.is_leaf:
+                    # An in-place op on a replay leaf would raise (and corrupt the
+                    # leaf). Every other receiver is written in place, as capture
+                    # wrote it, so a write through a view reaches the replayed base.
                     replayed = replayed.clone()
                 replayed = align_parent_to_slot_device(input_args, arg_domain, key, replayed)
                 # Differentiable copy into the recorded layout (grad mode is on here).
-                replayed = cast(
-                    torch.Tensor,
-                    relay_to_layout(replayed, slot_capture_layout(op, arg_domain, key)),
-                )
-                key_path = key if isinstance(key, tuple) else (key,)
+                replayed = cast(torch.Tensor, relay_to_layout(replayed, layout))
                 input_args[arg_domain] = _write_path(input_args[arg_domain], key_path, replayed)
         input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
         input_args["kwargs"] = _substitute_params(dict(input_args["kwargs"]), self.param_leaves)
+
+    def _written_alias(
+        self,
+        op: Op,
+        parent_label: str,
+        replayed: torch.Tensor,
+        slot: tuple[Any, CaptureLayout | None],
+    ) -> torch.Tensor:
+        """Return the replayed tensor a slot read when its parent wrote through a view.
+
+        An in-place op on a view (``y[:, 5:6].add_(v)``) advances the label of every
+        storage alias it wrote through, so a later reader of the base ``y`` records the
+        in-place op as its parent while it read the whole post-write base, not the
+        op's view-shaped output. ``slot`` holds the slot's saved value (its shape is
+        the shape read) and its recorded layout (``None`` for a row-major contiguous
+        read). The replay writes in place as capture did, so the alias the slot read
+        is a replayed tensor on the same storage with that geometry, searched along
+        the in-place op's receiver lineage first (``replayed_storage_alias``). An alias the replay never built (a sibling view read
+        only after the write) is rebuilt on the written storage when its full layout
+        was recorded and the written view sits where capture's did. Any other read
+        of another shape cannot be replayed.
+        """
+
+        saved, layout = slot
+        parent = self.resolve(parent_label)
+        if not (bool(getattr(parent, "is_inplace", False)) and isinstance(saved, torch.Tensor)):
+            return replayed
+        shape = tuple(saved.shape)
+        if tuple(replayed.shape) == shape and layout in (None, layout_of(replayed)):
+            return replayed
+        lineage = [self.values.get(label) for label in self._receiver_lineage(parent)]
+        others = [value for value in self.values.values() if value.requires_grad]
+        found = replayed_storage_alias(replayed, (shape, layout), lineage, others)
+        if found is not None:
+            return found
+        written_at = layout_of(replayed)
+        if layout is not None and written_at is not None:
+            if written_at == slot_capture_layout(parent, "args", 0):
+                return replayed.as_strided(*layout)
+        if tuple(replayed.shape) != shape:
+            raise AutogradGradReplayError(
+                f"subgraph op {op.label!r} reads a storage alias written by "
+                f"{parent.label!r} that the replay cannot locate"
+            )
+        return replayed
+
+    def _receiver_lineage(self, op: Op) -> list[str]:
+        """Return the concrete labels along ``op``'s receiver (first argument) chain."""
+
+        labels: list[str] = []
+        current: Op | None = op
+        while current is not None and len(labels) < _LINEAGE_BOUND:
+            labels.append(current.label)
+            positions = (record_member(current, "parent_arg_positions", {}) or {}).get("args", {})
+            receiver = positions.get(0)
+            current = self.resolve(receiver) if receiver is not None else None
+        return labels
 
     def _replay_op(self, op: Op) -> torch.Tensor:
         """Re-execute one op from its saved arguments with replayed parents spliced in."""

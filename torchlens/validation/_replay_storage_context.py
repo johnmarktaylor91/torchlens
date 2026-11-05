@@ -31,7 +31,7 @@ from .._storage_bindings import (
     views_part_of_its_storage,
 )
 from .._utils._record_group_table import record_member
-from .._utils._tensor_layout import CaptureLayout, relay_to_layout
+from .._utils._tensor_layout import CaptureLayout, layout_of, relay_to_layout
 from .._utils._torch_compat import get_force_original_view_tracking, get_view_func_replay
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
@@ -277,6 +277,62 @@ def slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout | 
         if component is None:
             return None
     return cast("CaptureLayout | None", getattr(component, "_capture_layout", None))
+
+
+def replayed_storage_alias(
+    written: torch.Tensor,
+    geometry: tuple[tuple[int, ...], CaptureLayout | None],
+    lineage: list[torch.Tensor | None],
+    others: list[torch.Tensor],
+) -> torch.Tensor | None:
+    """Return the replayed tensor on ``written``'s storage that a slot read.
+
+    Parameters
+    ----------
+    written:
+        The replayed output of an in-place op that wrote through a view.
+    geometry:
+        The read's shape and its recorded layout (``None`` for a row-major
+        contiguous read, whose storage offset is not recorded).
+    lineage:
+        Replayed values along the in-place op's receiver chain (the base and the
+        views it wrote through); the first match wins.
+    others:
+        Every other replayed differentiable value. These must agree on one
+        geometry: two contiguous aliases of one shape at different offsets are
+        ambiguous.
+
+    Returns
+    -------
+    torch.Tensor | None
+        The alias, or ``None`` when the replay holds none.
+
+    Raises
+    ------
+    ValueError
+        When the candidates outside the lineage are ambiguous.
+    """
+
+    shape, layout = geometry
+
+    def matches(candidate: torch.Tensor | None) -> bool:
+        if candidate is None or tuple(candidate.shape) != shape:
+            return False
+        same_storage = (
+            candidate.device == written.device
+            and candidate.untyped_storage().data_ptr() == written.untyped_storage().data_ptr()
+        )
+        if not same_storage:
+            return False
+        return candidate.is_contiguous() if layout is None else layout_of(candidate) == layout
+
+    found = next((candidate for candidate in lineage if matches(candidate)), None)
+    if found is not None:
+        return found
+    candidates = [candidate for candidate in others if matches(candidate)]
+    if len({candidate.storage_offset() for candidate in candidates}) > 1:
+        raise ValueError("the storage alias a view write reached is ambiguous in the replay")
+    return candidates[0] if candidates else None
 
 
 def _template_child(component: Any, part: Any) -> Any:
