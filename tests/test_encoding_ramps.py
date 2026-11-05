@@ -147,6 +147,21 @@ class _LongHeader(nn.Module):
         return self.a_rather_long_submodule_name_that_widens_the_header(x)
 
 
+def _start_anchored_texts(svg: str) -> list[tuple[str, str, str]]:
+    """Return ``(x, y, text)`` for each left-anchored SVG text element.
+
+    Attributes are read by name, not position: Graphviz 14 writes
+    ``xml:space="preserve"`` ahead of ``text-anchor`` where 2.43 does not.
+    """
+
+    texts = []
+    for attrs, body in re.findall(r"<text\b([^>]*)>([^<]*)</text>", svg):
+        values = dict(re.findall(r'([\w:-]+)="([^"]*)"', attrs))
+        if values.get("text-anchor") == "start":
+            texts.append((values["x"], values["y"], body))
+    return texts
+
+
 def _polygon_xs_ys(points: str) -> tuple[list[float], list[float]]:
     """Return an SVG polygon's x and y coordinates."""
 
@@ -175,9 +190,7 @@ def test_key_border_fits_its_bar_under_a_wide_header(tmp_path: Path) -> None:
     graph_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
     assert 'CELLSPACING="0" CELLPADDING="0" FIXEDSIZE="TRUE" ALIGN="LEFT"' in graph_line
     svg = (tmp_path / "g.svg").read_text(encoding="utf-8")
-    texts = re.findall(
-        r'<text text-anchor="start" x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)</text>', svg
-    )
+    texts = _start_anchored_texts(svg)
     header_x, _, _ = next(t for t in texts if "a_rather_long_submodule_name" in t[2])
     low = next(t for t in texts if t[2].startswith("output bytes: "))
     low_y = float(low[1])
