@@ -26,7 +26,7 @@ from torchlens._visualization._input_photo import (
 
 Image = pytest.importorskip("PIL.Image")
 
-_IMG_ROW = re.compile(r'<IMG SRC="[^"]*' + re.escape(INPUT_PHOTO_FILE) + '"/>')
+_IMG_ROW = re.compile(r'<IMG SRC="raw_inputs/' + re.escape(INPUT_PHOTO_FILE) + '" SCALE="TRUE"/>')
 
 
 class _Pixels:
@@ -67,6 +67,22 @@ def _input_node(dot: str) -> str:
     return match.group(0)
 
 
+def _node(dot: str, name: str) -> str:
+    """Return one node's DOT statement (single-pass ids carry a ``pass1`` suffix)."""
+
+    match = re.search(rf'^\t"?{re.escape(name)}(?:pass1)?"? \[.*?\]\n', dot, re.M | re.S)
+    assert match is not None, f"no node {name} in the DOT"
+    return match.group(0)
+
+
+def _assert_rounded_box(node: str) -> None:
+    """The node is a rounded box (a picture or a label list never sits in an oval)."""
+
+    assert "shape=box" in node, node
+    style = re.search(r'style="?([\w,]+)', node)
+    assert style is not None and "rounded" in style.group(1).split(","), node
+
+
 def _photo(width: int = 300, height: int = 200) -> Any:
     """Return an RGB test photo."""
 
@@ -79,6 +95,8 @@ def _assert_photo_drawn(trace: tl.Trace, tmp_path: Path) -> None:
     node = _input_node(trace.draw(path=str(tmp_path / "graph"), file_format="svg").dot)
     assert _IMG_ROW.search(node), node
     assert node.index("<IMG") < node.index("input_1</B>"), node
+    _assert_rounded_box(node)
+    assert "fillcolor=" in node and " image=" not in node, node
     thumb_path = _raw_input_visualizer_dir(trace) / INPUT_PHOTO_FILE
     with Image.open(thumb_path) as thumb:
         assert thumb.format == "PNG"
@@ -156,3 +174,39 @@ def test_single_photo_accepts_one_image_only(wrap: Any, found: bool) -> None:
 
     photo = _photo(4, 4)
     assert (single_photo(wrap(photo)) is photo) is found
+
+
+def test_annotation_image_sits_in_its_own_cell_above_the_rows(tmp_path: Path) -> None:
+    """An annotated picture is the top cell of a rounded box that keeps the node's fill."""
+
+    picture = tmp_path / "relu.png"
+    _photo(400, 100).save(picture)
+    trace = tl.trace(_TinyVision(), torch.ones(1, 3, 8, 8))
+    conv = next(label for label in trace.op_labels if label.startswith("conv2d")).split(":")[0]
+    trace.annotate(conv, image=str(picture))
+    node = _node(trace.draw(path=str(tmp_path / "graph"), file_format="svg").dot, conv)
+    assert f'<IMG SRC="{picture}" SCALE="TRUE"/>' in node, node
+    assert node.index("<IMG") < node.index(f"{conv}</B>"), node
+    _assert_rounded_box(node)
+    assert "fillcolor=" in node and "labelloc" not in node and "imagescale" not in node, node
+    width = re.search(r'FIXEDSIZE="TRUE" WIDTH="(\d+)"', node)
+    assert width is not None and int(width.group(1)) <= 144 + 8, node
+
+
+def test_decoded_output_list_draws_as_a_rounded_box(tmp_path: Path) -> None:
+    """A top-k label list on the output node draws in a rounded box, not an oval."""
+
+    options = tl.options.CaptureOptions(
+        output_transform=lambda out: [("tabby", 0.6), ("lynx", 0.3)]
+    )
+    trace = tl.trace(_TinyVision(), torch.ones(1, 3, 8, 8), capture=options)
+    node = _node(trace.draw(path=str(tmp_path / "graph"), file_format="svg").dot, "output_1")
+    assert "tabby" in node, node
+    _assert_rounded_box(node)
+    plain = _node(
+        tl.trace(_TinyVision(), torch.ones(1, 3, 8, 8))
+        .draw(path=str(tmp_path / "plain"), file_format="svg")
+        .dot,
+        "output_1",
+    )
+    assert "shape=box" not in plain, plain

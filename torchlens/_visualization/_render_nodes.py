@@ -15,6 +15,7 @@ from ._encoding_aggregate import (
 )
 from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._node_boxes import image_box_args, list_box_attrs
 from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
@@ -605,38 +606,13 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    # A picture keeps the node's fill; image_box_args (below) draws it in its own top cell.
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
-        default_spec = default_spec.replace(
-            image=visualizer_path,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=visualizer_path)
     annotation_image = _annotation_image_path_for_node(self, node)
     if annotation_image is not None:
-        default_spec = default_spec.replace(
-            image=annotation_image,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=annotation_image)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
@@ -661,7 +637,7 @@ def _build_layer_node(
         if raw_output_attrs is None:
             raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
-            node_args.update(raw_output_attrs)
+            node_args.update({**raw_output_attrs, **list_box_attrs(node_args)})
     node_args["name"] = _render_node_name(node, vis_mode)
     # Map membership is the ONE collapse predicate (the map builder owns the
     # mode decision); the edge pass reroutes mapped leaves' edges to the
@@ -683,7 +659,7 @@ def _build_layer_node(
         node_args["gradangle"] = "0"
     node_args.update(overlay_border_attrs(node, node_overlay))
 
-    graphviz_graph.node(**node_args)
+    graphviz_graph.node(**image_box_args(self, node_args))
 
     if node.is_final_output:
         with graphviz_graph.subgraph() as s:

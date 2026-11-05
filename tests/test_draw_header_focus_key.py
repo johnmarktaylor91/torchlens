@@ -187,13 +187,13 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 def test_drawn_sizes_use_the_released_unit_names() -> None:
     assert binary_size(0) == "0 B"
     assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1.0 KB"
+    assert binary_size(1024) == "1 KB"
     assert binary_size(1.5 * 1024**2) == "1.5 MB"
-    assert binary_size(3 * 1024**3) == "3.0 GB"
-    assert binary_size(1024**2 - 1) == "1024.0 KB"
-    assert format_memory(61440) == "60.0 KB"
-    assert _compact_size(61440) == "60.0KB"
-    assert format_overlay_value("bytes", 61440) == "bytes: 60.0 KB"
+    assert binary_size(3 * 1024**3) == "3 GB"
+    assert binary_size(1024**2 - 1) == "1024 KB"
+    assert format_memory(61440) == "60 KB"
+    assert _compact_size(61440) == "60KB"
+    assert format_overlay_value("bytes", 61440) == "bytes: 60 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         binary_size(-1)

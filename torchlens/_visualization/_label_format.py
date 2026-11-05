@@ -381,7 +381,7 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156.0 KB"``: the divisor is 1024 and
+        Human-readable memory such as ``"156 KB"``: the divisor is 1024 and
         the unit names are the released drawings' (B, KB, MB, GB, TB).
     """
 
@@ -391,16 +391,17 @@ def format_memory(bytes_or_quantity: Any) -> str:
 
 
 #: Unit names for the drawing's sizes, each 1024 times the one before. The
-#: drawings keep the released look (``"60.0 KB"``), not the IEC names
+#: drawings keep the released look (``"60 KB"``), not the IEC names
 #: (``KiB``) that card and repr byte quantities use.
 _BINARY_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
 def binary_size(size: float) -> str:
-    """Return a byte count for a drawing, for example ``"60.0 KB"``.
+    """Return a byte count for a drawing, for example ``"60 KB"`` or ``"1.9 KB"``.
 
     The divisor is 1024. Whole bytes print without a decimal (``"48 B"``);
-    larger values print one decimal under the largest unit the value reaches.
+    larger values print one decimal under the largest unit the value reaches,
+    dropped when it is zero (``"588 KB"``, not ``"588.0 KB"``).
     """
 
     if size < 0:
@@ -413,7 +414,8 @@ def binary_size(size: float) -> str:
         value /= 1024.0
         if value < 1024 or unit == _BINARY_UNITS[-1]:
             break
-    return f"{value:.1f} {unit}"
+    text = f"{value:.1f}"
+    return f"{text.removesuffix('.0')} {unit}"
 
 
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:
