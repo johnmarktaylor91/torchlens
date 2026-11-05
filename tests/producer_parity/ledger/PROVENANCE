@@ -5387,3 +5387,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 522d5372ae417c906393ba516c342427b7efa7f3 (dirty)
 recorded: 2026-11-05T05:02:11.721489+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq4: fixq3 09d296fdbe + train 420524e4e5 (C-264 row ingest, C-272 facade rows, C-276)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5888ab353365c3f465e4bfb8547729f936ab4877 (dirty)
+recorded: 2026-11-05T09:20:51.350486+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: C-263 fixq4: fixq3 09d296fdbe + train 420524e4e5 (C-264 row ingest, C-272 facade rows, C-276)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 5888ab353365c3f465e4bfb8547729f936ab4877 (dirty)
+recorded: 2026-11-05T09:20:58.437436+00:00
