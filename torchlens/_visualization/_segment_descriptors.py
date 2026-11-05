@@ -340,12 +340,37 @@ def _segment_owner_key(
     """
 
     parent = addresses[0].rsplit(".", 1)[0] if "." in addresses[0] else "self"
-    if parent == "self" or parent not in trace.modules:
+    if parent == "self" or not _is_recorded_module_key(trace, parent):
         return None
     if vis_mode == "rolled":
         return parent
     parent_key = f"{parent}:1"
-    return parent_key if parent_key in trace.modules else parent
+    return parent_key if _is_recorded_module_key(trace, parent_key) else parent
+
+
+def _is_recorded_module_key(trace: Trace, key: str) -> bool:
+    """Return whether ``key`` names a module or module call with its own record.
+
+    Containers (``nn.ModuleList``, ``nn.ModuleDict``) are never called, so their
+    addresses (``encoder.layers``) have no module record and never render as a
+    cluster. Every owner-key rule that names a lexical ancestor as a cluster
+    (segment owners here, collapsed-box owners and edge owners in the renderer)
+    asks this one question first.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    key:
+        Pass-free module address or pass-qualified module call label.
+
+    Returns
+    -------
+    bool
+        ``True`` when the trace recorded that module or call.
+    """
+
+    return key in trace.modules
 
 
 def _members_are_name_consecutive(addresses: tuple[str, ...]) -> bool:
