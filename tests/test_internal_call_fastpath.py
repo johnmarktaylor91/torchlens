@@ -128,6 +128,48 @@ def _capture_census(model: nn.Module, x: torch.Tensor) -> tuple[Counter[str], in
     return paused, calls[0], len(trace.ops)
 
 
+def _warm_both_routings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pay one-time capture work with the routing on and off before any census.
+
+    The first capture in a process parses sources and imports lazily, and the first one
+    after a pipelining module entered ``sys.modules`` latches the pipelining probe. Either
+    would land in whichever census ran first, so the counter test compares steady states.
+    """
+
+    from torchlens._utils import _torch_symbols
+
+    tl.trace(_chain(), torch.zeros(2, 4))
+    with monkeypatch.context() as patch:
+        patch.setattr(_torch_symbols, "_INTERNAL_READS", None)
+        tl.trace(_chain(), torch.zeros(2, 4))
+
+
+def _flush_pending_payload_aliases() -> None:
+    """Start a census with no deferred payload alias pending from earlier work.
+
+    Unreachable aliases leave the registry at collection; live ones (a trace an earlier
+    test still holds) are copied out through the wrapper's own pre-write path. Pending
+    aliases make every wrapped call evaluate the in-place signature check, which would
+    count in both censuses unequally.
+    """
+
+    import gc
+
+    from torchlens._utils import tensor_utils
+
+    gc.collect()
+    live = [
+        alias
+        for entries in list(tensor_utils._DEFER_PENDING.values())
+        for entry in entries
+        if (alias := entry.ref()) is not None
+    ]
+    tensor_utils.materialize_deferred_for_call(live)
+    del live
+    gc.collect()
+    assert not tensor_utils._DEFER_PENDING, "pending payload aliases survived the flush"
+
+
 def test_routed_names_are_the_census_names() -> None:
     """The routing table holds exactly the census read names."""
 
@@ -178,8 +220,11 @@ def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.Monke
 
     from torchlens._utils import _torch_symbols
 
+    _warm_both_routings(monkeypatch)
+    _flush_pending_payload_aliases()
     paused_on, calls_on, ops_on = _capture_census(_chain(), torch.zeros(2, 4))
     monkeypatch.setattr(_torch_symbols, "_INTERNAL_READS", None)
+    _flush_pending_payload_aliases()
     paused_off, calls_off, ops_off = _capture_census(_chain(), torch.zeros(2, 4))
     assert ops_on == ops_off
     skipped = sum(paused_off[name] for name in _EXPECTED_ROUTED)

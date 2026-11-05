@@ -7,11 +7,12 @@ its rule prints `VERDICT: did not replicate`, and the rule is never moved to pas
 
 | Script | Paper | Claim tested | Verdict rule |
 |---|---|---|---|
-| `induction_heads.py` | Olsson et al. 2022, "In-context Learning and Induction Heads" | the heads with the top prefix-matching scores on repeated random tokens | TorchLens's top 3 heads equal an independent Hugging Face oracle's top 3 (5.5, 6.9, 7.10), and all 144 scores are within 1e-4 of it |
+| `induction_heads.py` | Olsson et al. 2022, "In-context Learning and Induction Heads" | GPT-2 small has induction heads; by prefix-matching score on repeated random tokens the top three are 5.5, 6.9 and 7.10 | TorchLens's top 3 heads equal an independent Hugging Face oracle's top 3 (5.5, 6.9, 7.10), and all 144 scores are within 1e-4 of it |
 | `ioi_name_movers.py` | Wang et al. 2022, "Interpretability in the Wild" (arXiv 2211.00593) | the Name Mover Heads 9.9, 9.6 and 10.0 write the IO-minus-S logit difference directly | all three are in the top 5 heads by mean direct logit contribution over 50 IOI prompts |
 | `causal_tracing.py` | Meng et al. 2022, "Locating and Editing Factual Associations in GPT" (arXiv 2202.05262) | restoring MLP outputs has its largest effect at the last subject token in early-to-middle layers | the largest average indirect effect of restoring one MLP output is at the last subject token, in layers 0-7 |
 
-Run one with `python examples/replications/<script>.py --out DIR`. GPT-2 small
+Run one with `python examples/replications/<script>.py --out DIR` after
+`pip install torchlens[hf]` (see [Install](../../README.md#install)). GPT-2 small
 (`openai-community/gpt2`, about 550 MB, public) is downloaded at a pinned revision on first
 use. `--out` receives a JSON summary and a portable `.tlspec` of one representative run,
 loadable with `tl.load`. The bundles keep every activation: about 370 MB for the induction
@@ -19,12 +20,11 @@ run (one 101-token sequence) and about 50 MB for one IOI prompt.
 
 Each saved bundle is verified before the summary is written: it is loaded back with
 `tl.load`, rerun on the same model and input with `loaded.run(model, inputs)`, and every
-op of both the loaded trace and the replay must match the original bitwise, label by label.
-The script prints a `REPLAY:` line and records the comparison under `replay` in the JSON
-summary; any mismatch raises instead of writing a summary. A mismatch is a finding to
-explain, never a tolerance to widen.
+op of both the loaded trace and the replay must equal the original exactly (`torch.equal`),
+label by label. The script prints a `REPLAY:` line and records the comparison under `replay`
+in the JSON summary; any mismatch raises instead of writing a summary.
 
-The TorchLens calls used: `tl.trace` with `tl.options.CaptureOptions`,
+Functions used: `tl.trace` with `tl.options.CaptureOptions`,
 `torchlens.mechinterp.head_scores` with `torchlens.mechinterp.FixedPeriodInduction`,
 `torchlens.mechinterp.direct_logit_contributions` over `torchlens.mechinterp.full_decomposition`,
 `trace.fork`, `do` with `tl.facet(...).in_module(...)` hooks and `model=`/`inputs=`, and
@@ -41,20 +41,20 @@ their pinned public sources and checks each source's sha256:
   small completes correctly with its greedy next token. The causal-tracing verdict uses the
   first 10; the other 20 only widen its reported grids.
 - `induction_oracle.json`: per-head induction scores of GPT-2 small computed with plain
-  Hugging Face transformers (eager attention, float64), and the input protocol.
+  Hugging Face transformers (eager attention, float64), and the input protocol. `make_data.py`
+  does not rebuild this file.
 
 ## Differences from the papers
 
-- Causal tracing: the paper measured GPT-2 XL (48 layers) over 1,000 facts and restored a
-  run of 10 MLP layers; this script's verdict uses GPT-2 small (12 layers), 10 facts and one
-  MLP layer per restoration. `--window 3 --facts 30` adds a reported, non-gating grid that
-  restores 3 consecutive MLP layers (25% of depth, against the paper's 10 of 48, about 21%)
-  over 30 facts; it never changes the verdict. The GPT-2 small picture differs from the
-  paper's: the single-layer effect at the last subject token sits at layer 0 (0.0063 over
-  10 facts, 0.0111 over 30) and is near zero elsewhere, and with a 3-layer window the
-  largest cell is the last token at layer 9 (0.0112), not a mid-layer band at the last
-  subject token. The script's docstring lists both grids' rows. The noise follows the paper: Gaussian, 3 times the standard deviation
-  of the subject tokens' embeddings, 10 samples per fact.
+- Causal tracing: the paper measured GPT-2 XL (48 layers) over 1,000 facts and restored 10
+  MLP layers at a time; this script uses GPT-2 small (12 layers), 10 facts and one MLP layer
+  per restoration, with the paper's noise (Gaussian, 3 times the standard deviation of the
+  subject tokens' embeddings, 10 samples per fact). The rule passes, but the GPT-2 small
+  picture differs from the paper's: the single-layer effect at the last subject token sits
+  at layer 0 and is near zero elsewhere. `--window 3 --facts 30` adds a reported, non-gating
+  grid that restores 3 consecutive MLP layers over 30 facts; it peaks at the last token in
+  layer 9 instead, so neither grid shows the paper's mid-layer band at the last subject
+  token. The numbers are in the script's docstring and the JSON summary.
 - IOI: the paper's logit difference (3.56) is over its own 100,000-prompt sample; MIB's
   prompts use different templates, so the script prints its own mean beside the paper's
   and does not gate on it.
