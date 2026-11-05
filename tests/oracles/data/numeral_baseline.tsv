@@ -3325,7 +3325,7 @@ docs-md	docs/maintainers/where.md	324
 docs-md	docs/maintainers/where.md	326
 docs-md	docs/maintainers/where.md	327
 docs-md	docs/maintainers/where.md	328
-docs-md	docs/maintainers/where.md	32906
+docs-md	docs/maintainers/where.md	32991
 docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
@@ -3630,12 +3630,13 @@ docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	681
 docs-md	docs/maintainers/where.md	687
+docs-md	docs/maintainers/where.md	688
 docs-md	docs/maintainers/where.md	689
 docs-md	docs/maintainers/where.md	69
 docs-md	docs/maintainers/where.md	690
 docs-md	docs/maintainers/where.md	691
 docs-md	docs/maintainers/where.md	692
-docs-md	docs/maintainers/where.md	693212
+docs-md	docs/maintainers/where.md	693297
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	695
 docs-md	docs/maintainers/where.md	6957
@@ -9273,6 +9274,7 @@ package-docstrings	torchlens/validation/__init__.py	2.37
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
 package-docstrings	torchlens/validation/_crossing_perturbations.py	0..10
+package-docstrings	torchlens/validation/_crossing_perturbations.py	64
 package-docstrings	torchlens/validation/_destination_coverage.py	256
 package-docstrings	torchlens/validation/_destination_coverage.py	43
 package-docstrings	torchlens/validation/_domain_perturbations.py	17
