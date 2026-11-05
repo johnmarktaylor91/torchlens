@@ -48,7 +48,13 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils._record_group_table import record_member
-from .._vocab.node_spec import INTERVENTION_SITE_COLOR, CollapsedNodeSpecFn, NodeSpec, NodeSpecFn
+from .._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
+    INTERVENTION_SITE_COLOR,
+    CollapsedNodeSpecFn,
+    NodeSpec,
+    NodeSpecFn,
+)
 from ._edit_change import (
     ChangeReport,
     change_census_rows,
@@ -130,8 +136,6 @@ _MAX_MARK_ROWS_PER_NODE = 3
 
 #: Capture-status header lines the interventions view leaves to its census:
 #: the header's edit line already says the trace is edited.
-EDIT_VIEW_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
-
 #: Cap on caption census lines before deferring to the sidecar/text form.
 _MAX_CAPTION_LINES = 12
 
@@ -528,8 +532,8 @@ class SurgeryCensus:
     def caption_lines(self) -> tuple[str, ...]:
         """The short form drawn on the figure; the full census is the sidecar.
 
-        The outline key (with the changed-op count, or why changed ops are not
-        shown), declared rules that never fired, edited regions and the
+        Facts the key's colour chips cannot give (an inferred edit site, or
+        why changed ops are not shown), declared rules that never fired, edited regions and the
         injected-op count. Lane wording, site keys, the capture-status header
         lines and acknowledgment rows stay in :meth:`to_text`.
         """
@@ -604,7 +608,7 @@ def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
 def _omitted_header_rows(banner_lines: Iterable[str]) -> tuple[str, ...]:
     """The capture-status header lines this view leaves off the figure."""
 
-    return tuple(line for line in banner_lines if line.startswith(EDIT_VIEW_OMITTED_BANNERS))
+    return tuple(line for line in banner_lines if line.startswith(EDITED_HEADER_OMITTED_BANNERS))
 
 
 def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:

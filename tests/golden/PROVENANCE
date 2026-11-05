@@ -376,3 +376,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
 recorded: 2026-11-05T08:37:56.984838+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: input-photo-1104: input photo and picture boxes, sizes drop .0, compact counts, viridis key, header trim and network count, gentle size_by
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4181fa4e0590d0ef8d370a688d097ddb77c1a84b (clean)
+recorded: 2026-11-05T07:04:59.137347+00:00

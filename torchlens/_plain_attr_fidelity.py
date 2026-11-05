@@ -10,10 +10,18 @@ caller's model state is untouched. Two facts decide whether that is sound:
 * whether a plain attribute merely aliases the module's own registered tensors
   (:func:`is_registered_tensor_alias`), as ``nn.RNNBase._flat_weights`` does; such
   values are restored by the state_dict restore, so only their identity is plain state.
+
+:func:`deepcopy_for_validation` makes the copy itself. It shares imported Python
+module objects with the source instead of trying to pickle them: ``copy`` already
+treats functions and classes as atomic, and a module reached through an attribute
+(``self.F = torch.nn.functional``) is the same process-wide object the forward would
+reach through a global name, so sharing it is what an uncopied model does too.
 """
 
 from __future__ import annotations
 
+import copy
+import sys
 from typing import Any
 
 import torch
@@ -38,6 +46,26 @@ def _module_plain_attr_names(module: nn.Module) -> set[str]:
     """
 
     return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
+
+
+def deepcopy_for_validation(model: nn.Module) -> nn.Module:
+    """Return ``copy.deepcopy(model)`` with imported module objects shared, not copied.
+
+    Parameters
+    ----------
+    model:
+        Module tree to copy for a validation run.
+
+    Returns
+    -------
+    nn.Module
+        An independent deep copy; only entries of ``sys.modules`` are shared.
+    """
+
+    memo: dict[int, Any] = {
+        id(module): module for module in list(sys.modules.values()) if module is not None
+    }
+    return copy.deepcopy(model, memo)
 
 
 _FIDELITY_MAX_DEPTH = 4

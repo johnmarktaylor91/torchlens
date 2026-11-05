@@ -52,6 +52,14 @@
 - Reconstruction is checked, not trusted: `_reconstruct_checked()` recomputes and
   `_allclose_sdpa()` compares against the captured output; failure yields
   `MissingFacet`, never a wrong tensor.
+- The SDPA call's arguments come from `_sdpa_call_args.sdpa_call_arguments()`:
+  `saved_args`/`saved_kwargs` when the capture saved them (`reconstruction_ready`),
+  else the default capture's replay template (`args_template`: scalars as
+  `LiteralValue`, unlabeled tensors as `LiteralTensor`) with each `ParentRef`
+  slot read from its producer's saved output via `parent_arg_positions` (the
+  `out_versions_by_child` version first). An unsaved producer, an unsupported
+  template leaf or an unresolved label names the missing input and fails closed;
+  default capture saves nothing new for this.
 
 ## _hops.py (internal; DOCUMENTED-UNSTABLE)
 - The hop rule (mikit D3/D4): a closed op-kind GRAMMAR proposes

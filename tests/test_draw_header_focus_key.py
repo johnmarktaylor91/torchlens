@@ -3,11 +3,11 @@
 - Both draw doors (``Trace.draw`` and ``Bundle.draw``) take the format from the
   path extension; a ``file_format`` that disagrees refuses
   (``draw_format_mismatch``), so the extension never loses silently.
-- The header's count names what it counts, and the count and the byte total
-  cover the same nodes: the drawn nodes that show a tensor size (a focus's
-  input and output stubs show none and are not counted). A rolled draw also
-  counts the op passes its layers cover and sums the size over every pass, so
-  its size equals the unrolled header's.
+- The header's count reports the traced network (a ``module=`` draw: that
+  module), never the drawn boxes: its ops plus the input and output tensors and
+  their summed size, whatever the drawing collapses (a focus's input and output
+  stubs are outside the module and not counted). A rolled draw also names the
+  layers those ops form, and its size equals the unrolled header's.
 - Parameter counts carry thousands separators; every drawn size divides by
   1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
 - A focused draw opens with a scope line (model class, then each enclosing
@@ -36,11 +36,12 @@ from torch import nn
 import torchlens as tl
 from torchlens._visualization._header_block import (
     KEY_TABLE_ID,
-    drawn_count_line,
     drawn_module_marks,
     key_swatches,
+    network_count_line,
+    params_caption_detail,
 )
-from torchlens._visualization._label_format import binary_size, format_memory
+from torchlens._visualization._label_format import binary_size, compact_count, format_memory
 from torchlens._visualization.modes import _compact_size
 from torchlens._visualization.overlays import format_overlay_value
 from torchlens._visualization.themes import (
@@ -187,13 +188,13 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 def test_drawn_sizes_use_the_released_unit_names() -> None:
     assert binary_size(0) == "0 B"
     assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1.0 KB"
+    assert binary_size(1024) == "1 KB"
     assert binary_size(1.5 * 1024**2) == "1.5 MB"
-    assert binary_size(3 * 1024**3) == "3.0 GB"
-    assert binary_size(1024**2 - 1) == "1024.0 KB"
-    assert format_memory(61440) == "60.0 KB"
-    assert _compact_size(61440) == "60.0KB"
-    assert format_overlay_value("bytes", 61440) == "bytes: 60.0 KB"
+    assert binary_size(3 * 1024**3) == "3 GB"
+    assert binary_size(1024**2 - 1) == "1024 KB"
+    assert format_memory(61440) == "60 KB"
+    assert _compact_size(61440) == "60KB"
+    assert format_overlay_value("bytes", 61440) == "bytes: 60 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
         binary_size(-1)
@@ -209,7 +210,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert size == binary_size(
         sum(int(trace.ops[label].cost.activation_memory) for label in labels)
     )
-    assert f"{trace.num_params:,} params" in dot
+    assert f"{compact_count(trace.num_params, full_below=1000)} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
 
@@ -249,21 +250,74 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         loop.cleanup()
 
 
-def _count_unit(kind: str, node: object) -> SimpleNamespace:
+def _fake_trace(ops: dict[str, object], inputs: tuple[str, ...] = ()) -> SimpleNamespace:
+    return SimpleNamespace(ops=ops, input_layers=inputs, output_layers=())
+
+
+def _op(layer: str, memory: int = 16, modules: tuple[str, ...] = ()) -> SimpleNamespace:
+    return SimpleNamespace(activation_memory=memory, layer_label=layer, modules=modules)
+
+
+def test_count_line_keeps_singular_forms() -> None:
+    one = _fake_trace({"a:1": _op("a")})
+    assert network_count_line(one, None, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
+    assert network_count_line(one, None, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
+    two_passes = _fake_trace({"a:1": _op("a"), "a:2": _op("a")})
+    assert network_count_line(two_passes, None, "rolled") == "1 layer (2 ops, 32 B)"  # type: ignore[arg-type]
+
+
+def test_header_counts_print_compact_from_ten_thousand() -> None:
+    many = _fake_trace({f"o{i}": _op(f"o{i}", 0) for i in range(12_345)})
+    assert network_count_line(many, None, "unrolled") == "12.3K ops (0 B)"  # type: ignore[arg-type]
+    some = _fake_trace({f"o{i}": _op(f"o{i}", 0) for i in range(9_999)})
+    assert network_count_line(some, None, "unrolled") == "9,999 ops (0 B)"  # type: ignore[arg-type]
+
+
+def test_focus_count_line_counts_the_module_ops_only() -> None:
+    ops = {
+        "x": _op("x"),
+        "a": _op("a", 8, ("enc:1", "enc.mlp:1")),
+        "b": _op("b", 8, ("enc:1", "enc.mlp:2")),
+        "c": _op("c", 8, ("enc:1",)),
+    }
+    trace = _fake_trace(ops, inputs=("x",))
+    assert network_count_line(trace, "enc.mlp", "unrolled") == "2 ops (16 B)"  # type: ignore[arg-type]
+    assert network_count_line(trace, None, "unrolled") == "4 ops (40 B)"  # type: ignore[arg-type]
+    ops["buffer"] = SimpleNamespace(activation_memory=99, layer_label="buffer", is_buffer=True)
+    assert network_count_line(trace, None, "unrolled") == "4 ops (40 B)"  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("module", [None, _FOCUS])
+def test_count_line_reports_the_network_whatever_the_drawing_collapses(
+    trace: tl.Trace, tmp_path: Path, module: str | None
+) -> None:
+    """depth=1 collapses boxes but the header still counts the network's (or module's) ops."""
+
+    full = _COUNT.search(_header(_dot(trace, tmp_path, "full", module=module))).group(0)  # type: ignore[union-attr]
+    shallow = _header(_dot(trace, tmp_path, "shallow", module=module, depth=1))
+    assert _COUNT.search(shallow).group(0) == full  # type: ignore[union-attr]
+    assert not re.search(r"\d nodes? \(", shallow), shallow
+
+
+def _param_trace(total: int, trainable: int) -> SimpleNamespace:
     return SimpleNamespace(
-        kind=kind, emission=SimpleNamespace(node=node, call=None), source_nodes=(node,)
+        num_params=total,
+        num_params_trainable=trainable,
+        num_params_frozen=total - trainable,
+        _cost_total_param_memory=total * 4,
     )
 
 
-def test_rolled_count_line_keeps_singular_forms() -> None:
-    op = SimpleNamespace(cost=SimpleNamespace(activation_memory=16))
-    one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
-    assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
-    # In the unrolled view the drawn node is the op itself.
-    one_op = SimpleNamespace(units=(_count_unit("raw_op", op),))
-    assert drawn_count_line(None, one_op, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
-    box = SimpleNamespace(units=(_count_unit("module_box", op),))
-    assert drawn_count_line(None, box, "rolled") == "1 node (16 B)"  # type: ignore[arg-type]
+def test_header_params_print_compact_from_one_thousand() -> None:
+    assert params_caption_detail(_param_trace(11_689_512, 11_689_512)) == (  # type: ignore[arg-type]
+        "11.7M params (44.6 MB, all trainable)"
+    )
+    assert params_caption_detail(_param_trace(86_567_656, 0)).startswith("86.6M params (")  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(1_610, 1_610)).startswith("1.61K params (")  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(999, 999)) == "999 params (3.9 KB, all trainable)"  # type: ignore[arg-type]
+    mixed = params_caption_detail(_param_trace(2_000_000, 1_500))  # type: ignore[arg-type]
+    assert mixed.endswith(", 1.5K/2M trainable)"), mixed
+    assert compact_count(1_610) == "1610"  # node labels keep the full count below 10,000
 
 
 @pytest.mark.parametrize("rolled", [False, True])

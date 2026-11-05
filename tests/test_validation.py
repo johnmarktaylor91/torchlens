@@ -6,6 +6,7 @@ in ``tests/test_validation_perturbation_units.py``.
 """
 
 import copy
+import io
 import threading
 import warnings
 from collections import defaultdict, deque, namedtuple
@@ -1378,21 +1379,21 @@ def test_validate_forward_pass_deepcopy_fallback_warns_for_registered_state() ->
         assert validate_forward_pass(UndeepcopyableRegisteredState(), torch.randn(3)) is True
 
 
-def test_validate_forward_pass_replay_copy_fallback_fails_for_lock_attr() -> None:
-    """An opaque lock makes fallback state restoration unverifiable."""
+def test_validate_forward_pass_replay_copy_fallback_fails_for_opaque_generator_attr() -> None:
+    """An opaque generator object makes fallback state restoration unverifiable."""
 
-    class LockBackedModel(nn.Module):
-        """Model holding an uncopyable external resource."""
+    class GeneratorBackedModel(nn.Module):
+        """Model holding an uncopyable object with hidden iteration state."""
 
         def __init__(self) -> None:
-            """Initialize the lock and a simple registered buffer."""
+            """Initialize the generator and a simple registered buffer."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.register_buffer("bias", torch.ones(3))
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Use registered tensor state without mutating the lock."""
+            """Use registered tensor state without advancing the generator."""
 
             return x + cast(torch.Tensor, self.bias)
 
@@ -1400,7 +1401,7 @@ def test_validate_forward_pass_replay_copy_fallback_fails_for_lock_attr() -> Non
         RuntimeWarning,
         match="cannot prove model-state restoration",
     ):
-        assert validate_forward_pass(LockBackedModel(), torch.randn(3)) is False
+        assert validate_forward_pass(GeneratorBackedModel(), torch.randn(3)) is False
 
 
 def test_validate_forward_pass_warns_on_stateful_retrace_divergence() -> None:
@@ -1671,7 +1672,7 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
             """Initialize opaque state that fallback snapshotting cannot represent."""
 
             super().__init__()
-            self.opaque_state = object()
+            self.opaque_state = (step for step in range(3))
 
         def __deepcopy__(self, memo: dict[int, object]) -> "UncopyableOpaqueState":
             """Reject isolated ground-truth copies."""
@@ -1697,14 +1698,14 @@ def test_ground_truth_copy_fallback_warns_when_plain_attrs_cannot_be_snapshotted
 def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
     """An opaque fallback attribute can never produce a bare validation success."""
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1717,7 +1718,7 @@ def test_unsnapshotable_attr_fails_closed_before_validation() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = user_public_impls._validate_forward_pass_torch(
-            LockBackedToggle(),
+            OpaqueBackedToggle(),
             torch.randn(3),
         )
 
@@ -1745,14 +1746,14 @@ def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     ``last_validation_failure()`` side channel.
     """
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1767,7 +1768,7 @@ def test_unsnapshotable_attr_early_refusal_is_not_a_bare_false() -> None:
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
         result = user_public_impls._validate_forward_pass_torch(
-            LockBackedToggle(),
+            OpaqueBackedToggle(),
             torch.randn(3),
             _trace_observer=observed_traces.append,
         )
@@ -1813,14 +1814,14 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             self.use_mul = True
             return out
 
-    class LockBackedToggle(nn.Module):
-        """Stateful model with one unsnapshotable but unused lock."""
+    class OpaqueBackedToggle(nn.Module):
+        """Stateful model with one unsnapshotable but unused generator object."""
 
         def __init__(self) -> None:
-            """Initialize the lock and branch counter."""
+            """Initialize the generator and branch counter."""
 
             super().__init__()
-            self.lock = threading.Lock()
+            self.pending = (step for step in range(3))
             self.step = 0
 
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1850,7 +1851,7 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
             is False
         )
         assert (
-            user_public_impls._validate_forward_pass_torch(LockBackedToggle(), torch.randn(3))
+            user_public_impls._validate_forward_pass_torch(OpaqueBackedToggle(), torch.randn(3))
             is False
         )
         refusal = get_validation_failure(None)
@@ -1862,8 +1863,8 @@ def test_process_level_failure_never_leaks_into_a_later_validation_run() -> None
 def test_uncopyable_opaque_branch_state_fails_closed() -> None:
     """Opaque state cannot hide a branch-changing fallback validation."""
 
-    class OpaqueBox:
-        """Mutable opaque state holder."""
+    class OpaqueBox(io.BytesIO):
+        """Mutable state holder with a C-level base the snapshot cannot see through."""
 
         def __init__(self) -> None:
             """Initialize the branch counter."""

@@ -10,6 +10,7 @@ import torch
 
 from .._errors import ParamReleasedError
 from .._utils._record_group_table import record_member
+from ._sdpa_call_args import saved_output, sdpa_call_arguments
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
 ReconstructionFacet = Literal["scores", "pattern", "z", "result"]
@@ -82,7 +83,7 @@ def sdpa_reconstruction_spec(
             f"{facet} reconstruction missing prerequisite: eager attention op or fused "
             f"scaled_dot_product_attention op inside module {record_member(module, 'address', '<unknown>')!r}."
         )
-    missing = _missing_sdpa_prerequisite(sdpa_op)
+    missing = _missing_sdpa_prerequisite(sdpa_op, getattr(module, "trace", None))
     if missing is not None:
         return MissingFacet(f"{facet} reconstruction missing prerequisite: {missing}.")
     if facet == "result" and _output_projection(module) is None:
@@ -190,13 +191,21 @@ def _is_sdpa_op(op: Any) -> bool:
     return any("scaled_dot_product_attention" in str(field) for field in fields)
 
 
-def _missing_sdpa_prerequisite(op: Any) -> str | None:
+def _missing_sdpa_prerequisite(op: Any, trace: Any) -> str | None:
     """Return a named missing prerequisite for SDPA reconstruction.
+
+    The call's arguments come from ``saved_args`` / ``saved_kwargs`` when the
+    capture saved them, else from the default capture's replay template and the
+    parents' saved outputs (``sdpa_call_arguments``). Either way every input
+    must be the exact tensor or value the kernel received; anything the capture
+    did not record is named here and the facet fails closed.
 
     Parameters
     ----------
     op:
         SDPA op record.
+    trace:
+        Trace owning ``op``.
 
     Returns
     -------
@@ -204,31 +213,37 @@ def _missing_sdpa_prerequisite(op: Any) -> str | None:
         Missing prerequisite message, or ``None`` when ready.
     """
 
-    if (
-        record_member(op, "saved_args", None) is None
-        or record_member(op, "saved_kwargs", None) is None
-    ):
-        return (
-            "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
-            "capture=tl.options.CaptureOptions(save_args=True)"
-        )
-    args = list(record_member(op, "saved_args", ()) or ())
+    call = sdpa_call_arguments(op, trace)
+    if isinstance(call, str):
+        return f"{call}; {_RECAPTURE_HINT}"
+    args, kwargs = call
     if len(args) < 3 or not all(isinstance(value, torch.Tensor) for value in args[:3]):
         return "saved SDPA Q/K/V tensor args"
-    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
     dropout_p = float(kwargs.get("dropout_p", _positional_or_default(args, 4, 0.0)) or 0.0)
     if dropout_p:
         return "dropout_p=0.0; stochastic SDPA dropout reconstruction is fail-closed"
+    if not isinstance(saved_output(op), torch.Tensor):
+        return f"the SDPA op's saved output (the reconstruction check target); {_RECAPTURE_HINT}"
     return None
 
 
-def _sdpa_record(op: Any) -> SDPAReconstruction | MissingFacet:
-    """Build an SDPA reconstruction record from saved op args.
+#: Remedy appended to a missing argument prerequisite: a capture that saves the
+#: call's arguments verbatim needs none of the default capture's records.
+_RECAPTURE_HINT = (
+    "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+    "capture=tl.options.CaptureOptions(save_args=True)"
+)
+
+
+def _sdpa_record(op: Any, trace: Any) -> SDPAReconstruction | MissingFacet:
+    """Build an SDPA reconstruction record from the op's recorded arguments.
 
     Parameters
     ----------
     op:
         Fused SDPA op.
+    trace:
+        Trace owning ``op``.
 
     Returns
     -------
@@ -236,11 +251,13 @@ def _sdpa_record(op: Any) -> SDPAReconstruction | MissingFacet:
         Reconstruction record or named missing prerequisite.
     """
 
-    missing = _missing_sdpa_prerequisite(op)
+    missing = _missing_sdpa_prerequisite(op, trace)
     if missing is not None:
         return MissingFacet(f"SDPA reconstruction missing prerequisite: {missing}.")
-    args = list(record_member(op, "saved_args", ()) or ())
-    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
+    call = sdpa_call_arguments(op, trace)
+    if isinstance(call, str):
+        return MissingFacet(f"SDPA reconstruction missing prerequisite: {call}.")
+    args, kwargs = call
     q, k, v = args[:3]
     attn_mask = kwargs.get("attn_mask", _positional_or_default(args, 3, None))
     dropout_p = float(kwargs.get("dropout_p", _positional_or_default(args, 4, 0.0)) or 0.0)
@@ -305,7 +322,7 @@ def _reconstruct_checked(
         Validated reconstructed tensor or a missing sentinel.
     """
 
-    record = _sdpa_record(sdpa_op)
+    record = _sdpa_record(sdpa_op, getattr(module, "trace", None))
     if isinstance(record, MissingFacet):
         return record
     scores = _attention_scores(record)
@@ -316,8 +333,9 @@ def _reconstruct_checked(
     # each z element is sum_k pattern[..,k] * V[..,k,:] with pattern >= 0, so
     # the accumulated-|addend| bound is exactly pattern @ |V|.
     z_magnitude = torch.matmul(pattern.float(), expanded_v.abs().float())
-    if not _allclose_sdpa(
-        z, sdpa_op.out, magnitude=z_magnitude, reduction_length=int(expanded_v.shape[-2])
+    target = saved_output(sdpa_op)
+    if target is None or not _allclose_sdpa(
+        z, target, magnitude=z_magnitude, reduction_length=int(expanded_v.shape[-2])
     ):
         return MissingFacet(
             f"{facet} reconstruction validation failed: recomputed z did not match "

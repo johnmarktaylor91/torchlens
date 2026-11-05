@@ -32,7 +32,11 @@ from typing import TYPE_CHECKING, Any
 from ..._errors import InvalidArgumentError
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._record_group_table import record_member
-from ..._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
+from ..._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
+    LENS_BANNER_OMIT_KEY,
+    LENS_CAPTION_KEY,
+)
 from ...errors._base import TorchLensWarning
 from .. import surgery_visuals as _surgery_visuals
 from .._encoding_request import EncodingChannelRequest
@@ -669,7 +673,8 @@ def _start_build(trace: Trace, lens: LensPreset, request_kwargs: dict[str, Any])
         effective=effective,
         user_kwargs=request_kwargs,
         view=str(effective.get("vis_mode", _effective_view(lens, request_kwargs))),
-        disclosure=[f"view: {lens.name} -- {lens.question}"],
+        # No "view: <name>" line: the header carries only what the picture shows.
+        disclosure=[],
     )
     if lens.preset_spec_fn is not None:
         build.preset_fns.append(lens.preset_spec_fn)
@@ -693,7 +698,7 @@ def _surgery_mount(trace: Trace, build: _LensBuild) -> None:
     )
     build.disclosure.extend(census_lines)
     overrides = dict(build.effective.get("graph_overrides") or {})
-    overrides[LENS_BANNER_OMIT_KEY] = _surgery_visuals.EDIT_VIEW_OMITTED_BANNERS
+    overrides[LENS_BANNER_OMIT_KEY] = EDITED_HEADER_OMITTED_BANNERS
     build.effective["graph_overrides"] = overrides
 
 

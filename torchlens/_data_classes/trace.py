@@ -168,6 +168,7 @@ from .param import ParamAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
+    from PIL import Image
 
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
@@ -1338,7 +1339,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         selector: Any,
         *,
         data: Any = None,
-        image: str | Path | None = None,
+        image: "str | Path | Image.Image | None" = None,
         max_fanout: int = 1_000_000,
         copy: bool = False,
     ) -> "Trace":
@@ -1353,8 +1354,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             payloads are persisted under ``_annotation_blobs`` and are supported
             only for torch traces.
         image:
-            Optional local image path used by the existing ``NodeSpec.image``
-            render hook.
+            Optional picture for the selected nodes: an image file path or a PIL image.
         max_fanout:
             Explicit maximum number of selected sites. The default is
             intentionally large so annotation can fan out across many layers.

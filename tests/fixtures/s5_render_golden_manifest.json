@@ -2,28 +2,28 @@
   "cases": {
     "conv_plateau": {
       "auto": {
-        "dot_len": 20278,
-        "dot_sha256": "5ee52aafc2cd38b32261e438eac3653438862e61e0f1dbe56fd9ad52ab7ee2f2",
+        "dot_len": 20216,
+        "dot_sha256": "252d2d69f9fb5836b0e67ff40b557e06418d0979e0b4447e83fb4e8a20c68a8b",
         "plan_repr_len": 33,
         "plan_sha256": "e21dc3167adb91d926521d6aa628ace154437747dfe64760508efe5f0db8ba9f"
       },
       "max": {
-        "dot_len": 7636,
-        "dot_sha256": "2e4918a81ec7fcd95eaca9be3e09e77f83d1f7e9c83506bad4b21ae097680f24",
+        "dot_len": 7736,
+        "dot_sha256": "f027dce546ceacb1c3e055778878d7bdb39aa77863b2e5d7cd4f4dc69b424869",
         "plan_repr_len": 46,
         "plan_sha256": "9d912701a8e82c002c9fe64edc5e62df46d3875bdc7b06d7d975b8520f6c4fc4"
       },
       "none_default": {
-        "dot_len": 20265,
-        "dot_sha256": "e66da96bbc2d13c435b8610b36987c0b99706100b944237af5fff68736a9a791"
+        "dot_len": 20203,
+        "dot_sha256": "4f5c1e0338275564c35a3c9e902a99987566919e04661f7e7c4bd525e622667e"
       },
       "none_fold_False": {
-        "dot_len": 20265,
-        "dot_sha256": "e66da96bbc2d13c435b8610b36987c0b99706100b944237af5fff68736a9a791"
+        "dot_len": 20203,
+        "dot_sha256": "4f5c1e0338275564c35a3c9e902a99987566919e04661f7e7c4bd525e622667e"
       },
       "none_fold_True": {
-        "dot_len": 3167,
-        "dot_sha256": "5d3d6829966f45885c1ac35652d118b1bc5a4b503312b8883170e7c040ca5174"
+        "dot_len": 3190,
+        "dot_sha256": "093239e63a89b052f35202a7ec6b5fcc1721258855be65fa43e151dbb2f23d36"
       }
     },
     "repeated_residual": {
@@ -48,34 +48,34 @@
         "dot_sha256": "dd97f586dfce74e295f69dc0d0f36c01743f440c44068353d3d4c2c83cef9a15"
       },
       "none_fold_True": {
-        "dot_len": 2176,
-        "dot_sha256": "07f3575a7f237cee9645bd1cd828054f95709a48b4c289cea29de6863ed34a80"
+        "dot_len": 2207,
+        "dot_sha256": "e6781ddbb14c910a2e4ffe590b7f0de0f7e4bd55e1faba5ab342ae6077e500e4"
       }
     },
     "torchvision_resnet18": {
       "auto": {
-        "dot_len": 7579,
-        "dot_sha256": "f073ca60bd4ad5078f076b8f098a042b0d45e67ee1e7a44d4df882edc4ad9325",
+        "dot_len": 7696,
+        "dot_sha256": "1238db1b90254856055d84f0b3d03594933b1927c0ef1b40165db54abfbdf4a8",
         "plan_repr_len": 46,
         "plan_sha256": "3a7d17ee672e09a76535f1cfa008d7b3faadf231a829908de129c3ba7b922518"
       },
       "max": {
-        "dot_len": 5975,
-        "dot_sha256": "72285df564bd0e410ebef44a3ac0709d7e871f7c366d9ceb87960b8846a3a19d",
+        "dot_len": 5963,
+        "dot_sha256": "07e6d61cb5db0f9d87b89d52de86097e4b4495653c53c15a3e2e79093283c81a",
         "plan_repr_len": 63,
         "plan_sha256": "66ea1572f9347e5f8f7986ec47905d6059bc056f37b6a4ed8f6f6aad4589796b"
       },
       "none_default": {
-        "dot_len": 46422,
-        "dot_sha256": "966643127c41ec78ec78002d4c41db09171277bc4dd75e4b360fac7ce82b3249"
+        "dot_len": 46279,
+        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
       },
       "none_fold_False": {
-        "dot_len": 46422,
-        "dot_sha256": "966643127c41ec78ec78002d4c41db09171277bc4dd75e4b360fac7ce82b3249"
+        "dot_len": 46279,
+        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
       },
       "none_fold_True": {
-        "dot_len": 46422,
-        "dot_sha256": "966643127c41ec78ec78002d4c41db09171277bc4dd75e4b360fac7ce82b3249"
+        "dot_len": 46279,
+        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
       }
     },
     "uniform_stack": {
@@ -100,8 +100,8 @@
         "dot_sha256": "69cb0dcf8cd8ad8afe27f892408b4dc1fe5bde92bc9b0c6675908778b153ebe6"
       },
       "none_fold_True": {
-        "dot_len": 2473,
-        "dot_sha256": "0d9047c9b18534d93b079b8217afd336a5b817a6973e67f06a3e954dc329c852"
+        "dot_len": 2503,
+        "dot_sha256": "cb870688fa1c809875fd153404c5ad8a4daf9716d1bb68b97fa0131c0f912fca"
       }
     }
   },
