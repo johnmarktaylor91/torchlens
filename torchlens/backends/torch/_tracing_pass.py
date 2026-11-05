@@ -323,7 +323,7 @@ def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) ->
                 if isinstance(item, tracing_types):
                     return True
     stack = get_current_dispatch_mode_stack()
-    return bool(stack) and _fake_tensor_mode_active(stack)
+    return stack is not None and bool(stack) and _fake_tensor_mode_active(stack)
 
 
 def call_inside_tracing_pass(
