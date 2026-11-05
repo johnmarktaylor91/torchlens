@@ -1,4 +1,4 @@
-"""Copy out deferred payloads before a tensor's storage is handed to the host zero-copy.
+"""Copy out pending payload aliases before a tensor's storage is handed to the host zero-copy.
 
 A plain capture saves an op's out as a clone-on-write alias of the live storage and
 copies it out only before a wrapped call that can write that storage. A raw pointer
