@@ -464,6 +464,12 @@ def test_validate_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path)
         f"""
         import warnings, torch, torchlens as tl
         ref = torch.load({str(tmp_path / "ref.pt")!r})
+        import torchlens.validation.core as core
+        filed = core.note_replay_exception
+        def note(exc):
+            print("REPLAY-EXC", type(exc).__name__, exc)
+            filed(exc)
+        core.note_replay_exception = note
         loaded = tl.load({str(path)!r})
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
