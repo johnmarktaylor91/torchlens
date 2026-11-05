@@ -760,10 +760,10 @@ def _edges(  # noqa: PLR0913 -- the build's parts the contraction reads
         incoming = torch.zeros(grads.shape[0], n_nodes, dtype=dtype)
         for w_number, source in enumerate(writes):
             grad = grads[:, w_number]
-            if source.vectors is not None:
-                incoming.index_add_(
-                    1, source.node_idx, (grad[:, source.pos_idx] * source.vectors).sum(dim=-1)
-                )
+            if source.vectors is not None:  # one (chunk, width) @ (width, features) per position
+                for p in source.pos_idx.unique().tolist():
+                    at = source.pos_idx == p
+                    incoming.index_add_(1, source.node_idx[at], grad[:, p] @ source.vectors[at].T)
             first = starts.error + w_number * n_pos
             incoming[:, first : first + n_pos] = (grad * source.error).sum(dim=-1)
             if source.bias is not None:
