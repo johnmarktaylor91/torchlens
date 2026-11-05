@@ -361,3 +361,73 @@ def test_a_failed_placement_layout_leaves_the_labels_unplaced(
     arc = _edge(dot, "linear_2_6", "linear_1_4")
     assert (_label(arc, "taillabel"), _label(arc, "headlabel")) == ("Out 1", "In 2")
     assert "labelangle=" not in arc
+
+
+def _arg_labels_on_titles(source: str) -> list[tuple[str, tuple[float, float, float, float]]]:
+    """Return each ``arg`` head label box that covers a module box's title, by edge."""
+
+    layout = json.loads(
+        subprocess.run(
+            ["dot", "-Tjson"], input=source, capture_output=True, text=True, check=True
+        ).stdout
+    )
+    objects = layout["objects"]
+    sub_count = int(layout.get("_subgraph_cnt", 0))
+    names = {obj["_gvid"]: obj.get("name", "") for obj in objects}
+    titles = [r for obj in objects[:sub_count] for r in _label_lines(obj.get("_ldraw_"))]
+    hits = []
+    for edge in layout["edges"]:
+        if "arg" not in "".join(op.get("text", "") for op in edge.get("_hldraw_") or []):
+            continue
+        for box in _label_lines(edge["_hldraw_"]):
+            if any(
+                box[0] < t[2] and t[0] < box[2] and box[1] < t[3] and t[1] < box[3] for t in titles
+            ):
+                hits.append((f"{names[edge['tail']]} -> {names[edge['head']]}", box))
+    return hits
+
+
+@pytest.mark.heavy
+def test_an_arg_label_moves_off_a_module_box_title(tmp_path: Path) -> None:
+    """In a ResNet-18 block the residual add's ``arg 1`` label for the skip path sits over
+    the ``downsample`` box's title at Graphviz's default spot (JMT, 5 Nov 2026, on
+    ``layer2.0``, ``layer3.0`` and ``layer4.0`` alike); the placed drawing keeps it clear."""
+
+    torchvision = pytest.importorskip("torchvision")
+    torch.manual_seed(0)
+    model = torchvision.models.resnet18(weights=None).eval()
+    trace = tl.trace(model, torch.randn(1, 3, 224, 224))
+    try:
+        dot = trace.draw(module="layer2.0", file_format="dot", path=str(tmp_path / "block")).dot
+    finally:
+        trace.cleanup()
+    assert "cluster_layer2.0.downsample" in dot.replace('"', "") and "arg 1" in dot
+    if not _arg_labels_on_titles(dot):
+        pytest.skip("this Graphviz build keeps the default label off the title already")
+    placed = place_pass_labels(dot, engine="dot", timeout=60)
+    assert placed != dot
+    assert _arg_labels_on_titles(placed) == []
+    assert audit_gv_source(placed).hard_violation_count <= audit_gv_source(dot).hard_violation_count
+
+
+def test_a_clear_arg_label_keeps_its_default_spot() -> None:
+    """An ``arg`` label whose default spot touches nothing is left exactly as Graphviz put it."""
+
+    body = [
+        "digraph g {\n",
+        "\trankdir=BT\n",
+        '\tsubgraph "cluster_m" {\n',
+        '\t\tlabel="@m"\n',
+        '\t\ta [shape=box label="a"]\n',
+        "\t}\n",
+        '\tb [shape=box label="b"]\n',
+        '\tc [shape=box label="c"]\n',
+        "\ta -> b\n",
+        "\tb -> c [headlabel=<<TABLE><TR><TD><FONT>arg 1</FONT></TD></TR></TABLE>>]\n",
+        "}\n",
+    ]
+    assert has_pass_labels(body)
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input="".join(body), capture_output=True, text=True, check=True
+    ).stdout
+    assert choose_pass_label_placements(body, layout) == body
