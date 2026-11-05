@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1718 modules, 697311 lines, 0 modules without a docstring.
+85 packages, 1718 modules, 697316 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6499 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4492 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 134 | 57829 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 134 | 57834 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8861 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2744 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9195 |
@@ -1456,7 +1456,7 @@ tinygrad backend preview. (10 modules, 4492 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (134 modules, 57829 lines)
+Torch backend implementation package for TorchLens capture. (134 modules, 57834 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1562,7 +1562,7 @@ Torch backend implementation package for TorchLens capture. (134 modules, 57829 
 | `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 145 |
 | `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 399 |
 | `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 587 |
-| `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 250 |
+| `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 255 |
 | `_view_writeback` | Storage-alias helpers for view mutations. | 141 |
 | `_warm_originals` | Show torch's original callables while a derived identity cache is warmed. | 119 |
 | `_weightsfree_ctx` | The capture-owned factory-device slot (-CTX, weightsfree ). | 78 |
