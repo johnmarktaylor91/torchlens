@@ -34,8 +34,15 @@ def _model() -> GPT2LMHeadModel:
     return GPT2LMHeadModel(config).eval()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def parent() -> Iterator[tl.Trace]:
+    """A fresh, unforked parent trace for each test, cleaned up afterwards.
+
+    Every test here forks the parent, and each fork appends a ``fork`` row to
+    the parent's ``state_history``, so a shared parent would make one test's
+    result depend on which tests ran before it in the same worker.
+    """
+
     trace = tl.trace(_model(), torch.tensor([[1, 5, 7, 4, 9]]))
     try:
         yield trace
@@ -91,7 +98,10 @@ def test_fork_cost_does_not_grow_with_earlier_forks(parent: tl.Trace) -> None:
 def test_fork_history_is_an_isolated_copy(parent: tl.Trace) -> None:
     """The fork's history equals the parent's at fork time and shares no row or list with it."""
 
+    for _ in range(3):
+        parent.fork()  # the parent's own history rows, independent of any other test
     before = [dict(row) for row in parent.state_history]
+    assert len(before) >= 3, before
     fork = parent.fork()
     assert fork.state_history == before
     assert fork.state_history is not parent.state_history
@@ -123,3 +133,14 @@ def test_sealed_capture_fields_are_shared_and_tables_stay_isolated(parent: tl.Tr
         assert fork_table == parent_table and fork_table is not parent_table, name
         key = next(iter(parent_table))
         assert fork_table[key] == parent_table[key] and fork_table[key] is not parent_table[key]
+
+
+def test_parent_fixture_is_fresh_for_each_test(parent: tl.Trace) -> None:
+    """Every test gets an unforked parent, so no test depends on another's forks.
+
+    ``Trace.fork`` records a ``fork`` row on its parent by design, so a parent
+    shared across tests carries one test's forks into the next and makes the
+    results depend on test order (and on how xdist splits the module).
+    """
+
+    assert not [row for row in parent.state_history if row.get("op") == "fork"]
