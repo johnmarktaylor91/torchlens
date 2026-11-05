@@ -447,6 +447,32 @@ def test_loaded_validation_refuses_a_pointer_keyword_before_resolution(tmp_path:
         loaded.validate_forward_pass(reference)
 
 
+def test_loaded_validation_never_runs_or_verifies_a_pointer_call(tmp_path: Path) -> None:
+    """With resolution bypassed, replay still never calls the op and never reports a pass.
+
+    A spy stands in for a callable that slipped past resolution: the replay belt must
+    refuse before the call, and no broad handler may turn that refusal into a verdict
+    of verified.
+    """
+
+    path, reference = _crafted_new_bundle(tmp_path, {"cdata": 0})
+    loaded = tl.load(path)
+    crafted = next(op for op in loaded._layer_list if op.func_name == "new")
+    calls: list[Any] = []
+    crafted.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
+    outcome: Any
+    try:
+        outcome = loaded.validate_forward_pass(reference)
+    except (RunPreconditionError, ArtifactError) as refusal:
+        outcome = refusal
+    finally:
+        crafted.func = None
+    assert calls == [], f"the pointer call executed with {calls}"
+    assert outcome is not True
+    status = getattr(loaded, "validation_replay_status", None)
+    assert getattr(status, "state", None) != "passed", f"reported verified: {status}"
+
+
 def test_loaded_tensor_new_without_a_pointer_keyword_still_resolves(tmp_path: Path) -> None:
     """The refusal keys on the pointer keyword, never on ``Tensor.new`` itself."""
 
@@ -468,7 +494,7 @@ def test_replay_execution_refuses_a_pointer_keyword() -> None:
     op.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
     with pytest.raises(RunPreconditionError) as excinfo:
         execute_replay_func(op, {"args": list(op.saved_args), "kwargs": {"cdata": 0}}, [])
-    assert excinfo.value.code == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
+    assert excinfo.value.fields["code"] == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
     assert calls == []
 
 
