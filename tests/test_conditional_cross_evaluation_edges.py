@@ -178,11 +178,11 @@ def _has_cross_arm_edge(trace: Trace) -> bool:
     """Whether some edge joins two ops whose stacks name different arms."""
 
     for parent in trace._layer_list:
-        parent_stack = tuple(parent.conditional_branch_stack)
+        parent_stack = tuple(parent.control_flow.branch_stack)
         if not parent_stack:
             continue
         for child_label in parent.children:
-            child_stack = tuple(trace[child_label].conditional_branch_stack)
+            child_stack = tuple(trace[child_label].control_flow.branch_stack)
             if child_stack and child_stack != parent_stack:
                 return True
     return False
@@ -242,8 +242,8 @@ def test_then_to_else_edge_within_one_loop_iteration_fails() -> None:
     try:
         conditional_id = trace.graph.conditional_records[0].id
         second_then_op = _find_op(trace, "add_")
-        assert tuple(second_then_op.conditional_branch_stack) == ((conditional_id, "then"),)
-        second_then_op.conditional_branch_stack = [(conditional_id, "else")]
+        assert tuple(second_then_op.control_flow.branch_stack) == ((conditional_id, "then"),)
+        second_then_op._control_flow_branch_stack = [(conditional_id, "else")]
         _assert_invariant_6_error(trace, "crosses arms", "within its evaluation 1", "'neg_")
     finally:
         trace.cleanup()
@@ -256,7 +256,7 @@ def test_then_to_else_edge_in_a_single_pass_fails() -> None:
     try:
         conditional_id = trace.graph.conditional_records[0].id
         second_then_op = _find_op(trace, "add_")
-        second_then_op.conditional_branch_stack = [(conditional_id, "else")]
+        second_then_op._control_flow_branch_stack = [(conditional_id, "else")]
         _assert_invariant_6_error(trace, "crosses arms", "within its evaluation 1")
     finally:
         trace.cleanup()
@@ -269,8 +269,8 @@ def test_arm_body_op_before_any_test_fails() -> None:
     try:
         conditional_id = trace.graph.conditional_records[0].id
         test_input_op = _find_op(trace, "sum_")
-        assert not test_input_op.conditional_branch_stack
-        test_input_op.conditional_branch_stack = [(conditional_id, "then")]
+        assert not test_input_op.control_flow.branch_stack
+        test_input_op._control_flow_branch_stack = [(conditional_id, "then")]
         _assert_invariant_6_error(trace, "before any test")
     finally:
         trace.cleanup()
@@ -282,8 +282,8 @@ def test_stack_missing_its_enclosing_arm_fails() -> None:
     trace = _trace(NestedIf())
     try:
         inner_body_op = _find_op(trace, "mul_")
-        assert len(inner_body_op.conditional_branch_stack) == 2
-        inner_body_op.conditional_branch_stack = list(inner_body_op.conditional_branch_stack[1:])
+        assert len(inner_body_op.control_flow.branch_stack) == 2
+        inner_body_op._control_flow_branch_stack = list(inner_body_op.control_flow.branch_stack[1:])
         _assert_invariant_6_error(trace, "without its enclosing conditional")
     finally:
         trace.cleanup()

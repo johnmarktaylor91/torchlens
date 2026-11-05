@@ -110,7 +110,7 @@ def test_spliced_forward_calls_the_probe_once_and_refuses_a_missed_site() -> Non
     log = tl.trace(model, x)
     try:
         relu_op = log.find_sites(tl.func("relu")).first()
-        key = str(relu_op.site_key)
+        key = str(relu_op.graph.site_key)
         label = str(relu_op.label)
         ordinal = captum._site_ordinal(log, relu_op, key)
     finally:

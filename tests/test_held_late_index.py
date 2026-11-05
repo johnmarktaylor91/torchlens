@@ -28,7 +28,7 @@ import torchlens as tl
 
 
 def _buffer_addresses(trace: Any) -> list[str]:
-    return [trace._layer_dict_all_keys[label].address for label in trace.buffer_layers]
+    return [trace._layer_dict_all_keys[label].buffer_address for label in trace.buffer_layers]
 
 
 def _parent_types(trace: Any, op_type: str) -> list[list[str]]:
@@ -221,6 +221,6 @@ def test_set_rebound_private_tensor_reads_from_the_set_output(read_first: bool) 
     (set_op,) = [op for op in trace._layer_list if op.type == "set"]
     (add_op,) = [op for op in trace._layer_list if op.type == "add"]
     assert set_op.layer_label in add_op.parents
-    assert set_op.has_input_ancestor and add_op.has_input_ancestor
+    assert set_op.graph.has_input_ancestor and add_op.graph.has_input_ancestor
     assert set(_buffer_addresses(trace)) == {"_state"}
     assert tl.validate(_PrivateRebind(read_first), x, scope="forward") is True

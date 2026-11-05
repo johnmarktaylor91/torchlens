@@ -143,7 +143,7 @@ def arm_role_ops(
     for op in trace._layer_list:
         if any(
             ref.conditional_id == conditional_id and ref.arm_index == arm_index and ref.role == role
-            for ref in op.in_conditionals or []
+            for ref in op.control_flow.in_conditionals or []
         ):
             labels.append(op.layer_label)
     return labels

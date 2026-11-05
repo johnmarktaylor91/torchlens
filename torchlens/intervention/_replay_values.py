@@ -172,15 +172,15 @@ def rollback_snapshot(site: Op) -> dict[str, Any]:
 
     return {
         "out": site.out,
-        "transformed_out": site.transformed_out,
+        "transformed_out": site.payload.transformed_out,
         "shape": site.shape,
-        "transformed_out_shape": site.transformed_out_shape,
+        "transformed_out_shape": site.payload.transformed_out_shape,
         "dtype": site.dtype,
         "dtype_ref": site.dtype_ref,
         "device_ref": site.device_ref,
-        "transformed_out_dtype": site.transformed_out_dtype,
-        "activation_memory": site.activation_memory,
-        "transformed_activation_memory": site.transformed_activation_memory,
+        "transformed_out_dtype": site.payload.transformed_out_dtype,
+        "activation_memory": site.cost.activation_memory,
+        "transformed_activation_memory": site.cost.transformed_activation_memory,
         "has_saved_activation": site.has_saved_activation,
         "edits": list(site.edits),
         "is_edited": site.is_edited,
@@ -216,7 +216,7 @@ def refresh_output_derivatives(
     refresh_decoded_output(log)
     for label, before in snapshots.items():
         site = log._layer_dict_all_keys[label]
-        is_output = site.is_output or site.is_output_parent
+        is_output = site.is_output or site.graph.is_output_parent
         if is_output and not _same_value(before.get("out"), site.out):
             mark_transformed_output_stale(log)
             return

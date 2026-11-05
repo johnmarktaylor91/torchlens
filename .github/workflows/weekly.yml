@@ -328,7 +328,7 @@ jobs:
     if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
     # r7 R24 (sol MED, 4th pass): 97 shipped asserts remain behind the
     # shrink-only S101 ceiling, validation strips assertion checks under
-    # python -O (validation/backward.py), and NO leg proved the verdict
+    # python -O (validation/_backward.py), and NO leg proved the verdict
     # surface survives optimized mode -- a load-bearing assert converts a
     # FAIL verdict into silent green exactly where users run -O. This leg
     # executes the verdict-adjacent suites (the planted-corruption corpus

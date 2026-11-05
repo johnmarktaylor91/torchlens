@@ -14,6 +14,8 @@ from collections.abc import MutableMapping
 from dataclasses import replace
 from typing import Any
 
+from ..._utils._record_group_table import record_member
+
 __all__ = ("_layer_by_grad_fn_id", "_layer_grad_fn_pairing_rank", "_pair_discovered_with_layers")
 
 
@@ -31,7 +33,7 @@ def _layer_grad_fn_pairing_rank(layer: Any) -> int:
         Lower rank is preferred; compute ops outrank boundary sentinels.
     """
 
-    is_compute = getattr(layer, "is_compute_op", False) or getattr(
+    is_compute = record_member(layer, "is_compute_op", False) or record_member(
         layer,
         "is_compute_layer",
         False,
@@ -58,7 +60,7 @@ def _layer_by_grad_fn_id(trace: Any) -> dict[int, str]:
     mapping: dict[int, str] = {}
     ranks: dict[int, int] = {}
     for layer in trace._layer_list:
-        grad_fn_object_id = getattr(layer, "grad_fn_object_id", None)
+        grad_fn_object_id = record_member(layer, "grad_fn_object_id", None)
         if grad_fn_object_id is None:
             continue
         candidate_rank = _layer_grad_fn_pairing_rank(layer)

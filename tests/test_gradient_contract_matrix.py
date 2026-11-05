@@ -60,8 +60,8 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention.helpers import swap_with
-from torchlens.intervention.types import InterventionDecision
+from torchlens.intervention._helpers import swap_with
+from torchlens.intervention._types import InterventionDecision
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 

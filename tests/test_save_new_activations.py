@@ -14,6 +14,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -94,7 +95,7 @@ def test_save_new_outs_fast_path_does_not_attach_streaming_refs() -> None:
     log._save_new_outs(model, torch.randn(2, 5), seed=42, save=[output_label])
 
     assert getattr(log, "_out_writer", None) is None
-    assert all(getattr(layer, "out_ref", None) is None for layer in log._layer_list)
+    assert all(record_member(layer, "out_ref", None) is None for layer in log._layer_list)
     log.cleanup()
 
 
@@ -277,7 +278,7 @@ class TestGraphConsistencyValidation:
             refreshed_sub = next(op for op in log._layer_list if op.type == "sub")
             fresh_sub = next(op for op in fresh_log._layer_list if op.type == "sub")
             assert refreshed_sub.parents == fresh_sub.parents
-            assert refreshed_sub.parent_arg_positions == fresh_sub.parent_arg_positions
+            assert refreshed_sub.call.parent_arg_positions == fresh_sub.call.parent_arg_positions
             assert refreshed_sub.out is not None
             assert fresh_sub.out is not None
             assert torch.allclose(refreshed_sub.out, fresh_sub.out)
@@ -349,11 +350,11 @@ def _assert_buffer_sink_refusal(exc_info):
 def _tamper_recorded_training_literal(log, sink, value):
     """Flip the recorded literal mode argument on one sink's producing op."""
 
-    source = log._layer_dict_all_keys[sink.buffer_source]
-    args = list(source.non_tensor_pos_args)
+    source = log._layer_dict_all_keys[sink.graph.buffer_source]
+    args = list(source.call.non_tensor_pos_args)
     index = next(i for i, arg in enumerate(args) if isinstance(arg, bool))
     args[index] = value
-    source.non_tensor_pos_args = args
+    source._call_non_tensor_pos_args = args
 
 
 # Kept: sole branch coverage of _capture/projectors.py.

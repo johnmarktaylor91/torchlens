@@ -11,8 +11,8 @@ from .._utils._display_numbers import plural
 from .._utils.fail_open import fail_open
 
 if TYPE_CHECKING:
-    from .spec import Recipe, Rule
-    from .types import CapturedArgTemplate, FrozenInterventionSpec
+    from ._spec import Recipe, Rule
+    from ._types import CapturedArgTemplate, FrozenInterventionSpec
 
 
 def _term_text(value: Any) -> str:
@@ -22,7 +22,7 @@ def _term_text(value: Any) -> str:
         "torchlens._selection.selector_base",
         "torchlens._selection.selectors",
     } or (
-        type(value).__module__ == "torchlens.intervention.types" and type(value).__name__ == "Edit"
+        type(value).__module__ == "torchlens.intervention._types" and type(value).__name__ == "Edit"
     ):
         return fail_open(lambda: clipped(repr(value)), lambda _error: f"<{type(value).__name__}>")
     return value_text(value)

@@ -198,7 +198,7 @@ def test_inert_first_party_gate_discriminates() -> None:
 
     from torchlens._semantic.recipes.norm import layer_norm
     from torchlens._utils.display import identity
-    from torchlens.intervention.helpers import clamp, zero_ablate
+    from torchlens.intervention._helpers import clamp, zero_ablate
     from torchlens.report._environment import _module_is_installed
 
     assert is_inert_first_party_callable(identity)
@@ -236,7 +236,7 @@ class _OsSystemGadget:
 
 
 class _CleanupPartialGadget:
-    """``__reduce__`` -> ``torchlens.recording.cleanup.cleanup_partial('<attacker_dir>')``.
+    """``__reduce__`` -> ``torchlens.recording._cleanup.cleanup_partial('<attacker_dir>')``.
 
     On the pre-r22 tree the PUBLIC-named ``cleanup_partial`` slipped the verb
     denylist and pickle INVOKED it, ``shutil.rmtree``-ing an attacker-named directory
@@ -247,7 +247,7 @@ class _CleanupPartialGadget:
         self._victim = victim_dir
 
     def __reduce__(self):  # type: ignore[no-untyped-def]
-        from torchlens.recording.cleanup import cleanup_partial
+        from torchlens.recording._cleanup import cleanup_partial
 
         return (cleanup_partial, (self._victim,))
 
@@ -311,12 +311,12 @@ def test_public_side_effecting_first_party_callables_denied() -> None:
     """The public-name fallthrough is GONE: fs / state mutators fail the gate + door."""
 
     from torchlens._utils._torch_compat import mark_torch_capability_missing
-    from torchlens.recording.cleanup import cleanup_partial
+    from torchlens.recording._cleanup import cleanup_partial
 
     assert not is_inert_first_party_callable(cleanup_partial)
     assert not is_inert_first_party_callable(mark_torch_capability_missing)
     with pytest.raises(pickle.UnpicklingError):
-        _load_ref("torchlens.recording.cleanup", "cleanup_partial")
+        _load_ref("torchlens.recording._cleanup", "cleanup_partial")
     with pytest.raises(pickle.UnpicklingError):
         _load_ref("torchlens._utils._torch_compat", "mark_torch_capability_missing")
 

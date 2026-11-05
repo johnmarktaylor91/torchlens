@@ -61,7 +61,7 @@ def _eager(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
 
 
 def _buffer_addresses(trace: Any) -> list[str]:
-    return [trace._layer_dict_all_keys[label].address for label in trace.buffer_layers]
+    return [trace._layer_dict_all_keys[label].buffer_address for label in trace.buffer_layers]
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.

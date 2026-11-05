@@ -9,6 +9,7 @@ from typing import Any, Literal
 import torch
 
 from .._errors import ParamReleasedError
+from .._utils._record_group_table import record_member
 from ._sdpa_call_args import saved_output, sdpa_call_arguments
 from .facets import FacetCapabilityFlags, FacetSpec, MissingFacet
 
@@ -80,7 +81,7 @@ def sdpa_reconstruction_spec(
     if sdpa_op is None:
         return MissingFacet(
             f"{facet} reconstruction missing prerequisite: eager attention op or fused "
-            f"scaled_dot_product_attention op inside module {getattr(module, 'address', '<unknown>')!r}."
+            f"scaled_dot_product_attention op inside module {record_member(module, 'address', '<unknown>')!r}."
         )
     missing = _missing_sdpa_prerequisite(sdpa_op, getattr(module, "trace", None))
     if missing is not None:
@@ -184,7 +185,7 @@ def _is_sdpa_op(op: Any) -> bool:
 
     fields = (
         getattr(op, "func_name", None),
-        getattr(op, "func_qualname", None),
+        record_member(op, "func_qualname", None),
         getattr(op, "label", None),
     )
     return any("scaled_dot_product_attention" in str(field) for field in fields)

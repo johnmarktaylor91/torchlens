@@ -13,7 +13,8 @@ in ``torchlens.__all__`` (frozen root budget): reach it as ``tl.agent``.
 
 from __future__ import annotations
 
-from typing import Any
+import importlib
+from typing import TYPE_CHECKING, Any
 
 from ._envelope import build_envelope, build_error_envelope, canonical_dumps, json_safe
 from ._guide_text import AGENT_GUIDE, guide
@@ -67,3 +68,32 @@ def list_tools() -> list[dict[str, Any]]:
         }
         for spec in tool_specs()
     ]
+
+
+# Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
+# name on this module type-check as Any.
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Refuse a submodule path that 3.0 made private, typed; miss plainly otherwise.
+
+        Parameters
+        ----------
+        name:
+            Attribute normal lookup did not find.
+
+        Raises
+        ------
+        AttributeError
+            Always; ``FacadeTeachingError`` (``facade_redirect``) for a private
+            submodule's old public spelling.
+        """
+
+        # Resolved at call time, and only for a public spelling: importing torchlens._utils
+        # runs its package init, which reaches torch, and the tier-0 verbs stay torch-free
+        # (``from torchlens.agent import _cli`` asks this hook for ``_cli`` first).
+        if not name.startswith("_"):
+            importlib.import_module("torchlens._private_submodules").refuse_private_submodule(
+                __name__, name
+            )
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

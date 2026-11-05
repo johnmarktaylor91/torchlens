@@ -13,6 +13,7 @@ from .._data_classes._lookup_kinds import op_at
 from .._data_classes._module_edit_sites import edited_stand_in, is_mapped_replacement
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
 if TYPE_CHECKING:
@@ -64,7 +65,7 @@ def _source_line(op: Op) -> str | None:
         ``"file:line"`` or ``None`` when no source context is present.
     """
 
-    location = display_frame(getattr(op, "code_context", None))
+    location = display_frame(record_member(op, "code_context", None))
     if location is None:
         return None
     file_name = getattr(location, "file", None)
@@ -445,7 +446,7 @@ def _module_address(op: Op) -> str | None:
         Atomic module address or the innermost containing module address.
     """
 
-    atomic_address = getattr(op, "atomic_module_address", None)
+    atomic_address = record_member(op, "atomic_module_address", None)
     if isinstance(atomic_address, str):
         return atomic_address
     # Live (mid-capture) ops have no atomic_module_address yet; the fallback

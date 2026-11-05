@@ -189,7 +189,7 @@ def test_torchvision_resnet18_matrix_and_branch_differentiator() -> None:
     descriptor = next(iter(source.projective_field.per_input.values()))  # type: ignore[union-attr]
     assert descriptor.direction is ReceptiveFieldDirection.PROJECTIVE
     assert descriptor.source_key == source.label  # type: ignore[union-attr]
-    assert descriptor.target_key == target.io_role  # type: ignore[union-attr]
+    assert descriptor.target_key == target.graph.io_role  # type: ignore[union-attr]
     assert descriptor.status not in {
         ReceptiveFieldStatus.UNKNOWN,
         ReceptiveFieldStatus.UNSUPPORTED,

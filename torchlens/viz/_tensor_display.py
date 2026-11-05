@@ -8,6 +8,7 @@ import torch
 
 from .._utils._multipass_access import is_multipass_layer
 from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils._record_group_table import record_member
 from ._rgb_scale import rgb_unit_hwc
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
@@ -43,7 +44,7 @@ def _tensor_from_log(log_entry: Any) -> torch.Tensor | None:
             f"Layer {layer_label!r} is recurrent ({num_passes} passes); show() needs a "
             f"single pass. Select one, for example log['{layer_label}:1'].show()."
         )
-    out = getattr(log_entry, "transformed_out", None)
+    out = record_member(log_entry, "transformed_out", None)
     if isinstance(out, torch.Tensor):
         return out
     out = getattr(log_entry, "out", None)

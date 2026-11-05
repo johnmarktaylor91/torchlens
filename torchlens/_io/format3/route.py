@@ -19,8 +19,8 @@ from . import contract, reader
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ...bundle import Bundle
-    from ...intervention.spec import Recipe
-    from ...intervention.types import InterventionSpec
+    from ...intervention._spec import Recipe
+    from ...intervention._types import InterventionSpec
     from .. import PayloadLoadHints
 
 _FORMAT3_READER_SHAPES: Final = frozenset({"v3", "unknown"})

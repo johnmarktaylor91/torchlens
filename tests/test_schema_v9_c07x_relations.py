@@ -45,7 +45,7 @@ from torchlens.bundle._relations import (
     OpaqueRelationRow,
 )
 from torchlens.errors import TorchLensWarning
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 
 
 class _Tiny(torch.nn.Module):

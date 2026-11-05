@@ -208,7 +208,7 @@ CNN trace. The unpickler is deleted by this design (section 10). Filed as an ame
 (section 15).
 
 The `ref` tag: a live field that holds a record object rather than its label (the trace's op
-list and lookup dicts, `Layer.ops`, `Module.params`, `Op.code_context`, `GradFn.calls`,
+list and lookup dicts, `Layer.ops`, `Module.params`, `Op.source.frames`, `GradFn.calls`,
 `BackwardPass.grad_fn_calls`) writes `{"$tl": "ref", "record": kind, "row": index}`. The
 schema cannot type these cells from annotations (most are unannotated), so the reference is
 tagged; the index points into the record table, whose rows are in live container order.

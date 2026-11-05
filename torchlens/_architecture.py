@@ -95,6 +95,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io.scrub": "L3",
     "_io.tlspec": "L3",
     "_io.rehydrate": "L3",
+    # The source-bundle resolver split out of rehydrate (size cap) sits at its tier.
+    "_io._rehydrate_source_bundle": "L3",
     "_io.lazy": "L3",
     "_io.runnable": "L3",
     "_io.runnable_load": "L3",
@@ -121,9 +123,9 @@ PACKAGE_LAYERS: dict[str, str] = {
     "backends": "L2",
     "_ir": "L2",
     "recording": "L2",
-    "recording.types": "L1",
-    "recording.recover": "L3",
-    "recording.cleanup": "L3",
+    "recording._types": "L1",
+    "recording._recover": "L3",
+    "recording._cleanup": "L3",
     "observers": "L2",
     "_kernel_telemetry": "L2",
     "_options_removed": "L0",
@@ -303,7 +305,7 @@ def layer_for_module(dotted: str) -> str | None:
     Parameters
     ----------
     dotted:
-        Module path relative to ``torchlens`` (e.g. ``"recording.recover"``).
+        Module path relative to ``torchlens`` (e.g. ``"recording._recover"``).
 
     Returns
     -------

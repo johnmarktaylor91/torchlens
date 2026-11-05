@@ -23,11 +23,11 @@ Key entry points:
   `tl.report.doctor()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
   (`backends/_protocol.py`) stays torch's internal orchestration adapter.
 - Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
-  retained op carries the portable structural-position key `op.site_key`
+  retained op carries the portable structural-position key `op.graph.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
-  `Layer.site_peers` / `Layer.shape_summary` are the Layer surface (typed
-  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].site_key`); `grouping=` is the closed-vocabulary knob
+  `Layer.graph.site_peers` / `Layer.shape_summary` are the Layer surface (typed
+  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].graph.site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
   refuse typed pre-D1/S2) mirrored on
@@ -232,7 +232,7 @@ Key entry points:
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
   the replay engine only (`edge_intervention_engine_unsupported`
-  otherwise); the substituted value rides `Op.edge_substitutions` (+
+  otherwise); the substituted value rides `Op.graph.edge_substitutions` (+
   `edge_replacement_stamps`, `FireRecord.edge_address`; persisted as of
   tlspec v8) while capture truth stays unmodified, and uncorroborated
   entries FAIL validation (`edge_intervention_boundary`).
@@ -291,12 +291,9 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  `AtenOp.gpu_kernels` is the GPU kernel launches one ATen call made, matched to it by
-  the profiler's correlation id; `Op.gpu_kernels` is the deduplicated union of those
-  across the op's ATen calls. With telemetry off each returns one row with
-  `attribution_status="unavailable"`, never an empty tuple. Both are declared on their
-  classes and reach `torchlens._kernel_telemetry` by module name only when read; the views sit over
-  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
+  `torchlens._kernel_telemetry` correlates CUDA launches to rows of
+  the ATen execution profile (no public reader: the former per-op and per-call kernel views
+  are removed and refuse typed; `_aten_gpu_kernels` / `_op_gpu_kernels` are the private readers) (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
   keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
   from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
@@ -320,7 +317,7 @@ Key entry points:
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
-  Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
+  Spec persistence is one path: `intervention/_save.py` owns the `.tlspec` directory,
   tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
   encoder and decoder with the `format_version` table (`SPEC_FORMAT_VERSIONS`);
   `intervention/_spec_values.py` holds the value wrapper grammar and the import-ref

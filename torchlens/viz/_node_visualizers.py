@@ -9,7 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._utils._numpy_bridge import tensor_to_numpy
-from .feature_maps import _draw_more_marker
+from ._feature_maps import _draw_more_marker
 
 _HEATMAP_COLORS = (
     (68, 1, 84),

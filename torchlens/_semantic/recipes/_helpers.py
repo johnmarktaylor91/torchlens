@@ -8,6 +8,7 @@ import torch
 from torch.nn import functional as F
 
 from ..._data_classes._module_role_hints import multi_output_role_from_path
+from ..._utils._record_group_table import record_member
 from .._call_subject import CallBoundModule, bound_child
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
@@ -253,7 +254,7 @@ def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
 
     addresses: list[str] = []
     for module in trace.modules_with_facet(facet_name):
-        if getattr(module, "address", None) == "self":
+        if record_member(module, "address", None) == "self":
             continue
         module._single_call_or_error(remedy=_PER_CALL_PATCH_REMEDY)
         if not relays_wrapped_core(module, facet_name):
@@ -273,7 +274,7 @@ def output_projection_child(module: Any) -> Any | None:
         child = child_module(module, name)
         if child is not None:
             return child
-    address = getattr(module, "address", None)
+    address = record_member(module, "address", None)
     if not isinstance(address, str) or "." not in address:
         return None
     parent_address, own_name = address.rsplit(".", 1)
@@ -601,7 +602,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
 def fused_sdpa_pattern(module: Any) -> Any:
     """Return a reconstructed fused attention pattern or an absence reason."""
 
-    label = getattr(module.calls[0], "label", getattr(module, "address", "<unknown>"))
+    label = getattr(module.calls[0], "label", record_member(module, "address", "<unknown>"))
     value = fused_sdpa_facet(module, "pattern", "attention_reconstruction")
     if not isinstance(value, AbsenceReason):
         return value
@@ -637,5 +638,5 @@ def op_output_readable(op: Any) -> bool:
     """Return whether an op-backed facet can read its home output now."""
 
     return bool(
-        getattr(op, "has_saved_activation", False) or getattr(op, "out_ref", None) is not None
+        getattr(op, "has_saved_activation", False) or record_member(op, "out_ref", None) is not None
     )

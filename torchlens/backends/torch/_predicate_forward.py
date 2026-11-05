@@ -39,7 +39,7 @@ from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.selector_eval import selector_contains_kind
 from ..._utils._tensor_label import get_tensor_label
 from ...recording._halt import StopSignal
-from ...recording.types import ActivationRecord, CaptureSpec
+from ...recording._types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._ops_containers import _walk_output_tensors_with_paths
 from ._predicate_boundary_replacements import log_predicate_boundary_replacements
@@ -80,7 +80,7 @@ def _record_predicate_module_boundary_outputs(
     """
 
     from ..._selection.selectors import BaseSelector
-    from ...intervention.runtime import _peek_module_intervention_parent_labels
+    from ...intervention._runtime import _peek_module_intervention_parent_labels
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op
@@ -380,7 +380,7 @@ def _predicate_module_forward(
                 out = orig_forward(*args, **kwargs)
         else:
             out = orig_forward(*args, **kwargs)
-        from ...intervention.runtime import _apply_module_boundary_live_hooks
+        from ...intervention._runtime import _apply_module_boundary_live_hooks
 
         out = _apply_module_boundary_live_hooks(
             out,

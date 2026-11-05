@@ -281,7 +281,7 @@ def test_quantized_model_emits_warning_but_still_logs() -> None:
     assert quant_warnings, "Expected a UserWarning mentioning quantized submodules"
     quantized_ops = [op for op in log.ops if op.func_name.startswith("quantized_")]
     assert quantized_ops
-    assert sum(op.flops_forward or 0 for op in quantized_ops) > 0
+    assert sum(op.cost.flops_forward or 0 for op in quantized_ops) > 0
 
 
 def test_quantized_factory_warning_filter_does_not_exempt_torchlens_warning() -> None:

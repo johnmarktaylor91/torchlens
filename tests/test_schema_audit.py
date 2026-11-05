@@ -7,7 +7,7 @@ import torch
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     ForkFieldPolicy,
     Relationship,

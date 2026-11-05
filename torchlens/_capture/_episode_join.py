@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._utils.tensor_leaves import tensor_payload_bytes
-from ..errors.episode import EpisodeJoinError
+from ..errors._episode import EpisodeJoinError
 from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:

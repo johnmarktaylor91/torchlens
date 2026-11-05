@@ -41,6 +41,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from .._trace_state import TraceState
+from .._utils._record_group_table import record_member
 
 #: First tlspec version whose writer persists the intervention event audit.
 PRISTINE_EVIDENCE_MIN_TLSPEC = 9
@@ -160,7 +161,7 @@ def _positive(value: Any) -> bool:
 def _any_op_marked(ops: Iterable[Any]) -> bool:
     """Return whether any op records an intervention on its own fields."""
 
-    return any(getattr(op, name, None) for op in ops for name in OP_TOUCH_FIELDS)
+    return any(record_member(op, name, None) for op in ops for name in OP_TOUCH_FIELDS)
 
 
 def _spec_has_entries(spec: Any) -> bool:

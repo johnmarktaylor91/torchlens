@@ -20,7 +20,7 @@ from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
 from torchlens._postprocess._selective_save import pop_static_label_save_predicate
 from torchlens.errors import BackendUnsupportedError
-from torchlens.recording.types import Recording
+from torchlens.recording._types import Recording
 
 BACKENDS = Path(__file__).resolve().parents[1] / "torchlens" / "backends"
 TRANSACTION_KEYWORDS = ("inputs", "seed", "fast", "carry_state", "until", "save", "on_divergence")

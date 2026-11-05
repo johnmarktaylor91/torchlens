@@ -1014,7 +1014,11 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     list[Op]
         Terminal scalar bool layers in execution order.
     """
-    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [
+        layer
+        for layer in trace._layer_list
+        if layer.control_flow.is_terminal_bool and layer.control_flow.is_scalar_bool
+    ]
 
 
 def _find_only_layer(
@@ -1043,7 +1047,7 @@ def _find_only_layer(
         matching_layers = [
             layer
             for layer in matching_layers
-            if list(layer.conditional_branch_stack) == list(branch_stack)
+            if list(layer.control_flow.branch_stack) == list(branch_stack)
         ]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer for stack {branch_stack}, found {len(matching_layers)}"
@@ -1306,7 +1310,7 @@ def test_elif_ladder_model_cross_verifies_all_arms_and_render_labels() -> None:
 
         assert event.kind == "if_chain"
         assert set(event.branch_ranges) == {"then", "elif_1", "elif_2", "else"}
-        assert branch_layer.conditional_branch_stack == ((event.id, branch_kind),)
+        assert branch_layer.control_flow.branch_stack == ((event.id, branch_kind),)
         assert {layer.terminal_conditional_id for layer in _get_terminal_bool_layers(trace)} == {
             event.id
         }
@@ -1380,8 +1384,8 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
         for event in negative_log.graph.conditional_records
         if event.function_qualname.endswith(".helper") and "<locals>" not in event.function_qualname
     )
-    assert relu_layer.conditional_branch_stack == ((nested_event.id, "then"),)
-    assert square_layer.conditional_branch_stack == ((method_event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((nested_event.id, "then"),)
+    assert square_layer.control_flow.branch_stack == ((method_event.id, "then"),)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py, _postprocess/control_flow.py, _visualization/code_panel.py ....
@@ -1391,10 +1395,10 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
     trace = _log_model(_make_match_guard_model(), torch.ones(2, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    if bool_layer.conditional_context_kind == "unknown":
+    if bool_layer.control_flow.context_kind == "unknown":
         pytest.skip("Runtime-compiled match guards are not source-indexed in this environment")
-    assert bool_layer.conditional_context_kind == "match_guard"
-    assert bool_layer.is_terminal_conditional_bool is False
+    assert bool_layer.control_flow.context_kind == "match_guard"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is False
     _assert_branchless_log(trace)
 
 
@@ -1422,13 +1426,13 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
         entry for entry in trace._layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert captured_entries
-    assert all(len(entry.code_context) > 0 for entry in captured_entries)
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert all(len(entry.source.frames) > 0 for entry in captured_entries)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
     with monkeypatch.context() as local_patch:
         local_patch.setattr(linecache, "getlines", _tracking_getlines)
         for entry in captured_entries:
-            for frame in entry.code_context:
+            for frame in entry.source.frames:
                 assert frame.file is not None
                 assert frame.line_number is not None
                 assert frame.code_firstlineno is not None
@@ -1447,7 +1451,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
     roundtrip_stack = next(
-        entry.code_context for entry in roundtrip_log._layer_list if not entry.is_input
+        entry.source.frames for entry in roundtrip_log._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1464,9 +1468,9 @@ def test_basic_ternary_model_attributes_then_arm_as_ifexp() -> None:
 
     assert event.kind == "ifexp"
     assert set(event.branch_ranges) == {"then", "else"}
-    assert bool_layer.conditional_context_kind == "ifexp"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert bool_layer.control_flow.context_kind == "ifexp"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert linear_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 @requires_code_positions
@@ -1485,7 +1489,7 @@ def test_nested_ternary_model_records_parent_child_ifexp_events() -> None:
     assert outer_event.kind == "ifexp"
     assert inner_event.kind == "ifexp"
     assert inner_event.parent_branch_kind == "then"
-    assert linear_layer.conditional_branch_stack == (
+    assert linear_layer.control_flow.branch_stack == (
         (outer_event.id, "then"),
         (inner_event.id, "then"),
     )
@@ -1507,7 +1511,7 @@ def test_ternary_inside_if_model_records_mixed_if_and_ifexp_stack() -> None:
 
     assert inner_event.parent_conditional_id == outer_event.id
     assert inner_event.parent_branch_kind == "then"
-    assert linear_layer.conditional_branch_stack == (
+    assert linear_layer.control_flow.branch_stack == (
         (outer_event.id, "then"),
         (inner_event.id, "then"),
     )
@@ -1522,10 +1526,10 @@ def test_ternary_with_bool_cast_model_marks_conditional_wrapper_kind() -> None:
     linear_layer = _find_only_layer(trace, "linear", [(event.id, "then")])
 
     assert event.kind == "ifexp"
-    assert bool_layer.conditional_context_kind == "ifexp"
-    assert bool_layer.conditional_wrapper_kind == "bool_cast"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert bool_layer.control_flow.context_kind == "ifexp"
+    assert bool_layer.control_flow.wrapper_kind == "bool_cast"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert linear_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() -> None:
@@ -1540,12 +1544,12 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     negative_sub = _find_only_layer(negative_log, "sub")
 
     if all(
-        frame.col_offset is None for frame in positive_mul.code_context if frame.file == __file__
+        frame.col_offset is None for frame in positive_mul.source.frames if frame.file == __file__
     ):
         pytest.skip(
             "Column offsets are unavailable for this one-line ternary in the current runtime"
         )
-    assert positive_mul.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert positive_add.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert negative_div.conditional_branch_stack == ((negative_event.id, "else"),)
-    assert negative_sub.conditional_branch_stack == ((negative_event.id, "else"),)
+    assert positive_mul.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert positive_add.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert negative_div.control_flow.branch_stack == ((negative_event.id, "else"),)
+    assert negative_sub.control_flow.branch_stack == ((negative_event.id, "else"),)

@@ -30,7 +30,7 @@ from .._runnable import (
 from .._runnable.input_aliases import build_input_attestation_fingerprint
 from .._runnable.state import runnable_tensor_byte_digest
 from ..errors._base import TorchLensWarning
-from ..errors.runnable import RunnablePreflightError
+from ..errors._runnable import RunnablePreflightError
 from .format_errors import ArtifactError
 from .scrub import BlobSpec
 
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION, PayloadLayerDescriptor
+from .._utils._record_group_table import record_member
 from .format3.runnable import _WriteContext
 from .runnable import (
     require_sparse_run_descriptor,
@@ -75,7 +76,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     carriers = [
         op.label
         for op in (trace._layer_list if is_live_trace(trace) else ()) or ()
-        if getattr(op, "edge_substitutions", None)
+        if record_member(op, "edge_substitutions", None)
     ]
     if not carriers:
         return
@@ -233,7 +234,7 @@ def _validated_descriptor_for_resave(trace: Any) -> SparseRunDescriptor | None:
     descriptor = trace._runnable.descriptor
     if descriptor is None or not trace.__dict__.get("_loaded_from_bundle", False):
         return None
-    if any(getattr(op, "args_template", None) is not None for op in trace._layer_list):
+    if any(record_member(op, "args_template", None) is not None for op in trace._layer_list):
         return None
     layers = descriptor.payload_layers
     return replace(

@@ -128,7 +128,10 @@ def test_forked_module_edit_has_the_capture_time_shape() -> None:
         list(live.modules["mlp.1"].calls[0].output_ops) == live.modules["mlp.1"].calls[0].output_ops
         and live_replacement.label not in live.modules["mlp.1"].calls[0].output_ops
     )
-    assert replacement.output_of_module_calls == live_replacement.output_of_module_calls
+    assert (
+        replacement.module_context.output_of_module_calls
+        == live_replacement.module_context.output_of_module_calls
+    )
 
     # The replacement is reachable by every label spelling and sits after the last op.
     assert fork[replacement.label] is replacement
@@ -154,7 +157,7 @@ def test_a_later_upstream_push_passes_through_the_replacement() -> None:
         expected_output = model.head(torch.zeros(2, 16))
 
     # The second module edit mints its own replacement; the first one is kept.
-    by_call = {tuple(r.output_of_module_calls): r for r in _replacement_ops(fork)}
+    by_call = {tuple(r.module_context.output_of_module_calls): r for r in _replacement_ops(fork)}
     assert sorted(by_call) == [("inp:1",), ("mlp:1",)]
     replacement = by_call[("mlp:1",)]
     assert torch.allclose(fork.modules["mlp.1"].calls[0].outs[0], inner)

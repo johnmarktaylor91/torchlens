@@ -4,6 +4,8 @@
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
+from .._utils._record_group_table import record_member
+from ._atomic_scope import _enclosing_module_calls
 from ._cairosvg import get_cairosvg_support
 from ._focus_stubs import _boundary_module_path, _get_or_create_boundary_node
 from ._render_common import *
@@ -143,7 +145,7 @@ def _build_skip_filtered_edge_map(
     visible_entries = {
         label: node
         for label, node in entries_to_plot.items()
-        if not node.is_buffer or _is_buffer_visible(node, show_buffer_layers)
+        if not node.graph.is_buffer or _is_buffer_visible(node, show_buffer_layers)
     }
     skipped_labels: set[str] = set()
     if skip_fn is not None:
@@ -219,7 +221,7 @@ def _is_hidden_buffer_update_node(
         True when every parent and child endpoint is a hidden buffer.
     """
 
-    if isinstance(node, BoundaryNode) or node.is_buffer or show_buffer_layers == "always":
+    if isinstance(node, BoundaryNode) or node.graph.is_buffer or show_buffer_layers == "always":
         return False
     endpoint_labels = list(node.parents) + list(node.children)
     if not endpoint_labels:
@@ -233,7 +235,7 @@ def _is_hidden_buffer_update_node(
             return False
         endpoints.append(endpoint)
     return all(
-        endpoint.is_buffer and not _is_buffer_visible(endpoint, show_buffer_layers)
+        endpoint.graph.is_buffer and not _is_buffer_visible(endpoint, show_buffer_layers)
         for endpoint in endpoints
     )
 
@@ -314,7 +316,7 @@ def _enumerate_base_rendered_node_emissions(
     for node in entries_to_plot.values():
         if _render_node_label(node, vis_mode) in skipped_labels:
             continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+        if node.graph.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         if _is_hidden_buffer_update_node(
             trace,
@@ -484,7 +486,7 @@ def _enumerate_run_fold_ellipsis_emissions(
     for parent_node in entries_to_plot.values():
         if _render_node_label(parent_node, vis_mode) in skipped_labels:
             continue
-        if parent_node.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
+        if not _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         parent_endpoint = _collapsed_endpoint_for_emission(
             trace,
@@ -497,7 +499,7 @@ def _enumerate_run_fold_ellipsis_emissions(
         parent_name = parent_endpoint or _render_node_name(parent_node, vis_mode)
         for render_edge in edge_map.get(_render_node_label(parent_node, vis_mode), ()):
             child_node = render_edge.target
-            if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
+            if not _is_buffer_visible(child_node, show_buffer_layers):
                 continue
             child_render_name = _render_node_name(child_node, vis_mode)
             child_endpoint = _collapsed_endpoint_for_emission(
@@ -1191,9 +1193,7 @@ def _owner_module_key_for_node(
     )
     if collapse_address is not None:
         return collapse_address if vis_mode == "unrolled" else collapse_address.split(":", 1)[0]
-    modules = list(getattr(node, "modules", ()) or ())
-    if getattr(node, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
+    modules = _enclosing_module_calls(node)
     if not modules:
         return -1
     owner = modules[-1]
@@ -1485,7 +1485,7 @@ def _render_edge_occurrences(
             )
 
     occurrences: list[tuple[tuple[Any, ...], str | None]] = []
-    positions = getattr(child_node, "parent_arg_positions", None)
+    positions = record_member(child_node, "parent_arg_positions", None)
     if isinstance(positions, Mapping):
         for arg_type in ("args", "kwargs"):
             arg_positions = positions.get(arg_type, {})

@@ -31,9 +31,9 @@ from .._ir.selector_eval import selector_contains_kind
 from .._selection.selectors import BaseSelector
 from .._utils._tensor_label import clear_tensor_label, get_tensor_label
 from ._rule_match import _match_rules, _rule_decision
+from ._spec import Recipe
 from ._zero_fire import note_capture_rule_fired
 from .hooks import make_live_site_proxy, normalize_hook_plan
-from .spec import Recipe
 
 #: ``backends.torch._ops_interventions``, bound on first use: the backend module
 #: imports this package at module level, so a module-level import here would
@@ -227,7 +227,7 @@ def _fire_boundary_predicate_hooks(
     """
 
     from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
-    from .runtime import (
+    from ._runtime import (
         _apply_live_hooks,
         _armed_injection_state,
         _current_injection_rule,
@@ -322,7 +322,7 @@ def _apply_module_boundary_live_hooks(
         Module output with any tensor replacements applied.
     """
 
-    from .runtime import _apply_live_hooks
+    from ._runtime import _apply_live_hooks
 
     trace, _ = _state.active_capture()
     boundary = _BoundaryCall(

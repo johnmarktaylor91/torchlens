@@ -15,6 +15,8 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
+from ._profile_rows import _row
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
@@ -380,30 +382,6 @@ def _ops_for_labels(trace: Trace, labels: list[str]) -> list[Any]:
     return ops
 
 
-def _sum_optional(ops: list[Any], field: str) -> int | float | None:
-    """Sum a metric without turning wholly unavailable metadata into zero.
-
-    Parameters
-    ----------
-    ops:
-        Operations to aggregate.
-    field:
-        Numeric metadata field.
-
-    Returns
-    -------
-    int | float | None
-        Sum when at least one value is available, otherwise ``None``.
-    """
-
-    values = [getattr(op, field, None) for op in ops]
-    if field == "func_duration":
-        available = [float(value) for value in values if value is not None]
-    else:
-        available = [int(value) for value in values if value is not None]
-    return sum(available) if available else None
-
-
 def _format_duration(seconds: float | None) -> str:
     """Format an operation duration using a compact human-readable unit.
 
@@ -425,74 +403,6 @@ def _format_duration(seconds: float | None) -> str:
     if seconds >= 1e-3:
         return f"{seconds * 1e3:.3f} ms"
     return f"{seconds * 1e6:.3f} us"
-
-
-def _values(ops: list[Any], field: str) -> str | None:
-    """Format the distinct non-null values of one operation metadata field.
-
-    Parameters
-    ----------
-    ops:
-        Operations to inspect.
-    field:
-        Metadata field name.
-
-    Returns
-    -------
-    str | None
-        One value or a comma-separated stable set, if available.
-    """
-
-    values = sorted({str(value) for op in ops if (value := getattr(op, field, None)) is not None})
-    return ", ".join(values) if values else None
-
-
-def _row(name: str, kind: str, ops: list[Any], *, param_count: int | None) -> dict[str, Any]:
-    """Build one consistent profile row from operation metadata.
-
-    Parameters
-    ----------
-    name:
-        Stable row label.
-    kind:
-        Row granularity label.
-    ops:
-        Operations represented by the row.
-    param_count:
-        Parameter count owned by the corresponding module scope.
-
-    Returns
-    -------
-    dict[str, Any]
-        Profile row.
-    """
-
-    saved = [bool(getattr(op, "has_saved_activation", False)) for op in ops]
-    saved_activation: bool | str | None
-    if not saved:
-        saved_activation = None
-    elif all(saved):
-        saved_activation = True
-    elif not any(saved):
-        saved_activation = False
-    else:
-        saved_activation = "partial"
-    return {
-        "name": name,
-        "kind": kind,
-        "op_count": len(ops),
-        "time": _sum_optional(ops, "func_duration"),
-        "flops": _sum_optional(ops, "flops_forward"),
-        "activation_memory": _sum_optional(ops, "activation_memory"),
-        "saved_activation": saved_activation,
-        "param_count": param_count,
-        "dtype": _values(ops, "dtype"),
-        # ``Op`` has no ``device`` attribute; the canonical field is ``device_ref``
-        # (a ``DeviceRef`` whose ``str`` is the device name, e.g. ``"cpu"``).
-        # Reading the nonexistent ``device`` left this column permanently ``None``
-        # on every model via the ``getattr(op, field, None)`` default.
-        "device": _values(ops, "device_ref"),
-    }
 
 
 def _honesty_row(
@@ -714,7 +624,7 @@ def _innermost_call_by_label(trace: Trace) -> dict[str, str | None]:
     for op in ops:
         label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
         layer_label = str(getattr(op, "layer_label", ""))
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         _register_spellings(
             owners, label, layer_label, str(stack[-1]) if stack else None, bare_counts
         )

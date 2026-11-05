@@ -54,6 +54,7 @@ COUNTED_SET = (
     "public non-callable attributes whose value is int/float (bool excluded, typed"
     " quantities included) on every instance of Trace, Layer, Op, Module,"
     " ModuleCall, Param, Buffer, SummaryReport, SummaryTotals and CaptureFacts"
+    " (the concern groups of Trace, Layer and Op included)"
     " reached from two fixtures (eval forward; train mode with save_grads,"
     " backward, input/output distances and peak-memory measurement)"
 )
@@ -80,6 +81,27 @@ DOOR_PATHS = {
     "ParamAccessor": "torchlens._data_classes.param.ParamAccessor",
 }
 
+#: The concern groups of Op and Layer (``op.cost``, ``layer.call``, ...): the
+#: attribute each is read through and the module that defines its classes.
+#: A moved Op/Layer number is counted on its group door (``OpCost.flops_forward``).
+RECORD_GROUPS = (
+    ("cost", "Cost", "_record_groups"),
+    ("control_flow", "ControlFlow", "_record_groups"),
+    ("autograd", "Autograd", "_record_groups_autograd"),
+    ("call", "Call", "_record_groups_call"),
+    ("graph", "Graph", "_record_groups_graph"),
+    ("module_context", "ModuleContext", "_record_groups_module_context"),
+    ("payload", "Payload", "_record_groups_payload"),
+    ("source", "Source", "_record_groups_source"),
+)
+DOOR_PATHS.update(
+    {
+        f"{record}{suffix}": f"torchlens._data_classes.{module}.{record}{suffix}"
+        for record in ("Op", "Layer")
+        for _attr, suffix, module in RECORD_GROUPS
+    }
+)
+
 SCOPE = (
     "Trace",
     "Layer",
@@ -99,6 +121,7 @@ SCOPE = (
     "TraceSettings",
     "TraceHealth",
     "ParamAccessor",
+    *(f"{record}{suffix}" for record in ("Op", "Layer") for _attr, suffix, _mod in RECORD_GROUPS),
 )
 
 
@@ -173,6 +196,9 @@ def _instances(trace: Any) -> Iterator[tuple[str, Any]]:
     ):
         for item in accessor:
             yield name, item
+            if name in ("Layer", "Op"):
+                for attr, suffix, _module in RECORD_GROUPS:
+                    yield f"{name}{suffix}", getattr(item, attr)
 
 
 def _numeric_fields(obj: Any) -> Iterator[tuple[str, str]]:

@@ -15,6 +15,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization import lenses
 from torchlens._visualization.lenses import audit
 
@@ -46,9 +47,9 @@ def test_key_is_generated_from_machine_record(keyed: Any) -> None:
 
     log, resolution, key = keyed
     values = {
-        op.layer_label: float(getattr(op, resolution.source.member))
+        op.layer_label: float(record_member(op, resolution.source.member))
         for op in log._layer_list
-        if getattr(op, resolution.source.member, None) is not None
+        if record_member(op, resolution.source.member, None) is not None
     }
     by_id = {question.id: question for question in key.questions}
     assert by_id["extrema-max"].answer == max(values, key=values.__getitem__)

@@ -40,6 +40,7 @@ from typing import Any
 from .._trace_core.groups import GroupRef
 from .._trace_core.op_store import _CSR, _FACT, _MISSING, OpRowStore, PooledCell
 from .._trace_core.relation_views import OP_BITSET_VIEW_FIELDS
+from .._utils._record_group_table import op_attr
 from ._op_row_release import _OP_FACADE
 
 __all__ = ("OpColumns", "column_rows_by_label")
@@ -145,12 +146,18 @@ class OpColumns:
         self.store = store
 
     def _attribute(self, name: str) -> Any:
-        """Return the ``Op`` class attribute serving stored field ``name``."""
+        """Return the ``Op`` class attribute serving stored field ``name``.
+
+        ``name`` is the persisted field name (the store layout key); a field in
+        a concern group is served by its private storage attribute
+        (``has_output_descendant`` by ``_graph_has_output_descendant``).
+        """
 
         _op_class, op_vars, stored_names, _module = _bound_facade()
-        if name not in stored_names:
+        attr = op_attr(name)
+        if attr not in stored_names:
             raise ValueError(f"{name!r} is not a stored Op field")
-        return op_vars[name]
+        return op_vars[attr]
 
     def _shell(self, row: int) -> Any:
         """Return an ``Op`` facade over ``(self.store, row)`` for exact delegation."""

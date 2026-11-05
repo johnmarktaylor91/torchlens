@@ -53,7 +53,7 @@ from ...backends.registry import (
 )
 from ...errors import TorchLensWarning
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
 from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
@@ -1472,7 +1472,7 @@ class MLXBackend:
                 failed_count = 1
                 decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:
-                replayed_count, failed_count, decisions, exempted, unverified_reasons = (
+                (replayed_count, failed_count, decisions, exempted, unverified_reasons) = (
                     _mlx_detailed_counts(trace, validate_mlx_captures_detailed)
                 )
             if failed_count == 0 and replayed_count < 1:
@@ -2127,7 +2127,7 @@ class MLXBackend:
                 if label is not None:
                     kwarg_positions[key] = label
                     _add(label, key, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations and settle the unwrapped-op gap."""

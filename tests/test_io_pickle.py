@@ -116,9 +116,9 @@ def test_scrubbed_pickle_roundtrip_rehydrates_accessors(tmp_path) -> None:
     first_arg_layer = next(
         layer
         for layer in restored._layer_list
-        if layer.saved_args is not None and len(layer.saved_args) > 0
+        if layer.call.saved_args is not None and len(layer.call.saved_args) > 0
     )
-    assert isinstance(first_arg_layer.saved_args[0], torch.Tensor)
+    assert isinstance(first_arg_layer.call.saved_args[0], torch.Tensor)
 
 
 def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:

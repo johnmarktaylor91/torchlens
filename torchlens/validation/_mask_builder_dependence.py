@@ -37,6 +37,8 @@ import types
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -230,7 +232,7 @@ def builder_unread_positions(fn: Any, depth: int = 0) -> frozenset[int]:
 def _only_at(layer: Op, label: str, unread: frozenset[int]) -> bool:
     """Return whether ``label`` fills declared-unread positional slots only, and at least one."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     if label in (positions.get("kwargs", {}) or {}).values():
         return False
     keys = [key for key, parent in (positions.get("args", {}) or {}).items() if parent == label]
@@ -266,9 +268,9 @@ def check_mask_builder_unread_exempt(
     code = getattr(builder, "__code__", None)
     if not isinstance(code, types.CodeType):
         return False
-    if getattr(layer, "num_pos_args", None) != code.co_argcount:
+    if record_member(layer, "num_pos_args", None) != code.co_argcount:
         return False
-    if getattr(layer, "num_kwargs", None) != 0:
+    if record_member(layer, "num_kwargs", None) != 0:
         return False
     unread = builder_unread_positions(builder)
     if not unread:

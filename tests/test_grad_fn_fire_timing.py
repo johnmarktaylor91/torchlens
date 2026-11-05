@@ -82,7 +82,13 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
         # Signature tracks _register_fire_timing_prehook (F27 FLIP-2 added the
         # optional marker-token LIFO); a registration failure still means
         # untimed fires only, never a coverage gap.
-        del inner_trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps, marker_tokens
+        del (
+            inner_trace,
+            grad_fn_handle,
+            grad_fn_object_id,
+            fire_start_stamps,
+            marker_tokens,
+        )
         return None
 
     try:

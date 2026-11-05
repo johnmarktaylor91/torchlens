@@ -12,7 +12,7 @@ from collections import Counter, OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ..intervention.errors import BaselineUndeterminedError, BundleMemberError
 
 if TYPE_CHECKING:

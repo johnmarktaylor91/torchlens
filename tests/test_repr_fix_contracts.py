@@ -15,9 +15,9 @@ from torchlens._selection.resolver import _SiteTable
 from torchlens._utils import _display_card
 from torchlens._utils._display_bounded import RecordTuple, short_dataclass_repr
 from torchlens._utils._display_errors import lookup_message
-from torchlens.intervention.types import CapturedArgTemplate, LiteralValue, ParentRef
-from torchlens.validation.consolidated import InterventionValidationReport
-from torchlens.validation.diagnostics import ValidationFailure, record_validation_failure
+from torchlens.intervention._types import CapturedArgTemplate, LiteralValue, ParentRef
+from torchlens.validation._consolidated import InterventionValidationReport
+from torchlens.validation._diagnostics import ValidationFailure, record_validation_failure
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ def test_candidates_rank_before_cut_and_remedy_survives():
 
 
 def test_template_literals_and_parent_keys_are_readable(trace):
-    template = trace["relu_1"].args_template
+    template = trace["relu_1"].call.args_template
     assert "linear_1" in str(template)
     assert "<ParentRef>" not in str(template)
     nested = CapturedArgTemplate(
