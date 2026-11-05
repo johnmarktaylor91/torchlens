@@ -624,7 +624,18 @@ def _release_instrumentation(run: _RunState) -> None:
 
     instrumentation, run.instrumentation = run.instrumentation, None
     if instrumentation is not None:
-        instrumentation.__exit__(*run.exc_info)
+        _exc_type, exc, traceback = run.exc_info
+        try:
+            instrumentation.__exit__(*run.exc_info)
+        finally:
+            if exc is not None:
+                # Before Python 3.12, contextlib throws ``exc`` into each
+                # generator context manager and leaves those teardown frames
+                # appended to its traceback; they hold ``exc`` again, so a
+                # failed capture's partial trace waited for the cyclic collector.
+                # ``with_traceback`` puts back the forward's own traceback without
+                # going through the exception's ``__setattr__``.
+                exc.with_traceback(traceback)
 
 
 def _teardown_ladder(self: "Trace", run: _RunState) -> None:
@@ -683,6 +694,10 @@ def _finish_run(self: "Trace", run: _RunState) -> None:
     try:
         _teardown_ladder(self, run)
     finally:
+        # The teardown was the forward exception's last reader. Its traceback's
+        # frames hold ``run``, so keeping it here made every failed capture a
+        # reference cycle that pinned the partial trace and its payloads.
+        run.exc_info = (None, None, None)
         # Outermost: a teardown double-fault must not leak the capture
         # reservation, or every later admission refuses forever. The RNG
         # restore (R57) runs first but can never displace the release.

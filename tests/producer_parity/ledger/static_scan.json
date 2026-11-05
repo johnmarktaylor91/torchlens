@@ -1009,6 +1009,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_data_classes/_container_labels.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/_doors.py",
   "has_default": false,
@@ -1356,7 +1364,7 @@
   "field": "kind",
   "file": "torchlens/_data_classes/container.py",
   "has_default": false,
-  "sites": 20,
+  "sites": 19,
   "via_getattr": false
  },
  {
