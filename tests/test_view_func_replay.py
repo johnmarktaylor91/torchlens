@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.options import CaptureOptions
@@ -344,6 +345,8 @@ def test_bound_view_func_keeps_the_bound_method_contract(method: str) -> None:
     assert first == second and hash(first) == hash(second)
     assert first != getattr(base.t(), method)
     assert first.__self__ is view and first.__func__ is getattr(torch.Tensor, method)
-    argument = view if method == "_rev_view_func_unsafe" else base
-    copied = copy.deepcopy(first)
-    torch.testing.assert_close(copied(argument.clone()), first(argument.clone()))
+    assert copy.copy(first) == first
+    assert copy.deepcopy(first).__func__ is first.__func__
+    argument = view.clone() if method == "_rev_view_func_unsafe" else base.clone()
+    stock = _state._decorated_to_orig[id(first.__func__)]
+    torch.testing.assert_close(first(argument), stock(view, argument))
