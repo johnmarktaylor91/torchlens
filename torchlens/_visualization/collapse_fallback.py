@@ -19,7 +19,7 @@ The resulting plan flows through the SAME honesty gates as every other plan:
 it is a normal typed :class:`~.collapse_plan.CollapsePlan`, its
 ``scored_k`` equals its realized count by construction (three-way parity),
 and callers disclose the planner tier (``planner="linear_fallback"`` /
-``"floor_fallback"``) plus the D4 no-silent-floor warnings.
+``"floor_fallback"``) plus the no-silent-floor warnings.
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def _greedy_box_selection(trace: Trace, band_high: int, universe_count: int) -> 
     optimistic projected count reaches the readable band. The projection
     uses per-module hidden-op counts, so it is optimistic about overlaps;
     the caller builds the real plan once from the returned set and uses the
-    REALIZED count for every disclosure (memo D7: disclosures come from the
+    REALIZED count for every disclosure (disclosures come from the
     realized plan, never from a scored estimate).
     """
 

@@ -356,7 +356,7 @@ def _resolve_collapse_request(
     if collapse_fn is not None:
         segments = dict(getattr(collapse_fn, "_torchlens_v2_segments", {}) or {})
     if request.fold_patterns:
-        # Declarative pattern folding (F11, collapse memo D11): matched on
+        # Declarative pattern folding (collapse): matched on
         # this trace, realized as K4-family chips through the segment
         # channel. v1 supports the pattern-only view (collapse="none");
         # chip atomicity across the automatic planner (band/score/ceiling/
@@ -374,7 +374,7 @@ def _resolve_collapse_request(
         if request.engine == "rank":
             # The rank backend cannot position segment-family nodes yet (the
             # pre-existing __segment__ gap, owned by the typed-units item);
-            # chips fail closed rather than crash mid-layout (memo D12: no
+            # chips fail closed rather than crash mid-layout (no
             # rank arm until the fix lands).
             raise InvalidArgumentError(
                 "fold_patterns is not supported under vis_node_placement="
@@ -463,7 +463,7 @@ def _resolve_forward_context(
     if request.show_containers:
         engine = "dot"
     if request.encoding is not None:
-        # Engine-resolution fence (L5): explicit rank refuses typed; AUTO
+        # Engine-resolution fence: explicit rank refuses typed; AUTO
         # forces dot (show_containers precedent), noticed on cost override.
         from ._encoding import resolve_encoding_engine
 
@@ -553,7 +553,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         pending_container_collapse_nodes,
         container_summary_lines,
     )
-    # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
+    # Checked suppression (DEFAULT-ON): the trace-bearing prepass
     # proves which constructor-arg rows duplicate captured shapes on THIS
     # trace; unprovable or mismatching args stay visible (self-honest).
     # Computed ONCE and shared by the IR decision pass and node emission.
@@ -824,7 +824,7 @@ def _forward_header_label(
 def _emit_rank_groups(dot: Any, rank_groups: "tuple[RenderIRRankGroup, ...]") -> None:
     """Emit the IR's rank groups as ``rank=`` subgraphs.
 
-    Stacking channel (L5 M3): rank=same groups span module clusters, so
+    Stacking channel: rank=same groups span module clusters, so
     newrank=true opts dot into global rank constraints (without it
     cross-cluster rank=same is silently ignored, a dishonest no-op). A
     focused draw's stub groups (rank=source/sink) need no newrank.
@@ -874,7 +874,7 @@ def _emit_and_finish_forward(
             resolved_graph_overrides.pop("label", None)
         rank_visualizer_dir = getattr(trace, "_visualizer_dir", None)
         if rank_visualizer_dir and "imagepath" not in resolved_graph_overrides:
-            # r-b6 R19-6: one-attribute image root for the rank engine. T9
+            # One-attribute image root for the rank engine. T9
             # (grind-p3) removed the in-source root on the dot path (cwd
             # replaces it); the rank renderer runs neato internally and its
             # source file is deleted after a successful render, so the
@@ -974,7 +974,7 @@ def _emit_and_finish_forward(
             ) from error
 
         display_fn = cast(Any, display)
-        # r-b6 R40-2: render through the BOUNDED subprocess runner instead of
+        # Render through the BOUNDED subprocess runner instead of
         # ``dot.pipe()`` / ``display(dot)`` — graphviz 0.21 exposes no pipe
         # timeout, so a wedged ``dot`` hung the kernel indefinitely while
         # every CLI path was already bounded at ``render_timeout`` with a
@@ -1112,7 +1112,7 @@ def _publish_forward_render(
                     highlighter=context.highlighter,
                 )
             else:
-                # Atomic publish (vizmech D20/D24): render into a sibling temp
+                # Atomic publish (vizmech): render into a sibling temp
                 # file, validate it, and only then rename it over the user's
                 # path -- a failed/timed-out layout never leaves a stub -- and
                 # surface stderr even on exit 0 (the cairo "too large ...
@@ -1506,7 +1506,7 @@ def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
 
 
 def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderContext) -> None:
-    """Warn about requested elements the rank engine does not draw (F14).
+    """Warn about requested elements the rank engine does not draw.
 
     The rank engine positions IR units and the mutated-Parameter overlays only.
     Orphan islands and ``as_node`` intervention hook nodes are emitted by the dot

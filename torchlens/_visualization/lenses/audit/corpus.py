@@ -283,7 +283,7 @@ def toy_builders() -> dict[str, Callable[[], tuple[Any, Any]]]:
 #: The corpus rows. Real members are torchvision random-init builders for
 #: the structural strata; the HF real-checkpoint legs (gpt2, vit-base, t5,
 #: clip, convit, the 2,802-op generation episode) are named in the gallery
-#: spec and executed by D03 with pinned revisions.
+#: spec and executed by with pinned revisions.
 CORPUS: tuple[CorpusMember, ...] = (
     CorpusMember("two_node_minimal", _two_node_minimal, "toy", ("minimal",)),
     CorpusMember("residual_diamond", _residual_diamond, "toy", ("structure",)),

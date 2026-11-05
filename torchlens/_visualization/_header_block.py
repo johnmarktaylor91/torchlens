@@ -228,7 +228,7 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
+    # Capture-honesty banner: a poisoned/diverged sparse run,
     # an unverified capture, or an episode capture must not RENDER clean --
     # the graph is a publishable artifact, so the caption carries the facts.
     # The picture keeps a cited source location's file name and line only.
@@ -243,12 +243,12 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         caption_body += f"<B>{banner_text}</B><br align='left'/>"
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
-        # Stacking disclosure is part of the contract (memo 4.1): the
+        # Stacking disclosure is part of the contract: the
         # rendered output captions which annotation produced the columns.
         caption_body += (
             f"stacked by: {html_escape(encoding_state.stack_spec.display_name)}<br align='left'/>"
         )
-    # No silent floor (collapse memo D4): a floor-fallback plan renders with a
+    # No silent floor (collapse): a floor-fallback plan renders with a
     # VISIBLE notice, never as if the optimizer had chosen it.
     collapse_result = getattr(request.collapse_fn, "_torchlens_v2_result", None)
     if collapse_result is not None and getattr(collapse_result, "planner", "") == "floor_fallback":

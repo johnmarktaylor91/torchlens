@@ -164,7 +164,7 @@ def reset_naming_counter(class_name: str | None = None) -> None:
 
 
 def draw(*args: Any, **kwargs: Any) -> Any:
-    """One-call model picture over the quickstart input ladder (F17 B15).
+    """One-call model picture over the quickstart input ladder.
 
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm
     buffers restored), rendered with the facade default ``collapse="auto"``
@@ -254,13 +254,12 @@ def trace(
     Parameters
     ----------
     model:
-        PyTorch model, or a bound method of one (the ruled root contract,
-        F41): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
+        PyTorch model, or a bound method of one (the ruled root contract): ``tl.trace(model.generate, ids, ...)`` resolves the owner via
         ``method.__self__``, wraps it in a TL-authored synthetic root, and
         calls the method exactly once.
     inputs:
         Positional args for ``model.forward()``; a single tensor or list.
-        The input ladder (memo D2): a real input is the gold rung; omit
+        The input ladder: a real input is the gold rung; omit
         it and pass ``input_shape=``, or omit both to infer -- synthesized
         values, disclosed, or a teach; mixing refuses ``input_rung_conflict``.
     input_kwargs:
@@ -315,7 +314,7 @@ def trace(
         Per-trace additive facet recipes captured into the immutable
         registry snapshot for the returned trace.
     narrate:
-        Live narration (DOCUMENTED-UNSTABLE, lane F28): ``True`` narrates
+        Live narration (DOCUMENTED-UNSTABLE): ``True`` narrates
         every completed tensor-output event plus module structure lines;
         ``"modules"`` narrates structure only; a live selector scopes the
         stream; ``tl.options.NarrationOptions`` groups the full surface (stats
@@ -369,7 +368,7 @@ def trace(
         model, intervene = _model_door.resolve_trace_operands(model, intervene)
         if input_shape is not None or inputs is None:
             model = _reject_non_module_ladder_root(model)
-            # Quickstart input ladder (F17, memo D2/D4): declared/inferred rungs
+            # Quickstart input ladder: declared/inferred rungs
             # resolve BEFORE any capture machinery, then re-enter trace() as gold.
             ladder_kwargs = locals().copy()
             for consumed in (

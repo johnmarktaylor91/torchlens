@@ -226,7 +226,7 @@ def _revision_scoped(fn: Callable[..., Any]) -> Callable[..., Any]:
     Wraps a function whose first positional argument is the trace. The scope
     is LAZY: the first interior ``_collapse_graph_revision`` read computes
     the snapshot and every later read is served by identity, so decline
-    paths that never fingerprint pay nothing (r8 R60-13, strengthened -- the
+    paths that never fingerprint pay nothing (r8, strengthened -- the
     historical eager guard skipped the scope whenever raw ops exceeded
     ``COLLAPSE_OPTIMIZER_MAX_OPS``, a stale mirror of the pre-U-gate
     admission rule: an ADMITTED over-raw-ceiling trace ran the whole quality
@@ -504,7 +504,7 @@ def collapse_order(
 
     result = select_collapse_plan(trace, RenderContext(), mode=mode)
     if result.declined:
-        # Over-ceiling decline (r8 R60-8): the old order ran the full
+        # Over-ceiling decline: the old order ran the full
         # O(N*D) ``analyze_collapse`` only to zero every score afterwards.
         # An empty table is the honest degraded surface -- every consumer
         # reads through ``.get(address, 0.0)``, so the observable scores
@@ -692,7 +692,7 @@ def resolve_repeat_folds(
     from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
 
     if len(trace._layer_list) > COLLAPSE_OPTIMIZER_MAX_OPS:
-        # Compute-ceiling parity (r8 R60-9): ``draw(fold_repeats=True)`` with
+        # Compute-ceiling parity: ``draw(fold_repeats=True)`` with
         # ``collapse="none"`` entered run folding directly -- full
         # ``analyze_collapse`` plus uncached per-candidate structural digests
         # and three extra plan builds -- without ever consulting the one
@@ -715,7 +715,7 @@ def resolve_repeat_folds(
         # Explicit ``fold_repeats=True`` folds eligible repeated runs even
         # inside the readable band (the documented "even with
         # collapse='none'" contract). A MODE-resolved selection (v2-marked
-        # fn) is a presentation choice, not a fold scope: the D8 ladder can
+        # fn) is a presentation choice, not a fold scope: the ladder can
         # legally choose a near-full auto point whose selection would
         # otherwise silently veto the explicit fold request. An explicit
         # user collapse_fn (no marker) keeps scoping discovery to the
@@ -746,7 +746,7 @@ def resolve_repeat_folds(
     fingerprints = fingerprints_for(trace, analysis)
     candidate_folds: list[ModuleRepeatFold] = []
     candidate_addresses: set[str] = set()
-    # One selected-module index per discovery sweep (r8 R29): the per-group
+    # One selected-module index per discovery sweep: the per-group
     # rebuild inside the iterators evaluated collapse_fn over every module
     # once per sibling group -- Theta(M^2) predicate calls on module-heavy
     # models.
@@ -1102,7 +1102,7 @@ def _run_fold_members_uniform(
     signatures = {cache.signature(address) for address in addresses}
     if len(signatures) != 1:
         return False
-    # r4 b6-sol R19-1: equal per-member signatures are not enough when the
+    # equal per-member signatures are not enough when the
     # members SHARE exterior sources — the shared source must occupy the
     # same operand slot in every member (a - b vs b - a must never fold).
     merged: dict[str, int] = {}
@@ -1169,7 +1169,7 @@ def _split_run_by_member_uniformity(
     index = 0
     while index < total:
         end = index + 1
-        # r4 b6-sol R19-1: a window member must both share the signature AND
+        # a window member must both share the signature AND
         # bind any exterior source it shares with earlier window members to
         # the same operand slot (see _exterior_bindings_consistent).
         merged: dict[str, int] = {}
@@ -1228,7 +1228,7 @@ def _iter_collapsible_runs(
         the folded member.
     selected_index:
         Optional precomputed selected-address index shared across sibling
-        groups (r8 R29); ``None`` rebuilds it for this group.
+        groups; ``None`` rebuilds it for this group.
     fingerprints:
         Optional shared B1 fingerprint memo (collapse memo item 6), threaded
         through to :func:`_split_run_by_member_uniformity` so one discovery
@@ -1243,7 +1243,7 @@ def _iter_collapsible_runs(
 
     # One shared sorted index instead of a full trace.modules scan per child:
     # the per-child rescans made descendant-aware discovery Theta(S*M) in
-    # sibling count x module count (hunt-6 R29-3). r8 R29: callers walking
+    # sibling count x module count. r8 R29: callers walking
     # MANY sibling groups pass the index in, so it builds once per discovery
     # sweep instead of once per group (the cross-group rebuild was Theta(M^2)
     # in module count).
@@ -1320,7 +1320,7 @@ def _iter_collapsible_child_path_runs(
         Active collapse predicate.
     selected_index:
         Optional precomputed selected-address index shared across sibling
-        groups (r8 R29); ``None`` rebuilds it for this group.
+        groups; ``None`` rebuilds it for this group.
     fingerprints:
         Optional shared B1 fingerprint memo (collapse memo item 6), forwarded
         to the per-stem :func:`_iter_collapsible_runs` sweeps; ``None`` builds
@@ -1333,7 +1333,7 @@ def _iter_collapsible_child_path_runs(
     """
 
     # Shared index: the former per-sibling _selected_descendants call scanned
-    # the whole module table once per sibling (hunt-6 R29-3). r8 R29: callers
+    # the whole module table once per sibling. r8 R29: callers
     # walking many sibling groups pass it in (once per sweep, not per group).
     if selected_index is None:
         selected_index = _selected_address_index(trace, collapse_fn)
@@ -1410,7 +1410,7 @@ def _indexed_parent_stem(address: str) -> str:
         # A bare indexed ROOT child ("0", "1", ... under nn.Sequential as the
         # root) has an EMPTY shared stem. Falling back to the name here gave
         # every root sibling a DISTINCT run key, silently vetoing root-child
-        # run folding (D03-R3).
+        # run folding.
         return parent or stem
     return parent or stem or name
 
@@ -1473,7 +1473,7 @@ def _selected_address_index(
 
     One pass over the module table shared by all descendant lookups in a
     discovery sweep; the former per-child/per-sibling full scans made
-    repeat-fold discovery Theta(S*M) (hunt-6 R29-3).
+    repeat-fold discovery Theta(S*M) .
 
     Parameters
     ----------
@@ -2043,7 +2043,7 @@ def _assert_plan_count(
     _warn_count_mismatch_once(message)
 
 
-# r-b7 R42-9: one shared TORCHLENS_COLLAPSE_STRICT parser (_render_common).
+# One shared TORCHLENS_COLLAPSE_STRICT parser (_render_common).
 _strict_count_checks_enabled = strict_collapse_checks_enabled
 
 

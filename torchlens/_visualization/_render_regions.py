@@ -141,7 +141,7 @@ def _setup_subgraphs(
     )
     max_call_depth = _get_max_call_depth(subgraphs, module_edge_dict, module_submodule_dict)
     # deque: list.pop(0) shifted the whole queue per module, Theta(M^2) on
-    # flat module-heavy graphs before Graphviz even ran (R29, b4 sol MED).
+    # flat module-heavy graphs before Graphviz even ran (b4 sol MED).
     subgraph_stack: deque[list[str]] = deque([subgraph] for subgraph in subgraphs)
     call_depth = 0
     while len(subgraph_stack) > 0:
@@ -201,7 +201,7 @@ def _module_subtree_payload_empty(
 ) -> bool:
     """Return whether a module cluster AND all its descendants would be empty.
 
-    r-b6 R19-3: when collapse="max" condenses a module's ops into a segment
+    When collapse="max" condenses a module's ops into a segment
     OUTSIDE it, the module's whole subtree accumulates no nodes, edges, or
     rank groups — emitting its cluster produces a labeled dashed husk that
     both misplaces the ops and fabricates a "no input ancestor" claim about
@@ -313,13 +313,13 @@ def _setup_subgraphs_recurse(
     else:  # Leaf of this branch: create the subgraph and add all edges.
         emitted_rank_groups = 0
         cluster_payload = module_edge_dict[subgraph_name]
-        # r-b6 R19-3: an empty cluster is never emitted, whatever the module's
+        # An empty cluster is never emitted, whatever the module's
         # layer count. When collapse="max" condenses a module's ops into a
         # segment OUTSIDE it, the historical num_layers>1 carve-out still
         # emitted the husk — a labeled, dashed ("no input ancestor") box with
         # ZERO contents, both misplacing the ops and fabricating a
         # disconnection claim about nothing. Module containment for such ops
-        # is disclosed on the segment label instead (R19-5).
+        # is disclosed on the segment label instead.
         if _module_subtree_payload_empty(
             module_edge_dict, module_submodule_dict, subgraph_name_w_pass, vis_mode
         ):

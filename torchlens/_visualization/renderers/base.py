@@ -50,7 +50,7 @@ class UnsupportedRendererCapabilityError(_ActionableErrorMixin, ConfigurationErr
             Concrete caller action. The class default is used when omitted.
         code:
             Stable refusal code; the class attribute when omitted. Raise
-            sites may spell it inline so the S-17 census sees the code at
+            sites may spell it inline so the census sees the code at
             the site.
         **context:
             Structured, non-authoritative diagnostic context.
@@ -113,7 +113,7 @@ class RenderReport:
     """Result of renderer execution, kept separate from immutable RenderIR.
 
     ``engine`` and ``layout_stderr`` disclose what actually executed
-    (vizmech D24): the engine binary invoked and everything it wrote to
+    (vizmech): the engine binary invoked and everything it wrote to
     stderr even on exit 0 (the cairo clamp warning class).
     """
 

@@ -50,19 +50,19 @@ def _module_structural_signature(module: Module) -> StructuralSignature:
     layers/params) can never be silently hidden inside a ``+N more`` box that
     claims uniformity.
 
-    r-b6 R19-1: counts alone were not enough — a kwargs-different conv
+    Counts alone were not enough — a kwargs-different conv
     (dilation 2) and a tanh-for-relu block both matched the historical 4-int
     fingerprint, so two DIFFERENT models rendered byte-identical DOT under
     the homogeneity claim. The fingerprint therefore also carries the ordered
     per-layer op-type sequence and a canonical ``func_config`` digest.
 
-    r3 b6-opus R19-1: op types and kwargs are still not enough — a residual
+    op types and kwargs are still not enough — a residual
     ``x + y`` block and a self-add ``y + y`` block share the same ordered op
     list and params but are DIFFERENT DAGs. The fingerprint therefore also
     carries :func:`_module_wiring_digest`, a canonical intra-module dataflow
     component.
 
-    r4 b6-opus R19-1: ``func_config`` is the MODULE configuration, so a
+    ``func_config`` is the MODULE configuration, so a
     functional/dunder op's scalar operand never entered the fingerprint —
     ``* 1.0`` and ``* 3.0`` blocks folded behind one ``+N more``. Each row
     therefore also carries a canonical digest of the op's captured
@@ -144,10 +144,10 @@ def _wiring_degrade_sentinel(module: Module, error: Exception) -> tuple[str, str
     """Return the unique per-member sentinel for unresolvable wiring.
 
     A member whose wiring cannot be resolved degrades to a UNIQUE
-    per-member sentinel, so it can never fold (r4 b6-fable R19): degrading
+    per-member sentinel, so it can never fold: degrading
     every failing member to a shared exception type name made two members
     with genuinely different-but-unresolvable wiring compare equal, silently
-    falling back to the op-signature-only comparison the r3 HIGH proved
+    falling back to the op-signature-only comparison the HIGH proved
     insufficient.
     """
 
@@ -206,7 +206,7 @@ def _exterior_bindings_consistent(
 ) -> bool:
     """Merge one member's exterior binding into the fold's shared frame.
 
-    r4 b6-sol R19-1: per-member first-seen numbering alone erases the
+    per-member first-seen numbering alone erases the
     cross-member source correspondence — ``sub(a, b)`` and ``sub(b, a)``
     both canonicalize to ``(("x", 0), ("x", 1))``. When fold members SHARE
     an exterior source, that source must occupy the SAME operand slot in
@@ -244,7 +244,7 @@ _MEMORY_ADDRESS_PATTERN = re.compile(r"0x[0-9a-fA-F]+")
 def _non_tensor_args_digest(layer: Any) -> str:
     """Return a canonical digest of one op's captured non-tensor arguments.
 
-    r4 b6-opus R19-1: ``func_config`` is empty for functional/dunder ops, so
+    ``func_config`` is empty for functional/dunder ops, so
     a scalar operand (``* 3.0`` vs ``* 1.0``) never entered the fold
     fingerprint and two models computing DIFFERENT functions folded behind
     one ``+N more`` ellipsis. The captured positional and keyword non-tensor
@@ -279,7 +279,7 @@ def _non_tensor_args_digest(layer: Any) -> str:
 
 
 class MemberFingerprintCache:
-    """Per-analysis memo of member ``(signature, bindings)`` pairs (B1).
+    """Per-analysis memo of member ``(signature, bindings)`` pairs.
 
     One instance is shared by every enumeration sweep over one trace
     revision. :meth:`signature` and :meth:`bindings` compute BOTH values on

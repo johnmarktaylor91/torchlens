@@ -1,4 +1,4 @@
-"""Rank (stacking) channel: annotation -> same-graphviz-rank groups (L5 M3).
+"""Rank (stacking) channel: annotation -> same-graphviz-rank groups.
 
 ``draw(stack_by=...)`` pins nodes sharing an annotation value to one rank
 (column under LR, row under TB), producing the classic unrolled-RNN
@@ -150,7 +150,7 @@ def _multipass_ops_in_raw_order(trace: Trace) -> list[Any]:
 
 
 def check_lockstep_license(trace: Trace) -> None:
-    """Grant or refuse the auto-annotation license (memo 4.1).
+    """Grant or refuse the auto-annotation license.
 
     The predicate IS the case list: every globally monotone trace accepts
     (vanilla lockstep AND ragged monotone prefixes -- early exit,

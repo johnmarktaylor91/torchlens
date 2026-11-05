@@ -605,7 +605,7 @@ class _FastSparseSession:
                 restore_host_rng(host_rng_saved)
         output = self._reconstruct_output(slot_values, call_outputs, ceiling=ceiling)
         # The ordinary transaction's per-run contract-check set, verbatim: the
-        # input-structure (r67 C2), container, and conditional-arm-entry
+        # input-structure, container, and conditional-arm-entry
         # witness families have their ONLY runtime consumer here, so skipping
         # it left an exact-class-swapped container input replaying the
         # recorded path with a wrong value stamped verified.
@@ -1017,7 +1017,7 @@ class _FastLiveSession(_NestedEventTracker):
         if failed_input is _INPUT_CHECK_UNAVAILABLE:
             # This consultation has ADMISSION power (it runs BEFORE the
             # forward), so a broken guard must refuse, never read as
-            # inputs-match and run the forward unguarded (R22-2).
+            # inputs-match and run the forward unguarded.
             raise RunCapabilityUnavailableError(
                 "The fast live run's input-contract guard could not classify the "
                 "runtime inputs against the captured input boundary; refusing the "

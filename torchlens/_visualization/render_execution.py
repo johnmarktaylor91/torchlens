@@ -1,4 +1,4 @@
-"""Shared Graphviz layout-execution honesty seam (vizmech wave 1, lane C05).
+"""Shared Graphviz layout-execution honesty seam (vizmech wave 1).
 
 Three defects shared one root: the render subprocess seam threw away
 evidence. (1) A failed or timed-out layout left a PARTIAL artifact -- a
@@ -6,7 +6,7 @@ evidence. (1) A failed or timed-out layout left a PARTIAL artifact -- a
 successful render (vizmech defect 1). (2) Graphviz prints its "graph is too
 large ... scaling by N" clamp warning to stderr and EXITS 0, and every call
 site discarded stderr on success, so the one signal that raster dimensions
-are fiction never reached the user or the test suite (vizmech D24). (3) No
+are fiction never reached the user or the test suite (vizmech). (3) No
 structured record of what the layout actually produced existed, so geometry
 tests re-derived page facts by hand per test.
 
@@ -75,7 +75,7 @@ def is_raster_format(fileformat: str) -> bool:
 
     ``dpi`` is a physical-resolution knob: it belongs to raster outputs
     only. On vector formats graphviz multiplies the coordinate space with
-    it instead (vizmech D23), which is why the callers gate on this.
+    it instead (vizmech), which is why the callers gate on this.
     """
 
     return fileformat.lower() in _RASTER_FORMATS
@@ -83,7 +83,7 @@ def is_raster_format(fileformat: str) -> bool:
 
 @dataclass(frozen=True)
 class RenderGeometryRecord:
-    """Structured disclosure of one executed layout (vizmech D24).
+    """Structured disclosure of one executed layout (vizmech).
 
     Attributes
     ----------

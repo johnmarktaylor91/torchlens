@@ -19,7 +19,7 @@ from pathlib import Path
 # sibling renderers that do `from ._render_common import *`, which still
 # annotate with them. Modernizing the alias here means modernizing every
 # star-import consumer first. (Reworded so this prose line no longer LEXES as
-# a blanket noqa directive — SF-24.)
+# a blanket noqa directive —.)
 from typing import (  # noqa: UP035
     TYPE_CHECKING,
     Any,
@@ -98,7 +98,7 @@ from .node_spec import (
     INTERVENTION_HOOK_BORDER_COLOR,
     INTERVENTION_HOOK_FILL_COLOR,
     INTERVENTION_SITE_COLOR,
-    # S5 contract (C4): the three node-callback aliases have ONE declaration
+    # contract: the three node-callback aliases have ONE declaration
     # home (node_spec.py); this module re-exports them for internal consumers.
     BackwardNodeSpecFn as BackwardNodeSpecFn,
     CollapsedNodeSpecFn as CollapsedNodeSpecFn,
@@ -139,7 +139,7 @@ def strict_collapse_checks_enabled() -> bool:
     duplicated byte-for-byte in ``auto_collapse`` and ``_render_dot``, a
     divergence hazard for a verification-arming knob).
 
-    Keyed ONLY on the torchlens-owned knob (r3 b7-opus R47-A): the old
+    Keyed ONLY on the torchlens-owned knob: the old
     ``PYTEST_CURRENT_TEST in os.environ`` arm meant a DOWNSTREAM project's
     test suite rendering a TorchLens graph got an ``AssertionError`` on a
     render that works in a script, from a knob it never set. The TorchLens
@@ -334,7 +334,7 @@ _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tra
 # Commutative functions: argument order doesn't matter, so we skip arg-position
 # labels on their incoming edges to reduce visual clutter. ``cat`` is NOT here:
 # concatenation is order-sensitive at every degree, and listing it suppressed
-# argument-order labels exactly where they carry meaning (vizmech D14).
+# argument-order labels exactly where they carry meaning (vizmech).
 COMMUTE_FUNCS = ["add", "mul", "eq", "ne"]
 SIBLING_ORDER_NODE_CAP = 2000
 # Measured on torch 2.7.1+cpu / torchvision 0.22.1+cpu (nightly fast-tier leg,

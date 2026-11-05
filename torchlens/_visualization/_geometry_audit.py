@@ -25,7 +25,7 @@ indexed instrument the memo commissioned:
   pairs + min within-node gap, caption distance, cluster width vs member
   extent -- the second oracle, calibrated by tests in BOTH directions
   (known-bad fails, known-good passes with headroom).
-- **Engine discipline** (item 21 / D4, D8): the audit runs through the engine
+- **Engine discipline**: the audit runs through the engine
   that rendered (``dot`` or ``neato -n``), records it, and exposes the two
   free discriminators (position-pin count, bounding-box presence).
 
@@ -77,7 +77,7 @@ ELLIPSE_SAMPLES = 64
 #: Grid cell size for the candidate-pair prefilter (review r4: a 200 pt grid
 #: cut 825k candidate pairs to 21k on full rolled gpt2).
 GRID_CELL_PT = 200.0
-#: Arrowhead health floor (D15): min within-node arrowhead gap measured
+#: Arrowhead health floor: min within-node arrowhead gap measured
 #: 2.5 pt on healthy renders, 0.86 pt on the DenseNet knot.
 ARROWHEAD_GAP_FLOOR_PT = 2.5
 #: Reserved node-name marker for future sidecar-rail port cells (wave 5
@@ -295,7 +295,7 @@ def run_layout_json(dot_source: str, engine: str = "dot", timeout: int = 300) ->
 
     ``engine="dot"`` runs plain dot; ``engine="rank"`` (or ``"neato"``) runs
     ``neato -n`` -- the engine the rank path actually renders with. Auditing
-    a rank-path artifact through dot is the D4 instrument failure (the same
+    a rank-path artifact through dot is the instrument failure (the same
     cluster measured 356 pt under dot and 1260 pt under ``neato -n``).
     """
 
@@ -623,7 +623,7 @@ def _build_grid(parsed: ParsedLayout) -> _Grid:
     return grid
 
 
-#: Endpoint-label kinds carry NO own-edge exemption (FIXD03-F13, D03-R5):
+#: Endpoint-label kinds carry NO own-edge exemption (FIXD03-F13):
 #: graphviz paints head/tail labels post-layout beside their own spline near
 #: their own arrowhead, so "own spline/arrowhead" is exactly where this
 #: class collides -- the blanket exemption made the commonest head-label
@@ -682,7 +682,7 @@ def audit_layout(parsed: ParsedLayout, pen_eps: float = PEN_EPS) -> AuditResult:
     penwidth-inflated outlines. Self-pairs are exempt: a node's own label, a
     cluster's own caption ON its border row, an edge's MIDPOINT label against
     its own spline/arrowheads. Head/tail labels get NO own-edge exemption
-    (D03-R5): they are painted beside their own spline near their own
+    : they are painted beside their own spline near their own
     arrowhead, so an own-spline crossing there is a real placement defect,
     not expected contact.
     """
@@ -776,8 +776,7 @@ def edges_with_competing_labels(
     The wave-4 ``EdgeAnnotationPlan`` seam (shed-tail NOW-plumbing): today
     the only thing deciding label composition is which Graphviz attribute is
     written last -- naive midpointing DELETED a live conditional-arm ``IF``
-    label on stock gpt2 while the v1 audit scored the result clean (memo
-    D11). Until the typed plan lands, any widening that touches edges
+    label on stock gpt2 while the v1 audit scored the result clean. Until the typed plan lands, any widening that touches edges
     reported here must prove the multiset unchanged (``text_multiset``);
     the plan itself plugs in as the ONE composer for these channels.
     """
@@ -798,7 +797,7 @@ def edges_with_competing_labels(
 
 @dataclass(frozen=True)
 class UsabilityEnvelope:
-    """The second oracle: page-scale usability metrics (memo D2).
+    """The second oracle: page-scale usability metrics.
 
     Attributes are plain measurements; tests calibrate them in both
     directions (a known-bad must fail, a known-good must pass with headroom;
@@ -875,7 +874,7 @@ def _legend_ratio(parsed: ParsedLayout, width: float) -> float:
 
 
 def _arrowhead_metrics(parsed: ParsedLayout) -> tuple[int, float]:
-    """(fused pair count, min within-node arrowhead gap) -- memo D15."""
+    """(fused pair count, min within-node arrowhead gap)."""
 
     heads_by_node: defaultdict[str, list[Rect]] = defaultdict(list)
     for edge in parsed.edges:

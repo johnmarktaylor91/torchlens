@@ -40,7 +40,7 @@ BOX_SCOPE_HELPERS = BoxScopeHelpers(
 def _tooltip_repr(value: Any) -> str:
     """Return a repr for a DOT tooltip with memory addresses masked.
 
-    r19 (b6-fable carried LOW): a default-repr object (or a custom Sequence
+    (b6-fable carried LOW): a default-repr object (or a custom Sequence
     container with the default ``object.__repr__``) leaks ``0x...``
     addresses into the DOT bytes, making otherwise-identical renders
     nondeterministic across processes. Mask the addresses; an unreprable
@@ -805,7 +805,7 @@ def _render_raw_input(
         if not include_more:
             strings = strings[:max_items]
         # Lazy: ..viz top-imports this package, so an import-time edge back
-        # into ..viz would mint a bidirectional package cycle (b5 R51).
+        # into ..viz would mint a bidirectional package cycle.
         from ..viz import batch_summary
 
         return {
@@ -1016,7 +1016,7 @@ def _render_raw_input_image_batch(
     width_in = max(width_px / 96.0, 0.1)
     height_in = max((height_px + 24 * len(label_lines)) / 96.0, 0.1)
     return {
-        # r-b6 R19-6: relative to the visualizer root (graph-level imagepath).
+        # Relative to the visualizer root (graph-level imagepath).
         "image": relativize_visualizer_image(str(image_path)),
         "imagescale": "true",
         "fixedsize": "true",
@@ -2015,7 +2015,7 @@ def compute_default_node_lines(
 
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
-    # data, escaped like every row by the S5 choke point).
+    # data, escaped like every row by the choke point).
     shape_summary = getattr(layer_log, "shape_summary", None)
     if isinstance(shape_summary, str) and shape_summary:
         lines.append(shape_summary)

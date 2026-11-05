@@ -4,8 +4,8 @@ The two-axis theme system (themes trilab memo): a semantic LENS answers a
 question (what is slow, what is big, what is broken) and a cosmetic SKIN
 styles the ink; they compose freely. This subpackage carries the lens
 roster v1 (nine rows + three composition recipes), view-aware source
-families (N16), the visible-detail budget resolver (N10), the six-state
-nonfinite status channel (N6), the general display filter (N9), and the
+families, the visible-detail budget resolver, the six-state
+nonfinite status channel, the general display filter, and the
 resolution front door that enforces the refusal taxonomy and rendered
 disclosure.
 

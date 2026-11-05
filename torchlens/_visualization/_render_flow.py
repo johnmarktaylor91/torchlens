@@ -1760,7 +1760,7 @@ def _assert_sibling_backstops(
 ) -> None:
     """Check sibling-ordering structural backstops, raising on violation.
 
-    r-b7 R24-3: raises, not asserts — ``order_siblings=True`` is the shipped
+    Raises, not asserts — ``order_siblings=True`` is the shipped
     DEFAULT, and under ``python -O`` an assert-based backstop vanishes
     entirely, so an invisible ordering edge coinciding with real dataflow
     would no longer be rejected.

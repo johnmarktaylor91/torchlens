@@ -1,4 +1,4 @@
-"""The renderer registry: every picture passes one capability gate (C01 item 16).
+"""The renderer registry: every picture passes one capability gate.
 
 Architecture memo 6.3 seam 2: renderers are registered units with REQUIRED
 capability rows; appliances produce typed display records and ALL pictures

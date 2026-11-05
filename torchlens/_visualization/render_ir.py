@@ -59,7 +59,7 @@ class RenderIRNode:
     node_calls: tuple[Any, ...] = ()
     owned_node_args: tuple[tuple[str, dict[str, Any]], ...] = ()
     node_color: str = "black"
-    # S5 contract (C4): typed NodeSpec | None (was Any).
+    # contract: typed NodeSpec | None (was Any).
     node_spec: NodeSpec | None = None
     region_path: tuple[str, ...] = ()
 
@@ -225,7 +225,7 @@ class RenderIR:
     regions: tuple[RenderIRRegion, ...]
     ordering_constraints: tuple[RenderIROrderingConstraint, ...] = ()
     dot_statements: tuple[RenderIRDotStatement, ...] = ()
-    # Stacking channel (L5 M3): rank=same groups resolved at the prepass.
+    # Stacking channel: rank=same groups resolved at the prepass.
     stack_rank_groups: tuple[RenderIRRankGroup, ...] = ()
 
     def required_capabilities(self) -> RendererCapabilities:
@@ -340,7 +340,7 @@ def build_render_ir(
     scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
     populate_encoding_state(encoding, trace, universe, scope)
     if suppressed_args is None and not getattr(resolved_context, "show_redundant_args", False):
-        # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
+        # Checked suppression (DEFAULT-ON): the trace-bearing prepass
         # proves which constructor-arg rows duplicate captured shapes on
         # THIS trace; unprovable or mismatching args stay visible.
         from ._arg_suppression import compute_suppressed_arg_keys
@@ -388,7 +388,7 @@ def build_render_ir(
     )
 
 
-#: Disclosure ceiling for one render (R60): draw() has no hard node/edge cap
+#: Disclosure ceiling for one render: draw() has no hard node/edge cap
 #: anywhere — a hard refusal is a public-behavior decision (it would break
 #: legitimate giant renders such as model-catalog sweeps) — but past this size
 #: Graphviz layout time and memory grow super-linearly, so the user gets an

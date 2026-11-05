@@ -5,7 +5,7 @@ label (JMT, 29 Oct 2026: header, then key, then graph, all top left); this
 module still detects which roles a picture drew, builds the channel
 disclosure and backward-key sections, and emits the backward key's table.
 
-The backward key is ONE HTML-table plaintext node (vizmech item 13, D28;
+The backward key is ONE HTML-table plaintext node (vizmech item 13;
 the older six disconnected nodes were packed beside the model and drove a
 366 pt page to 1048 pt): rows carry the rendered fill as a swatch plus a
 text cell, and the node sits in a dedicated ``rank=sink`` group tied into the
@@ -196,7 +196,7 @@ def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
     """Build the channel disclosure sections from an ``EncodingState``.
 
     Every disclosure line the disconnected-node form carried is preserved
-    (AUTO disclosures are contract text, memo 2.3); ramp stop rows keep their
+    (AUTO disclosures are contract text); ramp stop rows keep their
     interpolated swatches.
     """
 

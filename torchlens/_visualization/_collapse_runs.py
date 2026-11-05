@@ -1,4 +1,4 @@
-"""Run-fold legality over indexed flow adjacency, de-quadratic (B2).
+"""Run-fold legality over indexed flow adjacency, de-quadratic.
 
 This module owns the v2 run-fold legality grammar (moved verbatim in
 semantics from ``auto_collapse.py``) plus the collapse memo's B2 build item
@@ -296,7 +296,7 @@ def uniform_prefix_length(
     first member's structural signature AND merge its exterior bindings
     consistently into the fold's shared frame (in address order), so the
     first failing member bounds every longer window. One signature pass per
-    component (B2) replaces the historical per-window recomputation.
+    component replaces the historical per-window recomputation.
     """
 
     if not candidate:

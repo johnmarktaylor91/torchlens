@@ -13,7 +13,7 @@ dims, transformer. EXTENDED-3 (ship iff their strata pass; a failure drops
 that row alone to wave 2 with the mandatory named promotion path in the
 memo, never a silent disappearance) = memory, sequence, compute.
 
-``overview`` and ``blueprint`` were registered by the C05 substrate
+``overview`` and ``blueprint`` were registered by the substrate
 (``theme_registry``); this module registers the remaining seven and the
 roster-level tables. Import is idempotent per process (the registry refuses
 double registration; this module registers once at first import).

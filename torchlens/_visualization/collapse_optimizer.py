@@ -233,7 +233,7 @@ class OptimizerResult:
     #: gate pins ``scored_k == count(plan) == emitted render units`` -- the
     #: phantom-k class is exactly a divergence here.
     scored_k: int | None = None
-    #: Band-miss disclosure (memo D7): True when no ladder point reaches the
+    #: Band-miss disclosure: True when no ladder point reaches the
     #: readable band; the served plan is the DISCLOSED strongest point and
     #: ``strongest_plan_count`` carries its REALIZED count (never a scored
     #: estimate, never the word "floor" -- the beam proves no bound).
@@ -258,7 +258,7 @@ class OptimizerResult:
 
         segment_nodes = sum(isinstance(node, (ChildSegment, OpSegment)) for node in self.plan.nodes)
         descriptor_count = len(self.segments or {})
-        # r-b7 R24-2: a raise, not an assert — this guards the label-honesty
+        # A raise, not an assert — this guards the label-honesty
         # contract on the DEFAULT draw(collapse=) path, and `python -O` strips
         # asserts, which would let segment boxes under-report hidden calls.
         if descriptor_count != segment_nodes:
@@ -396,7 +396,7 @@ def select_collapse_plan(
     """
 
     resolved_weights = OptimizerWeights() if weights is None else weights
-    # Pathological pre-gate (collapse memo D5(i), r8 R60-13 preserved): the
+    # Pathological pre-gate (collapse memo D5(i), preserved): the
     # revision snapshot and even the universe build are pointless on a
     # 100k-op artifact, so far-out-of-envelope traces decline outright --
     # the ONE remaining uncollapsed decline. Everything below it degrades to
@@ -423,7 +423,7 @@ def select_collapse_plan(
                     "rolled mode.",
                     code="collapse_pathological_skip",
                 ),
-                # r7 R19 (opus b6 LOW): a fixed stacklevel resolved to TorchLens's
+                # R19 (opus b6 LOW): a fixed stacklevel resolved to TorchLens's
                 # own _trace_collapse caller; blame the user's draw()/collapse_plan()
                 # line instead (the entry depth differs per public spelling).
                 stacklevel=user_stacklevel(),
@@ -461,7 +461,7 @@ def select_collapse_plan(
             # cache hit included; ``auto`` keeps the once-per-trace dedupe.
             _warn_budget_fallback(trace, mode, cached)
         return cached
-    # Admission gate (collapse memo D5): the variable is U -- the rendered
+    # Admission gate (collapse): the variable is U -- the rendered
     # universe of the FULL plan (focus/depth/rolled reductions applied), so
     # context reductions are real remedies -- tiered by the measured
     # (U, W) work estimator. Over-budget requests degrade to the
@@ -489,7 +489,7 @@ def _admission_budget(
     context: RenderContext,
     source_graph: SourceGraph | None,
 ) -> SelectionBudget:
-    """Measure U and W and price the request (memo D5 admission inputs)."""
+    """Measure U and W and price the request (memo admission inputs)."""
 
     admission_plan = _collapse_plan_for_source_or_trace(trace, None, None, context, source_graph)
     universe_count = count(admission_plan)
@@ -509,7 +509,7 @@ def _run_admitted_selection(
     request: tuple[str, OptimizerWeights | None],
     budget: SelectionBudget,
 ) -> OptimizerResult:
-    """Run the admitted quality planner under the armed budget (memo D5).
+    """Run the admitted quality planner under the armed budget.
 
     ``request`` is the ``(mode, weights)`` pair (weights steer only the max
     substrate). The watchdog deadline arms here (never in CI/deterministic
@@ -550,7 +550,7 @@ def _run_admitted_selection(
     )
 
 
-# The PUBLIC auto surface reads the typed event ladder (memo D8 unfreeze);
+# The PUBLIC auto surface reads the typed event ladder (memo unfreeze);
 # the historical frontier auto survives below as _frontier_auto_result, the
 # max path's internal substrate.
 
@@ -576,7 +576,7 @@ def _frontier_auto_result(
 ) -> OptimizerResult:
     """Run the historical band-targeted auto frontier selection (internal).
 
-    The PUBLIC auto surface reads the typed event ladder (memo D8 unfreeze,
+    The PUBLIC auto surface reads the typed event ladder (memo unfreeze,
     collapse_ladder.auto_from_ladder). This internal selector survives as
     the max path's substrate: _select_max_plan seeds its interval
     condensation from a band-targeted frontier cut and falls back to it
@@ -639,7 +639,7 @@ def _frontier_auto_result(
         first_pass_point = None
         first_pass_plan = None
     if best is None:
-        # No silent floor (collapse memo D4): the frontier emptied. The plan
+        # No silent floor (collapse): the frontier emptied. The plan
         # served is the deterministic significance-greedy fallback
         # (memo D5(iv)), never a bare uncollapsed wall.
         selected, repeat_folds, plan = linear_fallback_plan(
@@ -982,7 +982,7 @@ def _select_max_plan(
                 visible_count=plan_count,
                 segments=segments,
                 level=level,
-                # Protected reasons (memo D7): a fallback-tier substrate's
+                # Protected reasons: a fallback-tier substrate's
                 # diagnosed cause + remedy is a D4-mandated disclosure and
                 # survives the segment condensation; a healthy substrate's
                 # scored claim no longer binds, so its reason clears.
@@ -997,7 +997,7 @@ def _select_max_plan(
     return replace(
         auto,
         level="L3",
-        # Protected reasons (memo D7): the auto substrate's own cause and
+        # Protected reasons: the auto substrate's own cause and
         # remedy (K_CAP diagnosis, "module= focus" guidance) survive the
         # max-band fallback note instead of being clobbered by it.
         reason=(
@@ -1397,7 +1397,7 @@ def _assert_segment_descriptor_parity(
 ) -> None:
     """Fail loudly when segment descriptors collide before renderer exposure.
 
-    r-b7 R24-2: a raise, not an assert — label honesty must survive
+    A raise, not an assert — label honesty must survive
     ``python -O``.
     """
 
@@ -1477,7 +1477,7 @@ def _legal_plan_op_segment_run(
         op = trace.ops[concrete]
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):
             break
-        # Module-call containment (round-24 C1): an unrolled run must never
+        # Module-call containment: an unrolled run must never
         # absorb two different CALLS of one reused module -- the segment
         # renders as one node in one cluster, so crossing a reuse boundary
         # nests later calls' work under the first call's cluster and leaves
@@ -2375,7 +2375,7 @@ def _frontier_for_module(
         box_cost = _cached_box_cost(state.trace, signal, state)
         points.append(
             _DecisionPoint(
-                # M2a (collapse memo D1): a selected box renders one box PER
+                # M2a (collapse): a selected box renders one box PER
                 # CALL plus the atomic own-output ops the renderer keeps, so
                 # the scored k is that realized count from the cached render
                 # units -- k=1 here was the phantom-k pricing lie (the DP
@@ -2494,7 +2494,7 @@ def _synthetic_parent_owned_ops(
 ) -> tuple[str, ...]:
     """Return the parent's own non-buffer ops for a synthetic child graph.
 
-    M1 (collapse memo D1): the parent's own ops come from the SAME subtree
+    (collapse): the parent's own ops come from the SAME subtree
     set-difference the root path uses honestly. Stamping () here made every
     synthetic-graph parent claim zero own ops, so the optimizer scored a
     node count that was not what gets drawn (phantom k) on albert-class and
@@ -2686,7 +2686,7 @@ def _own_ops_segment_is_legal(state: _OptimizerState, own_ops: tuple[str, ...]) 
         if getattr(op, "is_input", False) or getattr(op, "is_output", False):
             return False
         if state.context.vis_mode != "rolled":
-            # Module-call containment (round-24 C1): a multi-call module's
+            # Module-call containment: a multi-call module's
             # own ops span several rendered call clusters, so replacing them
             # with ONE segment node would nest later calls' work under one
             # call's cluster. Refuse reuse-crossing sequences here; the
@@ -3681,7 +3681,7 @@ def _root_own_unit_count(
 ) -> int:
     """Return how many rendered units the root owns outside every top-level child.
 
-    The K_CAP cliff variable (collapse memo D4): when this exceeds ``K_CAP``
+    The K_CAP cliff variable (collapse): when this exceeds ``K_CAP``
     every frontier candidate overshoots the cap and the DP frontier empties.
     Rolled contexts count merged rendered units; unrolled contexts count the
     same non-buffer op set-difference ``_expanded_structure`` scores.

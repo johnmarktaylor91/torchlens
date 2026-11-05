@@ -110,7 +110,7 @@ class ResolvedRenderRequest:
     # even with channels active (a deliberate act).
     show_edge_shapes: bool = False
     show_legend: bool | None = None
-    # Encoding channel core (L5, DOCUMENTED-UNSTABLE until ratified):
+    # Encoding channel core (DOCUMENTED-UNSTABLE until ratified):
     # ``color_by``/``size_by``/``scale`` are the raw user sources;
     # ``encoding`` carries the resolved per-draw EncodingState (all active
     # channels). Presentation-only: NONE joins __hash__ (the
@@ -121,7 +121,7 @@ class ResolvedRenderRequest:
     scale: Any = None
     stack_by: Any = None
     encoding: Any = None
-    # Checked suppression (L5 M4, DOCUMENTED-UNSTABLE spelling): True shows
+    # Checked suppression (DOCUMENTED-UNSTABLE spelling): True shows
     # every constructor arg; False (default) suppresses args the equality
     # check proves redundant against this trace's captured shapes.
     show_redundant_args: bool = False
@@ -140,7 +140,7 @@ class ResolvedRenderRequest:
     # DOCUMENTED-UNSTABLE spelling): resolved PatternSpec records, () = off.
     # Joins __hash__: pattern chips change what renders, so a pattern-bearing
     # request must never share cached plans with a bare one (plan-cache
-    # identity is part of the D11 contract).
+    # identity is part of the contract).
     fold_patterns: tuple[Any, ...] = ()
 
     def with_resolved_collapse(

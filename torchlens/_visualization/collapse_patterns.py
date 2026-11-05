@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
 _ATOM_PATTERN = re.compile(r"^([A-Za-z_][A-Za-z0-9_.]*)(?:\{(\d+)\})?$")
 
-#: Curated preset (memo D11): the conv-bn-relu idiom family. Off by default;
+#: Curated preset: the conv-bn-relu idiom family. Off by default;
 #: selected with ``fold_patterns="idiomatic"``.
 IDIOMATIC_PATTERNS: Mapping[str, str] = {
     "ConvBnRelu": "conv2d > batch_norm > relu",
@@ -127,7 +127,7 @@ class PatternMatch:
 
 @dataclass
 class PatternFoldReport:
-    """Per-draw pattern folding disclosure (memo D11: counted, never silent).
+    """Per-draw pattern folding disclosure (counted, never silent).
 
     Parameters
     ----------
@@ -344,7 +344,7 @@ def _match_one_spec(
     """Match one spec over the op chain; record folds/refusals on the report.
 
     Accepted instances claim their ops (declaration order is priority);
-    every refusal is counted by reason -- never silent (memo D11).
+    every refusal is counted by reason -- never silent.
     ``scan`` is the shared ``(ops, labels_index, claimed, token_cache)``
     matcher state (one tuple: the scan travels together).
     """
@@ -387,7 +387,7 @@ def _extend_match(
 
     Extension follows dataflow children. More than one child satisfying the
     next atom is an equal-priority ambiguous tie and refuses THAT instance
-    with a diagnostic (memo D11) -- silent tie-breaking in a naming feature
+    with a diagnostic -- silent tie-breaking in a naming feature
     teaches users their pattern applied where it did not.
     """
 
@@ -420,7 +420,7 @@ def _instance_honesty_refusal(
 ) -> str | None:
     """Return the refusal reason for one candidate instance, or ``None``.
 
-    The honesty core (memo D11): single entry, single exit -- any external
+    The honesty core: single entry, single exit -- any external
     edge touching the interior refuses the instance -- and protected
     landmark junctions inside the match refuse it.
     """
@@ -459,7 +459,7 @@ def _interior_refusal(
     labels_index: Mapping[str, Op],
     is_external: Callable[[str], bool],
 ) -> str | None:
-    """Return the first interior honesty violation, or ``None`` (memo D11)."""
+    """Return the first interior honesty violation, or ``None``."""
 
     for label in instance[1:-1]:
         op = labels_index[label]
@@ -484,7 +484,7 @@ def _pattern_descriptor(
     label = f"PATTERN '{match_record.spec.name}' -- {len(match_record.op_labels)} ops"
     spanned_note = base.label.split(" -- spans ", 1)
     if len(spanned_note) == 2:
-        # Keep the R19-5 spanned-modules disclosure the base builder derived.
+        # Keep the spanned-modules disclosure the base builder derived.
         label = f"{label} -- spans {spanned_note[1]}"
     return SegmentDescriptor(
         name=f"__pattern__{match_record.spec.name}_{index}__{base.name}",

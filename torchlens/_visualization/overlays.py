@@ -34,7 +34,7 @@ def _overlay_candidate_labels(trace: Any) -> set[str]:
 def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     """Lower a Selection-shaped overlay source to per-site SELECTED COUNTS.
 
-    The element-mask law (leverage D-4): a consumer of a Selection-shaped
+    The element-mask law (leverage): a consumer of a Selection-shaped
     source reads element masks / ``num_selected``, never family membership
     — painting whole sites for a sparse element selection is the measured
     2.7x overpaint. Touched sites with zero selected elements stay in the
@@ -239,7 +239,7 @@ def builtin_overlay_value(node: Any, overlay: str) -> Any:
         return _tensor_norm(get_multipass_attr(node, "grad", None, multipass=None))
     if name == "nan":
         tensor = get_multipass_attr(node, "out", None, multipass=None)
-        # F15: distinguish "nothing was checked" (no available tensor -- missing,
+        # distinguish "nothing was checked" (no available tensor -- missing,
         # None, or an ambiguous aggregate) -> None -> "nan: n/a" from "checked,
         # none found" -> False -> "nan: no". The old code returned _has_nonfinite
         # of a missing/None tensor, i.e. False, and so asserted "nan: no" on nodes

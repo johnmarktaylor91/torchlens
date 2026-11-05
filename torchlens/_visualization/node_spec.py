@@ -2,7 +2,7 @@
 
 The NodeSpec VALUE vocabulary (dataclass, callback aliases, style constants)
 lives in :mod:`torchlens._vocab.node_spec` after the ratified V2 relocation
-(architecture memo 3.3, C01 item 6) -- it is consumed by strata below
+-- it is consumed by strata below
 PRESENT. This module re-exports it unchanged and keeps the render BEHAVIOR
 helpers, which are L7 code (they reach into the resolver, replay cone, and
 render node internals and may not ride a vocabulary module under Rule V3).

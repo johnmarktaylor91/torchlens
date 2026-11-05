@@ -2,7 +2,7 @@
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
-Collapse memo item 9 (D8). The measured public float slider was not
+Collapse memo item 9. The measured public float slider was not
 consumable: densenet201 spent ``t`` in ``[0, 0.984]`` between 713 and 366
 visible nodes (all unreadable) with its whole readable range in the last
 1.6% of travel, resnet152's first in-band step sat at ``t=1.0``, and
@@ -26,7 +26,7 @@ endpoint, and ``auto``, float-level selection, and the public
 - ``auto`` = the first ladder point meeting the readable-band count cap
   (the documented contract, now real), else the DISCLOSED strongest point:
   ``band_missed=True`` + ``strongest_plan_count`` computed from the
-  REALIZED plan (memo D7), never a silent near-uncollapsed render.
+  REALIZED plan, never a silent near-uncollapsed render.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class CollapseEvent:
-    """One typed condensation event on the ladder (memo D8).
+    """One typed condensation event on the ladder.
 
     Parameters
     ----------
@@ -99,7 +99,7 @@ class CollapseEvent:
 
 
 def _ladder_t(full_count: int, visible_count: int, max_count: int) -> float:
-    """Return the geometric interior ``t`` for one realized count (D8)."""
+    """Return the geometric interior ``t`` for one realized count."""
 
     if full_count <= max_count or visible_count >= full_count:
         return 0.0
@@ -392,7 +392,7 @@ def _interior_ladder_steps(
     node_pool: dict[PlanNode, PlanNode],
     counts: tuple[int, int],
 ) -> list[CollapseScheduleStep]:
-    """Realize the interior (strictly count-reducing) ladder stops (D8).
+    """Realize the interior (strictly count-reducing) ladder stops.
 
     ``counts`` is ``(full_count, max_count)``. Only count-reducing stops are
     public; events that changed nothing coalesce into the next effective
@@ -491,7 +491,7 @@ def auto_from_ladder(
         )
         # A fallback-tier endpoint already carries its cause and remedy
         # (K_CAP diagnosis, "module= focus" guidance); the band note joins
-        # it rather than clobbering it (memo D7: protected reasons).
+        # it rather than clobbering it (protected reasons).
         base_reason = max_result.reason
         return replace(
             max_result,

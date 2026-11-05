@@ -467,7 +467,7 @@ def _signed_zeros_match(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> bool:
     """Return whether zero elements carry the same sign bit on both sides.
 
     IEEE equality reads ``-0.0 == +0.0`` as True, so ``torch.equal`` alone
-    certifies a sign-flipped-zero replay as EXACT (sol+fable r4 probes) even
+    certifies a sign-flipped-zero replay as EXACT (sol+fable probes) even
     though the payloads are bit-distinct and diverge downstream
     (``1/x`` -> opposite infinities). Equal NON-zero finite floats share one
     representation and equal NaN masks are enforced separately, so the zero
@@ -827,7 +827,7 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
 
     Torch's default ``__torch_function__`` subclass-return conversion calls
     ``ret.as_subclass(cls)`` INSIDE ``x.clone()`` to reconstruct the subclass
-    type (R16-5, see ``torchlens/backends/torch/wrappers.py``). On torch 2.1
+    type (see ``torchlens/backends/torch/wrappers.py``). On torch 2.1
     and 2.2 that reconstruction raises "Creating a new Tensor subclass ...
     already associated to a python object" whenever a TorchLens dispatch mode
     (the completeness witness, armed by default; an intervention-ready
@@ -960,7 +960,7 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 
 # Kill switch: TORCHLENS_EAGER_PAYLOAD_CLONE=1 restores unconditional eager
 # clones (also used by the perf harness for A/B runs).
-# IMPORT-TIME LATCH (R47-4): read once here and value-copied into
+# IMPORT-TIME LATCH: read once here and value-copied into
 # ``backends/torch/wrappers.py`` at ITS import; a runtime ``setenv`` is a
 # silent no-op. Set the variable BEFORE the process imports torchlens (user
 # guidance must never recommend the runtime spelling). Promotion to a
@@ -971,7 +971,7 @@ _DEFER_ENABLED: bool = not closed_bool_env("TORCHLENS_EAGER_PAYLOAD_CLONE")
 # Opt-in: TORCHLENS_DEFER_GRAD_PAYLOADS=1 extends deferral to graph-connected
 # payloads (the default grad-enabled capture regime). OFF by default because of
 # residual H3 above; H1/H2 are closed unconditionally by the mint and rebind.
-# Same import-time latch caveat as above (R47-4).
+# Same import-time latch caveat as above.
 _DEFER_GRAD_ENABLED: bool = closed_bool_env("TORCHLENS_DEFER_GRAD_PAYLOADS")
 
 # storage key -> list of pending aliases. NEVER rebound (only mutated), so the
@@ -1025,7 +1025,7 @@ def _deferred_storage_key(x: torch.Tensor) -> tuple[int, int, str] | None:
     touching storage: reading a FakeTensor's data pointer trips torch's
     "almost definitely a bug" warning before the entry guard's typed refusal
     fires, and the entry guard's own contract is that FakeTensors never reach
-    pointer-reading metadata (grind-r5 b6 R16, order-dependent repro).
+    pointer-reading metadata (order-dependent repro).
     """
     from ._torch_compat import get_tracing_tensor_types
 
@@ -1206,7 +1206,7 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
         and threading.get_ident() != _state._active_owner_thread_id
     ):
         # Never toggle the global logging pause from a non-owner thread while
-        # a capture is live (r43: it blinds owner op capture). Cross-thread
+        # a capture is live (it blinds owner op capture). Cross-thread
         # mutation of a pending storage is outside the single-threaded capture
         # claim; the version belt still reports it loudly at the next touch.
         return
@@ -1322,7 +1322,7 @@ def disarm_deferred_payload_window() -> None:
         _DEFER_STATE_PTRS = None
 
 
-#: Pending fence events for in-flight ``cpu_async`` D2H copies (R36-1).
+#: Pending fence events for in-flight ``cpu_async`` D2H copies.
 #: Capture-scoped accumulate/drain state: each async pinned-buffer copy
 #: records one event on its source device's current stream, and
 #: ``synchronize_pending_cpu_async_copies()`` drains the list at the capture
@@ -1331,7 +1331,7 @@ def disarm_deferred_payload_window() -> None:
 #: observe partial bytes from an unfinished ``non_blocking=True`` copy.
 _CPU_ASYNC_PENDING_EVENTS: list[Any] = []
 
-#: Hard bound on accumulated fence events (R36): a capture that never reaches
+#: Hard bound on accumulated fence events: a capture that never reaches
 #: a drain seam (or an exotic failure path) must not grow the list without
 #: limit across captures. Crossing it drains inline — a fence, so strictly
 #: correctness-neutral; it only reduces async overlap for that one copy.
@@ -1339,7 +1339,7 @@ _CPU_ASYNC_PENDING_EVENTS_MAX = 512
 
 
 def _record_cpu_async_copy_event(device: torch.device) -> None:
-    """Record a stream event fencing one ``cpu_async`` D2H copy (R36-1).
+    """Record a stream event fencing one ``cpu_async`` D2H copy.
 
     Parameters
     ----------
@@ -1360,7 +1360,7 @@ def _record_cpu_async_copy_event(device: torch.device) -> None:
 
 
 def synchronize_pending_cpu_async_copies() -> None:
-    """Fence every pending ``cpu_async`` D2H copy recorded this capture (R36-1).
+    """Fence every pending ``cpu_async`` D2H copy recorded this capture.
 
     Called at the capture finalize seam and on the failure-scrub arms.
     Idempotent and cheap when nothing is pending; a completed copy's event
@@ -1414,7 +1414,7 @@ def synchronize_pending_cpu_async_copies() -> None:
             _CPU_ASYNC_PENDING_EVENTS[:0] = pending[index:]
 
 
-#: Backend labels that positively identify a non-CUDA capture home (R36).
+#: Backend labels that positively identify a non-CUDA capture home.
 #: Only these skip the allocator flush when the op-device scan yields no
 #: evidence; any label OUTSIDE this closed set (including ``"unknown"``/
 #: missing) fails toward the historical flush, so a future accelerator label
@@ -1441,7 +1441,7 @@ def _entry_device_is_cuda(entry: Any) -> bool | None:
 
 
 def _capture_observed_cuda_device(trace: Any) -> bool | None:
-    """Best-effort scan of recorded op device facts for a CUDA device (R36-3).
+    """Best-effort scan of recorded op device facts for a CUDA device.
 
     Parameters
     ----------
@@ -1483,7 +1483,7 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
 
 
 def capture_touched_cuda(trace: Any) -> bool:
-    """Return whether this capture's forward plausibly touched CUDA (R36-3).
+    """Return whether this capture's forward plausibly touched CUDA.
 
     Gates the capture-lifecycle ``torch.cuda.empty_cache()`` calls on the
     CAPTURE having used CUDA, not on process-wide availability: a CPU-only

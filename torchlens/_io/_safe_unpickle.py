@@ -84,7 +84,7 @@ Allowlist policy (fail-closed):
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
 
-STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49 storage, r63 tensor/ndarray).
+STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49 storage, tensor/ndarray).
 This unpickler's effective admit+CONSTRUCT surface is a documented STRICT SUBSET of
 torch's ``_weights_only_unpickler._get_allowed_globals()`` baseline. The invariant is
 about CONSTRUCTION, NOT resolution: the tensor / storage / ndarray TYPE OBJECTS stay
@@ -174,7 +174,7 @@ def _module_denied(module: str) -> bool:
     )
 
 
-# STRUCTURAL close of the denylist-completeness class (r31). The detector,
+# STRUCTURAL close of the denylist-completeness class. The detector,
 # carve-outs, and predicate are imported from ``utils._callable_safety`` so the
 # unpickler and callable resolver make one decision from one authority. The explicit
 # ``_DENIED_FOREIGN_MODULES`` alias stays as belt-and-suspenders; this positive rule
@@ -309,13 +309,13 @@ def _is_torchlens_appliance_module(module: str) -> bool:
 # resolved type is "reconstructed via normal unpickling, never INVOKED with attacker
 # args". That premise is FALSE: a pickle ``REDUCE`` may INVOKE any admitted type
 # (its instance, or the type itself) with attacker-chosen arguments. The concrete
-# load-time RCE (r23): ``torchlens.intervention._spec_values.LazyImportRef`` is a frozen
+# load-time RCE: ``torchlens.intervention._spec_values.LazyImportRef`` is a frozen
 # dataclass whose ``__call__(import_path, ...)`` resolves an ARBITRARY import path
 # under a trust flag read from its OWN pickled field, so a crafted ``metadata.pkl``
 # reconstructs ``LazyImportRef(import_path="os:system", trust_custom_callables=True)``
 # and REDUCE-invokes it -> ``os.system`` on plain ``tl.load``.
 #
-# This closes that with the same default-deny discipline as the r22 callable gate: a
+# This closes that with the same default-deny discipline as the callable gate: a
 # torchlens type is admitted ONLY if it is on this frozen allowlist of pure DATA
 # types -- dataclasses / enums / NamedTuples / plain accessor+value classes whose
 # reconstruction runs no import / exec / filesystem / process side effect and which
@@ -842,7 +842,7 @@ class _BundleAllowlistPolicy:
                         f"{str(getattr(obj, '__module__', '') or '')!r} (a dotted "
                         "name that escapes the torch package is refused)."
                     )
-                # STORAGE-CONSTRUCTOR deny (r49, secA_1). A torch STORAGE class is a
+                # STORAGE-CONSTRUCTOR deny. A torch STORAGE class is a
                 # torch-owned DATA ``type`` and would otherwise pass here, but its
                 # construction is NOT inert: a following ``REDUCE`` of
                 # ``torch.UntypedStorage(N)`` allocates N raw bytes (a multi-GiB alloc
@@ -928,7 +928,7 @@ class _BundleAllowlistPolicy:
             raise pickle.UnpicklingError(
                 f"Blocked dangerous global during bundle metadata unpickle: {module}.{name}."
             )
-        # 1b. STRUCTURAL close of the denylist-completeness class (r31): hard-deny any
+        # 1b. STRUCTURAL close of the denylist-completeness class: hard-deny any
         #     FOREIGN global whose pickled module is a Python STANDARD-LIBRARY /
         #     BUILTIN module (keyed on the top-level package), regardless of trust.
         #     This closes the whole class the explicit denylist kept chasing (io /
@@ -946,7 +946,7 @@ class _BundleAllowlistPolicy:
         #    mirroring ``resolve_function_registry_key`` under trust. Importing the
         #    module executes its top-level code, so this is gated behind the flags.
         if self._custom_module_trusted(module):
-            # DiD (r28, DiD-1): a DOTTED ``name`` under a TRUSTED module can
+            # DiD (DiD-1): a DOTTED ``name`` under a TRUSTED module can
             # attribute-walk into a module-globals MAPPING
             # (``<trusted_mod>.<func>.__globals__``) whose real ``__module__`` is
             # undefined, so the resolved-real-module denylist recheck below falls back
@@ -971,7 +971,7 @@ class _BundleAllowlistPolicy:
                     "Blocked mapping (module globals) resolved via a dotted name during "
                     f"trusted bundle metadata unpickle: {module}.{name}."
                 )
-            # A resolved MODULE object (A-R32-2): a bare module has no ``__module__``, so
+            # A resolved MODULE object: a bare module has no ``__module__``, so
             # the resolved-real-module denylist recheck below falls back to the (trusted,
             # non-stdlib) PICKLED module name and ADMITS it -- defeating
             # ``_stdlib_or_builtin_denied``. A bare module is never a legitimate foreign
@@ -1001,7 +1001,7 @@ class _BundleAllowlistPolicy:
                     f"{resolved_owner!r}) during trusted bundle metadata unpickle: "
                     f"{module}.{name}."
                 )
-            # STRUCTURAL stdlib/builtin close (r31): a dotted ``name`` can walk OFF a
+            # STRUCTURAL stdlib/builtin close: a dotted ``name`` can walk OFF a
             # trusted module and land on a stdlib/builtin callable (e.g. a trusted
             # ``mymod.io.open`` resolving ``io.open``, real module ``io``). Deny the
             # whole stdlib/builtin class on the resolved real module, even under trust.
@@ -1023,7 +1023,7 @@ class _BundleAllowlistPolicy:
             # ``"torchlens.backends.torch.wrappers"`` for ANY torch op TorchLens has
             # capture-wrapped (the near-universal live state) -- so a raw string
             # torch/prefix check misses a wrapped ``resize_`` / ``torch.load`` (the r36
-            # hole). Mirror the r35 torchlens-walk fix / the intervention resolver on the
+            # hole). Mirror the torchlens-walk fix / the intervention resolver on the
             # REAL identity: when the real owner is module-less OR torch, hold it to
             # ``is_pure_forward_callable`` (which unwraps + covers the
             # tensor-method-descriptor case, the storage-unsafe / ``apply_`` / ``map_``
@@ -1048,7 +1048,7 @@ class _BundleAllowlistPolicy:
                     "resolve from the torch namespace or a module-less C callable, even "
                     "under trust."
                 )
-            # OPERATOR GADGET name-scope (r33, A-R32-1 / E-r32-1): the ``operator`` /
+            # OPERATOR GADGET name-scope: the ``operator`` /
             # ``_operator`` root is carved out of the stdlib denial so ``operator.neg``
             # survives, but that carve-out must NOT re-admit the generic operator
             # gadgets (``attrgetter`` / ``methodcaller`` / ``call`` / ``getitem`` /
@@ -1080,7 +1080,7 @@ class _BundleAllowlistPolicy:
         # reassemble tensors from already-resolved (allowlisted) components; any
         # class they receive as an argument was itself gated through find_class.
         #
-        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # HARDENING (A-R28-1 CRITICAL default-victim RCE): the prior fast-path
         # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
         # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
         # attribute-walked, so a DOTTED name such as
@@ -1088,7 +1088,7 @@ class _BundleAllowlistPolicy:
         # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
         # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
         # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
-        # dotted-walk escape class the r27 torch-type / preview branches close; the
+        # dotted-walk escape class the torch-type / preview branches close; the
         # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
         # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
         # trigger the walk), and (b) after resolving, positively require a torch-owned,

@@ -1,4 +1,4 @@
-"""Rendered-edge multiplicity disclosure (r19): dedupe registry helpers.
+"""Rendered-edge multiplicity disclosure: dedupe registry helpers.
 
 Split out of ``_render_edges.py`` under the R43 file-size ratchet. When the
 visual dedupe merges genuinely distinct dataflow edges, the emitted edge
@@ -25,9 +25,9 @@ __all__ = [
 # ``xN`` multiplicity labels are midpoint text on their own spline; unpadded
 # plaintext there collides with the spline and neighbours. Padding 2 through
 # the same one-cell-table idiom as the head/tail builders measured the gpt2
-# depth-1 audit entry 11 -> 0 violations at +0.0% width (vizmech D9).
+# depth-1 audit entry 11 -> 0 violations at +0.0% width (vizmech).
 _MULTIPLICITY_LABEL_PAD = 2
-# Sized from the active edge typography (vizmech D29): the draw's edge font
+# Sized from the active edge typography (vizmech): the draw's edge font
 # setting when one is given, else the theme's annotation size.
 
 
@@ -86,7 +86,7 @@ def _bump_deduped_edge_multiplicity(
 ) -> None:
     """Disclose multiplicity when distinct dataflow edges merge in a render.
 
-    r19 (b6-fable carried LOW, 3rd round): a collapsed module returning TWO
+    (b6-fable carried LOW, 3rd round): a collapsed module returning TWO
     tensors both consumed by one exterior op rendered as ONE unlabeled edge
     — the visual dedupe silently merged genuinely distinct dataflow edges
     with no multiplicity disclosure. When a deduped edge's underlying
@@ -119,7 +119,7 @@ def _bump_deduped_edge_multiplicity(
 
 
 # The argument-label channel routes through the same tuned one-cell-table
-# builder as every other head/tail label (vizmech D9): head/tail labels
+# builder as every other head/tail label (vizmech): head/tail labels
 # reserve NO layout space in graphviz, so an unpadded bold 10-pt label sits
 # inside the node it annotates and gets speared by arrowheads on essentially
 # every multi-input op. Padding 6 / 8 pt / non-bold measured the corpus label
@@ -138,7 +138,7 @@ def _arg_edge_label_prefix() -> str:
 
 
 #: Visible fan-in at/above which a child op's argument labels relocate from
-#: ``headlabel`` to a midpoint ``label`` (FIXD03-F13, D03-R4). Graphviz
+#: ``headlabel`` to a midpoint ``label`` (FIXD03-F13). Graphviz
 #: reserves layout space ONLY for midpoint labels; every head label of a
 #: node is painted post-layout at one default radius, so they smear into
 #: one band as fan-in grows. Sweep provenance (toy N-way cat ladder, dot
@@ -207,7 +207,7 @@ def _set_argument_edge_label(
         arg_label:
             HTML label string describing edge argument positions.
         prefer_midpoint:
-            High-fan-in mode (D03-R4): route the label to a midpoint
+            High-fan-in mode: route the label to a midpoint
             ``label`` -- which graphviz reserves real layout space for --
             when no semantic midpoint label occupies the slot; a taken slot
             falls back to the historical head/xlabel chain.

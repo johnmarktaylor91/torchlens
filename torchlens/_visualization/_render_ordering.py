@@ -197,7 +197,7 @@ def _verify_and_apply_sibling_ordering(
     return current_source, _sibling_order_decision(chains, survivors, ratios)
 
 
-# r-b7 R42-9: one shared TORCHLENS_COLLAPSE_STRICT parser (_render_common).
+# One shared TORCHLENS_COLLAPSE_STRICT parser (_render_common).
 _strict_sibling_order_checks_enabled = strict_collapse_checks_enabled
 
 

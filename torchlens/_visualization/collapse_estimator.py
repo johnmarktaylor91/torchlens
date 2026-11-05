@@ -1,4 +1,4 @@
-"""Deterministic collapse work estimator and admission policy (memo D5/F5).
+"""Deterministic collapse work estimator and admission policy.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
@@ -7,7 +7,7 @@ The compute gate for smart collapse used to be one raw-op-count ceiling
 directions on real models (vit_l_16: 852 ops, 4.1 s; maxvit_t: 1,307 ops,
 0.48 s) and is not even mode-stable (train-mode densenet201 was REFUSED while
 eval mode was admitted at the same rendered universe). This module implements
-the panel's replacement (collapse memo D5):
+the panel's replacement (collapse):
 
 - the gate variable becomes ``U`` — the rendered-universe node count of the
   FULL plan (what would actually be drawn after focus/depth/rolled

@@ -1,4 +1,4 @@
-"""Site-key-first surgery diff (lane F43): two captures, joined on identity.
+"""Site-key-first surgery diff: two captures, joined on identity.
 
 The diff answers "what is structurally different between this capture and
 that one, and on what authority is each pairing claimed?" It joins the two

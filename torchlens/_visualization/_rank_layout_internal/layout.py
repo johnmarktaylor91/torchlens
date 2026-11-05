@@ -29,7 +29,7 @@ from ..render_ir import RenderIR, RenderIRDotStatement
 class RankRenderEndpointError(GraphvizRenderError):
     """Raised when rank-path DOT references an undeclared or unpositioned node.
 
-    The emit-time declared-endpoint invariant (vizmech D20): shipping such
+    The emit-time declared-endpoint invariant (vizmech): shipping such
     DOT is a guaranteed ``neato -n`` hard error after the layout work is
     already spent, and fabricating positions for dropped nodes would draw a
     graph that lies about the capture. Assert-and-fail, never fall back.
@@ -60,7 +60,7 @@ class RankRenderEndpointError(GraphvizRenderError):
         """Initialize the typed emit-time invariant refusal.
 
         The parent pins its own class code; this override lets the raise
-        site spell ``code=`` inline (the S-17 census reads the site).
+        site spell ``code=`` inline (the census reads the site).
         """
 
         del code  # the class attribute is the single authority
@@ -72,7 +72,7 @@ SPAN_LOCAL = 12
 # in ~14s; 3.5k-node hub graphs with 24 long edges cost about 42k and dot
 # exceeded 30s. 20k keeps local topology on dot and sends hub topology to rank.
 RANK_LAYOUT_COST_THRESHOLD = 20_000
-# Measured phrasing (vizmech D31): dot on stock densenet121 took ~8 s, not
+# Measured phrasing (vizmech): dot on stock densenet121 took ~8 s, not
 # "minutes" -- overstating dot's cost steered users away from the more
 # polished path for no reason.
 RANK_LAYOUT_NOTICE = (
@@ -269,7 +269,7 @@ def _compute_topological_layout(
     compound_bboxes = {}
     padding = 60  # points around contained nodes
 
-    # r-b6 R19-2: bboxes are keyed by the FULL pass-qualified region key.
+    # Bboxes are keyed by the FULL pass-qualified region key.
     # Collapsing "addr:2" to "addr" made every pass cluster share ONE
     # last-write-wins bbox, and since the write order was set-iteration
     # order, the surviving geometry was PYTHONHASHSEED-dependent. Sorted
@@ -584,7 +584,7 @@ def render_rank_layout(
             applied last so they win, matching the dot path.
         execution_record: Optional caller-owned dict this function fills with
             the executed engine, layout path, and captured stderr so the
-            caller can build the structured geometry record (vizmech D24).
+            caller can build the structured geometry record (vizmech).
         overlay_nodes: Synthesized nodes with no IR unit, as
             ``(module_region_key | None, node_args)`` (see
             ``_rank_overlay_entries``).
@@ -618,7 +618,7 @@ def render_rank_layout(
             name = str(attrs.pop("name", statement.args[0] if statement.args else node.name))
         else:
             continue
-        # r-b6 R19-2: identity comes from the RENDERER-UNIQUE node name, never
+        # Identity comes from the RENDERER-UNIQUE node name, never
         # the pass-free ``source_label`` — preferring the source label made
         # every recurrent pass collapse into ONE node_data entry, so all
         # passes shared a single positioned node and their clusters inherited
@@ -696,7 +696,7 @@ def render_rank_layout(
         "labeljust=left",
         "ordering=out",
     ]
-    # Typography parity with the dot path (vizmech D29): the dot path emits
+    # Typography parity with the dot path (vizmech): the dot path emits
     # theme font attributes through ``theme_graph_attrs``/``theme_node_attrs``/
     # ``theme_edge_attrs`` on the Digraph shell; this raw-DOT path historically
     # emitted NONE of them, so every rank render fell back to the engine's
@@ -713,7 +713,7 @@ def render_rank_layout(
     if page.lower() != "white":
         graph_attr_parts.append(f"bgcolor={_dot_quote(page)}")
     if dpi is not None and is_raster_format(vis_fileformat):
-        # Raster-only, matching the dot path (vizmech D23): on vector formats
+        # Raster-only, matching the dot path (vizmech): on vector formats
         # graphviz's dpi attribute multiplies the coordinate space instead.
         graph_attr_parts.append(f"dpi={int(dpi)}")
     for override_key, override_val in (graph_overrides or {}).items():
@@ -757,7 +757,7 @@ def render_rank_layout(
         """Recursively write a cluster subgraph with its nodes and children."""
         prefix = "  " * indent
         # One-node LEAF module clusters are not emitted on the rank path
-        # (vizmech item 16, D18a): ``neato -n`` invents cluster boxes it was
+        # (vizmech item 16): ``neato -n`` invents cluster boxes it was
         # never designed to compute -- measured at 366 one-node clusters
         # blown to a median 91% of graph width on stock densenet121, page-
         # wide boxes claiming containment they do not have. The node itself
@@ -786,7 +786,7 @@ def render_rank_layout(
         # neato -n places cluster captions in page coordinates (no rankdir flip).
         mod_attrs.update(cluster_caption_attrs())
 
-        # r-b6 R19-2: pass-qualified lookup — each pass cluster gets ITS OWN
+        # Pass-qualified lookup — each pass cluster gets ITS OWN
         # bbox instead of whichever pass's geometry happened to write last.
         group_id = f"group_{mod_key}"
         if group_id in compound_bboxes:
@@ -837,7 +837,7 @@ def render_rank_layout(
     for mod in top_modules:
         _write_cluster(mod, 0, 1)
 
-    # Emit-time declared-endpoint invariant (vizmech D20): every emitted edge
+    # Emit-time declared-endpoint invariant (vizmech): every emitted edge
     # endpoint must be a DECLARED and POSITIONED node. Shipping DOT that
     # violates this is a guaranteed downstream ``neato -n`` hard error
     # ("node X has no position") after the layout work is already spent --
@@ -906,7 +906,7 @@ def render_rank_layout(
     render_timeout = max(_NEATO_TIMEOUT, int(num_nodes * 0.01))
     render_succeeded = False
     try:
-        # Atomic publish (vizmech D20): neato writes a sibling temp file that
+        # Atomic publish (vizmech): neato writes a sibling temp file that
         # is renamed over the final path only on success, so a failed or
         # timed-out layout can never leave a partial stub at the user's path.
         with atomic_render_target(rendered_path) as temp_rendered_path:

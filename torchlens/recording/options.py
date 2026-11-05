@@ -249,7 +249,7 @@ class _RecordingConfig:
     grad_transform: _GradientPostfunc | None = None
     save_raw_grads: bool = True
     #: Normalized live-narration options (``torchlens.options.NarrationOptions``)
-    #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
+    #: or ``None``; typed ``Any`` here because fastlog never imports
     #: the narration engine -- seams read the armed session off the trace.
     echo: Any | None = None
     #: Whether a retained activation whose capture spec does not ask for

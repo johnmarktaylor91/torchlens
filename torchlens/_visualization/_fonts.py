@@ -1,6 +1,6 @@
 """Bundled open font delivery for Graphviz renders.
 
-The typography record pins the family name ``"Helvetica"`` (vizmech D29), but
+The typography record pins the family name ``"Helvetica"`` (vizmech), but
 which face a machine's fontconfig resolves that name to used to depend on the
 machine: Nimbus Sans on one, DejaVu Sans (wider metrics) on another, so the
 same graph laid out differently. FK3 ruled for bundling an open font over

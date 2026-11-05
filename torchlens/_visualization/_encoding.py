@@ -1,4 +1,4 @@
-"""Encoding-channel core (S5/L5): declarative value -> visual channels for draw().
+"""Encoding-channel core: declarative value -> visual channels for draw().
 
 v1 ships the COLOR channel (``color_by``): a value source (Layer/Op field
 name, scalar node-overlay builtin, or callable ``node -> value``) compiled
@@ -12,7 +12,7 @@ callable, or the closed ``"dims"`` shape token mapped to node width/height
 minimums (Graphviz ``fixedsize=false`` -- a label can never be truncated by
 an encoding, and the max clamp bounds encoded area at
 :data:`SIZE_BY_MAX_AREA_MULT` times the default node area). The shipped
-multi-dim -> geometry mapping is the D4 DEFAULT (memo 3.2 C2, AREA-ONLY:
+multi-dim -> geometry mapping is the DEFAULT (AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
 preserved) with the default ``scale="sqrt"`` -- D4 was UNRULED at this
 merge, so the METAPLAN default applies and is marked as default-applied.
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 # ---------------------------------------------------------------------------
-# Rolled-aggregate source allowlist rows (design memo 2.3b, r4 shape).
+# Rolled-aggregate source allowlist rows (design memo 2.3b, shape).
 #
 # A FIELD or BUILTIN source resolving on a rolled MULTI-PASS Layer node
 # (len(layer.ops) > 1) is classified by the NAME-KEYED table below. A name in
@@ -107,7 +107,7 @@ ROW_SHAPE = "shape"
 #: Resolving one raises the 2.2 wrong-type rule (encoding_value_invalid).
 ROW_NON_NUMERIC = "non_numeric"
 
-#: THE TRUE MIRRORED PER-CALL NUMERIC ENUMERATION (sol r4 MAJOR-1 residual
+#: THE TRUE MIRRORED PER-CALL NUMERIC ENUMERATION (sol MAJOR-1 residual
 #: fix). The design memo claimed this set was exactly
 #: {transformed_gradient_memory}; the live capture/postprocess code disproves
 #: that five ways:
@@ -364,7 +364,7 @@ LAYER_SOURCE_ROWS: dict[str, str] = _build_source_rows()
 
 # ---------------------------------------------------------------------------
 # Builtin scalar sources: the node_overlay builtin names where scalar, so the
-# two surfaces converge (memo 2.2). "nan" is boolean-valued and NOT a scalar
+# two surfaces converge. "nan" is boolean-valued and NOT a scalar
 # color source. Field-backed builtins resolve through the FIELD path so the
 # rolled-aggregate allowlist governs them; payload builtins (magnitude,
 # grad_norm) resolve through the multipass-safe overlay helper.
@@ -375,8 +375,8 @@ _BUILTIN_FIELD_SOURCES = {
     "time": "func_duration",
 }
 _BUILTIN_PAYLOAD_SOURCES = frozenset({"magnitude", "grad_norm"})
-#: Session-time Kineto-join builtin (torchnative W2.3): resolves per-node
-#: joined device nanoseconds through the F27 weak trace registry. Requesting
+#: Session-time Kineto-join builtin (torchnative.3): resolves per-node
+#: joined device nanoseconds through the weak trace registry. Requesting
 #: it on a trace with no joined session refuses typed
 #: (``device_time_unavailable``) -- an explicitly requested inapplicable
 #: column raises with cause and remedy, never silent zeros.
@@ -410,11 +410,11 @@ LIGHT_RAMP = ("#FFF7BC", "#993404")
 DARK_RAMP = ("#3A2E22", "#FED98E")
 
 # ---------------------------------------------------------------------------
-# SIZE channel constants (wave 1; D4 DEFAULT-APPLIED -- memo 3.1/3.2 C2).
+# SIZE channel constants (wave 1; D4 DEFAULT-APPLIED).
 # ---------------------------------------------------------------------------
 
 #: The one shape-valued builtin source token, legal for ``size_by`` only
-#: (memo 2.2): user callables must return scalars.
+#: : user callables must return scalars.
 SIZE_DIMS_TOKEN = "dims"
 
 
@@ -490,7 +490,7 @@ class EncodingState:
     One state object carries every active channel for the draw: ``spec`` is
     the color channel (``None`` when only size is active) and ``size_spec``
     /``size_scale`` the size channel; the two compose freely (different
-    Graphviz attrs, memo 2.4).
+    Graphviz attrs).
     """
 
     spec: EncodingChannelSpec | None = None
@@ -525,7 +525,7 @@ class EncodingState:
     stack_spec: EncodingChannelSpec | None = None
     stack_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
     stack_notes: list[str] = field(default_factory=list)
-    # Skin-supplied 3-anchor ramp (N4): low/mid/high. None keeps the
+    # Skin-supplied 3-anchor ramp: low/mid/high. None keeps the
     # historical 2-anchor module ramps.
     ramp_anchors: tuple[str, str, str] | None = None
 
@@ -890,7 +890,7 @@ def _coerce_scalar(
     *,
     argument: str = "color_by",
 ) -> float | None:
-    """Apply the closed value/type rules (memo 2.2) to one resolved value.
+    """Apply the closed value/type rules to one resolved value.
 
     ``argument`` selects the owning channel so color and size share ONE
     closed failure table.
@@ -1107,7 +1107,7 @@ def _sum_node_device_ns(result: Any, node: Any) -> tuple[int, bool]:
 def _resolve_device_time(
     state: EncodingState, trace: Any, node: Any, *, argument: str
 ) -> float | None:
-    """Resolve one node's joined device time (torchnative W2.3).
+    """Resolve one node's joined device time (torchnative.3).
 
     The value is the sum of exact-attribution device nanoseconds over the
     node's pass-qualified ops; on rolled multi-pass nodes that is an exact
@@ -1214,7 +1214,7 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
 
 # ---------------------------------------------------------------------------
-# SIZE channel resolution (wave 1). THE D4 DETECTOR (memo 3.1): the refusal
+# SIZE channel resolution (wave 1). THE DETECTOR: the refusal
 # predicate is LAYER-RECORD truth -- a rolled multi-pass Layer refuses
 # size_by when the size source cannot be certified single-valued on it
 # (marker-varying reconciled fields, mirrored/unreconciled per-call
@@ -1268,7 +1268,7 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
     """Resolve a FIELD size source on a rolled multi-pass Layer.
 
     Size REFUSES where color degrades: every verdict below that unencodes for
-    color is a typed ``size_by_rolled_varying`` refusal here (memo 3.1).
+    color is a typed ``size_by_rolled_varying`` refusal here.
     """
 
     _require_size_spec(state)
@@ -1353,7 +1353,7 @@ def _size_coerce(state: EncodingState) -> Any:
 
 
 def _resolve_node_shape(state: EncodingState, node: Any) -> tuple[int, ...] | None:
-    """Resolve the ``"dims"`` shape for one node (typed shape path, memo 2.2).
+    """Resolve the ``"dims"`` shape for one node (typed shape path).
 
     ORDERING PIN: on a rolled multi-pass node the 3.1 refusal fires BEFORE
     resolution, so the string-bearing honest aggregates minted for varying
@@ -1432,7 +1432,7 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
 
 
 def _compute_size_geometry(state: EncodingState) -> None:
-    """Map collected size values to (width, height) minimums (D4 default C2).
+    """Map collected size values to (width, height) minimums (D4 default).
 
     ``scale="sqrt"`` (default) compresses the dynamic range; ``"linear"``
     keeps area ~ value for the literal motif. Normalization is min-max over
@@ -1698,7 +1698,7 @@ def _non_color_legend_rows(state: EncodingState) -> list[Any]:
 
 
 #: Notice emitted when an active channel forces the dot engine where AUTO
-#: would have chosen the rank backend by cost (memo 2.1). Forcing dot on a
+#: would have chosen the rank backend by cost. Forcing dot on a
 #: >threshold-cost graph is the case the rank backend exists for -- expect
 #: layout time, bounded by the render timeout.
 ENCODING_FORCES_DOT_NOTICE = (
@@ -1733,7 +1733,7 @@ def attach_encoding_state(
             size_spec=size_spec,
             size_scale=size_scale,
             stack_spec=stack_spec,
-            # The skin's 3-anchor ramp (N4). The low anchor is off-ground by
+            # The skin's 3-anchor ramp. The low anchor is off-ground by
             # construction: an encoded-lowest node is never invisible (the
             # measured white-on-white absence defect).
             ramp_anchors=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
@@ -1747,7 +1747,7 @@ def resolve_encoding_engine(
     layout_cost: int,
     channels: tuple[str, ...] = ("color_by",),
 ) -> str:
-    """Apply the engine-resolution fence for an ACTIVE channel (memo 2.1).
+    """Apply the engine-resolution fence for an ACTIVE channel.
 
     v1 encoding channels are dot-layout-only. EXPLICIT ``layout="rank"``
     refuses typed HERE (the earliest point the conflict is decidable); AUTO
@@ -1789,7 +1789,7 @@ def channel_wrapped_node_spec_fn(
     """Wrap ``node_spec_fn`` with the channels' per-node spec transforms.
 
     PHASE B application site: the precomputed fill and size minimums apply
-    in the C3 slot (after the node-style preset, before the user callback,
+    in the slot (after the node-style preset, before the user callback,
     which still sees and may override them). Keyed on the rendered node
     itself: unrolled per-pass Op nodes encode their OWN pass value even
     though the user callback receives the aggregate Layer.

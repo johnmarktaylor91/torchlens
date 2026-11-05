@@ -7,12 +7,12 @@ honesty terms:
 - Defaults-not-overrides with the full precedence chain (C05's
   ``resolve_lens_request`` merge; ``preset_spec_fn`` composes BEFORE the
   user's ``node_spec_fn``, which keeps the last word).
-- HEADLINE / SECONDARY semantics (N2): missing headline evidence refuses
+- HEADLINE / SECONDARY semantics: missing headline evidence refuses
   typed naming the capture remedy; a missing SECONDARY degrades with a
   coded warning AND a rendered notice. Silence is never an option.
-- View-aware source-family resolution (N16) with the zero-coverage refusal
+- View-aware source-family resolution with the zero-coverage refusal
   and the mandatory rolled aggregation line.
-- The visible-detail budget resolver (N10) for rows that compact.
+- The visible-detail budget resolver for rows that compact.
 - Refusal taxonomy (memo section 2 item 5): overview/blueprint never
   refuse; speed/memory/compute/dims refuse on missing EVIDENCE;
   transformer/sequence refuse on factual absence of SUBJECT. Every refusal
@@ -153,7 +153,7 @@ def _module_facets_say_attention(trace: Trace) -> bool:
 
     ``Module.facets`` is single-call and refuses ``module_call_ambiguous``
     on any reused module; that per-module accessor limitation is never the
-    TRACE-level fact and must not surface as the user's refusal (D03-R1)
+    TRACE-level fact and must not surface as the user's refusal
     -- the op scan in :func:`_has_attention_subject` still probes those
     modules' calls.
     """
@@ -724,7 +724,7 @@ def resolve_lens(
     """
 
     request_kwargs, passthrough = _split_request_kwargs(_request_dialect(dict(user_kwargs or {})))
-    # The surgery row (lane F43) registers at its module's import; resolving
+    # The surgery row registers at its module's import; resolving
     # it by name must not depend on the caller having imported that module.
     from .. import surgery_visuals as _surgery_visuals  # noqa: F401
 
@@ -747,7 +747,7 @@ def resolve_lens(
     budget = _budget_stage(trace, build, channel_values)
     nonfinite = _debug_stage(trace, resolved_lens, build)
     if resolved_lens.name == "surgery":
-        # Surgery lens (lane F43): headline check + mark family + census
+        # Surgery lens: headline check + mark family + census
         # disclosure resolve in the surgery module; this stage only mounts
         # them on the build (missing evidence refuses surgery_evidence_missing).
         mark_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)

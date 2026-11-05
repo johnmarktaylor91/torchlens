@@ -1,4 +1,4 @@
-"""Segment boxes for the rank backend (collapse memo D2, the ``__segment__`` half).
+"""Segment boxes for the rank backend (collapse, the ``__segment__`` half).
 
 The node universe has no segment unit: the dot path draws a segment box while
 it emits the member ops, and the render IR gives every member an empty node.

@@ -155,14 +155,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
 ) -> str:
     """Run a metadata-only forward pass and return a rendered summary report.
 
-    The one-call door is SAFE by default (A4): the captured forward runs in
+    The one-call door is SAFE by default: the captured forward runs in
     eval mode under ``torch.no_grad()``, and every module training flag plus
     the host/device RNG state is restored bit-identically afterwards -- a
     summary call never mutates the model (BatchNorm running stats included)
     or advances the caller's RNG streams. The function RETURNS the result
     and never auto-prints (the repr self-displays).
 
-    Input precedence follows the quickstart ladder (F17, memo D2): real
+    Input precedence follows the quickstart ladder: real
     ``inputs`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
@@ -179,7 +179,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         string form is DOCUMENTED-UNSTABLE.
     inputs:
         Positional args for ``model.forward()``. The quickstart input ladder
-        applies (F17): a real input is the gold rung; omit it and pass
+        applies: a real input is the gold rung; omit it and pass
         ``input_shape=`` for a declared shape with synthesized values; omit
         both for an inferred shape. Non-gold rungs are disclosed in the
         trace's persistent provenance record and in the summary text.
@@ -222,12 +222,12 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     if input_kwargs is None:
         input_kwargs = {}
 
-    # Quickstart input ladder (F17 B11): the summary verb conjugates exactly
+    # Quickstart input ladder: the summary verb conjugates exactly
     # like trace and render. Non-gold rungs synthesize concrete tensors here
     # (disclosed via the provenance record attached after capture AND the
     # rebuilt renderer's synthetic-input banner line); the inferred rung
     # reuses the inference search's exact verified trace when the default
-    # eval/no-grad policy is requested (memo D9 in-call reuse).
+    # eval/no-grad policy is requested (memo in-call reuse).
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
@@ -317,7 +317,7 @@ def _ladder_synthesis_note(input_size: Any, resolved: Any) -> str | None:
     """Derive the one-line synthesis disclosure from ladder provenance.
 
     Non-gold rungs feed the rebuilt renderer's ``synthetic input:`` banner
-    line (F08) from the ONE quickstart provenance record (F17); the gold
+    line from the ONE quickstart provenance record; the gold
     rung returns ``None`` (real values, nothing to disclose).
     """
 
@@ -446,7 +446,7 @@ def _maybe_weightsfree_summary(
 def _all_meta_model(model: nn.Module) -> bool:
     """Whether every registered parameter/buffer sits on the meta device.
 
-    The rung-4 facade trigger (weightsfree memo D12): only an ALL-meta model
+    The rung-4 facade trigger: only an ALL-meta model
     may auto-select structure-only; a mixed or parameterless-real model takes
     the ordinary path (and mixed substrates refuse at the entry gate).
     """
@@ -765,7 +765,7 @@ def _restore_validation_replay_state(
             restores.callback(plain_attr_snapshot.restore_changed_attrs)
         # Wrapped-parameter modules (bitsandbytes) refuse their OWN state
         # dict through load_state_dict on CPU; the resilient restore falls
-        # back to proven in-place restoration (lane F37).
+        # back to proven in-place restoration.
         restores.callback(
             restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
         )
@@ -857,7 +857,7 @@ def _warn_if_validation_trace_not_reproducible(
         # Buffer-source identity is assigned during postprocessing only when the
         # relevant activations are saved. Match the validation trace's "all"
         # selection so the structural comparison does not compare two capture modes.
-        # r33 F-2: the first trace is captured under a FORCED "shadow"
+        # the first trace is captured under a FORCED "shadow"
         # completeness-witness mode (validate_forward_pass), so the re-trace
         # must run under the same mode -- comparing a shadow capture against an
         # ambient-mode capture is exactly the two-capture-modes comparison this
@@ -1071,7 +1071,7 @@ def _validate_forward_pass_torch(
        tensors: if torchlens wrappers are installed, they are removed for
        this one forward (restored from the pre-decoration originals ledger)
        and reinstalled afterwards, so the ground truth never observes
-       through the wrapper layer it is meant to check (R75-1). If they
+       through the wrapper layer it is meant to check. If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
     2. Run ``trace`` with ``save_args=True`` and ``save='all'``
@@ -1136,7 +1136,7 @@ def _validate_forward_pass_torch(
     # process (CHECK_PRECONDITION sites below have no Trace to reset against,
     # unlike the Trace-scoped reset in core.validate_saved_outs).
     reset_validation_failure(None)
-    # F41 bound-method roots: validation captures through the same ruled root
+    # bound-method roots: validation captures through the same ruled root
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
@@ -1183,7 +1183,7 @@ def _validate_forward_pass_torch(
         )
 
     # A META first parameter never pins the input device: offload-hooked
-    # models (accelerate device_map / cpu/disk offload, lane F37) hold meta
+    # models (accelerate device_map / cpu/disk offload) hold meta
     # params between forwards and their hooks place inputs themselves; the
     # first NON-meta param still pins for mixed dispatch.
     model_device = next((p.device for p in model.parameters() if p.device.type != "meta"), None)
@@ -1252,7 +1252,7 @@ def _validate_forward_pass_torch(
     prior_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
     prior_num_threads = torch.get_num_threads()
     try:
-        # R07-2 (install-move half): both process-global installs run INSIDE
+        # (install-move half): both process-global installs run INSIDE
         # the restoring try -- a raising set_num_threads used to strand the
         # already-flipped deterministic stance for the life of the process
         # (the finally below never ran). Restoring to the just-snapshotted
@@ -1283,7 +1283,7 @@ def _validate_forward_pass_torch(
         from .backends.torch._ops_containers import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_ground_truth_oracle
 
-        # R75-1: the phase-0 ground truth must observe through PRISTINE
+        # the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
         # installed pass-through wrapper shells -- the same closures capture
         # and replay observe through -- so a wrapper-layer numeric
@@ -1495,7 +1495,7 @@ def _validate_forward_pass_torch(
         )
         # Step 3: Validate by replaying the forward pass from saved outs.
         # validate_saved_outs resets the diagnostics ledger at entry so a
-        # DIRECT repeat call reports this-run evidence only (B8-43); the
+        # DIRECT repeat call reports this-run evidence only; the
         # retrace diagnostics recorded above belong to THIS flow, so they are
         # snapshotted and re-prepended after the replay run.
         from .validation.diagnostics import (
@@ -1611,7 +1611,7 @@ def validate_backward_pass(
         streams on return and on error.
     atol:
         Absolute allclose tolerance. ``None`` (default) derives the
-        tolerance per gradient dtype (R13); the historical fp32 decimal
+        tolerance per gradient dtype; the historical fp32 decimal
         pair applied to every dtype was ~4.5e11 fp64 ULPs loose and
         false-failed fp16 grads.
     rtol:
