@@ -42,7 +42,6 @@ from __future__ import annotations
 import ast
 import hashlib
 import os
-import tokenize
 import warnings
 from collections import OrderedDict
 from collections.abc import Sequence
@@ -56,15 +55,26 @@ from torchlens._postprocess._ast_predicates import (
     is_direct_bool_call,
     is_match_case_node,
 )
+from torchlens._postprocess._branch_source import (
+    range_contains_line,
+    range_contains_point,
+    range_contains_range,
+    read_interactive_source,
+    read_source_file,
+    source_range_width,
+    split_source_lines,
+)
 
 ConditionalKey: TypeAlias = tuple[str, int, int, int]
 SourceRange: TypeAlias = tuple[int, int, int, int]
 LineSpan: TypeAlias = tuple[int, int]
 FunctionNode: TypeAlias = ast.FunctionDef | ast.AsyncFunctionDef
+_FileCacheKey: TypeAlias = str | tuple[str, bytes]
 
 _BRANCH_CONSUMER_KINDS = {"if_test", "elif_test", "ifexp"}
 _FILE_CACHE_MAX_SIZE = 256
-_file_cache: OrderedDict[str, FileIndex] = OrderedDict()
+#: Disk files key by filename; ``linecache``-only source by (filename, text digest).
+_file_cache: OrderedDict[_FileCacheKey, FileIndex] = OrderedDict()
 
 #: First-read source digests, pinned for the process lifetime (NOT LRU-evicted
 #: with the index): a rebuild after eviction must prove the on-disk content
@@ -268,9 +278,9 @@ class ScopeEntry:
         matches: list[BranchInterval] = []
         for interval in self.branch_intervals:
             if col is None:
-                if _range_contains_line(interval.span, line):
+                if range_contains_line(interval.span, line):
                     matches.append(interval)
-            elif _range_contains_point(interval.span, line, col):
+            elif range_contains_point(interval.span, line, col):
                 matches.append(interval)
 
         if col is None:
@@ -292,7 +302,7 @@ class ScopeEntry:
                 # from the body by column, so column-carrying runtimes still
                 # attribute precisely; degraded mode must fail closed.
                 test_spans = self.test_spans_by_key.get(interval.conditional_key, [])
-                if any(_range_contains_line(test_span, line) for test_span in test_spans):
+                if any(range_contains_line(test_span, line) for test_span in test_spans):
                     continue
                 filtered.append(interval)
             matches = filtered
@@ -511,7 +521,7 @@ class FileIndex:
         """
 
         if self._source_lines is None:
-            self._source_lines = _split_source_lines(self.source)
+            self._source_lines = split_source_lines(self.source)
         return self._source_lines
 
     def resolve_scope(
@@ -601,7 +611,8 @@ def get_file_index(filename: str) -> FileIndex | None:
     a mismatch warns once and fails closed to ``None`` (honest
     non-attribution, never mis-attribution). ``invalidate_cache`` is the
     explicit opt-out: it clears the pin along with the index (a caller who
-    reloaded the module may re-index the new content).
+    reloaded the module may re-index the new content). A notebook cell has
+    no file: ``_interactive_file_index`` reads its ``linecache`` text.
 
     Parameters
     ----------
@@ -623,28 +634,136 @@ def get_file_index(filename: str) -> FileIndex | None:
     try:
         mtime_ns = os.stat(filename).st_mtime_ns
     except OSError:
-        return None
+        return _interactive_file_index(filename)
 
-    source = _read_source_file(filename)
+    source = read_source_file(filename)
     if source is None:
         return None
-
-    source_digest = hashlib.sha256(source.encode("utf-8", "surrogatepass")).digest()
-    pinned_digest = _pinned_source_digests.get(filename)
-    if pinned_digest is not None and pinned_digest != source_digest:
-        if filename not in _source_drift_warned:
-            _source_drift_warned.add(filename)
-            warnings.warn(
-                f"TorchLens: source file {filename!r} changed on disk after it was "
-                "first indexed for conditional/source attribution; refusing to "
-                "re-attribute against the new content (line numbers come from the "
-                "already-loaded code objects). Attribution for this file is "
-                "disabled for the rest of the process; call "
-                "torchlens._postprocess.ast_branches.invalidate_cache() after a "
-                "module reload to re-index deliberately.",
-                stacklevel=2,
-            )
+    source_digest = _source_digest(source)
+    drift_message = (
+        f"TorchLens: source file {filename!r} changed on disk after it was "
+        "first indexed for conditional/source attribution; refusing to "
+        "re-attribute against the new content (line numbers come from the "
+        "already-loaded code objects). Attribution for this file is "
+        "disabled for the rest of the process; call "
+        "torchlens._postprocess.ast_branches.invalidate_cache() after a "
+        "module reload to re-index deliberately."
+    )
+    if _source_drifted(filename, source_digest, drift_message, stacklevel=3):
         return None
+
+    file_index = _build_file_index(filename, mtime_ns, source)
+    if file_index is not None:
+        _set_cached_file_index(filename, file_index)
+        _pinned_source_digests[filename] = source_digest
+    return file_index
+
+
+def _interactive_file_index(filename: str) -> FileIndex | None:
+    """Return the AST index for source that only ``linecache`` holds.
+
+    IPython and Jupyter register each cell's text in ``linecache`` under a
+    pseudo-filename and compile the cell under that name, so the registered
+    text is what the running code came from. The index is cached under
+    ``(filename, digest of text)`` and the first text is pinned per name. A
+    second, different text under the same name means TorchLens can no longer
+    tell which text a running frame was compiled from: the name warns once
+    and stays unreadable for the rest of the process (no conditional is
+    recorded, so a tensor bool read there remains a scalar escape), rather
+    than attribute frames against the wrong text.
+
+    Parameters
+    ----------
+    filename:
+        Code-object filename with no file on disk.
+
+    Returns
+    -------
+    Optional[FileIndex]
+        The index of the registered text, or ``None`` when ``linecache``
+        holds no interactive text for ``filename``, the text does not parse,
+        or the name was seen with two different texts.
+    """
+
+    source = read_interactive_source(filename)
+    if source is None or filename in _source_drift_warned:
+        return None
+    source_digest = _source_digest(source)
+    cache_key = (filename, source_digest)
+    cached = _get_cached_file_index(cache_key)
+    if cached is not None:
+        return cached
+    drift_message = (
+        f"TorchLens: the source registered in linecache under {filename!r} "
+        "changed: two different texts were compiled under the same name, so "
+        "TorchLens cannot tell which one a running frame came from. Branches "
+        "in it are not recorded for the rest of the process. Give each cell "
+        "or exec'd string its own filename to record them."
+    )
+    if _source_drifted(filename, source_digest, drift_message, stacklevel=4):
+        return None
+    file_index = _build_file_index(filename, 0, source)
+    if file_index is not None:
+        _set_cached_file_index(cache_key, file_index)
+        _pinned_source_digests[filename] = source_digest
+    return file_index
+
+
+def _source_digest(source: str) -> bytes:
+    """Return the content digest that pins one source text to its filename."""
+
+    return hashlib.sha256(source.encode("utf-8", "surrogatepass")).digest()
+
+
+def _source_drifted(filename: str, source_digest: bytes, message: str, stacklevel: int) -> bool:
+    """Return whether ``source_digest`` differs from ``filename``'s pinned digest.
+
+    The first mismatch per filename warns with ``message``; later mismatches
+    are silent. A filename with no pin has not drifted.
+
+    Parameters
+    ----------
+    filename:
+        Source filename the digest belongs to.
+    source_digest:
+        Digest of the text read now.
+    message:
+        Warning text naming why attribution is refused.
+    stacklevel:
+        ``warnings.warn`` stack level that lands on ``get_file_index``'s caller.
+
+    Returns
+    -------
+    bool
+        ``True`` when the text differs from the first-read text.
+    """
+
+    pinned_digest = _pinned_source_digests.get(filename)
+    if pinned_digest is None or pinned_digest == source_digest:
+        return False
+    if filename not in _source_drift_warned:
+        _source_drift_warned.add(filename)
+        warnings.warn(message, stacklevel=stacklevel)
+    return True
+
+
+def _build_file_index(filename: str, mtime_ns: int, source: str) -> FileIndex | None:
+    """Parse ``source`` and index every function scope in it.
+
+    Parameters
+    ----------
+    filename:
+        Filename recorded in the index and in every conditional key.
+    mtime_ns:
+        Disk modification time, or ``0`` for source with no file.
+    source:
+        Source text to parse.
+
+    Returns
+    -------
+    Optional[FileIndex]
+        The new index, or ``None`` when ``source`` does not parse.
+    """
 
     try:
         module = ast.parse(source, filename=filename)
@@ -667,7 +786,7 @@ def get_file_index(filename: str) -> FileIndex | None:
         )
         indexer.index_scope()
 
-    file_index = FileIndex(
+    return FileIndex(
         filename=filename,
         mtime_ns=mtime_ns,
         source=source,
@@ -676,12 +795,9 @@ def get_file_index(filename: str) -> FileIndex | None:
         bool_consumers=bool_consumers,
         _heavy=_HeavyAst(module=module, parent_map=parent_map, scope_nodes=scope_nodes),
     )
-    _set_cached_file_index(filename, file_index)
-    _pinned_source_digests[filename] = source_digest
-    return file_index
 
 
-def _get_cached_file_index(filename: str) -> FileIndex | None:
+def _get_cached_file_index(filename: _FileCacheKey) -> FileIndex | None:
     """Return a cached file index and mark it as recently used.
 
     Parameters
@@ -701,7 +817,7 @@ def _get_cached_file_index(filename: str) -> FileIndex | None:
     return cached
 
 
-def _set_cached_file_index(filename: str, file_index: FileIndex) -> None:
+def _set_cached_file_index(filename: _FileCacheKey, file_index: FileIndex) -> None:
     """Store a file index and evict least-recently-used entries beyond the cap.
 
     Parameters
@@ -749,9 +865,9 @@ def classify_bool(filename: str, line: int, col: int | None = None) -> BoolClass
     consumers: list[BoolConsumer] = []
     for consumer in file_index.bool_consumers:
         if col is None:
-            if _range_contains_line(consumer.span, line):
+            if range_contains_line(consumer.span, line):
                 consumers.append(consumer)
-        elif _range_contains_point(consumer.span, line, col):
+        elif range_contains_point(consumer.span, line, col):
             consumers.append(consumer)
 
     if col is None:
@@ -770,7 +886,7 @@ def classify_bool(filename: str, line: int, col: int | None = None) -> BoolClass
         if branch_consumers and any(
             consumer.kind not in _BRANCH_CONSUMER_KINDS
             and not any(
-                _range_contains_range(branch_consumer.span, consumer.span)
+                range_contains_range(branch_consumer.span, consumer.span)
                 for branch_consumer in branch_consumers
             )
             for consumer in consumers
@@ -923,7 +1039,8 @@ def invalidate_cache(filename: str | None = None) -> None:
         _pinned_source_digests.clear()
         _source_drift_warned.clear()
     else:
-        _file_cache.pop(filename, None)
+        for key in [key for key in _file_cache if filename in (key, key[0])]:
+            del _file_cache[key]
         _pinned_source_digests.pop(filename, None)
         _source_drift_warned.discard(filename)
 
@@ -1066,35 +1183,6 @@ def _call_arg_expressions(
     return expressions
 
 
-def _split_source_lines(source: str) -> list[str]:
-    """Split source into lines exactly as the CPython parser does.
-
-    Parameters
-    ----------
-    source:
-        Source text to split.
-
-    Returns
-    -------
-    List[str]
-        Lines with terminators kept. Only ``\\n``, ``\\r\\n``, and ``\\r``
-        terminate lines; characters ``str.splitlines`` also breaks on (form
-        feed, ``\\x0b``, ``\\u2028``, ...) stay inside their line, matching
-        ``ast._splitlines_no_ff`` so AST byte offsets index correctly.
-    """
-
-    lines: list[str] = []
-    pending = ""
-    for part in source.splitlines(keepends=True):
-        pending += part
-        if pending[-1] in "\r\n":
-            lines.append(pending)
-            pending = ""
-    if pending:
-        lines.append(pending)
-    return lines
-
-
 def _span_source_segment(source_lines: list[str], span: SourceRange) -> str | None:
     """Return the source segment for a span from pre-split lines.
 
@@ -1170,15 +1258,15 @@ def _find_candidate_calls(
         for entry in file_index.scope_calls(scope)
         if (func_name is None or entry.visible_name == func_name)
         and (
-            _range_contains_line(entry.span, line)
+            range_contains_line(entry.span, line)
             if col is None
-            else _range_contains_point(entry.span, line, col)
+            else range_contains_point(entry.span, line, col)
         )
     ]
     if not matches:
         return []
 
-    matches.sort(key=lambda entry: _source_range_width(entry.span))
+    matches.sort(key=lambda entry: source_range_width(entry.span))
     if len(matches) > 1 and matches[0].span == matches[1].span:
         return []
     return matches
@@ -1281,23 +1369,6 @@ def _maybe_node_span(node: ast.AST) -> SourceRange | None:
     if lineno is None or col_offset is None or end_lineno is None or end_col_offset is None:
         return None
     return (lineno, col_offset, end_lineno, end_col_offset)
-
-
-def _source_range_width(span: SourceRange) -> tuple[int, int]:
-    """Return a sortable width for a source range.
-
-    Parameters
-    ----------
-    span:
-        Source range ``(start_line, start_col, end_line, end_col)``.
-
-    Returns
-    -------
-    tuple[int, int]
-        Line and column extent, with smaller ranges sorting first.
-    """
-
-    return (span[2] - span[0], span[3] - span[1])
 
 
 def _assignment_target_names(call_node: ast.Call, parent_map: dict[ast.AST, ast.AST]) -> list[str]:
@@ -1411,27 +1482,6 @@ def _target_names(target: ast.expr) -> list[str]:
             names.append(element.id)
         return names
     return []
-
-
-def _read_source_file(filename: str) -> str | None:
-    """Read a source file using its declared encoding.
-
-    Parameters
-    ----------
-    filename:
-        Source file to read.
-
-    Returns
-    -------
-    Optional[str]
-        File contents, or ``None`` if the file cannot be read.
-    """
-
-    try:
-        with tokenize.open(filename) as handle:
-            return handle.read()
-    except OSError:
-        return None
 
 
 def _build_parent_map(module: ast.Module) -> dict[ast.AST, ast.AST]:
@@ -1561,68 +1611,6 @@ def _compose_child_qualname(
     if container_kind == "function":
         return f"{qualname_prefix}.<locals>.{child_name}"
     return f"{qualname_prefix}.{child_name}"
-
-
-def _range_contains_point(span: SourceRange, line: int, col: int) -> bool:
-    """Return whether a source range contains a point.
-
-    Parameters
-    ----------
-    span:
-        Source range ``(start_line, start_col, end_line, end_col)``.
-    line:
-        Query line number.
-    col:
-        Query column number.
-
-    Returns
-    -------
-    bool
-        ``True`` when the point falls within the span.
-    """
-
-    return (span[0], span[1]) <= (line, col) <= (span[2], span[3])
-
-
-def _range_contains_range(outer: SourceRange, inner: SourceRange) -> bool:
-    """Return whether a source range fully contains another source range.
-
-    Parameters
-    ----------
-    outer:
-        Candidate containing range ``(start_line, start_col, end_line, end_col)``.
-    inner:
-        Candidate contained range.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``inner`` lies entirely within ``outer`` (bounds
-        inclusive; equal ranges contain each other).
-    """
-
-    return (outer[0], outer[1]) <= (inner[0], inner[1]) and (
-        (inner[2], inner[3]) <= (outer[2], outer[3])
-    )
-
-
-def _range_contains_line(span: SourceRange, line: int) -> bool:
-    """Return whether a source range contains a line in degraded mode.
-
-    Parameters
-    ----------
-    span:
-        Source range ``(start_line, start_col, end_line, end_col)``.
-    line:
-        Query line number.
-
-    Returns
-    -------
-    bool
-        ``True`` when the query line falls within the span's line bounds.
-    """
-
-    return span[0] <= line <= span[2]
 
 
 def _node_span(node: ast.AST) -> SourceRange:

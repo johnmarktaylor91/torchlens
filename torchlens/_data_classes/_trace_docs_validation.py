@@ -90,7 +90,8 @@ DOCS: dict[str, str] = {
         chunk_paths:
             Optional explicit tensor leaf paths to split.
         replay:
-            Optional ``ReplayOptions`` for the rerun (append, chunking).
+            Optional ``ReplayOptions`` for the rerun (strictness, chunking). To add a
+            batch to this Trace instead of replacing it, use ``append(inputs)``.
         input_transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit input
             transform callable for this run.

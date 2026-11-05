@@ -302,12 +302,14 @@ DOCS: dict[str, str] = {
         """
     ),
     "modules_with_facet": (
-        """Yield single-call Modules whose semantic facet view has a facet available now.
+        """Yield Modules with facet ``name`` available now, reused ones included.
         
-        A module called more than once has no module-level facet view: it is
-        skipped when no facet recipe for its class declares ``name``, and refused
-        (``InvalidArgumentError``, code ``module_call_ambiguous``) when one does;
-        the refusal's remedy names the per-call views, ``module.calls[N].facets``.
+        A module called once is yielded when its facet view has ``name``. A
+        module called more than once is yielded when a facet recipe for its class
+        declares ``name`` and at least one of its calls has ``name`` available
+        now. Reading such a Module's own ``.facets`` refuses
+        (``InvalidArgumentError``, code ``module_call_ambiguous``); read each call
+        with ``module.calls[N].facets``.
         
         Parameters
         ----------
