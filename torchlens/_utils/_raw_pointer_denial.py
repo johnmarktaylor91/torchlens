@@ -50,6 +50,10 @@ and no enumeration of individual names:
    cannot read a pybind builtin, so a callable of a ``torch._C.*`` submodule fails
    CLOSED unless that module is EXACTLY listed by the gate; the bare ``torch`` /
    ``torch._C`` prefix never admits ``torch._C._aoti`` or ``torch._C._cudart``.
+   The same holds for any torch callable with no inspectable signature whose
+   module is not exactly listed (:func:`is_unlisted_uninspectable_callable`): a
+   pybind class whose ``__module__`` names a public package (``torch._C._SDPAParams``
+   reports ``torch.backends.cuda``) cannot pass on the bare ``torch`` prefix.
 
 The parameter names were chosen to have zero overlap with the pure forward-op
 surface: no captured torch forward op takes a parameter named ``cdata``,
@@ -152,8 +156,8 @@ def signature_takes_raw_pointer(func: Callable[..., Any]) -> bool:
 
     Non-inspectable C builtins (no signature) return ``False`` here: they are
     closed by the constructor-type rule, by :func:`is_unlisted_private_c_callable`
-    (which fails CLOSED for a pybind builtin of an unlisted ``torch._C.*``
-    submodule) and by the keyword refusals at the replay boundaries.
+    and :func:`is_unlisted_uninspectable_callable` (which fail CLOSED unless the
+    module is exactly listed) and by the keyword refusals at the replay boundaries.
 
     Parameters
     ----------
@@ -201,6 +205,36 @@ def is_unlisted_private_c_callable(func: Callable[..., Any], listed: frozenset[s
     return module.startswith("torch._C.") and module not in listed
 
 
+def is_unlisted_uninspectable_callable(func: Callable[..., Any], listed: frozenset[str]) -> bool:
+    """Return whether a torch callable with no signature lives in an unlisted module.
+
+    The signature rule reads nothing from such a callable, and a pybind builtin can
+    report any ``__module__``, so it fails CLOSED unless its module is an exact
+    allowlist entry. The module test runs first, so listed builtins pay nothing.
+
+    Parameters
+    ----------
+    func:
+        Capture-unwrapped callable under the security gate.
+    listed:
+        The gate's forward-op module allowlist (exact module names).
+
+    Returns
+    -------
+    bool
+        ``True`` for an uninspectable callable of an unlisted ``torch`` module.
+    """
+
+    module = str(getattr(func, "__module__", "") or "")
+    if module in listed or not (module == "torch" or module.startswith("torch.")):
+        return False
+    try:
+        inspect.signature(func)
+    except (TypeError, ValueError):  # C builtins and C-based classes expose none.
+        return True
+    return False
+
+
 def is_raw_pointer_risk(func: Callable[..., Any], listed: frozenset[str]) -> bool:
     """Return whether the gate must deny ``func`` under any raw-pointer rule.
 
@@ -215,13 +249,15 @@ def is_raw_pointer_risk(func: Callable[..., Any], listed: frozenset[str]) -> boo
     -------
     bool
         ``True`` for a tensor / storage class, a callable whose signature takes a
-        pointer, or a callable of an unlisted ``torch._C.*`` submodule.
+        pointer, or a callable of an unlisted ``torch._C.*`` submodule or with no
+        signature in an unlisted torch module.
     """
 
     return (
         is_raw_pointer_constructor_type(func)
         or signature_takes_raw_pointer(func)
         or is_unlisted_private_c_callable(func, listed)
+        or is_unlisted_uninspectable_callable(func, listed)
     )
 
 

@@ -515,6 +515,21 @@ def test_private_c_pointer_adopters_are_refused_even_under_trust() -> None:
     assert checked, "no private-C pointer adopter was available to check"
 
 
+def test_uninspectable_builtin_with_a_public_module_name_is_refused() -> None:
+    """A pybind class reporting a public ``__module__`` cannot pass on the bare prefix."""
+
+    candidate = torch._C._SDPAParams
+    module = str(getattr(candidate, "__module__", ""))
+    assert module.startswith("torch.") and not module.startswith("torch._C")
+    assert module not in _ALLOWED_FORWARD_OP_MODULES
+    assert not is_pure_forward_callable(candidate), f"torch._C._SDPAParams ({module}) admitted"
+    key = FunctionRegistryKey(
+        "custom", "_SDPAParams", "function", import_path="torch._C:_SDPAParams"
+    )
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(key, trust_custom_callables=True)
+
+
 def _torch_module_callables() -> list[tuple[str, Any]]:
     """Every callable defined in a loaded ``torch.*`` module or ``torch._C`` submodule."""
 
@@ -527,10 +542,12 @@ def _torch_module_callables() -> list[tuple[str, Any]]:
     while stack:
         current = stack.pop()
         for value in list(vars(current).values()):
-            if isinstance(value, ModuleType) and value.__name__.startswith("torch._C."):
-                if value.__name__ not in modules:
-                    modules[value.__name__] = value
-                    stack.append(value)
+            is_c_submodule = isinstance(value, ModuleType) and value.__name__.startswith(
+                "torch._C."
+            )
+            if is_c_submodule and value.__name__ not in modules:
+                modules[value.__name__] = value
+                stack.append(value)
     found: list[tuple[str, Any]] = []
     for module_name, module in sorted(modules.items()):
         for name, value in list(vars(module).items()):
