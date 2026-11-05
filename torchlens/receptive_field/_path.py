@@ -70,9 +70,7 @@ def resolve_graph_point(trace: Trace | None, handle: object) -> Op:
     Parameters
     ----------
     trace:
-        Trace against which the handle is resolved. ``None`` only when the caller has no
-        trace but the handle's own (``node_spec``); a label then has nothing to resolve
-        against and is refused as unsupported.
+        Trace against which the handle is resolved; ``None`` refuses a label as unsupported.
     handle:
         Exact pass-qualified label, IO role as field status reports it, ``Op``,
         ``Layer``, ``ModuleCall``, or ``Module``.

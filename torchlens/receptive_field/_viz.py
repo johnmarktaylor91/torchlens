@@ -10,12 +10,15 @@ from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..errors import InvalidArgumentError
+from ..preprocessing._card import declared_from_record
+from ..preprocessing._declared_transform import geometry_from_declared
 from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
     ReceptiveFieldError,
 )
+from ._path import resolve_graph_point
 from ._types import (
     GradReceptiveField,
     ReceptiveField,
@@ -224,6 +227,14 @@ def node_spec(
         else frozenset()
     )
 
+    return _cone_node_spec_fn(trace, cone_labels, descriptor.io_role, dim_others)
+
+
+def _cone_node_spec_fn(
+    trace: Any, cone_labels: frozenset[str], io_role: str, dim_others: bool
+) -> NodeSpecFn:
+    """Build the draw callback that highlights ``cone_labels`` and dims the rest."""
+
     def node_spec_fn(layer: Any, spec: NodeSpec) -> NodeSpec | None:
         """Style one rendered layer according to on-demand cone membership."""
 
@@ -233,7 +244,7 @@ def node_spec(
             if not dim_others:
                 return None
             return spec.replace(fillcolor=_DIM_FILL, fontcolor="#707070", tooltip=spec.tooltip)
-        node_descriptor = _descriptor_for_labels(trace, labels, descriptor.io_role)
+        node_descriptor = _descriptor_for_labels(trace, labels, io_role)
         tooltip = _tooltip(node_descriptor) if node_descriptor is not None else "RF ancestor cone"
         return spec.replace(fillcolor=_CONE_FILL, color="#D97706", penwidth=2.0, tooltip=tooltip)
 
@@ -247,8 +258,6 @@ def _node_spec_target(handle: object) -> Op:
     other receptive-field entry points resolve them; anything else, a bare label string
     included, has no trace and reaches the resolver's typed refusal.
     """
-
-    from ._path import resolve_graph_point
 
     return resolve_graph_point(getattr(handle, "_source_trace", None), handle)
 
@@ -415,9 +424,6 @@ def _aligned_photo(
     rgb = photo.convert("RGB")
     if rgb.size == size:
         return rgb
-    from ..preprocessing._card import declared_from_record
-    from ..preprocessing._declared_transform import geometry_from_declared
-
     record = getattr(getattr(trace, "provenance", None), "input_preprocessor", None)
     declared = declared_from_record(record)
     geometry = None if declared is None else geometry_from_declared(declared)

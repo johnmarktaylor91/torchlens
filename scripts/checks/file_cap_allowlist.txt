@@ -1276,7 +1276,6 @@ torchlens/receptive_field/_validation.py::validate_receptive_field_trace	110
 torchlens/receptive_field/_view.py::ReceptiveFieldView.at	119
 torchlens/receptive_field/_view.py::ReceptiveFieldView.probe_grad	81
 torchlens/receptive_field/_view.py::ReceptiveFieldView.show	71
-torchlens/receptive_field/_viz.py::node_spec	62
 torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	75
