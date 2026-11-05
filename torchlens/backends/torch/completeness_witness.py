@@ -1327,7 +1327,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
                 event.outcome = "returned_tensor"
                 owner = event.owner
                 if owner is not None and owner.boundary_credit_is_output_scoped:
-                    event.credit_refs = _dispatch_credit_refs(owner, func, args, result)
+                    event.credit_refs = epilogue_credit_refs(event, func, args, result)
                 if not event.mutates and _operator_base_name(func) == "aten.as_strided":
                     # Owner-independent: an ``__dlpack__``-wrapper-owned interval is
                     # not a modeled call, so the audited row must still apply.
@@ -1587,7 +1587,6 @@ from ._completeness_boundaries import (  # noqa: E402
 )
 from ._completeness_dispatch import (  # noqa: E402
     _as_strided_result_contained,
-    _dispatch_credit_refs,
     _dispatch_result_holds_tensor,
     _sample_writeback_at_consumption,
 )
@@ -1608,6 +1607,7 @@ from ._completeness_origins import (  # noqa: E402
     _register_dispatch_result_origins,
     internal_scalar_read,
 )
+from ._function_epilogue import epilogue_credit_refs  # noqa: E402
 
 # Import-time roster collection for the witness's internal-caller
 # authorization (see ``_caller_frame_is_torchlens_internal``). Runs at the

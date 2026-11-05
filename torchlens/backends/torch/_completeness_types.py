@@ -75,6 +75,10 @@ class _DispatchEvent:
     when the owner's boundary credit is output-scoped (module-forward tokens). Weak, so the
     census never extends an intermediate's lifetime; the token holds its boundary tensors
     strongly, so a dead reference can never name one of them."""
+    apply_epilogue_alias: bool = False
+    """A pure alias dispatched by the C++ part of ``Function.apply`` (no Python frame of the
+    user's forward between ``apply`` and the dispatcher); ``_function_epilogue`` credits it
+    only when its operand is one of that call's own returned tensors."""
 
 
 @dataclass
