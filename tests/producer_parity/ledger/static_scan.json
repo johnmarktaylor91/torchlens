@@ -11377,6 +11377,14 @@
  },
  {
   "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_setitem_index_probe.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "unattributed_tensor_args",
   "file": "torchlens/validation/_source_provenance.py",
   "has_default": false,

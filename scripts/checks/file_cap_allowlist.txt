@@ -66,7 +66,7 @@ torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	107
 torchlens/_capture_state_helpers.py::_reject_opaque_wrappers	70
 torchlens/_capture_state_helpers.py::_snapshot_plain_attr_value	180
-torchlens/_constants.py	1434
+torchlens/_constants.py	1428
 torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	61
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
