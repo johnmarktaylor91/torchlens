@@ -61,11 +61,14 @@ _BUILD_OPCODES = frozenset(
 # has imported the tensor-parallel or pipelining namespaces (the capability
 # snapshot's forced probes do) runs per-module checks of the capture's
 # distributed guard that an ordinary process skips. The second pin imports
-# those namespaces first, so a regression in that state still fails. Measured on
-# the train d557ac500c: 967.94 and 967.95 plain, 970.03 with the namespaces.
+# those namespaces first, so a regression in that state still fails. The count
+# is the same with or without the nightly env's ``test`` extra installed: the
+# session tensor walk no longer follows a reachable logger into the process
+# logging registry, whose size grew with ``import accelerate``. Measured on
+# 70543d2222 in both envs: 943.39 plain, 945.03 with the namespaces.
 _MAX_TRACE_CALLS_PER_OP = 3337.07
-_MAX_TRACE_BUILDS_PER_OP = 967.96
-_MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 970.04
+_MAX_TRACE_BUILDS_PER_OP = 943.40
+_MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 945.04
 _MAX_COMMIT_CALLS_PER_OP = 35.72
 _MAX_COMMIT_BUILDS_PER_OP = 30.91
 #: The distributed namespaces the capture's distributed guard checks, as a worker
