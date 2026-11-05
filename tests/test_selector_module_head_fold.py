@@ -112,8 +112,8 @@ def test_folded_selector_writes_at_staged_and_rerun_do() -> None:
     )
     explicit = explicit.run(model, x)
     assert torch.equal(_output(hooked), _output(explicit))
-    # The fold discloses its fan-out exactly as the explicit spelling does.
-    assert folded_codes == explicit_codes == ["facet_selector_fanout"]
+    # Scoped to one module, both spellings write the head's q, k and v silently.
+    assert folded_codes == explicit_codes == []
 
     done: list[Any] = []
     _fanout_codes(
@@ -148,3 +148,39 @@ def test_folded_selector_binds_through_when() -> None:
     folded = _refusal(tl.module("attn") & tl.head(1))
     explicit = _refusal(tl.head(1).in_module("attn"))
     assert folded == explicit == ("bind_rule_runtime_error", SelectorCapabilityError)
+
+
+def test_scoped_head_writes_its_q_k_v_silently_and_the_unscoped_head_discloses() -> None:
+    """One module's head is its q, k and v; only the broadcast spelling warns.
+
+    The README splash, ``trace.fork().do(tl.module(address) & tl.head(3),
+    tl.zero_ablate())``, must print nothing: writing all three rows of one
+    head is what the caller asked for. ``tl.head(i)`` with no module keeps the
+    fan-out disclosure, counting the sites and naming the scope that narrows it.
+    """
+
+    model, x, clean = _case()
+    for spelling in (tl.module("attn") & tl.head(1), tl.head(1).in_module("attn")):
+        scoped = clean.fork("scoped")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            scoped.do(spelling, tl.zero_ablate(), intervention=_STAGE)
+        codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+        assert "facet_selector_fanout" not in codes, repr(spelling)
+        scoped = scoped.run(model, x)
+        for name in ("q", "k", "v"):
+            assert torch.count_nonzero(scoped.modules["attn"].facets.head(1)[name]) == 0
+
+    broadcast = clean.fork("broadcast")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        broadcast.do(tl.head(1), tl.zero_ablate(), intervention=_STAGE)
+    reports = [
+        w.message
+        for w in caught
+        if getattr(w.message, "fields", {}).get("code") == "facet_selector_fanout"
+    ]
+    assert len(reports) == 1
+    assert reports[0].fields["site_count"] == 3
+    assert "tl.head(1) writes 3 sites" in str(reports[0])
+    assert "tl.head(1).in_module('attn')" in str(reports[0])
