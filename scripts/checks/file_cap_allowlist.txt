@@ -842,7 +842,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	302
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
@@ -857,7 +857,7 @@ torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	172
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	291
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	120
@@ -867,14 +867,12 @@ torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_leg
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	72
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	105
 torchlens/backends/torch/_ops_interventions.py::_record_predicate_intervention_spec	85
-torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fields	97
-torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	62
 torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	175
 torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	151
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	148
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	62
@@ -927,7 +925,7 @@ torchlens/backends/torch/identity_shims.py	993
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	2258
+torchlens/backends/torch/model_prep.py	2256
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_create_session_param_logs	97
 torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	323
@@ -1095,7 +1093,7 @@ torchlens/intervention/_trace_edits.py::do_with_options	65
 torchlens/intervention/_trace_edits.py::set_site	63
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	79
-torchlens/intervention/_trace_run.py::run	322
+torchlens/intervention/_trace_run.py::run	305
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	61
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
@@ -1140,13 +1138,13 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	152
-torchlens/intervention/rerun.py	1640
+torchlens/intervention/rerun.py	1626
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
-torchlens/intervention/rerun.py::_chunked_rerun	77
+torchlens/intervention/rerun.py::_chunked_rerun	71
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
-torchlens/intervention/rerun.py::run	143
+torchlens/intervention/rerun.py::run	136
 torchlens/intervention/runtime.py	1638
 torchlens/intervention/runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/runtime.py::_apply_live_backward_prehooks	72
@@ -1213,7 +1211,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1688
+torchlens/options.py	1681
 torchlens/options.py::CaptureOptions.__init__	74
 torchlens/options.py::VisualizationOptions.__init__	129
 torchlens/options.py::_merge_grouped_options	74

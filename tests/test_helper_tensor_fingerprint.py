@@ -107,7 +107,7 @@ def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> N
     assert torch.equal(trace.output_ops[0].out, readout)
     assert trace._intervention_spec.freeze().hook_specs == staged
     with pytest.raises(SpecMutationError):
-        trace.run(model, x, replay=tl.options.ReplayOptions(append=True))
+        trace.append(x, model=model)
 
 
 def test_func_predicate_rerun_refuses_a_changed_helper_tensor(setup) -> None:
