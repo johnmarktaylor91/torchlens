@@ -23,7 +23,6 @@ Step 20 (_release_param_refs): Drops live parameter references after finalizatio
 
 import time
 from collections import defaultdict, deque
-from itertools import zip_longest
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
@@ -46,8 +45,9 @@ from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
 from .._utils._display_constructor import bind_template_keys
 from .._utils.hashing import sha256_file
-from ..backends._constants import is_constant_op
 from ..backends.torch._tl import clear_meta
+from . import _column_passes_finalize
+from ._column_passes_finalize import _strip_pass_suffix
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
     _make_public_conditional_ids,
@@ -348,42 +348,6 @@ def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module"
                 queue.append(child_addr)
 
 
-def _append_unique_child_label(
-    child_labels: list[str], seen_labels: set[str], child_label: str
-) -> None:
-    """Append a child label if it has not been seen yet.
-
-    Parameters
-    ----------
-    child_labels:
-        Ordered list being accumulated.
-    seen_labels:
-        Membership set mirroring ``child_labels`` (the bare list scan made
-        each aggregate projection O(k^2) in its child count -- R52).
-    child_label:
-        Child label to append.
-    """
-    if child_label not in seen_labels:
-        seen_labels.add(child_label)
-        child_labels.append(child_label)
-
-
-def _strip_pass_suffix(layer_label: str) -> str:
-    """Strip the ``:call_index`` suffix from a layer label.
-
-    Parameters
-    ----------
-    layer_label:
-        Pass-qualified or pass-free layer label.
-
-    Returns
-    -------
-    str
-        Layer label without any pass suffix.
-    """
-    return layer_label.split(":", 1)[0]
-
-
 def _layer_space_labels(self: "Trace", labels: list[str]) -> list[str]:
     """Map op-space labels to layer space for module-log containers.
 
@@ -470,96 +434,6 @@ def _assign_output_roles(
         parent_layer = output.source_trace._layer_logs.get(output.layer_label)
         if parent_layer is not None:
             parent_layer.multi_output_name = output.multi_output_name
-
-
-def _merge_layer_log_conditional_fields(
-    layer_log: "Layer",
-    pass_log: "Op",
-) -> None:
-    """Merge one pass's conditional metadata into an aggregate ``Layer``.
-
-    Parameters
-    ----------
-    layer_log:
-        Aggregate layer entry being updated.
-    pass_log:
-        Per-pass layer entry contributing conditional metadata.
-    """
-    if pass_log.is_in_conditional_body:
-        layer_log.is_in_conditional_body = True
-
-    stack_signature = tuple(pass_log.conditional_branch_stack)
-    if stack_signature not in layer_log.conditional_branch_stack_ops:
-        layer_log.conditional_role_stacks.append(list(pass_log.conditional_branch_stack))
-        layer_log.conditional_branch_stack_ops[stack_signature] = []
-
-    signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
-    if pass_log.pass_number not in signature_ops:
-        signature_ops.append(pass_log.pass_number)
-        signature_ops.sort()
-
-    for conditional_id, branch_children in pass_log.conditional_arm_children.items():
-        merged_branch_children = layer_log.conditional_arm_children.setdefault(
-            conditional_id,
-            {},
-        )
-        for branch_kind, child_labels in branch_children.items():
-            merged_child_labels = merged_branch_children.setdefault(branch_kind, [])
-            merged_seen = set(merged_child_labels)
-            for child_label in child_labels:
-                _append_unique_child_label(
-                    merged_child_labels,
-                    merged_seen,
-                    _strip_pass_suffix(child_label),
-                )
-
-
-def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
-    """Recompute aggregate conditional compatibility views for one ``Layer``.
-
-    Parameters
-    ----------
-    layer_log:
-        Aggregate layer entry whose derived conditional fields are refreshed.
-    """
-    layer_log.is_in_conditional_body = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
-    )
-
-    conditional_entry_children: list[str] = []
-    entry_seen: set[str] = set()
-    for _, pass_log in sorted(layer_log.ops.items()):
-        for child_label in pass_log.conditional_entry_children:
-            _append_unique_child_label(
-                conditional_entry_children,
-                entry_seen,
-                _strip_pass_suffix(child_label),
-            )
-    layer_log.conditional_entry_children = conditional_entry_children
-
-    conditional_then_children: list[str] = []
-    then_seen: set[str] = set()
-    conditional_elif_children: dict[int, list[str]] = {}
-    elif_seen_by_index: dict[int, set[str]] = {}
-    conditional_else_children: list[str] = []
-    else_seen: set[str] = set()
-    for branch_children in layer_log.conditional_arm_children.values():
-        for child_label in branch_children.get("then", []):
-            _append_unique_child_label(conditional_then_children, then_seen, child_label)
-        for branch_kind, child_labels in branch_children.items():
-            if not branch_kind.startswith("elif_"):
-                continue
-            elif_index = int(branch_kind.split("_", 1)[1])
-            elif_children = conditional_elif_children.setdefault(elif_index, [])
-            elif_seen = elif_seen_by_index.setdefault(elif_index, set())
-            for child_label in child_labels:
-                _append_unique_child_label(elif_children, elif_seen, child_label)
-        for child_label in branch_children.get("else", []):
-            _append_unique_child_label(conditional_else_children, else_seen, child_label)
-
-    layer_log.conditional_then_children = conditional_then_children
-    layer_log.conditional_elif_children = conditional_elif_children
-    layer_log.conditional_else_children = conditional_else_children
 
 
 def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
@@ -1063,7 +937,7 @@ def _honest_multipass_shape(values: list[Any]) -> tuple:
     return tuple(dims)
 
 
-def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
+def _reconcile_multipass_layer_fields(layer_log: "Layer", read: Any = getattr) -> None:
     """Make multi-pass aggregate Layer fields honest about divergent passes.
 
     ``Layer`` construction projects pass-1 values onto 78+ aggregate fields on the
@@ -1092,6 +966,8 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
     ----------
     layer_log:
         Aggregate layer with its ``ops`` accessor fully populated.
+    read:
+        ``getattr``-shaped per-pass field reader (step 15.5 binds column getters).
     """
 
     if len(layer_log.ops) <= 1:
@@ -1113,7 +989,7 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         return False
 
     for field_name in _MULTIPASS_SHAPE_FIELDS:
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [read(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             setattr(layer_log, field_name, _honest_multipass_shape(values))
 
@@ -1121,18 +997,16 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         *((name, Bytes) for name in _MULTIPASS_BYTES_FIELDS),
         *((name, Flops) for name in _MULTIPASS_FLOPS_FIELDS),
     ):
-        values = [getattr(op, field_name, None) for op in pass_ops]
+        values = [read(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             numeric = [value for value in values if isinstance(value, (int, float))]
             if numeric and len(numeric) == len(values):
                 setattr(layer_log, field_name, quantity_type(int(max(numeric))))
 
     for field_name in _MULTIPASS_MARKER_ONLY_FIELDS:
-        record_if_varying(field_name, [getattr(op, field_name, None) for op in pass_ops])
+        record_if_varying(field_name, [read(op, field_name, None) for op in pass_ops])
 
-    module_stacks = [
-        [module_pass[0] for module_pass in (getattr(op, "modules", None) or ())] for op in pass_ops
-    ]
+    module_stacks = [[pair[0] for pair in (read(op, "modules", None) or ())] for op in pass_ops]
     record_if_varying("modules", module_stacks)
 
     if record_if_varying("params", pass_param_addresses(pass_ops)):
@@ -1170,89 +1044,9 @@ def _build_layer_logs(self: "Trace") -> None:
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).
     """
-    from collections import OrderedDict
-
     from .._data_classes.layer import Layer
 
-    layer_logs = OrderedDict()
-
-    for pass_log in self._layer_list:
-        no_call_label = pass_log.layer_label
-        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
-        pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
-
-        if no_call_label not in layer_logs:
-            # First pass: create Layer from this pass's data.
-            layer_log = Layer(pass_log)
-            layer_logs[no_call_label] = layer_log
-        else:
-            # Subsequent pass: merge only the 3 aggregate fields.
-            layer_log = layer_logs[no_call_label]
-            # Merge field 1/3: has_input_ancestor (OR across ops).
-            if pass_log.has_input_ancestor:
-                layer_log.has_input_ancestor = True
-            # Merge field 2/3: io_role (char-merge with '*').
-            if layer_log.io_role is not None and pass_log.io_role is not None:
-                merged = "".join(
-                    c if c == s else "*"
-                    for c, s in zip_longest(
-                        layer_log.io_role,
-                        pass_log.io_role,
-                        fillvalue="",
-                    )
-                )
-                if merged.endswith("."):
-                    merged = merged[:-1]
-                if merged.endswith("*"):
-                    merged = merged.rstrip("*") + "*"
-                layer_log.io_role = merged
-            # Merge field 3/3: is_atomic_module (OR across ops).
-            if pass_log.is_atomic_module:
-                layer_log.is_atomic_module = True
-
-        layer_log.ops[pass_log.pass_number] = pass_log
-        layer_log.call_labels.append(pass_log.label)
-        _merge_layer_log_conditional_fields(layer_log, pass_log)
-
-    autograd_memory = 0
-    has_autograd_saved_value = False
-    for layer_log in layer_logs.values():
-        for pass_log in layer_log.ops.values():
-            linked_labels = []
-            for param_log in pass_log._param_logs:
-                # Tied parameters list every aliasing address in ``all_addresses`` (primary
-                # first); co-occurring distinct tensors (``co_parent_params``) are not tying.
-                for alias_address in getattr(param_log, "all_addresses", []):
-                    if alias_address == param_log.address:
-                        continue
-                    linked_labels.append(f"{param_log.address} → {alias_address}")
-            if linked_labels:
-                pass_log.annotations["tied_parameter_notation"] = linked_labels
-        pass_autograd_bytes = [
-            pass_log.autograd_memory
-            for pass_log in layer_log.ops.values()
-            if pass_log.autograd_memory is not None
-        ]
-        pass_autograd_tensor_counts = [
-            pass_log.num_autograd_tensors
-            for pass_log in layer_log.ops.values()
-            if pass_log.num_autograd_tensors is not None
-        ]
-        if pass_autograd_bytes:
-            layer_log.autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log.total_autograd_memory = layer_log.autograd_memory
-            layer_log.num_autograd_tensors = sum(pass_autograd_tensor_counts)
-            autograd_memory += layer_log.autograd_memory
-            has_autograd_saved_value = True
-        else:
-            layer_log.autograd_memory = None
-            layer_log.total_autograd_memory = None
-            layer_log.num_autograd_tensors = None
-        _reconcile_multipass_layer_fields(layer_log)
-        _rebuild_layer_log_conditional_views(layer_log)
-
-    self._cost_total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
-    self._layer_logs = layer_logs
+    _column_passes_finalize.build_layer_logs(self, Layer, _reconcile_multipass_layer_fields)
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
 
