@@ -248,8 +248,7 @@ ZOO_BUILDERS = {
 # Kept by shrink-r4 (per-id subset rule): sole coverage of report/_cost_tree.py.
 # Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
 @pytest.mark.parametrize(
-    "case",
-    sorted(c for c in ZOO_BUILDERS if c in {"eager_attention_h1", "rnn_unrolled"}),
+    "case", sorted(c for c in ZOO_BUILDERS if c in {"eager_attention_h1", "rnn_unrolled"})
 )
 def test_zoo_backward_equals_closed_form(case: str) -> None:
     """Counted executed backward == the closed-form backward, per zoo case, exactly."""

@@ -691,9 +691,7 @@ class TestConditionalBranchDetection:
     @staticmethod
     def _log(model, x, save_source_context=False):
         return trace_fn(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(save_source_context=save_source_context),
+            model, x, capture=tl.options.CaptureOptions(save_source_context=save_source_context)
         )
 
     @staticmethod

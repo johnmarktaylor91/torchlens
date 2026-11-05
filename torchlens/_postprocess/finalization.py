@@ -57,6 +57,11 @@ from ._conditional_records import (
     _roles_by_label,
     roles_held_by_pass,
 )
+from ._layer_conditional_merge import (
+    _merge_layer_log_conditional_fields,
+    _rebuild_conditional_edge_call_indices,
+    _rebuild_layer_log_conditional_views,
+)
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
@@ -349,42 +354,6 @@ def _compute_call_depths(module_dict: dict[str, "Module"], root_module: "Module"
                 queue.append(child_addr)
 
 
-def _append_unique_child_label(
-    child_labels: list[str], seen_labels: set[str], child_label: str
-) -> None:
-    """Append a child label if it has not been seen yet.
-
-    Parameters
-    ----------
-    child_labels:
-        Ordered list being accumulated.
-    seen_labels:
-        Membership set mirroring ``child_labels`` (the bare list scan made
-        each aggregate projection O(k^2) in its child count -- R52).
-    child_label:
-        Child label to append.
-    """
-    if child_label not in seen_labels:
-        seen_labels.add(child_label)
-        child_labels.append(child_label)
-
-
-def _strip_pass_suffix(layer_label: str) -> str:
-    """Strip the ``:call_index`` suffix from a layer label.
-
-    Parameters
-    ----------
-    layer_label:
-        Pass-qualified or pass-free layer label.
-
-    Returns
-    -------
-    str
-        Layer label without any pass suffix.
-    """
-    return layer_label.split(":", 1)[0]
-
-
 def _layer_space_labels(self: "Trace", labels: list[str]) -> list[str]:
     """Map op-space labels to layer space for module-log containers.
 
@@ -473,151 +442,6 @@ def _assign_output_roles(
             parent_layer.multi_output_name = output.multi_output_name
 
 
-def _merge_layer_log_conditional_fields(
-    layer_log: "Layer",
-    pass_log: "Op",
-) -> None:
-    """Merge one pass's conditional metadata into an aggregate ``Layer``.
-
-    Parameters
-    ----------
-    layer_log:
-        Aggregate layer entry being updated.
-    pass_log:
-        Per-pass layer entry contributing conditional metadata.
-    """
-    if pass_log.control_flow.is_in_conditional_body:
-        layer_log._control_flow_is_in_conditional_body = True
-
-    stack_signature = tuple(pass_log.control_flow.branch_stack)
-    if stack_signature not in layer_log.control_flow.branch_stack_ops:
-        layer_log.control_flow.role_stacks.append(list(pass_log.control_flow.branch_stack))
-        layer_log.control_flow.branch_stack_ops[stack_signature] = []
-
-    signature_ops = layer_log.control_flow.branch_stack_ops[stack_signature]
-    if pass_log.pass_number not in signature_ops:
-        signature_ops.append(pass_log.pass_number)
-        signature_ops.sort()
-
-    for conditional_id, branch_children in pass_log.control_flow.arm_children.items():
-        merged_branch_children = layer_log.control_flow.arm_children.setdefault(
-            conditional_id,
-            {},
-        )
-        for branch_kind, child_labels in branch_children.items():
-            merged_child_labels = merged_branch_children.setdefault(branch_kind, [])
-            merged_seen = set(merged_child_labels)
-            for child_label in child_labels:
-                _append_unique_child_label(
-                    merged_child_labels,
-                    merged_seen,
-                    _strip_pass_suffix(child_label),
-                )
-
-
-def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
-    """Recompute aggregate conditional compatibility views for one ``Layer``.
-
-    Parameters
-    ----------
-    layer_log:
-        Aggregate layer entry whose derived conditional fields are refreshed.
-    """
-    layer_log._control_flow_is_in_conditional_body = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.control_flow.role_stacks
-    )
-
-    conditional_entry_children: list[str] = []
-    entry_seen: set[str] = set()
-    for _, pass_log in sorted(layer_log.ops.items()):
-        for child_label in pass_log.control_flow.entry_children:
-            _append_unique_child_label(
-                conditional_entry_children,
-                entry_seen,
-                _strip_pass_suffix(child_label),
-            )
-    layer_log._control_flow_entry_children = conditional_entry_children
-
-    conditional_then_children: list[str] = []
-    then_seen: set[str] = set()
-    conditional_elif_children: dict[int, list[str]] = {}
-    elif_seen_by_index: dict[int, set[str]] = {}
-    conditional_else_children: list[str] = []
-    else_seen: set[str] = set()
-    for branch_children in layer_log.control_flow.arm_children.values():
-        for child_label in branch_children.get("then", []):
-            _append_unique_child_label(conditional_then_children, then_seen, child_label)
-        for branch_kind, child_labels in branch_children.items():
-            if not branch_kind.startswith("elif_"):
-                continue
-            elif_index = int(branch_kind.split("_", 1)[1])
-            elif_children = conditional_elif_children.setdefault(elif_index, [])
-            elif_seen = elif_seen_by_index.setdefault(elif_index, set())
-            for child_label in child_labels:
-                _append_unique_child_label(elif_children, elif_seen, child_label)
-        for child_label in branch_children.get("else", []):
-            _append_unique_child_label(conditional_else_children, else_seen, child_label)
-
-    layer_log._control_flow_then_children = conditional_then_children
-    layer_log._control_flow_elif_children = conditional_elif_children
-    layer_log._control_flow_else_children = conditional_else_children
-
-
-def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
-    """Recompute rolled conditional edge-pass metadata from arm-entry edges.
-
-    Parameters
-    ----------
-    self:
-        Model log being finalized.
-    """
-    if self._graph_conditional_edge_call_indices:
-        self._graph_conditional_edge_call_indices = {
-            edge_key: sorted(dict.fromkeys(call_indexs))
-            for edge_key, call_indexs in self._graph_conditional_edge_call_indices.items()
-        }
-        return
-
-    conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self._graph_conditional_arm_entry_edges.items():
-        for parent_label, child_label in edge_list:
-            parent_no_pass = _strip_pass_suffix(parent_label)
-            child_no_pass = _strip_pass_suffix(child_label)
-            child_call_index = _get_label_call_index(child_label)
-            edge_key = (
-                parent_no_pass,
-                child_no_pass,
-                conditional_id,
-                branch_kind,
-            )
-            if child_call_index not in conditional_edge_call_indices[edge_key]:
-                conditional_edge_call_indices[edge_key].append(child_call_index)
-
-    self._graph_conditional_edge_call_indices = {
-        edge_key: sorted(call_indexs)
-        for edge_key, call_indexs in conditional_edge_call_indices.items()
-    }
-
-
-def _get_label_call_index(layer_label: str) -> int:
-    """Extract the pass number encoded in a layer label.
-
-    Parameters
-    ----------
-    layer_label:
-        Layer label that may include a ``:call_index`` suffix.
-
-    Returns
-    -------
-    int
-        Parsed pass number, or ``1`` for pass-free labels.
-    """
-    label_parts = layer_label.rsplit(":", 1)
-    if len(label_parts) == 2 and label_parts[1].isdigit():
-        return int(label_parts[1])
-    return 1
-
-
 def _build_submodule_call_logs(
     self: "Trace",
     address: str,
@@ -646,33 +470,9 @@ def _build_submodule_call_logs(
         pass_layers = list(mbd["module_pass_layers"].get(call_label, []))
 
         # Derive input/output layers per pass from Op fields
-        pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
-        pass_output_layers = []
-        pass_output_ops = []
-        pass_outputs = []
-        for op_label in pass_layers:
-            try:
-                te = self.ops[op_label]
-            except (KeyError, TypeError):
-                continue
-            # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
-            # fed-call fact. The old ``len(module_call_stack) > 0`` companion
-            # test was a proxy for the same thing only while the enter lane
-            # wrote both together; under containment semantics it would drop
-            # top-level-created inputs (e.g. the model input) from the call's
-            # input roster.
-            if (
-                call_label in te.module_context.input_to_module_calls
-                and te.layer_label not in pass_input_layers
-            ):
-                pass_input_layers.append(te.layer_label)
-            if (
-                te.module_context.is_module_output
-                and call_label in te.module_context.output_of_module_calls
-            ):
-                pass_output_layers.append(te.layer_label)
-                pass_output_ops.append(te.label)
-                pass_outputs.append(te)
+        pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs = _call_io_layers(
+            self, call_label, pass_layers, pass_input_layers_by_call
+        )
 
         role_hints = role_hints_for_module_class(module_class)
         _assign_output_roles(pass_outputs, hints=role_hints)
@@ -740,6 +540,62 @@ def _build_submodule_call_logs(
         pass_dict[call_label] = module_call_log
 
     return ops, call_labels_list
+
+
+def _call_io_layers(
+    self: "Trace",
+    call_label: str,
+    pass_layers: list[str],
+    pass_input_layers_by_call: dict[str, list[str]] | None,
+) -> tuple[list[str], list[str], list[str], list["Op"]]:
+    """Derive one module call's input and output layers from its Op fields.
+
+    Parameters
+    ----------
+    self:
+        Trace being finalized.
+    call_label:
+        Module call label (``address:call_index``).
+    pass_layers:
+        Op labels executed inside the call.
+    pass_input_layers_by_call:
+        Pre-collected input layers keyed by call label, if any.
+
+    Returns
+    -------
+    tuple[list[str], list[str], list[str], list[Op]]
+        Input layer labels, output layer labels, output op labels and the
+        output Op entries.
+    """
+
+    pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
+    pass_output_layers = []
+    pass_output_ops = []
+    pass_outputs = []
+    for op_label in pass_layers:
+        try:
+            te = self.ops[op_label]
+        except (KeyError, TypeError):
+            continue
+        # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
+        # fed-call fact. The old ``len(module_call_stack) > 0`` companion
+        # test was a proxy for the same thing only while the enter lane
+        # wrote both together; under containment semantics it would drop
+        # top-level-created inputs (e.g. the model input) from the call's
+        # input roster.
+        if (
+            call_label in te.module_context.input_to_module_calls
+            and te.layer_label not in pass_input_layers
+        ):
+            pass_input_layers.append(te.layer_label)
+        if (
+            te.module_context.is_module_output
+            and call_label in te.module_context.output_of_module_calls
+        ):
+            pass_output_layers.append(te.layer_label)
+            pass_output_ops.append(te.label)
+            pass_outputs.append(te)
+    return pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs
 
 
 def _resolve_call_hierarchy(
@@ -1149,6 +1005,37 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         layer_log.annotations["varying_across_passes"] = varying
 
 
+def _merge_io_role(layer_io_role: str, pass_io_role: str) -> str:
+    """Char-merge two ``io_role`` strings, ``'*'`` marking differing characters.
+
+    Parameters
+    ----------
+    layer_io_role:
+        The aggregate layer's current ``io_role``.
+    pass_io_role:
+        The merging pass's ``io_role``.
+
+    Returns
+    -------
+    str
+        Merged role (``"output.0"`` + ``"output.1"`` -> ``"output.*"``).
+    """
+
+    merged = "".join(
+        c if c == s else "*"
+        for c, s in zip_longest(
+            layer_io_role,
+            pass_io_role,
+            fillvalue="",
+        )
+    )
+    if merged.endswith("."):
+        merged = merged[:-1]
+    if merged.endswith("*"):
+        merged = merged.rstrip("*") + "*"
+    return merged
+
+
 def _build_layer_logs(self: "Trace") -> None:
     """Step 15.5: Build aggregate Layer objects from per-pass Op entries.
 
@@ -1200,19 +1087,9 @@ def _build_layer_logs(self: "Trace") -> None:
                 layer_log._graph_has_input_ancestor = True
             # Merge field 2/3: io_role (char-merge with '*').
             if layer_log.graph.io_role is not None and pass_log.graph.io_role is not None:
-                merged = "".join(
-                    c if c == s else "*"
-                    for c, s in zip_longest(
-                        layer_log.graph.io_role,
-                        pass_log.graph.io_role,
-                        fillvalue="",
-                    )
+                layer_log._graph_io_role = _merge_io_role(
+                    layer_log.graph.io_role, pass_log.graph.io_role
                 )
-                if merged.endswith("."):
-                    merged = merged[:-1]
-                if merged.endswith("*"):
-                    merged = merged.rstrip("*") + "*"
-                layer_log._graph_io_role = merged
             # Merge field 3/3: is_atomic_module (OR across ops).
             if pass_log.module_context.is_atomic_module:
                 layer_log._module_context_is_atomic_module = True
@@ -1265,6 +1142,33 @@ def _build_layer_logs(self: "Trace") -> None:
     _build_conditional_records(self)
 
 
+def _ordered_branch_kinds(event: Any) -> list[str]:
+    """Return a conditional event's branch kinds in arm order.
+
+    Parameters
+    ----------
+    event:
+        Conditional event whose ``branch_ranges`` name its AST arms.
+
+    Returns
+    -------
+    list[str]
+        ``"then"``, the ``elif_<n>`` kinds by index, then ``"else"`` and
+        ``"fallthrough"`` when present.
+    """
+
+    ast_branch_kinds = list(event.branch_ranges)
+    ordered_branch_kinds = ["then"]
+    ordered_branch_kinds.extend(
+        sorted(
+            (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
+            key=lambda kind: int(kind.split("_", 1)[1]),
+        )
+    )
+    ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
+    return ordered_branch_kinds
+
+
 def _build_conditional_records(self: "Trace") -> None:
     """Build the public ConditionalAccessor from conditional postprocess data."""
 
@@ -1285,15 +1189,7 @@ def _build_conditional_records(self: "Trace") -> None:
         conditional_id = conditional_id_by_event_id[event.id]
         # AST-derived branch_ranges materialize every static arm regardless of which
         # fired at runtime; fired-vs-not is captured per-arm via ConditionalArm.fired.
-        ast_branch_kinds = list(event.branch_ranges)
-        ordered_branch_kinds = ["then"]
-        ordered_branch_kinds.extend(
-            sorted(
-                (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
-                key=lambda kind: int(kind.split("_", 1)[1]),
-            )
-        )
-        ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
+        ordered_branch_kinds = _ordered_branch_kinds(event)
 
         # Per-arm test identity: phase 5c stashes ``_arm_bool_indices``
         # (branch kind -> indices into ``bool_layers`` for bools whose runtime
@@ -1439,8 +1335,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     for layer_label in self._layer_dict_main_keys:
         tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
-        bind_template_keys(tensor.args_template, self._layer_dict_all_keys)
-        bind_template_keys(tensor.kwargs_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor.call.args_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor.call.kwargs_template, self._layer_dict_all_keys)
     self._tracing_finished = True
 
 

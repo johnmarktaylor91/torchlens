@@ -218,9 +218,7 @@ class TestOptimizerSupport:
         # Only optimize second linear layer
         optimizer = torch.optim.Adam(model[2].parameters())
         mh = trace_fn(
-            model,
-            _simple_input(),
-            capture=tl.options.CaptureOptions(optimizer=optimizer),
+            model, _simple_input(), capture=tl.options.CaptureOptions(optimizer=optimizer)
         )
         assert mh.params["0.weight"].has_optimizer is False
         assert mh.params["0.bias"].has_optimizer is False

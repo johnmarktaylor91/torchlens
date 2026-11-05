@@ -553,13 +553,7 @@ class OpTierCollector:
         return self._block_observations
 
     def _ensure_site(
-        self,
-        step: int,
-        site_id: str,
-        *,
-        label: str,
-        ctx: Any,
-        parent: str | None = None,
+        self, step: int, site_id: str, *, label: str, ctx: Any, parent: str | None = None
     ) -> None:
         """Register one site row on first sight (D5: drift adds rows).
 

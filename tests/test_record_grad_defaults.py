@@ -152,10 +152,7 @@ def test_record_keeps_saved_payload_values() -> None:
     model, x = _model_and_input()
     plain = tl.record(model, x, save=_keep_relu)
     hooked = tl.record(
-        model,
-        x,
-        save=_keep_relu,
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        model, x, save=_keep_relu, capture=tl.options.CaptureOptions(backward_ready=True)
     )
     plain_outs = [record.ram_payload for record in plain if record.ram_payload is not None]
     hooked_outs = [record.ram_payload for record in hooked if record.ram_payload is not None]

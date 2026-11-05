@@ -108,31 +108,9 @@ def _build_preview_recurrence_graph(
     raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
     raw_label_set = set(raw_labels)
 
-    data_parents_by_label: dict[str, tuple[str, ...]] = {}
-    data_children_by_label: dict[str, list[str]] = {label: [] for label in raw_labels}
-    for label in raw_labels:
-        op_log = raw_dict[label]
-        control_parents = {
-            parent_label
-            for edge in getattr(op_log, "_edge_uses", ()) or ()
-            if is_control_edge_use(edge)
-            and isinstance(parent_label := getattr(edge, "parent_label", None), str)
-        }
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for parent in getattr(op_log, "parents", ()) or ():
-            if (
-                isinstance(parent, str)
-                and parent in raw_label_set
-                and parent not in seen
-                and parent not in control_parents
-            ):
-                seen.add(parent)
-                ordered.append(parent)
-        data_parents_by_label[label] = tuple(ordered)
-    for label, parents in data_parents_by_label.items():
-        for parent in parents:
-            data_children_by_label[parent].append(label)
+    data_parents_by_label, data_children_by_label = _preview_data_edges(
+        raw_dict, raw_labels, raw_label_set
+    )
 
     equivalence_keys = {
         label: _preview_equivalence_key(raw_dict[label], label, backend_name)
@@ -196,6 +174,57 @@ def _build_preview_recurrence_graph(
         source_labels=tuple(source_labels),
         eligible_labels=tuple(eligible_labels),
     )
+
+
+def _preview_data_edges(
+    raw_dict: Mapping[str, Any],
+    raw_labels: tuple[str, ...],
+    raw_label_set: set[str],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, list[str]]]:
+    """Return the data-edge parents and children of every preview raw op.
+
+    Parameters
+    ----------
+    raw_dict:
+        Materialized preview raw ops keyed by raw label.
+    raw_labels:
+        Raw labels in capture order.
+    raw_label_set:
+        The same raw labels as a set.
+
+    Returns
+    -------
+    tuple[dict[str, tuple[str, ...]], dict[str, list[str]]]
+        Ordered, de-duplicated data parents per label (control edges and
+        unknown labels dropped) and the matching data children per label.
+    """
+
+    data_parents_by_label: dict[str, tuple[str, ...]] = {}
+    data_children_by_label: dict[str, list[str]] = {label: [] for label in raw_labels}
+    for label in raw_labels:
+        op_log = raw_dict[label]
+        control_parents = {
+            parent_label
+            for edge in getattr(op_log, "_edge_uses", ()) or ()
+            if is_control_edge_use(edge)
+            and isinstance(parent_label := getattr(edge, "parent_label", None), str)
+        }
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for parent in getattr(op_log, "parents", ()) or ():
+            if (
+                isinstance(parent, str)
+                and parent in raw_label_set
+                and parent not in seen
+                and parent not in control_parents
+            ):
+                seen.add(parent)
+                ordered.append(parent)
+        data_parents_by_label[label] = tuple(ordered)
+    for label, parents in data_parents_by_label.items():
+        for parent in parents:
+            data_children_by_label[parent].append(label)
+    return data_parents_by_label, data_children_by_label
 
 
 def _is_pseudo_op(op_log: Any) -> bool:

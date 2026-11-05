@@ -28,8 +28,12 @@ from .._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from . import _column_passes
+from . import _column_passes, _column_passes_graph
 from ._buffer_addresses import _recorded_buffer_address
+from ._orphan_predicates import (
+    _orphan_is_uninit_alloc_source,
+    _rng_orphan_drove_control_or_output,
+)
 from ._orphan_seeds import (
     _expand_seen_nodes_to_complete_func_call_groups,
     _orphan_flood_seeds,
@@ -227,6 +231,45 @@ def _event_buffer_address_matches(self: "Trace", label_raw: str, buffer_address:
     return _recorded_buffer_address(event) == buffer_address
 
 
+def _strip_output_node_params_and_modules(new_output_node: Op, output_node: Op) -> None:
+    """Clear the parameter and module fields a synthetic output node cloned.
+
+    Parameters
+    ----------
+    new_output_node:
+        Output node built by ``_add_output_layers`` from its producing op.
+    output_node:
+        The producing op; its module stack becomes the output node's
+        ``output_of_modules``/``output_of_module_calls``.
+    """
+
+    # Strip any params:
+
+    new_output_node._graph_parent_params = []
+    new_output_node._param_barcodes = []
+    new_output_node._graph_parent_param_ops = {}
+    new_output_node._param_logs = []
+    new_output_node.param_shapes = []
+    new_output_node.num_params = 0
+    new_output_node.num_params_trainable = 0
+    new_output_node.num_params_frozen = 0
+    new_output_node._cost_param_memory = Bytes(0)
+
+    # Strip module info:
+
+    new_output_node.module = None
+    new_output_node.modules = []
+    new_output_node._module_context_call_stack = []
+    new_output_node._module_context_input_to_module_calls = []
+    new_output_node._module_context_output_of_modules = [
+        mod_pass[0] for mod_pass in output_node.modules
+    ]
+    new_output_node._module_context_output_of_module_calls = output_node.modules
+    new_output_node._module_context_is_module_output = False
+    new_output_node._module_context_is_atomic_module = False
+    new_output_node._module_context_atomic_module_call = None
+
+
 def _add_output_layers(
     self: "Trace",
     output_tensors: list[torch.Tensor],
@@ -357,31 +400,7 @@ def _add_output_layers(
         new_output_node._internal_set("saved_args", [output_tensor])
         new_output_node._internal_set("saved_kwargs", {})
 
-        # Strip any params:
-
-        new_output_node._graph_parent_params = []
-        new_output_node._param_barcodes = []
-        new_output_node._graph_parent_param_ops = {}
-        new_output_node._param_logs = []
-        new_output_node.param_shapes = []
-        new_output_node.num_params = 0
-        new_output_node.num_params_trainable = 0
-        new_output_node.num_params_frozen = 0
-        new_output_node._cost_param_memory = Bytes(0)
-
-        # Strip module info:
-
-        new_output_node.module = None
-        new_output_node.modules = []
-        new_output_node._module_context_call_stack = []
-        new_output_node._module_context_input_to_module_calls = []
-        new_output_node._module_context_output_of_modules = [
-            mod_pass[0] for mod_pass in output_node.modules
-        ]
-        new_output_node._module_context_output_of_module_calls = output_node.modules
-        new_output_node._module_context_is_module_output = False
-        new_output_node._module_context_is_atomic_module = False
-        new_output_node._module_context_atomic_module_call = None
+        _strip_output_node_params_and_modules(new_output_node, output_node)
 
         # Fix ancestry information:
 
@@ -587,28 +606,8 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     """
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
-    nodes_seen = set()
-    node_stack = _orphan_flood_seeds(self)
-    # Shadow sets over the two trace-level list[str] sink ledgers: the former
-    # per-node `label not in <list>` scans were O(k^2) in sink count
-    # (hunt-6 R52-2). The lists stay the portable source of truth.
-    seen_sink_labels = set(self.internal_sink_ops)
-    seen_terminated_bool_labels = set(self.internally_terminated_bool_ops)
-    while len(node_stack) > 0:
-        tensor_label = node_stack.pop()
-        nodes_seen.add(tensor_label)
-        layer_entry = self._raw_graph_ws.raw_layer_dict[tensor_label]
-        if (len(layer_entry.children) == 0) and (not layer_entry.is_output):
-            _log_internally_terminated_tensor(
-                self,
-                tensor_label,
-                seen_sink_labels=seen_sink_labels,
-                seen_terminated_bool_labels=seen_terminated_bool_labels,
-            )
-        # Follow BOTH directions to ensure full bidirectional reachability.
-        for next_label in layer_entry.children + layer_entry.parents:
-            if next_label not in nodes_seen:
-                node_stack.append(next_label)
+    # Flood body (column view, facade fallback) lives in ``_column_passes_graph``.
+    nodes_seen = _column_passes_graph.flood_orphan_reachability(self, _orphan_flood_seeds(self))
 
     nodes_seen = _expand_seen_nodes_to_complete_func_call_groups(self, nodes_seen)
     orphan_nodes = orig_nodes - nodes_seen
@@ -662,130 +661,6 @@ def _remove_orphan_nodes(self: "Trace") -> None:
             new_layer_list.append(tensor_label)
     self._raw_graph_ws.raw_layer_labels_list = new_layer_list
     self._raw_graph_ws.raw_layer_dict = new_layer_dict
-
-
-def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label: str) -> bool:
-    """Return whether a child op TOTALLY overwrites the walked tensor's bytes (r53 hon_2).
-
-    The sanitized pruned-orphan walk stops at a total-writer edge whose
-    DESTINATION is the walked tensor (``copy_``/``zero_``/``fill_``/RNG-fill
-    receiver, or an ``out=`` destination): the post-write value is independent
-    of the walked nondeterministic bytes, so a pruned ``empty -> fill_(1) ->
-    branch`` chain must NOT be flagged (empty-plus-fill is THE idiomatic
-    scratch init). The walk CONTINUES when the walked tensor is the VALUE
-    SOURCE of the writer (``dst.copy_(walked)``). Unknown or partial in-place
-    writers never stop the walk (fail closed).
-    """
-
-    from .._utils._uninit_alloc import qualname_is_uninit_total_writer
-
-    op = self._raw_graph_ws.raw_layer_dict.get(child_label)
-    if op is None:
-        return False
-    func_id = record_member(op, "func_id", None)
-    namespace = getattr(func_id, "namespace", None)
-    qualname = getattr(func_id, "qualname", None)
-    arg_locs = record_member(op, "parent_arg_positions", None)
-    args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
-    kwargs_locs = arg_locs.get("kwargs", {}) if isinstance(arg_locs, dict) else {}
-    if (
-        namespace in ("torch", "torch.Tensor", "torch.nn.functional")
-        and kwargs_locs.get("out") == walked_label
-    ):
-        return True
-    return qualname_is_uninit_total_writer(namespace, qualname) and args_locs.get(0) == walked_label
-
-
-def _rng_orphan_drove_control_or_output(
-    self: "Trace", start_label: str, escape_sources: frozenset[str]
-) -> bool:
-    """Return whether an orphaned nondeterministic op's value steered control or output.
-
-    Walks the forward (child) chain from ``start_label``. The nondeterministic
-    result (a seeded torch-RNG draw or an uninitialized-memory family product,
-    r53 hon_2) "influenced control" when the op itself or any descendant is a
-    recorded tensor->host escape source (its value was read by
-    ``bool()``/``.item()`` to steer pure-Python control flow); it "influenced
-    output" when a descendant is an output node (defensive: an output-reaching
-    op is not normally orphaned). The walk is SANITIZED: it never crosses a
-    total-writer edge whose destination is the walked tensor
-    (``_child_edge_totally_overwrites``), so an empty-then-fully-written
-    scratch chain stays clean. A genuinely-dead draw whose result feeds nothing
-    reaches neither and returns ``False``, so it stays VERIFIED.
-    """
-
-    seen: set[str] = set()
-    stack = [start_label]
-    while stack:
-        label = stack.pop()
-        if label in seen:
-            continue
-        seen.add(label)
-        op = self._raw_graph_ws.raw_layer_dict.get(label)
-        if op is None:
-            continue
-        if label in escape_sources or getattr(op, "is_output", False):
-            return True
-        for child_label in getattr(op, "children", ()) or ():
-            if child_label in seen:
-                continue
-            if _child_edge_totally_overwrites(self, label, child_label):
-                continue
-            stack.append(child_label)
-    return False
-
-
-def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
-    """Return whether an orphaned op is an uninitialized-memory value source (r53 hon_2).
-
-    Keys on the shared closed family table (``utils/rng.py``): the ``empty``
-    factory family taints unless its product has zero elements; a resize
-    spelling taints only when it GREW its receiver beyond the pre-call element
-    count (shrink/same-size preserves the prefix), failing closed to tainted
-    when either shape is unreadable. The whole family is clean when the
-    capture-time ambient snapshot proves deterministic fill.
-    """
-
-    from .._utils._uninit_alloc import (
-        deterministic_fill_governs,
-        qualname_is_uninit_growth_resize,
-        qualname_is_uninitialized_alloc,
-    )
-
-    func_id = record_member(op, "func_id", None)
-    namespace = getattr(func_id, "namespace", None)
-    qualname = getattr(func_id, "qualname", None)
-    is_factory = qualname_is_uninitialized_alloc(namespace, qualname)
-    is_resize = qualname_is_uninit_growth_resize(namespace, qualname)
-    if not is_factory and not is_resize:
-        return False
-    snapshot = self._runnable.capture_ambient
-    if isinstance(snapshot, dict) and deterministic_fill_governs(
-        snapshot.get("deterministic_algorithms"),
-        snapshot.get("fill_uninitialized_memory"),
-    ):
-        return False
-
-    def _numel(shape: Any) -> int | None:
-        """Element count for a fully-static integer shape tuple, else ``None``."""
-
-        if not isinstance(shape, tuple):
-            return None
-        numel = 1
-        for dim in shape:
-            if not isinstance(dim, int):
-                return None
-            numel *= dim
-        return numel
-
-    out_numel = _numel(getattr(op, "shape", None))
-    if is_factory:
-        return out_numel is None or out_numel > 0
-    arg_locs = record_member(op, "parent_arg_positions", None)
-    args_locs = arg_locs.get("args", {}) if isinstance(arg_locs, dict) else {}
-    receiver = self._raw_graph_ws.raw_layer_dict.get(args_locs.get(0, ""))
-    pre_numel = _numel(getattr(receiver, "shape", None)) if receiver is not None else None
-    return pre_numel is None or out_numel is None or out_numel > pre_numel
 
 
 def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> None:
@@ -895,22 +770,11 @@ def _log_internally_terminated_tensor(
     seen_sink_labels: set[str],
     seen_terminated_bool_labels: set[str],
 ) -> None:
-    """Mark a tensor as terminated inside the model (no children reaching an output node).
+    """Mark a tensor as terminated inside the model (body in ``_column_passes_graph``)."""
 
-    ``seen_sink_labels`` / ``seen_terminated_bool_labels`` are the caller's
-    persistent shadow sets over ``internal_sink_ops`` /
-    ``internally_terminated_bool_ops``; the membership guards read them
-    instead of rescanning the growing lists once per visited node
-    (hunt-6 R52-2).
-    """
-    layer_entry = self[tensor_label]
-    layer_entry._internal_set("is_internal_sink", True)
-    if tensor_label not in seen_sink_labels:
-        seen_sink_labels.add(tensor_label)
-        self.internal_sink_ops.append(tensor_label)
-        if layer_entry.control_flow.is_scalar_bool and (
-            tensor_label not in seen_terminated_bool_labels
-        ):
-            seen_terminated_bool_labels.add(tensor_label)
-            self.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry._control_flow_is_terminal_bool = True
+    _column_passes_graph.log_internally_terminated_tensor(
+        self,
+        tensor_label,
+        seen_sink_labels=seen_sink_labels,
+        seen_terminated_bool_labels=seen_terminated_bool_labels,
+    )

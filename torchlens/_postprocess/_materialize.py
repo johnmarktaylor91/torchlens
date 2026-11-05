@@ -51,8 +51,6 @@ if TYPE_CHECKING:
 from torchlens._ir.op_record import IngestExtras as _IngestExtras
 from torchlens._ir.op_record_scatter import CELL_SOURCES
 
-from .._utils._record_group_table import record_member
-
 _EMPTY_INGEST_EXTRAS = _IngestExtras()
 
 
@@ -419,7 +417,7 @@ def _drop_missing_buffer_sources(local_registrations: dict[str, Any]) -> None:
 
     raw_labels = set(local_registrations)
     for op_log in local_registrations.values():
-        buffer_source = record_member(op_log, "buffer_source", None)
+        buffer_source = getattr(op_log.graph, "buffer_source", None)
         if buffer_source is not None and buffer_source not in raw_labels:
             op_log._graph_buffer_source = None
 
@@ -837,7 +835,7 @@ def _equivalent_ops_by_label(
     buffer_address_by_label = dict(buffer_addresses_by_label)
     for event in buffer_write_events:
         label_raw = getattr(event, "version_label_raw", None)
-        address = record_member(event, "address", None)
+        address = getattr(event, "address", None)
         if isinstance(label_raw, str) and isinstance(address, str):
             buffer_address_by_label[label_raw] = address
     for event in op_events:
@@ -1457,7 +1455,7 @@ def _buffer_write_fields(
             continue
         producer_label_raw = getattr(event, "producer_label_raw", None)
         fields: dict[str, object] = {
-            "address": record_member(event, "address", None),
+            "address": getattr(event, "address", None),
             "buffer_write_kind": getattr(event, "kind", None),
             "buffer_value_changed": getattr(event, "value_changed", None),
             "buffer_source": producer_label_raw if producer_label_raw in op_event_labels else None,
@@ -1671,7 +1669,7 @@ def _param_logs_for_event(param_logs_registry: Any, params: tuple[object, ...]) 
 
     param_logs: list[Any] = []
     for param in params:
-        address = record_member(param, "address", None)
+        address = getattr(param, "address", None)
         if address is not None and address in param_logs_registry:
             param_logs.append(param_logs_registry[address])
     return param_logs

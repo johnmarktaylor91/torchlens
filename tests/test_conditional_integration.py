@@ -1027,8 +1027,7 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
 
 
 @pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="column offsets are only captured on Python 3.11+",
+    sys.version_info < (3, 11), reason="column offsets are only captured on Python 3.11+"
 )
 def test_ternary_py311_records_non_none_column_offsets_for_ifexp_frames() -> None:
     """Python 3.11+ captures ``col_offset`` on ternary frames."""

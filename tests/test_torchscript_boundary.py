@@ -30,8 +30,7 @@ from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
 
 pytestmark = pytest.mark.skipif(
-    not HAS_SCRIPT_FUNCTION_CALL_HOOK,
-    reason="torch build without a ScriptFunction call hook",
+    not HAS_SCRIPT_FUNCTION_CALL_HOOK, reason="torch build without a ScriptFunction call hook"
 )
 
 

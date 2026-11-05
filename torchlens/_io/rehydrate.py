@@ -21,7 +21,6 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file
 
-from torchlens._utils._record_group_table import record_member
 from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
 from .._data_classes._state_adapter import state_items
@@ -32,6 +31,7 @@ from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
 from ._rehydrate_lazy_names import _lazy_ref_field_name, _lazy_ref_kind, _normalize_map_location
+from ._rehydrate_source_bundle import _source_bundle_path_for_trace
 from ._small_raw import (
     _rehydrate_small_raw_images as _rehydrate_small_raw_images,
     _rehydrate_trace_raw_values,
@@ -1332,37 +1332,3 @@ def _rehydrate_nested_object(
                 ),
             )
     return value
-
-
-def _source_bundle_path_for_trace(trace: Trace) -> Path:
-    """Resolve the source bundle path recorded on a portable-loaded ``Trace``.
-
-    Parameters
-    ----------
-    trace:
-        Model log whose source bundle should be resolved.
-
-    Returns
-    -------
-    Path
-        Source bundle directory.
-
-    Raises
-    ------
-    ArtifactError
-        If the model log does not retain a source bundle reference.
-    """
-
-    bundle_path = getattr(trace, "_source_bundle_path", None)
-    if isinstance(bundle_path, Path):
-        return bundle_path
-
-    for layer in trace._layer_list:
-        out_ref = record_member(layer, "out_ref", None)
-        if isinstance(out_ref, LazyActivationRef):
-            return out_ref.source_bundle_path
-        grad_ref = record_member(layer, "grad_ref", None)
-        if isinstance(grad_ref, LazyActivationRef):
-            return grad_ref.source_bundle_path
-
-    raise ArtifactError("Trace does not retain a source bundle path for nested blob rehydration.")

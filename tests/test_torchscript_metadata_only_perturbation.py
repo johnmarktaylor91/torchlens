@@ -32,8 +32,7 @@ from torchlens.validation._script_metadata_proof import (
 )
 
 pytestmark = pytest.mark.skipif(
-    not HAS_SCRIPT_FUNCTION_CALL_HOOK,
-    reason="torch build without a ScriptFunction call hook",
+    not HAS_SCRIPT_FUNCTION_CALL_HOOK, reason="torch build without a ScriptFunction call hook"
 )
 
 

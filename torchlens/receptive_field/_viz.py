@@ -270,8 +270,7 @@ def _view_box(
             return cast(ReceptiveFieldBox, view.at(coordinates, input_op=selected))
         if direction is ReceptiveFieldDirection.PROJECTIVE:
             return cast(
-                ReceptiveFieldBox,
-                view.at(coordinates, direction=direction, target=selected),
+                ReceptiveFieldBox, view.at(coordinates, direction=direction, target=selected)
             )
         return cast(ReceptiveFieldBox, view.at(coordinates, direction=direction, input_op=selected))
     except TypeError as exc:
@@ -422,12 +421,7 @@ def _gradient_image(
 
 
 def _draw_box(
-    image: Image.Image,
-    box: ReceptiveFieldBox,
-    axes: tuple[int, ...],
-    *,
-    dashed: bool,
-    color: str,
+    image: Image.Image, box: ReceptiveFieldBox, axes: tuple[int, ...], *, dashed: bool, color: str
 ) -> None:
     """Draw a status-styled RF region scaled from tensor extents to image pixels."""
 

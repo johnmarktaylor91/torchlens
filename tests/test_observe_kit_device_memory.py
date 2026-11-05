@@ -53,10 +53,7 @@ def _reading(allocated: int, peak: int, reserved: int = 4096, peak_reserved: int
     """Shorthand scripted reading."""
 
     return DeviceMemoryReading(
-        allocated=allocated,
-        reserved=reserved,
-        peak_allocated=peak,
-        peak_reserved=peak_reserved,
+        allocated=allocated, reserved=reserved, peak_allocated=peak, peak_reserved=peak_reserved
     )
 
 
@@ -66,10 +63,7 @@ def test_flat_fields_are_projections_of_the_typed_samples(monkeypatch) -> None:
     readings = [_reading(1000 + 32 * step, 1000 + 32 * step) for step in range(64)]
     provider = _ScriptedProvider({"fake:0": readings})
     captured = _capture_with_provider(
-        monkeypatch,
-        provider,
-        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
-        torch.randn(2, 4),
+        monkeypatch, provider, nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4)
     )
     try:
         relu = captured.ops["relu_1_2"]

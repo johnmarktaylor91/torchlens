@@ -236,8 +236,6 @@ def test_layer_door_on_single_pass_layer_edits_only_that_layer(captured) -> None
     fork = trace.fork()
     fork[fresh].do(tl.scale(2.0))
     assert torch.allclose(
-        fork[fork.output_layers[0]].out,
-        _oracle(model, x, fresh_edit=_double),
-        atol=1e-6,
+        fork[fork.output_layers[0]].out, _oracle(model, x, fresh_edit=_double), atol=1e-6
     )
     assert not any(fork[f"{shared}:{pass_index}"].edits for pass_index in (1, 2))

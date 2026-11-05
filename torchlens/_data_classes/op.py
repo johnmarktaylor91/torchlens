@@ -2832,10 +2832,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Build context for an out or grad transform failure."""
 
         return _op_save._transform_error_message(
-            self,
-            transform_kind=transform_kind,
-            tensor=tensor,
-            streaming_active=streaming_active,
+            self, transform_kind=transform_kind, tensor=tensor, streaming_active=streaming_active
         )
 
     def _validate_train_mode_transform_output(
@@ -2862,10 +2859,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Validate transformed tensors before streaming bundle finalization."""
 
         _op_save._validate_streaming_transform_output(
-            self,
-            output,
-            transform_kind=transform_kind,
-            streaming_active=streaming_active,
+            self, output, transform_kind=transform_kind, streaming_active=streaming_active
         )
 
     def _abort_streaming_writer(self, message: str) -> None:
@@ -2884,11 +2878,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Stream one tensor field when present."""
 
         _op_save._stream_tensor_blob(
-            self,
-            writer,
-            tensor_field=tensor_field,
-            pending_field=pending_field,
-            kind=kind,
+            self, writer, tensor_field=tensor_field, pending_field=pending_field, kind=kind
         )
 
     # ********************************************

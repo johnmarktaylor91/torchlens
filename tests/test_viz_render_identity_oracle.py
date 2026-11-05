@@ -409,16 +409,10 @@ def _cases() -> tuple[OracleCase, ...]:
             {"collapse": "auto", "fold_repeats": None, "skip_fn": _skip_relu},
         ),
         OracleCase(
-            "repeat_max_fold_off",
-            OracleRepeat,
-            (1, 4),
-            {"collapse": "max", "fold_repeats": False},
+            "repeat_max_fold_off", OracleRepeat, (1, 4), {"collapse": "max", "fold_repeats": False}
         ),
         OracleCase(
-            "repeat_float_quarter",
-            OracleRepeat,
-            (1, 4),
-            {"collapse": 0.25, "fold_repeats": None},
+            "repeat_float_quarter", OracleRepeat, (1, 4), {"collapse": 0.25, "fold_repeats": None}
         ),
         OracleCase(
             "repeat_float_three_quarters",
@@ -475,11 +469,7 @@ def _cases() -> tuple[OracleCase, ...]:
             intervene=True,
         ),
         OracleCase(
-            "orphans_visible",
-            OracleOrphans,
-            (1, 4),
-            {"show_orphans": True},
-            keep_orphans=True,
+            "orphans_visible", OracleOrphans, (1, 4), {"show_orphans": True}, keep_orphans=True
         ),
         *tuple(
             OracleCase(
@@ -975,10 +965,7 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
         trace.backward(loss)
         _stabilize_backward_identifiers(trace)
         backward = trace.draw(
-            graph="backward",
-            rolled=True,
-            path=str(tmp_path / "backward"),
-            file_format="svg",
+            graph="backward", rolled=True, path=str(tmp_path / "backward"), file_format="svg"
         ).dot
         combined = trace.draw(
             graph="combined", path=str(tmp_path / "combined"), file_format="svg"
@@ -1199,10 +1186,7 @@ def test_viz_render_identity_oracle(tmp_path: Path) -> None:
         # update run reporting green is a vacuous pass (b10 R78-8d).
         pytest.skip(f"updated render-identity golden; re-run without {_UPDATE_ENV} to verify")
     golden_path = require_env_golden(
-        _GOLDEN_PATH.parent,
-        _GOLDEN_PATH.name,
-        _UPDATE_ENV,
-        extra_packages=_EMITTER_PACKAGES,
+        _GOLDEN_PATH.parent, _GOLDEN_PATH.name, _UPDATE_ENV, extra_packages=_EMITTER_PACKAGES
     )
     expected = json.loads(golden_path.read_text(encoding="utf-8"))
     if os.environ.get(_BYTE_ORACLE_ENV) == "1":

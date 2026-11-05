@@ -77,11 +77,7 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
     original = backward_mod._register_fire_timing_prehook
 
     def failing(
-        inner_trace,
-        grad_fn_handle,
-        grad_fn_object_id,
-        fire_start_stamps,
-        marker_tokens=None,
+        inner_trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps, marker_tokens=None
     ):
         # Signature tracks _register_fire_timing_prehook (F27 FLIP-2 added the
         # optional marker-token LIFO); a registration failure still means

@@ -388,9 +388,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
         (
             "append",
             lambda log: log.run(
-                _ReluAdd(),
-                torch.ones(1, 4),
-                replay=tl.options.ReplayOptions(append=True),
+                _ReluAdd(), torch.ones(1, 4), replay=tl.options.ReplayOptions(append=True)
             ),
             terrors.AppendMismatchError,
         ),

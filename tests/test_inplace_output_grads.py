@@ -221,9 +221,7 @@ def _refreshed_trace(model: nn.Module, x: torch.Tensor, save_grads: object) -> t
     """Trace ``model`` on one input, then refresh it onto ``x`` with ``save_new_outs``."""
 
     trace = tl.trace(
-        model,
-        torch.randn_like(x),
-        capture=CaptureOptions(save_grads=save_grads, seed=0),
+        model, torch.randn_like(x), capture=CaptureOptions(save_grads=save_grads, seed=0)
     )
     trace._save_new_outs(model, x, seed=1)
     trace.backward(trace[trace.output_layers[0]].out.sum())

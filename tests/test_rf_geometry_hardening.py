@@ -392,10 +392,7 @@ def test_strided_slice_projective_lattice(start: int, step: int) -> None:
         truth = true_receptive_support(model, x, (0, 0, out_pos))
         box = getitem.receptive_field.at((out_pos,))
         assert_box_against_truth(
-            box,
-            truth,
-            (2,),
-            context=f"slice RF start={start} step={step} out={out_pos}",
+            box, truth, (2,), context=f"slice RF start={start} step={step} out={out_pos}"
         )
 
 

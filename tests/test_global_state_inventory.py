@@ -408,11 +408,7 @@ def test_nested_public_capture_inside_reserved_window_refuses_typed() -> None:
     class _NestedTraceTensor(torch.Tensor):
         @classmethod
         def __torch_function__(
-            cls,
-            func: object,
-            types: object,
-            args: tuple = (),
-            kwargs: dict | None = None,
+            cls, func: object, types: object, args: tuple = (), kwargs: dict | None = None
         ) -> object:
             kwargs = kwargs or {}
             if fired["result"] is None and _state._capture_reserved_by is not None:
