@@ -52,6 +52,7 @@ from ._foreign_data import (
     known_foreign_kernel_exits,
     note_plain_export,
 )
+from ._function_epilogue import SAVED_ALIAS_OWNER, credit_saved_output_aliases, register_apply_code
 from ._function_input_views import log_native_input_views, own_view_dispatch
 from .escape_detection import ExpectedOriginalToken
 
@@ -343,6 +344,7 @@ def install_function_apply_wrapper() -> None:
             return original_function(cls, *args, **kwargs)
         return record_function_apply(active_trace, cls, original_function, args, kwargs)
 
+    register_apply_code(original_function)
     functools.update_wrapper(wrapped_apply, original_function)
     installed = classmethod(wrapped_apply)
     torch.autograd.Function.apply = installed  # type: ignore[assignment]
@@ -688,6 +690,20 @@ def _log_input_view(
     own_view_dispatch(marks.witness_state, marks.witness_mark, token)
 
 
+def _finish_ordinary_call(
+    trace: Any, args: tuple[Any, ...], out: Any, marks: BoundaryMarks, original: Any
+) -> None:
+    """Credit the aliases C++ ``apply`` took of its own outputs, then log its input views.
+
+    The first is :mod:`._function_epilogue`; the second records the ``view_as`` torch
+    made in C++ for an output that is an input (:func:`log_native_input_views`).
+    """
+
+    token = _accounted_boundary_token(original, SAVED_ALIAS_OWNER, "detach")
+    credit_saved_output_aliases(marks.witness_state, marks.witness_mark, out, token)
+    log_native_input_views(trace, args, out, marks, _log_input_view)
+
+
 def record_function_apply(
     trace: Any,
     cls: type[Any],
@@ -699,8 +715,8 @@ def record_function_apply(
 
     A forward leaves torch when the frame saw an export or host re-entry, or when the
     Function is a known foreign kernel (``_foreign_data.known_foreign_kernel_exits``:
-    FlashAttention 4 hands its tensors to a CuTe kernel through TVM FFI, which no export
-    patch sees).
+    FlashAttention 4 hands its tensors to a CuTe kernel through TVM FFI, unseen by any
+    export patch). An ordinary call credits its epilogue aliases and C++ input views.
 
     Parameters
     ----------
@@ -737,7 +753,7 @@ def record_function_apply(
         host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
         exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
-        log_native_input_views(trace, args, out, marks, _log_input_view)
+        _finish_ordinary_call(trace, args, out, marks, original_function)
         return out
     spec = BoundarySpec(
         replay=_make_replay_callable(cls, original_function, exits),
