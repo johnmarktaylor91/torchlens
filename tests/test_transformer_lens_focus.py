@@ -89,6 +89,8 @@ def test_transformer_lens_focuses_the_first_block_and_says_so() -> None:
     try:
         resolution = lenses.resolve_lens(log, "transformer")
         assert resolution.draw_kwargs["module"] == "blocks.0"
+        # A repeat fold would draw the focused block as one closed box.
+        assert not resolution.draw_kwargs.get("fold_repeats")
         assert any("first of 3 _Block blocks" in line for line in resolution.disclosure)
     finally:
         log.cleanup()

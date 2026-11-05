@@ -168,10 +168,9 @@ TRANSFORMER_LENS = register_lens(
         question="how is attention wired?",
         members={
             # The resolver focuses the draw on the first repeated block that
-            # holds attention (module=), so its wiring is drawn in full
-            # instead of hidden in a folded module box.
+            # holds attention (module=), so its wiring is drawn in full;
+            # folding repeats would draw that block as one closed box.
             "collapse": "none",
-            "fold_repeats": True,
             "show_legend": True,
         },
         disclosure=("attention rows come from module names and op types",),
