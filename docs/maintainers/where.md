@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1604 modules, 682917 lines, 0 modules without a docstring.
+83 packages, 1604 modules, 682929 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -24,7 +24,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 62 | 37006 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8995 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12559 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 25 | 12571 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
@@ -560,7 +560,7 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (25 modules, 12559 lines)
+Internal backend-neutral IR for TorchLens capture unification. (25 modules, 12571 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -570,7 +570,7 @@ Internal backend-neutral IR for TorchLens capture unification. (25 modules, 1255
 | `_op_row_seed` | The values ''Op'' construction derives and converts, applied to a capture row. | 129 |
 | `_output_occurrences` | Output-path occurrences of captured tensors, built at capture and read at output-op build. | 110 |
 | `_output_path_assign` | Assign a value at a nested output path, rebuilding immutable containers on the way. | 125 |
-| `_row_journal` | Row-backed exhaustive capture journal (capture C2b). | 643 |
+| `_row_journal` | Row-backed exhaustive capture journal (capture C2b). | 655 |
 | `_selector_nodes` | Leaf plan nodes for the compiled selector evaluator. | 460 |
 | `_selector_universe` | Per-lifecycle subject universes for the selector interpreter. | 552 |
 | `capture_events` | Mutable capture event accumulator for one forward pass. | 1224 |

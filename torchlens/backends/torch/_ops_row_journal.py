@@ -30,7 +30,7 @@ from ._ops_freeze_refs import (
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-    from ..._ir.refs import FunctionCallRef
+    from ..._ir.events import FunctionCallRef
     from ..._trace_core.op_store import OpStoreLayout
     from ...intervention.types import EdgeUseRecord
     from .ops import ExhaustiveOpDraft

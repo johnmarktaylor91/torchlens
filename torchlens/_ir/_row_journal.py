@@ -93,6 +93,18 @@ class _RowResidual:
         "__weakref__",
     )
 
+    kind: Any
+    output: Any
+    function: Any
+    module_stack: Any
+    edge_uses: Any
+    params: Any
+    parent_params: Any
+    backend_semantics: Any
+    policy: Any
+    is_scalar_bool: Any
+    fire_results: Any
+
     def __init__(self, **values: Any) -> None:
         """Store every residual slot from keyword arguments (all are required)."""
 
