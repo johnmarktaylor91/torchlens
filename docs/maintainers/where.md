@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1729 modules, 701677 lines, 0 modules without a docstring.
+85 packages, 1729 modules, 701774 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 33983 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 34080 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -2317,7 +2317,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 33983 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 34080 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2329,7 +2329,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 257 |
 | `_consolidated` | Consolidated validation entry point for TorchLens 2.0. | 731 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 41 |
-| `_core` | Core validation logic for verifying saved activations. | 3684 |
+| `_core` | Core validation logic for verifying saved activations. | 3683 |
 | `_core_arg_slots` | Slot-level evidence readers for the unattributed-arg-slot sweep. | 101 |
 | `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'', saturation and clamp bounds. | 486 |
 | `_ctc_lengths_perturbation` | Sum-preserving length perturbation for ''ctc_loss''. | 80 |
@@ -2340,7 +2340,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_display` | Validation printouts; independent of checks, tolerances and verdict production. | 112 |
 | `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 691 |
 | `_edge_boundary` | Edge-intervention boundary validation, split out of ''core.py''. | 361 |
-| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 655 |
+| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 656 |
 | `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 494 |
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
 | `_exemption_table` | The declared table of validation exemptions. | 91 |
@@ -2380,7 +2380,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_non_pass_record` | Close ''validate_saved_outs'' so every non-passing status carries a recorded failure. | 136 |
 | `_norm_running_var_proof` | Value proof for an eval-mode batch_norm whose input sits exactly at its running mean. | 173 |
 | `_norm_zero_weight_proof` | Value proof for a normalization input annihilated by an all-zero affine weight. | 147 |
-| `_operand_value_proofs` | Value proofs for calls whose perturbed operand provably cannot reach the output. | 473 |
+| `_operand_value_proofs` | Value proofs for calls whose perturbed operand provably cannot reach the output. | 483 |
 | `_output_walk` | Validation-owned independent output-tensor traversal. | 98 |
 | `_perturb` | Validation perturbations: a random wrong value per dtype for the replay tripwire. | 280 |
 | `_posthoc_decision` | The structured decision every posthoc perturbation predicate returns. | 29 |
@@ -2394,7 +2394,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_replay_warnings` | Keep validation verdicts independent of the caller's warning filters. | 67 |
 | `_saved_outs_steps` | Recorded failure and diagnostic steps of one forward-replay validation run. | 281 |
 | `_saved_value_proofs` | Posthoc value proofs for parents that provably cannot reach an op's output. | 463 |
-| `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 270 |
+| `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 357 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 291 |
 | `_setitem_index_probe` | In-domain index probe for integer and bool-mask index components of ''__setitem__''. | 300 |
 | `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 315 |
