@@ -586,6 +586,10 @@ last-run slots are overwritten per run and never steer a verdict.
 
 _WEAK_SUBJECT_TABLES = frozenset(
     {
+        # Instance step-hook bindings keyed weakly by the optimizer: a hold per
+        # TorchLens session, the entry deleted with the last hold (torch 2.1
+        # compile strip fallback); dies with the optimizer.
+        ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
         # by the Trace), so re-validation of a fresh capture can re-check it.
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
@@ -943,6 +947,7 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
