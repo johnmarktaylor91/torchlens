@@ -27,6 +27,7 @@ torchvision = pytest.importorskip("torchvision")
 import example_models  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from tests.support.pickled_weights_guard import requires_pickled_weight_loading  # noqa: E402
 from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK  # noqa: E402
 from torchlens._visualization import show_model_graph  # noqa: E402
 from torchlens.validation import validate_forward_pass  # noqa: E402
@@ -1768,6 +1769,7 @@ def test_simple_moe():
 
 
 @pytest.mark.heavy
+@requires_pickled_weight_loading
 def test_electra_small():
     transformers = pytest.importorskip("transformers")
     tokenizer = transformers.AutoTokenizer.from_pretrained("google/electra-small-discriminator")
