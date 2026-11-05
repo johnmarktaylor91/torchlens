@@ -66,6 +66,7 @@ __all__ = [
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -346,6 +347,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_GRAPH_TASK_ID": ("torch:_C._current_graph_task_id",),
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
+    "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -1001,47 +1003,15 @@ def _probe_disabled_torch_function_impl() -> bool:
 
 
 def _probe_gradient_edge() -> bool:
-    """Return whether torch's GradientEdge surface actually WORKS end to end.
+    """Return whether torch's GradientEdge surface works end to end (see the leaf).
 
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
-        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
-        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
-        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
-        an explicit cotangent succeeds. Attribute presence alone is
-        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
-        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
-        every output -- including a bare ``GradientEdge``, which has no such
-        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
-        matching this read's long-documented "2.4+" remedy text). Absent on
-        older torch or broken on this intermediate band is a healthy old
-        install either way, not a TorchLens degradation: the read refuses
-        typed.
+    Attribute presence alone is insufficient: torch 2.2-2.3 ships the class but its
+    own ``_make_grads`` raises ``AttributeError`` on a bare ``GradientEdge`` output
+    (fixed upstream by 2.4). Absent or broken is a healthy old install, not a
+    TorchLens degradation: the read refuses typed.
     """
 
-    if (
-        _import_module_attr_or_none("torch.autograd.graph", "GradientEdge") is None
-        or _import_module_attr_or_none("torch.autograd.graph", "get_gradient_edge") is None
-    ):
-        return False
-    from torch.autograd.graph import GradientEdge
-
-    try:
-        x = torch.randn(1, requires_grad=True)
-        h = x * 2
-        if h.grad_fn is None:
-            # Never happens for a requires_grad leaf's product, but the
-            # static annotation is ``Node | None``; treat an impossible-in-
-            # practice None the same as any other probe failure below.
-            return False
-        torch.autograd.grad(
-            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
-        )
-    except Exception:
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_gradient_edge())
 
 
 def get_gradient_edge_support(*, force_probe: bool = False) -> bool:
@@ -1366,6 +1336,7 @@ HAS_ACCUMULATE_GRAD_CLASS: bool = _probe_attribute_paths("HAS_ACCUMULATE_GRAD_CL
 HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK_ID")
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
+HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1565,6 +1536,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_GRAPH_TASK_ID",
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
+    "HAS_VIEW_FUNC_UNSAFE",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -1782,6 +1754,9 @@ class TorchCapabilityWarning(TorchLensWarning):
 
 OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
     {
+        # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
+        # fallback of get_view_func_replay, not a degradation.
+        "HAS_VIEW_FUNC_UNSAFE",
         # PEP 657 / 3.11 code-object surfaces: an interpreter feature, not a
         # torch-private degradation -- CPython 3.10 installs are healthy.
         "HAS_CODE_POSITIONS",
@@ -2132,6 +2107,17 @@ def get_current_autograd_node_fn() -> Callable[[], Any] | None:
 def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     """Return autograd's original-view-tracking context manager, or ``None`` (flag flipped)."""
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
+
+
+def get_view_func_replay() -> Callable[..., Any]:
+    """Return ``Tensor._view_func_unsafe``, else torch 2.1's ``Tensor._view_func``.
+
+    Torch 2.2 renamed the unchecked view-chain replay to ``_view_func_unsafe`` and
+    gave ``_view_func`` a checked wrapper; on 2.1 ``_view_func`` is that same
+    unchecked replay, so the fallback replays identically (``HAS_VIEW_FUNC_UNSAFE``).
+    """
+    found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
+    return found if found is not None else torch.Tensor._view_func
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:

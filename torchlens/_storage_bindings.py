@@ -238,6 +238,7 @@ def has_view_geometry_of(rebuilt: torch.Tensor, recorded: torch.Tensor) -> bool:
 def copy_with_view_context(
     tensor: torch.Tensor,
     force_tracking: Callable[[bool], AbstractContextManager[Any]] | None,
+    replay_view_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
 ) -> torch.Tensor:
     """Copy a view together with a private copy of its base, keeping the view relation.
 
@@ -258,6 +259,10 @@ def copy_with_view_context(
         Autograd's original-view-tracking context manager, which the caller
         takes from the capability accessor ``get_force_original_view_tracking``
         (``None`` when ``HAS_ORIGINAL_VIEW_TRACKING`` reads ``False``).
+    replay_view_func:
+        The unbound unchecked view-chain replay, from the capability accessor
+        ``get_view_func_replay`` (``Tensor._view_func_unsafe``, or the older
+        ``Tensor._view_func`` spelling when ``HAS_VIEW_FUNC_UNSAFE`` reads ``False``).
 
     Returns
     -------
@@ -268,7 +273,7 @@ def copy_with_view_context(
     if force_tracking is not None and tensor._is_view() and tensor._base is not None:
         base_copy = copy_with_storage_context(tensor._base.detach())
         with force_tracking(True):
-            rebuilt = tensor._view_func_unsafe(base_copy)
+            rebuilt = replay_view_func(tensor, base_copy)
         if isinstance(rebuilt, torch.Tensor) and has_view_geometry_of(rebuilt, tensor):
             return rebuilt
     return tensor.detach().clone()

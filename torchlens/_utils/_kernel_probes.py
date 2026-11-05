@@ -236,3 +236,37 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
             return False
         raise
     return True
+
+
+def probe_gradient_edge() -> bool:
+    """Return whether a real ``autograd.grad`` seeded by an output ``GradientEdge`` runs.
+
+    The one-backward read engine seeds ``autograd.grad`` with ``(node, output
+    slot)`` addresses, so both ``GradientEdge`` and ``get_gradient_edge`` must
+    exist AND a call seeding an output edge with an explicit cotangent must
+    succeed: some releases ship the class while their own gradient plumbing
+    rejects it.
+
+    Returns
+    -------
+    bool
+        ``True`` when the seeded ``autograd.grad`` call succeeds.
+    """
+
+    try:
+        from torch.autograd.graph import GradientEdge, get_gradient_edge  # noqa: F401
+    except ImportError:
+        return False
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        if h.grad_fn is None:
+            # Impossible for a requires_grad leaf's product; the static type is
+            # ``Node | None``, so treat it as any other probe failure.
+            return False
+        torch.autograd.grad(
+            [GradientEdge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
+        )
+    except Exception:
+        return False
+    return True
