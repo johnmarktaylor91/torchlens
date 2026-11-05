@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import io
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -26,6 +28,8 @@ import test_loop_module_rolling as demos  # noqa: E402
 from support.label_geometry import audit_gv_source  # noqa: E402
 
 import torchlens as tl  # noqa: E402
+from torchlens._visualization._fonts import graphviz_font_env  # noqa: E402
+from torchlens._visualization._pass_label_placement import place_pass_labels  # noqa: E402
 
 _CONTAINER_FRAME_GUTTER_PX = 5
 
@@ -68,7 +72,11 @@ def test_rolled_edge_labels_have_zero_hard_violations(
         path=str(tmp_path / name),
         **kwargs,
     ).dot
-    result = audit_gv_source(gv_source)
+    # The returned DOT carries no pass-label placement (it is the same under every
+    # Graphviz build); the renderer places the labels only in the text the image is
+    # drawn from, so audit that text.
+    placed_source = place_pass_labels(gv_source, engine="dot", timeout=60)
+    result = audit_gv_source(placed_source)
     assert result.hard_violation_count == 0, result.describe_violations(name)
 
 
@@ -171,6 +179,37 @@ class _CacheLayer(nn.Module):
         return x + 1, past_key_values
 
 
+_RASTERIZE_SCRIPT = (
+    "import sys, cairosvg; "
+    "sys.stdout.buffer.write(cairosvg.svg2png(bytestring=sys.stdin.buffer.read(), "
+    "output_width=int(sys.argv[1]), output_height=int(sys.argv[2])))"
+)
+
+
+def _rasterize_with_layout_font(svg_text: str, width: int, height: int) -> bytes:
+    """Rasterize ``svg_text`` to PNG with the font Graphviz measured the layout with.
+
+    The SVG names ``Helvetica``; Graphviz sized every box with the bundled face
+    (``graphviz_font_env``), but cairo in this process would resolve the name
+    through the host's fontconfig, where a wider fallback such as DejaVu Sans
+    overflows boxes that fit. A child process with the same font environment
+    draws the text the layout measured. Fontconfig reads its configuration once
+    per process, so the environment cannot be switched in place.
+    """
+
+    proc = subprocess.run(
+        [sys.executable, "-c", _RASTERIZE_SCRIPT, str(width), str(height)],
+        input=svg_text.encode(),
+        capture_output=True,
+        env=graphviz_font_env(),
+        timeout=120,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise AssertionError(f"cairosvg rasterization failed: {proc.stderr.decode()[-2000:]}")
+    return proc.stdout
+
+
 def _native_svg_outer_frame_min_brightness(svg_path: Path) -> dict[str, int]:
     """Return minimum RGB brightness in the outermost SVG frame."""
 
@@ -181,11 +220,7 @@ def _native_svg_outer_frame_min_brightness(svg_path: Path) -> dict[str, int]:
     _x0, _y0, view_width, view_height = [float(value) for value in match.group(1).split()]
     width = round(view_width)
     height = round(view_height)
-    png_bytes = cairosvg.svg2png(
-        bytestring=svg_text.encode(),
-        output_width=width,
-        output_height=height,
-    )
+    png_bytes = _rasterize_with_layout_font(svg_text, width, height)
     rgba_image = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     image = Image.new("RGB", rgba_image.size, (255, 255, 255))
     image.paste(rgba_image, mask=rgba_image.getchannel("A"))
