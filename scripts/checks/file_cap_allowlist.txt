@@ -234,7 +234,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	487
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3712
+torchlens/_io/runnable_load.py	3711
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -1136,7 +1136,7 @@ torchlens/intervention/replay.py::_commit_replay_updates	71
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
-torchlens/intervention/replay.py::_run_replay	152
+torchlens/intervention/replay.py::_run_replay	150
 torchlens/intervention/rerun.py	1626
 torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
