@@ -17,19 +17,21 @@ import dataclasses
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from .themes import RELEASED_SEMANTIC_PALETTE
+
 if TYPE_CHECKING:
     from .._vocab.node_spec import NodeSpec
     from ._header_block import KeySwatch
     from .themes import VisualizationTheme
 
-__all__ = [
+__all__ = (
     "ENDPOINT_RING_PENWIDTH",
     "color_scale_active",
     "endpoint_ring_ink",
     "endpoint_ring_role",
     "endpoint_ring_spec",
     "endpoint_ring_swatch",
-]
+)
 
 #: Ring width of an endpoint under a colour scale, in points (the edit ring's width).
 ENDPOINT_RING_PENWIDTH = 2.5
@@ -49,8 +51,6 @@ def endpoint_ring_ink(role: str, theme: VisualizationTheme | None) -> str:
     The skin's own input or output colour, so a ring matches the fill the
     skin would otherwise paint; the released palette when no skin is given.
     """
-
-    from .themes import RELEASED_SEMANTIC_PALETTE
 
     palette: Mapping[str, str] = (
         RELEASED_SEMANTIC_PALETTE if theme is None else theme.semantic_palette
