@@ -117,7 +117,7 @@ from .escape_detection import (
 )
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 from .offload_hooks import uninstall_offload_hook_shims
-from .ops import _add_tensor_backward_hook
+from .ops import _VIEW_MUTATION_RELABELS, _add_tensor_backward_hook
 from .prehook_provenance import bind_invocation
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
@@ -2161,15 +2161,15 @@ def _cleanup_model_session(
     if input_objects is not None:
         _clear_session_tensor_metadata(input_objects, seen)
 
-    # The class-metadata cache is SESSION-scoped by design, but it was only ever
-    # cleared at the START of the next capture -- so a process whose last capture
-    # used generated / function-local module classes pinned those classes (and,
-    # through ``meta["cls"]``, their code objects and closures) alive
-    # indefinitely. Release it here too: the entries have no consumer after
-    # module capture, and the start-of-session clear stays as the staleness
-    # guard for captures that die before this epilogue runs.
+    # Session-scoped state released here, not only at the START of the next capture: the
+    # class-metadata cache pinned generated / function-local module classes (and, through
+    # ``meta["cls"]``, their code objects and closures) alive indefinitely, and the
+    # view-write relabels kept every later capture off the per-call emptiness check. A
+    # capture that dies before this epilogue leaves stale entries that the next start clears
+    # (class metadata) or that its retired session token keeps inert (relabels).
     _module_class_metadata_cache.clear()
     _state._dir_cache.clear()
+    _VIEW_MUTATION_RELABELS.clear()
 
     # r83 C1: retire this capture's label-anchoring session LAST, after every
     # cleanup pass that consults it. Any label still carried by an object that
