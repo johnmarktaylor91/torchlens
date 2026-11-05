@@ -228,7 +228,7 @@ def _build_shared_fields_dict(
     Returns:
         (fields_dict, parent_layer_entries, arg_tensors, parent_param_ops)
     """
-    _bind_writeback_receiver_label(func_name, args)
+    bound_aliases = _bind_call_alias_labels(args, kwargs)
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = _normalize_func_name(func_name)
 
@@ -294,18 +294,7 @@ def _build_shared_fields_dict(
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-    # Exact-name lookup first (add / add_ / __add__ have distinct signatures --
-    # W3 F9). The underscore-stripped key remains a best-effort fallback for
-    # NON-dunder names whose own introspection stored nothing; a dunder whose
-    # signature is opaque stays honestly unknown (empty) rather than borrowing
-    # the namesake torch function's different signature.
-    _op_arg_names = _st._arg_names.get(func_name)
-    if _op_arg_names is None:
-        if func_name.startswith("__"):
-            _op_arg_names = ()
-        else:
-            _op_arg_names = _st._arg_names.get(func_name.strip("_"), ())
-    fields_dict["arg_names"] = _op_arg_names
+    fields_dict["arg_names"] = _call_arg_names(func_name)
     fields_dict["num_args_total"] = len(args) + len(kwargs)
     fields_dict["num_pos_args"] = len(args)
     fields_dict["num_kwargs"] = len(kwargs)
@@ -348,7 +337,26 @@ def _build_shared_fields_dict(
         param_shapes,
     )
 
+    _restore_call_alias_labels(bound_aliases)
     return fields_dict, parent_layer_entries, arg_tensors, parent_param_ops
+
+
+def _call_arg_names(func_name: str) -> tuple[str, ...]:
+    """Return the recorded argument names of the wrapped callable ``func_name``.
+
+    Exact-name lookup first (add / add_ / __add__ have distinct signatures --
+    W3 F9). The underscore-stripped key remains a best-effort fallback for
+    NON-dunder names whose own introspection stored nothing; a dunder whose
+    signature is opaque stays honestly unknown (empty) rather than borrowing
+    the namesake torch function's different signature.
+    """
+
+    names = _st._arg_names.get(func_name)
+    if names is not None:
+        return names
+    if func_name.startswith("__"):
+        return ()
+    return _st._arg_names.get(func_name.strip("_"), ())
 
 
 def _classify_new_tensor_in_trace(
@@ -618,8 +626,9 @@ from ._ops_arguments import (  # noqa: E402
     _tensor_has_known_provenance,
 )
 from ._ops_capture_records import (  # noqa: E402
-    _bind_writeback_receiver_label,
+    _bind_call_alias_labels,
     _record_label_version_snapshot,
+    _restore_call_alias_labels,
     _snapshot_exhaustive_module_stack,
 )
 from ._ops_emission import (  # noqa: E402

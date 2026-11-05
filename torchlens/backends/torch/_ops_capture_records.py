@@ -42,7 +42,8 @@ __all__ = (
     "_compact_ancestor_sets",
     "_is_inplace_augmented_assignment_dunder",
     "_record_label_version_snapshot",
-    "_bind_writeback_receiver_label",
+    "_bind_call_alias_labels",
+    "_restore_call_alias_labels",
     "_label_version_baseline",
     "_stamp_same_object",
     "get_capture_producer_policy",
@@ -208,19 +209,19 @@ def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | Non
     mutated_via
         ``(view, prior_label)`` when ``t`` is a storage alias whose label was just
         advanced because an in-place op wrote through ``view``; remembered for
-        :func:`_bind_writeback_receiver_label`.
+        :func:`_bind_call_alias_labels`, chained to the alias's previous advance
+        when that advance produced ``prior_label`` in this session.
     """
 
     if not isinstance(t, torch.Tensor):
         return
     if mutated_via is not None:
         view, prior_label = mutated_via
-        _VIEW_MUTATION_RELABELS[t] = (
-            active_label_session_token(),
-            prior_label,
-            get_tensor_label(t),
-            id(view),
-        )
+        token = active_label_session_token()
+        previous = _VIEW_MUTATION_RELABELS.get(t)
+        if previous is not None and (previous[0] != token or previous[2] != prior_label):
+            previous = None
+        _VIEW_MUTATION_RELABELS[t] = (token, prior_label, get_tensor_label(t), id(view), previous)
     # ``_version`` is a WITNESSED input-metadata property (r33): the scoped patch
     # records a genuine USER ``x._version`` read on a model-input leaf. This snapshot is
     # TorchLens's OWN bookkeeping read, so it must run under the internal marker or it
@@ -232,57 +233,126 @@ def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | Non
         _LABEL_VERSION_SNAPSHOT[t] = (active_label_session_token(), version)
 
 
-def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> None:
-    """Bind an augmented-assignment write-back's receiver to its pre-mutation producer.
+def _call_alias_tensors(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[torch.Tensor]:
+    """Return the distinct rebindable tensors a call reads, top level and one list deep."""
 
-    ``x[idx] += v`` runs as ``t = x[idx]; t += v; x[idx] = t``. The in-place op wrote
-    through the view ``t``, so storage-alias propagation advanced ``x``'s label to that
-    op, and the write-back ``__setitem__`` then recorded ONE parent at slot 0 (the whole
-    tensor) and slot 2 (the slice): one label for two different values, which a
-    per-(parent, child) version snapshot cannot carry, so argument logging failed on
-    every such call. When slot 2 IS the view the in-place op wrote through, slot 0
-    binds to the pre-mutation label for this call, so each slot has its own label:
-    the value slot the mutation op, the receiver slot the base's own lineage. For a
-    same-region write-back the binding is exact on its own (the call overwrites
-    precisely the region the mutation wrote); when the view is written to ANOTHER
-    region of its base (``v = m[:, 0:2]; v.mul_(3); m[:, 2:4] = v``) the receiver
-    slot consumes a later version of that label and its actual content reaches
-    replay through the per-child version snapshot. The setitem's own label then
-    advances ``x`` like any in-place op. Advanced indexing or a later relabel of
-    the receiver is left as is.
+    found: dict[int, torch.Tensor] = {}
+    for value in (*args, *kwargs.values()):
+        for item in value if isinstance(value, (list, tuple)) else (value,):
+            if (
+                isinstance(item, torch.Tensor)
+                and not isinstance(item, torch.nn.Parameter)
+                and item.device.type != "meta"
+            ):
+                found.setdefault(id(item), item)
+    return list(found.values())
+
+
+def _resolve_call_alias_labels(tensors: list[torch.Tensor]) -> dict[int, str]:
+    """Return the label each colliding argument of one call binds to, by tensor id.
+
+    An argument whose label another argument also carries, and which holds it only
+    because an in-place op wrote through a view of it (a live relabel entry of this
+    session naming that label), steps back to its label before that write; the step
+    repeats along the alias's chained relabels while a collision remains. A tensor
+    that produced its label itself never moves, so the written view keeps the
+    mutation's label. A collision no relabel explains is left as is (fail closed).
 
     Parameters
     ----------
-    func_name
-        Name of the call being logged.
-    args
-        The call's live positional arguments.
+    tensors
+        The call's distinct argument tensors.
+
+    Returns
+    -------
+    dict[int, str]
+        ``id(tensor)`` to its label for this call, only for tensors that move.
     """
 
-    if func_name != "__setitem__" or len(args) < 3:
-        return
-    receiver, value = args[0], args[2]
-    if (
-        not isinstance(receiver, torch.Tensor)
-        or not isinstance(value, torch.Tensor)
-        or isinstance(receiver, torch.nn.Parameter)
-        or receiver.device.type == "meta"
-    ):
-        return
-    entry = _VIEW_MUTATION_RELABELS.get(receiver)
-    if entry is None:
-        return
-    session_token, prior_label, mutation_label, view_id = entry
-    if (
-        prior_label is None
-        or session_token is None
-        or session_token != active_label_session_token()
-        or view_id != id(value)
-        or get_tensor_label(receiver) != mutation_label
-        or get_tensor_label(value) != mutation_label
-    ):
-        return
-    set_tensor_label(receiver, prior_label)
+    token = active_label_session_token()
+    bound: dict[int, str] = {}
+    cursor: dict[int, Any] = {}
+    for tensor in tensors:
+        label = get_tensor_label(tensor)
+        if label is None:
+            continue
+        entry = _VIEW_MUTATION_RELABELS.get(tensor)
+        live = entry is not None and entry[0] == token and entry[2] == label
+        bound[id(tensor)] = label
+        cursor[id(tensor)] = entry if live else None
+    moved: dict[int, str] = {}
+    changed = True
+    while changed:
+        changed = False
+        holders: dict[str, list[int]] = {}
+        for tensor_id, label in bound.items():
+            holders.setdefault(label, []).append(tensor_id)
+        for tensor_ids in holders.values():
+            for tensor_id in tensor_ids if len(tensor_ids) > 1 else ():
+                entry = cursor[tensor_id]
+                if entry is None or entry[1] is None:
+                    continue
+                bound[tensor_id] = moved[tensor_id] = entry[1]
+                cursor[tensor_id] = entry[4]
+                changed = True
+    return moved
+
+
+def _bind_call_alias_labels(
+    args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> list[tuple[torch.Tensor, str | None, str]]:
+    """Bind each argument of one call to the label of the value it is, for this call.
+
+    An in-place op on a view advances its base's label to that op, so the base's
+    later consumers see the write (``wrappers._propagate_mutation_label_to_storage_aliases``).
+    A call that reads the base AND the written view (``y + col`` after
+    ``col.add_(1)``; the write-back ``x[idx] = t`` of ``x[idx] += v``) then held one
+    label for two different values, which a per-(parent, child) version snapshot cannot
+    carry, so argument logging failed. Here the base binds to its pre-write label (its
+    actual content reaches replay through the per-child version snapshot) and the view
+    keeps the mutation's label; see :func:`_resolve_call_alias_labels`. The caller hands
+    the result to :func:`_restore_call_alias_labels` once the call's argument reads are
+    recorded, so the base's later consumers still bind to the mutation. A capture with
+    no live view-write relabel pays one emptiness check per call.
+
+    Parameters
+    ----------
+    args
+        The call's live positional arguments.
+    kwargs
+        The call's live keyword arguments.
+
+    Returns
+    -------
+    list[tuple[torch.Tensor, str | None, str]]
+        ``(tensor, live_label, bound_label)`` for every argument that moved.
+    """
+
+    if not _VIEW_MUTATION_RELABELS:
+        return []
+    tensors = _call_alias_tensors(args, kwargs)
+    moved = _resolve_call_alias_labels(tensors) if len(tensors) > 1 else {}
+    bound = []
+    for tensor in tensors if moved else ():
+        label = moved.get(id(tensor))
+        if label is not None:
+            bound.append((tensor, get_tensor_label(tensor), label))
+            set_tensor_label(tensor, label)
+    return bound
+
+
+def _restore_call_alias_labels(bound: list[tuple[torch.Tensor, str | None, str]]) -> None:
+    """Give every argument :func:`_bind_call_alias_labels` moved its live label back.
+
+    Parameters
+    ----------
+    bound
+        What :func:`_bind_call_alias_labels` returned for the call.
+    """
+
+    for tensor, live_label, bound_label in bound:
+        if live_label is not None and get_tensor_label(tensor) == bound_label:
+            set_tensor_label(tensor, live_label)
 
 
 def _label_version_baseline(t: Any) -> int | None:
