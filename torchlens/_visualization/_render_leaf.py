@@ -24,6 +24,7 @@ from ._branch_label_text import (
 )
 from ._forward_op_module import _module_key_for_forward_op
 from ._render_common import *
+from ._render_node_parts import _compact_int_ranges
 from ._typography import DEFAULT_TYPOGRAPHY, edge_annotation_pt
 
 # the opt-in backward rows of the ``draw_backward`` call being rendered
@@ -1035,36 +1036,6 @@ def _run_fold_representative_names(
         )
         for fold in _unique_repeat_folds(repeat_folds)
     }
-
-
-def _compact_int_ranges(values: Sequence[int]) -> str:
-    """Return sorted integers in compact range notation.
-
-    Parameters
-    ----------
-    values:
-        Integer values to format.
-
-    Returns
-    -------
-    str
-        Comma-separated values and ranges, for example ``"1,2-4"``.
-    """
-
-    if not values:
-        return ""
-    sorted_values = sorted(set(values))
-    ranges: list[str] = []
-    start = sorted_values[0]
-    previous = sorted_values[0]
-    for value in sorted_values[1:]:
-        if value == previous + 1:
-            previous = value
-            continue
-        ranges.append(str(start) if start == previous else f"{start}-{previous}")
-        start = previous = value
-    ranges.append(str(start) if start == previous else f"{start}-{previous}")
-    return ",".join(ranges)
 
 
 def _module_address_and_call(module_call: str) -> tuple[str, int] | None:
