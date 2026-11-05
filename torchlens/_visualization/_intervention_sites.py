@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
+from .._data_classes.grad_fn import GradFn
+from .._ir._selector_universe import _grad_fn_forward_op
 from .._utils._multipass_access import get_multipass_attr
 
 if TYPE_CHECKING:
@@ -79,9 +81,6 @@ def _forward_site(site: Any) -> Any:
     Layer its layer-label ``op`` names. Other sites mark their ``op`` (a hook
     site) or themselves.
     """
-
-    from .._data_classes.grad_fn import GradFn
-    from .._ir._selector_universe import _grad_fn_forward_op
 
     if isinstance(site, GradFn):
         return _grad_fn_forward_op(site)

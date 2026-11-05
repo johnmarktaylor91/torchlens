@@ -175,7 +175,7 @@ def _record_entries(
         spellings).
     """
 
-    from torchlens.attribution._core import _temporarily_eval
+    from torchlens.attribution._core import _temporarily_eval  # deferred: cycle attribution
 
     leaves = [leaf for leaf in _tensor_leaves((positional, kwargs)) if not _is_float_tensor(leaf)]
     position_by_id = {id(leaf): index for index, leaf in enumerate(leaves)}

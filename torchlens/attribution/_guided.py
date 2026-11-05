@@ -336,7 +336,7 @@ def _modified_backward_attribution(
         for handle in hook_handles:
             handle.remove()
     values = tuple(gradient.abs() if absolute else gradient for gradient in gradients)
-    from torchlens.attribution._core import _value_tree_from_leaves
+    from torchlens.attribution._core import _value_tree_from_leaves  # deferred: cycle attribution
 
     return Attribution(
         method=rule_name,

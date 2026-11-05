@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import FoundReport, at_source, rows_of
+from .._errors import InvalidArgumentError
 from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 
 if TYPE_CHECKING:
@@ -295,7 +296,7 @@ def _forward_join(trace: Trace, node: Any) -> tuple[str | None, str | None, str 
         except Exception:  # noqa: BLE001 - the join is best-effort disclosure.
             op = None
         if op is not None:
-            from ._common import _source_line
+            from ._common import _source_line  # deferred: cycle debug
 
             source_line = _source_line(op)
     return (
@@ -319,8 +320,6 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
         ``backward_capture_required`` / ``bwd_selector_required`` /
         ``bwd_selector_unknown`` (passes never collapse).
     """
-
-    from .._errors import InvalidArgumentError
 
     try:
         backward_passes = list(trace.autograd.backward_passes)
@@ -574,7 +573,7 @@ def bisect_nan_backward(
     (True, 'birth', 'inf')
     """
 
-    from ._gradients import _validate_grad_scale
+    from ._gradients import _validate_grad_scale  # deferred: cycle debug
 
     grad_scale = _validate_grad_scale(grad_scale)
     selected, bwd = _select_backward_pass(trace, bwd)

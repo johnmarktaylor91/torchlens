@@ -21,6 +21,14 @@ from ..._ir.events import (
 )
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import ParamRef
+from ..._utils._tensor_label import (
+    clear_tensor_label,
+    get_tensor_label,
+    get_tensor_meta,
+    mutated_parameter_label,
+    set_tensor_label,
+)
+from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.introspection import (
     _get_code_context,
     get_arg_tensors_for_resolution,
@@ -43,14 +51,6 @@ from ._ops_arg_slots import (
     parents_from_slots,
     templates_requested,
 )
-from ._tl import (
-    clear_tensor_label,
-    get_tensor_label,
-    get_tensor_meta,
-    mutated_parameter_label,
-    set_tensor_label,
-)
-from ._tl_collective import _async_collective_elem
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,

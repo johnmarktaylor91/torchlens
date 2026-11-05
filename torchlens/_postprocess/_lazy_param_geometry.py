@@ -6,6 +6,10 @@ Extracted from finalization.py under the R43 size ratchet; called only by
 
 from typing import TYPE_CHECKING
 
+from .._capture_state_helpers import _is_uninitialized_param
+from .._quantities import Bytes as _Bytes
+from .._utils.tensor_utils import get_memory_amount as _get_memory_amount
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -18,10 +22,6 @@ def _finalize_lazy_param_geometry(self: "Trace") -> None:
     reference so the inventory reports real counts (a never-materialized
     lazy param keeps its zero geometry and reads as never-executed).
     """
-
-    from .._capture_state_helpers import _is_uninitialized_param
-    from .._quantities import Bytes as _Bytes
-    from .._utils.tensor_utils import get_memory_amount as _get_memory_amount
 
     for pl in self._param_logs:
         if not getattr(pl, "_lazy_at_prep", False):

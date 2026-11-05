@@ -42,9 +42,11 @@ from tests.support.census_harness import (  # noqa: E402
     run_census_row,
     run_refusal_row,
 )
-from torchlens.distributed import (  # noqa: E402
+from torchlens._distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     _recognizer as recognizer_mod,
+)
+from torchlens.distributed import (  # noqa: E402
     is_vetted_build,
 )
 

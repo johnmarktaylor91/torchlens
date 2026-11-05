@@ -20,7 +20,7 @@ from .._ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from .._selection.selection import _SelectionOperand
+from .._selection.selection import _selection_from_edge, _SelectionOperand
 from .._selection.target import (
     FrozenTargetSpec as FrozenTargetSpec,
     TargetSpec as TargetSpec,
@@ -422,8 +422,6 @@ class EdgeUseRecord(_SelectionOperand):
 
     def __selection__(self) -> Any:
         """Lift this edge occurrence as an EDGE selection term."""
-
-        from .._selection.selection import _selection_from_edge
 
         return _selection_from_edge(self)
 

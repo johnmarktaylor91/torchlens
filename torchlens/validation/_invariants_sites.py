@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from .._data_classes._layer_sites import layer_site_key
 from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
+from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -47,7 +48,7 @@ def _check_site_key_invariants(ml: Trace) -> None:
 def _check_site_key_totality(ops: list, name: str) -> None:
     """I-S1: every retained op carries a non-empty, prefixed, well-formed key."""
 
-    from .invariants import MetadataInvariantError
+    from .invariants import MetadataInvariantError  # deferred: cycle validation
 
     for op in ops:
         key = getattr(op, "site_key", None)
@@ -102,7 +103,7 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
     fully blind for backends without a module stack.
     """
 
-    from .invariants import MetadataInvariantError
+    from .invariants import MetadataInvariantError  # deferred: cycle validation
 
     equivalence_counts: dict[object, int] = {}
     for op in ops:
@@ -145,8 +146,7 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
     tripwire exists to catch.
     """
 
-    from .._errors import InvalidArgumentError
-    from .invariants import MetadataInvariantError
+    from .invariants import MetadataInvariantError  # deferred: cycle validation
 
     for layer_label in getattr(ml, "layer_labels", ()) or ():
         layer = ml._layer_logs.get(layer_label)

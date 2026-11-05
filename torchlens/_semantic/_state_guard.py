@@ -16,6 +16,9 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._utils._cuda_probe import _is_cuda_initialized
+from .._utils.rng import _snapshot_cuda_rng_states
+
 
 class _CounterfactualStateGuard:
     """Snapshot and restore model state and global RNG around patching runs.
@@ -166,8 +169,6 @@ def _fork_rng_devices() -> list[int]:
     pre-fix gate ``utils/rng.py`` documents.
     """
 
-    from .._utils._cuda_probe import _is_cuda_initialized
-
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
     return []
@@ -175,8 +176,6 @@ def _fork_rng_devices() -> list[int]:
 
 def _snapshot_rng() -> dict[str, Any]:
     """Capture the global CPU (and CUDA, when live) RNG state."""
-
-    from .._utils.rng import _snapshot_cuda_rng_states
 
     snapshot: dict[str, Any] = {"cpu": torch.default_generator.get_state()}
     # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a

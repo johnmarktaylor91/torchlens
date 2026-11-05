@@ -22,9 +22,11 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._constants import get_orig_torch_funcs
 from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils.introspection import nested_getattr
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
 EscapeDetectorMode = Literal["off", "shadow"]
@@ -262,9 +264,6 @@ def _safe_qualname(value: Any) -> str:
 
 def _build_export_sites() -> dict[int, tuple[str, ...]]:
     """Build exact raw-id to currently registered torch export-site names."""
-
-    from ..._constants import get_orig_torch_funcs
-    from ..._utils.introspection import nested_getattr
 
     sites: dict[int, list[str]] = {}
     for namespace_name, func_name in get_orig_torch_funcs():

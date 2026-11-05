@@ -442,7 +442,7 @@ def _python_handoff(node: dict[str, Any]) -> str:
 def op_row(op: Any, is_input: bool, is_output: bool) -> dict[str, Any]:
     """Project one op record into the query row shape (persisted facts)."""
 
-    from ..report._agent_json import _op_entry
+    from ..report._agent_json import _op_entry  # deferred: startup cost
 
     entry = _op_entry(op)
     entry["is_input"] = is_input

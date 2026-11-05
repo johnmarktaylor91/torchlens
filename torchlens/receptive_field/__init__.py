@@ -76,7 +76,7 @@ def __getattr__(name: str) -> object:
     """
 
     if name == "node_spec":
-        from ._viz import node_spec
+        from ._viz import node_spec  # deferred: startup cost
 
         return node_spec
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -208,8 +208,8 @@ def _empirical_adjoint_checks(
         One reported comparison or graceful skip per receptive empirical result.
     """
 
-    from ._gradient import gradient_for_unit
-    from ._gradient_forward import projective_gradient_for_unit
+    from ._gradient import gradient_for_unit  # deferred: cycle receptive_field
+    from ._gradient_forward import projective_gradient_for_unit  # deferred: cycle receptive_field
 
     checks: list[EmpiricalAdjointCheck] = []
     for validation in containment:
