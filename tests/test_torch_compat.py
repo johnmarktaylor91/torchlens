@@ -392,6 +392,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_VARIABLE_FUNCTIONS": True,
         "HAS_TORCH_VF": True,
         "HAS_TORCH_FUNC": True,
+        "HAS_SPARSE_INVARIANT_CHECK": True,
         "HAS_FUNCTORCH_APIS": True,
         "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
         "HAS_FUNCTORCH_INTERPRETER_STACK_API": True,
@@ -843,6 +844,7 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_MPS_MEMORY_QUERY"] == tc.HAS_MPS_MEMORY_QUERY
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
     assert snapshot["HAS_SPARSE_SPSOLVE_CUDA"] == tc.HAS_SPARSE_SPSOLVE_CUDA
+    assert snapshot["HAS_SPARSE_INVARIANT_CHECK"] is True
 
 
 def test_read_fill_uninitialized_memory_returns_none_when_absent(

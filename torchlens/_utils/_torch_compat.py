@@ -150,6 +150,7 @@ __all__ = [
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
     "HAS_MPS_MEMORY_QUERY",
+    "HAS_SPARSE_INVARIANT_CHECK",
     "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
@@ -337,6 +338,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_FP32_PRECISION_CONTROLS": ("torch:backends.fp32_precision",),
     "HAS_AMP_GRADSCALER": ("torch.amp:GradScaler",),
     "HAS_RMSNORM_MODULE": ("torch:nn.RMSNorm",),
+    "HAS_SPARSE_INVARIANT_CHECK": ("torch:sparse.check_sparse_tensor_invariants",),
     "HAS_MPS_MEMORY_QUERY": (
         "torch.mps:recommended_max_memory",
         "torch.mps:driver_allocated_memory",
@@ -1279,6 +1281,7 @@ HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_attribute_paths("HAS_RMSNORM_MODULE")
 HAS_MPS_MEMORY_QUERY: bool = _probe_attribute_paths("HAS_MPS_MEMORY_QUERY")
+HAS_SPARSE_INVARIANT_CHECK: bool = _probe_attribute_paths("HAS_SPARSE_INVARIANT_CHECK")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
 HAS_REDUCE_TUPLE_DIM: bool = False
@@ -1503,6 +1506,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
     "HAS_MPS_MEMORY_QUERY",
+    "HAS_SPARSE_INVARIANT_CHECK",
     "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
@@ -1691,31 +1695,27 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # refuses typed instead of degrading.
         "HAS_GRADIENT_EDGE",
         "HAS_NODE_PREHOOK",
-        # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the
-        # torch>=2.1 floor (added torch 2.14): its absence on older torch means
-        # checkpoint hook objects carry no private cross-call identity state to
-        # preserve, not a degradation (backward.py's token-wrapper swap is
-        # unconditionally safe there).
+        # _checkpoint_internal_hook (torch.utils.checkpoint) postdates the torch>=2.1 floor (added
+        # torch 2.14): its absence on older torch means checkpoint hook objects carry no private
+        # cross-call identity state to preserve, not a degradation (backward.py's token-wrapper swap
+        # is unconditionally safe there).
         "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
-        # Deterministic uninit-memory fill, device-agnostic GradScaler,
-        # torch.nn.attention, torch.nn.RMSNorm, and tuple-dim any()/all() all
-        # postdate the torch>=2.1 floor: their absence is a healthy old
-        # install with a real fallback (fill flag) or nothing to shim
-        # (TorchLens product code never constructs a GradScaler/RMSNorm or
-        # calls sdpa_kernel itself; the tuple-dim reduction falls back to
-        # sequential single-axis reduction).
+        # Deterministic uninit-memory fill, device-agnostic GradScaler, torch.nn.attention,
+        # torch.nn.RMSNorm, and tuple-dim any()/all() all postdate the torch>=2.1 floor: their
+        # absence is a healthy old install with a real fallback (fill flag) or nothing to shim
+        # (TorchLens product code never constructs a GradScaler/RMSNorm or calls sdpa_kernel itself;
+        # the tuple-dim reduction falls back to sequential single-axis reduction).
         "HAS_DETERMINISTIC_FILL_FLAG",
-        # fp32_precision controls (torch >= 2.9): absent means no second
-        # precision representation exists to snapshot, not a degradation.
+        # fp32_precision controls (torch >= 2.9): absent means no second precision representation
+        # exists to snapshot, not a degradation.
         "HAS_FP32_PRECISION_CONTROLS",
         "HAS_AMP_GRADSCALER",
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
-        # torch.mps memory queries (recommended_max_memory /
-        # driver_allocated_memory, torch >= 2.5): absent means the save budget
-        # reports an MPS device as unmeasured and unbudgeted (the honest
-        # fallback it already took for every device without a headroom query),
-        # not a degradation; Linux and CUDA installs never use them.
+        # torch.mps memory queries (recommended_max_memory / driver_allocated_memory, torch >= 2.5):
+        # absent means the save budget reports an MPS device as unmeasured and unbudgeted (the
+        # honest fallback it already took for every device without a headroom query), not a
+        # degradation; Linux and CUDA installs never use them.
         "HAS_MPS_MEMORY_QUERY",
         "HAS_REDUCE_TUPLE_DIM",
         # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer
