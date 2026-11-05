@@ -1170,58 +1170,57 @@ def call_fingerprinting() -> Iterator[CallFingerprint]:
         _call_fingerprint = previous
 
 
-@contextmanager
-def active_logging(trace: "Trace") -> Iterator[None]:
-    """Activate logging for the duration of a forward pass.
+class _ActiveLogging:
+    """Activate logging for one forward pass (``active_logging``).
 
-    Sets ``_logging_enabled = True`` and ``_active_trace = trace``.
-    On exit (including exceptions), resets both.
-
-    Ordering invariant:
-        - On entry: set ``_active_trace`` *before* the toggle, so wrappers
-          never see ``_logging_enabled=True`` with a stale/None trace.
-        - On exit: clear the toggle *before* the trace, for the same reason.
-
-    This context manager is NOT nestable.  Only one forward pass may be logged
-    at a time (single-threaded design).  Entering a second ``active_logging``
-    while another is already active raises ``ReentrantTraceError`` — silently
-    corrupting the outer log (overwriting ``_active_trace`` and then
-    clearing it on inner exit) is worse than failing loudly.
+    Entry sets ``_active_trace`` before ``_logging_enabled`` and exit (also on
+    exceptions) clears them in reverse, so no wrapper sees the toggle on with a
+    stale trace. Not nestable: entering while a capture is live raises
+    ``ReentrantTraceError``. A class, not a ``@contextmanager`` generator, whose
+    exit writes ``__traceback__`` onto the exception and so turns an exception
+    with locked attributes into ``AttributeError``.
     """
-    global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_iter
-    global _dynamo_warning_emitted
-    global _active_owner_thread_id, _call_fingerprint
-    # Admission is atomic: the refusal check and the publication of the three
-    # owner globals happen under one lock, so two threads entering together
-    # cannot both be admitted (see ``_capture_admission_lock``).
-    with _capture_admission_lock:
-        if _capture_conflict_is_live():
-            raise _reentrant_refusal()
-        # Model log must be visible before the toggle flips — wrappers will
-        # immediately read _active_trace once _logging_enabled is True.
-        _active_trace = trace
-        _active_owner_thread_id = threading.get_ident()
-        _functorch_warning_emitted = False
-        _dynamo_warning_emitted = False
-        _func_call_id_iter = itertools.count(1)
-        previous_fingerprint = _call_fingerprint
-        fingerprint = CallFingerprint(_active_owner_thread_id)
-        _call_fingerprint = fingerprint
-        _logging_enabled = True
-    try:
-        yield
-    finally:
+
+    __slots__ = ("_fingerprint", "_previous_fingerprint", "_trace")
+
+    def __init__(self, trace: "Trace") -> None:
+        """Remember the trace to activate on entry."""
+        self._trace = trace
+
+    def __enter__(self) -> None:
+        """Admit the capture and publish the owner globals, toggle last."""
+        global _logging_enabled, _active_trace, _functorch_warning_emitted, _func_call_id_iter
+        global _dynamo_warning_emitted, _active_owner_thread_id, _call_fingerprint
+        # Atomic admission: two threads entering together are never both admitted.
         with _capture_admission_lock:
-            # Toggle off first so no wrapper sees enabled=True with trace=None
+            if _capture_conflict_is_live():
+                raise _reentrant_refusal()
+            # Trace first: wrappers read _active_trace as soon as the toggle flips.
+            _active_trace = self._trace
+            _active_owner_thread_id = threading.get_ident()
+            _functorch_warning_emitted = False
+            _dynamo_warning_emitted = False
+            _func_call_id_iter = itertools.count(1)
+            self._previous_fingerprint = _call_fingerprint
+            self._fingerprint = CallFingerprint(_active_owner_thread_id)
+            _call_fingerprint = self._fingerprint
+            _logging_enabled = True
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Clear the toggle, then the trace; never suppress or touch the exception."""
+        global _logging_enabled, _active_trace, _active_owner_thread_id, _call_fingerprint
+        with _capture_admission_lock:
             _logging_enabled = False
             _active_trace = None
             _active_owner_thread_id = None
-            _call_fingerprint = previous_fingerprint
-        # Runtime-only (FieldPolicy.DROP): the ordered torch-call structure the
-        # guarded fast re-run compares against (see ``CallFingerprint``).
-        # Admission tests drive this with stateless ``object()`` sentinels.
-        if hasattr(trace, "__dict__"):
-            trace._raw_call_fingerprint = fingerprint.value
+            _call_fingerprint = self._previous_fingerprint
+        # Runtime-only call structure for the guarded fast re-run (``CallFingerprint``);
+        # admission tests pass stateless ``object()`` sentinels, hence the guard.
+        if hasattr(self._trace, "__dict__"):
+            self._trace._raw_call_fingerprint = self._fingerprint.value
+
+
+active_logging = _ActiveLogging
 
 
 class _PauseLogging:

@@ -30,7 +30,6 @@ from ..._selection.selectors import (
 )
 from ..._state import pause_logging
 from ..._utils._tensor_label import get_label_list
-from ..._utils._torch_symbols import tensor_read
 from ...errors._base import CompatibilityError
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
@@ -46,7 +45,18 @@ if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
 
-_LIVE_FIRE_RESULTS_STORAGE_ATTR = "_tl_live_fire_results_by_tensor_id"
+_OUT_OF_BAND_FIRE_RESULTS: dict[
+    int, tuple[weakref.ReferenceType[torch.Tensor], tuple[FireResult, ...]]
+] = {}
+"""Fire results of tensors that reject dynamic attributes, keyed by ``id(tensor)``.
+
+Each entry holds a weak reference to its tensor whose callback drops the entry, so
+the table never outlives a tensor, and readers check the referent's identity so a
+recycled id is never served. The table is keyed on the tensor, never on its
+storage: torch 2.1 returns a fresh storage wrapper from every ``untyped_storage()``
+call (an attribute set on one is lost) and a weak reference to a storage crashes
+the interpreter there.
+"""
 
 # Stable constant-spelled refusal kinds (surfaced on ``fields["kind"]``),
 # enrolled in the lockstep gate's constant-spelled table so a rename or
@@ -58,77 +68,49 @@ INTERVENTION_FIRE_RESULTS_CLEANUP_FAILED = "intervention_fire_results_cleanup_fa
 
 def _clear_out_of_band_fire_results(
     tensor_id: int,
-    storage_reference: weakref.ReferenceType[Any],
     reference: weakref.ReferenceType[torch.Tensor],
 ) -> None:
-    """Drop a storage-owned fire record when its tensor is reclaimed."""
+    """Drop an out-of-band fire record when its tensor is reclaimed."""
 
-    storage = storage_reference()
-    if storage is None:
-        return
-    records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-    if not isinstance(records, dict):
-        return
-    current = records.get(tensor_id)
+    current = _OUT_OF_BAND_FIRE_RESULTS.get(tensor_id)
     if current is not None and current[0] is reference:
-        records.pop(tensor_id, None)
-    if not records:
-        try:
-            delattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR)
-        except (AttributeError, RuntimeError):
-            return
+        _OUT_OF_BAND_FIRE_RESULTS.pop(tensor_id, None)
 
 
 def _store_out_of_band_fire_results(
     tensor: torch.Tensor,
     fire_results: tuple[FireResult, ...],
 ) -> None:
-    """Store fire results on the tensor's storage with weak tensor ownership."""
+    """Record fire results for ``tensor`` in the weakly owned module table."""
 
     tensor_id = id(tensor)
     try:
-        with pause_logging():
-            storage = tensor_read(tensor, "untyped_storage")(tensor)
-        records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-        if records is None:
-            records = {}
-            setattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, records)
-        if not isinstance(records, dict):
-            raise TypeError("storage fire-result side table has an invalid type")
-        storage_reference = weakref.ref(storage)
-        reference = weakref.ref(
-            tensor,
-            partial(_clear_out_of_band_fire_results, tensor_id, storage_reference),
-        )
-    except (AttributeError, RuntimeError, TypeError) as side_table_error:
+        reference = weakref.ref(tensor, partial(_clear_out_of_band_fire_results, tensor_id))
+    except TypeError as side_table_error:
         raise CompatibilityError(
             "An intervention changed execution, but its tensor accepts neither "
-            "transient metadata nor storage-backed evidence.",
+            "transient metadata nor a weakly referenced out-of-band record.",
             kind=INTERVENTION_FIRE_RESULTS_UNRECORDABLE,
         ) from side_table_error
-    records[tensor_id] = (reference, fire_results)
+    _OUT_OF_BAND_FIRE_RESULTS[tensor_id] = (reference, fire_results)
+
+
+def _peek_out_of_band_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
+    """Return, without consuming, the out-of-band fire results for ``tensor``."""
+
+    entry = _OUT_OF_BAND_FIRE_RESULTS.get(id(tensor))
+    if entry is not None and entry[0]() is tensor:
+        return entry[1]
+    return ()
 
 
 def _take_out_of_band_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
-    """Take fire results for ``tensor`` from its storage-owned side table."""
+    """Take the out-of-band fire results for ``tensor`` from the module table."""
 
-    try:
-        with pause_logging():
-            storage = tensor_read(tensor, "untyped_storage")(tensor)
-        records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-    except (AttributeError, RuntimeError, TypeError):
-        return ()
-    if not isinstance(records, dict):
-        return ()
-    fallback = records.pop(id(tensor), None)
-    if not records:
-        try:
-            delattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR)
-        except (AttributeError, RuntimeError):
-            pass
-    if fallback is not None and fallback[0]() is tensor:
-        return fallback[1]
-    return ()
+    fire_results = _peek_out_of_band_fire_results(tensor)
+    if fire_results:
+        _OUT_OF_BAND_FIRE_RESULTS.pop(id(tensor), None)
+    return fire_results
 
 
 __all__ = (
