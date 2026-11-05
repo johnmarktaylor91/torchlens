@@ -27,7 +27,7 @@ from .._ir.container_registry import (
 from ._container_labels import (
     _display_key,
     _leaf_reference,
-    _path_component_text,
+    _opaque_member_text,
     _same_container_spec,
 )
 
@@ -869,7 +869,7 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
         if opaque_member is None:
             opaque_member = _opaque_member_text(container.spec)
     if len(output_labels) == 1:
-        return trace.ops[output_labels[0]].out
+        return _saved_single_output(trace.ops[output_labels[0]])
     problem = "No reconstructable final-output container was captured"
     remedy = "trace with capture_container_structure=True to persist container structure"
     if opaque_member is not None:
@@ -888,35 +888,24 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
     raise PayloadUnavailableError(problem, code="container_not_reconstructable", remedy=remedy)
 
 
-def _opaque_member_text(spec: ContainerSpec | None) -> str | None:
-    """Name the first opaque node of a final-output spec, or ``None`` when there is none.
+def _saved_single_output(op: Any) -> Any:
+    """Return a lone output op's saved value; refuse ``activation_not_saved`` when unsaved.
 
-    Parameters
-    ----------
-    spec:
-        Final-output container spec, ``None`` for a path-only view.
-
-    Returns
-    -------
-    str | None
-        ``"the model output"`` for an opaque root, ``"its member 'a.b'"`` for a
-        nested opaque node, ``None`` when no node is opaque.
+    An eagerly loaded trace reads an unsaved op's ``out`` as ``None`` (the live trace
+    already refuses), so without this a save that left the output op out would rebuild
+    the model output as a silent ``None``.
     """
 
-    if spec is None:
-        return None
-    pending: list[tuple[tuple[str, ...], ContainerSpec]] = [((), spec)]
-    while pending:
-        path, node = pending.pop(0)
-        if node.kind == "opaque":
-            if not path:
-                return "the model output"
-            return f"its member {'.'.join(path)!r}"
-        pending.extend(
-            ((*path, _path_component_text(component)), child)
-            for component, child in node.child_specs
+    value = op.out
+    if value is None and not getattr(op, "has_saved_activation", False):
+        label = getattr(op, "layer_label", None) or getattr(op, "label", "the output op")
+        raise PayloadUnavailableError(
+            f"op {label} was not saved; no saved payload is available",
+            code="activation_not_saved",
+            remedy="re-run with save=... covering the output op to retain the model output",
+            label=str(label),
         )
-    return None
+    return value
 
 
 def reconstruct_container(
