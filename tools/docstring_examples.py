@@ -324,10 +324,19 @@ def run_example(
     runner = _AcceptingRunner(accept, optionflags=OPTION_FLAGS, verbose=False)
     runner.run(test, out=report.write, clear_globs=True)
     if runner.accepted is not None and runner.failures == 1:
-        return ExampleResult(symbol.path, "refused", repr(runner.accepted))
+        return ExampleResult(symbol.path, "refused", _describe_refusal(runner.accepted))
     if runner.failures:
         return ExampleResult(symbol.path, "failed", report.getvalue())
     return ExampleResult(symbol.path, "ok", "")
+
+
+def _describe_refusal(exc: BaseException) -> str:
+    """Name an accepted refusal by type, stable code (when it has one) and message."""
+
+    fields = getattr(exc, "fields", None)
+    code = fields.get("code") if isinstance(fields, dict) else None
+    label = type(exc).__name__ if code is None else f"{type(exc).__name__}[{code}]"
+    return f"{label}: {exc}"
 
 
 class _AcceptingRunner(doctest.DocTestRunner):
