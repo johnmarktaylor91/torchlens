@@ -7,6 +7,8 @@ import re as _re
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
+from .._utils.display import ensure_trace_visualizer_dir
+from ..viz import _batch_summary as batch_summary
 from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
@@ -19,15 +21,15 @@ from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._render_names import call_collapsed_spec_fn
 from ._render_node_parts import _buffer_node_address, _module_output_summary
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
-# file under its ratchet ceiling; re-exported here for existing importers.
-# The spec-slot context lives there too, so the intervention callback reads it
-# without importing this module.
+# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
+# ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
+# too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
-from .themes import _edge_and_label_inks
+from .themes import THEME_PRESETS, _edge_and_label_inks, collapse_tokens
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
 #: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
@@ -641,7 +643,7 @@ def _build_layer_node(
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
-        from ._encoding import channel_wrapped_node_spec_fn
+        from ._encoding import channel_wrapped_node_spec_fn  # deferred: cycle _visualization
 
         node_spec_fn = channel_wrapped_node_spec_fn(encoding, node, node_spec_fn)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
@@ -735,7 +737,6 @@ def _queue_segment_node(
     vis_mode, theme, encoding = (*pres, None, None)[:3]
     # K4 capsule colors derive from the active theme (F11 memo item 10:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
-    from .themes import THEME_PRESETS, collapse_tokens
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
     node_args = {
@@ -748,7 +749,7 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
-    node_args.update(segment_encoding_attrs(encoding, segment.name))
+    node_args.update(segment_encoding_attrs(encoding, segment.name, tokens.segment_font))
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)
@@ -797,10 +798,10 @@ def _render_raw_input(
             max_items=max_items,
             include_more=include_more,
         )
-    sequence = _raw_input_sequence(value)
+    sequence = [value] if isinstance(value, Image.Image) else _raw_input_sequence(value)
     if sequence is None:
         return None
-    if len(sequence) == 1:
+    if len(sequence) == 1 and not isinstance(sequence[0], Image.Image):  # one photo: batch of one
         return _render_raw_input(trace, sequence[0], batch_render="first")
     if all(isinstance(item, str) for item in sequence):
         strings = cast(Sequence[str], sequence)
@@ -1004,7 +1005,6 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     # Lazy for the same package-cycle reason as the text-table branch above.
-    from ..viz import _batch_summary as batch_summary
 
     try:
         montage = batch_summary.montage(images, max_items)
@@ -1045,8 +1045,6 @@ def _raw_input_visualizer_dir(trace: "Trace") -> Path:
     Path
         Directory where image artifacts can be written.
     """
-
-    from .._utils.display import ensure_trace_visualizer_dir
 
     input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
     input_dir.mkdir(parents=True, exist_ok=True)
@@ -1202,16 +1200,16 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
     ]
     lines = ["output"]
-    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:3]:
+    batch_items = sorted({int(row.get("batch_item", 0)) for row in rows})[:3]
+    for batch_item in batch_items:
         item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:5]
-        lines.append(f"item {batch_item}")
+        if len(batch_items) > 1:  # one input needs no "item 0" heading
+            lines.append(f"item {batch_item}")
         lines.extend(
-            [
-                f"{int(row.get('rank', 0))}. "
-                f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
-                f"{float(row.get('prob', 0.0)):.0%}"
-                for row in item_rows
-            ]
+            f"{int(row.get('rank', 0))}. "
+            f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
+            f"{float(row.get('prob', 0.0)):.0%}"
+            for row in item_rows
         )
     if not rows:
         lines.append("no decoded rows")
@@ -1539,7 +1537,7 @@ def _build_collapsed_module_node(
     # Encoding channels: exact member-op aggregate, user may override.
     mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, mode_spec)
+        result = call_collapsed_spec_fn(collapsed_node_spec_fn, ml, mode_spec, scope.op_labels)
         spec = mode_spec if result is None else result
     else:
         spec = mode_spec

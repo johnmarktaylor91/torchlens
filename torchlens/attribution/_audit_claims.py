@@ -103,7 +103,7 @@ class _AuditPlan:
         not complete is measured by its own fork.
         """
 
-        from torchlens.attribution._audit_sites import _swept_scores
+        from torchlens.attribution._audit_sites import _swept_scores  # deferred: cycle attribution
 
         swept = _swept_scores(
             self.trace,
@@ -220,12 +220,12 @@ def _validate_settings(request: _AuditRequest) -> None:
 def _trace_once(request: _AuditRequest) -> Any:
     """Trace the model once, eval mode, no grad."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     inputs = request.inputs
     positional = [inputs] if isinstance(inputs, Tensor) else list(inputs)
     with _temporarily_eval(request.model), torch.no_grad():
-        return tl.trace(
+        return _capture_trace(
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,

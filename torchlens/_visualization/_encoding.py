@@ -50,7 +50,10 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.layer import Layer
 from .._errors import InvalidArgumentError
+from .._observability._native_profile import require_join_result
+from .._utils._multipass_access import get_multipass_attr
 from .._utils._record_group_table import record_member
 from ._encoding_aggregate import AggregateTargets, collect_aggregate, encoding_aggregate_targets
 from ._encoding_request import EncodingChannelRequest
@@ -62,6 +65,10 @@ from ._encoding_size_layout import (
     SIZE_SCALE_VOCABULARY,
     non_batch_numel,
 )
+from ._render_nodes import _annotation_image_path_for_node
+from .node_spec import NodeSpec
+from .overlays import builtin_overlay_value
+from .themes import fill_with_ink
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -842,13 +849,10 @@ def _node_key(node: Any) -> str:
     record object, so the keying is consistent within one draw.
     """
 
-    from .._data_classes.layer import Layer
-
     if isinstance(node, Layer):
         layer_label = getattr(node, "layer_label", None)
         if isinstance(layer_label, str):
             return layer_label
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(node, "label", None, multipass=None)
     if isinstance(label, str):
@@ -859,8 +863,6 @@ def _node_key(node: Any) -> str:
 
 def _is_rolled_multipass(node: Any) -> bool:
     """Return whether ``node`` is a rolled multi-pass aggregate Layer."""
-
-    from .._data_classes.layer import Layer
 
     return isinstance(node, Layer) and len(node.ops) > 1
 
@@ -880,7 +882,6 @@ def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
         return True
-    from ._render_nodes import _annotation_image_path_for_node
 
     if _annotation_image_path_for_node(trace, node) is not None:
         return True
@@ -1046,8 +1047,6 @@ def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float 
 def _rolled_wrong_type_read(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Shape / non-numeric rows: read and let the wrong-type rule speak."""
 
-    from .._utils._multipass_access import get_multipass_attr
-
     return _coerce_scalar(state, node, get_multipass_attr(node, field_name, None, multipass=None))
 
 
@@ -1101,8 +1100,6 @@ def _resolve_device_time(
     the join attributed no kernels to reads honest n/a, never zero.
     """
 
-    from .._observability._native_profile import require_join_result
-
     result = require_join_result(trace, argument)
     total, found = _sum_node_device_ns(result, node)
     if not found:
@@ -1132,7 +1129,7 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1145,8 +1142,6 @@ def _resolve_payload_builtin(
     state: EncodingState, node: Any, token: str, argument: str = "color_by"
 ) -> float | None:
     """Resolve one payload-builtin (magnitude/grad_norm) channel value."""
-
-    from .overlays import builtin_overlay_value
 
     value = builtin_overlay_value(node, token)
     if value is None:
@@ -1190,7 +1185,6 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
     if _is_rolled_multipass(node):
         return _resolve_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1222,7 +1216,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
         f"rolled multi-pass node {_node_key(node)!r}: {why}{detail}",
         code="size_by_rolled_varying",
         remedy=(
-            "unroll the graph (vis_mode='unrolled') to size each pass by its "
+            "unroll the graph (rolled=False) to size each pass by its "
             "own value, choose a cross-pass total (total_*), or pass a "
             "callable asserting your own aggregate semantics"
         ),
@@ -1241,7 +1235,7 @@ def _require_size_rolled_row(node: Any, field_name: str) -> str:
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1291,7 +1285,6 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
         )
     # ROW_SHAPE / ROW_NON_NUMERIC: read and let the wrong-type rule speak
     # (a shape field names its own remedy: size_by="dims").
-    from .._utils._multipass_access import get_multipass_attr
 
     return coerce(node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1408,7 +1401,6 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
         field_name = _BUILTIN_FIELD_SOURCES[spec.source]
     if _is_rolled_multipass(node):
         return _resolve_size_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1592,7 +1584,7 @@ def populate_encoding_state(
         _compute_size_geometry(state)
 
     if state.stack_spec is not None:
-        from ._stacking import compute_stack_groups
+        from ._stacking import compute_stack_groups  # deferred: cycle _visualization
 
         compute_stack_groups(state, trace, universe)
 
@@ -1604,20 +1596,13 @@ def populate_encoding_state(
 def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
     """Format a domain endpoint for the legend (builtin-aware, with units)."""
 
-    if spec is not None and spec.source_kind == "builtin":
-        from .overlays import format_overlay_value
+    from .overlays import legend_domain_text
 
-        formatted = format_overlay_value(spec.source, value)
-        return formatted.split(": ", 1)[-1]
-    if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
-    return f"{value:.4g}"
+    return legend_domain_text(spec, value)
 
 
 def _color_legend_rows(state: EncodingState) -> list[Any]:
     """Return color-channel title and ramp rows for the disclosure legend."""
-
-    from .node_spec import NodeSpec
 
     if state.spec is None:
         return []
@@ -1655,8 +1640,6 @@ def _color_legend_rows(state: EncodingState) -> list[Any]:
 
 def _non_color_legend_rows(state: EncodingState) -> list[Any]:
     """Return active size and stack disclosure rows."""
-
-    from .node_spec import NodeSpec
 
     rows: list[NodeSpec] = []
     if state.size_spec is not None:
@@ -1790,7 +1773,7 @@ def channel_wrapped_node_spec_fn(
         """Apply the channel fill/size, then let the user callback override them."""
 
         if channel_fill is not None:
-            spec = spec.replace(fillcolor=channel_fill)
+            spec = fill_with_ink(spec, channel_fill)
         if channel_size is not None:
             # Minimums only: fixedsize=false means the box can only GROW
             # from the label's natural size (a label can never be truncated

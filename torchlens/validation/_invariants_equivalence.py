@@ -5,6 +5,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, cast
 
+from .._postprocess._call_site_contract import (
+    CallSiteEntry,
+    call_site_classes_for,
+    call_site_contract_violation,
+)
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
 from ._invariants_equivalence_index import (
@@ -692,15 +697,11 @@ def _check_call_site_contract_post_hoc(
     ``call_site_contract_unchecked`` instead of passing silently.
     """
 
-    from .._postprocess._call_site_contract import (
-        CallSiteEntry,
-        call_site_classes_for,
-        call_site_contract_violation,
-    )
-    from ._invariants import MetadataInvariantError
+    from ._invariants import MetadataInvariantError  # deferred: cycle validation
 
     classes = call_site_classes_for(trace)
     if classes is None:
+        # deferred: cycle validation
         from ._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(

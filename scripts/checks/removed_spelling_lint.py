@@ -108,6 +108,13 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     "perturb": re.compile(r"\bperturb_saved_grads\b"),
     # Removed draw()/show() warned alias (vis_mode is the kept method param).
     "vis_opt": re.compile(r"\bvis_opt\s*="),
+    # Removed premade-view spellings (JMT 4 Nov 2026 lens lock, no alias): the
+    # interventions highlight is ``trace.draw(view="interventions")`` and the
+    # blueprint view was dropped (plain ``trace.draw()`` is the full picture).
+    "draw_highlight": re.compile(
+        r"\.draw\s*\([^)\n]*\bhighlight\s*=|\bDrawHighlightLiteral\b"
+        r"|\bview\s*=\s*['\"]blueprint['\"]"
+    ),
     # Removed legacy bool VALUES for buffer visibility (tri-state only).
     "buffers_bool": re.compile(r"\bshow_buffers\s*=\s*(?:True|False)\b"),
     # Removed 'vision'/'attention' node-style presets (canonical:
@@ -258,6 +265,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
     "patch": ("patch_detached_references", "patch_policy", "patch_modules"),
     "perturb": ("perturb_saved_grads",),
     "vis_opt": ("vis_opt",),
+    "draw_highlight": ("highlight", "Highlight", "blueprint"),
     "buffers_bool": ("show_buffers",),
     "node_style_domain": ("node_style", "node_mode"),
     "inert_opts": (
@@ -535,6 +543,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "patch": "tl.wrap_torch(patch_policy='detached')\n",
         "perturb": "validate_backward_pass(model, x, perturb_saved_grads=True)\n",
         "vis_opt": "log.draw(vis_opt='rolled')\n",
+        "draw_highlight": 'trace.draw(highlight="interventions")\n',
         "buffers_bool": "log.draw(show_buffers=True)\n",
         "node_style_domain": "log.draw(node_style='vision')\n",
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",

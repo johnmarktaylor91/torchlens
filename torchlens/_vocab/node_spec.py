@@ -29,6 +29,9 @@ INTERVENTION_SITE_COLOR = "#7B1FA2"
 INTERVENTION_CONE_COLOR = "#7B1FA2"
 INTERVENTION_HOOK_FILL_COLOR = "#F3E5F5"
 INTERVENTION_HOOK_BORDER_COLOR = "#7B1FA2"
+#: SVG class on an edited node (and the as_node hook node, and a collapsed box
+#: holding an edit site); the legend shows the edit swatch when it is present.
+EDITED_NODE_CLASS = "tl_edited"
 INTERVENTION_OVERRIDE_KEYS = frozenset(
     {
         "intervention_site_color",
@@ -40,6 +43,12 @@ INTERVENTION_OVERRIDE_KEYS = frozenset(
         "intervention_hook_penwidth",
     }
 )
+#: ``graph_overrides`` key carrying a lens's disclosure lines; the header
+#: block renders them under the model header, and Graphviz never sees it.
+LENS_CAPTION_KEY = "lens_caption"
+#: ``graph_overrides`` key carrying header-banner prefixes a view moves to its
+#: own record (the interventions census); Graphviz never sees it.
+LENS_BANNER_OMIT_KEY = "lens_banner_omit"
 
 
 @dataclass

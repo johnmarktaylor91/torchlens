@@ -29,7 +29,7 @@ from .._io.format3.recipe import (
     recipe_placeholders,
 )
 from .._io.format_errors import ArtifactError
-from .._ir.selector_eval import normalize_selector_like
+from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_like
 from ._helpers import rebuild_builtin_helper
 from ._spec import Recipe, Rule
 from ._types import Edit, HookSpec, InterventionSpec, TargetSpec, TargetValueSpec, TensorSliceSpec
@@ -360,8 +360,6 @@ def _stored_operands(target: Any) -> tuple[Any, ...] | None:
 
 def _lower_final_label_leaf(trace: Any, target: Any) -> Any:
     """Return one ``label`` leaf readdressed to its single raw live label, else ``target``."""
-
-    from .._ir.selector_eval import looks_like_finalized_label
 
     value = getattr(target, "selector_value", None)
     if (

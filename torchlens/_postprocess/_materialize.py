@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
+from torchlens._data_classes.op import Op
 from torchlens._io import BlobRef as PortableBlobRef
+from torchlens._ir import op_record_scatter as _scatter
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import (
     ModuleEnterEvent,
@@ -21,6 +23,7 @@ from torchlens._ir.events import (
     ModulePrepEvent,
     OpEvent,
 )
+from torchlens._ir.op_record import OpRecord, op_record_from_event
 from torchlens.intervention._types import EdgeUseRecord
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -30,11 +33,11 @@ from .._data_classes._module_role_hints import (
 )
 from .._ir.workspaces import _init_module_hierarchy_data
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils._tensor_label import get_buffer_address, get_tensor_label, get_tensor_meta
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.display import _record_phase_timing
 from .._utils.introspection import get_vars_of_type_from_obj
-from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
 from ._buffer_addresses import (
     _buffer_addresses_by_label,
     _buffer_alias_snapshots_by_address,
@@ -69,8 +72,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
     Op
         Materialized operation or buffer log.
     """
-
-    from torchlens._data_classes.op import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
     # r83 C2: the display ``address`` and the backend-native ``backend_address``
@@ -269,9 +270,6 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
     map is LOCAL and the payload derives from it).
     """
 
-    from torchlens._ir.op_record import OpRecord, op_record_from_event
-    from torchlens._ir.op_record_scatter import scatter_record_to_cells
-
     journal = inputs.journal
     op_store = inputs.op_row_store
     module_workspace_forward_args = dict(inputs.module_workspace.module_forward_args)
@@ -348,7 +346,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         else:
             record, extras = op_record_from_event(event)
         fields_dict: dict[str, object] = dict.fromkeys(LAYER_PASS_LOG_FIELD_ORDER)
-        fields_dict.update(scatter_record_to_cells(record, extras, inputs.owning_trace))
+        fields_dict.update(_scatter.scatter_record_to_cells(record, extras, inputs.owning_trace))
         _apply_join_cells(
             fields_dict,
             record,

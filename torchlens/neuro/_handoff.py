@@ -26,8 +26,18 @@ import torch
 from .._data_classes._lookup_kinds import _record_view
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
+from .._utils._multipass_access import get_multipass_attr
 from .._utils._record_group_table import record_member
+from ..dataset_extraction import LoadedExtraction, load_extraction
 from ..errors._base import ConfigurationError, TorchLensError
+from ..features import SHAPING_OP, as_matrix, site_matrix
+from ..repgeom._annotation_gate import (
+    _expected_stimulus_counts,
+    _raise_ineligible_site,
+    _raise_unsaved_activation,
+    _site_ineligibility,
+    _warn_skipped_sites,
+)
 from ._conflicts import (
     require_rsatoolbox as require_rsatoolbox,
     rsatoolbox_version as rsatoolbox_version,
@@ -359,8 +369,6 @@ def _source_kind(source: Any) -> str:
         ``neuro_source_invalid`` for unsupported source types.
     """
 
-    from ..dataset_extraction import LoadedExtraction
-
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
     if hasattr(source, "layers") and is_live_trace(source):
@@ -458,8 +466,6 @@ def _shape_payload(payload: torch.Tensor) -> tuple[torch.Tensor, tuple[int, ...]
         The 2-D matrix and the original per-stimulus shape.
     """
 
-    from ..features import as_matrix
-
     matrix, record = as_matrix(payload.detach().cpu())
     return matrix, tuple(record.input_shape[1:])
 
@@ -483,8 +489,6 @@ def _trace_site_payload(record: Any, key: str, requested: str, verb: str) -> Sit
     SitePayload
         The shaped payload with identity facts.
     """
-
-    from ..repgeom._annotation_gate import _raise_unsaved_activation
 
     out = getattr(record, "out", None) if getattr(record, "has_saved_activation", False) else None
     if not isinstance(out, torch.Tensor):
@@ -546,12 +550,6 @@ def enumerate_trace_sites(
     NeuroHandoffError
         ``neuro_site_ambiguous`` for a bare multi-pass layer lookup.
     """
-
-    from ..repgeom._annotation_gate import (
-        _expected_stimulus_counts,
-        _raise_ineligible_site,
-        _site_ineligibility,
-    )
 
     expected_counts = _expected_stimulus_counts(trace)
     if sites is None:
@@ -620,8 +618,6 @@ def _default_trace_sweep(
         Eligible shaped payloads and the full per-site ledger.
     """
 
-    from ..repgeom._annotation_gate import _site_ineligibility, _warn_skipped_sites
-
     payloads: list[SitePayload] = []
     ledger: list[SiteOutcome] = []
     skipped: OrderedDict[str, str] = OrderedDict()
@@ -666,8 +662,6 @@ def _safe_label(record: Any) -> str | None:
         The single op label, or ``None`` when the record aggregates
         several passes.
     """
-
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(record, "label", None, multipass=None)
     return str(label) if label is not None else None
@@ -729,10 +723,6 @@ def enumerate_extraction_sites(
         For an explicitly requested stored output that is not
         stimulus-indexed.
     """
-
-    from ..dataset_extraction import LoadedExtraction, load_extraction
-    from ..features import site_matrix
-    from ..repgeom._annotation_gate import _raise_ineligible_site, _warn_skipped_sites
 
     loaded = source if isinstance(source, LoadedExtraction) else load_extraction(source)
     manifest_n = (loaded.manifest.get("stimulus_provenance") or {}).get("n_stimuli")
@@ -812,9 +802,7 @@ def base_descriptors(
         Descriptor mapping: identity story first, provenance facts after.
     """
 
-    import torchlens
-
-    from ..features import SHAPING_OP
+    from .._vocab._package_version import __version__
 
     descriptors: dict[str, Any] = {
         "source": "torchlens",
@@ -833,7 +821,7 @@ def base_descriptors(
         # Datasets (measured at 0.3.2).
         "per_stimulus_shape": str(tuple(payload.per_stimulus_shape)),
         "source_dtype": payload.source_dtype,
-        "tl_version": str(getattr(torchlens, "__version__", "unknown")),
+        "tl_version": __version__,
         "rsatoolbox_version": rsatoolbox_version(),
     }
     if payload.pass_index is not None:

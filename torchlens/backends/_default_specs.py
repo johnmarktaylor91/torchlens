@@ -467,7 +467,7 @@ def _simple_leaves(
     """
 
     if isinstance(value, dict | tuple | list):
-        from .._input_walk import (
+        from .._utils._input_tree import (
             INPUT_TREE_MAX_DEPTH,
             raise_input_tree_cycle_refusal,
             raise_input_tree_depth_refusal,
@@ -772,7 +772,7 @@ def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
         Validation result.
     """
 
-    from .._user_funcs import _validate_forward_pass_torch
+    from .._user_public_impls import _validate_forward_pass_torch
 
     return _validate_forward_pass_torch(*args, **kwargs)
 

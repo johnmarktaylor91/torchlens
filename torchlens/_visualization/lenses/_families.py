@@ -155,8 +155,8 @@ def resolve_source_family(family: str, view: str) -> ResolvedSource:
     Raises
     ------
     InvalidArgumentError
-        ``lens_source_family_unknown`` for a token outside the closed table;
-        ``lens_view_invalid`` for a view outside {rolled, unrolled}.
+        ``view_source_family_unknown`` for a token outside the closed table;
+        ``view_roll_mode_invalid`` for a view outside {rolled, unrolled}.
     """
 
     row = SOURCE_FAMILIES.get(family)
@@ -164,14 +164,14 @@ def resolve_source_family(family: str, view: str) -> ResolvedSource:
         raise InvalidArgumentError(
             f"unknown performance source family {family!r}; "
             f"known families: {', '.join(sorted(SOURCE_FAMILIES))}",
-            code="lens_source_family_unknown",
+            code="view_source_family_unknown",
             remedy="declare one of the closed family tokens (time, bytes, flops)",
             argument="family",
         )
     if view not in ("rolled", "unrolled"):
         raise InvalidArgumentError(
             f"view must be 'rolled' or 'unrolled'; received {view!r}",
-            code="lens_view_invalid",
+            code="view_roll_mode_invalid",
             remedy="pass the effective vis_mode ('rolled' or 'unrolled')",
             argument="view",
         )
@@ -180,7 +180,7 @@ def resolve_source_family(family: str, view: str) -> ResolvedSource:
             family=row,
             member=row.summed_member,
             view=view,
-            aggregation_line=f"{row.summed_member}: total across passes on rolled nodes",
+            aggregation_line="rolled nodes show the total across passes",
         )
     return ResolvedSource(family=row, member=row.per_pass_member, view=view, aggregation_line=None)
 

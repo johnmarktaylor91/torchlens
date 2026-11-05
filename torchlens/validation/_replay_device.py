@@ -193,7 +193,7 @@ def saved_args_on_consumed_devices(trace: Any, label: str) -> Iterator[None]:
         While the entry is checked.
     """
 
-    from ._core import _op_for_validation_label, _validation_ops_for_entry
+    from ._core import _op_for_validation_label, _validation_ops_for_entry  # deferred: cycle
 
     entry = trace._layer_logs.get(label, _op_for_validation_label(trace, label))
     swapped: list[tuple[Any, Any, Any, Any]] = []

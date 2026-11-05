@@ -49,6 +49,7 @@ from typing import Any
 import torch
 
 from .._record_type import record_type
+from .._trace_slice import TraceSlice
 from .._utils._record_group_table import record_member
 from ._region_graph import _connected_instances, _offending_reentry_path
 from ._types import Edit
@@ -365,8 +366,6 @@ def region(slice_: Any, *, exits: Any = None) -> RegionTarget:
         ``region_empty`` / ``region_not_convex`` / ``region_exits_unknown``
         / ``region_exits_incomplete`` / ``region_exit_address_underivable``.
     """
-
-    from .._trace_slice import TraceSlice
 
     if not isinstance(slice_, TraceSlice):
         raise RegionError(

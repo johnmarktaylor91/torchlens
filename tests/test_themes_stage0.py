@@ -105,7 +105,7 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     """A channel-free artifact carries no encoded-fill findings."""
 
     log, resolution, graph, svg_path = speed_render
-    bare = lenses.resolve_lens(log, "blueprint")
+    bare = lenses.resolve_lens(log, "overview")
     bare_graph = log.draw(
         **bare.draw_kwargs,
         path=svg_path.replace(".svg", "-bare"),

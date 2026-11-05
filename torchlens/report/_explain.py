@@ -17,6 +17,7 @@ from .._capture_honesty import (
     refuse_presenter_subject,
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._partial import PartialTrace
 from ._explain_partial import (
     _partial_diagnosis,
     _partial_sections,
@@ -244,8 +245,6 @@ def _is_partial_trace(log: Any) -> bool:
         Whether the object is a failed partial capture wrapper.
     """
 
-    from .._partial import PartialTrace
-
     return isinstance(log, PartialTrace)
 
 
@@ -453,7 +452,7 @@ def _model_summary_lines(log: Any) -> list[str]:
         Bullet lines for the model section.
     """
 
-    from ._factcore import factcore
+    from ._factcore import factcore  # deferred: cycle report
 
     model_class_name = log._source_class_name if is_live_trace(log) else type(log).__name__
     # Single-source law (sumfam D1/item 11): headline facts come from
@@ -511,7 +510,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
         Bullet lines for the capture section.
     """
 
-    from ._factcore import factcore
+    from ._factcore import factcore  # deferred: cycle report
 
     # Counts come from the explicit grain vocabulary (sumfam D3): the bare
     # word "operations" cannot denote both the compute ops and the tracked
@@ -596,7 +595,7 @@ def _anomaly_lines(log: Any) -> list[str]:
         Bullet lines describing non-finite outs.
     """
 
-    from ._health import health_facts
+    from ._health import health_facts  # deferred: cycle report
 
     # D14 (sumfam item 11): bare explain renders the THREE health states
     # from whatever basis is in hand and NEVER scans -- and it says "not
@@ -661,7 +660,7 @@ def _anomaly_lines(log: Any) -> list[str]:
 def _track_nonfinite_hint_lines(log: Any) -> list[str]:
     """The partial-coverage hint line, while track_nonfinite is off."""
 
-    from ._health import nonfinite_option_hint
+    from ._health import nonfinite_option_hint  # deferred: cycle report
 
     hint = nonfinite_option_hint(log, "not_checked")
     return [f"- To check every op as it runs: {hint}."] if hint else []

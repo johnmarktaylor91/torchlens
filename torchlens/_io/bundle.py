@@ -2738,9 +2738,8 @@ def _fast_copy_tensor_blob(
 ) -> TensorEntry:
     """Carry one lazily-backed tensor from its source artifact into the new one.
 
-    The source blob is digest-checked, read by key and queued into the new
-    artifact's chunk files (3.0 chunks hold many tensors, so a whole-file copy
-    no longer applies).
+    The source blob is digest-checked, read by key and queued into the new artifact's chunk
+    files as an entry of its own (its reference takes the source device after the store answers).
 
     Parameters
     ----------
@@ -2755,7 +2754,7 @@ def _fast_copy_tensor_blob(
         Destination manifest entry for the copied blob.
     """
 
-    source_entry = manifest_index.get(fast_copy_spec.source_ref.blob_id)
+    store, source_entry = store.unshared(), manifest_index.get(fast_copy_spec.source_ref.blob_id)
     if source_entry is None:
         raise ArtifactError(f"Manifest is missing blob_id={fast_copy_spec.source_ref.blob_id}.")
 

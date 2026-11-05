@@ -48,7 +48,11 @@ from ._collapse_frontier import (
 )
 from ._collapse_runs import FlowAdjacency, _flow_adjacency, longest_uniform_legal_run
 from ._collapse_signatures import fingerprints_for
+from ._render_common import BoundaryNode
+from ._render_edges import _is_buffer_visible
+from ._render_flow import _entries_to_plot_for_context
 from ._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
+from ._render_nodes import _normalize_buffer_visibility
 from ._segment_descriptors import (
     _child_segment_covered_ops,
     _crosses_module_call_boundary,
@@ -108,6 +112,7 @@ from .collapse_plan import (
     collapse_plan_for_trace,
     count,
 )
+from .node_universe import build_node_universe
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -2985,10 +2990,6 @@ def _module_render_box_units(
     cached = cached_by_trace.get(context)
     if cached is not None:
         return cached
-    from ._render_common import BoundaryNode
-    from ._render_edges import _is_buffer_visible
-    from ._render_flow import _entries_to_plot_for_context
-    from ._render_nodes import _normalize_buffer_visibility
 
     show_buffer_layers = _normalize_buffer_visibility(context.show_buffer_layers)
     box_calls: dict[str, dict[str, None]] = {}
@@ -3827,7 +3828,6 @@ def _rendered_own_unit_map(trace: Trace, context: RenderContext) -> dict[str, tu
 
     if context.vis_mode != "rolled":
         return {}
-    from .node_universe import build_node_universe
     from .source_graph import build_source_graph
 
     units: dict[str, list[str]] = {"self": []}

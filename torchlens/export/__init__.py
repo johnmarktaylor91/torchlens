@@ -20,15 +20,20 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from torchlens._observe import memory_timeline_v2 as _build_v2
+
 from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
 from .._capture_honesty import capture_honesty_facts
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._entry_refusals import require_xarray_presentations
+from .._errors import InvalidArgumentError
+from .._extraction.trace_safetensors import write_trace_safetensors
 from .._io._json import loads_bounded
 from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
+from ..intervention.errors import BundleComparisonError
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
 from ._honesty_comments import _bundle_member_honesty, _honesty_comment_block, _honesty_xml_comment
@@ -56,7 +61,7 @@ def __getattr__(name: str) -> Any:
     """Lazily resolve re-exported Model Explorer names from the L8 bridge."""
 
     if name in _MODEL_EXPLORER_LAZY_NAMES:
-        from . import _model_explorer as _me
+        from . import _model_explorer as _me  # deferred: cycle export
 
         value = getattr(_me, name)
         globals()[name] = value
@@ -99,7 +104,7 @@ def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     True
     """
 
-    from ._model_explorer import model_explorer as _impl
+    from ._model_explorer import model_explorer as _impl  # deferred: cycle export
 
     return _impl(trace, path, **kwargs)
 
@@ -136,7 +141,7 @@ def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
     True
     """
 
-    from ._model_explorer import model_explorer_diff as _impl
+    from ._model_explorer import model_explorer_diff as _impl  # deferred: cycle export
 
     return _impl(members, path, **kwargs)
 
@@ -178,7 +183,7 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     ['me.json']
     """
 
-    from ._model_explorer import model_explorer_serve as _impl
+    from ._model_explorer import model_explorer_serve as _impl  # deferred: cycle export
 
     return _impl(source, **kwargs)
 
@@ -264,7 +269,7 @@ def html(
     True
     """
 
-    from ._report import write_report
+    from ._report import write_report  # deferred: cycle export
 
     return write_report(trace, path, arrays=arrays, graph=graph, options=options)
 
@@ -604,8 +609,6 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
     True
     """
 
-    from torchlens._observe import memory_timeline_v2 as _build_v2
-
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     artifact = _build_v2(trace)
@@ -727,7 +730,6 @@ def xarray(trace: Any) -> Any:
         raise ImportError(
             "xarray export requires xarray. Install with: pip install torchlens[neuro]"
         ) from exc
-    from .._errors import InvalidArgumentError
 
     arrays = []
     layer_coord: list[str] = []
@@ -1000,8 +1002,6 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     deltas (every event's ``delta`` is ``None``; the status records code and message).
     """
 
-    from ..intervention.errors import BundleComparisonError
-
     try:
         return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
     except ValueError as exc:  # both refusal classes are ValueErrors carrying fields
@@ -1196,8 +1196,6 @@ def safetensors(trace: Any, path: str | Path) -> Path:
     >>> size > 0
     True
     """
-
-    from .._extraction.trace_safetensors import write_trace_safetensors
 
     return write_trace_safetensors(trace, path)
 

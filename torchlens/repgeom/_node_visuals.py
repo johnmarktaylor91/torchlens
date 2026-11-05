@@ -13,10 +13,10 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
+from .._plots import node_plots
+from .._plots.node_plots import image_scatter, lineplot
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import ensure_trace_visualizer_dir
-from ..viz import _node_plots as node_plots
-from ..viz._node_plots import image_scatter, lineplot
 from ._geometry import (
     _SCATTER_CANVAS_SIZE,
     EffectiveDimensionalityInfo,
@@ -601,7 +601,8 @@ def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | 
     Returns
     -------
     Sequence[Any] | None
-        PIL image sequence when the length exactly matches the coordinates.
+        PIL image sequence when the length exactly matches the coordinates. A single PIL
+        image (what an image-path capture stores as ``trace.input``) is a batch of one.
     """
 
     if raw_input is None or isinstance(raw_input, str | bytes | bytearray):
@@ -610,7 +611,10 @@ def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | 
         from PIL import Image
     except ImportError:
         return None
-    if isinstance(raw_input, Sequence):
+    sequence: Sequence[Any]
+    if isinstance(raw_input, Image.Image):
+        sequence = (raw_input,)
+    elif isinstance(raw_input, Sequence):
         sequence = raw_input
     elif hasattr(raw_input, "__len__") and hasattr(raw_input, "__iter__"):
         sequence = tuple(raw_input)

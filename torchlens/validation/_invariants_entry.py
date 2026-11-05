@@ -6,6 +6,8 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from torchlens.backends.registry import UnknownBackendError
+
 from ._status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
@@ -72,8 +74,8 @@ def _check_receptive_field_metadata_invariants(trace: Trace) -> None:
         If receptive-field metadata violates a geometric contract.
     """
 
-    from ..receptive_field._errors import ReceptiveFieldError
-    from ..receptive_field._validation import check_geometric_metadata_invariants
+    from ..receptive_field._errors import ReceptiveFieldError  # deferred: cycle receptive_field
+    from ..receptive_field._validation import check_geometric_metadata_invariants  # deferred: cycle
 
     try:
         check_geometric_metadata_invariants(trace)
@@ -357,7 +359,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         If backend identity fields are invalid or unsupported by the registry.
     """
 
-    from ..backends.registry import UnknownBackendError, get_backend_spec
+    from ..backends.registry import get_backend_spec
 
     name = "backend_identity_invariants"
     backend = trace._provenance_backend

@@ -49,6 +49,10 @@ from .._partial import PartialTrace
 from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
+from ..report._notebook._grid import GridBudgets, array_grid_html
+from ..report._notebook.cards import partial_trace_card
+from ..report._notebook.cardtree import render_card_html
+from ..report._notebook.frontier import nonfinite_frontier
 from ._common import _static_graph_data
 
 __all__ = ["HtmlReportOptions", "write_report"]
@@ -223,8 +227,6 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ``report_arrays_invalid`` for an unrecognized ``arrays=`` value.
     """
 
-    from ..report._notebook.frontier import nonfinite_frontier
-
     frontier = nonfinite_frontier(log) if not _is_partial(log) else None
     flagged_total = frontier.flagged_total if frontier else 0
     if share_safe:
@@ -306,8 +308,6 @@ def _site_tensor(log: Any, label: str) -> Any | None:
 
 def _site_render(tensor: Any) -> tuple[str | None, str | None]:
     """Stats line + thumbnail grid for one payload, degrade-safe."""
-
-    from ..report._notebook._grid import GridBudgets, array_grid_html
 
     line: str | None = None
     try:
@@ -669,9 +669,6 @@ def write_report(
 def _partial_body(log: Any) -> str:
     """Failure-first body for a PartialTrace report."""
 
-    from ..report._notebook.cards import partial_trace_card
-    from ..report._notebook.cardtree import render_card_html
-
     try:
         card = render_card_html(partial_trace_card(log), include_css=True)
     except Exception:  # noqa: BLE001 - the report survives a card fault
@@ -696,11 +693,11 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
 
     import torch
 
-    import torchlens
+    from .._vocab._package_version import __version__
 
     manifest: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
-        "torchlens_version": getattr(torchlens, "__version__", "unknown"),
+        "torchlens_version": __version__,
         # getattr spelling: the layer lint's torch-privates text scan would
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),

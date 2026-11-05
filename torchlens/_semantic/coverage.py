@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._utils._record_group_table import record_member
+from ..errors import InvalidArgumentError
 
 __all__ = ["FacetCoverageReport", "ModuleCoverageRow", "facet_coverage"]
 
@@ -168,8 +169,6 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
     >>> len(report.rows) > 0
     True
     """
-
-    from ..errors import InvalidArgumentError
 
     rows: list[ModuleCoverageRow] = []
     for module in trace.modules:

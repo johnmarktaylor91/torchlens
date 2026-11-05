@@ -38,6 +38,7 @@ from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
 
 from .._utils._record_group_table import record_member
+from ..options import CaptureOptions
 
 TokenReshape = Callable[[Tensor], Tensor]
 
@@ -305,12 +306,12 @@ def _grid_candidates(graph: _TraceGraph, layer_label: str) -> set[tuple[int, int
 def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
     """Capture a metadata-only trace of the attributed forward call."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
-    options = tl.options.CaptureOptions()
+    options = CaptureOptions()
     args = inputs if inputs is not None else ()
     with _temporarily_eval(model):
-        return tl.trace(model, args, input_kwargs=input_kwargs, capture=options, save=None)
+        return _capture_trace(model, args, input_kwargs=input_kwargs, capture=options, save=None)
 
 
 def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:

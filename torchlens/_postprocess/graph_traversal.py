@@ -10,7 +10,7 @@ Step 4 (_mark_layer_depths, in the sibling module ``_layer_depths``): Optional
 """
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 
@@ -19,15 +19,23 @@ from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
 from .._utils._record_group_table import record_member
+from .._utils._tensor_label import clear_tensor_label, get_tensor_label
 from .._utils.display import identity
 from .._utils.introspection import _get_code_context
-from .._utils.rng import log_current_rng_states
+from .._utils.rng import aten_qualname_is_seeded_rng, log_current_rng_states
 from .._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
     tensor_nanequal,
 )
+from ..backends.torch._completeness_escape_state import (
+    alias_mutation_candidate_labels,
+    host_escape_source_labels,
+    record_pruned_alias_mutation_source,
+    record_pruned_rng_control_source,
+)
+from ..backends.torch.sources import log_source_tensor
 from . import _column_passes, _column_passes_graph
 from ._buffer_addresses import _recorded_buffer_address
 from ._orphan_predicates import (
@@ -39,35 +47,14 @@ from ._orphan_seeds import (
     _orphan_flood_seeds,
     _remember_orphan_rows,
 )
+from ._output_payload import (
+    output_copy_detaches,
+    output_payload_aliases_parent as output_payload_aliases_parent,  # re-exported for tests
+    output_rides_parent_payload,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-
-
-def output_payload_aliases_parent(returned: Any, retained: Any) -> bool:
-    """True iff the returned output tensor IS the producer's retained payload value.
-
-    The output pseudo-row may share the producer's ONE retained payload
-    (HONESTY 13-R1) exactly when the tensor the model returned equals the
-    producer's retained ``out`` bit-for-bit under the same shape, dtype and
-    device (NaN-equal, so a NaN output is not a spurious "difference"). Any
-    other case -- unretained producer, meta payloads, a cross-device
-    ``output_device`` policy, an in-place mutation after the producer, a view
-    whose base shape differs -- keeps the historical physical copy so the
-    variation is recorded, never hidden.
-    """
-
-    if not (torch.is_tensor(returned) and torch.is_tensor(retained)):
-        return False
-    if returned.is_meta or retained.is_meta:
-        return False
-    if (
-        tuple(returned.shape) != tuple(retained.shape)
-        or returned.dtype != retained.dtype
-        or str(returned.device) != str(retained.device)
-    ):
-        return False
-    return bool(tensor_nanequal(returned, retained))
 
 
 def _resolve_output_parent_labels(
@@ -107,9 +94,6 @@ def _resolve_output_parent_labels(
         unattributable outputs before Step 1.
     """
     from collections import deque
-
-    from ..backends.torch._tl import clear_tensor_label, get_tensor_label
-    from ..backends.torch.sources import log_source_tensor
 
     # Common case: capture attributed every output -- the existing positional
     # pairing is exact, and nothing needs synthesizing.
@@ -474,28 +458,23 @@ def _add_output_layers(
         new_output_node.has_out_variations = False
         new_output_node.out_versions_by_child = {}
         if output_node.has_saved_activation:
-            # The recomputed payload must inherit the PARENT payload's
-            # detachment state: cooked/sparse traces store detached payloads
-            # (a retained graph would poison later captures), while live
-            # traces keep the graph-attached output — it is the very handle
-            # backward() differentiates through.
-            _producer_tensor = (
+            # The recomputed payload inherits the PARENT payload's detachment: cooked/sparse
+            # traces store detached payloads (a retained graph would poison later captures);
+            # live traces keep the graph-attached output, the handle backward() differentiates
+            # through, also when it gained its history after the producer (_output_payload).
+            _parent_payload = (
                 output_node.out
                 if output_node.out is not None
                 else output_node.payload.transformed_out
             )
-            _detach_payload = not (
-                torch.is_tensor(_producer_tensor) and _producer_tensor.grad_fn is not None
-            )
-            if output_payload_aliases_parent(output_tensor, output_node.out):
-                # HONESTY 13-R1: the producer already retains this exact value,
-                # so the output pseudo-row rides that ONE retained payload
-                # instead of a second physical copy (the byte model charged
-                # both: a full duplicate of the logits on large models). The
-                # A1 identity partition already says the producer owns the
-                # bytes; the payload now agrees. Differing values (an in-place
-                # mutation after the producer) still copy below and record
-                # the variation.
+            _detach_payload = output_copy_detaches(output_tensor, _parent_payload, self)
+            if output_rides_parent_payload(output_tensor, output_node.out, self):
+                # HONESTY 13-R1: the producer already retains this exact value, so the output
+                # pseudo-row rides that ONE retained payload instead of a second physical copy
+                # (the byte model charged both: a full duplicate of the logits on large
+                # models). The A1 identity partition already says the producer owns the bytes;
+                # the payload now agrees. Differing values (an in-place mutation after the
+                # producer) still copy below and record the variation.
                 actual_output_raw = output_node.out
             else:
                 actual_output_raw = safe_copy(output_tensor, detach_tensor=_detach_payload)
@@ -678,12 +657,6 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
     records a side-channel fact; it never alters the visible graph.
     """
 
-    from .._utils.rng import aten_qualname_is_seeded_rng
-    from ..backends.torch._completeness_escape_state import (
-        host_escape_source_labels,
-        record_pruned_rng_control_source,
-    )
-
     escape_sources = host_escape_source_labels(self)
     for label in orphan_nodes:
         op = self._raw_graph_ws.raw_layer_dict.get(label)
@@ -713,8 +686,6 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
     nothing the outputs depend on) leaves no gap in the outputs' provenance.
     ``keep_orphans`` leaves the ops, and their per-op witness, in the trace.
     """
-
-    from ..backends.torch._completeness_escape_state import host_escape_source_labels
 
     escape_sources: frozenset[str] | None = None
     witness: list[str] = []
@@ -750,11 +721,6 @@ def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None
     recorded. This only reads orphan metadata and records a side-channel fact; it never alters the
     visible graph.
     """
-
-    from ..backends.torch._completeness_escape_state import (
-        alias_mutation_candidate_labels,
-        record_pruned_alias_mutation_source,
-    )
 
     candidates = alias_mutation_candidate_labels(self)
     if not candidates:

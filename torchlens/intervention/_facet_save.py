@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._selection.selectors import BaseSelector, FacetSelector, WhereSelector, in_module, module
+from .._state import active_capture
 
 
 def _is_op_event(ctx: Any) -> bool:
@@ -76,7 +77,6 @@ def _facet_save_predicate(selector: FacetSelector) -> BaseSelector:
         # class is read from the live model of the active capture.
         from .._data_classes._runtime_handles import source_model_from_trace
         from .._semantic.facets import describe
-        from .._state import active_capture
 
         model = source_model_from_trace(active_capture()[0])
         key = (id(model), address)

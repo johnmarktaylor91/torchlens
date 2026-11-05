@@ -54,7 +54,7 @@ def manifest_overview(manifest: dict[str, Any] | None) -> dict[str, Any]:
                 "artifact or it is corrupt. Nothing was unpickled."
             ),
         }
-    from ._artifacts import declared_bytes_and_count
+    from ._artifacts import declared_bytes_and_count  # deferred: startup cost
 
     declared_bytes, declared_count = declared_bytes_and_count(manifest)
     backward = manifest.get("backward_summary") or {}
@@ -85,7 +85,7 @@ def _coverage_block(log: Any) -> dict[str, Any]:
     """Payload/gradient coverage counts an agent needs before value work."""
 
     ops = list(log._layer_list or [])
-    from ..report._agent_json import _payload_state
+    from ..report._agent_json import _payload_state  # deferred: startup cost
 
     states = [_payload_state(op) for op in ops]
     saved_grads = sum(
@@ -105,7 +105,7 @@ def _coverage_block(log: Any) -> dict[str, Any]:
 def _audit_block(log: Any) -> dict[str, Any]:
     """The always-present audit block: health verdict + non-finite facts."""
 
-    from ..report._agent_json import _health_summary
+    from ..report._agent_json import _health_summary  # deferred: startup cost
 
     health = _health_summary(log)
     coverage = getattr(log, "nonfinite_coverage", None)
@@ -202,7 +202,7 @@ def honesty_blocks(log: Any) -> dict[str, Any]:
         ``{"capture": ..., "audit": ...}``.
     """
 
-    from ..report._agent_json import build_agent_json
+    from ..report._agent_json import build_agent_json  # deferred: startup cost
 
     return {"capture": build_agent_json(log, max_ops=1)["capture"], "audit": _audit_block(log)}
 
@@ -222,7 +222,7 @@ def folded_overview(log: Any) -> dict[str, Any]:
         coverage, audit, interventions, anomalies, next operations).
     """
 
-    from ..report._agent_json import build_agent_json
+    from ..report._agent_json import build_agent_json  # deferred: startup cost
 
     skeleton = build_agent_json(log, max_ops=1)
     capture = skeleton["capture"]
@@ -332,7 +332,7 @@ def dump_view(
         ``agent_view_invalid`` on an unknown view or class id.
     """
 
-    from .._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError  # deferred: startup cost
     from ..report._agent_json import _op_entry, build_agent_json
 
     if view not in DUMP_VIEWS:

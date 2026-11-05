@@ -11,8 +11,8 @@ import contextlib
 from typing import TYPE_CHECKING, Any, cast
 
 from torchlens._errors import TraceCaptureError, attach_partial_trace, original_exception
+from torchlens._utils import _tensor_label as _tl
 from torchlens._utils._exception_notes import annotate_guarded
-from torchlens.backends.torch import _tl
 
 from ..._utils._record_group_table import record_member
 

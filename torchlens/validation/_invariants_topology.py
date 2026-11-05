@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._constants import _is_suffixed_raw_label
+from .._errors import AmbiguousOpLookupError
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -385,15 +388,13 @@ def _check_op_label_resolution(ml: Trace) -> None:
     pass it.
     """
 
-    from .._constants import _is_suffixed_raw_label
-    from .._errors import AmbiguousOpLookupError
-
     name = "graph_topology"
     if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):
         # A duck-typed stand-in without an ops accessor (the mutant-test fakes)
         # has no second lookup that could disagree with ``ml[label]``. A real
         # ``Trace`` always defines ``ops``, so this never applies to one. The
         # check is reported as not run, never passed silently.
+        # deferred: cycle validation
         from ._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(

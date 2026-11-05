@@ -109,7 +109,7 @@ def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
     ids has none otherwise); a plain ``tl.trace`` never changes those flags.
     """
 
-    from .._user_funcs import trace as capture_trace
+    from .._user_public_impls import trace as capture_trace
 
     with torch.enable_grad(), frozen_parameter_gradients():
         return capture_trace(model, inputs, intervene=intervene)
@@ -218,7 +218,7 @@ def _reads(trace: Any, graph: ComponentGraph) -> dict[str, _Read]:
 def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
     """Return ``(logits label, dM/dlogits, per-example M)`` for one evaluation point."""
 
-    from ._anchors import resolve_lm_head
+    from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     head = resolve_lm_head(trace).head
     outputs = list(getattr(head, "output_ops", ()) or ())

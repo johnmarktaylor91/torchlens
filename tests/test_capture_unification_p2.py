@@ -20,9 +20,9 @@ from torchlens._ir.workspaces import (
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
+from torchlens._utils._tensor_label import get_tensor_label
 from torchlens._visualization._summary_internal._builder import _live_op_count
 from torchlens.backends._protocol import CaptureBackend
-from torchlens.backends.torch._tl import get_tensor_label
 
 
 class _MidForwardProbe(nn.Module):

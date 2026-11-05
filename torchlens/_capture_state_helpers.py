@@ -44,10 +44,10 @@ from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
+from .backends.torch._tracing_pass import lift_hop_entry_compiles
 
-# Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
-# under the R43 file-size ratchet. Re-exported here because the historical import
-# surface for the capture-cache key helpers is torchlens._capture_state_helpers.
+# Content-fingerprint / attribute-fragment family (split to _capture_fingerprint.py), re-exported:
+# the historical import surface for the capture-cache key helpers is this module.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
@@ -543,7 +543,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
 
     with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
         sites = compiled_plain_callable_sites(model)
-        with force_eager_stance_scope() as stance_active:
+        with force_eager_stance_scope() as stance_active, lift_hop_entry_compiles():
             if stance_active:
                 if sites:
                     _warn_compiled_plain_callables_forced_eager_once(sites)
@@ -1328,7 +1328,7 @@ def _strip_copied_forward_decorations(model: nn.Module) -> None:
         shallow copy taken mid-capture shares with its source module.
     """
 
-    from .backends.torch._tl import is_forward_call_decorated
+    from ._utils._tensor_label import is_forward_call_decorated
 
     for module in model.modules():
         current_forward = module.__dict__.get("forward", None)
@@ -2066,7 +2066,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
     try:
         moved = _move_tensors_to_device_inner(obj, device)
     except RecursionError as exc:
-        from torchlens._input_walk import raise_input_tree_stack_refusal
+        from torchlens._utils._input_tree import raise_input_tree_stack_refusal
 
         raise_input_tree_stack_refusal(exc)
         raise  # unreachable: the refusal always raises

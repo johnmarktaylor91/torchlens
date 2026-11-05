@@ -12,16 +12,23 @@ from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes._state_adapter import state_items
 from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
 from .._utils._record_group_table import op_attr
+from .._utils._tensor_label import get_tensor_label, set_tensor_label
+from .._utils.tensor_utils import safe_copy
+from ..backends.torch.backward import _register_forward_grad_fn
+from ..backends.torch.tensor_tracking import _add_rebound_gradient_hook
+from ..errors._runnable import BufferSinkRoutingError
 from ._cook_facts import _cook_facts, _replay_capture_events
 from ._cooked_inventory import install_cooked_inventory, install_run_facts
 from ._multipass_cook import fold_pass_cores
 from ._parent_arg_signature import _format_parent_arg_positions, _normalized_parent_arg_positions
 from ._record_indexes import _RecordIndexes
+from .projections import activation_record_from_event
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -237,7 +244,6 @@ class RefreshProjector:
                 f"{preview}{suffix}. "
                 "The computational graph may have changed between ops."
             )
-        from .._data_classes._state_adapter import state_items
 
         preserved_states = [dict(state_items(layer)) for layer in self.target._layer_list]
         if not self.target._refresh_matching_rerun_state_from(refreshed):
@@ -340,8 +346,6 @@ class RefreshProjector:
         ``tests/test_run_until_projection_cost.py`` pins the equivalence.
         """
 
-        from .._data_classes._state_adapter import state_items
-
         held = {name for name, _value in state_items(layer)}
         new_state = dict(state_items(new_layer))
         dynamic = self._DYNAMIC_OP_FIELDS
@@ -395,7 +399,6 @@ class RefreshProjector:
 
         from .._partial import PartialTrace
         from .._runnable import RunnableErrorCode
-        from ..errors._runnable import BufferSinkRoutingError
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "
@@ -700,9 +703,6 @@ class RefreshProjector:
         payloads, so registering them would bind dead autograd state.
         """
 
-        from ..backends.torch.backward import _register_forward_grad_fn
-        from ..backends.torch.tensor_tracking import _add_rebound_gradient_hook
-
         self.target.__dict__["_tl_backward_hooked_tensor_keys"] = set()
         self.target.__dict__["_tl_grad_hook_owner_by_label"] = {}
         for layer in self.target._layer_list:
@@ -721,22 +721,20 @@ class RefreshProjector:
     def _separate_output_payloads(self) -> None:
         """Settle refreshed output-node payloads against their producer's payload.
 
-        HONESTY 13-R1 (same rule as plain capture, ``graph_traversal``): when
-        the refreshed output value IS the producer's retained payload, the
-        output pseudo-row rides that ONE payload; a differing value keeps its
-        own physical copy, so a refresh never hides a variation and never
-        re-acquires the redundant duplicate the byte model charged.
+        HONESTY 13-R1 (same rule as plain capture, ``_output_payload``): when the refreshed
+        output value IS the producer's retained payload, the output pseudo-row rides that ONE
+        payload; a differing value (or a graph the payload lacks) keeps its own physical copy,
+        so a refresh never hides a variation nor re-acquires the duplicate the bytes charged.
         """
 
-        from .._postprocess.graph_traversal import output_payload_aliases_parent
-        from .._utils.tensor_utils import safe_copy
+        from .._postprocess._output_payload import output_rides_parent_payload
 
         for output_label in self.target.output_layers:
             output = self.target._layer_dict_all_keys[output_label]
             if not output.parents or output.out is None:
                 continue
             parent_out = self.target._layer_dict_all_keys[output.parents[0]].out
-            if output_payload_aliases_parent(output.out, parent_out):
+            if output_rides_parent_payload(output.out, parent_out, self.target):
                 output._internal_set("out", parent_out)
                 continue
             output._internal_set(
@@ -831,8 +829,6 @@ class RecordingProjection:
             trace.output_layers = list(self.preset_output_layers)
             return
 
-        from ..backends.torch._tl import get_tensor_label, set_tensor_label
-
         for tensor, label in zip(self.output_tensors, self.output_labels, strict=False):
             if label is not None and get_tensor_label(tensor) is None:
                 set_tensor_label(tensor, label)
@@ -847,8 +843,6 @@ class RecordingProjection:
         label
             Authoritative raw event label for that tensor.
         """
-
-        from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
         if get_tensor_label(tensor) is None:
             set_tensor_label(tensor, label)
@@ -872,8 +866,6 @@ def _core_records(
         The records the core stored at seal time, else the records projected
         from its predicate-matched events.
     """
-
-    from .projections import activation_record_from_event
 
     stored_records = core.projection_facts.get("records", ())
     if stored_records:

@@ -561,11 +561,26 @@ expert contributions from routing indices alone.
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
-- `Trace.draw(highlight="interventions")` (keyword-only) draws the surgery lens: recorded
-  interventions marked on their nodes, the per-lane census in the caption, and the full census
-  written beside the figure as `<path>.census.txt` (beside the collision-safe file a bare draw
-  chose). Any other value refuses `draw_highlight_invalid` listing the allowed values; an
-  un-edited trace refuses `surgery_evidence_missing`.
+- `Trace.draw(view=...)` (keyword-only; default `None`, the plain graph) draws a premade view,
+  each answering one question: `"overview"`, `"debug"`, `"speed"`, `"dims"`, `"transformer"`,
+  `"memory"`, `"sequence"`, `"compute"`, `"interventions"` (spelled once in
+  `torchlens/_literals.py` `DrawViewLiteral`; door `torchlens/_visualization/_view_door.py`).
+  Each view prints caption lines under the header block, first line
+  `view: <name> -- <question>`. Explicit keywords win over the view's settings, so combinations
+  are keywords (`trace.draw(view="debug", show_edge_shapes=True)`); `theme=` stays the colour
+  skin and composes with any view; `"speed"`/`"memory"`/`"compute"` turn on
+  `node_style="profiling"` rows themselves. `"transformer"` focuses on the first repeated block
+  holding attention (GPT-2 `transformer.h.0`) and names it in the caption; explicit `module=`
+  wins. `"interventions"` outlines edited ops in purple (dashed = inferred site) and ops whose
+  saved value differs from the clean run (`trace.parent_trace`) in light purple with the
+  largest absolute change; a collapsed module box takes the marks of its ops (edit outline
+  when it holds an edit site, else the largest change inside); without a live unedited
+  parent the caption says so. The full
+  record goes beside a written figure as `<path>.census.txt` (beside the collision-safe file
+  a bare draw chose). Any other value
+  refuses `draw_view_invalid` listing the allowed values; a missing subject or evidence refuses
+  `view_*` (for example `view_attention_subject_absent`) and an un-edited trace refuses
+  `surgery_evidence_missing`. `torchlens._visualization.lenses.draw_with_lens` is private.
 - `tl.viz.contact_sheet(view, page=k)` returns a `ContactSheet`: the page's SVG text (a `str`)
   carrying `page` and `page_count`, so `contact_sheet(view).page_count` says how many pages to
   ask for.
@@ -709,7 +724,7 @@ expert contributions from routing indices alone.
   inert `DeviceMesh` remains informational. The bounded scan covers inspectable inputs/plain attrs
   and direct TP-namespace hook registries; slots/descriptor-only holders, opaque user-wrapped hooks,
   over-bound state, and tensors created inside `forward` remain disclosed residuals.
-  Detection lives in `torchlens/_distributed.py` and is shared verbatim by both surfaces; the
+  Detection lives in `torchlens/_distributed/` and is shared verbatim by both surfaces; the
   `HAS_DTENSOR` / `HAS_DEVICE_MESH` / `HAS_PIPELINING` capability flags gate the exact-`isinstance`
   path and fall back to structural namespace matching. The `dtensor` finding carries per-site
   dual geometry on `finding.geometry` (logical shape, placements, shard offset, local elements),

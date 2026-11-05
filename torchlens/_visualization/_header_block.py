@@ -33,11 +33,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import honesty_banner_lines
+from .._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
+from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
+from ._edit_highlighter import highlighter_rgba
+from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink, header_edit_line
 from ._focus_scope import scope_caption_head
+from ._fonts import _FONT_DIR
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
-from ._render_utils import html_escape
-from .themes import resolve_theme
+from ._render_common import (
+    BOOL_NODE_COLOR,
+    BUFFER_NODE_COLOR,
+    DEFAULT_BG_COLOR,
+    FROZEN_PARAMS_BG_COLOR,
+    INPUT_COLOR,
+    OUTPUT_COLOR,
+    TRAINABLE_PARAMS_BG_COLOR,
+)
+from ._render_utils import html_escape, strip_path_directories
+from .node_spec import NodeSpec, intervention_sites_for_log
+from .themes import _hex_rgb, _theme_cluster_attrs, apply_theme_to_spec, resolve_theme
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -221,28 +237,13 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         HTML-like caption body without the outer FONT wrapper.
     """
 
-    from .._capture_honesty import honesty_banner_lines
-    from ._render_utils import strip_path_directories
-
     caption_body = _caption_head(trace, count_line, getattr(request, "module", None))
     edit_line = _header_edit_line(trace, request)
     if edit_line is not None:
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    # Capture-honesty banner (WT1 A-V row 23): a poisoned/diverged sparse run,
-    # an unverified capture, or an episode capture must not RENDER clean --
-    # the graph is a publishable artifact, so the caption carries the facts.
-    # The picture keeps a cited source location's file name and line only.
-    for banner_line in honesty_banner_lines(trace):
-        banner_text = html_escape(strip_path_directories(banner_line))
-        if banner_line.startswith("capture advisory:"):
-            # An advisory discloses a gap in source provenance, not a failed
-            # capture: it stays in the header, in the key's text size, unbolded.
-            size = resolve_theme(request.theme).typography.secondary_size
-            caption_body += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
-            continue
-        caption_body += f"<B>{banner_text}</B><br align='left'/>"
+    caption_body += _honesty_banner_rows(trace, request)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the
@@ -268,7 +269,26 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     reuse_note = module_reuse_note(trace, request)
     if reuse_note is not None:
         caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
-    return caption_body
+    return caption_body + _lens_caption_rows(request)
+
+
+def _lens_caption_rows(request: ResolvedRenderRequest) -> str:
+    """Return a lens's disclosure lines, in the key's text size, for under the header.
+
+    A lens draw passes its caption in ``graph_overrides`` under
+    :data:`LENS_CAPTION_KEY`, so the model header stays and the caption adds
+    to it instead of replacing it.
+    """
+
+    caption = (getattr(request, "graph_overrides", None) or {}).get(LENS_CAPTION_KEY)
+    if not caption:
+        return ""
+    size = resolve_theme(request.theme).typography.secondary_size
+    return "".join(
+        f"<FONT POINT-SIZE=\"{size:g}\">{html_escape(line)}</FONT><br align='left'/>"
+        for line in str(caption).split("\n")
+        if line
+    )
 
 
 def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
@@ -277,12 +297,34 @@ def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
     return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
 
 
+def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest) -> str:
+    """Return the capture-honesty banner rows as caption HTML.
+
+    A poisoned/diverged sparse run, an unverified capture, or an episode
+    capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
+    artifact, so the caption carries the facts. The picture keeps a cited
+    source location's file name and line only. A view may move named lines
+    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census).
+    """
+
+    omitted = tuple((request.graph_overrides or {}).get(LENS_BANNER_OMIT_KEY, ()))
+    rows = ""
+    for banner_line in honesty_banner_lines(trace):
+        if omitted and banner_line.startswith(omitted):
+            continue
+        banner_text = html_escape(strip_path_directories(banner_line))
+        if banner_line.startswith("capture advisory:"):
+            # An advisory discloses a gap in source provenance, not a failed
+            # capture: it stays in the header, in the key's text size, unbolded.
+            size = resolve_theme(request.theme).typography.secondary_size
+            rows += f"<FONT POINT-SIZE=\"{size:g}\">{banner_text}</FONT><br align='left'/>"
+            continue
+        rows += f"<B>{banner_text}</B><br align='left'/>"
+    return rows
+
+
 def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | None:
     """Return the header's edit line (``1 edit: Δ zero_ablate on linear_1_1``), if any."""
-
-    from ._edit_marks import edit_ink, header_edit_line
-    from .node_spec import intervention_sites_for_log
-    from .themes import resolve_theme
 
     sites = intervention_sites_for_log(trace)
     if not sites:
@@ -297,9 +339,9 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
 
     The collapse panel ratified "disclose, don't switch" for weight-shared
     models: the default ``vis_mode`` stays, and an overview render (a smart
-    collapse mode) says how many modules ran more than once and that rolled
-    mode draws the loop. Nested modules of a reused module are not counted
-    again.
+    collapse mode) says how many modules ran more than once and that
+    ``rolled=True`` draws the loop, short enough not to clip. Nested modules
+    of a reused module are not counted again.
 
     Returns
     -------
@@ -329,9 +371,7 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     count = len(outermost)
     calls = sum(outermost.values())
     noun = "module" if count == 1 else "modules"
-    return (
-        f"this model reuses {count} {noun} across {calls} calls; vis_mode='rolled' shows the loop"
-    )
+    return f"{count} reused {noun} ({calls} calls); rolled=True draws the loop"
 
 
 def drawn_module_marks(
@@ -403,16 +443,6 @@ def key_swatches(
     highlighter drawn, ``changed by the edit``.
     """
 
-    from ._render_common import (
-        BOOL_NODE_COLOR,
-        BUFFER_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        FROZEN_PARAMS_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-
     has_weights = "parameterized" in drawn
     marks = module_marks | ({"frame"} if has_module else set())
     entries = (
@@ -444,9 +474,6 @@ def _entry_swatch(theme: VisualizationTheme, text: str, shape: str, fill: str) -
     to every function call teaches nothing.
     """
 
-    from .node_spec import NodeSpec
-    from .themes import _hex_rgb, apply_theme_to_spec
-
     if shape == "frame":
         return _module_frame_swatch(theme)
     themed = apply_theme_to_spec(NodeSpec([text], shape=shape, fillcolor=fill), theme)
@@ -467,8 +494,6 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
     the key matches the expanded modules in the picture (Lead, 29 Oct 2026).
     """
 
-    from .themes import _theme_cluster_attrs
-
     cluster = _theme_cluster_attrs(theme)
     return KeySwatch(
         text="module",
@@ -482,9 +507,6 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
 def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[KeySwatch]:
     """Return the edit entries: a ringed oval ``edited`` and the highlighted arrow."""
 
-    from ._edit_highlighter import highlighter_rgba
-    from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink
-
     ink = edit_ink(theme)
     swatches = []
     if "edited" in drawn:
@@ -497,10 +519,22 @@ def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[Key
                 line=EDIT_RING_PENWIDTH,
             )
         )
-    if "changed by the edit" in drawn:
+    if "changed value" in drawn:
         swatches.append(
             KeySwatch(
                 text="changed by the edit",
+                shape="oval",
+                fill=theme.default_fill,
+                border=CHANGED_INK,
+                line=CHANGED_PENWIDTH,
+            )
+        )
+    if "changed by the edit" in drawn:
+        # Beside the value-change outline, the cone's arrows say "downstream".
+        cone_text = "downstream of the edit" if "changed value" in drawn else "changed by the edit"
+        swatches.append(
+            KeySwatch(
+                text=cone_text,
                 shape="arrow",
                 fill=highlighter_rgba(theme),
                 border=str(theme.edge.get("color", theme.default_border)),
@@ -624,8 +658,6 @@ def _text_width(text: str, size: float, bold: bool = False) -> float:
     """Return ``text``'s width in points in the bundled face Graphviz draws with."""
 
     from PIL import ImageFont
-
-    from ._fonts import _FONT_DIR
 
     name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
     try:

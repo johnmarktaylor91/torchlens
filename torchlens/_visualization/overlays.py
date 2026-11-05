@@ -11,6 +11,7 @@ import torch
 
 from .._capture.flops import append_attention_note
 from .._errors import InvalidArgumentError
+from .._selection.selection import Selection, Selector
 from .._utils._multipass_access import get_multipass_attr
 from .._utils.display import format_flops
 from ..errors._base import TorchLensWarning
@@ -40,8 +41,6 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
     2.7x overpaint. Touched sites with zero selected elements stay in the
     mapping as an honest ``0``.
     """
-
-    from .._selection.selection import Selection, Selector
 
     if isinstance(overlay, Selector):
         overlay = overlay._resolve(trace)
@@ -253,6 +252,52 @@ def builtin_overlay_value(node: Any, overlay: str) -> Any:
     if name == "bundle_delta":
         return get_multipass_attr(node, "bundle_delta", None, multipass=None)
     return None
+
+
+#: Record fields with a physical unit -> the overlay formatter that prints it.
+FIELD_UNIT_OVERLAYS = {
+    "func_duration": "time",
+    "total_func_duration": "time",
+    "activation_memory": "bytes",
+    "total_activation_memory": "bytes",
+    "flops_forward": "flops",
+    "total_flops_forward": "flops",
+}
+
+
+def legend_domain_text(spec: Any, value: float) -> str:
+    """Format one colour-legend endpoint, with units where the source has one.
+
+    Parameters
+    ----------
+    spec:
+        The colour channel's spec (``source`` and ``source_kind``), or ``None``.
+    value:
+        The endpoint value.
+
+    Returns
+    -------
+    str
+        The endpoint text, for example ``"1.56 ms"`` or ``"42"``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> from torchlens._visualization.overlays import legend_domain_text
+    >>> legend_domain_text(SimpleNamespace(source="func_duration", source_kind="field"), 0.002)
+    '2 ms'
+    >>> legend_domain_text(None, 3.0)
+    '3'
+    """
+
+    source = str(getattr(spec, "source", ""))
+    builtin = spec is not None and getattr(spec, "source_kind", None) == "builtin"
+    overlay = source if builtin else FIELD_UNIT_OVERLAYS.get(source)
+    if overlay is not None:
+        return format_overlay_value(overlay, value).split(": ", 1)[-1]
+    if value == int(value) and abs(value) < 1e15:
+        return str(int(value))
+    return f"{value:.4g}"
 
 
 def format_overlay_value(name: str, value: Any) -> str:

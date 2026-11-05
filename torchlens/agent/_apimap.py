@@ -36,7 +36,7 @@ _EXAMPLES: dict[str, str] = {
 def _resolve(name: str) -> Any:
     """Resolve one root name through the live facade (import side effects OK here)."""
 
-    import torchlens
+    import torchlens  # deferred: startup cost
 
     try:
         return getattr(torchlens, name)
@@ -102,7 +102,7 @@ def compact_rows() -> list[dict[str, Any]]:
         summary, deprecation flag, required_params (elision disclosed), arity.
     """
 
-    from .._surface import surface_rows
+    from .._surface import surface_rows  # deferred: startup cost
 
     rows: list[dict[str, Any]] = []
     for surface_row in surface_rows():
@@ -158,7 +158,7 @@ def name_detail(name: str) -> dict[str, Any]:
         ``agent_name_unknown`` when the name is not on the surface.
     """
 
-    from .._errors import InvalidArgumentError
+    from .._errors import InvalidArgumentError  # deferred: startup cost
 
     value = _resolve(name)
     if value is None:
@@ -197,7 +197,7 @@ def capabilities_block() -> dict[str, Any]:
         explicit write/execute facts.
     """
 
-    from . import _registry
+    from . import _registry  # deferred: startup cost
     from ._schemas import schema_index
 
     specs = _registry.tool_specs()

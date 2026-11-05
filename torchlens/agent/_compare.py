@@ -81,7 +81,7 @@ def _value_tier(ref_op: Any, sub_op: Any, rtol: float, atol: float) -> dict[str,
         Value metrics, or a ``payload_unavailable`` state row.
     """
 
-    from .._io.payload_reader import read_op_payload
+    from .._io.payload_reader import read_op_payload  # deferred: startup cost
 
     try:
         reference = read_op_payload(ref_op)

@@ -127,7 +127,7 @@ def test_spill_artifact_carries_no_torchlens_sidecar():
     tensors or storages that view the same data as different types".
     """
 
-    from torchlens.backends.torch._tl import set_tensor_label
+    from torchlens._utils._tensor_label import set_tensor_label
 
     session = CaptureSession(
         CapturePlan.compile(

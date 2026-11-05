@@ -15,8 +15,10 @@ from typing import Any
 
 import torch
 
-import torchlens as tl
 import torchlens.mechinterp as mi
+
+from .._user_public_impls import trace as _capture_trace
+from ..options import CaptureOptions
 
 
 def tlens_agreement_demo() -> dict[str, Any]:
@@ -30,10 +32,10 @@ def tlens_agreement_demo() -> dict[str, Any]:
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     prompt = "The Eiffel Tower is located in the city of"
     ids = torch.tensor([tokenizer(prompt)["input_ids"]])
-    log = tl.trace(
+    log = _capture_trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(save_args=True),
+        capture=CaptureOptions(save_args=True),
         save="all",
     )
 
@@ -86,7 +88,7 @@ def _tlens_parity_rows(prompt: str) -> int | None:
     tlens.eval()
     tokens = tlens.to_tokens(prompt)
     _, cache = tlens.run_with_cache(tokens)
-    log2 = tl.trace(tlens, tokens, save="all")
+    log2 = _capture_trace(tlens, tokens, save="all")
     dec2 = mi.residual_decomposition(log2)
     stack, _labels = cache.decompose_resid(layer=-1, return_labels=True)
     exact = sum(

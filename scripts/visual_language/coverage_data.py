@@ -395,15 +395,11 @@ ROWS: Mapping[str, Row] = {
         "lenses._roster:ROSTER",
         variants=("overview", "speed", "dims", "debug"),
         caption_variants=(
-            "blueprint",
             "transformer",
             "memory",
             "sequence",
             "compute",
-            "surgery",
-            "runtime_storage",
-            "vision",
-            "debug_edge_shapes",
+            "interventions",
         ),
     ),
     "VK10": _R(

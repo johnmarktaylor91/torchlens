@@ -24,6 +24,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from ..._selection.selector_base import BaseSelector
+from ..._selection.selectors import in_module
 from ..._utils._record_group_table import record_member
 from . import _pooling, _refusals, _runtime, _sites
 
@@ -211,8 +213,6 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
         A composed selector, or None for the save-everything default.
     """
 
-    from torchlens import in_module
-
     label_map: dict[str, Any] = {}
     for op in probe._layer_list:
         label_map[str(op.label)] = op
@@ -227,7 +227,7 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
                 return None
             addresses.add(stack[-1].rsplit(":", 1)[0])
 
-    selection = None
+    selection: BaseSelector | None = None
     for address in sorted(addresses):
         selector = in_module(address)
         selection = selector if selection is None else (selection | selector)
@@ -390,7 +390,7 @@ def dataset(
     """
 
     _require_lit_nlp()
-    from ._adapters import build_dataset
+    from ._adapters import build_dataset  # deferred: cycle bridge
 
     vocab = tuple(str(label) for label in labels) if labels is not None else None
     return build_dataset(examples, vocab, description)
@@ -417,6 +417,6 @@ def layout() -> Any:
     """
 
     _require_lit_nlp()
-    from ._adapters import build_layout
+    from ._adapters import build_layout  # deferred: cycle bridge
 
     return build_layout()

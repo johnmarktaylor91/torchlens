@@ -58,7 +58,7 @@ def _fail_uncorroborated_edge_entries(
 ) -> ValidationCheckResult | None:
     """Fail any tier-(ii) entry missing its FireRecord address or stamp verdict."""
 
-    from ._core import ValidationCheckResult
+    from ._core import ValidationCheckResult  # deferred: cycle validation
     from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
     stamps = getattr(target_op, "edge_replacement_stamps", None) or {}
@@ -120,7 +120,7 @@ def _splice_edge_substitution_args(
 ) -> tuple[dict[str, Any] | None, ValidationCheckResult | None]:
     """Splice tier-(ii) substituted values into the captured call arguments."""
 
-    from ._core import ValidationCheckResult
+    from ._core import ValidationCheckResult  # deferred: cycle validation
     from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
     from ._replay_grad_fidelity import replay_copy_for_slot
 
@@ -206,7 +206,7 @@ def _reexecute_edge_boundary(
     """Re-execute the child from the spliced tier-(ii) values and compare outputs."""
 
     from .._utils.tensor_utils import tensor_nanequal
-    from ._core import (
+    from ._core import (  # deferred: cycle validation
         ValidationCheckResult,
         _execute_func_with_restored_state,
         _prepare_input_args_for_validating_layer,
@@ -267,7 +267,7 @@ def _parent_arg_evidence(
     never validated.
     """
 
-    from ._core import ValidationCheckResult, _saved_out_payload
+    from ._core import ValidationCheckResult, _saved_out_payload  # deferred: cycle validation
 
     target_op_label = getattr(target_layer, "label", target_layer.layer_label)
     versions = parent_layer.out_versions_by_child
@@ -326,7 +326,7 @@ def _capture_payload_equal(trace: Trace, candidate: Op, target_layer: Op, value:
     """
 
     from .._utils.tensor_utils import tensor_nanequal
-    from ._core import _saved_out_payload
+    from ._core import _saved_out_payload  # deferred: cycle validation
 
     if not isinstance(value, torch.Tensor):
         return False

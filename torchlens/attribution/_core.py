@@ -1210,7 +1210,7 @@ def _stacked_gradients(
         or a callable target's output tree does not split.
     """
 
-    from torchlens.attribution._steps import _scalarize_stacked_output
+    from torchlens.attribution._steps import _scalarize_stacked_output  # deferred: cycle
 
     output = _call_model(model, inputs, stacked_leaves, n_rows=n_rows)
     scalar = _scalarize_stacked_output(output, target, n_rows, _scalarize_output)
@@ -1322,7 +1322,7 @@ def integrated_gradients(
     True
     """
 
-    from torchlens.attribution._steps import (
+    from torchlens.attribution._steps import (  # deferred: cycle attribution
         _chunk_steps,
         _midpoint_alphas,
         _StepAuditor,
@@ -1497,7 +1497,7 @@ def smoothgrad(
     # noise draw order (one draw per unique leaf per sample, per-device
     # generator seeded on first use) is bit-identical to the historical
     # inline implementation.
-    from torchlens.attribution._noise_tunnel import noise_tunnel
+    from torchlens.attribution._noise_tunnel import noise_tunnel  # deferred: cycle attribution
 
     tunneled = noise_tunnel(
         inputs,

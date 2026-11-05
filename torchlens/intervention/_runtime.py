@@ -14,12 +14,15 @@ from .._data_classes._site_key import call_instance_id, render_site_key, site_ax
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
+from .._ir.selector_eval import normalize_selector_like
 from .._record_type import record_type
+from .._selection.resolver import _resolve_unchecked
 from .._state import pause_logging
 from .._utils._record_group_table import record_member
 from .._utils.arg_handling import copy_arg_tree
 from ._audit import build_fire_record
 from ._hooks_support import gradient_inner
+from ._injection import peek_injection_state
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -526,8 +529,6 @@ def _apply_live_hooks(
 
 def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
     """The trace's consolidated injection state when ``log_injections`` is armed."""
-
-    from ._injection import peek_injection_state
 
     state = peek_injection_state(trace)
     if isinstance(state, dict) and state.get("armed", False):
@@ -1173,9 +1174,6 @@ def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
     bool
         Whether the selector matches the op.
     """
-
-    from .._ir.selector_eval import normalize_selector_like
-    from .._selection.resolver import _resolve_unchecked
 
     # Session-only cache in the run state (last_run is never persisted).
     cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(

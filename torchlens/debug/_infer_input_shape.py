@@ -20,6 +20,10 @@ from torchlens.debug._infer_training_states import (
     training_states_restored,
 )
 
+from .._user_public_impls import trace
+from .._utils.lazy_state import has_uninitialized_lazy_state
+from .._utils.rng import _snapshot_cuda_rng_states
+from ..options import CaptureOptions
 from ._infer_op_facts import (
     _shape_op_config_int,
     _shape_op_label,
@@ -314,8 +318,6 @@ def _has_uninitialized_lazy_state(model: nn.Module) -> bool:
     bool
         Whether any module has uninitialized lazy parameters or buffers.
     """
-
-    from .._utils.lazy_state import has_uninitialized_lazy_state
 
     return has_uninitialized_lazy_state(model)
 
@@ -1124,9 +1126,6 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
     Trace
         Completed TorchLens trace.
     """
-
-    from torchlens._user_funcs import trace
-    from torchlens.options import CaptureOptions
 
     states = _training_states(model)
     try:
@@ -2077,7 +2076,6 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     cpu_rng_state = torch.default_generator.get_state()
     # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
     # gate allocated a CUDA context per visible device on CPU-only runs.
-    from .._utils.rng import _snapshot_cuda_rng_states
 
     cuda_rng_state = _snapshot_cuda_rng_states() or None
     try:

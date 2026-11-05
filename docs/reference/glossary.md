@@ -2125,6 +2125,20 @@ routing-table read without saved router weights or expert indices. Its
   programs; SPMD processes may arm lazily at capture entry). Sharded state (DTensor,
   tensor/pipeline parallel) still refuses typed at capture entry.
 
+**tl.distributed.ArmingRecord**
+: What `arm()` established, stamped on every boundary record. Fields:
+  `ArmingRecord.install_epoch` (the `InstallEpoch` the arming installed under),
+  `ArmingRecord.recognizer_snapshot` (the recognizer snapshot id the arming derived) and
+  `ArmingRecord.source` (how arming happened: explicit or lazy at capture entry).
+
+**tl.distributed.GroupIdentity**
+: The resolved lifetime identity of one process group on this rank. Fields:
+  `GroupIdentity.membership_digest`, `GroupIdentity.lifetime_ordinal` (which lifetime of
+  that membership this group is), `GroupIdentity.ordinal_source` (where the ordinal came
+  from), `GroupIdentity.global_ranks` (the member ranks) and `GroupIdentity.backend`; the
+  `GroupIdentity.group_uid` property is the exactly-two-field correlation group identity
+  (membership digest, lifetime ordinal).
+
 **Collective boundary op**
 : A captured op whose portable `annotations["collective"]` carries the
   `collective_boundary_v1` payload: correlation key, role-indexed dual geometry, event
@@ -3094,15 +3108,30 @@ deprecation shim owed*
   conservative area-only mapping + typed refusal on rolled varying sources).
   See the "size_by" and "size_scale (size channel)" entries above for semantics.
 
-**highlight (draw kwarg)** — *keyword-only*
-: `Trace.draw(highlight=...)` draws a named highlight over the graph; `None` (the
-  default) draws the plain graph. The one value today is `"interventions"`: the surgery
-  lens marks every recorded intervention on its node (solid border = recorded fact, dashed
-  = heuristic attribution), the caption carries the per-lane census, and a written figure
-  gets the full census text beside it as `<path>.census.txt` (beside the collision-safe
-  file a bare draw chose). A trace with no recorded intervention refuses
-  `surgery_evidence_missing`; any other value refuses `draw_highlight_invalid`, naming the
-  allowed values.
+**view (draw kwarg): the premade views** — *keyword-only*
+: `Trace.draw(view=...)` draws one premade view: a bundle of draw settings plus evidence
+  checks and a caption, each answering one question. `None` (the default) draws the plain
+  graph, which already shows every op. The values are `"overview"` (what is this model?),
+  `"debug"` (what is broken?), `"speed"` (where does time go?), `"dims"` (what shape is the
+  data?), `"transformer"` (how is attention wired?), `"memory"` (what is big in bytes?),
+  `"sequence"` (how do the passes unfold?), `"compute"` (where are the FLOPs?) and
+  `"interventions"` (what did the edits change?). Each view prints its caption lines under
+  the header block, starting with `view: <name> -- <question>`. Keywords you pass win over
+  the view's own settings, so combinations are spelled with keywords, for example
+  `trace.draw(view="debug", show_edge_shapes=True)`. `theme=` stays the colour skin and
+  composes with any view; `"speed"`, `"memory"` and `"compute"` turn on the
+  `node_style="profiling"` rows themselves. `"transformer"` focuses the drawing on the first
+  repeated block that holds attention (for GPT-2, `transformer.h.0`) and names it in the
+  caption; an explicit `module=` wins. `"interventions"` outlines every edited op in purple
+  (dashed = inferred site) and every other op whose saved value differs from the clean run
+  (the unedited parent trace) in light purple with its largest absolute change (a collapsed
+  module box takes the marks of the ops inside it), and writes
+  the full record beside a written figure as `<path>.census.txt`. A
+  view whose evidence or subject is missing refuses typed with a remedy
+  (`view_headline_evidence_missing`, `view_attention_subject_absent`,
+  `view_single_pass_no_sequence`, or `surgery_evidence_missing` for `"interventions"` on a
+  trace with no recorded edit); any other value refuses `draw_view_invalid`, naming the
+  allowed values. See docs/reference/lenses.md.
 
 **ContactSheet (contact-sheet page)** — *documented-unstable*
 : What `tl.viz.contact_sheet(view, page=...)` returns: the page's SVG text (a `str`, so
@@ -4979,6 +5008,7 @@ The sections above describe each surface in depth.
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
+| `ValidationStatus.__bool__` | The pass/fail result as a bool; raises `TypeError` unless replay validation ran (`state` is `passed` or `failed`) |
 | `ValidationStatus.available_live` | Build the default status for a live trace with validation support |
 | `ValidationStatus.exempted_reason_counts` | Stable reason-code counts for nodes whose replay/perturbation check had a provable exemption |
 | `ValidationStatus.from_replay_counts` | Fold replay outcome counts into a trace-level status |
@@ -6720,7 +6750,6 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `height=` | keyword of `tl.viz.heatmap` (keyword-only; default `240`): Output image height in pixels; keyword of `tl.viz.lineplot` (keyword-only; default `180`): Output image height in pixels; keyword of `tl.viz.nodes.histogram` (default `160`): Rendered image height; keyword of `tl.viz.nodes.scree` (keyword-only; default `180`): Height of the rendered scree image in pixels |
 | `hi_exp=` | constructor keyword of `tl.stats.HistogramDescriptor` (default `16`) |
 | `high=` | keyword of `tl.clamp` (keyword-only; default `None`): Optional upper bound; keyword of `tl.saturated` (keyword-only; default `None`) |
-| `highlight=` | keyword of `Trace.draw` (keyword-only; default `None`): Keyword-only. Named highlight drawn over the graph. `None` (the default) draws the plain graph. `"interventions"` draws the surgery lens: every recorded intervention is marked on its node (solid border = recorded fact, dashed = heuristic attribution), the caption carries the per-lane census, .. |
 | `hist_every=` | constructor keyword of `tl.trackers.HFTrainerWatchCallback`, `tl.trackers.LightningWatchCallback` (keyword-only; optional); keyword of `tl.trackers.watch` (keyword-only; default `None`): Histogram cadence; may run coarser than scalars. `None` disables the sketch tier (scalars remain) |
 | `history_id=` | keyword of `Bundle.effects`: which recorded history to read; constructor keyword of `tl.experiment.SweepGrid` (required) |
 | `history_size=` | constructor keyword of `tl.options.RecordingOptions` (optional); keyword of `tl.recording.dry_run` (keyword-only; default `8`): Fastlog dry-run options. Predicate exceptions propagate immediately |
@@ -6997,7 +7026,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `node_overlay=` | keyword of `Trace.draw` (keyword-only; default `None`): Per-node label row: a stock overlay name (`"flops"`, `"time"`, `"bytes"`, `"magnitude"`, `"nan"`, `"grad_norm"`, `"intervention"`, `"bundle_delta"`), a mapping of layer label to value, or a callable `node -> value`; constructor keyword of `tl.options.VisualizationOptions` (optional): Built-in overlay name, an external label->value score mapping, or a callable invoked as `fn(node)` to compute a per-node overlay value |
 | `node_overrides=` | keyword of `Bundle.draw` (keyword-only; default `None`) |
 | `node_spec_fn=` | keyword of `Trace.draw` (keyword-only; default `None`): Per-node styling and selection callbacks (see `tl.viz.nodes`); constructor keyword of `tl.options.VisualizationOptions` (optional): Optional layer-node customization callback |
-| `node_style=` | keyword of `Trace.draw` (keyword-only; default `'default'`): Node label style: `"default"` or `"profiling"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Built-in node label/style preset |
+| `node_style=` | keyword of `Trace.draw` (keyword-only; default `'default'`): Node label style: `"default"` or `"profiling"`; separate from `view=`, though `view="speed"`, `"memory"` and `"compute"` turn the profiling rows on themselves; constructor keyword of `tl.options.VisualizationOptions` (optional): Built-in node label/style preset |
 | `nodes=` | keyword of `Bundle.draw` (keyword-only; default `'ops'`) |
 | `noise_bank=` | keyword of `tl.attribution.noise_tunnel` (keyword-only; default `None`): Optional stored unit-scale draws (`noise_bank[sample][unique_leaf]`) replayed instead of fresh draws; oracle rows use this to feed our runner and a reference implementation the same bank |
 | `noise_level=` | keyword of `tl.attribution.smoothgrad` (keyword-only; default `0.1`): Standard deviation of Gaussian noise added to each input copy; must be positive (zero noise refuses `smoothgrad_noise_level_invalid`) |
@@ -7050,7 +7079,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `on_save=` | constructor keyword of `tl.options.StorageOptions` (optional): Callback invoked with `(label, tensor)` for each saved out |
 | `on_zero_fire=` | keyword of `Recipe.bind` (keyword-only; default `'warn'`): Zero-fire settlement policy, the same knob at every intervention door. A rule that never fired is always recorded on `.last_report.zero_fire_rule_ids`; `"warn"` (default) also emits a `bind_zero_fire` coded warning, `"error"` raises `bind_zero_fire` after the call, and `"disclose"` ..; keyword of `Trace.run`, `Trace.run_transaction` (keyword-only; optional): What a staged hook entry that fired at zero sites on this run does after the fact is recorded (`last_run["hooks_unfired"]`): `"warn"` (default) emits a `rerun_zero_fire` coded warning, `"error"` raises `rerun_zero_fire`, `"disclose"` records only. The same knob as `spec.bind` and ..; keyword of `tl.trace` (keyword-only; optional): What a capture-time `intervene=` that fired at zero sites does once the fact is recorded (`annotations["unmatched_capture_selectors"]`, intervention audit): `"warn"`, used when not passed, warns `trace_zero_fire`; `"error"` raises it; `"disclose"` records only. Same knob as .. |
 | `onto=` | keyword of `tl.mechinterp.attention_head_contributions` (keyword-only; default `None`): Optional direction vector(s) `[d_model]` or `[d_model, n]`: rows are contracted BEFORE any full stack exists (contract-before-expand; the memory number lives in the module docstring). Contracted rows are score tensors, not residual writers; keyword of `tl.mechinterp.mlp_neuron_contributions` (keyword-only; default `None`): Optional direction vector(s) `[d_model]` or `[d_model, n]`; rows are contracted BEFORE any full row exists (contracted rows are scores, not residual writers) |
-| `op=` | keyword of `ReceptiveFieldView.projective` (required): Source operation whose output grid owns `unit` coordinates; keyword of `tl.experimental.node_styles.attention_node_mode`, `tl.experimental.node_styles.vision_node_mode` (required): Per-pass Op or aggregate Layer being rendered; keyword of `tl.receptive_field.node_spec` (required): Target operation whose receptive-field ancestry is shown; keyword of `tl.transforms.pool_spatial` (default `'mean'`): `'mean'` (default) or `'max'`; keyword of `tl.transforms.pool_tokens` (required): One of `'mean'`, `'max'`, `'first'`, `'last'`. `first` and `last` gather each row's first/GREATEST VALID index under the mask, never physical endpoints (those need the recorded assertion); keyword of `tl.transforms.reduce` (required): One of `'mean'`, `'sum'`, `'max'`, `'min'` |
+| `op=` | keyword of `ReceptiveFieldView.projective` (required): Source operation whose output grid owns `unit` coordinates; keyword of `tl.experimental.node_styles.attention_node_mode`, `tl.experimental.node_styles.vision_node_mode` (required): Per-pass Op or aggregate Layer being rendered; keyword of `tl.receptive_field.node_spec` (required): Target whose receptive-field ancestry is shown: an `Op`, or a single-pass `Layer`, single-call `ModuleCall` or single-call `Module` resolved to its output operation on the trace that owns it; keyword of `tl.transforms.pool_spatial` (default `'mean'`): `'mean'` (default) or `'max'`; keyword of `tl.transforms.pool_tokens` (required): One of `'mean'`, `'max'`, `'first'`, `'last'`. `first` and `last` gather each row's first/GREATEST VALID index under the mask, never physical endpoints (those need the recorded assertion); keyword of `tl.transforms.reduce` (required): One of `'mean'`, `'sum'`, `'max'`, `'min'` |
 | `op_label=` | keyword of `KernelProfileReport.device_time_ns` (required); constructor keyword of `tl.mechinterp.Coordinate` (default `None`): Pass-qualified captured op label the value rode (`add_10_101:2`); constructor keyword of `tl.receptive_field.GradReceptiveField` (required); constructor keyword of `tl.types.OpRef` (keyword-only; required) |
 | `op_or_label=` | keyword of `tl.debug.lineage` (required): Start op or lookup key accepted by `trace.__getitem__` |
 | `op_row_index=` | constructor keyword of `tl.types.OpRef` (keyword-only; required) |
@@ -7413,7 +7442,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `tensors=` | constructor keyword of `tl.types.InputProvenance` (required): Per-tensor shape/dtype/device facts (direct arguments; nested containers are the capture record's job) |
 | `tested_through=` | constructor keyword of `tl.backends.FrameworkRequirement` (required): Highest version the backend's suite has run on |
 | `text=` | keyword of `tl.attribution.text` (required): Input text; keyword of `tl.bridge.transformers.trace_text` (required): String, list of strings, or list of message dictionaries when `chat_template=True`; keyword of `tl.report.summary` (required) |
-| `theme=` | keyword of `Bundle.draw` (keyword-only; default `None`); keyword of `Trace.draw` (keyword-only; default `'torchlens'`): Skin preset: `"torchlens"` (default), `"paper"`, `"dark"`, `"colorblind"` or `"high_contrast"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Theme name; keyword of `tl.viz.bundle_diff` (keyword-only; default `'paper'`): Visualization theme preset |
+| `theme=` | keyword of `Bundle.draw` (keyword-only; default `None`); keyword of `Trace.draw` (keyword-only; default `'torchlens'`): Skin preset: `"torchlens"` (default), `"paper"`, `"dark"`, `"colorblind"` or `"high_contrast"`; the colour skin, which composes with any `view=`; constructor keyword of `tl.options.VisualizationOptions` (optional): Theme name; keyword of `tl.viz.bundle_diff` (keyword-only; default `'paper'`): Visualization theme preset |
 | `threshold=` | keyword of `tl.low_variance` (keyword-only; required) |
 | `thumbnail_size=` | keyword of `tl.viz.image_scatter` (keyword-only; default `36`): Maximum width and height for pasted thumbnails; keyword of `tl.viz.nodes.feature_map` (keyword-only; default `72`): Required minimum size for raw stimulus thumbnails; keyword of `tl.viz.nodes.mds_scatter` (keyword-only; default `36`): Maximum width and height for each pasted thumbnail; keyword of `tl.viz.nodes.rdm` (keyword-only; default `24`): Maximum width and height for axis thumbnails |
 | `tier=` | keyword of `tl.export.register_target` (keyword-only; required): Per-member tier row: `"present"` (native emitter) or `"bridge"` (foreign-peer-shaped writer) |
@@ -7474,7 +7503,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `verify=` | keyword of `tl.dataset_extraction.open_extraction` (keyword-only; default `'structural'`): `"structural"` (default: manifest/ledger well-formed, files present at their exact ledgered byte sizes) or `"first_access"` (each shard's CRC verified once per handle lifetime); keyword of `tl.mechinterp.measure_trajectory` (keyword-only; default `True`): As in `logit_lens`; the lens is checked on the first batch |
 | `version=` | constructor keyword of `tl.transforms.PlannedStep` (required): Numerics-visible algorithm version of the step; constructor keyword of `tl.transforms.SrpSizing` (required): Formula version; constructor keyword of `tl.transforms.TransformDefinition` (required): Numerics-visible algorithm version; any numeric change bumps it |
 | `version_index=` | keyword of `Buffer.value_at` (required) |
-| `view=` | keyword of `Trace.summary` (keyword-only; default `None`): `"overview"` (default) \| `"compute"` \| `"stats"` (per-site payload statistics; see docs/reference/summary.md, "The stats view"); keyword of `tl.debug.sketch_grad_fn` (keyword-only; default `False`): Open the rendered file in the managed viewer (never a raw Popen); keyword of `tl.viz.attention` (required): The attention view record; keyword of `tl.viz.contact_sheet`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
+| `view=` | keyword of `Trace.draw` (keyword-only; default `None`): Premade view (each door has its own value list), one of `"overview"`, `"debug"`, `"speed"`, `"dims"`, `"transformer"`, `"memory"`, `"sequence"`, `"compute"` or `"interventions"`; `None` draws the plain graph (see "view (draw kwarg): the premade views"); keyword of `Trace.summary` (keyword-only; default `None`): `"overview"` (default) \| `"compute"` \| `"stats"` (per-site payload statistics; see docs/reference/summary.md, "The stats view"); keyword of `tl.debug.sketch_grad_fn` (keyword-only; default `False`): Open the rendered file in the managed viewer (never a raw Popen); keyword of `tl.viz.attention` (required): The attention view record; keyword of `tl.viz.contact_sheet`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
 | `views=` | keyword of `tl.transformer.bertviz_tuple` (required): Per-layer attention views in layer order; keyword of `tl.transformer.circuitsvis_attention`, `tl.transformer.circuitsvis_payload` (required): Per-layer attention views sharing one token axis; keyword of `tl.viz.attention_atlas` (required): One attention view per layer, in execution order |
 | `vmax=` | keyword of `tl.viz.heatmap` (keyword-only; default `None`): Optional upper normalization bound |
 | `vmin=` | keyword of `tl.viz.heatmap` (keyword-only; default `None`): Optional lower normalization bound |

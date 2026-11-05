@@ -19,7 +19,7 @@ def _graph_site_values(graph: Any, graph_value: str) -> dict[str, list[float]]:
 
     by_site: dict[str, list[float]] = {}
     if graph_value == "influence":
-        from torchlens.attribution._graph._neuronpedia import node_influence
+        from torchlens.attribution._graph._neuronpedia import node_influence  # deferred: cycle
 
         influence = node_influence(graph).tolist()
         for index, node in enumerate(graph.nodes):

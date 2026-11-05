@@ -30,6 +30,13 @@ import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens._utils._record_group_table import record_member
 from torchlens._utils.tensor_utils import tensor_nanequal
+from torchlens._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationStatus,
+)
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     CaptureGapWarning,
@@ -82,13 +89,6 @@ from torchlens.validation._invariants_topology import (
     _check_capture_edge_survival,
     _check_graph_topology,
     _check_special_layer_lists,
-)
-from torchlens.validation._status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None
@@ -5934,7 +5934,7 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
 def test_stale_internal_source_label_is_relogged_not_reused() -> None:
     """A stale tensor label must not become a missing live-index parent."""
 
-    from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+    from torchlens._utils._tensor_label import get_tensor_label, set_tensor_label
 
     model = _StaleLabelConstantModel()
     set_tensor_label(model.constant, "internalsource_1_2_raw")

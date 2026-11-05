@@ -36,6 +36,7 @@ from typing import Any
 
 import torch
 
+from ..._selection.selection import Selection, Selector
 from ..._utils._torch_compat import HAS_NODE_PREHOOK
 from ...errors import TorchLensWarning
 from ._accessor import ReadEdgeIndex, SiteEdge
@@ -174,8 +175,6 @@ def _resolve_explicit(
     selection-shaped (resolved against the trace; ACT kind only; element
     masks freeze exactly the masked elements of the slot).
     """
-
-    from ..._selection.selection import Selection, Selector
 
     sites: dict[str, SiteEdge] = {}
     masks: dict[str, torch.Tensor | None] = {}

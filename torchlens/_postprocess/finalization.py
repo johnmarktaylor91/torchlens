@@ -28,25 +28,35 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
 import torch
 
+from .._capture.outcome import outcome_for
 from .._data_classes._module_role_hints import (
     multi_output_role_from_path,
     role_hints_for_module_class,
 )
 from .._data_classes._state_adapter import state_items
 from .._data_classes._summary import format_call_arg
+from .._data_classes.layer import Layer
 from .._data_classes.module import Module, ModuleCall
+from .._data_classes.param import ParamAccessor
+from .._data_classes.trace import (
+    Conditional,
+    ConditionalAccessor,
+    ConditionalArm,
+    ConditionalRoleRef,
+)
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.format3.writer import settle_live_side
 from .._io.lazy import LazyActivationRef
-from .._io.scrub import BlobSpec
+from .._io.scrub import BlobSpec, scrub_for_save
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
+from .._ir.workspaces import _init_module_hierarchy_data
 from .._quantities import Bytes, Duration, Flops
 from .._utils._display_constructor import bind_template_keys
 from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
+from .._utils._tensor_label import clear_meta
 from .._utils.hashing import sha256_file
-from ..backends.torch._tl import clear_meta
 from . import _column_passes_finalize
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
@@ -203,7 +213,6 @@ def _build_root_module_log(
     root's forward ran undecorated (a plain module root), else the recorded
     ``self:1`` .. ``self:N`` of a bound-method root called N times.
     """
-    from .._data_classes.param import ParamAccessor
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_capture_ws.module_metadata)
     root_meta = module_metadata.get("self", {})
@@ -591,7 +600,6 @@ def _build_module_param_info(
     _buffer_layers_by_module: dict[str, list[str]] | None = None,
 ) -> ModuleParamInfo:
     """Gather parameter counts, sizes, and buffer layers for a single module."""
-    from .._data_classes.param import ParamAccessor
 
     module_param_dict = {pl.address: pl for pl in self._param_logs_by_module.get(address, [])}
     module_params = ParamAccessor(module_param_dict)
@@ -807,7 +815,6 @@ def _build_module_logs(self: "Trace") -> None:
     self._module_capture_ws.module_metadata = {}
     self._module_capture_ws.module_forward_args = {}
     self._module_capture_ws.root_forward_args = None
-    from .._ir.workspaces import _init_module_hierarchy_data
 
     self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
 
@@ -978,8 +985,6 @@ def _build_layer_logs(self: "Trace") -> None:
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).
     """
-    from .._data_classes.layer import Layer
-
     _column_passes_finalize.build_layer_logs(self, Layer, _reconcile_multipass_layer_fields)
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
@@ -987,13 +992,6 @@ def _build_layer_logs(self: "Trace") -> None:
 
 def _build_conditional_records(self: "Trace") -> None:
     """Build the public ConditionalAccessor from conditional postprocess data."""
-
-    from .._data_classes.trace import (
-        Conditional,
-        ConditionalAccessor,
-        ConditionalArm,
-        ConditionalRoleRef,
-    )
 
     conditionals: list[Conditional] = []
     event_by_id = {event.id: event for event in self._graph_conditional_records}
@@ -1181,7 +1179,6 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     if writer is None:
         return
 
-    from .._capture.outcome import outcome_for
     from ..intervention._injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer skips the save door that appends the injected family.
@@ -1258,8 +1255,6 @@ def _scrub_streamed_trace(
     tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
         Scrubbed state, blob specs and unsupported tensor audit records.
     """
-
-    from .._io.scrub import scrub_for_save
 
     return scrub_for_save(
         self,

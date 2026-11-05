@@ -164,7 +164,7 @@ def _swept_scores(
     unit's own fork exactly; a unit the sweep did not complete is left out.
     """
 
-    from torchlens.experiment import sweep_sites
+    from torchlens.experiment import sweep_sites  # deferred: cycle experiment
 
     names = {f"u{index}": key for index, key in enumerate(selections)}
     if not names:

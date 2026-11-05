@@ -62,7 +62,7 @@ def test_skip_fn_conflict_refuses(glue_log: Any) -> None:
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(
             glue_log,
-            "blueprint",
+            "overview",
             {"skip_fn": lambda layer: False},
             display_filter=lenses.DisplayFilter(exclude="reshapes"),
         )
@@ -74,7 +74,7 @@ def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: 
     the rendered caption, and no new xlabel family."""
 
     resolution = lenses.resolve_lens(
-        glue_log, "blueprint", display_filter=lenses.DisplayFilter(exclude="reshapes")
+        glue_log, "overview", display_filter=lenses.DisplayFilter(exclude="reshapes")
     )
     graph = glue_log.draw(
         **resolution.draw_kwargs,

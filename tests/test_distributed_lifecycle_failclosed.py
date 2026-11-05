@@ -26,8 +26,9 @@ pytestmark = pytest.mark.skipif(
     reason="torch.distributed gloo unavailable",
 )
 
-from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build  # noqa: E402
-from torchlens.distributed._lifecycle import AmbiguousGroupLifetimeError  # noqa: E402
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens._distributed._lifecycle import AmbiguousGroupLifetimeError  # noqa: E402
+from torchlens.distributed import is_vetted_build  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
 # census-vetted torch build exists (torchlens.distributed.is_vetted_build());

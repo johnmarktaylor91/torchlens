@@ -15,7 +15,7 @@ Shape rules (normative, from the fold):
 
 - **One mark family, never a new view kind**: the marks ride the standard
   ``Trace.draw`` node-spec funnel through C05's lens registry (the
-  ``"surgery"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
+  ``"interventions"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
   row registered below); there is no separate surgery picture type.
 - **Per-lane splice-box disclosure**: each transaction's disclosure box
   carries the wording of ITS recorded lane -- a recorded
@@ -28,11 +28,12 @@ Shape rules (normative, from the fold):
   wording here (marks, boxes, census) ever uses the banned
   execution-removal verbs -- that vocabulary is unrepresentable by construction
   (:data:`torchlens.intervention._audit.EXECUTION_EFFECTS`).
-- **The census travels with exported figures**: the per-lane census renders
-  into the figure's disclosure caption (C05's rendered-artifact rule) and
-  ``Trace.draw(highlight="interventions")`` (:func:`draw_interventions`)
+- **The census travels with exported figures**: a short form of the census
+  (one line per edit, in its own lane's wording) renders under the figure's
+  header, and ``Trace.draw(view="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
-- **CREDIT rows** ride the census (D01's acknowledgment list).
+- **CREDIT rows** ride the full census text (D01's acknowledgment list), not
+  the figure.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -40,14 +41,23 @@ Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils._record_group_table import record_member
-from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
+from .._vocab.node_spec import INTERVENTION_SITE_COLOR, CollapsedNodeSpecFn, NodeSpec, NodeSpecFn
+from ._edit_change import (
+    ChangeReport,
+    change_census_rows,
+    change_key_rows,
+    change_report,
+    make_change_box_spec_fn,
+    make_change_spec_fn,
+)
+from ._intervention_sites import intervention_sites_for_log
 from ._render_names import _SPEC_SLOT_RENDERED_NODE, DEFAULT_DRAW_STEM
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
@@ -117,6 +127,10 @@ CREDIT_ROWS: tuple[str, ...] = (
 
 #: Cap on per-node mark rows before the "+N more" fold (label legibility).
 _MAX_MARK_ROWS_PER_NODE = 3
+
+#: Capture-status header lines the interventions view leaves to its census:
+#: the header's edit line already says the trace is edited.
+EDIT_VIEW_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
 
 #: Cap on caption census lines before deferring to the sidecar/text form.
 _MAX_CAPTION_LINES = 12
@@ -487,17 +501,41 @@ class SurgeryCensus:
     box_lines: tuple[str, ...]
     mark_totals: tuple[str, ...]
     credit_rows: tuple[str, ...]
+    caption_rows: tuple[str, ...] = ()
+    injected_ops: int = 0
+    key_rows: tuple[str, ...] = ()
+    change_rows: tuple[str, ...] = ()
+    header_rows: tuple[str, ...] = ()
 
     def lines(self) -> tuple[str, ...]:
         """Every census line, in render order."""
 
+        header = (
+            ("header lines the figure leaves out (the edit line says it):",) + self.header_rows
+            if self.header_rows
+            else ()
+        )
         return (
             ("surgery census (facts cited from the intervention audit)",)
             + self.lane_rows
             + self.box_lines
             + self.mark_totals
+            + self.change_rows
+            + header
             + self.credit_rows
         )
+
+    def caption_lines(self) -> tuple[str, ...]:
+        """The short form drawn on the figure; the full census is the sidecar.
+
+        The outline key (with the changed-op count, or why changed ops are not
+        shown), declared rules that never fired, edited regions and the
+        injected-op count. Lane wording, site keys, the capture-status header
+        lines and acknowledgment rows stay in :meth:`to_text`.
+        """
+
+        injected = () if self.injected_ops == 0 else (f"injected ops: {self.injected_ops}",)
+        return self.key_rows + self.caption_rows + injected
 
     def to_text(self) -> str:
         """The full census as one plain-ASCII text block."""
@@ -505,15 +543,22 @@ class SurgeryCensus:
         return "\n".join(self.lines()) + "\n"
 
 
-def surgery_census(trace: Trace) -> SurgeryCensus:
+def surgery_census(
+    trace: Trace,
+    facts: SurgeryFacts | None = None,
+    report: ChangeReport | None = None,
+    banner_lines: Iterable[str] = (),
+) -> SurgeryCensus:
     """Build the per-lane census for one trace's recorded surgery.
 
     An un-operated trace yields an honest empty census (the LENS refuses on
     missing headline evidence; the census itself is a disclosure and never
-    refuses).
+    refuses). ``banner_lines`` are the capture's honesty banner lines; the
+    census lists the ones the interventions figure leaves off its header.
     """
 
-    facts = surgery_facts(trace)
+    facts = surgery_facts(trace) if facts is None else facts
+    report = _change_report(trace, facts) if report is None else report
     per_lane: dict[str, tuple[int, int]] = {}
     for transaction in facts.transactions:
         count, fires = per_lane.get(transaction.lane, (0, 0))
@@ -533,19 +578,69 @@ def surgery_census(trace: Trace) -> SurgeryCensus:
         box_lines=splice_box_lines(facts),
         mark_totals=mark_totals,
         credit_rows=CREDIT_ROWS,
+        caption_rows=_caption_rows(facts),
+        injected_ops=sum(facts.injected_host_counts.values()),
+        key_rows=change_key_rows(report, heuristic_count),
+        change_rows=change_census_rows(report),
+        header_rows=_omitted_header_rows(banner_lines),
     )
 
 
-def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -> NodeSpecFn:
+def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
+    """Compare the trace's saved values against the clean run, skipping edit sites."""
+
+    edited: set[str] = set()
+    for site in intervention_sites_for_log(trace):
+        for name in ("label", "layer_label"):
+            value = get_multipass_attr(site, name, None, multipass=None)
+            if isinstance(value, str):
+                edited.add(value)
+    for mark in facts.marks:
+        if mark.basis == "fact":
+            edited.update(label for label in (mark.layer_label, mark.call_label) if label)
+    return change_report(trace, edited, lambda parent: bool(intervention_sites_for_log(parent)))
+
+
+def _omitted_header_rows(banner_lines: Iterable[str]) -> tuple[str, ...]:
+    """The capture-status header lines this view leaves off the figure."""
+
+    return tuple(line for line in banner_lines if line.startswith(EDIT_VIEW_OMITTED_BANNERS))
+
+
+def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:
+    """The caption rows the header edit line does not already say.
+
+    A declared rule that never fired, and each edited region with its op
+    count. Each lane's effect wording (the replay and live texts are mutually
+    false) stays in the census sidecar, beside the splice boxes.
+    """
+
+    rows: list[str] = []
+    for transaction in facts.transactions:
+        rows.extend(
+            f"rule {rule_id} was declared and never fired"
+            for rule_id in transaction.zero_fire_rule_ids
+        )
+    for region_fact in facts.regions:
+        rows.append(f"edited region {region_fact.edit}: {len(region_fact.members)} ops")
+    return tuple(rows)
+
+
+def make_surgery_mark_spec_fn(
+    trace: Trace, facts: SurgeryFacts | None = None, report: ChangeReport | None = None
+) -> NodeSpecFn:
     """Build the ONE mark family's node-spec callback.
 
     Line-style law: FACT marks paint a solid border at penwidth 3.0 in the
     intervention site color; HEURISTIC marks paint a DASHED border at
     penwidth 2.25 in the same hue. Each mark appends its citation row to the
-    node label (capped, with an honest "+N more" fold).
+    node label (capped, with an honest "+N more" fold). An unmarked node whose
+    saved value ``report`` says the edit changed gets the light purple
+    change outline instead.
     """
 
     resolved = surgery_facts(trace) if facts is None else facts
+    change_fn = None if report is None else make_change_spec_fn(report)
     by_call: dict[str, list[SurgeryMark]] = {}
     by_layer: dict[str, list[SurgeryMark]] = {}
     for mark in resolved.marks:
@@ -569,7 +664,8 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
             if target is not layer_log and is_multipass_layer(layer_log):
                 node_marks = [mark for mark in node_marks if mark.call_label is None]
         if not node_marks:
-            return default_spec
+            changed = None if change_fn is None else change_fn(layer_log, default_spec)
+            return default_spec if changed is None else changed
         any_fact = any(mark.basis == "fact" for mark in node_marks)
         # replace() copies shallowly; give the copy its OWN lines list so the
         # appended mark rows never leak into the caller's default spec.
@@ -580,18 +676,21 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
         )
         if not any_fact:
             spec.style = f"{spec.style},dashed" if spec.style else "dashed"
-        shown = node_marks[:_MAX_MARK_ROWS_PER_NODE]
-        for mark in shown:
-            spec.lines.append(mark.row)
-        if len(node_marks) > len(shown):
-            spec.lines.append(f"+{len(node_marks) - len(shown)} more surgery mark(s)")
+        # The plain label already prints each fired edit (its delta row), so
+        # fire marks add only the border; their rows stay in the census.
+        rows = [mark.row for mark in node_marks if mark.kind != "fire"]
+        spec.lines.extend(rows[:_MAX_MARK_ROWS_PER_NODE])
+        if len(rows) > _MAX_MARK_ROWS_PER_NODE:
+            spec.lines.append(f"+{len(rows) - _MAX_MARK_ROWS_PER_NODE} more edit mark(s)")
         return spec
 
     return surgery_mark_spec_fn
 
 
-def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
-    """Resolve the surgery lens stage: marks callback + census disclosure.
+def surgery_stage(
+    trace: Trace,
+) -> tuple[NodeSpecFn, CollapsedNodeSpecFn | None, tuple[str, ...]]:
+    """Resolve the surgery lens stage: op marks, collapsed-box marks, census caption.
 
     Refuses typed when the headline evidence (C03 audit entries) is absent:
     with nothing recorded, the picture would answer a different question.
@@ -600,32 +699,37 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     facts = surgery_facts(trace)
     if not facts.has_evidence:
         raise InvalidArgumentError(
-            "the surgery lens found no intervention audit entries on this "
+            "the interventions view found no intervention audit entries on this "
             "trace: no transaction envelopes, no region rows, no fire "
             "records, no injected ops -- there is no recorded surgery to "
             "render",
             code="surgery_evidence_missing",
             remedy=(
                 "run an edit first (fork.do(...), tl.trace(..., intervene=...), "
-                "spec.bind(model), or a region do), or use theme='overview' "
+                "spec.bind(model), or a region do), or leave view= unset "
                 "for an un-operated picture"
             ),
-            argument="lens",
+            argument="view",
         )
-    census = surgery_census(trace)
-    lines = census.lines()
+    report = _change_report(trace, facts)
+    census = surgery_census(trace, facts, report)
+    lines = census.caption_lines()
     if len(lines) > _MAX_CAPTION_LINES:
         lines = lines[: _MAX_CAPTION_LINES - 1] + (
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
             "see the .census.txt sidecar or surgery_census(trace).to_text()",
         )
-    return make_surgery_mark_spec_fn(trace, facts), lines
+    return make_surgery_mark_spec_fn(trace, facts, report), make_change_box_spec_fn(report), lines
 
 
-def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
+def draw_interventions(
+    trace: Trace,
+    user_kwargs: Mapping[str, Any],
+    banner_lines: Callable[[Trace], Iterable[str]],
+) -> Any:
     """Draw ``trace`` under the surgery lens; the census travels with it.
 
-    The body of ``Trace.draw(highlight="interventions")``: a thin door over
+    The body of ``Trace.draw(view="interventions")``: a thin door over
     the standard lens resolution (never a new view kind). The marks and the
     caption census render through ``Trace.draw``, and when a figure lands on
     disk the full census text is written beside it as
@@ -638,7 +742,10 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
         The trace to draw.
     user_kwargs:
         The ``Trace.draw`` keywords the caller passed explicitly (never
-        ``highlight``); they win over the lens members.
+        ``lens``); they win over the lens members.
+    banner_lines:
+        Returns the capture's honesty banner lines; the census records the
+        ones the figure's header leaves out.
 
     Returns
     -------
@@ -646,9 +753,9 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
         Whatever ``Trace.draw`` returns for the resolved keywords.
     """
 
-    from .lenses._resolve import draw_with_lens
+    from .lenses._resolve import draw_with_lens  # deferred: cycle _visualization
 
-    result = draw_with_lens(trace, "surgery", **user_kwargs)
+    result = draw_with_lens(trace, "interventions", **user_kwargs)
     # Nothing was written when the draw wrote no file; a census then would
     # sit beside a stale figure.
     if getattr(result, "path", None) is not None:
@@ -663,7 +770,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
             outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"
         with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
-            census_file.write(surgery_census(trace).to_text())
+            census_file.write(surgery_census(trace, banner_lines=banner_lines(trace)).to_text())
     return result
 
 
@@ -672,15 +779,10 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
 #: :func:`surgery_stage`; absence refuses ``surgery_evidence_missing``).
 SURGERY_LENS = register_lens(
     LensPreset(
-        name="surgery",
-        question="what did surgery change on this capture, and on what recorded authority?",
+        name="interventions",
+        question="what did the edits change?",
         members={"show_legend": True},
         surface=GRAPHVIZ_DRAW_SURFACE,
         headline_evidence="intervention_audit",
-        disclosure=(
-            "marks cite audit entries: solid border = recorded fact, "
-            "dashed border = heuristic attribution",
-            "edits replace values or substitute exits; execution removal exists in no lane",
-        ),
     )
 )

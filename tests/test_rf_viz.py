@@ -175,6 +175,46 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
     assert show(_View(unknown), (0, 0, 3, 3), image=base).tobytes() == base.tobytes()
 
 
+def test_show_draws_a_single_pil_input_as_the_base_image() -> None:
+    """A trace captured from one photo keeps a bare PIL image as its input; show() draws it.
+
+    Before the fix the single image was not recognised as a batch of one, so the overlay fell
+    back to a heatmap of the normalized input tensor instead of the photo.
+    """
+
+    from types import SimpleNamespace
+
+    from torchlens.repgeom._node_visuals import _matching_pil_image_batch
+
+    photo = Image.new("RGB", (8, 8), "white")
+    assert _matching_pil_image_batch(photo, 1) == (photo,)
+    assert _matching_pil_image_batch(photo, 2) is None
+    assert _matching_pil_image_batch([photo], 1) == [photo]
+
+    view = _View(_descriptor(2))
+    view._op = SimpleNamespace(source_trace=SimpleNamespace(input=photo))
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == photo.size
+    pixels = set(rendered.getdata())
+    assert (255, 255, 255) in pixels and len(pixels) > 1  # the photo, with the box drawn on it
+
+    # A raw photo of another size than the model input (resized or cropped by preprocessing)
+    # cannot carry the box; the overlay then draws the preprocessed input tensor as the photo.
+    class _Trace:
+        input = Image.new("RGB", (40, 30), "white")
+        provenance = SimpleNamespace(
+            input_preprocessor=SimpleNamespace(config={"mean": [0.5] * 3, "std": [0.5] * 3})
+        )
+
+        def __getitem__(self, label: str) -> Any:
+            return SimpleNamespace(out=torch.full((1, 3, 8, 8), -1.0))  # de-normalizes to black
+
+    view._op = SimpleNamespace(source_trace=_Trace())
+    rendered = show(view, (0, 0, 3, 3))
+    assert rendered.size == (8, 8)
+    assert (0, 0, 0) in set(rendered.getdata())
+
+
 def test_show_3d_requires_explicit_slice() -> None:
     """Require a plane selection before rendering a 3-D spatial input."""
 
@@ -258,3 +298,164 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     assert isinstance(second, Image.Image)
     # A final non-retaining probe consumes the graph and still succeeds.
     op.receptive_field.probe_grad(unit, retain_graph=False)
+
+
+class _StemStage(nn.Module):
+    """Conv stem followed by a once-called stage module, like a ResNet ``layer3``."""
+
+    def __init__(self) -> None:
+        """Build the stem convolution and the stage block."""
+
+        super().__init__()
+        self.stem = nn.Conv2d(3, 4, kernel_size=3, padding=1)
+        self.stage = nn.Sequential(nn.Conv2d(4, 4, kernel_size=3, padding=1), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, then the stage."""
+
+        return self.stage(torch.relu(self.stem(x)))
+
+
+@pytest.mark.parametrize("as_list", [False, True], ids=["single_image", "list_of_one"])
+def test_show_draws_the_captured_pil_photo_not_the_tensor(as_list: bool) -> None:
+    """``show(unit)`` draws a captured PIL stimulus whether the input was one image or a list.
+
+    An image-path capture stores ``trace.input`` as one PIL image; that must count as a batch
+    of one rather than falling back to the normalized-tensor heatmap.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    photo_color = (12, 200, 34)
+    photo = Image.new("RGB", (8, 8), photo_color)
+    trace.input = [photo] if as_list else photo
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit)
+
+    assert rendered.convert("RGB").getpixel((0, 0)) == photo_color
+
+
+_BOX_RGB = (255, 59, 48)
+
+
+@pytest.mark.parametrize("as_list", [False, True], ids=["single_image", "list_of_one"])
+def test_show_replays_the_declared_crop_so_the_box_matches_the_tensor_grid(
+    tmp_path: Any, as_list: bool
+) -> None:
+    """A path-captured photo is resized and cropped as declared before the box is drawn.
+
+    The box lands on exactly the pixels it occupies on a blank image of the model-input size,
+    so the overlay agrees with the tensor the model saw, for one image or a list of images.
+    """
+
+    torchvision_models = pytest.importorskip("torchvision.models")
+    import torchlens.preprocessing
+
+    model = torchlens.preprocessing.attach_authority(
+        _StemStage().eval(), torchvision_models.ResNet18_Weights.IMAGENET1K_V1
+    )
+    photo_color = (12, 200, 34)
+    path = tmp_path / "photo.png"
+    Image.new("RGB", (320, 240), photo_color).save(path)
+    trace = tl.trace(model, str(path))
+    assert isinstance(trace.input, Image.Image)
+    if as_list:
+        trace.input = [trace.input]
+    input_op = next(op for op in trace._layer_list if op.is_input)
+    height, width = (int(side) for side in input_op.out.shape[-2:])
+    assert (width, height) != (320, 240), "the fixture must exercise a resize and crop"
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    on_grid = target.receptive_field.show(unit, image=Image.new("RGB", (width, height), "white"))
+    on_photo = target.receptive_field.show(unit).convert("RGB")
+
+    assert on_photo.size == on_grid.size == (width, height)
+    grid_pixels = list(on_grid.convert("RGB").getdata())
+    photo_pixels = list(on_photo.getdata())
+    box = [index for index, pixel in enumerate(grid_pixels) if pixel == _BOX_RGB]
+    assert box, "the box must be drawn on the model-input grid"
+    assert all(photo_pixels[index] == _BOX_RGB for index in box)
+    assert on_photo.getpixel((0, 0)) == photo_color
+
+
+def test_show_keeps_the_tensor_rendering_when_the_photo_cannot_align() -> None:
+    """A photo at another size with no declared crop to replay never carries the box."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    photo_color = (12, 200, 34)
+    trace.input = Image.new("RGB", (16, 12), photo_color)
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit).convert("RGB")
+
+    assert rendered.size == (8, 8)
+    assert rendered.getpixel((0, 0)) != photo_color
+
+
+def test_show_draws_the_first_seen_image_for_a_list_of_photos_at_another_size() -> None:
+    """A list of photos at another size, with no crop to replay, draws the first image seen.
+
+    That is the first preprocessed image the model saw: not the raw photo, and not another
+    item of the batch.
+    """
+
+    torch.manual_seed(0)
+    first = torch.rand(3, 8, 8)
+    batch = torch.stack([first, 1.0 - first])
+    trace = tl.trace(_StemStage().eval(), batch)
+    photo_colors = [(12, 200, 34), (200, 12, 34)]
+    trace.input = [Image.new("RGB", (16, 12), color) for color in photo_colors]
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit).convert("RGB")
+
+    low = first.amin(dim=(1, 2), keepdim=True)
+    high = first.amax(dim=(1, 2), keepdim=True)
+    scaled = ((first - low) / (high - low) * 255.0).round().to(torch.uint8)
+    expected = tuple(int(value) for value in scaled[:, 0, 0])
+    assert rendered.size == (8, 8)
+    assert rendered.getpixel((0, 0)) == expected
+    assert rendered.getpixel((0, 0)) not in photo_colors
+    assert _BOX_RGB in set(rendered.getdata())
+
+
+def test_node_spec_resolves_layer_call_and_module_handles_like_the_op(tmp_path: Any) -> None:
+    """``node_spec`` takes an Op, Layer, ModuleCall or Module and styles the same cone."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    target = trace.ops["stage"]
+    handles = {
+        "layer": trace.layers[target.layer_label],
+        "module_call": trace["stage:1"],
+        "module": trace["stage"],
+    }
+
+    def _dot(handle: Any) -> str:
+        """Render the graph with the node-spec callback built from ``handle``."""
+
+        drawing = trace.draw(
+            node_spec_fn=node_spec(handle), path=str(tmp_path / "rf_cone"), file_format="dot"
+        )
+        return str(drawing.dot)
+
+    expected = _dot(target)
+    assert "#ffd8a8" in expected.lower()
+    for kind, handle in handles.items():
+        assert _dot(handle) == expected, kind
+
+
+def test_node_spec_refuses_a_bare_label_with_the_typed_error() -> None:
+    """A label string carries no trace to resolve against and refuses typed."""
+
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    label = trace.ops["stem"].label
+
+    with pytest.raises(ReceptiveFieldError, match="Graph point must be"):
+        node_spec(label)

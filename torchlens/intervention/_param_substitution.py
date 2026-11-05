@@ -70,8 +70,11 @@ from .._selection.selection import (
     Selection,
     Site,
     _apply_invalid,
+    _ParamTerm,
+    units,
 )
 from .._utils._record_group_table import record_member
+from ._audit import build_fire_record
 from ._masked_edit import _derive_masked_edit, _validate_edited
 from ._types import Edit, FireRecord, LiteralTensor
 
@@ -626,8 +629,6 @@ def _param_fire_record(
 ) -> FireRecord:
     """Mint the per-occurrence FireRecord (discloses substitution, not change)."""
 
-    from ._audit import build_fire_record
-
     return build_fire_record(
         target_label=child_op.layer_label,
         call_label=child_op.label,
@@ -703,8 +704,6 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         ``selection_unresolvable`` when the buffer has no recorded version or
         the mask does not match the buffer's shape.
     """
-
-    from .._selection.selection import _ParamTerm, units
 
     node = getattr(selection, "_node", None)
     if not isinstance(node, _ParamTerm):

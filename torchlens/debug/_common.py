@@ -12,7 +12,7 @@ from .._comparison_tensor import _comparison_tensor
 from .._data_classes._lookup_kinds import op_at
 from .._data_classes._module_edit_sites import edited_stand_in, is_mapped_replacement
 from .._data_classes.func_call_location import display_frame
-from .._utils._multipass_access import is_multipass_layer
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._utils._record_group_table import record_member
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
@@ -112,8 +112,6 @@ def _op_label(op: Op) -> str:
     str
         Op label, or the aggregate ``layer_label`` for a multi-pass Layer.
     """
-
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(op, "label", None, multipass=None)
     if isinstance(label, str) and label:

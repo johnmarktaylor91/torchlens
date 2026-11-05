@@ -24,7 +24,25 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
+from ._edit_change import CHANGED_NODE_CLASS
+from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
+from ._encoding import _color_legend_rows, _non_color_legend_rows
+from ._render_common import (
+    BACKWARD_HIGHER_ORDER_COLOR,
+    BACKWARD_NODE_COLOR,
+    BOOL_NODE_COLOR,
+    BUFFER_NODE_COLOR,
+    DEFAULT_BG_COLOR,
+    FROZEN_PARAMS_BG_COLOR,
+    GRADIENT_ARROW_COLOR,
+    INPUT_COLOR,
+    OUTPUT_COLOR,
+    PARAMS_NODE_BG_COLOR,
+    TRAINABLE_PARAMS_BG_COLOR,
+)
 from ._render_utils import html_escape
+from .node_spec import NodeSpec
+from .themes import apply_theme_to_spec
 
 if TYPE_CHECKING:
     import graphviz
@@ -89,6 +107,7 @@ LEGEND_ROLES = (
     "mutated parameter",
     "boolean",
     "edited",
+    "changed value",
     "changed by the edit",
 )
 
@@ -98,19 +117,6 @@ _NON_ROLE_SHAPES = frozenset({"plaintext", "plain", "none", "point"})
 
 def _role_fills(theme: VisualizationTheme) -> dict[str, frozenset[str]]:
     """Return each fill-coded role's rendered fills under ``theme``, lowercased."""
-
-    from ._render_common import (
-        BOOL_NODE_COLOR,
-        BUFFER_NODE_COLOR,
-        DEFAULT_BG_COLOR,
-        FROZEN_PARAMS_BG_COLOR,
-        INPUT_COLOR,
-        OUTPUT_COLOR,
-        PARAMS_NODE_BG_COLOR,
-        TRAINABLE_PARAMS_BG_COLOR,
-    )
-    from .node_spec import NodeSpec
-    from .themes import apply_theme_to_spec
 
     def themed(*constants: str) -> frozenset[str]:
         """Return the lowercased fills ``theme`` paints for ``constants``."""
@@ -152,13 +158,11 @@ def drawn_legend_roles(
 
     A role counts only when a node was painted with it: its rendered fill
     (and, for buffers and mutated Parameters, the cylinder), or for
-    interventions the ``tl_edited`` and ``tl_downstream`` SVG classes the
-    edit marks carry.
+    interventions the ``tl_edited``, ``tl_downstream`` and ``tl_changed`` SVG
+    classes the edit marks carry.
     Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
     counts as parameterized.
     """
-
-    from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 
     fills = _role_fills(theme)
     roles: set[str] = set()
@@ -173,6 +177,8 @@ def drawn_legend_roles(
             roles.add("edited")
         if DOWNSTREAM_NODE_CLASS in classes:
             roles.add("changed by the edit")
+        if CHANGED_NODE_CLASS in classes:
+            roles.add("changed value")
         if shape == "cylinder":
             if fill in fills["buffer"]:
                 roles.add("buffer")
@@ -200,8 +206,6 @@ def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
     interpolated swatches.
     """
 
-    from ._encoding import _color_legend_rows, _non_color_legend_rows
-
     rows: list[LegendRow] = []
     for spec in (*_color_legend_rows(state), *_non_color_legend_rows(state)):
         fill = spec.fillcolor if isinstance(spec.fillcolor, str) else None
@@ -227,12 +231,6 @@ def backward_key_sections(
     for a style the render does not use would itself be an unexplained claim,
     so each row is gated on the corresponding inventory flag.
     """
-
-    from ._render_common import (
-        BACKWARD_HIGHER_ORDER_COLOR,
-        BACKWARD_NODE_COLOR,
-        GRADIENT_ARROW_COLOR,
-    )
 
     rows: list[LegendRow] = [
         LegendRow(text="backward op (grad_fn)", swatch_fill=BACKWARD_NODE_COLOR)

@@ -14,7 +14,8 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._entry_refusals import refuse_validation_scope
 from .._literals import OutputDeviceLiteral
-from .._save_budget import SaveBudgetOption
+from .._options_validation import _validate_output_device
+from .._save_budget import SaveBudgetOption, resolve_save_budget
 from .._utils._display_card import render_card
 from .._utils.display import user_stacklevel
 from .._utils.rng import restores_rng_streams
@@ -22,6 +23,12 @@ from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from ._backward import validate_backward_pass
+from ._diagnostics import (
+    CHECK_METADATA_INVARIANT,
+    ValidationFailure,
+    last_validation_failure,
+    record_validation_failure,
+)
 
 if TYPE_CHECKING:
     from ..receptive_field._types import ReceptiveFieldValidation
@@ -247,9 +254,6 @@ def _validate_save_option_keywords(
         ``scope="receptive_field"``.
     """
 
-    from .._options_validation import _validate_output_device
-    from .._save_budget import resolve_save_budget
-
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
     if scope in _SAVE_OPTION_SCOPES:
@@ -326,7 +330,7 @@ def _intervention_report(
         false until real intervention-specific checks exist.
     """
 
-    from .._user_funcs import validate_forward_pass
+    from .._user_public_impls import validate_forward_pass
 
     forward_ok = validate_forward_pass(
         model,
@@ -418,8 +422,8 @@ def _validate_receptive_field_scope(
         Sampled receptive and projective tri-state results.
     """
 
-    from .._user_funcs import trace
-    from ..receptive_field._validation import validate_receptive_field_trace
+    from .._user_public_impls import trace
+    from ..receptive_field._validation import validate_receptive_field_trace  # deferred: cycle
     from ._invariants import check_metadata_invariants
 
     ready_args = _gradient_ready_value(input_args)
@@ -601,7 +605,7 @@ def validate(
             backend=backend,
         )
 
-    from .._user_funcs import validate_forward_pass
+    from .._user_public_impls import validate_forward_pass
 
     if normalized_scope in {"forward", "saved"}:
         # R33-2: validation is the product's largest transient peak and had no
@@ -712,13 +716,6 @@ def _report_validation_failure(normalized_scope: str, verbose: bool) -> None:
 
 def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None:
     """Record a metadata-invariant failure on the side channel when none is present."""
-
-    from ._diagnostics import (
-        CHECK_METADATA_INVARIANT,
-        ValidationFailure,
-        last_validation_failure,
-        record_validation_failure,
-    )
 
     if last_validation_failure() is not None:
         return

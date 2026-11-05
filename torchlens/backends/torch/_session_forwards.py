@@ -23,8 +23,14 @@ from typing import TYPE_CHECKING, Any
 from torch import nn
 
 from ... import _state
+from ..._utils._call_site import register_module_boundary_wrapper
 from ..._utils._module_call_dispatch import forward_entered_through_module_call
-from ._tl import get_module_meta, is_forward_call_decorated, mark_forward_call_decorated
+from ..._utils._tensor_label import (
+    get_module_meta,
+    is_forward_call_decorated,
+    mark_forward_call_decorated,
+)
+from . import _tracing_pass
 from .bound_root import instrumented_modules
 
 if TYPE_CHECKING:
@@ -133,12 +139,21 @@ class _SessionForward:
 
         functools.update_wrapper(self, original)
         self._delegate = wrapper
+        self._original = original
         self._module = module
         self._prior = prior
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Run the module forward through the session wrapper."""
+        """Run the module forward through the session wrapper.
 
+        While Dynamo traces a lifted ``cond`` entry it traces the plain
+        ``forward`` instead: it cannot trace the caller-frame read or the
+        capture bookkeeping, and the branch's eager run calls this wrapper
+        again and is captured (``_tracing_pass.inside_lifted_cond_compile``).
+        """
+
+        if _tracing_pass.cond_entry_innermost and _tracing_pass.inside_lifted_cond_compile():
+            return self._original(*args, **kwargs)
         if _state._logging_enabled:
             _note_direct_forward_call(self._module, sys._getframe(1))
         return self._delegate(*args, **kwargs)
@@ -228,7 +243,6 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Submodule ``forward`` attributes are replaced in place.
     """
 
-    from ..._utils._call_site import register_module_boundary_wrapper
     from .model_prep import module_forward_decorator
 
     register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")

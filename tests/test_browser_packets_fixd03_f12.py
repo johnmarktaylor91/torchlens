@@ -2,7 +2,7 @@
 territory (browser-packet reserved prefix; evidence in the D03 themes packet).
 
 - D03-R1: the transformer subject probe on a trace with a REUSED module
-  refuses ``lens_attention_subject_absent`` (factual absence of SUBJECT),
+  refuses ``view_attention_subject_absent`` (factual absence of SUBJECT),
   never the accessor's ``module_call_ambiguous``.
 - D03-R2: Stage-0 label boxes are sized from VISIBLE text -- raw HTML-table
   markup length manufactured phantom geometry penetrations.
@@ -88,7 +88,7 @@ def test_transformer_refuses_subject_absent_on_reused_module_trace(
 
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(reused_module_log, "transformer")
-    assert excinfo.value.fields["code"] == "lens_attention_subject_absent"
+    assert excinfo.value.fields["code"] == "view_attention_subject_absent"
     assert "overview" in str(excinfo.value)
 
 

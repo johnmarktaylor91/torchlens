@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from tests._record_fakes import FlatNamespace
+from torchlens._validation_status import ValidationStatus
 from torchlens.validation import _backward as backward_validation, _core as core
 from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
 from torchlens.validation._diagnostics import get_validation_failure
@@ -43,7 +44,6 @@ from torchlens.validation._invariants_entry import (
     _check_receptive_field_metadata_invariants,
 )
 from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
-from torchlens.validation._status import ValidationStatus
 
 
 def _trace_saving_args(model: Any, inputs: Any) -> Any:

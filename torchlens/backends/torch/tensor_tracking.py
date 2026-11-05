@@ -21,19 +21,21 @@ from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._selection.selectors import BaseSelector
 from ..._state import pause_logging
 from ..._utils._record_group_table import record_member
-from ..._utils._torch_compat import get_current_graph_task_id_fn
-from ..._utils.display import _record_phase_timing
-from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
-from ..._utils.tensor_utils import SaveMode, safe_copy
-from ...recording._types import CaptureSpec
-from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
-from ._tl import (
+from ..._utils._tensor_label import (
     get_param_meta,
     get_tensor_label,
     increment_param_call_index,
     mutated_parameter_label,
     set_param_meta,
 )
+from ..._utils._torch_compat import get_current_graph_task_id_fn
+from ..._utils.display import _record_phase_timing
+from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ..._utils.tensor_utils import SaveMode, safe_copy
+from ...recording._types import CaptureSpec
+from ._completeness_origins import internal_scalar_read
+from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
+from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
 
 if TYPE_CHECKING:
     from ..._capture.session import LiveGradientReference
@@ -295,7 +297,6 @@ def _escrow_live_gradient_reference(
     """
 
     from ..._capture.session import LiveGradientReference, capture_session_for
-    from ._completeness_origins import internal_scalar_read
 
     session = capture_session_for(trace)
     if session is None:
@@ -333,8 +334,6 @@ def _add_live_gradient_reference_hook(
     tensor_label:
         Raw label of the in-place op.
     """
-
-    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         current_grad_fn = reference.tensor.grad_fn
@@ -1252,15 +1251,10 @@ def _locate_parent_tensors_in_args(
 ) -> dict[str, dict[Any, str]]:
     """Map each parent tensor to its position in the function's args/kwargs.
 
-    Supports up to 2 levels of nesting:
-      - Top-level: ``args[i]`` maps to key ``i``
-      - Nested: ``args[i][j]`` maps to key ``(i, j)``
-    Deeper nesting is not tracked (would require recursive search).
-
-    This mapping is stored as ``parent_arg_positions`` on the child's log
-    entry, and is used by:
-      - ``_get_parent_contents``: to retrieve pre-call parent values from arg_copies
-      - Validation replay: to reconstruct the function call
+    Two levels of nesting: ``args[i]`` maps to key ``i``, ``args[i][j]`` to ``(i, j)``.
+    Stored as the child's ``parent_arg_positions``; ``_get_parent_contents`` reads
+    pre-call parent values with it and validation replay rebuilds the call from it.
+    Labels come from the op's argument slot snapshot when one was taken.
 
     Returns:
         ``{"args": {pos: label, ...}, "kwargs": {key: label, ...}}``
@@ -1268,6 +1262,8 @@ def _locate_parent_tensors_in_args(
     tensor_all_arg_positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     if not parent_log_entries:
         return tensor_all_arg_positions
+    if (slots := current_arg_slots(self, args, kwargs)) is not None:
+        return parent_arg_positions_from_slots(slots, parent_log_entries)
 
     positions_by_label: dict[str, dict[str, list[Any]]] = {
         parent_entry._label_raw: {"args": [], "kwargs": []} for parent_entry in parent_log_entries

@@ -25,6 +25,7 @@ from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._observability._kernels import RunningStats, RunningStatsResult
+from ..options import CaptureOptions
 
 __all__ = ["TRAJECTORY_STATISTICS", "TrajectoryStats", "measure_trajectory"]
 
@@ -184,7 +185,7 @@ def measure_trajectory(  # noqa: PLR0913 -- what (statistics), where (facet, lay
             remedy="pass an iterable of batches, e.g. tl.mechinterp.measure_trajectory(model, [ids])",
             argument="data",
         )
-    from .._semantic.logit_lens import _LensRequest
+    from .._semantic.logit_lens import _LensRequest  # deferred: cycle _semantic
 
     request = _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify)
     folder = _TrajectoryFolder(statistics)
@@ -282,9 +283,9 @@ class _TrajectoryFolder:
     ) -> None:
         """Trace one ``(model_input, targets)`` batch, project layer by layer, reduce and fold."""
 
+        # deferred: cycle _semantic
         from .._semantic.logit_lens import _iter_layer_logits, _mask_input_tokens, _prepare_lens
-        from .._user_funcs import trace
-        from ..options import CaptureOptions
+        from .._user_public_impls import trace
 
         model_input, targets = batch
         names = self._resolve_names(targets is not None)

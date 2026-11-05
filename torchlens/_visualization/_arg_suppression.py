@@ -34,6 +34,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._record_type import record_type
+from .._utils._multipass_access import get_multipass_attr
 from .._utils._record_group_table import record_member
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
@@ -103,7 +104,6 @@ def _record_output_shape(node: Any) -> tuple[int, ...] | None:
             marker = annotations.get("varying_across_passes")
             if isinstance(marker, dict) and "shape" in marker:
                 return None
-    from .._utils._multipass_access import get_multipass_attr
 
     return _usable_shape(get_multipass_attr(node, "shape", None, multipass=None))
 

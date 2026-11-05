@@ -281,7 +281,7 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
     control -- without the sidecar-stripping spill fix, this test fails.
     """
 
-    from torchlens.backends.torch._tl import set_tensor_label
+    from torchlens._utils._tensor_label import set_tensor_label
 
     session = _retention_session(
         RetentionProfile(

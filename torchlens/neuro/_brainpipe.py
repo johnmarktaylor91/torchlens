@@ -40,7 +40,9 @@ import numpy as np
 import torch
 from torch import nn
 
+from .. import options as tl_options
 from .._errors import InvalidArgumentError
+from ..dataset_extraction import extract_dataset
 
 __tl_layer__ = "L6"
 
@@ -444,7 +446,6 @@ class ExtractionPlan:
                 remedy="keep the model referenced, or re-plan with a live model",
             )
         self._check_signature(stimuli)
-        from ..dataset_extraction import extract_dataset
 
         kwargs: dict[str, Any] = {}
         if stimulus_ids is not None:
@@ -487,8 +488,7 @@ def _probe_once(
         Per-label site facts and the capture's peak pair.
     """
 
-    from .. import options as tl_options
-    from .._user_funcs import trace
+    from .._user_public_impls import trace
 
     log = trace(model, inputs, capture=tl_options.CaptureOptions(inference_only=True))
     facts: dict[str, dict[str, Any]] = {}
