@@ -27,6 +27,7 @@ from .._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
+from . import _column_passes
 from ._buffer_addresses import _recorded_buffer_address
 from ._orphan_seeds import (
     _expand_seen_nodes_to_complete_func_call_groups,
@@ -495,21 +496,9 @@ def _add_output_layers(
 
 
 def _find_output_ancestors(self: "Trace") -> None:
-    """Step 2: Mark every node that is an ancestor of an output node.
+    """Step 2: Mark every output ancestor (column-view body in ``_column_passes``)."""
 
-    Walks the capture DAG in reverse topological order so every child's complete
-    descendant set is finalized before it is propagated to a parent. This keeps
-    ancestry metadata complete even when optional Step 4 distance computation is
-    disabled.
-    """
-
-    for node_label in reversed(self._raw_graph_ws.raw_layer_labels_list):
-        node = self[node_label]
-        for child_node_label in node.children:
-            child = self[child_node_label]
-            if child.has_output_descendant:
-                node.has_output_descendant = True
-                node.output_descendants.update(child.output_descendants)
+    _column_passes.find_output_ancestors(self)
 
 
 def _remove_foreign_kernel_interiors(self: "Trace") -> None:
