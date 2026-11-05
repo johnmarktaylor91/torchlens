@@ -22,8 +22,10 @@ The same export also records the receiver's storage for the capture
 value other than its producer's saved out stores a per-child version snapshot like any
 changed parent; the write that changed it ran outside torch and is in no recorded op.
 :func:`note_foreign_written_snapshot` marks that snapshot with the exact argument slots
-the parent was bound to, and forward validation accepts a snapshot it cannot otherwise
-explain only for those slots (``validation/_snapshot_binding.py``).
+the parent was bound to, only when each of those slots holds the parent's own labeled
+tensor on the very storage that was exported, and forward validation accepts a snapshot
+it cannot otherwise explain only for those slots (``validation/_snapshot_binding.py``).
+The journal keeps a weak reference per exported storage, so it keeps nothing alive.
 """
 
 from __future__ import annotations
@@ -32,9 +34,15 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 import torch
+from torch.multiprocessing.reductions import StorageWeakRef
 
 from ... import _state
 from ..._utils._internal_read import _internal_read_state
+from ..._utils._tensor_label import (
+    get_tensor_meta,
+    session_label_storage_intact,
+    session_meta_is_anchored,
+)
 from ..._utils.collections import index_nested
 from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
 from ._foreign_data import FOREIGN_DATA_DEPARTURES_ATTR, ForeignJournal, foreign_journal
@@ -79,8 +87,8 @@ def materialize_deferred_for_export(args: Sequence[Any]) -> None:
     materialize_deferred_for_call(args[:1])
 
 
-def _storage_key(tensor: Any) -> tuple[str, int] | None:
-    """Return ``(device, storage data pointer)`` of a tensor, or ``None`` when unreadable."""
+def _storage_of(tensor: Any) -> tuple[tuple[str, int], Any] | None:
+    """Return ``((device, storage data pointer), untyped storage)``, or ``None`` when unreadable."""
 
     if not isinstance(tensor, torch.Tensor):
         return None
@@ -92,7 +100,7 @@ def _storage_key(tensor: Any) -> tuple[str, int] | None:
             key = (str(storage.device), int(storage.data_ptr()))
         except (RuntimeError, TypeError, AttributeError, NotImplementedError):
             return None
-    return None if key[1] == 0 else key
+    return None if key[1] == 0 else (key, storage)
 
 
 def _slot_value(container: Any, position: Any) -> Any:
@@ -121,11 +129,34 @@ def note_storage_export(trace: Any, args: Sequence[Any]) -> None:
         return
     if getattr(_internal_read_state, "depth", 0):
         return
-    key = _storage_key(args[0])
-    if key is not None:
-        # The tensor is held so its storage pointer cannot be reused by a later
-        # allocation and taken for an exported one.
-        foreign_journal(trace).exported[key] = args[0]
+    found = _storage_of(args[0])
+    if found is not None:
+        # A weak reference to the storage itself, not the tensor: nothing exported is
+        # kept alive, and an expired reference never lets a reused pointer pass for an
+        # exported storage.
+        key, storage = found
+        foreign_journal(trace).exported[key] = StorageWeakRef(storage)
+
+
+def _on_exported_parent_storage(exported: Mapping[Any, Any], value: Any, parent_label: str) -> bool:
+    """Return whether ``value`` is the parent's own labeled tensor on a still-exported storage.
+
+    A write outside torch dispatch changes the parent's value only through the
+    parent's own storage, so the slot must hold the object stamped with the parent's
+    label in this session, on the storage it was stamped with (``label_storage``), and
+    that very storage (same storage object, alive) must have been exported.
+    """
+
+    meta = get_tensor_meta(value) if isinstance(value, torch.Tensor) else None
+    if meta is None or meta.label_raw != parent_label or not session_meta_is_anchored(meta):
+        return False
+    if not session_label_storage_intact(meta, value):
+        return False
+    found = _storage_of(value)
+    if found is None:
+        return False
+    ref = exported.get(found[0])
+    return ref is not None and not ref.expired() and ref == StorageWeakRef(found[1])
 
 
 def note_foreign_written_snapshot(
@@ -133,7 +164,8 @@ def note_foreign_written_snapshot(
     parent_label: str,
     child_label: str,
     parent_arg_positions: Mapping[str, Mapping[Any, str]],
-    live_args: tuple[Sequence[Any], Mapping[str, Any]],
+    live_args: Sequence[Any],
+    live_kwargs: Mapping[str, Any],
 ) -> None:
     """Mark a parent's version snapshot whose live slot sits on an exported storage.
 
@@ -150,8 +182,13 @@ def note_foreign_written_snapshot(
         Raw labels of the parent and of the child the snapshot was stored for.
     parent_arg_positions:
         The child's ``{"args": {position: label}, "kwargs": {name: label}}`` binding.
-    live_args:
+    live_args, live_kwargs:
         The child's live positional and keyword arguments.
+
+    The mark is set only when every slot bound to the parent holds the parent's own
+    labeled tensor on its stamp-time storage and that storage was exported
+    (:func:`_on_exported_parent_storage`): a slot holding any other tensor, on an
+    exported storage or not, is a binding no foreign write explains.
     """
 
     journal = trace.__dict__.get(FOREIGN_DATA_DEPARTURES_ATTR)
@@ -163,8 +200,9 @@ def note_foreign_written_snapshot(
         for position, label in (parent_arg_positions.get(kind) or {}).items()
         if label == parent_label
     ]
-    sources = dict(zip(("args", "kwargs"), live_args, strict=True))
-    if any(
-        _storage_key(_slot_value(sources[kind], pos)) in journal.exported for kind, pos in slots
+    sources = {"args": live_args, "kwargs": live_kwargs}
+    if slots and all(
+        _on_exported_parent_storage(journal.exported, _slot_value(sources[kind], pos), parent_label)
+        for kind, pos in slots
     ):
         journal.written_slots[(parent_label, child_label)] = frozenset(slots)

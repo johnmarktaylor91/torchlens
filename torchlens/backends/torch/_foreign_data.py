@@ -114,14 +114,16 @@ class ForeignJournal:
 
     ``departures`` lists the tensors that left in plain forward code, for host
     constructors. ``exported`` maps ``(device, storage pointer)`` of every zero-copy
-    export to the exported tensor, held so a reused pointer cannot fake an export.
+    export to a weak reference to that storage (``StorageWeakRef``): it keeps nothing
+    alive, and an expired reference never lets a reused pointer fake an export.
     ``written_slots`` maps ``(parent raw label, child raw label)`` of a by-value
-    snapshot whose slot sat on an exported storage to the parent's bound argument
-    slots; forward validation reads it. Postprocess step 3 keeps only the marks.
+    snapshot whose slots held the parent's own tensor on an exported storage to the
+    parent's bound argument slots; forward validation reads it. Postprocess step 3
+    keeps only the marks.
     """
 
     departures: list[Departure] = field(default_factory=list)
-    exported: dict[tuple[str, int], torch.Tensor] = field(default_factory=dict)
+    exported: dict[tuple[str, int], Any] = field(default_factory=dict)
     written_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
 
     def end_capture(self) -> ForeignJournal | None:

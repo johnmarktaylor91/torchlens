@@ -25,6 +25,7 @@ from __future__ import annotations
 import contextlib
 import ctypes
 from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
 import pytest
@@ -301,3 +302,78 @@ def test_foreign_fill_swapped_operands_fail(route: str, model_name: str, defer: 
     """
 
     assert not _validate_foreign(_FOREIGN_MODELS[model_name](route), defer, planted=True)
+
+
+#: Set by the planted model just before its ``sub``; the patched binder swaps that call's
+#: two positional parents while capture is running, then clears it.
+_PLANT_SWAP = [False]
+
+
+class _PlantedSwapForeignFills(_TwoForeignFills):
+    """``_TwoForeignFills`` that asks the patched binder to swap ``sub``'s parents."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        first = torch.full((x.shape[0], 4), -1.0)
+        second = torch.full((x.shape[0], 4), -1.0)
+        _foreign_fill(first.detach(), x[:, None] * torch.arange(4.0), self.route)
+        _foreign_fill(second.detach(), x[:, None] + torch.arange(4.0), self.route)
+        _PLANT_SWAP[0] = True
+        return torch.sub(first, second)
+
+
+def _swapping_binder(real: Any) -> Any:
+    """Wrap the capture binder so the planted call binds its two slots to each other's parent."""
+
+    def locate(self: Any, entries: Any, args: Any, kwargs: Any) -> Any:
+        positions = real(self, entries, args, kwargs)
+        bound = positions["args"]
+        if _PLANT_SWAP[0] and {0, 1} <= bound.keys() and bound[0] != bound[1]:
+            _PLANT_SWAP[0] = False
+            bound[0], bound[1] = bound[1], bound[0]
+        return positions
+
+    return locate
+
+
+@pytest.mark.parametrize("defer", [True, False], ids=["deferred", "eager"])
+@pytest.mark.parametrize("route", _ROUTES)
+def test_capture_time_swap_of_exported_storages_fails(
+    route: str, defer: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wrong binding made AT capture onto exported storages that are not the parent's fails.
+
+    Both slots hold tensors on exported, foreign-written storages, and capture binds each
+    slot to the other buffer's producer, so the marks would be recorded from the wrong
+    binding itself. A mark needs the slot to hold the parent's own tensor on that
+    exported storage, so neither swapped snapshot is marked and validation fails.
+    """
+
+    import torchlens.backends.torch._ops_predicate_events as predicate_events
+
+    model = _PlantedSwapForeignFills(route)
+    torch.manual_seed(0)
+    x = torch.randn(5)
+    real = predicate_events._locate_parent_tensors_in_args
+    monkeypatch.setattr(predicate_events, "_locate_parent_tensors_in_args", _swapping_binder(real))
+    try:
+        with _payload_clone_mode(defer=defer):
+            trace = tl.trace(
+                model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True)
+            )
+    finally:
+        monkeypatch.undo()
+        _PLANT_SWAP[0] = False
+    (child,) = [op for op in trace._layer_list if op.func_name == "sub"]
+    order = [op.label for op in trace._layer_list]
+    bound = [
+        _op_for_validation_label(trace, child.call.parent_arg_positions["args"][k]) for k in (0, 1)
+    ]
+    assert order.index(bound[0].label) > order.index(bound[1].label), "the plant did not swap"
+    assert all(
+        child.layer_label in p.out_versions_by_child or child.label in p.out_versions_by_child
+        for p in bound
+    )
+    with _payload_clone_mode(defer=defer):
+        ground_truth = model(x.clone())
+        _PLANT_SWAP[0] = False
+        assert not trace.validate_forward_pass(ground_truth, validate_metadata=False)
