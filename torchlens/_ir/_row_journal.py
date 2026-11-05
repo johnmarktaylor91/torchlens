@@ -24,7 +24,7 @@ equal to ``record_with_path_updates`` on the eager record.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Container, Iterable
 from typing import Any, cast
 
 from .events import ArgTemplateRef, ParentEdge
@@ -118,16 +118,6 @@ class _RowJournal:
 
         return _RowOpRecord(self, self.store._rows[row_index], rest, {})
 
-    def release_rows(self) -> None:
-        """Detach the capture store once ingest has taken its rows (capture C2c).
-
-        The taken rows belong to the trace's op store from then on, and the
-        capture store no longer pins the others; a handle still unbuilt at
-        this point refuses to build (:func:`_record_from_row`).
-        """
-
-        self.store = None
-
 
 class _RowOpRecord:
     """Private journal handle for one exhaustive op: row cells plus residual.
@@ -167,11 +157,6 @@ class _RowOpRecord:
 
         record = self._record
         if record is None:
-            if self._journal.store is None:
-                raise RuntimeError(
-                    f"capture row of {self._cell('_label_raw')!r} was handed off to ingest "
-                    "before its record was built"
-                )
             record = _record_from_row(self)
             self._record = record
             self._row = None
@@ -184,14 +169,24 @@ class _RowOpRecord:
 
         The record is built first, from the row as committed, so ingest may
         then write join cells into the row and adopt it as the op's store row.
-        Returns ``None`` for an amended, already built or handed-off handle,
-        which ingest reads through the record path instead.
+        Returns ``None`` for an amended or already built handle, which ingest
+        reads through the record path instead.
         """
 
         row = self._row
-        if row is None or self._patch or self._journal.store is None:
+        if row is None or self._patch:
             return None
         return row, self.materialize()
+
+    def build_if_reading(self, row_ids: Container[int]) -> None:
+        """Build the record now when this handle still reads a row in ``row_ids`` (capture C2c).
+
+        Ingest writes into the rows it takes; a handle built first never reads
+        them again.
+        """
+
+        if self._row is not None and id(self._row) in row_ids:
+            self.materialize()
 
     def with_patch(self, items: Iterable[tuple[str, Any]]) -> Any:
         """Return the handle (or record) with ordered facet-path updates folded on."""

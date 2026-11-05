@@ -7,8 +7,8 @@ default capture builds no ``OpRecord`` from a draft, scatters no record into
 cells, constructs no ``Op`` from a fields dict and clones no sealed journal
 entry. These tests pin those counts, that each capture row becomes exactly one
 ``Op`` over the same row list, that every adopted op's cells equal the cells
-the record path builds for the same entry, and that a handle whose capture
-rows were handed off refuses to build.
+the record path builds for the same entry, and that no row handle is left
+unbuilt over a row ingest adopted.
 """
 
 from __future__ import annotations
@@ -249,18 +249,41 @@ def test_adopted_capture_row_equals_the_record_path_cells(
     assert checked and len(checked) == len(expected)
 
 
-def test_handle_refuses_to_build_after_its_rows_are_handed_off() -> None:
-    """A handle left unbuilt when ingest takes the capture rows raises instead of misreading."""
+@pytest.mark.parametrize("name", _SUBJECT_NAMES)
+def test_no_unbuilt_handle_reads_an_adopted_row(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """Every row handle left over a row the trace adopted was built before ingest wrote it."""
 
-    from torchlens._data_classes.op import _OP_STORE_LAYOUT
+    sources: list[Any] = []
+    original_hand_off = postprocess_module.hand_off_capture_rows
 
-    store = OpRowStore(_OP_STORE_LAYOUT)
-    journal = _row_journal._RowJournal(store)
-    row_index = store.adopt_row([_MISSING] * _OP_STORE_LAYOUT.n_fields)
-    rest = _row_journal._RowResidual(**dict.fromkeys(_row_journal._RowResidual.__slots__[:-1]))
-    handle = journal.handle(row_index, rest)
+    def recording_hand_off(session: Any, source: Any, clone: Callable[[Any], Any]) -> Any:
+        """Record the capture's events, then hand its rows off."""
 
-    journal.release_rows()
+        sources.append(source)
+        return original_hand_off(session, source, clone)
 
-    with pytest.raises(RuntimeError, match="handed off"):
-        handle.materialize()
+    adopted: list[list[Any]] = []
+    original_adopt = OpRowStore.adopt_row
+
+    def recording_adopt(self: OpRowStore, cells: list[Any]) -> int:
+        """Record each adopted row list, then adopt it."""
+
+        adopted.append(cells)
+        return original_adopt(self, cells)
+
+    monkeypatch.setattr(postprocess_module, "hand_off_capture_rows", recording_hand_off)
+    monkeypatch.setattr(OpRowStore, "adopt_row", recording_adopt)
+    model, x = _subject(name)
+
+    tl.trace(model, x)
+
+    adopted_ids = {id(cells) for cells in adopted}
+    handles = [
+        event
+        for source in sources
+        for event in (*source.op_events, *source.live_index.by_raw_label.values())
+        if type(event) is _row_journal._RowOpRecord
+    ]
+    assert sources and handles
+    reading = [handle for handle in handles if id(handle._row) in adopted_ids]
+    assert reading == []

@@ -8,8 +8,8 @@ op's store row:
 
 1. :func:`hand_off_capture_rows` takes each unamended row handle's row and
    record from the sealed journal (the record is built once, from the row as
-   committed) instead of cloning the entry, builds every other handle that
-   still reads a capture row, and detaches the capture store.
+   committed) instead of cloning the entry, and builds any other handle that
+   still reads a taken row.
 2. :func:`adopt_capture_row` writes ingest's join cells, the neutral ``None``
    seeds and ``Op`` construction's defaults and conversions
    (``_ir/_op_row_seed.py``, shared with ``Op.__init__``) into the row,
@@ -74,7 +74,6 @@ def hand_off_capture_rows(
         return list(map(journal_record, source.amended_op_records())), {}
     projected: list[Any] = []
     capture_rows: dict[int, list[Any]] = {}
-    journals: dict[int, Any] = {}
     for event in session.seal().events:
         taken = event.take_row() if type(event) is _RowOpRecord else None
         if taken is None:
@@ -82,16 +81,14 @@ def hand_off_capture_rows(
             continue
         row, record = taken
         capture_rows[id(record)] = row
-        journals[id(event._journal)] = event._journal
         projected.append(record)
-    if journals:
-        # Build every handle still reading a capture row before ingest writes
-        # into the taken rows; nothing may read them through a handle after.
+    if capture_rows:
+        # Ingest writes into the taken rows: build any other handle over one
+        # first (a raw-lane or live-index entry that is not the sealed entry).
+        taken_ids = {id(row) for row in capture_rows.values()}
         for event in (*source.op_events, *source.live_index.by_raw_label.values()):
             if type(event) is _RowOpRecord:
-                event.materialize()
-        for journal in journals.values():
-            journal.release_rows()
+                event.build_if_reading(taken_ids)
     return projected, capture_rows
 
 

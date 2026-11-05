@@ -173,7 +173,7 @@ class _CommitSpy:
 
 @pytest.fixture
 def commit_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[_CommitSpy]:
-    """Wrap the exhaustive row commit and the first ingest clone with a spy."""
+    """Wrap the exhaustive row commit and the hand-off to ingest with a spy."""
 
     spy = _CommitSpy()
     real_commit = _ops_row_journal.commit_row_record
@@ -182,18 +182,18 @@ def commit_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[_CommitSpy]:
         "commit_row_record",
         lambda draft, layout, edge_uses: spy.commit(real_commit, draft, layout, edge_uses),
     )
-    real_clone = postprocess_module._clone_op_event_for_replay
+    real_hand_off = postprocess_module.hand_off_capture_rows
 
-    def clone(event: Any) -> Any:
-        """Run the ingest hook once, before the first replay clone builds anything."""
+    def hand_off(*args: Any) -> Any:
+        """Run the ingest hook once, before the hand-off to ingest builds anything."""
 
         if not spy.ingest_seen:
             spy.ingest_seen = True
             if spy.on_ingest is not None:
                 spy.on_ingest(spy)
-        return real_clone(event)
+        return real_hand_off(*args)
 
-    monkeypatch.setattr(postprocess_module, "_clone_op_event_for_replay", clone)
+    monkeypatch.setattr(postprocess_module, "hand_off_capture_rows", hand_off)
     yield spy
     spy.eager.clear()
 
