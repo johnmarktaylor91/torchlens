@@ -5014,6 +5014,14 @@ recorded: 2026-11-04T23:59:41.530652+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: read site removed with the dead internal_source_parents capture key (fields-dict-prune)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9003dc5f4682f33a920c6502a463a41b41b2d034 (dirty)
+recorded: 2026-11-04T23:12:44.089369+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: mkldnn-shared-state-edges: freeze reads pooled parent_arg_positions; render fan-in per occurrence
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
