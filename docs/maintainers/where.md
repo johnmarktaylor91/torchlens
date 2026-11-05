@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1639 modules, 684147 lines, 0 modules without a docstring.
+83 packages, 1639 modules, 684151 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37128 |
-| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 8996 |
+| `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 9000 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11743 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
 | `torchlens._observability` | Observability substrates. | 22 | 8242 |
@@ -320,7 +320,7 @@ Core data structures for representing a logged forward pass. (119 modules, 42097
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_grad_fn_pass` | Resolve the forward pass one GradFn differentiates. | 41 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
-| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 409 |
+| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 410 |
 | `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 42 |
 | `_layer_sites` | Layer-level site accessors: ''layer_site_key'', ''site_peers'', ''shape_summary''. | 174 |
 | `_layer_spec` | Layer mirror-field spec table and stored-state order (pure schema data). | 228 |
@@ -358,7 +358,7 @@ Core data structures for representing a logged forward pass. (119 modules, 42097
 | `_record_groups_module_context` | The module_context group of an ''Op'' or ''Layer'': ''op.module_context.call_depth'', ... | 178 |
 | `_record_groups_payload` | The payload group of an ''Op'' or ''Layer'': ''op.payload.transformed_out'', ... | 203 |
 | `_record_groups_source` | The source group of an ''Op'' or ''Layer'': ''op.source.frames'', ''layer.source.fx_path'', ... | 109 |
-| `_removed_members` | Typed refusals for removed public members of the record classes. | 59 |
+| `_removed_members` | Typed refusals for removed public members of the record classes. | 65 |
 | `_repr` | Shared record representation helpers. | 64 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
 | `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 691 |
@@ -420,7 +420,7 @@ Core data structures for representing a logged forward pass. (119 modules, 42097
 | `internal_types` | Internal dataclasses for parameter bundles passed between functions. | 57 |
 | `layer` | Layer: aggregate per-layer metadata (accessors live in ''_layer_accessors.py''). | 1693 |
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2587 |
-| `op` | Op: per-operation metadata for a single invocation of a layer. | 3343 |
+| `op` | Op: per-operation metadata for a single invocation of a layer. | 3336 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1084 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 223 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3418 |
@@ -546,7 +546,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 
 ### `torchlens._io.format3`
 
-The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 8996 lines)
+The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25 modules, 9000 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -566,15 +566,15 @@ The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. (25
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 507 |
 | `reader` | Reader of the 2.38 saved format: manifest first, digests, record tables, records. | 780 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 800 |
-| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 183 |
+| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 185 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 87 |
 | `runnable` | The 2.38 runnable component: descriptor JSON plus safetensors state, no pickle. | 414 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 285 |
-| `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
+| `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 272 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 122 |
 | `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 798 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 692 |
-| `writer` | The 2.38 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 714 |
+| `writer` | The 2.38 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 715 |
 
 ### `torchlens._ir`
 
