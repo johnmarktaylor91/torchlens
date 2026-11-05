@@ -259,7 +259,8 @@ def test_resnet18_architecture_real_row(tmp_path: Path) -> None:
     onnx = pytest.importorskip("onnx")
     json_format = pytest.importorskip("google.protobuf.json_format")
 
-    log = tl.trace(torchvision.models.resnet18(weights=None).eval(), torch.randn(1, 3, 224, 224))
+    resnet18 = torchvision.models.resnet18(weights=None).eval()
+    log = tl.trace(resnet18, torch.randn(1, 3, 224, 224))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         path = tl.export.netron(log, tmp_path / "resnet18.json", attachment=True)
@@ -269,7 +270,12 @@ def test_resnet18_architecture_real_row(tmp_path: Path) -> None:
     props = {row["key"]: row["value"] for row in payload["metadataProps"]}
     assert int(props["torchlens.function_count"]) >= 8, "the residual stages drill down"
     assert len(payload["graph"]["node"]) <= 20, "the shallow module view is a diagram"
-    assert int(props["torchlens.hidden_buffer_count"]) == 80, "eval resnet18 buffer census"
+    # An eval-mode BatchNorm reads two buffers (running_mean, running_var) and
+    # leaves num_batches_tracked alone, so the census is two per BatchNorm.
+    batchnorms = [m for m in resnet18.modules() if isinstance(m, torch.nn.BatchNorm2d)]
+    assert int(props["torchlens.hidden_buffer_count"]) == 2 * len(batchnorms), (
+        "eval resnet18 buffer census"
+    )
 
 
 if __name__ == "__main__":

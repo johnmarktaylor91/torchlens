@@ -96,7 +96,7 @@ def test_maybe_profile_releases_activation_tensor_deterministically(tmp_path: Pa
 
     import gc
 
-    import torchlens
+    from torchlens.callbacks import lightning as lightning_callbacks
 
     # Clear any pending garbage left over from earlier tests in this process
     # (unrelated cyclic references, e.g. frames from prior torch/trace calls)
@@ -108,7 +108,8 @@ def test_maybe_profile_releases_activation_tensor_deterministically(tmp_path: Pa
     model = _TinyModel()
 
     tensor_ref: weakref.ReferenceType[torch.Tensor] | None = None
-    orig_trace = torchlens.trace
+    # The callback calls the ``trace`` bound in its own module, so the spy patches that name.
+    orig_trace = lightning_callbacks.trace
 
     def _spying_trace(*args: Any, **kwargs: Any) -> Any:
         nonlocal tensor_ref
@@ -125,7 +126,7 @@ def test_maybe_profile_releases_activation_tensor_deterministically(tmp_path: Pa
                 break
         return log
 
-    with patch("torchlens.trace", _spying_trace):
+    with patch.object(lightning_callbacks, "trace", _spying_trace):
         callback._maybe_profile("train", _FakeTrainer(), model, {"x": torch.ones(2, 4)}, 0)
 
     assert tensor_ref is not None, "no saved activation tensor was observed"
