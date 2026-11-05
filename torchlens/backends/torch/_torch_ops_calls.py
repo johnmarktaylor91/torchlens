@@ -43,8 +43,8 @@ import torch
 import torch._ops as _torch_ops
 
 from ... import _state
+from ..._utils._tensor_label import get_tensor_label
 from ._foreign_data import FLASH_ATTENTION_2_CUSTOM_OP, recorded_custom_op_name
-from ._tl import get_tensor_label
 
 _CALL_CLASS_NAMES: tuple[str, ...] = ("OpOverloadPacket", "OpOverload")
 """``torch._ops`` classes whose ``__call__`` user ``torch.ops.*`` calls flow through.

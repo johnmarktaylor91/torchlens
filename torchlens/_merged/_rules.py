@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any, Final, TypeGuard
 
-from ..distributed._ledger import membership_digest_for_ranks
+from .._distributed._ledger import membership_digest_for_ranks
 from ._enums import TENSORLESS_KINDS
 
 __all__ = (

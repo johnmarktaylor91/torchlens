@@ -31,6 +31,7 @@ from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
+from .._runnable import refuse_poisoned_trace
 from .._selection.resolver import _resolve_sites
 from ..intervention._resolver_registry import (
     function_registry_key_from_callable,
@@ -136,7 +137,6 @@ def save_intervention(
     from .._capture.outcome import require_capture_capability
 
     require_capture_capability(trace, "save_analysis")
-    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace, "intervention export")
     save_level = _coerce_save_level(level)

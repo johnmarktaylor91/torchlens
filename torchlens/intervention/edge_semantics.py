@@ -26,6 +26,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils.fail_open import fail_open
+
 #: Functions whose output is DOCUMENTED to always be a torch view of the
 #: tensor at args[0]. Conditional cases (``reshape``, ``flatten``,
 #: ``contiguous``, ``__getitem__`` advanced indexing) are deliberately
@@ -178,8 +180,6 @@ def distribution_relation(trace: Any, record: Any) -> EdgeDistributionRelation |
     EdgeDistributionRelation | None
         The corroborated verdict, or ``None``.
     """
-
-    from .._utils.fail_open import fail_open
 
     if record.arg_kind != "positional" or tuple(record.arg_path) != (0,):
         return None

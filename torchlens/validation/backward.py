@@ -16,6 +16,7 @@ from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._input_coerce import _coerce_inputs
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
+from .._user_public_impls import trace as trace_fn
 from .._utils.arg_handling import normalize_input_args
 from .._utils.display import warn_parallel
 from .._utils.rng import set_random_seed
@@ -50,8 +51,7 @@ from .diagnostics import (
 if TYPE_CHECKING:
     from ._layer_grad_report import LayerGradReport
 
-_SUM_IN_PROGRESS = object()
-"""Memo sentinel: this container is on the current descent chain (a cycle)."""
+_SUM_IN_PROGRESS = object()  # memo sentinel: the container is already on the descent chain
 
 
 def _sum_tensors(
@@ -604,8 +604,8 @@ def validate_backward_pass(
     bool
         True when captured grads match stock autograd.
     """
-    from .._user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
-    from .invariants import check_metadata_invariants
+    from .._capture_state_helpers import _reject_opaque_wrappers, _unwrap_data_parallel
+    from .invariants import check_metadata_invariants  # deferred: cycle validation
 
     reset_validation_failure(None)
     if _is_appended_trace(model):

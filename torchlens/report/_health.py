@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from .._data_classes._trace_missing_attrs import is_live_trace
 
 #: Annotations key carrying the persisted record (field_intent.tsv row C02).
@@ -180,8 +181,7 @@ def _parse_persisted(payload: Any, revision: str) -> HealthFacts:
 def _derive(trace: Any) -> HealthFacts:
     """Derive HealthFacts from the strongest basis in hand."""
 
-    from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
-    from ._factcore import capture_fingerprint
+    from ._factcore import capture_fingerprint  # deferred: cycle report
 
     revision = capture_fingerprint(trace)
     coverage = nonfinite_coverage(trace)
@@ -226,7 +226,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
 
     annotations = getattr(trace, "annotations", None)
     if isinstance(annotations, dict) and HEALTH_FACTS_ANNOTATIONS_KEY in annotations:
-        from ._factcore import capture_fingerprint
+        from ._factcore import capture_fingerprint  # deferred: cycle report
 
         revision = capture_fingerprint(trace)
         persisted = _parse_persisted(annotations[HEALTH_FACTS_ANNOTATIONS_KEY], revision)
@@ -240,7 +240,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
         from .._data_classes._nonfinite import has_scan_evidence
 
         if not has_scan_evidence(trace):
-            from ._factcore import capture_fingerprint
+            from ._factcore import capture_fingerprint  # deferred: cycle report
 
             unexamined = sum(
                 1
@@ -263,7 +263,7 @@ def normalize_health_facts(trace: Any) -> HealthFacts:
     try:
         record = _derive(trace)
     except Exception:  # noqa: BLE001 -- health must degrade, never break render
-        from ._factcore import capture_fingerprint
+        from ._factcore import capture_fingerprint  # deferred: cycle report
 
         try:
             revision = capture_fingerprint(trace)

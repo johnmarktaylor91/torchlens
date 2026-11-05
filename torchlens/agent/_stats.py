@@ -99,7 +99,7 @@ def _read_payload(op: Any, target: str) -> Any:
     """
 
     if target == "out":
-        from .._io.payload_reader import read_op_payload
+        from .._io.payload_reader import read_op_payload  # deferred: startup cost
 
         try:
             return read_op_payload(op)
@@ -454,7 +454,7 @@ def _select_ops(log: Any, *, labels: list[str] | None, query: dict[str, Any] | N
             or str(getattr(op, "layer_label", "")) in wanted
         ]
     if query is not None:
-        from ._query import query_sites
+        from ._query import query_sites  # deferred: startup cost
 
         matched, _, _ = query_sites(log, query)
         matched_labels = {row["label"] for row in matched}

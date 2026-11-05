@@ -10,6 +10,7 @@ import graphviz
 import torch
 
 from .._errors import InvalidArgumentError
+from ..bundle._deltas import site_deltas
 from ._render_utils import _add_svg_accessibility, render_dot_to_file, strip_known_extension
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
@@ -98,7 +99,6 @@ def bundle_diff(
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
-    from ..bundle._deltas import site_deltas
 
     baseline_name = bundle._baseline_or_raise(baseline_ref)
     sides = sorted({left_name, right_name} - {baseline_name})
@@ -807,7 +807,7 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
     (:func:`torchlens._visualization._encoding.interpolate_hex`).
     """
 
-    from ._encoding import interpolate_hex
+    from ._encoding import interpolate_hex  # deferred: cycle _visualization
 
     return interpolate_hex(start, end, fraction)
 

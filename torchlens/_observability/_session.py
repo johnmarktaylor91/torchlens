@@ -23,6 +23,7 @@ from typing import Any
 
 import torch
 
+from .._events import register_active_profiler_session
 from .._registry.kernel import TORCHLENS_PROVIDER, create_registry
 from ._errors import ProfilerSessionError
 from ._spans import SpanRegistry
@@ -64,6 +65,10 @@ def active_session() -> ProfilerSession | None:
     """Return the active profiler session, if any (the consumer probe)."""
 
     return _ACTIVE_SESSION
+
+
+# The engine's marker sinks read the session through this slot (torchlens._events).
+register_active_profiler_session(active_session)
 
 
 @dataclass(frozen=True)

@@ -2123,6 +2123,20 @@ routing-table read without saved router weights or expert indices. Its
   programs; SPMD processes may arm lazily at capture entry). Sharded state (DTensor,
   tensor/pipeline parallel) still refuses typed at capture entry.
 
+**tl.distributed.ArmingRecord**
+: What `arm()` established, stamped on every boundary record. Fields:
+  `ArmingRecord.install_epoch` (the `InstallEpoch` the arming installed under),
+  `ArmingRecord.recognizer_snapshot` (the recognizer snapshot id the arming derived) and
+  `ArmingRecord.source` (how arming happened: explicit or lazy at capture entry).
+
+**tl.distributed.GroupIdentity**
+: The resolved lifetime identity of one process group on this rank. Fields:
+  `GroupIdentity.membership_digest`, `GroupIdentity.lifetime_ordinal` (which lifetime of
+  that membership this group is), `GroupIdentity.ordinal_source` (where the ordinal came
+  from), `GroupIdentity.global_ranks` (the member ranks) and `GroupIdentity.backend`; the
+  `GroupIdentity.group_uid` property is the exactly-two-field correlation group identity
+  (membership digest, lifetime ordinal).
+
 **Collective boundary op**
 : A captured op whose portable `annotations["collective"]` carries the
   `collective_boundary_v1` payload: correlation key, role-indexed dual geometry, event
@@ -4065,6 +4079,7 @@ describe each surface in depth.
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered facet functions, optionally filtered by target scope and class-name glob |
 | `tl.facets.parameter_spec` | Recipe helper: a module parameter as a `FacetSpec` (`module, name, recipe_id`), or an absence reason |
+| `tl.facets.reset` | Reset the process facet registry to the built-in recipe set, dropping every recipe registered since (bumps the registry version) |
 | `tl.mechinterp.AblationControlsReport` | Every control rerun of one ablation claim and the verdict per family (read-only record) |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
@@ -4920,6 +4935,7 @@ The sections above describe each surface in depth.
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
 | `ValidationFailure.check_name` | Which validation phase fired (always set) |
+| `ValidationStatus.__bool__` | The pass/fail result as a bool; raises `TypeError` unless replay validation ran (`state` is `passed` or `failed`) |
 | `ValidationStatus.available_live` | Build the default status for a live trace with validation support |
 | `ValidationStatus.exempted_reason_counts` | Stable reason-code counts for nodes whose replay/perturbation check had a provable exemption |
 | `ValidationStatus.from_replay_counts` | Fold replay outcome counts into a trace-level status |
@@ -6015,7 +6031,10 @@ drops a newly listed record from the keyword rows.
 | `tl.preprocessing.InputDiagnostics` | Opt-in tensor findings (record three of three) |
 | `tl.preprocessing.PreprocessingComparison` | The field-level audit report (record two of three) |
 | `tl.preprocessing.Resolution` | One authority resolution: provenance record + declared fields + transform |
+| `tl.preprocessing.compare` | Field-by-field audit of an applied preprocessing pipeline against an authority (`authority`, `applied=`); returns a `PreprocessingComparison`, never a transform, and refuses mismatch or unknown verdicts only under `strict=True` |
+| `tl.preprocessing.diagnose` | Opt-in tensor diagnostics on the batch fed to the model (`batch`, `declared=`, `checks=`); returns `InputDiagnostics` findings, never a match |
 | `tl.preprocessing.register` | Decorator registering a custom input detector (`name=`, `priority=`; lower runs first) that turns a model's raw input into a trace |
+| `tl.preprocessing.resolve` | Resolve a preprocessing authority (an explicit `authority`, or discovery from `model=`; `offline=`) into a `Resolution`; nothing resolving returns the honest unknown, never a TorchLens-authored recipe |
 | `tl.preprocessing.unregister` | Remove a registered input detector by name |
 | `tl.receptive_field.AmbiguousInputError` | Raised when a query has more than one reachable model input |
 | `tl.receptive_field.EmpiricalAdjointCheck` | One sampled comparison of receptive and projective empirical derivatives |
@@ -6611,7 +6630,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `intervene=` | keyword of `tl.extract_dataset` (keyword-only; default `None`): Optional `InterventionSpec` (`tl.when(selector, helper)`; DOCUMENTED-UNSTABLE): every batch is captured with the spec armed, so stored rows are the INTERVENED activations. Batch zero freezes the structural sites the spec fired at; a batch firing nowhere or ..; constructor keyword of `tl.options.RecordingOptions` (optional); keyword of `tl.record` (keyword-only; default `None`): Optional predicate-time intervention slot evaluated on operation contexts; constructor keyword of `tl.recording.Recorder` (keyword-only; optional); keyword of `tl.trace` (keyword-only; default `None`): Optional predicate returning an intervention decision for current-op live mutation |
 | `intervening_cluster=` | keyword of `Trace.draw` (keyword-only; default `'upstream'`): Combined graph: placement of backward-only nodes (`"upstream"`, `"outside"`, `"downstream"` or `"own"`) |
 | `intervention=` | keyword of `Layer.do` (keyword-only; default `None`): Grouped intervention options (`InterventionOptions`); keyword of `Op.do` (keyword-only; default `None`); keyword of `Trace.do` (keyword-only; default `None`): Grouped intervention options (`InterventionOptions`: `engine` in `"auto"`/`"replay"`/`"rerun"`/`"set_only"`, `strict`, `allow_changed_params`); keyword of `tl.transformer.receipt_from_patch_grid` (keyword-only; default `None`): Intervention wording; the default says what a patch grid does ("clean activation of one head patched into the corrupted run", or "... one kv group ..." with `kv_groups`); keyword of `Recording.do` (keyword-only; default `None`) |
-| `intervention_mode=` | keyword of `Trace.draw` (keyword-only; default `'node_mark'`): How intervened sites are marked: `"node_mark"` or `"cone"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Intervention overlay mode |
+| `intervention_mode=` | keyword of `Trace.draw` (keyword-only; default `'node_mark'`): How intervened sites are marked: `"node_mark"` or `"as_node"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Intervention overlay mode |
 | `invocations=` | constructor keyword of `tl.experimental.Session` (optional) |
 | `io_role=` | constructor keyword of `tl.receptive_field.GradReceptiveField` (required) |
 | `ir=` | keyword of `tl.trackers.graph_ir_to_tensorboard` (required) |

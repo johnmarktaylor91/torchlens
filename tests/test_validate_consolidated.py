@@ -8,7 +8,7 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
+import torchlens._user_public_impls as user_public_impls
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens.validation.consolidated import InterventionValidationReport
 
@@ -63,8 +63,8 @@ def test_validate_scope_defaults_to_forward(
     model, x = model_and_input
     with (
         mock.patch(
-            "torchlens._user_funcs.validate_forward_pass",
-            wraps=user_funcs.validate_forward_pass,
+            "torchlens._user_public_impls.validate_forward_pass",
+            wraps=user_public_impls.validate_forward_pass,
         ) as forward_validator,
         mock.patch(
             "torchlens.validation.consolidated.validate_backward_pass",

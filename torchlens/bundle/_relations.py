@@ -6,7 +6,7 @@ alignment or relations (the S6 flexibility invariant). The table is DATA,
 not derivation: loads never recompute it, but its invariants (R1/R2/R3) are
 re-checked on every load and every mutation.
 
-Pattern-of-record: :mod:`torchlens.distributed._ledger` — closed
+Pattern-of-record: :mod:`torchlens._distributed._ledger` — closed
 vocabularies, frozen payload key sets, fail-closed ``from_payload``,
 immutable identity-stable finalized views. Parse boundaries raise
 ``ValueError``; the public Bundle wiring converts into the typed

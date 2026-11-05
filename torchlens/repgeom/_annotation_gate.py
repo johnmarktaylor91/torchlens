@@ -16,7 +16,7 @@ import torch
 
 from .._utils._multipass_access import get_multipass_attr
 from ..backends.registry import TORCH_BACKEND_NAME
-from ..errors._base import TorchLensWarning
+from ..errors._base import TorchLensError, TorchLensWarning
 
 #: Verb-specific vocabulary for the shared site-selection diagnostics, so an
 #: error raised for ``rdm_evolution`` never names ``mds_evolution`` (the
@@ -46,8 +46,6 @@ def _expected_stimulus_counts(trace: Any) -> frozenset[int]:
     frozenset[int]
         Leading dimensions observed across input-boundary layers.
     """
-
-    from ..errors._base import TorchLensError
 
     # Absent/odd input evidence must read as "no evidence", never kill the
     # sweep; lookup surfaces raise TorchLensError subclasses plus the builtin

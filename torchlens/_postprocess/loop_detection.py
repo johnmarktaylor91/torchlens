@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._site_key import SiteKeyMinter
 from .._record_type import record_type
+from ..errors.validation import MetadataInvariantError
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,
@@ -518,8 +519,6 @@ def _check_call_site_contract(self: "Trace", classes: dict[str, str]) -> None:
     ]
     violation = call_site_contract_violation(entries, classes)
     if violation is not None:
-        from ..validation.invariants import MetadataInvariantError
-
         raise MetadataInvariantError("call_site_contract", violation)
 
 

@@ -14,6 +14,10 @@ packages are not added as implicit edges.
 Run ``python tools/layering/graph.py [PACKAGE_DIR] [--members]`` for a JSON
 summary: module and edge counts, the in-function import counts, and the
 largest strongly connected component (with its member list on request).
+``--deferred-reasons`` prints instead a table of deferred imports per
+top-level package, grouped by the reason comment on or above each import
+(``# deferred: optional dependency``, ``# deferred: startup cost`` or
+``# deferred: cycle``; anything else counts as "no reason").
 """
 
 from __future__ import annotations
@@ -29,6 +33,15 @@ from pathlib import Path
 EAGER = "eager"
 DEFERRED = "deferred"
 TYPING = "typing"
+
+REASON_MARKERS = (
+    ("# deferred: optional dependency", "optional dependency"),
+    ("# deferred: startup cost", "startup cost"),
+    ("# deferred: cycle", "cycle"),
+)
+NO_REASON = "no reason"
+REASONS = tuple(label for _, label in REASON_MARKERS) + (NO_REASON,)
+COMMENT_LOOKBACK = 3
 
 
 @dataclass(frozen=True)
@@ -48,6 +61,7 @@ class ImportGraph:
     package: str
     modules: set[str] = field(default_factory=set)
     sites: list[ImportSite] = field(default_factory=list)
+    files: dict[str, Path] = field(default_factory=dict)
 
     def edges(self, kinds: Iterable[str] = (EAGER, DEFERRED)) -> dict[str, set[str]]:
         """Return importer -> imported modules for the given import kinds."""
@@ -184,6 +198,7 @@ def build_graph(root: Path) -> ImportGraph:
     for path in iter_package_files(root):
         name = module_name(path, root)
         graph.modules.add(name)
+        graph.files[name] = path
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         parsed.append((name, path.name == "__init__.py", tree))
     for name, is_package, tree in parsed:
@@ -267,12 +282,105 @@ def summarize(graph: ImportGraph, members: bool = False) -> dict[str, object]:
     return summary
 
 
+def _reason_text(lines: list[str], line: int) -> str:
+    """Return the import line plus the comment block directly above it."""
+
+    kept = [lines[line - 1]]
+    for above in reversed(lines[max(0, line - 1 - COMMENT_LOOKBACK) : line - 1]):
+        if not above.strip().startswith("#"):
+            break
+        kept.append(above)
+    return "\n".join(kept)
+
+
+def _classify_reason(text: str) -> str:
+    """Return the label of the first reason marker found in ``text``."""
+
+    return next((label for marker, label in REASON_MARKERS if marker in text), NO_REASON)
+
+
+def _top_package(graph: ImportGraph, module: str) -> str:
+    """Return the first package under the root that holds ``module``."""
+
+    rest = module.split(".")[1:]
+    is_package = graph.files[module].name == "__init__.py"
+    if rest and (is_package or len(rest) > 1):
+        return f"{graph.package}.{rest[0]}"
+    return graph.package
+
+
+def deferred_reasons(graph_or_package: ImportGraph | Path | str) -> dict[str, dict[str, int]]:
+    """Count deferred internal import statements per top-level package and reason.
+
+    Parameters
+    ----------
+    graph_or_package
+        A graph from :func:`build_graph`, or the package directory to build one from.
+
+    Returns
+    -------
+    dict[str, dict[str, int]]
+        Top-level package -> reason label -> statement count, every label present,
+        plus a ``"total"`` row summed over all packages.
+    """
+
+    graph = (
+        graph_or_package
+        if isinstance(graph_or_package, ImportGraph)
+        else build_graph(Path(graph_or_package))
+    )
+    statements = sorted({(s.importer, s.line) for s in graph.sites if s.kind == DEFERRED})
+    sources: dict[str, list[str]] = {}
+    counts: dict[str, dict[str, int]] = {}
+    total = dict.fromkeys(REASONS, 0)
+    for importer, line in statements:
+        if importer not in sources:
+            sources[importer] = graph.files[importer].read_text(encoding="utf-8").splitlines()
+        reason = _classify_reason(_reason_text(sources[importer], line))
+        row = counts.setdefault(_top_package(graph, importer), dict.fromkeys(REASONS, 0))
+        row[reason] += 1
+        total[reason] += 1
+    counts["total"] = total
+    return counts
+
+
+def format_deferred_reasons(counts: dict[str, dict[str, int]]) -> str:
+    """Render :func:`deferred_reasons` as an aligned table, worst package first."""
+
+    header = ("package", *REASONS, "deferred total")
+    packages = sorted(
+        (name for name in counts if name != "total"),
+        key=lambda name: (-counts[name][NO_REASON], name),
+    )
+    rows = [header]
+    for name in [*packages, "total"]:
+        values = [counts[name][reason] for reason in REASONS]
+        rows.append((name, *(str(v) for v in values), str(sum(values))))
+    widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
+    return "\n".join(
+        "  ".join(
+            cell.ljust(width) if i == 0 else cell.rjust(width)
+            for i, (cell, width) in enumerate(zip(row, widths, strict=True))
+        )
+        for row in rows
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("package", nargs="?", default="torchlens", type=Path)
     parser.add_argument("--members", action="store_true", help="list the largest SCC")
+    parser.add_argument(
+        "--deferred-reasons",
+        action="store_true",
+        help="table of deferred imports per package by reason comment",
+    )
     args = parser.parse_args(argv)
-    print(json.dumps(summarize(build_graph(args.package), args.members), indent=1))
+    graph = build_graph(args.package)
+    if args.deferred_reasons:
+        print(format_deferred_reasons(deferred_reasons(graph)))
+        return 0
+    print(json.dumps(summarize(graph, args.members), indent=1))
     return 0
 
 

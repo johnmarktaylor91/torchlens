@@ -9,10 +9,10 @@ import pytest
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
 from torchlens.validation.invariants import check_metadata_invariants
-from torchlens.validation.status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 

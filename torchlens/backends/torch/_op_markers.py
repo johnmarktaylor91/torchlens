@@ -18,7 +18,10 @@ from typing import Any
 import torch
 
 from ... import _state
+from ..._errors import InvalidArgumentError
+from ..._events import active_profiler_session
 from ..._utils.rng import monitor_state
+from ._completeness_cross_thread import _internal_read_active
 
 
 def _nvtx_host_available() -> bool:
@@ -47,7 +50,6 @@ def refuse_unavailable_nvtx(emit_nvtx: bool) -> None:
 
     if not emit_nvtx or _nvtx_host_available():
         return
-    from ..._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         "emit_nvtx=True needs a CUDA device with an NVIDIA driver, and torch reports "
@@ -127,8 +129,6 @@ def _op_marker_labels(func_name: str, func_call_id: int) -> tuple[str, str]:
         name and the opaque exact-key ``record_function`` marker name.
     """
 
-    from ._completeness_cross_thread import _internal_read_active
-
     if _internal_read_active():
         visual = f"torchlens::internal::{func_name}#{func_call_id}"
         join = f"torchlens::internal::{func_call_id}"
@@ -169,14 +169,7 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     global _active_session_fn
     session_fn: Callable[[], Any] | None = _active_session_fn
     if session_fn is None:
-        try:
-            from ..._observability._session import (  # deferred: cycle _observability (layering follow-up)
-                active_session,
-            )
-        except ImportError:  # pragma: no cover - torn install without the substrate
-            session_fn = _no_active_session
-        else:
-            session_fn = active_session
+        session_fn = active_profiler_session
         _active_session_fn = session_fn
     return session_fn
 

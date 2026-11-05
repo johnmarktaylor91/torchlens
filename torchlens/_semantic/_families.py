@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any, cast
 
+from .._errors import InvalidArgumentError
+
 if TYPE_CHECKING:
     from .facets import FacetSpec
 
@@ -83,8 +85,6 @@ def family_facet_name(base: Any, index: Any) -> str:
         ``sae_latent_family_unknown`` when no family has that name; the
         family's own refusals for an index it does not have.
     """
-
-    from .._errors import InvalidArgumentError
 
     family = _FACET_FAMILIES.get(base) if isinstance(base, str) else None
     if family is None:

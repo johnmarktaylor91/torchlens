@@ -30,7 +30,7 @@ from torch import nn
 from torch.utils.hooks import RemovableHandle
 
 from . import _state
-from .backends.torch import _tl as _tl_meta
+from ._utils import _tensor_label as _tl_meta
 
 
 def module_fingerprint_address(module: nn.Module, fallback: str) -> str:

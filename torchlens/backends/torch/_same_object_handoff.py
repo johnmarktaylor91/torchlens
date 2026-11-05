@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ._tl import _ensure_tensor_meta, get_tensor_meta
+from ..._utils._tensor_label import _ensure_tensor_meta, get_tensor_meta
 
 __all__ = [
     "pop_same_object_mutation",

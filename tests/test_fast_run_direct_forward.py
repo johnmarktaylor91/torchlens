@@ -17,8 +17,8 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._utils._tensor_label import get_module_meta
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
-from torchlens.backends.torch._tl import get_module_meta
 
 #: Stage a sticky hook on the trace without propagating it.
 _STAGE = tl.options.InterventionOptions(engine="set_only")
