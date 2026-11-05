@@ -397,6 +397,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # aborted-nonfinite prefix facts): the _capture_parent_edge_truth
     # class; loaded traces disclose honest absence (field_intent live-only).
     "_autograd_saved_bands": FieldPolicy.DROP,
+    "_foreign_written_slots": FieldPolicy.DROP,
     "_autograd_seen_saved_storages": FieldPolicy.DROP,
     "_nonfinite_frontier_out": FieldPolicy.DROP,
     "_nonfinite_prefix_finalized": FieldPolicy.DROP,

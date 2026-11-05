@@ -109,6 +109,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
         run=ex._run_remove_orphan_nodes,
         reads=(
             "_capture_events",
+            "_exported_storages",
             "_foreign_departures",
             "_foreign_kernel_interior_labels",
             "_layer_logs",
@@ -125,6 +126,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
             "output_layers",
         ),
         writes=(
+            "_exported_storages",
             "_foreign_departures",
             "_foreign_kernel_interior_labels",
             "_graph_conditional_arm_entry_edges",

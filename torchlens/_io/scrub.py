@@ -1178,6 +1178,8 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_plain_scalar_escape_labels",
         "_plain_direct_escape_gaps",
         "_foreign_departures",
+        "_exported_storages",
+        "_foreign_written_slots",
         "_unrecorded_operator_mutations",
         "_torch_file_loads",
         "_last_sibling_ordering_decision",

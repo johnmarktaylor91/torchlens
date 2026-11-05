@@ -319,6 +319,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_capture_parent_edge_truth": StorageBinding(StorageKind.RUNTIME),
     "_nonfinite_capture": StorageBinding(StorageKind.RUNTIME),
     "_autograd_saved_bands": StorageBinding(StorageKind.RUNTIME),
+    "_foreign_written_slots": StorageBinding(StorageKind.RUNTIME),
     "_autograd_seen_saved_storages": StorageBinding(StorageKind.RUNTIME),
     "_nonfinite_frontier_out": StorageBinding(StorageKind.RUNTIME),
     "_nonfinite_prefix_finalized": StorageBinding(StorageKind.RUNTIME),

@@ -285,6 +285,7 @@ def _parent_arg_evidence(
                 parent_layer,
                 _saved_out_payload,
                 lambda label: _op_for_validation_label(trace, label),
+                trace.__dict__.get("_foreign_written_slots"),
             ):
                 return ValidationCheckResult.failed_result("arg_logging_mismatch")
             return versions[key], None

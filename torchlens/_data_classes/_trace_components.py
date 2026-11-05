@@ -152,6 +152,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_aten_ops": "capture_config",
     "_device_memory_samples": "capture_config",
     "_autograd_saved_bands": "capture_config",
+    "_foreign_written_slots": "capture_config",
     "_autograd_seen_saved_storages": "capture_config",
     "_nonfinite_frontier_out": "capture_config",
     "_nonfinite_prefix_finalized": "capture_config",
@@ -619,5 +620,15 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch capture (backends/torch/_foreign_data.py): tensors that left torch in "
         "plain forward code (numpy / dlpack / tolist exports outside any Function), "
         "matched by later host constructors and popped by postprocess step 3"
+    ),
+    "_exported_storages": (
+        "torch capture (backends/torch/_storage_exports.py): storages handed to the host "
+        "zero-copy in plain forward code, holding each exported tensor, popped by "
+        "postprocess step 3"
+    ),
+    "_foreign_written_slots": (
+        "torch capture (backends/torch/_storage_exports.py): version snapshots whose "
+        "slot sat on an exported storage, keyed by raw parent and child label, read by "
+        "forward validation (validation/_snapshot_binding.py)"
     ),
 }

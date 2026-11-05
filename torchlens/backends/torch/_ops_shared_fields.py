@@ -51,6 +51,7 @@ from ._ops_arg_slots import (
     parents_from_slots,
     templates_requested,
 )
+from ._storage_exports import note_foreign_written_snapshot
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
@@ -374,6 +375,7 @@ def _tag_tensor_and_track_variations(
     fields_dict_onetensor: dict[str, Any],
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
+    live_args: tuple[tuple[Any, ...], dict[str, Any]],
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations.
 
@@ -381,7 +383,9 @@ def _tag_tensor_and_track_variations(
     tensor's value at function-call time (from arg_copies) differs from its
     saved out, the pre-mutation value is recorded in
     ``out_versions_by_child``.  This is critical for validation replay,
-    which needs the actual input values each child operation saw.
+    which needs the actual input values each child operation saw. A snapshot whose
+    live slot (``live_args``) sits on a storage exported zero-copy is marked as a
+    possible foreign write (``_storage_exports.note_foreign_written_snapshot``).
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
@@ -416,6 +420,13 @@ def _tag_tensor_and_track_variations(
                     transform_state=fields_dict_onetensor["activation_transform"],
                     detach_grad_policy=fields_dict_onetensor["detach_saved_activations"],
                 )
+            )
+            note_foreign_written_snapshot(
+                self,
+                parent_label,
+                new_layer_entry._label_raw,
+                new_layer_entry._call_parent_arg_positions,
+                live_args,
             )
 
 

@@ -19,7 +19,14 @@ A differing snapshot is explained when
 - the parent is not an in-place op, the snapshot has the parent's shape and dtype
   (an in-place write never changes either), and an in-place op the child ALSO
   consumes wrote through the parent's lineage: the call reads a base together
-  with the view written into it, the base bound to its own lineage before the write.
+  with the view written into it, the base bound to its own lineage before the write; or
+- the parent is not an in-place op, the snapshot has the parent's shape and dtype, and
+  capture marked this snapshot as a foreign write: the slot's live tensor sat on a
+  storage the forward had handed to the host zero-copy (``data_ptr``, a storage handle,
+  a NumPy view, DLPack), so code outside torch dispatch may have written it. The mark
+  names the exact argument slots the parent was bound to
+  (``backends/torch/_storage_exports.py``); a parent bound to any other slots, or a
+  snapshot without the mark, is not explained by it. A loaded trace carries no marks.
 
 Anything else is a binding the recorded graph cannot produce, and argument logging
 fails. The check only adds failures; it never validates what failed before.
@@ -27,7 +34,7 @@ fails. The check only adds failures; it never validates what failed before.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -59,6 +66,7 @@ def snapshot_binding_explained(
     parent_layer: Op,
     saved_out: Callable[[Op], Any],
     resolve: Callable[[str], Any],
+    foreign_written: Mapping[tuple[str, str], frozenset[tuple[str, Any]]] | None = None,
 ) -> bool:
     """Return whether ``parent_layer``'s snapshot for ``target_layer`` follows from the graph.
 
@@ -72,6 +80,9 @@ def snapshot_binding_explained(
         Returns an op's retained saved out, or ``None`` when capture omitted it.
     resolve:
         Resolves a recorded parent label to its op.
+    foreign_written:
+        The trace's foreign-write marks: ``(parent raw label, child raw label)`` to
+        the parent's bound slots at capture; ``None`` when there are none.
 
     Returns
     -------
@@ -90,7 +101,41 @@ def snapshot_binding_explained(
         return True
     if record_member(parent_layer, "is_inplace", False):
         return True
-    return same_geometry and _consumed_write_reaches(target_layer, parent_layer, resolve)
+    if not same_geometry:
+        return False
+    if _consumed_write_reaches(target_layer, parent_layer, resolve):
+        return True
+    return _foreign_write_marked(target_layer, parent_layer, resolve, foreign_written or {})
+
+
+def _foreign_write_marked(
+    target_layer: Op,
+    parent_layer: Op,
+    resolve: Callable[[str], Any],
+    foreign_written: Mapping[tuple[str, str], frozenset[tuple[str, Any]]],
+) -> bool:
+    """Return whether capture marked this snapshot as a foreign write for its current slots."""
+
+    key = (
+        record_member(parent_layer, "_label_raw", None),
+        record_member(target_layer, "_label_raw", None),
+    )
+    marked = foreign_written.get(key)
+    return bool(marked) and marked == _bound_slots(target_layer, parent_layer, resolve)
+
+
+def _bound_slots(
+    target_layer: Op, parent_layer: Op, resolve: Callable[[str], Any]
+) -> frozenset[tuple[str, Any]]:
+    """Return the ``(args|kwargs, position)`` slots of ``target_layer`` bound to ``parent_layer``."""
+
+    positions = record_member(target_layer, "parent_arg_positions", None) or {}
+    return frozenset(
+        (kind, position)
+        for kind in ("args", "kwargs")
+        for position, label in (positions.get(kind) or {}).items()
+        if resolve(label) is parent_layer
+    )
 
 
 def _consumed_write_reaches(

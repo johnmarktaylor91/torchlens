@@ -74,6 +74,7 @@ def _run_remove_orphan_nodes(ctx: StepContext) -> None:
 
     with _vtimed(ctx.trace, "  Step 3: Remove orphan nodes", bucket="remove_orphan_nodes"):
         ctx.trace.__dict__.pop("_foreign_departures", None)  # capture-time journal ends here
+        ctx.trace.__dict__.pop("_exported_storages", None)  # releases the held exports
         graph_traversal._remove_orphan_nodes(ctx.trace)
 
 

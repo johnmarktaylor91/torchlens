@@ -1253,8 +1253,8 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
-        if exports_storage and _COW_PENDING and not inside_function_apply():
-            _storage_exports.materialize_deferred_for_export(args)
+        if exports_storage and not inside_function_apply():
+            _storage_exports.note_storage_export(trace, args)
         if has_inplace_signature and not args:
             # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
             args, kwargs = _receiver_kwarg_as_positional(args, kwargs)
