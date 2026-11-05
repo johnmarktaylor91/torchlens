@@ -12,8 +12,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .._utils._display_numbers import format_count
 from .._utils._record_group_table import record_member
+from ._label_format import param_count
 from ._render_common import format_collapsed_module_contents
 from .collapse_plan import RenderContext, SegmentDescriptor
 
@@ -444,6 +444,6 @@ def _child_segment_label(
 
 
 def _format_param_count(value: int) -> str:
-    """Return a compact parameter count for segment labels (the shared ``15.4k`` spelling)."""
+    """Return a segment label's parameter count, compact from 1,000 like every drawn one."""
 
-    return format_count(value)
+    return param_count(value)
