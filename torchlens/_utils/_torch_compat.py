@@ -2117,7 +2117,10 @@ def get_view_func_replay() -> Callable[..., Any]:
     unchecked replay, so the fallback replays identically (``HAS_VIEW_FUNC_UNSAFE``).
     """
     found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
-    return found if found is not None else torch.Tensor._view_func
+    if found is None:
+        # Read through the probe resolver: newer torch stubs drop ``Tensor._view_func``.
+        found = _resolve_attribute_path("torch:Tensor._view_func")
+    return found
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:
