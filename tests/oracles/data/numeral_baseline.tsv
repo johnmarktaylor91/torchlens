@@ -2832,13 +2832,11 @@ docs-md	docs/maintainers/where.md	14,
 docs-md	docs/maintainers/where.md	140
 docs-md	docs/maintainers/where.md	1404
 docs-md	docs/maintainers/where.md	14061
-docs-md	docs/maintainers/where.md	1408
 docs-md	docs/maintainers/where.md	1409
 docs-md	docs/maintainers/where.md	141
 docs-md	docs/maintainers/where.md	1417
 docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	1420
-docs-md	docs/maintainers/where.md	1428
 docs-md	docs/maintainers/where.md	143
 docs-md	docs/maintainers/where.md	1433
 docs-md	docs/maintainers/where.md	1435
@@ -2922,6 +2920,7 @@ docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1834
+docs-md	docs/maintainers/where.md	18390
 docs-md	docs/maintainers/where.md	184
 docs-md	docs/maintainers/where.md	1847
 docs-md	docs/maintainers/where.md	185
@@ -3072,7 +3071,6 @@ docs-md	docs/maintainers/where.md	280
 docs-md	docs/maintainers/where.md	281
 docs-md	docs/maintainers/where.md	283
 docs-md	docs/maintainers/where.md	284
-docs-md	docs/maintainers/where.md	2843
 docs-md	docs/maintainers/where.md	285
 docs-md	docs/maintainers/where.md	286
 docs-md	docs/maintainers/where.md	287
@@ -3147,7 +3145,6 @@ docs-md	docs/maintainers/where.md	3418
 docs-md	docs/maintainers/where.md	342
 docs-md	docs/maintainers/where.md	343
 docs-md	docs/maintainers/where.md	344
-docs-md	docs/maintainers/where.md	34598
 docs-md	docs/maintainers/where.md	346
 docs-md	docs/maintainers/where.md	3462
 docs-md	docs/maintainers/where.md	347
@@ -3434,11 +3431,9 @@ docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	6501
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	656
-docs-md	docs/maintainers/where.md	657
 docs-md	docs/maintainers/where.md	66
 docs-md	docs/maintainers/where.md	660
 docs-md	docs/maintainers/where.md	662
-docs-md	docs/maintainers/where.md	664
 docs-md	docs/maintainers/where.md	667
 docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
@@ -3528,7 +3523,6 @@ docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	783
 docs-md	docs/maintainers/where.md	785
 docs-md	docs/maintainers/where.md	786
-docs-md	docs/maintainers/where.md	787
 docs-md	docs/maintainers/where.md	788
 docs-md	docs/maintainers/where.md	79
 docs-md	docs/maintainers/where.md	790
@@ -3552,7 +3546,6 @@ docs-md	docs/maintainers/where.md	819
 docs-md	docs/maintainers/where.md	82
 docs-md	docs/maintainers/where.md	821
 docs-md	docs/maintainers/where.md	8239
-docs-md	docs/maintainers/where.md	825
 docs-md	docs/maintainers/where.md	829
 docs-md	docs/maintainers/where.md	83
 docs-md	docs/maintainers/where.md	835
@@ -3599,6 +3592,7 @@ docs-md	docs/maintainers/where.md	934
 docs-md	docs/maintainers/where.md	935
 docs-md	docs/maintainers/where.md	94
 docs-md	docs/maintainers/where.md	946
+docs-md	docs/maintainers/where.md	949
 docs-md	docs/maintainers/where.md	95
 docs-md	docs/maintainers/where.md	952
 docs-md	docs/maintainers/where.md	957
@@ -3607,14 +3601,12 @@ docs-md	docs/maintainers/where.md	97
 docs-md	docs/maintainers/where.md	972
 docs-md	docs/maintainers/where.md	974
 docs-md	docs/maintainers/where.md	976
-docs-md	docs/maintainers/where.md	977
 docs-md	docs/maintainers/where.md	98
 docs-md	docs/maintainers/where.md	982
 docs-md	docs/maintainers/where.md	985
 docs-md	docs/maintainers/where.md	986
 docs-md	docs/maintainers/where.md	99
 docs-md	docs/maintainers/where.md	992
-docs-md	docs/maintainers/where.md	993
 docs-md	docs/maintainers/where.md	995
 docs-md	docs/maintainers/where.md	9989
 docs-md	docs/memory_debugging.md	0.10
@@ -6616,7 +6608,6 @@ package-docstrings	torchlens/_runnable/witness_contracts.py	256
 package-docstrings	torchlens/_runnable/witness_contracts.py	35
 package-docstrings	torchlens/_runnable/witness_contracts.py	65
 package-docstrings	torchlens/_runnable/witness_contracts.py	67
-package-docstrings	torchlens/_save_budget.py	1.44
 package-docstrings	torchlens/_save_budget.py	16
 package-docstrings	torchlens/_save_budget.py	17
 package-docstrings	torchlens/_save_budget.py	190
@@ -7028,8 +7019,6 @@ package-docstrings	torchlens/_utils/tensor_utils.py	10
 package-docstrings	torchlens/_utils/tensor_utils.py	11
 package-docstrings	torchlens/_utils/tensor_utils.py	16
 package-docstrings	torchlens/_utils/tensor_utils.py	16,
-package-docstrings	torchlens/_utils/tensor_utils.py	2.1
-package-docstrings	torchlens/_utils/tensor_utils.py	2.2
 package-docstrings	torchlens/_utils/tensor_utils.py	256
 package-docstrings	torchlens/_utils/tensor_utils.py	32
 package-docstrings	torchlens/_utils/tensor_utils.py	32,

@@ -400,6 +400,50 @@ class TestOverloadShimLedgerKeying:
         )
         # monkeypatch teardown restores the real shim over the real resolver.
 
+    def test_try_compile_fn_shim_hands_jit_the_ledger_original(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Torch 2.1's ``torch.jit._recursive.try_compile_fn`` builds jit's
+        resolution callback from the function it is handed BEFORE honoring
+        ``__prepare_scriptable__``, so a wrapped functional reached from another
+        scripted functional (``F.interpolate`` calling ``adaptive_avg_pool2d``)
+        compiled its original source against the wrapper's globals. The
+        installer must shim that entry to hand it the ledger original, pass
+        every other argument through, and leave non-wrappers untouched.
+        """
+
+        import sys
+
+        from torchlens.backends.torch import identity_shims
+
+        _ensure_wrapped()
+        module = sys.modules["torch.jit._recursive"]
+        wrapped_relu = F.relu
+        original_relu = _state._decorated_to_orig.get(id(wrapped_relu))
+        assert original_relu is not None, "expected F.relu to be wrapped"
+
+        seen: list[tuple[object, object]] = []
+
+        def spy(fn: object, loc: object) -> None:
+            """Record what the entry was handed."""
+            seen.append((fn, loc))
+
+        def plain(t: torch.Tensor) -> torch.Tensor:
+            """A function no torchlens wrapper stands for."""
+            return t
+
+        records: list[tuple[object, str, object]] = []
+        monkeypatch.setattr(module, "try_compile_fn", spy)
+        identity_shims._install_jit_overload_shim(records)  # shim over the spy
+        shim = module.try_compile_fn
+        assert shim is not spy, "installer did not shim try_compile_fn"
+
+        loc = object()
+        shim(wrapped_relu, loc)
+        shim(plain, loc)
+        assert seen == [(original_relu, loc), (plain, loc)]
+        # monkeypatch teardown restores the real entry.
+
 
 class TestShimLifecycle:
     # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills, planted fault catches.

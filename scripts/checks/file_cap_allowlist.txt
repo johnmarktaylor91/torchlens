@@ -424,7 +424,7 @@ torchlens/_runnable/verification.py::_attestation_state_matches	61
 torchlens/_runnable/verification.py::_value_at_path	78
 torchlens/_runnable/witness_contracts.py::_tensor_derived_scalar_stale	69
 torchlens/_runnable/witness_contracts.py::_unbound_state_escape_stale	63
-torchlens/_save_budget.py	967
+torchlens/_save_budget.py	950
 torchlens/_save_budget.py::SaveBudget._message	69
 torchlens/_save_budget.py::_retained_storage_identities	64
 torchlens/_save_budget.py::resolve_save_budget	83
@@ -464,7 +464,7 @@ torchlens/_semantic/reconstruction.py::_result_or_missing	65
 torchlens/_snoop/_entry.py::resolve_echo_capture_options	66
 torchlens/_snoop/_stats.py::reuse_stats	70
 torchlens/_snoop/_stats.py::sampled_stats	67
-torchlens/_state.py	1393
+torchlens/_state.py	1392
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
 torchlens/_trace_core/op_store.py	1670
@@ -861,7 +861,7 @@ torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	120
 torchlens/backends/torch/_ops_finalize.py::_raise_if_nonfinite_requested	119
-torchlens/backends/torch/_ops_interventions.py	825
+torchlens/backends/torch/_ops_interventions.py	807
 torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_legacy	114
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	72
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	105
@@ -915,12 +915,12 @@ torchlens/backends/torch/completeness_witness.py	1622
 torchlens/backends/torch/completeness_witness.py::_CompletenessDispatchMode.__torch_dispatch__	168
 torchlens/backends/torch/completeness_witness.py::_storage_disposition_rows	79
 torchlens/backends/torch/escape_detection.py	946
-torchlens/backends/torch/escape_detection.py::capture_escape_guard	120
-torchlens/backends/torch/funcol.py	1016
+torchlens/backends/torch/escape_detection.py::capture_escape_guard	119
+torchlens/backends/torch/funcol.py	1015
 torchlens/backends/torch/funcol.py::_build_funcol_payload	130
 torchlens/backends/torch/funcol.py::_make_funcol_wrap	178
 torchlens/backends/torch/funcol.py::_make_funcol_wrap.wrapped_funcol	155
-torchlens/backends/torch/identity_shims.py	993
+torchlens/backends/torch/identity_shims.py	956
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
@@ -954,7 +954,7 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2843
+torchlens/backends/torch/wrappers.py	2823
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84

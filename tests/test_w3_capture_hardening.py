@@ -210,6 +210,20 @@ def test_subclass_output_capture():
     assert validate_forward_pass(SubclassRegion(), torch.zeros(3))
 
 
+def test_strict_subclass_receiver_conversion_pauses_owned_modes():
+    """Converting OUT of a strict subclass pauses like converting into one."""
+
+    from torchlens.backends.torch._wrappers_refusals import _pauses_for_subclass_conversion
+
+    strict = torch.zeros(2).as_subclass(_TracedSubclass)
+    assert _pauses_for_subclass_conversion("as_subclass", (strict, torch.Tensor), 1)
+    assert _pauses_for_subclass_conversion("as_subclass", (torch.zeros(2), _TracedSubclass), 1)
+    assert not _pauses_for_subclass_conversion("as_subclass", (torch.zeros(2), torch.Tensor), 1)
+    parameter = nn.Parameter(torch.zeros(2))
+    assert not _pauses_for_subclass_conversion("as_subclass", (parameter, torch.Tensor), 1)
+    assert not _pauses_for_subclass_conversion("add", (strict, 1.0), None)
+
+
 def test_parameter_outputs_stay_excluded():
     """The nn.Parameter carve-out of the emit gate must survive the isinstance fix."""
 

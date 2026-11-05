@@ -6,7 +6,6 @@ completeness without the separate dispatcher witness.
 
 from __future__ import annotations
 
-import contextlib
 import inspect
 import sys
 import threading
@@ -15,7 +14,7 @@ import traceback
 import types
 import warnings
 from collections.abc import Callable, Iterator, Mapping
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, suppress
 from dataclasses import dataclass, field
 from typing import Any, Literal, cast
 
@@ -25,6 +24,8 @@ from ... import _state
 from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._utils.display import user_stacklevel
+from ...errors._base import transparent_contextmanager
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
 EscapeDetectorMode = Literal["off", "shadow"]
@@ -823,7 +824,7 @@ def _copy_recording_diagnostics(trace: Any) -> None:
             object.__setattr__(recording, recording_name, getattr(trace, trace_name))
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_escape_guard(trace: Any) -> Iterator[None]:
     """Record owner-thread qualification and optionally arm shadow detection.
 
@@ -870,10 +871,9 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
             _install_detector(guard)
         yield
     finally:
-        # Clear the thread-local guard BEFORE the uninstall and fence the uninstall
-        # itself: a raise inside ``_uninstall_detector`` used to skip
-        # ``_THREAD_STATE.guard = None`` and every diagnostic write below it, stranding a
-        # torn-down guard as this thread's live guard for the rest of the process.
+        # Clear the thread-local guard BEFORE the uninstall and fence the uninstall itself: a raise
+        # in ``_uninstall_detector`` used to skip ``_THREAD_STATE.guard = None`` and every
+        # diagnostic write below, leaving a torn-down guard as this thread's live guard for good.
         _THREAD_STATE.guard = None
         _THREAD_STATE.tokens = []
         if mode == "shadow":
@@ -885,7 +885,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 # blessed verdict. Disclose, demote every authority field this guard
                 # owns, and best-effort clear the one residual we can still see.
                 if sys.getprofile() is _profile_callback:
-                    with contextlib.suppress(Exception):
+                    with suppress(Exception):
                         sys.setprofile(guard.prior_profile)
                 trace._health_escape_detector_verified = False
                 if trace.__dict__.get("_health_completeness_verified") is True:
@@ -908,7 +908,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                     "(reason: escape_detector_teardown_failed); a leaked hook may still "
                     "be active in this process.",
                     CaptureGapWarning,
-                    stacklevel=2,
+                    stacklevel=user_stacklevel(),
                 )
         thread_count_end = threading.active_count()
         trace._provenance_thread_count_end = thread_count_end
@@ -931,7 +931,7 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 "domain is the capture-owner thread; move model tensor work into that thread "
                 "or treat this Trace as unverified.",
                 CaptureGapWarning,
-                stacklevel=2,
+                stacklevel=user_stacklevel(),
             )
         if getattr(trace, "_raw_dynamo_region_detected", False):
             # A bypassed torch.compile region is the ROOT cause of the incompleteness and

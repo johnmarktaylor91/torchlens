@@ -46,11 +46,12 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from importlib.machinery import PathFinder
-from typing import Any
+from typing import Any, cast
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 
-from ..errors._base import TorchLensWarning
+from ..errors._base import TorchLensWarning, transparent_contextmanager
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
@@ -66,6 +67,10 @@ __all__ = [
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
+    "HAS_REV_VIEW_FUNC_UNSAFE",
+    "HAS_SDPA_GQA",
+    "HAS_TORCH_CPP_EXTENSION",
+    "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -315,6 +320,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
+    "HAS_REV_VIEW_FUNC_UNSAFE": ("torch:Tensor._rev_view_func_unsafe",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -572,13 +578,13 @@ def _probe_safe_weights_only_load() -> bool:
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
 
-    return bool(_real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode())
+    return _real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode(TorchDispatchMode)
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
     """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
 
-    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode())
+    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode(TorchDispatchMode))
 
 
 def _probe_roll_tensor_shifts() -> bool:
@@ -1063,9 +1069,10 @@ def get_sparse_spsolve_cuda_support(*, force_probe: bool = False) -> bool:
 
 
 def _force_real_op_probes() -> None:
-    """Run every lazily latched probe that executes a real tensor op (diagnostics only)."""
+    """Run every lazily latched probe that runs a real tensor op or heavy import (diagnostics)."""
 
     get_reduce_tuple_dim_support(force_probe=True)
+    get_torch_cpp_extension_support(force_probe=True)
     get_cpu_half_kernels_support(force_probe=True)
     get_eval_batch_norm_mean_residual_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
@@ -1095,6 +1102,29 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
         HAS_META_ITEM_GUARD = _probe_meta_item_guard()
         _META_ITEM_GUARD_PROBED = True
     return HAS_META_ITEM_GUARD
+
+
+def get_torch_cpp_extension_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``torch.utils.cpp_extension`` imports cleanly, lazily (see the leaf).
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even when cached. Diagnostic surfaces set this; nothing imports the
+        extension builder (and setuptools with it) on a plain ``import torchlens``.
+
+    Returns
+    -------
+    bool
+        ``HAS_TORCH_CPP_EXTENSION``, cached after the first call.
+    """
+
+    global HAS_TORCH_CPP_EXTENSION, _TORCH_CPP_EXTENSION_PROBED
+
+    if not _TORCH_CPP_EXTENSION_PROBED or force_probe:
+        HAS_TORCH_CPP_EXTENSION = bool(_real_op_probe_leaf().probe_torch_cpp_extension())
+        _TORCH_CPP_EXTENSION_PROBED = True
+    return HAS_TORCH_CPP_EXTENSION
 
 
 def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
@@ -1235,6 +1265,9 @@ HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
+HAS_REV_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_REV_VIEW_FUNC_UNSAFE")
+HAS_SDPA_GQA: bool = _real_op_probe_leaf().probe_sdpa_gqa()
+HAS_SDPA_EMPTY_ROW_ZERO: bool = _real_op_probe_leaf().probe_sdpa_empty_row_zero()
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1300,6 +1333,8 @@ HAS_SPARSE_SPSOLVE_CUDA: bool = False
 _SPARSE_SPSOLVE_CUDA_PROBED: bool = False
 HAS_META_ITEM_GUARD: bool = False
 _META_ITEM_GUARD_PROBED: bool = False
+HAS_TORCH_CPP_EXTENSION: bool = False
+_TORCH_CPP_EXTENSION_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1435,6 +1470,10 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
+    "HAS_REV_VIEW_FUNC_UNSAFE",
+    "HAS_SDPA_GQA",
+    "HAS_TORCH_CPP_EXTENSION",
+    "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -1533,6 +1572,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_TORCH_CPP_EXTENSION_PROBED": ("HAS_TORCH_CPP_EXTENSION",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (
@@ -1656,6 +1696,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
         # fallback of get_view_func_replay, not a degradation.
         "HAS_VIEW_FUNC_UNSAFE",
+        # Newer-torch SDPA and view surfaces: absent means a model cannot call them.
+        "HAS_REV_VIEW_FUNC_UNSAFE",
+        "HAS_SDPA_GQA",
+        "HAS_SDPA_EMPTY_ROW_ZERO",
         # PEP 657 / 3.11 code-object surfaces: an interpreter feature, not a
         # torch-private degradation -- CPython 3.10 installs are healthy.
         "HAS_CODE_POSITIONS",
@@ -2015,7 +2059,7 @@ def get_view_func_replay() -> Callable[..., Any] | None:
     replay (``HAS_VIEW_FUNC_UNSAFE``). ``None`` (neither) makes view replay refuse.
     """
     found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
-    return found if found is not None else _resolve_attribute_path("torch:Tensor._view_func")
+    return cast(Callable[..., Any], found or _resolve_attribute_path("torch:Tensor._view_func"))
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:
@@ -3258,7 +3302,7 @@ def warm_lazy_torch_imports() -> None:
     _LAZY_TORCH_IMPORTS_WARMED = import_first_capture_lazy_modules()
 
 
-@contextlib.contextmanager
+@transparent_contextmanager
 def force_eager_stance_scope() -> Iterator[bool]:
     """Force compiled callables to run their original eager Python for a scope.
 
@@ -3273,17 +3317,15 @@ def force_eager_stance_scope() -> Iterator[bool]:
 
     Notes
     -----
-    The stance (public API, torch >= 2.6; verified experimentally in the
-    2026-08-12 design-review compile reconcile) runs the ORIGINAL Python inside every
-    compiled callable reached in the scope, triggers zero new compiles during
-    the scope (including on never-seen input shapes), and leaves every warm
-    compiled artifact reproduced bitwise after exit. Reading the probe never
-    imports ``torch._dynamo``. Skipping the stance when Dynamo is absent is
-    exact for every callable that EXISTS at scope entry (compiling one imports
-    Dynamo), but NOT for a callable created inside the scope: a forward whose
-    first ``torch.compile`` happens mid-capture imports Dynamo after this
-    check, so that callable runs compiled and is bypassed-and-disclosed
-    (``dynamo_region_not_logged``) rather than eager-logged.
+    The stance (public API, torch >= 2.6; verified experimentally in the 2026-08-12
+    design-review compile reconcile) runs the ORIGINAL Python inside every compiled callable
+    reached in the scope, triggers zero new compiles during the scope (including on never-seen
+    input shapes), and leaves every warm compiled artifact reproduced bitwise after exit.
+    Reading the probe never imports ``torch._dynamo``. Skipping the stance when Dynamo is absent
+    is exact for every callable that EXISTS at scope entry (compiling one imports Dynamo), but
+    NOT for a callable created inside the scope: a forward whose first ``torch.compile`` happens
+    mid-capture imports Dynamo after this check, so that callable runs compiled and is
+    bypassed-and-disclosed (``dynamo_region_not_logged``) rather than eager-logged.
     """
 
     if not HAS_SET_STANCE or "torch._dynamo" not in sys.modules:

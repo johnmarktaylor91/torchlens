@@ -227,6 +227,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_PIPELINING"),
     _row("HAS_REDUCE_TUPLE_DIM", absent_on=("2.1.2",)),
+    _row("HAS_REV_VIEW_FUNC_UNSAFE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_MPS_MEMORY_QUERY", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_RMSNORM_MODULE", absent_on=("2.1.2", "2.2.2", "2.3.1")),
     _row("HAS_SAFE_WEIGHTS_ONLY_LOAD", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
@@ -236,6 +237,8 @@ _ROWS: tuple[CapabilityRow, ...] = (
         absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1"),
     ),
     _row("HAS_SCRIPT_FUNCTION_CALL_HOOK"),
+    _row("HAS_SDPA_EMPTY_ROW_ZERO", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
+    _row("HAS_SDPA_GQA", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_SET_STANCE", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
     _row("HAS_SPARSE_SPSOLVE_CUDA", measured=False),
     _row(
@@ -244,6 +247,9 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_TENSORBASE_CLASS"),
     _row("HAS_TENSOR_SEQUENCE_SLOT_FIX"),
+    # Measured with current setuptools installed, as a pip install carries it; with no
+    # setuptools at all the import also fails on 2.2.2 through 2.9.1.
+    _row("HAS_TORCH_CPP_EXTENSION", absent_on=("2.1.2",)),
     _row("HAS_TORCH_FUNC"),
     _row("HAS_TORCH_FUNCTION_STACK_SURGERY"),
     _row("HAS_TORCH_VF"),

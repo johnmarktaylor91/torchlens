@@ -124,7 +124,11 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
 )
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
-from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
+from ._wrappers_refusals import (
+    _constructs_strict_subclass,
+    _pauses_for_subclass_conversion,
+    _raise_if_subclass_ctor_under_dispatch_mode,
+)
 from .aliasing import _tensors_alias
 from .arg_names import get_arg_names
 from .buffer_writes import (
@@ -795,30 +799,6 @@ def _propagate_mutation_label_to_storage_aliases(
 _SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {"__new__": 0, "_make_subclass": 0, "as_subclass": 1}
 
 
-def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
-    """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
-
-    Parameters
-    ----------
-    args:
-        Positional call arguments.
-    idx:
-        Index of the candidate subclass ``cls`` argument, or ``None`` when the
-        caller has none (always ``False``; lets callers pass their own
-        ``... | None`` index constant without narrowing it themselves first).
-
-    Returns
-    -------
-    bool
-        ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
-    """
-
-    if idx is None or len(args) <= idx:
-        return False
-    cls = args[idx]
-    return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
-
-
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 
 # Setters that rebind the receiver to the RHS's storage instead of writing in
@@ -1432,8 +1412,8 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
-        pauses_owned_modes = constructs_tensor_subclass and _constructs_strict_subclass(
-            args, _logged_subclass_cls_index
+        pauses_owned_modes = constructs_tensor_subclass and _pauses_for_subclass_conversion(
+            func_name, args, _logged_subclass_cls_index
         )
         # W3 F8: per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
