@@ -89,6 +89,7 @@ from .._runnable import (
 )
 from .._runnable.seam import carries_intervened_values
 from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
+from .._utils import _raw_pointer_denial as _rawptr
 from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
@@ -1525,12 +1526,12 @@ def _validate_call_arity(
     """Anchor persisted call arity to the DENSE first-level argument leaves (r53 free_1).
 
     A legitimate producer records ``num_positional_args`` equal to the count of
-    distinct first-level positional roots ``("args", i)`` with ``i`` dense in
-    ``[0, n)``, and ``num_keyword_args`` equal to the count of distinct keyword
-    names -- the run-time tripwire in ``_pre_call_contract_checks`` has always
-    required exactly this, so anchoring it at parse cannot over-trigger. The
-    density check is the allocation-free pigeonhole (len/min/max over the root
-    set); it never materializes ``set(range(n))`` from the untrusted integer.
+    distinct dense first-level positional roots and ``num_keyword_args`` equal to
+    the count of distinct keyword names; ``_pre_call_contract_checks`` has always
+    required exactly this at run time, so anchoring it at parse cannot
+    over-trigger (density is the allocation-free pigeonhole over the root set). A
+    keyword leaf naming a RAW MEMORY ADDRESS (the legacy constructors'
+    keyword-only ``cdata`` overload and its siblings) is refused here too.
     """
 
     def _refuse(detail: str) -> DescriptorStructuralBoundError:
@@ -1541,10 +1542,7 @@ def _validate_call_arity(
         )
 
     if num_positional_args < 0 or num_keyword_args < 0:
-        raise _refuse(
-            f"negative arity (num_positional_args={num_positional_args}, "
-            f"num_keyword_args={num_keyword_args})"
-        )
+        raise _refuse(f"negative arity ({num_positional_args=}, {num_keyword_args=})")
     positional_roots: set[int] = set()
     keyword_names: set[str] = set()
     paths = tuple(argument.argument_path for argument in tensor_arguments) + tuple(
@@ -1561,6 +1559,8 @@ def _validate_call_arity(
         else:
             if not isinstance(head, str):
                 raise _refuse(f"keyword argument root {head!r} is not a string")
+            if _rawptr.is_raw_pointer_parameter_name(head):  # r50 raw-pointer family
+                raise _refuse(_rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}"))
             keyword_names.add(head)
     n = num_positional_args
     dense = len(positional_roots) == n and (
@@ -1568,9 +1568,8 @@ def _validate_call_arity(
     )
     if not dense:
         raise _refuse(
-            f"num_positional_args={n} does not match the dense first-level positional "
-            f"leaf roots (count={len(positional_roots)}, "
-            f"span={sorted(positional_roots)[:8]!r}...)"
+            f"num_positional_args={n} does not match the dense first-level positional leaf "
+            f"roots (count={len(positional_roots)}, span={sorted(positional_roots)[:8]!r}...)"
         )
     if num_keyword_args != len(keyword_names):
         raise _refuse(

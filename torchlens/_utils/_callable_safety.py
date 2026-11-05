@@ -57,9 +57,10 @@ deliberately NOT used (they would wrongly deny ``Tensor.module_load`` /
 ``_preload_cuda_deps``) are enumerated exactly instead. ``from_numpy`` and
 ``frombuffer`` are pure and stay resolvable (they match none of the patterns).
 
-GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` /
-``resize_``; r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``; r41
-``cond`` / ``while_loop`` / ``autocast_increment_nesting``). A callable reachable in the
+GENERAL INVARIANT (the denylist-completeness class -- r5/r6 ``from_file`` / ``resize_``;
+r26 ``apply_`` / ``map_``; r39 ``map2_`` / ``register_hook``; r41 ``cond`` /
+``while_loop`` / ``autocast_increment_nesting``; r50 the ``cdata=`` raw-pointer
+constructor families, closed in ``_raw_pointer_denial``). A callable reachable in the
 allowed namespace is NOT a pure forward op -- and must NOT resolve from an untrusted
 bundle -- if it does ANY of the following, regardless of whether it was individually
 enumerated:
@@ -105,8 +106,7 @@ torch.Tensor / torch.nn.functional / operator) to catch NO pure forward op: the
 ``_autocast_to_reduced_precision``, and every ``is_*``/``get_*`` autocast + cuFFT getter
 resolvable; the SIGNATURE guard leaves every pure forward op (no pure tensor op takes a
 callable parameter) resolvable. The sole benign structural false-deny remains the inert
-functionalization introspection query ``_functionalize_was_inductor_storage_resized``
-(a boolean read, never a captured forward op).
+functionalization introspection query ``_functionalize_was_inductor_storage_resized`` (a boolean read, never captured).
 
 R43 STRUCTURAL INVERSION (the denylist-of-verbs approach reached its limit). The
 denylist above closes the CLASS "callable is a stdlib/builtin module" structurally, but
@@ -122,13 +122,12 @@ pure factory / audited ``to_sparse_coo`` wrapper), decided against torch's OWN o
 authority (``get_overridable_functions`` / ``torch.ops.aten``) which is independent of
 this gate and self-updates across torch versions. This closes the whole functionalization
 family, ``share_memory_``, JIT / IR type constructors, Storage / legacy ``*Tensor``
-ctors, state getters, and deprecated methods as a CLASS -- not instance by instance. The
-verb / name / signature belts above are KEPT and run FIRST (as diagnostic belts and to
-catch overridable-but-unsafe ops such as ``share_memory_``). DEEPER allowlisted operator
+ctors, state getters, and deprecated methods as a CLASS -- not instance by instance. The verb / name / signature
+belts above are KEPT and run FIRST (as diagnostic belts and to catch
+overridable-but-unsafe ops such as ``share_memory_``). DEEPER allowlisted operator
 submodules keep their module-prefix admission. ``torch._sobol_engine_initialize_state_``
-is a genuine aten operator and is admitted as a documented residual (its native
-crash-on-malformed-args is a torch operator-robustness boundary outside the
-side-effect-free admission contract).
+is a genuine aten operator admitted as a documented residual (its native
+crash-on-malformed-args is a torch operator-robustness boundary outside this contract).
 """
 
 from __future__ import annotations
@@ -144,6 +143,7 @@ import torch
 
 # The structural stdlib/builtin rule lives in its own leaf module; the names stay
 # readable here for ``_safe_unpickle`` and the SSOT drift gate.
+from . import _raw_pointer_denial as _rawptr
 from ._stdlib_denial import (  # noqa: F401
     _ALLOWED_STDLIB_ROOTS,
     _STDLIB_AND_BUILTIN_TOP_LEVEL,
@@ -1261,69 +1261,72 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     """Return whether a resolved callable is a pure, side-effect-free forward op.
 
     The callable is unwrapped to its real identity, then admitted only if (a) its
-    terminal NAME is not a side-effecting callable (file-I/O / serialization /
-    import gadget, process-global-state mutator, or storage-unsafe in-place op --
-    incl. the r43 ``share_memory_`` storage rebind), (a2) its terminal name, if a
-    dunder, is one of the operator-protocol forward dunders (``_ALLOWED_FORWARD_DUNDERS``:
-    arithmetic / reflected / in-place / comparison / bitwise / index-item / numeric-
-    conversion) -- every OTHER ``__x__`` (the r47 secE_1 storage-REBIND ``__setstate__``
-    and its pickle/copy/array/dlpack/format/repr/reversed siblings) is denied by shape
-    even when torch-OVERRIDABLE, (b) its signature exposes no arbitrary-callable
-    parameter, and (c) its module clears the gate.
+    terminal NAME is not a side-effecting callable (file-I/O / serialization / import
+    gadget, process-global-state mutator, or storage-unsafe in-place op incl. the r43
+    ``share_memory_`` storage rebind), (a2) its terminal name, if a dunder, is one of
+    the operator-protocol forward dunders (``_ALLOWED_FORWARD_DUNDERS``: arithmetic /
+    reflected / in-place / comparison / bitwise / index-item / numeric-conversion) --
+    every OTHER ``__x__`` (the r47 secE_1 storage-REBIND ``__setstate__`` and its
+    pickle / copy / array / dlpack / format / repr / reversed siblings) is denied by
+    shape even when torch-OVERRIDABLE, (b) its signature exposes neither an
+    arbitrary-callable nor a raw-pointer parameter, and (c) its module clears the gate.
 
     Module resolution (r43): the exact internal-builtin roots ``torch`` / ``torch._C``
     / ``torch._tensor`` are gated by the STRUCTURAL recognized-operator predicate
     (``_is_recognized_operator``) -- DEFAULT-DENY, admit ONLY torch-overridable
     identities, aten-schema ops, the small pure tensor factories, the audited
     ``to_sparse_coo`` wrapper, and the safe pure-read tensor property getters
-    (``T`` / ``mT`` / ``real`` / ``imag``). This closes, as a CLASS, the non-forward internal
-    builtins those roots host (functionalization dispatch controls, JIT / type
-    constructors, Storage / legacy ``*Tensor`` ctors, process-global state getters,
-    deprecated Tensor methods) that the pre-r43 module-prefix admission let through.
+    (``T`` / ``mT`` / ``real`` / ``imag``). This closes, as a CLASS, the non-forward
+    internal builtins those roots host (functionalization dispatch controls, JIT / type
+    constructors, Storage / legacy ``*Tensor`` ctors, state getters, deprecated Tensor
+    methods) that the pre-r43 module-prefix admission let through.
     DEEPER allowlisted operator submodules (``torch.nn.functional`` / ``torch._VF`` /
     ``torch._C._nn`` / ``torch.linalg`` / ...) keep their module-PREFIX admission. The
     ``operator`` / ``_operator`` root is gated separately by a POSITIVE NAME allowlist
     (``_ALLOWED_OPERATOR_NAMES``), so generic gadget / mutation primitives
-    (``operator.call`` / ``attrgetter`` / ``methodcaller`` / ``itemgetter`` /
-    ``setitem`` / ``delitem`` / ``iadd`` / ...) are default-denied while the pure
-    arithmetic / comparison / bitwise / index operators still resolve. Module-less C
-    tensor method descriptors are admitted when bound to a Tensor class (so the whole C
-    tensor-op surface keeps resolving without reaching the root predicate).
+    (``operator.call`` / ``attrgetter`` / ``setitem`` / ``iadd`` / ...) are
+    default-denied while the pure arithmetic / comparison / bitwise / index operators
+    still resolve. Module-less C tensor method descriptors are admitted when bound to a
+    Tensor class (so the whole C tensor-op surface keeps resolving).
 
-    Anything else -- notably ``torch.load`` / ``torch.save`` / ``torch.from_file``,
-    the functionalization controls ``_enable_functionalization`` /
-    ``_functionalize_enable_reapply_views``, the state mutators ``set_default_dtype`` /
-    ``manual_seed`` / ``set_num_threads``, the storage-unsafe ``resize_`` / ``set_`` /
-    ``share_memory_``, JIT / IR type constructors, and any ``os`` / ``pickle`` /
-    ``subprocess`` callable -- is refused. The name / signature guards run FIRST so a
-    side-effecting builtin or method whose real module is an allowlisted ``torch``
-    namespace (or ``None`` for a C tensor method) cannot slip the module gate.
-    ``torch._sobol_engine_initialize_state_`` is admitted as a documented residual (a
-    genuine aten operator; see ``_is_recognized_operator``).
+    Raw-pointer family (r50): every torch tensor / storage CLASS and every inspectable
+    pointer / address / handle-taking callable is denied structurally before the module
+    gate (``_raw_pointer_denial``), closing the ``torch.<dtype>Tensor`` ``cdata=``
+    constructor families and their future siblings as a CLASS.
+
+    Anything else -- notably ``torch.load`` / ``torch.save`` / ``torch.from_file``, the
+    functionalization controls, the state mutators ``set_default_dtype`` /
+    ``manual_seed``, the storage-unsafe ``resize_`` / ``set_`` / ``share_memory_``, JIT /
+    IR type constructors, and any ``os`` / ``pickle`` / ``subprocess`` callable -- is
+    refused. The name / signature guards run FIRST so a side-effecting builtin or method
+    whose real module is an allowlisted ``torch`` namespace (or ``None`` for a C tensor
+    method) cannot slip the module gate. ``torch._sobol_engine_initialize_state_`` is
+    admitted as a documented residual (a genuine aten operator).
     """
 
     real = _unwrap_capture_wrapper(func)
     if _is_side_effecting_callable_name(real):
         return False
     # r47 (secE_1): deny NON-forward protocol dunders by SHAPE (positive forward-dunder
-    # allowlist). Runs BEFORE every module branch, so it covers BOTH the module-less
-    # ``_is_tensor_method_descriptor`` path AND the gated-root ``_is_recognized_operator``
-    # path -- closing ``Tensor.__setstate__`` (an overridable storage-REBIND the name/storage
-    # belts miss because its leading-``__`` carries no ``set_`` / ``resize`` / ``share_memory``
-    # token) and its pickle/copy/array/dlpack/format/repr/reversed siblings, while the genuine
-    # forward operator dunders (``__add__`` / ``__mul__`` / ``__matmul__`` / ``__getitem__`` /
-    # ``__pow__`` / ``__floordiv__`` / reflected ops / ``__len__`` / ``__contains__``) stay
-    # admitted. Deliberately a DEDICATED helper, NOT folded into ``_is_side_effecting_callable_name``
-    # (whose second caller ``is_inert_first_party_callable`` gates ``torchlens.*`` facet recipes).
+    # allowlist), before every module branch, so it covers BOTH the module-less
+    # ``_is_tensor_method_descriptor`` path AND the gated-root path -- closing
+    # ``Tensor.__setstate__`` (an overridable storage-REBIND whose leading ``__`` carries
+    # no ``set_`` / ``resize`` / ``share_memory`` token) and its pickle / copy / array /
+    # dlpack / format / repr / reversed siblings, while genuine forward operator dunders
+    # stay admitted. A DEDICATED helper, NOT folded into
+    # ``_is_side_effecting_callable_name`` (whose second caller gates facet recipes).
     if _is_denied_forward_dunder_name(_terminal_callable_name(real)):
         return False
     # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
-    # ``while_loop`` / ``handle_torch_function`` / ``triplet_margin_with_distance_loss`` /
-    # ``_check_with`` / ``_disable_dynamo``) -- the same arbitrary-callable-INVOKE class as
-    # the r39-denied ``vmap``, but carrying no ``map`` / ``register`` name marker. Runs
-    # BEFORE the module gate so a callable-taking op whose real module is the allowlisted
+    # ``while_loop`` / ``handle_torch_function`` / ``_check_with`` / ``_disable_dynamo``)
+    # -- the arbitrary-callable-INVOKE class carrying no ``map`` / ``register`` name
+    # marker. Runs BEFORE the module gate so a callable-taking op in the allowlisted
     # ``torch`` namespace cannot slip. Fails safe: no-signature C ops fall through.
     if _signature_invokes_callable(real):
+        return False
+    # r50: deny the RAW-POINTER family structurally (``_raw_pointer_denial``). Runs
+    # BEFORE the module gate, which prefix-admitted ``torch.cuda`` / ``torch.sparse``.
+    if _rawptr.is_raw_pointer_constructor_type(real) or _rawptr.signature_takes_raw_pointer(real):
         return False
     module = str(getattr(real, "__module__", "") or "")
     if module == "":
@@ -1339,12 +1342,9 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # r43: on the EXACT internal-builtin roots (``torch`` / ``torch._C`` /
     # ``torch._tensor``) DEFAULT-DENY and admit ONLY structurally-recognized genuine
     # forward operators (overridable identity / aten schema / pure factory / audited
-    # wrapper). This inverts the pre-r43 prefix admission on these roots that let every
-    # non-forward internal builtin (functionalization controls, JIT/type ctors, state
-    # getters, deprecated methods) through. Checked BEFORE the prefix ``_matches`` so
-    # DEEPER allowlisted operator submodules (``torch.nn.functional`` / ``torch._VF`` /
-    # ``torch._C._nn`` / ...) keep their module-prefix admission and no deep forward op
-    # is over-denied.
+    # wrapper), inverting the pre-r43 prefix admission that let every non-forward
+    # internal builtin through. Checked BEFORE the prefix ``_matches`` so DEEPER
+    # allowlisted operator submodules keep their module-prefix admission.
     if module in _OPERATOR_GATED_ROOTS:
         return _is_recognized_operator(real, _terminal_callable_name(real))
     return _matches(module, _ALLOWED_FORWARD_OP_MODULES)
