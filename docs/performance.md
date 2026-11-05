@@ -239,7 +239,7 @@ assert trace.find_sites(tl.func("relu")).first().out.shape[0] == 128
 ```
 
 `chunk_size=` is forward-only sugar over a first `trace(...)` followed by
-`rerun(..., append=True)` for later chunks. It splits selected positional tensor leaves along
+`trace.append(...)` for later chunks. It splits selected positional tensor leaves along
 dimension 0, executes one sub-batch at a time, and returns one accumulated in-memory `Trace`.
 
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no

@@ -198,6 +198,12 @@ capture: the replacement takes the next unused position number and every other o
 its label. A later push upstream passes the parent's new value through the replacement
 and fires the module's hooks there again.
 
+Comparison reads report a module edit (either kind) at the edited module's last op:
+`tl.debug.compare` and `tl.debug.first_divergence`, `Bundle.compare`,
+`Bundle.rank_changes` and the bundle diff read the replacement's value at that op's
+row, and the replacement op has no row of its own, so the unedited trace (which has no
+replacement op) is compared against the edited value at the site the edit named.
+
 ## Capture-Time Recording
 
 `tl.record(..., save=...)` is the sparse capture sibling of `tl.trace(..., save=...)`.
@@ -241,7 +247,8 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | `log.do(site, edit, intervention=InterventionOptions(differentiable=True))` | Replay onto a new fork whose outputs stay differentiable and return it (replay engine only). |
 | `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`); `do` returns the trace, not a handle. Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
-| `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
+| `log.run(model, x)` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
+| `log.append(x, model=model)` | Run one more compatible batch and add its rows to `log` in place. |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
 | `recipe.save(path, level=...)` | Write an authored `tl.Recipe` on its own (`kind: "recipe"`); `tl.load(path)` returns the Recipe. |
 
