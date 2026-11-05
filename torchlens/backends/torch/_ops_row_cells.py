@@ -187,6 +187,8 @@ def _fill_facets(
 
     Returns the annotations mapping (the transform config cell embeds a copy).
     """
+    # Cyclomatic grade C on purpose: this runs once per committed op, and one flat
+    # writer saves the per-op calls that split facet helpers would add.
 
     is_scalar_bool = fields_dict["is_scalar_bool"]
     bool_value = fields_dict["bool_value"]
