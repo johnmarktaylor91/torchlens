@@ -1088,6 +1088,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_data_classes/_module_edit_sites.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_data_classes/_module_edit_sites.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/_data_classes/_moe_structure.py",
