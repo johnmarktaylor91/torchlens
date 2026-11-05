@@ -37,7 +37,7 @@ _EVICT_INERT_TYPES = frozenset({type(None), bool, int, float, complex, str, byte
 _EVICT_CONTAINER_TYPES = (list, tuple, dict, set, frozenset)
 
 
-class _EvictTypes(set):  # type: ignore[type-arg]
+class _EvictTypes(set[type]):
     """One sweep's types the walk returns unchanged by type alone.
 
     Starts as the builtin scalars and grows with every opaque type the sweep
