@@ -540,4 +540,4 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     torch.testing.assert_close(traced_input.grad, reference_input.grad)
     producer = trace[output.parents[0]]
     assert producer.has_saved_grad
-    assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+    assert type(producer.autograd.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
