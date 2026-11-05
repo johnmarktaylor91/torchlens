@@ -13,14 +13,17 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import runnable_coherence, runnable_load
-from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
+from torchlens._io.runnable import (
+    build_sparse_run_descriptor,
+    preflight_sparse_run_descriptor,
+)
 from torchlens._runnable import (
     PathFaithfulness,
     ResolverStatus,
     RunnableErrorCode,
 )
 from torchlens._utils._callable_safety import is_pure_forward_callable
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _FFT_NAMES = (

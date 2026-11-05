@@ -63,7 +63,7 @@ def _model_signature(source: Any, *, kind: TlspecKind) -> str:
     """
 
     if kind == "bundle":
-        return "torchlens.intervention.bundle.Bundle"
+        return "torchlens.intervention._bundle.Bundle"
     model_class_qualname = source._source_class_qualname if is_live_trace(source) else None
     if isinstance(model_class_qualname, str) and model_class_qualname:
         return model_class_qualname

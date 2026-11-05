@@ -115,7 +115,7 @@ def test_did_you_mean_stays_plain_for_typos() -> None:
 
 
 # The root verbs removed in 02d4fea77 (do, push, push_from, run) and the edit
-# helper swap_with are Trace methods or torchlens.intervention.helpers names;
+# helper swap_with are Trace methods or torchlens.intervention._helpers names;
 # each gets a teaching row so the old root spelling names its home.
 @pytest.mark.parametrize("name", ["do", "push", "push_from", "run", "swap_with"])
 def test_removed_root_verb_redirects(name: str) -> None:

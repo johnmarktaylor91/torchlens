@@ -10,11 +10,11 @@ import torch
 from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 from torchlens.types import Relationship
@@ -224,7 +224,7 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     assert log.last_run["divergence_count"] == 1
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_rerun_honors_metadata_only_save_scope() -> None:
     """Rerun of a metadata-only trace does not save every activation."""
 
@@ -407,7 +407,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.layer_labels == new_log.layer_labels
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_trace_append_dispatches_to_append() -> None:
     """Phase 12 implements append rerun through ``Trace.append``."""
 
@@ -419,7 +419,7 @@ def test_trace_append_dispatches_to_append() -> None:
     assert log.state is TraceState.APPENDED
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_rerun.py, campaign mutant kills.
 def test_rerun_x_none_requires_explicit_input() -> None:
     """Phase 7 does not reconstruct original inputs from ids."""
 
@@ -458,11 +458,11 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.intervention.hooks import NormalizedHookEntry
-    from torchlens.intervention.rerun import (
+    from torchlens.intervention._rerun import (
         _assign_unique_plan_ids,
         _reconcile_rerun_hook_fires,
     )
+    from torchlens.intervention.hooks import NormalizedHookEntry
 
     def shared_callable(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """One callable shared by two differently-targeted entries."""

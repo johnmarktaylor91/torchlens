@@ -157,7 +157,7 @@ def test_pristine_oracle_is_noop_when_never_wrapped() -> None:
     assert "NOOP-OK" in _run_probe(script)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/backward.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_backward.py.
 def test_backward_validation_runs_pristine_stock_pass() -> None:
     """Backward validation's stock pass also settles under the pristine root.
 
@@ -166,7 +166,7 @@ def test_backward_validation_runs_pristine_stock_pass() -> None:
     the wrappers are back afterwards.
     """
 
-    from torchlens.validation.backward import validate_backward_pass
+    from torchlens.validation._backward import validate_backward_pass
 
     model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
     tl.trace(model, torch.randn(2, 4))

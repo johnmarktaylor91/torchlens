@@ -34,13 +34,12 @@ from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_l
 from .._selection.resolver import _resolve_unchecked
 from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
+from ._audit import record_intervention_event, site_keys_for_labels
 from ._edit_guards import detach_handles, internal_mutation
+from ._replay import _reset_backward_projection, gradient_edit_replay_text
 from ._rerun_predicate import raw_live_labels
-from .audit import record_intervention_event, site_keys_for_labels
-from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
-from .replay import _reset_backward_projection, gradient_edit_replay_text
-from .runtime import apply_live_gradient_hooks
-from .spec import (
+from ._runtime import apply_live_gradient_hooks
+from ._spec import (
     Recipe,
     Rule,
     _join_union,
@@ -50,6 +49,7 @@ from .spec import (
     site_signal,
     split_site_by_signal,
 )
+from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 
 if TYPE_CHECKING:
     import torch
@@ -217,7 +217,7 @@ def _preflight_signal_do(
 ) -> _DoTransaction:
     """Pick the engine and preflight the whole plan; an error row records a refusal."""
 
-    model, x, intervention_options = request.model, request.x, request.intervention_options
+    model, x, intervention_options = (request.model, request.x, request.intervention_options)
     engine = select_signal_plan_engine(
         trace, intervention_options.engine, model=model, x=x, plan=plan
     )

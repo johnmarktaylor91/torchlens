@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from ..backends.torch._script_boundary import script_function_of
 
 SCRIPT_METADATA_ONLY_REASON = "torchscript_metadata_only_argument"
@@ -217,7 +218,7 @@ def _perturbed_argument_names(layer: Any, perturbed_label: str, names: list[str]
         no proof can apply.
     """
 
-    positions = getattr(layer, "parent_arg_positions", {}) or {}
+    positions = record_member(layer, "parent_arg_positions", {}) or {}
     slots: set[str] = set()
     for key, label in (positions.get("args", {}) or {}).items():
         if label != perturbed_label:

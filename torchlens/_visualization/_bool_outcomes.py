@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 #: Renderer fill constant for a False test; each skin paints it as its boolean
 #: colour mixed toward white (``themes._role_fill``).
 BOOL_FALSE_NODE_COLOR = "#FBEAB0"
@@ -48,8 +50,8 @@ def bool_outcomes(node: Any) -> tuple[bool | None, ...]:
     source = getattr(node, "original", node)
     passes = sorted(_pass_ops(source), key=lambda op: op.pass_number)
     if len(passes) > 1:
-        return tuple(_as_bool(op.bool_value) for op in passes)
-    return (_as_bool(getattr(source, "bool_value", None)),)
+        return tuple(_as_bool(record_member(op, "bool_value", None)) for op in passes)
+    return (_as_bool(record_member(source, "bool_value", None)),)
 
 
 def _pass_ops(source: Any) -> tuple[Any, ...]:
@@ -93,7 +95,7 @@ def bool_test_kind(node: Any) -> str | None:
 
     source = getattr(node, "original", node)
     passes = _pass_ops(source) or (source,)
-    kinds = {getattr(op, "conditional_context_kind", None) for op in passes}
+    kinds = {record_member(op, "conditional_context_kind", None) for op in passes}
     if kinds == {"elif_test"}:
         return "ELIF"
     if kinds & {"if_test", "elif_test", "ifexp"}:

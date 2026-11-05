@@ -32,7 +32,7 @@ from tests.support.hf_capabilities import bert_switches_attention_dynamically  #
 from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402
 from torchlens._semantic.tolerances import within_reconstruction_tolerance  # noqa: E402
 from torchlens.bridge import transformers as tl_hf  # noqa: E402
-from torchlens.bridge.hf_attention import (  # noqa: E402
+from torchlens.bridge._hf_attention import (  # noqa: E402
     BACKEND_KEY,
     _CallFacts,
     _check_against_sdpa,

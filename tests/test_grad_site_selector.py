@@ -25,8 +25,8 @@ from torchlens._selection.selectors import (
     GradSelector,
     grad_fn_label,
 )
+from torchlens.intervention._types import TargetSpec
 from torchlens.intervention.errors import SelectorCompositionError
-from torchlens.intervention.types import TargetSpec
 
 
 class _BlockModel(nn.Module):

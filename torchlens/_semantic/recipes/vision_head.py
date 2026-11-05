@@ -32,6 +32,7 @@ from typing import Any
 
 import torch
 
+from ..._utils._record_group_table import record_member
 from ..._utils.collections import _path_component_key
 from .._hops import HopRefusal, HopWalk, walk_upstream
 from ..facets import AbsenceReason, FacetSpec, register
@@ -120,7 +121,7 @@ def _single_token_position(op: Any) -> int | None:
 
     if str(getattr(op, "func_name", "")) not in _INDEX_FUNCS:
         return None
-    pos = list(getattr(op, "non_tensor_pos_args", ()) or ())
+    pos = list(record_member(op, "non_tensor_pos_args", ()) or ())
     entries = pos[0] if len(pos) == 1 else None
     if not isinstance(entries, tuple) or not _is_token_read(entries):
         return None
@@ -258,7 +259,7 @@ def _pooled_norm(head: Any) -> _PooledNorm | AbsenceReason:
 def _tower_address(norm: Any) -> str:
     """Return the address of the module that owns the head's final norm."""
 
-    address = str(getattr(norm, "address", ""))
+    address = str(record_member(norm, "address", ""))
     parent, sep, _ = address.rpartition(".")
     return parent if sep else "self"
 
@@ -362,7 +363,7 @@ def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:
     if trace is None:
         return structural("module trace is unavailable")
     try:
-        if str(getattr(module, "address", "")) == "self":
+        if str(record_member(module, "address", "")) == "self":
             candidates = [
                 item if hasattr(item, "container_path") else trace.ops[item]
                 for item in tuple(getattr(trace, "output_ops", ()) or ())

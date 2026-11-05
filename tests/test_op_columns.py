@@ -34,6 +34,7 @@ from torchlens._trace_core.op_store import (
     begin_cell_write_audit,
     end_cell_write_audit,
 )
+from torchlens._utils._record_group_table import op_attr
 
 _FID = _OP_STORE_LAYOUT.fid_by_name
 
@@ -44,7 +45,7 @@ def _plain_field_names() -> list[str]:
     return [
         name
         for name in _OP_SLOT_NAMES
-        if type(vars(Op)[name]) is _OpField and name not in {"out", "grad"}
+        if type(vars(Op)[op_attr(name)]) is _OpField and name not in {"out", "grad"}
     ]
 
 
@@ -109,7 +110,7 @@ def test_column_read_costs_one_python_call_against_facade(name: str) -> None:
         """Read every row through the facade."""
 
         for op in ops:
-            getattr(op, name)
+            getattr(op, op_attr(name))
 
     def column_reads() -> None:
         """Read every row through the bound column getter."""
@@ -122,7 +123,7 @@ def test_column_read_costs_one_python_call_against_facade(name: str) -> None:
 
     assert column_calls == n_rows, column_calls
     assert facade_calls >= 3 * n_rows, facade_calls
-    assert [get(row) for row in range(n_rows)] == [getattr(op, name) for op in ops]
+    assert [get(row) for row in range(n_rows)] == [getattr(op, op_attr(name)) for op in ops]
 
 
 def test_column_write_costs_one_python_call_against_facade() -> None:
@@ -137,7 +138,7 @@ def test_column_write_costs_one_python_call_against_facade() -> None:
         """Write every row through the facade."""
 
         for op in ops:
-            op.has_output_descendant = True
+            op._graph_has_output_descendant = True
 
     def column_writes() -> None:
         """Write every row through the bound column setter."""
@@ -150,7 +151,7 @@ def test_column_write_costs_one_python_call_against_facade() -> None:
 
     assert column_calls == n_rows, column_calls
     assert facade_calls >= 3 * n_rows, facade_calls
-    assert all(op.has_output_descendant is False for op in ops)
+    assert all(op.graph.has_output_descendant is False for op in ops)
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +198,7 @@ def test_pooled_cell_read_matches_facade(name: str, make: Callable[[], Any]) -> 
     facade_op = _facade(facade_store, 0)
     get = OpColumns(column_store).getter(name)
 
-    via_facade = getattr(facade_op, name)
+    via_facade = getattr(facade_op, op_attr(name))
     via_column = get(0)
 
     assert type(via_column) is type(via_facade)
@@ -206,12 +207,12 @@ def test_pooled_cell_read_matches_facade(name: str, make: Callable[[], Any]) -> 
         assert store.cell_get(0, fid) is value, "the hydrated container is cached back"
         assert store.cell_get(1, fid).__class__ is PooledCell, "unread rows stay pooled"
     assert get(0) is via_column, "identity is stable across reads"
-    assert getattr(facade_op, name) is via_facade
+    assert getattr(facade_op, op_attr(name)) is via_facade
 
     _mutate(via_facade)
     _mutate(via_column)
-    assert get(0) == getattr(facade_op, name)
-    assert get(1) == getattr(_facade(facade_store, 1), name) == make()
+    assert get(0) == getattr(facade_op, op_attr(name))
+    assert get(1) == getattr(_facade(facade_store, 1), op_attr(name)) == make()
     assert column_pool.prototype == facade_pool.prototype == make()
     if isinstance(via_column, dict) and via_column.get("nested") is not None:
         assert get(1)["nested"] is not via_column["nested"], "nested containers rebuild"
@@ -238,7 +239,7 @@ def test_unset_cell_raises_like_facade_and_default_returns() -> None:
 
     store = _store_with_rows(1)
     with pytest.raises(AttributeError) as facade_error:
-        getattr(_facade(store, 0), _PLAIN_A)
+        getattr(_facade(store, 0), op_attr(_PLAIN_A))
     with pytest.raises(AttributeError) as column_error:
         OpColumns(store).getter(_PLAIN_A)(0)
     assert str(column_error.value) == str(facade_error.value)
@@ -246,7 +247,7 @@ def test_unset_cell_raises_like_facade_and_default_returns() -> None:
 
     sentinel = object()
     assert OpColumns(store).getter(_PLAIN_A, default=sentinel)(0) is sentinel
-    assert getattr(_facade(store, 0), _PLAIN_A, sentinel) is sentinel
+    assert getattr(_facade(store, 0), op_attr(_PLAIN_A), sentinel) is sentinel
     assert store.cell_get(0, _FID[_PLAIN_A]) is _MISSING
 
 
@@ -256,7 +257,11 @@ def test_plain_value_is_returned_by_identity() -> None:
     store = _store_with_rows(1)
     payload = ["kept", {"by": "identity"}]
     store.cell_set(0, _FID[_PLAIN_B], payload)
-    assert OpColumns(store).getter(_PLAIN_B)(0) is getattr(_facade(store, 0), _PLAIN_B) is payload
+    assert (
+        OpColumns(store).getter(_PLAIN_B)(0)
+        is getattr(_facade(store, 0), op_attr(_PLAIN_B))
+        is payload
+    )
 
 
 @pytest.mark.parametrize("name", ["children", "output_descendants", "in_conditionals"])
@@ -265,7 +270,7 @@ def test_relation_writes_match_facade_on_building_and_detached_stores(name: str)
 
     building_facade, building_column = _store_with_rows(1), _store_with_rows(1)
     staged = ["a", "b"]
-    setattr(_facade(building_facade, 0), name, staged)
+    setattr(_facade(building_facade, 0), op_attr(name), staged)
     OpColumns(building_column).setter(name)(0, staged)
     assert building_column.cell_get(0, _FID[name]) is staged
     assert building_facade.cell_get(0, _FID[name]) is staged
@@ -274,7 +279,7 @@ def test_relation_writes_match_facade_on_building_and_detached_stores(name: str)
     detached_column = DetachedOpStore(_OP_STORE_LAYOUT)
     for store in (detached_facade, detached_column):
         store.adopt_row([_MISSING] * _OP_STORE_LAYOUT.n_fields)
-    setattr(_facade(detached_facade, 0), name, ["a", "b"])
+    setattr(_facade(detached_facade, 0), op_attr(name), ["a", "b"])
     OpColumns(detached_column).setter(name)(0, ["a", "b"])
     facade_cell = detached_facade.cell_get(0, _FID[name])
     column_cell = detached_column.cell_get(0, _FID[name])
@@ -282,7 +287,7 @@ def test_relation_writes_match_facade_on_building_and_detached_stores(name: str)
     assert column_cell == facade_cell
 
     with pytest.raises(Exception) as facade_error:
-        setattr(_facade(detached_facade, 0), name, 3)
+        setattr(_facade(detached_facade, 0), op_attr(name), 3)
     with pytest.raises(Exception) as column_error:
         OpColumns(detached_column).setter(name)(0, 3)
     assert type(column_error.value) is type(facade_error.value)
@@ -383,14 +388,14 @@ def _field_mismatch(ops: tuple[Any, Any, Any], read_column: Callable[[], Any], n
     """
 
     facade_op, column_op, control_op = ops
-    kind_f, facade_value = _outcome(getattr, facade_op, name)
+    kind_f, facade_value = _outcome(getattr, facade_op, op_attr(name))
     kind_c, column_value = _outcome(read_column)
-    kind_o, control_value = _outcome(getattr, control_op, name)
+    kind_o, control_value = _outcome(getattr, control_op, op_attr(name))
     if kind_f != kind_c:
         return f"{kind_f} vs {kind_c}"
     if kind_f == kind_o and _same(facade_value, control_value):
         return "" if _same(facade_value, column_value) else "differs from facade"
-    _kind_b, own_value = _outcome(getattr, column_op, name)
+    _kind_b, own_value = _outcome(getattr, column_op, op_attr(name))
     if type(column_value) is not type(control_value):
         return "fork-owned type differs"
     if own_value is column_value or _same(own_value, column_value):

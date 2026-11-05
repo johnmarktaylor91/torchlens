@@ -23,7 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.format3.container import RELATIONS_FILE
 from torchlens.bundle._lineage import MemberEffectRow, MemberEffectTable
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 
 
 class _Tiny(nn.Module):

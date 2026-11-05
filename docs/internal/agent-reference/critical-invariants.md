@@ -38,7 +38,7 @@
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
-    annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
+    annotation families; entry-dark declared slots `Op.call.injection_provenance` (F01 writes),
     `Trace.source.snapshots` (F30), `Trace.graph.structure_evidence` (F33) validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
@@ -60,7 +60,7 @@
     `step_output`; `cache_len` DELETED for the channel-keyed
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
     versions quarantine), and entry-dark slots `Trace.provenance.root_entry_point` (written unconditionally),
-    `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
+    `Op.episode_step`, `Op.call.tl_authored_root` with fail-closed validation.
 9d. tlspec v10 (batch-2 coordinated schema write): one bump for every new saved
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
@@ -75,7 +75,7 @@
     record `torchlens/schemas/writer_contract_v11.json`; the v10 contract stays frozen beside it
     (`tests/test_schema_v10_contract_and_goldens.py::V10_CONTRACT_SHA256`).
 9f. tlspec v12 (3.0 columnar records; current): `Op.is_constant` (stamped by the shared
-    constants rule) and `Op.arg_expressions` persist on the op record, admitted by
+    constants rule) and `Op.source.arg_expressions` persist on the op record, admitted by
     `tests/test_schema_v12_contract.py::V12_FIELD_ADMISSIONS`; the reader floor moves to 12 with
     the contract. Contract of record `torchlens/schemas/writer_contract_v12.json`; the v11
     contract stays frozen beside it.

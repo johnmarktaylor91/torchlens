@@ -178,7 +178,7 @@ def _mlx_trace_intermediate_signatures(
     for op in ops:
         signature = _MLXIntermediateSignature(
             op_name=str(op.func_name or op.type),
-            call_ordinal=int(op.func_call_id or 0),
+            call_ordinal=int(op.call.call_id or 0),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())
             ),

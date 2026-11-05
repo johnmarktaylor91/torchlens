@@ -26,7 +26,7 @@ from .._errors import InvalidArgumentError
 from .._ir.selector_eval import module_union_matches, selector_from_spec
 from .._utils.tensor_utils import safe_copy
 from ._generation_options import GenerationOptions
-from .types import ActivationRecord
+from ._types import ActivationRecord
 
 if TYPE_CHECKING:
     from ._recorder import Recorder

@@ -16,10 +16,10 @@ import torch
 
 from .._utils._display_constructor import clipped, value_text
 from .._utils.fail_open import fail_open
-from .helpers import builtin_helper_constructor
+from ._helpers import builtin_helper_constructor
 
 if TYPE_CHECKING:
-    from .types import Edit
+    from ._types import Edit
 
 #: Public namespaces searched for a builtin constructor, in order, with the
 #: prefix each one prints under (``import torchlens as tl``).

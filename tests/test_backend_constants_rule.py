@@ -20,7 +20,13 @@ import pytest
 from torchlens._data_classes.trace import Trace
 from torchlens._errors import CaptureGapError
 from torchlens._ir.capture_events import CaptureEvents
-from torchlens._ir.events import ArgTemplateRef, FunctionCallRef, OpEvent, OutputRef, ParentEdge
+from torchlens._ir.events import (
+    ArgTemplateRef,
+    FunctionCallRef,
+    OpEvent,
+    OutputRef,
+    ParentEdge,
+)
 from torchlens._ir.predicate import RecordContext
 from torchlens._ir.refs import DtypeRef, ReservedLabel, TensorRef
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy
@@ -48,7 +54,7 @@ from torchlens.backends._finalize import (
     mark_output_label,
 )
 from torchlens.backends.registry import BackendUnsupportedError
-from torchlens.recording.types import CaptureSpec
+from torchlens.recording._types import CaptureSpec
 
 
 class _NumpyBackend:
@@ -396,7 +402,7 @@ def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_
     constant = _op_by_raw(trace, labels["w"])
     assert constant.func_name == CONSTANT_FUNC_NAME
     assert tuple(constant.parents) == ()
-    assert constant.is_input is False and constant.is_buffer is False
+    assert constant.is_input is False and constant.graph.is_buffer is False
     assert constant.out is not None and tuple(constant.out.shape) == (2, 3)
     assert tuple(constant.shape) == (2, 3)
     assert is_closure_constant_op(constant) and is_constant_op(constant)

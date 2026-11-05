@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._errors import ReceptiveFieldUnavailableError
 
 if TYPE_CHECKING:
@@ -67,7 +68,7 @@ def live_graph_tensor(op: Op, value: torch.Tensor, _depth: int = 0) -> torch.Ten
     node = value.grad_fn
     if node is None or type(node).__name__ != "CloneBackward0" or _depth > _MAX_DEPTH:
         return value
-    recorded = getattr(op, "grad_fn_class_name", None)
+    recorded = record_member(op, "grad_fn_class_name", None)
     if recorded is None or str(recorded).rsplit(".", 1)[-1] == "CloneBackward0":
         return value
     next_functions = tuple(node.next_functions)

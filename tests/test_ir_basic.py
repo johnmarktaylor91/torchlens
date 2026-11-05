@@ -25,7 +25,11 @@ from torchlens._ir import (
 )
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import InterventionState, PreHookProvenanceEvent
-from torchlens._ir.intervention import FireResult, FunctionEventInput, InterventionTemplateRef
+from torchlens._ir.intervention import (
+    FireResult,
+    FunctionEventInput,
+    InterventionTemplateRef,
+)
 from torchlens._ir.predicate import RecordContext
 from torchlens._ir.refs import ReservedLabel
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy

@@ -64,8 +64,8 @@ def test_capture_memory_fields_and_forward_source_line() -> None:
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
     assert isinstance(log.source.forward_line, int)
-    assert all(hasattr(layer, "bytes_delta_at_call") for layer in log._layer_list)
-    assert all(hasattr(layer, "bytes_peak_at_call") for layer in log._layer_list)
+    assert all(hasattr(layer.cost, "bytes_delta_at_call") for layer in log._layer_list)
+    assert all(hasattr(layer.cost, "bytes_peak_at_call") for layer in log._layer_list)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _trace_selector_helpers.py, campaign mutant kills.

@@ -15,7 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 from torchlens.errors import SelectionError, TraceCleanedUpError
 
 _requires_gradient_edge = pytest.mark.skipif(
@@ -124,7 +124,7 @@ class TestByDoorContract:
         with pytest.raises(TraceCleanedUpError):
             trace[selection]
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py, attribution/onebackward/_table.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _selection/values.py, attribution/_onebackward/_table.py.
     @_requires_gradient_edge
     def test_multi_target_requires_explicit_fold(self) -> None:
         trace = _trace()
@@ -209,7 +209,7 @@ class TestCompositionRows:
         assert len(rescored) > 0
         assert rescored.trace is fork
 
-    # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/module.py, attribution/onebackward/_facet_bridge.py.
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/module.py, attribution/_onebackward/_facet_bridge.py.
     @_requires_gradient_edge
     def test_multipass_addresses_rank_distinctly(self) -> None:
         """Recurrence row: pass-qualified addresses are distinct table rows."""

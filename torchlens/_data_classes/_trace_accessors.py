@@ -10,6 +10,7 @@ from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from ._lookup_kinds import converted, module_call_for_key, output_op
@@ -262,7 +263,7 @@ def _is_counted_op(op: Op) -> bool:
     return not (
         getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
 
 

@@ -33,7 +33,7 @@ from support.sampling import sampling_draws
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.population import OneDatum
+from torchlens.intervention._population import OneDatum
 
 # slow: each leg captures a real (config-built) GPT-2 subject plus six donor
 # runs, ~40-45s measured -- honestly tiered above the smoke/heavy budgets.

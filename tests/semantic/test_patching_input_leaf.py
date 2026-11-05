@@ -27,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.facets import FacetSpec
 
 
@@ -126,7 +127,7 @@ class MappingInputModel(nn.Module):
 def _input_facet(trace: Any, io_role: str) -> FacetSpec:
     """Return a facet spec homed on the input op recorded at ``io_role``."""
 
-    home = next(op for op in trace.input_ops if getattr(op, "io_role", None) == io_role)
+    home = next(op for op in trace.input_ops if record_member(op, "io_role", None) == io_role)
     return FacetSpec.from_home(home, function_id="test_input_leaf_patching")
 
 

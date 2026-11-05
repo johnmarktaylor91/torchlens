@@ -43,21 +43,21 @@ from ._hooks_support import (
     gradient_inner,
     make_live_site_proxy,
 )
-from .errors import (
-    HelperMountError,
-    HookSignatureError,
-    HookSiteCoverageError,
-    LiveModeLabelError,
-    SiteResolutionError,
-)
-from .masked_edit import _mask_digest
-from .types import (
+from ._masked_edit import _mask_digest
+from ._types import (
     Edit,
     FrozenTargetSpec,
     HookSpec,
     InterventionSpec,
     TargetSpec,
     TargetValueSpec,
+)
+from .errors import (
+    HelperMountError,
+    HookSignatureError,
+    HookSiteCoverageError,
+    LiveModeLabelError,
+    SiteResolutionError,
 )
 
 HookTiming: TypeAlias = Literal["pre", "post"]
@@ -1568,7 +1568,7 @@ def _facet_scatter_hook(
             Full edited home-op output tensor.
         """
 
-        from .runtime import validate_hook_output
+        from ._runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
         with _facet_fire_scope(spec, selector):

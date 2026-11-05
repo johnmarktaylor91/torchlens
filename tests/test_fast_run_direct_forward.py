@@ -139,7 +139,7 @@ def _assert_same_payloads(full: Any, fast: Any) -> None:
         }
 
     want, have = saved(full), saved(fast)
-    buffers = {op.label for op in full._layer_list if op.is_buffer}
+    buffers = {op.label for op in full._layer_list if op.graph.is_buffer}
     assert want and have.keys() <= want.keys()
     assert want.keys() - have.keys() <= buffers
     for label, value in have.items():

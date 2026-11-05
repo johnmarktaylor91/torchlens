@@ -8,6 +8,7 @@ torchlens/_runnable/state_context.py::_fake_tensor_mode_class
 torchlens/_state.py::call_token
 torchlens/_state.py::module_token
 torchlens/_utils/_callable_safety.py::_torch_overridable_callable_ids
+torchlens/_utils/_record_group_table.py::_resolve_stored_member
 torchlens/_visualization/_fonts.py::_fontconfig_file_for
 torchlens/_visualization/_header_block.py::_private_swatch_dir
 torchlens/_visualization/_header_block.py::_text_width

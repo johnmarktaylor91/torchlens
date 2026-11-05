@@ -55,7 +55,7 @@ def _op_by_name(trace: Trace, handle: str) -> Op:
         return matches[0]
     detail = f"No operation with exact pass-qualified label {handle!r} exists in this trace."
     if not matches:
-        by_role = [op for op in trace._layer_list if str(op.io_role or "") == handle]
+        by_role = [op for op in trace._layer_list if str(op.graph.io_role or "") == handle]
         if len(by_role) == 1:
             return by_role[0]
         if by_role:

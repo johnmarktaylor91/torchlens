@@ -6,6 +6,7 @@ from typing import Any
 
 from .._utils._display_card import inline_names, render_card
 from .._utils._display_numbers import format_exact_count, format_iec_bytes
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._value_ops import _names
 from ._value_state import (
@@ -22,7 +23,7 @@ def _param_facts(param: Any) -> tuple[str, Any, str, Any]:
     """Peek a live handle without scanning it or mutating its reference cache."""
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
-    stats = _statistics(live, compute=False, identity=getattr(param, "address", None))
+    stats = _statistics(live, compute=False, identity=record_member(param, "address", None))
     honesty = "" if live is not None else "(live unavailable)"
     return metadata_text(param, live), stats, honesty, live
 
@@ -33,7 +34,7 @@ def param_repr_line(param: Any) -> str:
     metadata, stats, honesty, _ = _param_facts(param)
     status = "trainable" if getattr(param, "is_trainable", False) else "frozen"
     return value_line(
-        f"Param {getattr(param, 'address', '?')}", f"{metadata}, {status}", stats, honesty
+        f"Param {record_member(param, 'address', '?')}", f"{metadata}, {status}", stats, honesty
     )
 
 
@@ -55,7 +56,7 @@ def param_rows(param: Any) -> list[tuple[str, str]]:
     )
     rows = [("module", str(getattr(param, "module_address", "") or "")), ("basis", basis)]
     count = getattr(param, "num_params", None)
-    memory = getattr(param, "param_memory", None)
+    memory = record_member(param, "param_memory", None)
     if count is not None and memory is not None:
         rows.append(("size", f"{_count_words(count, 'value')}, {format_iec_bytes(int(memory))}"))
     rows.append(("values", value_words(stats)))
@@ -88,7 +89,7 @@ def _buffer_facts(buffer: Any) -> tuple[str, Any, str]:
         versions = getattr(buffer, "versions", ()) or ()
         slot = getattr(versions[0], "_slot", None) if versions else None
         initial = slot("out") if callable(slot) else None
-    stats = _statistics(initial, compute=True, identity=getattr(buffer, "address", None))
+    stats = _statistics(initial, compute=True, identity=record_member(buffer, "address", None))
     basis = "snapshot at capture" if initial is not None else METADATA_ONLY
     return metadata_text(buffer, initial), stats, basis
 
@@ -101,7 +102,7 @@ def buffer_repr_line(buffer: Any) -> str:
     if versions > 1:
         metadata += f", {_count_words(versions, 'version')}"
     honesty = METADATA_ONLY if basis == METADATA_ONLY else ""
-    return value_line(f"Buffer {getattr(buffer, 'address', '?')}", metadata, stats, honesty)
+    return value_line(f"Buffer {record_member(buffer, 'address', '?')}", metadata, stats, honesty)
 
 
 def buffer_card(buffer: Any) -> str:

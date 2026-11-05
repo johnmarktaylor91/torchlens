@@ -31,8 +31,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
-from torchlens.validation import exemptions as ex
-from torchlens.validation.core import (
+from torchlens.validation import _exemptions as ex
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
 
@@ -214,7 +214,7 @@ def test_structural_template_decision_must_exclude_runtime_fill_values(
     trace = _capture(_FullLikeTensorFillModel(), torch.randn(3, 4))
     try:
         op = _op_with_func_name(trace, "full_like")
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         fill_parent = positions[1]
         _freeze_op_replay(op)
         _assert_dead_edge_is_caught(trace, op, fill_parent)

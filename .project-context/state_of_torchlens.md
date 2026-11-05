@@ -27,7 +27,7 @@ validation, and core data-class names for the current 2.x surface.
 - `load` - load portable TorchLens artifact; `torchlens._io.bundle.load`.
 
 ### Validation
-- `validate` - consolidated validator with `scope=`; `torchlens.validation.consolidated.validate`.
+- `validate` - consolidated validator with `scope=`; `torchlens.validation._consolidated.validate`.
 
 ### Data Classes
 - `Trace` - top-level capture container; `torchlens._data_classes.trace.Trace`.
@@ -35,12 +35,12 @@ validation, and core data-class names for the current 2.x surface.
 - `Op` - one per-pass tensor operation record; `torchlens._data_classes.op.Op`.
 
 ### Intervention Containers and Execution
-- `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention.bundle.Bundle`.
+- `Bundle` - named collection of logs/specs with multi-trace helpers; `torchlens.intervention._bundle.Bundle`.
 - `bundle` - convenience constructor for `Bundle`; `torchlens.__init__.bundle`.
-- `do` - runtime intervention execution helper; `torchlens.intervention.runtime.do`.
-- `push` - push an intervention/log/spec; `torchlens.intervention.replay.push` (the removed `replay` raises a teaching redirect).
-- `push_from` - push from a source object; `torchlens.intervention.replay.push_from` (the removed `replay_from` raises a teaching redirect).
-- `run` - run a model with interventions; `torchlens.intervention.rerun.run` (the removed `rerun` raises a teaching redirect).
+- `do` - runtime intervention execution helper; `torchlens.intervention._runtime.do`.
+- `push` - push an intervention/log/spec; `torchlens.intervention._replay.push` (the removed `replay` raises a teaching redirect).
+- `push_from` - push from a source object; `torchlens.intervention._replay.push_from` (the removed `replay_from` raises a teaching redirect).
+- `run` - run a model with interventions; `torchlens.intervention._rerun.run` (the removed `rerun` raises a teaching redirect).
 
 ### Selectors and Site Discovery
 - `label` - selector by layer label; `torchlens.intervention.selectors.label`.
@@ -54,20 +54,20 @@ validation, and core data-class names for the current 2.x surface.
 - Site discovery is via `Trace.find_sites(...)`; the old top-level `sites()`/`SiteCollection`/`SiteSpec` were removed from the public API.
 
 ### Intervention Helper Transforms
-- `clamp` - clamp activation values; `torchlens.intervention.helpers.clamp`.
-- `mean_ablate` - mean-ablation helper; `torchlens.intervention.helpers.mean_ablate`.
-- `noise` - noise injection helper; `torchlens.intervention.helpers.noise`.
-- `project_off` - remove a projection direction; `torchlens.intervention.helpers.project_off`.
-- `project_onto` - project onto a direction; `torchlens.intervention.helpers.project_onto`.
-- `scale` - scale activation helper; `torchlens.intervention.helpers.scale`.
-- `scramble_elements` - elementwise iid scramble helper (formerly `resample_ablate`); `torchlens.intervention.helpers.scramble_elements`.
-- `splice_module` - module-splicing helper; `torchlens.intervention.helpers.splice_module`.
-- `steer` - steering-vector helper; `torchlens.intervention.helpers.steer`.
-- `swap_with` - activation swap helper; `torchlens.intervention.helpers.swap_with`.
-- `zero_ablate` - zero-ablation helper; `torchlens.intervention.helpers.zero_ablate`.
-- `bwd_hook` - backward hook helper; `torchlens.intervention.helpers.bwd_hook`.
-- `gradient_scale` - gradient scaling helper; `torchlens.intervention.helpers.gradient_scale`.
-- `gradient_zero` - gradient-zeroing helper; `torchlens.intervention.helpers.gradient_zero`.
+- `clamp` - clamp activation values; `torchlens.intervention._helpers.clamp`.
+- `mean_ablate` - mean-ablation helper; `torchlens.intervention._helpers.mean_ablate`.
+- `noise` - noise injection helper; `torchlens.intervention._helpers.noise`.
+- `project_off` - remove a projection direction; `torchlens.intervention._helpers.project_off`.
+- `project_onto` - project onto a direction; `torchlens.intervention._helpers.project_onto`.
+- `scale` - scale activation helper; `torchlens.intervention._helpers.scale`.
+- `scramble_elements` - elementwise iid scramble helper (formerly `resample_ablate`); `torchlens.intervention._helpers.scramble_elements`.
+- `splice_module` - module-splicing helper; `torchlens.intervention._helpers.splice_module`.
+- `steer` - steering-vector helper; `torchlens.intervention._helpers.steer`.
+- `swap_with` - activation swap helper; `torchlens.intervention._helpers.swap_with`.
+- `zero_ablate` - zero-ablation helper; `torchlens.intervention._helpers.zero_ablate`.
+- `bwd_hook` - backward hook helper; `torchlens.intervention._helpers.bwd_hook`.
+- `gradient_scale` - gradient scaling helper; `torchlens.intervention._helpers.gradient_scale`.
+- `gradient_zero` - gradient-zeroing helper; `torchlens.intervention._helpers.gradient_zero`.
 
 ### Observers
 - `tap` - create a tap observer for a site; `torchlens.observers.tap`.
@@ -106,7 +106,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |
 | `torchlens/agent/` | Read-only agent inspection surface: registry, envelope, overview, query, stats, compare, torch-free CLI | Agent and MCP tooling |
-| `torchlens/attribution/onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |
+| `torchlens/attribution/_onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |
 | `torchlens/brainpipe.py` | Memory-planned whole-model extraction (plan, table, run, npz) | Large extraction runs under a byte budget |
 | `torchlens/debug/_checks/` | Training sanity checks (exposed as `tl.debug.ChecksSession` and friends) (`audit_params`, gradient-flow audit) | Parameter and gradient health |
 | `tests/conformance/` | Capture conformance packs C0-C2 (test-side harness) | Third-party conformance testing |
@@ -143,9 +143,9 @@ intervention convenience methods.
 Intervention-ready captures retain enough metadata for site selection and replay. Selectors
 resolve through `Trace.find_sites()` / `resolve_sites()` and `intervention/resolver.py`.
 Hooks are normalized in `intervention/hooks.py`, executed through capture/live-hook paths, and
-validated in `intervention/runtime.py`. `Bundle` collects named logs/specs and uses
+validated in `intervention/_runtime.py`. `Bundle` collects named logs/specs and uses
 `multi_trace/` for node views, topology comparisons, and diff metrics. Save levels live in
-`intervention/save.py`.
+`intervention/_save.py`.
 
 ### .tlspec Format
 Portable artifacts are directory bundles with a public `manifest.json` schema and tensor blobs

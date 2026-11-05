@@ -17,6 +17,7 @@ from collections import defaultdict
 from types import SimpleNamespace
 
 from torchlens._postprocess.loop_grouping_adapter import RecurrenceAssignment
+from torchlens._utils._record_group_table import op_attr
 from torchlens.backends._finalize import _apply_recurrence_relabel_epilogue, _finalize_single_op
 
 
@@ -93,7 +94,7 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
         label="producer_1_1:1",
         layer_label="producer_1_1",
         num_passes=1,
-        equivalence_class="producer",
+        **{op_attr("equivalence_class"): "producer"},
         parents=[],
         children=["consumer_1_2_raw"],
         root_ancestors=frozenset({"producer_1_1_raw"}),
@@ -105,7 +106,7 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
         label="consumer_1_2:1",
         layer_label="consumer_1_2",
         num_passes=1,
-        equivalence_class="consumer",
+        **{op_attr("equivalence_class"): "consumer"},
         parents=["producer_1_1_raw"],
         children=[],
         root_ancestors=frozenset(),
@@ -127,8 +128,8 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     assert producer.children == ["consumer_1_2"]
     assert trace.input_layers == ["producer_1_1"]
     assert trace.output_layers == ["consumer_1_2"]
-    assert producer.recurrent_ops == ["producer_1_1:1"]
-    assert consumer.recurrent_ops == ["consumer_1_2:1"]
+    assert getattr(producer, op_attr("recurrent_ops")) == ["producer_1_1:1"]
+    assert getattr(consumer, op_attr("recurrent_ops")) == ["consumer_1_2:1"]
     # N5: lineage sets (seeded with raw labels at capture time or during the
     # pre-relabel depth flood) must be relabeled too, with their original
     # container type (frozenset vs set) preserved.

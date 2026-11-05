@@ -31,11 +31,13 @@ from torchlens.backends.torch._foreign_data import (
     foreign_data_resolution,
     is_foreign_data_recorder,
 )
-from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
+from torchlens.backends.torch.completeness_witness import (
+    AUDITED_COMPLETENESS_BOUNDARIES,
+)
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.diagnostics import CHECK_REPLAY
+from torchlens.validation._diagnostics import CHECK_REPLAY
 
 
 class _RoundTripModel(nn.Module):
@@ -111,9 +113,9 @@ def _assert_one_round_trip(trace: tl.Trace, resolution: str, parent_type: str) -
     ops = _foreign_ops(trace)
     assert len(ops) == 1
     op = ops[0]
-    assert op.is_transform is True
-    assert op.transform_kind == FOREIGN_DATA_TRANSFORM_KIND
-    assert op.transform_config["resolution"] == resolution
+    assert op.call.is_func_transform is True
+    assert op.call.func_transform_kind == FOREIGN_DATA_TRANSFORM_KIND
+    assert op.call.func_transform_config["resolution"] == resolution
     assert is_foreign_data_recorder(op.func)
     assert foreign_data_resolution(op.func) == resolution
     assert [record_type(trace[label]) for label in op.parents] == [parent_type]
@@ -153,7 +155,7 @@ def test_pure_round_trip_is_one_op_with_the_departed_parent_and_validates(
     # recorded literals alone, and its key names the portable replay function.
     departed = trace[op.parents[0]].out
     expected = model.round_trip(departed.clone())
-    assert torch.equal(op.func(departed, *op.non_tensor_pos_args), expected)
+    assert torch.equal(op.func(departed, *op.call.non_tensor_pos_args), expected)
     assert (op.func.__module__, op.func.__qualname__) == (
         foreigndata.__module__,
         foreigndata.__qualname__,
@@ -225,7 +227,9 @@ def test_scalar_constructor_links_only_tolist_departures() -> None:
     tolist_model = _ScalarAfterTolistModel("tolist")
     trace = _trace_quiet(tolist_model, torch.randn(3, 4))
     ops = _foreign_ops(trace)
-    assert len(ops) == 1 and ops[0].transform_config["resolution"] == RESOLUTION_UNRESOLVED
+    assert (
+        len(ops) == 1 and ops[0].call.func_transform_config["resolution"] == RESOLUTION_UNRESOLVED
+    )
 
 
 class _ConsumedCapsuleModel(nn.Module):
@@ -249,7 +253,7 @@ def test_consumed_capsule_without_departure_replays_its_recorded_value() -> None
     trace = _trace_quiet(model, x)
     ops = _foreign_ops(trace)
     assert len(ops) == 1
-    assert ops[0].transform_config["resolution"] == RESOLUTION_CONSTANT
+    assert ops[0].call.func_transform_config["resolution"] == RESOLUTION_CONSTANT
     assert list(ops[0].parents) == []
     assert torch.equal(ops[0].func(), torch.full((3, 4), 2.0))
     assert _validate(model, x) is True

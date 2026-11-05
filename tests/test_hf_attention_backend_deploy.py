@@ -33,7 +33,7 @@ from tests.test_hf_attention_backend import (  # noqa: E402
     _Spy,
 )
 from torchlens.bridge import transformers as tl_hf  # noqa: E402
-from torchlens.bridge.hf_attention import BACKEND_KEY  # noqa: E402
+from torchlens.bridge._hf_attention import BACKEND_KEY  # noqa: E402
 
 DISK_MAP = {
     "model.embed_tokens": "cpu",

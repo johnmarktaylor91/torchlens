@@ -46,7 +46,7 @@ DECLARED_VOCABULARY: frozenset[str] = frozenset(
         "_vocab.node_spec",
         "_io.format_errors",
         "_output_slot",
-        "recording.types",
+        "recording._types",
     }
 )
 
@@ -66,7 +66,7 @@ _ALLOWED_EAGER_PREFIXES: tuple[str, ...] = ("_errors", "errors", "_vocab")
 #: down by splitting the vocabulary half out, never by widening the ledger.
 V3_RESIDUE_CEILINGS: dict[str, tuple[int, int]] = {
     # module: (max distinct eager behavior targets, max distinct deferred targets)
-    "recording.types": (3, 14),
+    "recording._types": (3, 14),
 }
 
 
@@ -262,7 +262,7 @@ _CLOSURE_BASELINE: dict[str, int] = {
     "_vocab.node_spec": 0,
     "_io.format_errors": 1,  # errors._base (L0 error vocabulary)
     "_output_slot": 2,  # _errors and errors._base (L0 error vocabulary)
-    "recording.types": 25,  # the declared residue; splits burn this down
+    "recording._types": 25,  # the declared residue; splits burn this down
 }
 
 

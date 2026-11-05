@@ -10,15 +10,19 @@ from typing import Any
 
 import torch
 
+from torchlens._private_submodules import (
+    refuse_private_submodule as _refuse_private_submodule,
+)
+
 from .._entry_refusals import refuse_viz_shape
 from .._plots.node_plots import heatmap, image_scatter, lineplot
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
-from . import batch_summary as _batch_summary, nodes
+from . import _batch_summary as _batch_summary, nodes
+from ._batch_summary import montage
 from ._drawing import Drawing
+from ._feature_maps import feature_maps
 from ._tensor_images import chans, rgb
-from .batch_summary import montage
-from .feature_maps import feature_maps
 
 __all__ = [
     "Drawing",
@@ -88,6 +92,8 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not a ``torchlens.viz`` name.
     """
 
+    _refuse_private_submodule(__name__, name)
+
     if name in _LAZY_RENDERERS:
         import importlib
 
@@ -96,9 +102,6 @@ def __getattr__(name: str) -> Any:
         globals()[name] = value
         return value
     raise AttributeError(f"module 'torchlens.viz' has no attribute {name!r}")
-
-
-batch_summary = _batch_summary
 
 
 def causal_trace_heatmap(

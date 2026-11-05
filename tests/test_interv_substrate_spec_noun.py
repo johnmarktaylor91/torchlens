@@ -16,7 +16,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
-from torchlens.intervention.spec import classify_where
+from torchlens.intervention._spec import classify_where
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -116,7 +116,7 @@ def test_overlapping_rules_refuse_at_fire_time() -> None:
 
 
 def test_sweep_door_accepts_specs_unchanged() -> None:
-    from torchlens.intervention.sweep import sweep
+    from torchlens.intervention._sweep import sweep
 
     model = _TinyModel()
     bundle = sweep(
@@ -131,7 +131,7 @@ def test_sweep_door_accepts_specs_unchanged() -> None:
 
 
 def test_sweep_spec_values_conflicts_refuse_typed() -> None:
-    from torchlens.intervention.sweep import sweep
+    from torchlens.intervention._sweep import sweep
 
     model = _TinyModel()
     spec = tl.when(tl.func("relu"), tl.scale(0.0))
@@ -146,7 +146,7 @@ def test_sweep_spec_values_conflicts_refuse_typed() -> None:
 def test_sweep_values_ride_typed_helper_specs() -> None:
     """Ledger item 1: swept values are typed replace helpers, not closures."""
 
-    from torchlens.intervention.sweep import sweep
+    from torchlens.intervention._sweep import sweep
 
     model = _TinyModel()
     bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])

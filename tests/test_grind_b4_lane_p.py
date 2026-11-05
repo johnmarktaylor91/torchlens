@@ -25,7 +25,10 @@ from torchlens._io.state_keys import (
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
+from torchlens._utils.display import (
+    cleanup_trace_visualizer_dir,
+    ensure_trace_visualizer_dir,
+)
 
 
 class _NonPersistentBufferModel(nn.Module):

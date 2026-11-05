@@ -17,7 +17,7 @@ def run_metadata_invariants(trace: Any) -> bool:
     the check runs rather than being skipped.
     """
     if _events.registered_metadata_invariants() is None:
-        from ..validation.invariants import check_metadata_invariants  # deferred: cycle validation
+        from ..validation._invariants import check_metadata_invariants  # deferred: cycle validation
 
         _events.register_metadata_invariants(check_metadata_invariants)
     return _events.run_metadata_invariants(trace)
