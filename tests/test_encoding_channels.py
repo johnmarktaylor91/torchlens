@@ -1,7 +1,7 @@
 """L5 M1 pins: encoding-channel core + color_by.
 
 Covers the design-memo 2.5 test list: channel resolution (both phases), the
-prepass callable-once counting pin, conflict-matrix pins, legend content +
+prepass callable-once counting pin, conflict-matrix pins, key content +
 visibility rule, the collapse-plan-hash pin, the engine-resolution matrix,
 the 2.3b rolled-aggregate allowlist color pins (alias rows, mirrored per-call
 numerics, unclassified sources, classification completeness), and the 2.4(i)
@@ -273,11 +273,18 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     for role_fill in ('"#98FB98"', '"#ff9999"', '"#009E73"', '"#D55E00"'):
         assert role_fill not in drawn, role_fill  # no input/output role fill
     assert ">input<" not in label and ">output<" not in label
-    assert "TorchLens encoding" in label
+    # The plain key: "output bytes: <low>", a 16-segment colour bar, "<high>".
+    assert "output bytes: " in label
+    assert label.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
+    # No method wording anywhere: not drawn and not kept in the source
+    # (JMT, 4 Nov 2026: a drawing carries no method details).
+    for jargon in ("linear min-max", "eligible", "color_by:", "TorchLens encoding"):
+        assert jargon not in dot, jargon
+    assert "encoding method" not in dot
     # One block: the key and the channel section share the header label;
     # there is no second legend topology.
     assert "tl_legend" not in dot
-    assert dot.count("TorchLens encoding") == 1
+    assert dot.count("output bytes: ") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -291,7 +298,8 @@ def test_legend_true_without_channel_keeps_todays_meaning(
 ) -> None:
     dot = _draw(mlp_log, tmp_path, show_legend=True)
     assert 'ID="tl_key"' in dot
-    assert "TorchLens encoding" not in dot
+    assert "encoding method" not in dot
+    assert 'BGCOLOR="#' not in dot  # no colour bar without a channel
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_draw_validation.py, _visualization/_render_dot.py.
@@ -407,7 +415,9 @@ def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     total_state = _state(varying_log)
     assert layer.layer_label in total_state.colors
     assert any("total_flops_forward" in line for line in total_state.aggregation_lines)
-    assert "total across passes" in dot  # mandatory aggregation legend line
+    # The aggregation stays on the encoding state; the drawing prints none of it.
+    assert any("total across passes" in line for line in total_state.aggregation_lines)
+    assert "total across passes" not in dot
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
@@ -431,7 +441,8 @@ def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Pa
         state = _state(varying_log)
         assert layer.layer_label not in state.colors, source
         assert NOTE_FIRST_PASS_ONLY in state.notes, source
-        assert "first-pass-only field" in dot, source
+        # The note lives on the encoding state; the drawing carries no method text.
+        assert "first-pass-only field" not in dot, source
 
 
 def test_mirrored_per_call_enumeration_matches_live_mirror_spec() -> None:
@@ -559,27 +570,26 @@ def test_bundle_diff_consumes_shared_interpolation() -> None:
     from torchlens._visualization.bundle_diff import _delta_color
 
     assert _delta_color(0.0, 1.0) == "#FFFFFF"
-    assert _delta_color(1.0, 1.0) == interpolate_hex("#FFFFFF", "#C93F3F", 1.0)
+    assert _delta_color(1.0, 1.0) == interpolate_hex(("#FFFFFF", "#C93F3F"), 1.0) == "#C93F3F"
+    assert _delta_color(0.5, 1.0) == interpolate_hex(("#FFFFFF", "#C93F3F"), 0.5)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/themes.py.
 def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Ramps resolve through the SKIN's 3-anchor record (N4); the dark low
-    anchor is deliberately off-ground (never equal to the default fill --
-    the white-on-white absence defect's dark analog)."""
+    """Ramps resolve through the SKIN's stop list (N4); the dark low stop is
+    deliberately off-ground (never equal to the default fill -- the
+    white-on-white absence defect's dark analog)."""
 
     from torchlens._visualization.themes import resolve_theme
 
     _draw(mlp_log, tmp_path, color_by="bytes", theme="dark")
     state = _state(mlp_log)
     dark = resolve_theme("dark")
-    assert state.ramp == (dark.ramp[0], dark.ramp[2])
-    assert state.ramp[1] == DARK_RAMP[1]  # the high anchor is unchanged
+    assert state.ramp == dark.ramp == DARK_RAMP  # the default family's dark stops
     assert state.ramp[0] != dark.default_fill
     _draw(mlp_log, tmp_path, color_by="bytes")
     light = resolve_theme("torchlens")
-    assert _state(mlp_log).ramp == (light.ramp[0], light.ramp[2])
-    assert LIGHT_RAMP[1] == light.ramp[2]  # endpoint continuity with the module ramp
+    assert _state(mlp_log).ramp == light.ramp == LIGHT_RAMP
 
 
 if __name__ == "__main__":  # pragma: no cover

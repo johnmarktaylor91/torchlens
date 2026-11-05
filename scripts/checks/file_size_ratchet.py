@@ -465,7 +465,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_visualization/_render_leaf.py": 2200,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
-    "torchlens/_visualization/_render_nodes.py": 2150,
+    # Re-keyed down 2150 -> 2050 (r7 R43-F2 slack rule): the raw-input scratch
+    # folder, input photo and picture-box layout moved to _input_photo.py and
+    # _node_boxes.py; measured 2035.
+    "torchlens/_visualization/_render_nodes.py": 2050,
     "torchlens/_visualization/_render_flow.py": 2100,
 }
 

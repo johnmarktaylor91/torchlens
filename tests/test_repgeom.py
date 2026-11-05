@@ -309,7 +309,8 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
         node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
         assert len(node_images) == 1
         assert node_images[0].startswith("data:image/png;base64,")
-        assert "<polygon" in node_block
+        # A picture node is a rounded box: a filled, stroked path rather than a polygon.
+        assert re.search(r'<path fill="[^"]+" stroke="[^"]+"', node_block)
         assert f">{layer.layer_label}</text>" in node_block
 
 
@@ -349,7 +350,8 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
         node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
         assert len(node_images) == 1
         assert node_images[0].startswith("data:image/png;base64,")
-        assert "<polygon" in node_block
+        # A picture node is a rounded box: a filled, stroked path rather than a polygon.
+        assert re.search(r'<path fill="[^"]+" stroke="[^"]+"', node_block)
         assert f">{layer.layer_label}</text>" in node_block
 
 
