@@ -17,6 +17,7 @@ its next read, so its op moves onto that node.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
@@ -145,20 +146,36 @@ def _copy_slices_is_newest(copy_slices: Any, handles: Mapping[str, Any], skip: s
     return True
 
 
-def _chain_has_recorded_reader(chain: list[Any], handles: Mapping[str, Any]) -> bool:
-    """Return whether a recorded node outside ``chain`` has an edge into it."""
+# ``id(node)`` -> ids of the recorded nodes with an edge into it.
+_ReaderIndex = dict[int, set[int]]
+
+
+def _recorded_reader_index(handles: Mapping[str, Any], *extra: Any) -> _ReaderIndex:
+    """Map each node a recorded node (or one of ``extra``) has an edge into to its readers.
+
+    One pass over the recorded nodes; every view write builds it once and asks
+    ``_chain_has_recorded_reader`` of it for each chain, so the cost of a write
+    does not grow with the number of live sibling views.
+    """
+
+    index: _ReaderIndex = {}
+    for node in (*handles.values(), *extra):
+        for edge in getattr(node, "next_functions", None) or ():
+            if edge[0] is not None:
+                index.setdefault(id(edge[0]), set()).add(id(node))
+    return index
+
+
+def _chain_has_recorded_reader(chain: list[Any], readers: _ReaderIndex) -> bool:
+    """Return whether a node of ``readers`` outside ``chain`` has an edge into the chain."""
 
     chain_ids = {id(node) for node in chain}
-    for handle in handles.values():
-        if handle is None or id(handle) in chain_ids:
-            continue
-        edges = getattr(handle, "next_functions", None) or ()
-        if any(id(edge[0]) in chain_ids for edge in edges if edge[0] is not None):
-            return True
-    return False
+    return any(readers.get(node_id, set()) - chain_ids for node_id in chain_ids)
 
 
-def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -> list[Any]:
+def _orphaned_view_nodes(
+    start: Any, copy_slices: Any, handles: Mapping[str, Any], readers: _ReaderIndex | None = None
+) -> list[Any]:
     """Return the view nodes a view write's ``CopySlices`` provably cut out of the graph.
 
     ``rebase_history`` drops the written view's node (for a view of a view, every
@@ -166,10 +183,10 @@ def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any
     recorded node is returned only when all of this is proven:
 
     - ``_view_chain_to_prior`` walks it to ``CopySlices``'s first input;
-    - no other recorded op's node has an edge into the chain (a reader of the
-      view before the write keeps the view's node alive in the graph). Only
-      recorded nodes are seen: a consumer whose op was not recorded is outside
-      this proof;
+    - no other recorded op's node (``readers``, built from ``handles`` when not
+      given) has an edge into the chain (a reader of the view before the write
+      keeps the view's node alive in the graph). Only recorded nodes are seen: a
+      consumer whose op was not recorded is outside this proof;
     - ``CopySlices`` was created after every recorded op's node, so it is this
       write's node and not one an unlogged earlier write left behind.
 
@@ -177,7 +194,9 @@ def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any
     """
 
     chain = _view_chain_to_prior(start, copy_slices)
-    if not chain or _chain_has_recorded_reader(chain, handles):
+    if readers is None:
+        readers = _recorded_reader_index(handles)
+    if not chain or _chain_has_recorded_reader(chain, readers):
         return []
     skip = {id(node) for node in chain}
     return chain if _copy_slices_is_newest(copy_slices, handles, skip) else []
@@ -283,25 +302,42 @@ def _live_sibling_views(receiver: Any) -> list[tuple[Any, str]]:
     return found
 
 
+def _read_sibling_grad_fn(alias: Any) -> Any | None:
+    """Read a sibling view's ``grad_fn`` so that the read never changes capture's outcome.
+
+    Reading it regenerates the node now, as autograd does at the sibling's next
+    read. Torch checks a stale view on that read: a view that is an output of a
+    multi-output view op (``chunk``, ``split``, ``unbind``), was made in no-grad
+    mode or inside a custom ``autograd.Function`` raises or warns there. Any
+    warning is recorded here (never shown, never raised by a warnings-as-errors
+    filter) and, like a raise, refuses the sibling: ``None``.
+    """
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        try:
+            node = alias.grad_fn
+        except (RuntimeError, Warning):
+            return None
+    return None if caught else node
+
+
 def _regenerated_sibling_node(
-    alias: Any, label: str, copy_slices: Any, handles: Mapping[str, Any]
+    alias: Any, label: str, copy_slices: Any, handles: Mapping[str, Any], readers: _ReaderIndex
 ) -> Any | None:
     """Return the node a sibling view's op moves to after the write, or ``None``.
 
     Proven only when the op's recorded node is a pre-write view chain down to
-    ``CopySlices``'s first input that no other recorded op reads (as for the
-    written view's producers), and the sibling's regenerated node is a view node
-    over ``CopySlices`` that no op records. Reading ``alias.grad_fn`` regenerates
-    the node now, as autograd does at the sibling's next read.
+    ``CopySlices``'s first input that no other recorded node in ``readers`` reads
+    (as for the written view's producers), and the sibling's regenerated node is
+    a view node over ``CopySlices`` that no op records. A sibling whose
+    ``grad_fn`` read raises or warns is refused (``_read_sibling_grad_fn``).
     """
 
     chain = _view_chain_to_prior(handles.get(label), copy_slices)
-    if not chain or _chain_has_recorded_reader(chain, handles):
+    if not chain or _chain_has_recorded_reader(chain, readers):
         return None
-    try:
-        node = alias.grad_fn
-    except RuntimeError:
-        return None
+    node = _read_sibling_grad_fn(alias)
     if (
         node is None
         or not _is_view_backward_class(type(node).__name__)
@@ -312,18 +348,24 @@ def _regenerated_sibling_node(
     return node
 
 
-def _rebind_sibling_views(receiver: Any, copy_slices: Any, handles: dict[str, Any]) -> list[Any]:
+def _rebind_sibling_views(
+    receiver: Any, copy_slices: Any, handles: dict[str, Any], readers: _ReaderIndex
+) -> list[Any]:
     """Move each provable sibling view's op onto its regenerated node; return the nodes.
 
     The write rebases the whole base, so a view of it taken before the write and
     read after it goes through a node autograd regenerates over ``CopySlices``;
     the view's pre-write node is no longer in the graph.
+
+    ``readers`` is the write's one reader index (``rebind_rebased_view_producers``),
+    taken before any record moved: a reader that existed when the write ran
+    keeps refusing every chain it reads.
     """
 
     moved: list[Any] = []
     with pause_logging(), internal_scalar_read():
         for alias, label in _live_sibling_views(receiver):
-            node = _regenerated_sibling_node(alias, label, copy_slices, handles)
+            node = _regenerated_sibling_node(alias, label, copy_slices, handles, readers)
             if node is not None:
                 handles[label] = node
                 moved.append(node)
@@ -377,11 +419,15 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
     writer_node = _view_write_node(start, copy_slices, handles)
     if writer_node is None:
         return None
-    orphaned = _orphaned_view_nodes(start, copy_slices, handles)
+    # One scan of the recorded nodes per write, shared by every chain proof below.
+    # ``CopySlices`` is a reader too: it becomes the op's node, and it reads the
+    # written value's node when that value is a view of the same base.
+    readers = _recorded_reader_index(handles, copy_slices)
+    orphaned = _orphaned_view_nodes(start, copy_slices, handles, readers)
     for raw_label, handle in list(handles.items()):
         if any(handle is node for node in orphaned):
             handles[raw_label] = copy_slices
-    siblings = _rebind_sibling_views(receiver, copy_slices, handles)
+    siblings = _rebind_sibling_views(receiver, copy_slices, handles, readers)
     # Pin the nodes for the trace's lifetime, as ``backward._strong_grad_fn_refs``
     # pins every recorded node, so their ``id()`` (the GradFn key) is never reused.
     trace.__dict__.setdefault("_backward_gradfn_refs", []).extend([copy_slices, *siblings])
