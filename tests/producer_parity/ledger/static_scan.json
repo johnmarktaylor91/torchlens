@@ -1945,6 +1945,150 @@
  },
  {
   "ambiguous": false,
+  "field": "backend_semantics",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "fire_results",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "function",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_scalar_bool",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_transform",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_params",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "seq",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_chain",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_fn_name",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_fn_qualname",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_fn_source",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_kind",
+  "file": "torchlens/_ir/_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "is_transform",
   "file": "torchlens/_ir/_selector_nodes.py",
   "has_default": true,
@@ -7153,6 +7297,22 @@
  },
  {
   "ambiguous": false,
+  "field": "fire_results",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "module_stack",
+  "file": "torchlens/backends/torch/_ops_row_journal.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "backend_semantics",
   "file": "torchlens/backends/torch/_ops_shared_fields.py",
   "has_default": false,
@@ -7603,22 +7763,6 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/torch/offload_hooks.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "fire_results",
-  "file": "torchlens/backends/torch/ops.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "module_stack",
-  "file": "torchlens/backends/torch/ops.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
