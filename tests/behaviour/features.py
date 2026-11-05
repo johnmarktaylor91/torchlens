@@ -244,7 +244,7 @@ def _after_rerun(cell: Cell) -> None:
     trace = cell.require_trace()
     before = cell.output_leaves(trace)
     torch.manual_seed(SEED)
-    trace.run(cell.model, cell.fresh_inputs())
+    trace = trace.run(cell.model, cell.fresh_inputs())
     cell.expect_same_leaves(before, cell.output_leaves(trace), "rerun output")
 
 

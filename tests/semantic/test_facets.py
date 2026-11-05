@@ -613,7 +613,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
 
     zeroed = clean.fork("zero_q_head")
     zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
-    zeroed.run(model, x)
+    zeroed = zeroed.run(model, x)
 
     assert not torch.allclose(_trace_output(zeroed), clean_out)
     assert torch.count_nonzero(zeroed.modules["attn"].facets.head(0).q) == 0
@@ -626,7 +626,7 @@ def test_facet_head_zero_and_patch_rerun_changes_output_and_validates() -> None:
         replacement,
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    patched.run(model, x)
+    patched = patched.run(model, x)
 
     assert not torch.allclose(_trace_output(patched), clean_out)
     assert torch.count_nonzero(patched.modules["attn"].facets.head(1).q) == 0
@@ -655,7 +655,7 @@ def test_gpt2_fused_c_attn_facet_edits_compose_and_conflicts_error() -> None:
         ],
         intervention=_STAGE,
     )
-    edited.run(model, x)
+    edited = edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(0).q) == 0
@@ -752,7 +752,7 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
         edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
     assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
-    edited.run(model, x)
+    edited = edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0

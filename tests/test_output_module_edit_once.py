@@ -356,7 +356,7 @@ def test_output_module_edit_applies_once_on_every_door(
     with warnings.catch_warnings():
         # The rerun graph legitimately differs from the un-edited capture (other lane).
         warnings.simplefilter("ignore", ControlFlowDivergenceWarning)
-        fork.run(model, x2)
+        fork = fork.run(model, x2)
     _assert_same(_trace_outputs(fork), want2, f"{case}: fork.run(model, x2) after do")
 
     captured = tl.trace(model, x, intervene=tl.when(selector, tl.scale(0.5)))

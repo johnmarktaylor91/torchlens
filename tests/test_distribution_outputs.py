@@ -366,7 +366,7 @@ def test_rerun_doors_zero_fire_name_the_distribution_output() -> None:
     assert "(output paths .loc, .scale)" in str(refused.value)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        trace.run(model, _x() + 1)
+        trace = trace.run(model, _x() + 1)
     (warning,) = _zero_fire_warnings(caught, "rerun_zero_fire")
     assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
     assert "module 'policy' output is a Normal" in warning.fields["reason_detail"]

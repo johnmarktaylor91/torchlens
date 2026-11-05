@@ -61,7 +61,7 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     saved_before = _saved_op_labels(log)
     num_ops_before = len(log._layer_list)
 
-    log.run(ThreeOpModel(), x + 1)
+    log = log.run(ThreeOpModel(), x + 1)
 
     assert saved_before
     assert _saved_op_labels(log) == saved_before

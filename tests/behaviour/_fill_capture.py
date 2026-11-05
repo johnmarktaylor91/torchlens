@@ -365,7 +365,7 @@ def _after_rerun(cell: Cell) -> None:
     trace = cell.require_trace()
     labels = [op.label for op in _order(trace)]
     torch.manual_seed(SEED)
-    trace.run(cell.model, cell.fresh_inputs())
+    trace = trace.run(cell.model, cell.fresh_inputs())
     cell.expect([op.label for op in _order(trace)] == labels, "rerun changed the op labels")
     eager = _eager_reference(cell)
     if eager is not None:

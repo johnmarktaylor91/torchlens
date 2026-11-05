@@ -274,7 +274,7 @@ def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
 def _door_stage_run(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
     trace._attach_hooks(tl.module("lin1"), edit)
-    trace.run(model, _X)
+    trace = trace.run(model, _X)
     return _out(trace)
 
 

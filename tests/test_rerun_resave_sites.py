@@ -121,7 +121,7 @@ def _rerun(trace: Any, model: nn.Module, x: torch.Tensor, **kwargs: Any) -> None
             message="rerun raw-event shape hash diverged",
             category=ControlFlowDivergenceWarning,
         )
-        trace.run(model, x, **kwargs)
+        trace = trace.run(model, x, **kwargs)
 
 
 @pytest.fixture
@@ -260,7 +260,7 @@ def test_restored_trace_rerun_with_matching_graph_resaves_by_raw_index() -> None
     model, x = _setup()
     plain = tl.trace(model, x, save=_save())
     trace = _restored(model, x)
-    trace.run(model, x)
+    trace = trace.run(model, x)
     assert _saved_labels(trace) == _saved_labels(plain)
     for address, expected in _site_outs(plain).items():
         assert torch.equal(_site_outs(trace)[address], expected), address

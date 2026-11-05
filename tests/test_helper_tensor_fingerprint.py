@@ -93,7 +93,7 @@ def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> N
 
     model, x, direction = setup
     trace = _staged_trace(model, x, direction, door)
-    trace.run(model, x)
+    trace = trace.run(model, x)
     readout = trace.output_ops[0].out.clone()
     staged = trace._intervention_spec.freeze().hook_specs
     version = direction._version
@@ -132,7 +132,7 @@ def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
         direction.add_(0.25)
         trace.clear_edits(handle=handle)
         handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
-        trace.run(model, x)
+        trace = trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 
 

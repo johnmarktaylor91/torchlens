@@ -118,7 +118,7 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
 
     zeroed = clean.fork("zero_q_head")
     zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
-    zeroed.run(model, x)
+    zeroed = zeroed.run(model, x)
 
     h0 = zeroed.modules["attn"].facets.head(0).q
     h1 = zeroed.modules["attn"].facets.head(1).q

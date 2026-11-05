@@ -427,7 +427,7 @@ def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
     legacy = _steered_trace(model, direction, short_ids)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        legacy.run(model, long_ids)
+        legacy = legacy.run(model, long_ids)
     # The capture fallback may disclose the divergence; nothing else may warn.
     assert all(issubclass(w.category, ControlFlowDivergenceWarning) for w in caught)
 
@@ -478,7 +478,7 @@ def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
     longer = _ids(_CAPTURE_LEN + 2, seed=801)
     reference = _hooked(model, direction, longer)
 
-    trace.run(model, longer)
+    trace = trace.run(model, longer)
 
     assert trace.last_run["engine"] == "guarded_fast"
     assert trace.last_run["shape_varied"] is True
@@ -522,7 +522,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run_transaction(inputs=ids, fast=True)
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
-    trace.run(model, ids)
+    trace = trace.run(model, ids)
     assert trace.last_run["engine"] == "rerun"
     assert trace.last_run["fast_refused"] is None
     assert not trace.injected_ops
@@ -557,7 +557,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     assert _SITE not in graph_fired_addresses(trace)
 
     reference = _hooked(model, direction, ids)
-    trace.run(model, ids)
+    trace = trace.run(model, ids)
 
     assert trace.last_run["engine"] == "rerun"
     refused = trace.last_run["fast_refused"]
@@ -566,7 +566,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     assert _module_hook_count(model) == baseline
     _assert_matches_hook(trace, reference, fast=False)
 
-    trace.run(model, ids)
+    trace = trace.run(model, ids)
     assert trace.last_run["engine"] == "guarded_fast"
     _assert_matches_hook(trace, reference, fast=True)
     assert _module_hook_count(model) == baseline
