@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ._options_validation import _validate_output_device
@@ -15,15 +16,22 @@ if TYPE_CHECKING:
     from .backends.registry import BackendName, BackendSpec
 
 
+@dataclass(frozen=True)
+class ForwardValidationEntryOptions:
+    """The forward validation door's torch-only keywords, exactly as passed."""
+
+    output_device: OutputDeviceLiteral
+    save_budget: SaveBudgetOption
+    num_threads: int | None
+    trace_observer: Callable[[Trace | None], None] | None
+
+
 def resolve_forward_validation_entry(
     backend: BackendName | None,
     model: Any,
     inputs: Any,
     input_kwargs: dict[Any, Any] | None,
-    output_device: OutputDeviceLiteral,
-    save_budget: SaveBudgetOption,
-    num_threads: int | None,
-    trace_observer: Callable[[Trace | None], None] | None,
+    options: ForwardValidationEntryOptions,
 ) -> tuple[BackendSpec, dict[str, Any]]:
     """Resolve the validation backend and the torch-only keywords to forward to it.
 
@@ -36,7 +44,7 @@ def resolve_forward_validation_entry(
     ----------
     backend, model, inputs, input_kwargs:
         Backend selector and the model and inputs it resolves for.
-    output_device, save_budget, num_threads, trace_observer:
+    options:
         The door's torch-only keywords, as passed.
 
     Returns
@@ -50,6 +58,8 @@ def resolve_forward_validation_entry(
         ``backend_unsupported`` if any of them is non-default on a non-torch backend.
     """
 
+    output_device, save_budget = options.output_device, options.save_budget
+    num_threads, trace_observer = options.num_threads, options.trace_observer
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
     spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
@@ -74,6 +84,3 @@ def resolve_forward_validation_entry(
     if "trace_observer" in chosen:
         chosen["_trace_observer"] = chosen.pop("trace_observer")
     return spec, chosen
-
-
-__all__ = ["resolve_forward_validation_entry"]

@@ -200,6 +200,9 @@ def test_other_scopes_refuse_the_keywords(scope: str, keyword: str) -> None:
     assert calls == []
 
 
+_options = entry_options.ForwardValidationEntryOptions
+
+
 def test_non_torch_backend_refuses_the_keywords(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-torch backend refuses num_threads and trace_observer by their public names."""
 
@@ -208,7 +211,7 @@ def test_non_torch_backend_refuses_the_keywords(monkeypatch: pytest.MonkeyPatch)
     )
     with pytest.raises(tl.errors.BackendUnsupportedError) as excinfo:
         entry_options.resolve_forward_validation_entry(
-            None, object(), (), None, "same", "auto", 1, lambda trace: None
+            None, object(), (), None, _options("same", "auto", 1, lambda trace: None)
         )
     assert excinfo.value.fields["code"] == "backend_unsupported"
     assert excinfo.value.fields["options"] == ["num_threads", "trace_observer"]
@@ -225,10 +228,10 @@ def test_torch_backend_forwards_only_non_default_keywords(monkeypatch: pytest.Mo
         return None
 
     _, defaults = entry_options.resolve_forward_validation_entry(
-        None, object(), (), None, "same", "auto", None, None
+        None, object(), (), None, _options("same", "auto", None, None)
     )
     assert defaults == {}
     _, forwarded = entry_options.resolve_forward_validation_entry(
-        None, object(), (), None, "same", None, 1, observer
+        None, object(), (), None, _options("same", None, 1, observer)
     )
     assert forwarded == {"save_budget": None, "num_threads": 1, "_trace_observer": observer}
