@@ -1,9 +1,8 @@
-"""F12 pins: the lens refusal taxonomy (themes memo section 2 item 5).
+"""F12 pins: the view refusal taxonomy (themes memo section 2 item 5).
 
-Overview/blueprint never refuse; speed/memory/compute/dims refuse on
-missing EVIDENCE; transformer and sequence refuse on factual absence of
-SUBJECT. Every refusal names the remedy; the teaching escape is
-theme='overview'.
+Overview never refuses; speed/memory/compute/dims refuse on missing
+EVIDENCE; transformer and sequence refuse on factual absence of SUBJECT.
+Every refusal names the remedy; the teaching escape is view='overview'.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ def test_sequence_refuses_on_single_pass(plain_log: Any) -> None:
 
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(plain_log, "sequence")
-    assert excinfo.value.fields["code"] == "lens_single_pass_no_sequence"
+    assert excinfo.value.fields["code"] == "view_single_pass_no_sequence"
     assert "overview" in str(excinfo.value)
 
 
@@ -45,7 +44,7 @@ def test_detail_ceiling_refusal_names_both_remedies(plain_log: Any, monkeypatch:
     for name in ("debug", "dims"):
         with pytest.raises(Exception) as excinfo:
             lenses.resolve_lens(plain_log, name)
-        assert excinfo.value.fields["code"] == "lens_above_detail_budget"
+        assert excinfo.value.fields["code"] == "view_above_detail_budget"
         message = str(excinfo.value)
         assert "module=" in message
         assert "collapse=" in message
@@ -79,7 +78,7 @@ def test_sequence_stack_license_degrade_is_coded_and_rendered() -> None:
             resolution = lenses.resolve_lens(log, "sequence")
         if "stack_by" not in resolution.draw_kwargs:
             codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
-            assert "lens_secondary_degraded" in codes
+            assert "view_secondary_degraded" in codes
             assert any("stack_by degraded" in line for line in resolution.disclosure)
         else:
             # The license held on this trace shape: stacking stays active.

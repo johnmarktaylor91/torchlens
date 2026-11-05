@@ -192,9 +192,9 @@ def test_source_annotated_roundtrip_and_source_privacy(tmp_path):
 
 
 def test_edge_shape_option_group_and_lens_use_the_same_channel():
-    """Grouped draw translation and the established debug recipe preserve the flag."""
+    """Grouped draw translation and the debug lens with edge shapes preserve the flag."""
     from torchlens._options_validation import visualization_to_render_kwargs
-    from torchlens._visualization.lenses._roster import COMPOSITIONS
+    from torchlens._visualization.lenses import resolve_lens
 
     options = tl.options.VisualizationOptions(show_edge_shapes=True)
     assert visualization_to_render_kwargs(options)["show_edge_shapes"] is True
@@ -202,7 +202,9 @@ def test_edge_shape_option_group_and_lens_use_the_same_channel():
         options.to_dict(), frozenset({"show_edge_shapes"})
     )
     assert copied.show_edge_shapes and copied.is_field_explicit("show_edge_shapes")
-    assert COMPOSITIONS["debug_edge_shapes"]["show_edge_shapes"] is True
+    trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
+    resolution = resolve_lens(trace, "debug", {"show_edge_shapes": True})
+    assert resolution.draw_kwargs["show_edge_shapes"] is True
 
 
 def test_visualize_feature_rejects_disconnected_objective_and_cleans_hooks():

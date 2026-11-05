@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .themes import fill_with_ink, ink_on_fill
+
 #: Key prefix separating aggregate-node keys from op/layer keys in the
 #: shared per-draw encoding maps (an op label can never start with it).
 AGGREGATE_KEY_PREFIX = "aggregate::"
@@ -221,12 +223,13 @@ def target_value(
     return value
 
 
-def segment_encoding_attrs(state: Any, name: str) -> dict[str, str]:
-    """Return Graphviz fill and size attrs for one encoded segment node.
+def segment_encoding_attrs(state: Any, name: str, ink: str | None = None) -> dict[str, str]:
+    """Return Graphviz fill, ink and size attrs for one encoded segment node.
 
     Segment capsules are emitted as raw node args (no NodeSpec funnel), so
-    this is their one channel writer. Size is a minimum (fixedsize=false):
-    the capsule can only grow from its label.
+    this is their one channel writer. A fill also rechecks the text colour
+    ``ink`` against it. Size is a minimum (fixedsize=false): the capsule can
+    only grow from its label.
     """
 
     if state is None:
@@ -235,7 +238,7 @@ def segment_encoding_attrs(state: Any, name: str) -> dict[str, str]:
     attrs: dict[str, str] = {}
     fill = state.colors.get(key)
     if fill is not None:
-        attrs["fillcolor"] = fill
+        attrs.update(fillcolor=fill, fontcolor=ink_on_fill(fill, ink) or "#000000")
     size = state.final_sizes.get(key) or state.sizes.get(key)
     if size is not None:
         attrs.update({"width": str(size[0]), "height": str(size[1]), "fixedsize": "false"})
@@ -254,7 +257,7 @@ def box_channel_spec(state: Any, name: str, spec: Any) -> Any:
     key = aggregate_key(name)
     fill = state.colors.get(key)
     if fill is not None:
-        spec = spec.replace(fillcolor=fill)
+        spec = fill_with_ink(spec, fill)
     size = state.sizes.get(key)
     if size is not None:
         spec = spec.replace(width=size[0], height=size[1], fixedsize="false")
