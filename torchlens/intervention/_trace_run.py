@@ -23,6 +23,7 @@ from .._capture.outcome import (
 )
 from .._capture.projectors import RefreshProjector
 from .._capture.structure_only import require_structure_only_capability
+from .._capture_state_helpers import unwrap_compiled_model
 from .._data_classes._staged_spec import _staged_user_entries
 from .._data_classes._trace_rerun_state import (
     mark_stateful_run_warning_emitted,
@@ -160,7 +161,9 @@ def try_guarded_fast_rerun(
     trace:
         Result fork carrying the staged spec; this door refreshes it in place on success.
     model:
-        The model the caller passed (or the trace's retained live model).
+        The model the caller passed (or the trace's retained live model); a
+        compiled wrapper is unwrapped to its eager source module, as the
+        capture rerun does.
     inputs:
         Transformed forward input.
     output_transform:
@@ -180,6 +183,7 @@ def try_guarded_fast_rerun(
     # The legacy door leaves no TorchLens hook on the user's model between calls, so
     # the session is built for the run and closed after it; fast=True keeps its own.
     close_fast_run_session(trace)
+    model = unwrap_compiled_model(model)
     session: _FastLiveSession | None = None
     try:
         session = _FastLiveSession(trace, model)
