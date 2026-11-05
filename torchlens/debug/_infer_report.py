@@ -102,7 +102,9 @@ class GuessInputShapeReport(FoundReport):
         facts = [f"found {dtype}{shape_text or 'no shape'}"]
         flexible = f"flexible dims {self.flexible_dims}" if self.flexible_dims else None
         constrained = (
-            f"constrained by {self.constraining_module}" if self.constraining_module else None
+            f"constrained by {_module_display_address(self.constraining_module)}"
+            if self.constraining_module
+            else None
         )
         # Width ladder (house style A1): drop the flexible dims first, then cut.
         for optional in ((flexible, constrained), (constrained,)):
@@ -110,3 +112,24 @@ class GuessInputShapeReport(FoundReport):
             if len(text) <= REPR_COLS:
                 return text
         return text[: REPR_COLS - 3] + "..."
+
+
+def _module_display_address(module: str) -> str:
+    """Drop a trailing ``:N`` call suffix from a module label for display.
+
+    ``constraining_module`` keeps the module-call label it was read from
+    (``conv1:1``); the one-line repr names the module (``conv1``).
+
+    Parameters
+    ----------
+    module:
+        Module address or module-call label.
+
+    Returns
+    -------
+    str
+        The module address without a numeric call suffix.
+    """
+
+    address, sep, suffix = module.rpartition(":")
+    return address if sep and address and suffix.isdigit() else module
