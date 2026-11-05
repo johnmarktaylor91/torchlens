@@ -807,12 +807,12 @@ def test_map_grad_witness_census_of_the_body_equals_the_forced_eager_capture() -
 def test_map_grad_planted_drop_is_named_by_the_witness(monkeypatch: pytest.MonkeyPatch) -> None:
     """Under grad, a body op the capture leaves unlogged inside ``map`` is named by the census.
 
-    The planted over-broad guard passes the body's ``* 2.0`` through unlogged
-    during the compiled graph's run; the witness, re-entered for that run,
-    reports the ``aten.mul`` and the capture is not verified.
+    The planted wrapper passes each row's ``* 2.0`` through unlogged and
+    unpaused during the compiled graph's run; the witness, re-entered for that
+    run, reports one ``aten.mul`` per row and the capture is not verified.
     """
 
-    _plant_over_broad_guard(monkeypatch)
+    _plant_unpaused_drop(monkeypatch)
     x = _input("map").requires_grad_(True)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -823,7 +823,7 @@ def test_map_grad_planted_drop_is_named_by_the_witness(monkeypatch: pytest.Monke
         outputs = len(trace.output_layers)
     finally:
         trace.cleanup()
-    assert any(name.startswith("aten.mul.") for name in operators), operators
+    assert operators.count("aten.mul.Tensor") == 3, operators
     assert verified is False
     assert outputs == 1
 
@@ -831,16 +831,22 @@ def test_map_grad_planted_drop_is_named_by_the_witness(monkeypatch: pytest.Monke
 def test_map_grad_validation_with_a_planted_drop_fails_on_the_census(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Under grad, ``tl.validate`` fails ``map`` with a dropped body op, not on output count."""
+    """Under grad, ``tl.validate`` fails ``map`` on the dispatch census of its dropped body ops.
 
-    _plant_over_broad_guard(monkeypatch)
+    Each row's unlogged ``* 2.0`` is dispatched but not captured, so the census
+    counts exactly three more dispatched ops than captured ones.
+    """
+
+    _plant_unpaused_drop(monkeypatch)
     model, x = _model("map"), _input("map")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
     failure = tl.validation.last_validation_failure()
     assert failure is not None
-    assert failure.check_name != "ground_truth_missing_out", failure
+    assert failure.check_name == "bfs_completeness", failure
+    counts = failure.extra
+    assert counts["dispatch_op_count"] - counts["captured_op_count"] == 3, counts
 
 
 @pytest.mark.parametrize("name", _ALL_CASES)
