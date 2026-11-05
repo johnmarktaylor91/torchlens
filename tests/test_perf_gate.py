@@ -243,9 +243,10 @@ def _clean_process_small_capture_medians() -> list[float]:
         check=False,
     )
     lines = [line for line in proc.stdout.splitlines() if line.startswith("MEDIANS ")]
-    assert proc.returncode == 0 and lines, (
-        f"clean-process measurement failed (rc={proc.returncode}):\n{proc.stderr[-4000:]}"
-    )
+    if proc.returncode != 0 or not lines:
+        pytest.fail(
+            f"clean-process measurement failed (rc={proc.returncode}):\n{proc.stderr[-4000:]}"
+        )
     return [float(value) for value in json.loads(lines[-1].removeprefix("MEDIANS "))]
 
 
