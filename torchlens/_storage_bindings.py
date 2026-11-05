@@ -238,7 +238,7 @@ def has_view_geometry_of(rebuilt: torch.Tensor, recorded: torch.Tensor) -> bool:
 def copy_with_view_context(
     tensor: torch.Tensor,
     force_tracking: Callable[[bool], AbstractContextManager[Any]] | None,
-    replay_view_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    replay_view_func: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] | None,
 ) -> torch.Tensor:
     """Copy a view together with a private copy of its base, keeping the view relation.
 
@@ -248,8 +248,8 @@ def copy_with_view_context(
     later ``_view_func`` or ``_rev_view_func_unsafe`` call. A receiver without a
     view chain (a ``None`` from torch) or one whose chain does not rebuild its
     geometry gets a compact detached clone, which replay refuses. So does every
-    receiver when ``force_tracking`` is ``None`` (torch lacks original-view
-    tracking): replay then fails loudly instead of running without it.
+    receiver when ``force_tracking`` or ``replay_view_func`` is ``None`` (torch lacks
+    original-view tracking or the replay): replay then fails loudly instead.
 
     Parameters
     ----------
@@ -262,7 +262,8 @@ def copy_with_view_context(
     replay_view_func:
         The unbound unchecked view-chain replay, from the capability accessor
         ``get_view_func_replay`` (``Tensor._view_func_unsafe``, or the older
-        ``Tensor._view_func`` spelling when ``HAS_VIEW_FUNC_UNSAFE`` reads ``False``).
+        ``Tensor._view_func`` spelling when ``HAS_VIEW_FUNC_UNSAFE`` reads ``False``;
+        ``None`` when torch has neither).
 
     Returns
     -------
@@ -270,7 +271,8 @@ def copy_with_view_context(
         The rebuilt view, or a compact detached clone as described above.
     """
 
-    if force_tracking is not None and tensor._is_view() and tensor._base is not None:
+    viewable = tensor._is_view() and tensor._base is not None
+    if force_tracking is not None and replay_view_func is not None and viewable:
         base_copy = copy_with_storage_context(tensor._base.detach())
         with force_tracking(True):
             rebuilt = replay_view_func(tensor, base_copy)

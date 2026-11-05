@@ -2109,18 +2109,15 @@ def get_force_original_view_tracking() -> Callable[[bool], Any] | None:
     return _resolve_or_mark_missing("HAS_ORIGINAL_VIEW_TRACKING", "view-func replay refuses views")
 
 
-def get_view_func_replay() -> Callable[..., Any]:
-    """Return ``Tensor._view_func_unsafe``, else torch 2.1's ``Tensor._view_func``.
+def get_view_func_replay() -> Callable[..., Any] | None:
+    """Return ``Tensor._view_func_unsafe``, else torch 2.1's ``Tensor._view_func``, else ``None``.
 
     Torch 2.2 renamed the unchecked view-chain replay to ``_view_func_unsafe`` and
-    gave ``_view_func`` a checked wrapper; on 2.1 ``_view_func`` is that same
-    unchecked replay, so the fallback replays identically (``HAS_VIEW_FUNC_UNSAFE``).
+    gave ``_view_func`` a checked wrapper; on 2.1 ``_view_func`` is that same unchecked
+    replay (``HAS_VIEW_FUNC_UNSAFE``). ``None`` (neither) makes view replay refuse.
     """
     found = _resolve_attribute_path(_ATTRIBUTE_PROBES["HAS_VIEW_FUNC_UNSAFE"][0])
-    if found is None:
-        # Read through the probe resolver: newer torch stubs drop ``Tensor._view_func``.
-        found = _resolve_attribute_path("torch:Tensor._view_func")
-    return found
+    return found if found is not None else _resolve_attribute_path("torch:Tensor._view_func")
 
 
 def get_functorch_transform_probe() -> Callable[[], Any] | None:
