@@ -21,6 +21,7 @@ Helpers from ``core`` are imported lazily (``core`` imports this module).
 
 from __future__ import annotations
 
+import heapq
 import inspect
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -28,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils._tensor_layout import relay_to_layout
 from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, recorder_signature
@@ -36,7 +38,7 @@ from ..backends.torch._autograd_grad_marker import (
     is_autograd_grad_recorder,
 )
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
-from ._replay_storage_context import check_view_context_receiver
+from ._replay_storage_context import check_view_context_receiver, slot_capture_layout
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -193,6 +195,40 @@ def _select_output(op: Op, output: Any) -> Any:
     return output
 
 
+def _recorded_order(pending: dict[str, Op], resolve: Callable[[str], Op]) -> list[Op]:
+    """Return ``pending`` ops parents-first, in capture's execution order where it allows.
+
+    The order key is the op's capture event index (``raw_index``). A parent's
+    event always precedes its children's, so sorting by it alone is already
+    topological; the ready-set walk keeps parents first even for an op without a
+    usable index.
+    """
+
+    def key(op: Op) -> tuple[int, str]:
+        index = getattr(op, "raw_index", None)
+        return (index if isinstance(index, int) else -1, op.label)
+
+    waiting = {
+        label: {parent.label for parent in map(resolve, tuple(op.parents))} & pending.keys()
+        for label, op in pending.items()
+    }
+    children: dict[str, list[str]] = {label: [] for label in pending}
+    for label, parents in waiting.items():
+        for parent in parents:
+            children[parent].append(label)
+    ready = [(key(pending[label]), label) for label, parents in waiting.items() if not parents]
+    heapq.heapify(ready)
+    ordered: list[Op] = []
+    while ready:
+        _, label = heapq.heappop(ready)
+        ordered.append(pending[label])
+        for child in children[label]:
+            waiting[child].discard(label)
+            if not waiting[child]:
+                heapq.heappush(ready, (key(pending[child]), child))
+    return ordered
+
+
 class _SubgraphReplay:
     """Recompute the recorded forward subgraph between a boundary's inputs and roots.
 
@@ -249,29 +285,48 @@ class _SubgraphReplay:
                 return True
         return False
 
-    def _replay_ancestors(self, root: Op) -> None:
-        """Post-order walk from ``root``: replay every op that depends on an input."""
+    def replay_roots(self, labels: list[str]) -> None:
+        """Replay every op the roots named by ``labels`` depend on, all in one ordered pass."""
 
-        stack: list[tuple[Op, bool]] = [(root, False)]
+        self._replay_ancestors(*(self.resolve(label) for label in labels))
+
+    def _replay_ancestors(self, *roots: Op) -> None:
+        """Replay the not-yet-replayed ancestors of ``roots`` in the recorded execution order.
+
+        Autograd's engine runs ready backward nodes newest first (by creation
+        sequence number), and the gradient contributions reaching one node are
+        summed in the order its consumers' backward nodes run. Building the
+        replayed subgraph in any other order sums the same terms in another order,
+        which moves a gradient made of cancelling terms by a rounding step. So the
+        subgraph is rebuilt in the order capture executed it (see
+        :func:`_recorded_order`).
+        """
+
+        pending: dict[str, Op] = {}
+        stack = list(roots)
         while stack:
-            op, parents_done = stack.pop()
-            if op.label in self.depends:
+            op = stack.pop()
+            if op.label in self.depends or op.label in pending:
                 continue
-            parents = [self.resolve(label) for label in tuple(op.parents)]
-            if not parents_done:
-                stack.append((op, True))
-                stack.extend((parent, False) for parent in parents)
-                continue
-            depends = self._reads_input_param(op) or any(
-                self.depends.get(parent.label, False) for parent in parents
-            )
-            if op.label in self.input_values:
-                self.values[op.label] = self._input_node(op, depends)
-                self.depends[op.label] = True
-                continue
-            self.depends[op.label] = depends
-            if depends:
-                self.values[op.label] = self._replay_op(op)
+            pending[op.label] = op
+            stack.extend(self.resolve(label) for label in tuple(op.parents))
+        for op in _recorded_order(pending, self.resolve):
+            self._replay_one(op)
+
+    def _replay_one(self, op: Op) -> None:
+        """Replay one op whose parents are all replayed or known constant."""
+
+        parents = [self.resolve(label) for label in tuple(op.parents)]
+        depends = self._reads_input_param(op) or any(
+            self.depends.get(parent.label, False) for parent in parents
+        )
+        if op.label in self.input_values:
+            self.values[op.label] = self._input_node(op, depends)
+            self.depends[op.label] = True
+            return
+        self.depends[op.label] = depends
+        if depends:
+            self.values[op.label] = self._replay_op(op)
 
     def grad_input(self, label: str) -> torch.Tensor:
         """Return the tensor the ``inputs`` slot of op input ``label`` differentiates against.
@@ -329,6 +384,8 @@ class _SubgraphReplay:
                 if is_inplace:
                     replayed = replayed.clone()
                 replayed = align_parent_to_slot_device(input_args, arg_domain, key, replayed)
+                # Differentiable copy into the recorded layout (grad mode is on here).
+                replayed = relay_to_layout(replayed, slot_capture_layout(op, arg_domain, key))
                 key_path = key if isinstance(key, tuple) else (key,)
                 input_args[arg_domain] = _write_path(input_args[arg_domain], key_path, replayed)
         input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
@@ -404,7 +461,9 @@ def _replayed_outputs(
 
     from .._utils.tensor_utils import tensor_nanequal
 
-    for path, root_label in _parent_slots_under(layer, outputs_slot).items():
+    root_slots = _parent_slots_under(layer, outputs_slot)
+    replay.replay_roots(list(root_slots.values()))
+    for path, root_label in root_slots.items():
         label = replay.resolve(root_label).label
         replayed_root = replay.value(label)
         saved_root = _read_path(outputs_value, path)
