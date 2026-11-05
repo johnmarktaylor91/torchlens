@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import torch
@@ -22,7 +23,9 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
+from torchlens._runnable import PathFaithfulness
 from torchlens.errors import MetadataInvariantError
+from torchlens.options import CaptureOptions
 from torchlens.validation import check_metadata_invariants
 
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
@@ -208,3 +211,24 @@ def test_unrecorded_clone_falls_back_and_still_fails(
             check_metadata_invariants(trace)
     finally:
         trace.cleanup()
+
+
+def test_reused_bool_model_saves_runnable_and_verifies(tmp_path: Path) -> None:
+    """Under the replayable witness belt each later test logs one record and replays VERIFIED."""
+
+    model = ThreeIfsOneBoolElse().eval()
+    value = torch.ones(2, 3)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(
+            model,
+            value,
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
+            save="all",
+        )
+    assert len(_ops_named(trace, "clone")) == 2
+    path = tmp_path / "reused-bool.tlspec"
+    trace.save(path, level="runnable", include_weights=True)
+    result = tl.load(path).run_transaction(inputs=value, seed=0)
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert torch.equal(result.output, model(value))
