@@ -537,8 +537,8 @@ class AddOnes(torch.nn.Module):
         return x + torch.ones(4)
 trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.layers["ones_1_1"], trace.layers["add_1_2"]
-print("is_internal_source", ones.is_internal_source, add.is_internal_source)
-print("has_input_ancestor", ones.has_input_ancestor, add.has_input_ancestor)
+print("is_internal_source", ones.graph.is_internal_source, add.graph.is_internal_source)
+print("has_input_ancestor", ones.graph.has_input_ancestor, add.graph.has_input_ancestor)
 print("internal_source_parents", add.internal_source_parents)
 # Output:
 # is_internal_source True False
@@ -680,7 +680,7 @@ The `if` test is a terminal bool layer (per layer).
 
 ```python
 trace = tl.trace(model, x)
-layer = next(l for l in trace.layers if l.is_terminal_bool)
+layer = next(l for l in trace.layers if l.control_flow.is_terminal_bool)
 print("layer_label", layer.layer_label)
 print("is_scalar_bool", layer.control_flow.is_scalar_bool)
 print("bool_value", layer.control_flow.bool_value)

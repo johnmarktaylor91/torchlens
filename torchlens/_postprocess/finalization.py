@@ -1335,8 +1335,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     for layer_label in self._layer_dict_main_keys:
         tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
-        bind_template_keys(tensor.args_template, self._layer_dict_all_keys)
-        bind_template_keys(tensor.kwargs_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor.call.args_template, self._layer_dict_all_keys)
+        bind_template_keys(tensor.call.kwargs_template, self._layer_dict_all_keys)
     self._tracing_finished = True
 
 
