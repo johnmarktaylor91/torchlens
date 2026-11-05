@@ -535,7 +535,8 @@ def _scalar_escape_advisory_texts(state: Any, location: str) -> tuple[str, str]:
     but whatever Python then computed or decided with it has no edge back to
     the tensor, and a branch it decided is not a recorded conditional. When
     some reads were bool tests in code whose source cannot be read, the text
-    names that cause, since running from a ``.py`` file records those branches.
+    names that cause: without the source TorchLens cannot tell an ``if`` test
+    (whose branch it records from a ``.py`` file) from a ``while`` or ``assert``.
 
     Parameters
     ----------
@@ -558,8 +559,9 @@ def _scalar_escape_advisory_texts(state: Any, location: str) -> tuple[str, str]:
     if state.unreadable_source_count:
         unreadable = (
             f"; {state.unreadable_source_count} of these reads are bool tests in code with no "
-            "readable source file (exec of a string, stdin or a notebook cell), so their "
-            "branches could not be recorded; run the code from a .py file to record them"
+            "readable source file (exec of a string, stdin or a notebook cell), so TorchLens "
+            "could not tell whether they are if tests, whose branches it records; run the code "
+            "from a .py file to record those branches"
         )
     row_message = (
         f"tensor-to-Python scalar escape(s) observed during capture; {missing}{unreadable}"
