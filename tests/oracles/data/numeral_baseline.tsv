@@ -8411,6 +8411,7 @@ test-docstrings	tests/test_agent_surface_fold.py	12
 test-docstrings	tests/test_agent_surface_fold.py	18
 test-docstrings	tests/test_agent_surface_fold.py	24
 test-docstrings	tests/test_agent_surface_fold.py	3.4
+test-docstrings	tests/test_ancestry_closure_invariant.py	21
 test-docstrings	tests/test_ancestry_closure_invariant.py	73
 test-docstrings	tests/test_api_surface.py	10
 test-docstrings	tests/test_api_surface.py	102
@@ -8761,6 +8762,8 @@ test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	21
 test-docstrings	tests/test_edge_multiplicity_render.py	14
 test-docstrings	tests/test_encoding_channels.py	2.3
 test-docstrings	tests/test_encoding_channels.py	2.4
+test-docstrings	tests/test_encoding_ramps.py	14
+test-docstrings	tests/test_encoding_ramps.py	2.43
 test-docstrings	tests/test_encoding_ramps.py	2026
 test-docstrings	tests/test_encoding_size.py	1,8,10,10
 test-docstrings	tests/test_encoding_size.py	1,8,14,14
