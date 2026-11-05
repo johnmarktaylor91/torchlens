@@ -30,7 +30,6 @@ from unittest import mock
 import pytest
 import torch
 from torch import nn
-from torchlens.validation.diagnostics import get_validation_diagnostics
 
 import torchlens._user_funcs as user_funcs
 import torchlens.backends.torch._ops_exhaustive
@@ -38,6 +37,7 @@ import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
 from torchlens import _state, _user_public_impls, _validation_argument_references as arg_references
 from torchlens.backends.torch import _ops_saved_arg_copies as saved_arg_copies
+from torchlens.validation._diagnostics import get_validation_diagnostics
 
 
 def _validate(
