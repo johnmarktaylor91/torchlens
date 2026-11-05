@@ -20,6 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._capture_honesty import honesty_banner_lines
 from torchlens._visualization._edit_change import CHANGED_INK, _value_change
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
@@ -81,7 +82,8 @@ def test_downstream_changes_are_outlined_with_their_largest_change(tmp_path: Pat
     assert "penwidth=3" in edited
     expected = float((fork["linear_2_3:1"].out - clean["linear_2_3:1"].out).abs().max())
     assert f"changed by up to {expected:.3g}" in _node(source, "linear_2_3")
-    assert "light purple: changed by the edit" in source
+    assert "changed by the edit" in source  # the key's colour chip, not a legend line
+    assert "purple outline" not in source
 
 
 def test_header_drops_status_jargon_and_census_keeps_it(tmp_path: Path) -> None:
@@ -99,12 +101,15 @@ def test_header_drops_status_jargon_and_census_keeps_it(tmp_path: Path) -> None:
     assert "exit values were substituted" in census
 
 
-def test_plain_draw_of_the_fork_keeps_its_header_lines(tmp_path: Path) -> None:
-    """Only the view moves the status lines; a plain draw still shows them."""
+def test_plain_draw_of_the_fork_drops_the_status_lines(tmp_path: Path) -> None:
+    """A plain draw's header says the edit in one line; the facts stay on the trace."""
 
     _clean, fork = _edited_pair()
     source = fork.draw(path=str(tmp_path / "plain"), file_format="svg").dot
-    assert "INTERVENED capture" in source
+    for jargon in ("capture outcome", "INTERVENED capture", "COUNTERFACTUAL"):
+        assert jargon not in source, jargon
+    assert "1 edit:" in source
+    assert any(line.startswith("INTERVENED capture") for line in honesty_banner_lines(fork))
 
 
 def test_missing_clean_values_are_said_in_one_line(tmp_path: Path) -> None:

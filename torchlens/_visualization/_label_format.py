@@ -423,15 +423,16 @@ COMPACT_COUNT_FROM = 10_000
 _COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
 
 
-def compact_count(count: int) -> str:
-    """Return a count for a drawing: in full below 10,000, else 3 significant figures.
+def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
+    """Return a count for a drawing: in full below ``full_below``, else 3 significant figures.
 
     ``9999`` stays ``"9999"``; ``147968`` is ``"148K"``, ``85798656`` is
     ``"85.8M"`` and ``1_500_000_000`` is ``"1.5B"``. The exact count stays in
-    the data and the node tooltip.
+    the data and the node tooltip. The header's parameter count passes
+    ``full_below=1000`` (``1024`` is ``"1.02K"``).
     """
 
-    if count < COMPACT_COUNT_FROM:
+    if count < full_below:
         return str(count)
     for index, (divisor, suffix) in enumerate(_COUNT_UNITS):
         if count >= divisor or index == len(_COUNT_UNITS) - 1:
@@ -441,6 +442,12 @@ def compact_count(count: int) -> str:
                 text = f"{count / divisor:.3g}"
             return f"{text}{suffix}"
     return str(count)
+
+
+def header_count(count: int) -> str:
+    """Return a header count: thousands separators below 10,000, compact from there."""
+
+    return f"{count:,}" if count < COMPACT_COUNT_FROM else compact_count(count)
 
 
 def collapsed_param_detail(num_params: int, num_frozen: int) -> str:

@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from .._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
     INTERVENTION_SITE_COLOR,
     CollapsedNodeSpecFn,
     NodeSpec,
@@ -133,8 +134,6 @@ _MAX_MARK_ROWS_PER_NODE = 3
 
 #: Capture-status header lines the interventions view leaves to its census:
 #: the header's edit line already says the trace is edited.
-EDIT_VIEW_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
-
 #: Cap on caption census lines before deferring to the sidecar/text form.
 _MAX_CAPTION_LINES = 12
 
@@ -529,8 +528,8 @@ class SurgeryCensus:
     def caption_lines(self) -> tuple[str, ...]:
         """The short form drawn on the figure; the full census is the sidecar.
 
-        The outline key (with the changed-op count, or why changed ops are not
-        shown), declared rules that never fired, edited regions and the
+        Facts the key's colour chips cannot give (an inferred edit site, or
+        why changed ops are not shown), declared rules that never fired, edited regions and the
         injected-op count. Lane wording, site keys, the capture-status header
         lines and acknowledgment rows stay in :meth:`to_text`.
         """
@@ -606,7 +605,9 @@ def _omitted_header_rows(trace: Trace) -> tuple[str, ...]:
     from .._capture_honesty import honesty_banner_lines
 
     return tuple(
-        line for line in honesty_banner_lines(trace) if line.startswith(EDIT_VIEW_OMITTED_BANNERS)
+        line
+        for line in honesty_banner_lines(trace)
+        if line.startswith(EDITED_HEADER_OMITTED_BANNERS)
     )
 
 

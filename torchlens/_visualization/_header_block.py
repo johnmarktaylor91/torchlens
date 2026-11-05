@@ -33,10 +33,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
+from .._vocab.node_spec import (
+    EDITED_HEADER_OMITTED_BANNERS,
+    LENS_BANNER_OMIT_KEY,
+    LENS_CAPTION_KEY,
+)
 from ._focus_scope import scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
-from ._label_format import format_memory
+from ._label_format import compact_count, format_memory, header_count
 from ._render_utils import html_escape
 from .themes import resolve_theme
 
@@ -107,22 +111,23 @@ class KeySwatch:
 
 
 def params_caption_detail(trace: Trace) -> str:
-    """Return the header's parameter line, for example ``1,024 params (4.0 KB, all trainable)``.
+    """Return the header's parameter line, for example ``11.7M params (44.6 MB, all trainable)``.
 
-    Counts take thousands separators so a large model reads at a glance
-    (``124,439,808 params``), and the memory uses the binary unit its 1024
-    divisor implies.
+    Counts from 1,000 up print compact (``124M params``); the exact count stays
+    on ``trace.num_params``. The memory uses the binary unit of its 1024 divisor.
     """
 
     total = int(trace.num_params)
     if total == 0:
         return "0 params"
     memory = format_memory(trace._cost_total_param_memory)
+    count = compact_count(total, full_below=1000)
     if trace.num_params_frozen == 0:
-        return f"{total:,} params ({memory}, all trainable)"
+        return f"{count} params ({memory}, all trainable)"
     if trace.num_params_trainable == 0:
-        return f"{total:,} params ({memory}, all frozen)"
-    return f"{total:,} params ({memory}, {int(trace.num_params_trainable):,}/{total:,} trainable)"
+        return f"{count} params ({memory}, all frozen)"
+    trainable = compact_count(int(trace.num_params_trainable), full_below=1000)
+    return f"{count} params ({memory}, {trainable}/{count} trainable)"
 
 
 def _unit_memory(trace: Trace, unit: Any) -> int | None:
@@ -192,13 +197,13 @@ def drawn_count_line(trace: Trace, universe: NodeUniverse, vis_mode: str) -> str
         size = format_memory(sum(memory for _, memory in rolled))
         layer_noun = "layer" if count == 1 else "layers"
         op_noun = "op" if ops == 1 else "ops"
-        return f"{count:,} {layer_noun} ({ops:,} {op_noun}, {size})"
+        return f"{header_count(count)} {layer_noun} ({header_count(ops)} {op_noun}, {size})"
     if has_module_box:
         noun = "node" if count == 1 else "nodes"
     else:
         noun = "op" if count == 1 else "ops"
     total = sum(_unit_memory(trace, unit) or 0 for unit in counted)
-    return f"{count:,} {noun} ({format_memory(total)})"
+    return f"{header_count(count)} {noun} ({format_memory(total)})"
 
 
 def graph_caption_html(
@@ -226,7 +231,7 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
         caption_body += f"{edit_line}<br align='left'/>"
     if getattr(trace, "_has_direct_writes", False):
         caption_body += "Direct writes detected - recipe propagation will overlay<br align='left'/>"
-    caption_body += _honesty_banner_rows(trace, request)
+    caption_body += _honesty_banner_rows(trace, request, edited=edit_line is not None)
     encoding_state = getattr(request, "encoding", None)
     if encoding_state is not None and getattr(encoding_state, "stack_spec", None) is not None:
         # Stacking disclosure is part of the contract (memo 4.1): the
@@ -280,20 +285,23 @@ def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
     return scope_caption_head(trace, module, count_line, params_caption_detail(trace))
 
 
-def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest) -> str:
+def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest, *, edited: bool) -> str:
     """Return the capture-honesty banner rows as caption HTML.
 
     A poisoned/diverged sparse run, an unverified capture, or an episode
     capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
     artifact, so the caption carries the facts. The picture keeps a cited
     source location's file name and line only. A view may move named lines
-    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census).
+    to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census);
+    an edited trace's edit line drops :data:`EDITED_HEADER_OMITTED_BANNERS`.
     """
 
     from .._capture_honesty import honesty_banner_lines
     from ._render_utils import strip_path_directories
 
     omitted = tuple((request.graph_overrides or {}).get(LENS_BANNER_OMIT_KEY, ()))
+    if edited:
+        omitted += EDITED_HEADER_OMITTED_BANNERS
     rows = ""
     for banner_line in honesty_banner_lines(trace):
         if omitted and banner_line.startswith(omitted):
