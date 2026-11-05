@@ -235,7 +235,7 @@ def _force_registration_imports() -> None:
 def _all_dispatcher_schemas() -> list[Any]:
     """Return every dispatcher schema, or refuse typed when unenumerable.
 
-    r-b4 R26-2: routed through the ``_torch_compat`` accessor
+    Routed through the ``_torch_compat`` accessor
     (``HAS_JIT_SCHEMA_ENUMERATION``). A private-API rename used to escape as a
     raw ``AttributeError`` at ``tl.distributed.arm()``; an unenumerable
     dispatcher now raises the contract's typed ``uncaptured_collective_op``

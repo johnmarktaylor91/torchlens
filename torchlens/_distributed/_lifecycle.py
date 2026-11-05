@@ -254,7 +254,7 @@ def _dist() -> Any:
 def _any_group_history() -> bool:
     """Whether any process group has been observed alive in this process.
 
-    FAIL-CLOSED (round-3 R18): when this returns ``False``, ``arm()`` stamps
+    FAIL-CLOSED: when this returns ``False``, ``arm()`` stamps
     ``armed_before_any_group`` -- the complete-witness epoch whose lineage
     vector the merge-time audit lets override other ranks' evidence. A probe
     failure or an unreadable private registry therefore reads as "history

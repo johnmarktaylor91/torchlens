@@ -15,7 +15,7 @@ import numpy as np
 import torch
 from torch import nn
 
-# r-b4 R26-6c: read capability flags at USE time through the module object --
+# read capability flags at USE time through the module object --
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES

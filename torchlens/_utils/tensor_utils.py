@@ -550,7 +550,7 @@ def tensor_nanequal(
 
         # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every comparison
         # below used to escape tl.trace() as a raw torch-internal NotImplementedError naming
-        # the SparseCPU dispatcher (R65; the layout sibling of the fp8 class documented below).
+        # the SparseCPU dispatcher (the layout sibling of the fp8 class documented below).
         # Compare the canonical structure exactly and recurse on the strided values tensor so
         # NaN/Inf/tolerance semantics match the dense path.
         if tensor_a.layout != tensor_b.layout:

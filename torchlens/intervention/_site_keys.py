@@ -128,8 +128,8 @@ def mint_keys_in_execution_order(trace: Any) -> dict[str, str]:
 
     The parity harness: feeding the SAME streaming minter the retained ops
     in raw execution order must reproduce ``op.graph.site_key`` byte-identically
-    (property P4 sibling). Used by the C03 parity pin; also the reference
-    implementation the F01 bind runtime can consume.
+    (property P4 sibling). Used by the parity pin; also the reference
+    implementation the bind runtime can consume.
 
     Returns
     -------

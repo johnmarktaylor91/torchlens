@@ -560,7 +560,7 @@ def probe_attention_causal_bias() -> bool:
     -----
     This probe NEVER imports ``torch.nn.attention.bias``: on torch 2.13 its
     module body reaches ``torch._dynamo``, whose import tree also drags in
-    ``torch.distributed.fsdp`` -- breaking the W21 cold-start guarantee that a
+    ``torch.distributed.fsdp`` -- breaking the cold-start guarantee that a
     plain eager capture pays neither import. ``find_spec`` imports only the
     parent ``torch.nn.attention`` package (verified dynamo-free), and a process
     that never imported the module cannot hold a ``CausalBias`` instance, so

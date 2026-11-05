@@ -13,7 +13,7 @@ Tiers: CORE-5 = overview, debug, speed, dims, transformer.
 EXTENDED-3 = memory, sequence, compute. The ninth row, ``interventions``,
 registers in ``surgery_visuals``.
 
-``overview`` is registered by the C05 substrate (``theme_registry``); this
+``overview`` is registered by the substrate (``theme_registry``); this
 module registers the remaining seven and the
 roster-level tables. Import is idempotent per process (the registry refuses
 double registration; this module registers once at first import).

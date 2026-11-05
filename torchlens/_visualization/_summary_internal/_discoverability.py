@@ -1,7 +1,7 @@
 """The capture-provenance block served by ``trace.provenance.summary()``.
 
 The ~35-line block and its exclusive helpers (formerly the summary
-preamble; the F08 rebuild moved it to ``trace.provenance.summary()`` byte-identically).
+preamble; the rebuild moved it to ``trace.provenance.summary()`` byte-identically).
 """
 
 from __future__ import annotations

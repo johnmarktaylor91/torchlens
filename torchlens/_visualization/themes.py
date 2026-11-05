@@ -6,7 +6,7 @@ semantic palette (N4: the rendered node-role colors resolve through the
 active skin at :func:`apply_theme_to_spec`, replacing the dead
 ``legend_items`` data deleted in the same change), a sequential ramp stop
 list (low value first, blended in OKLab; ``_ramps``), and the declared
-NEUTRAL "aggregate, not encoded" fill (N17) for collapsed boxes under an
+NEUTRAL "aggregate, not encoded" fill for collapsed boxes under an
 active channel.
 
 The default ``torchlens`` skin and the ``colorblind`` skin render the

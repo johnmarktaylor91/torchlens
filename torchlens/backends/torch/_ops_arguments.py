@@ -254,7 +254,7 @@ def _unlabeled_tensor_literal(value: torch.Tensor) -> LiteralTensor:
     """Template a tensor argument that has no live parent label as a literal."""
 
     if isinstance(value, torch.nn.Parameter):
-        # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
+        # snapshot the model-prep barcode NOW (model provably alive) --
         # session cleanup strips the weak registry meta before a deferred save,
         # so the template itself must carry the capture-time identity.
         param_meta = get_param_meta(value)

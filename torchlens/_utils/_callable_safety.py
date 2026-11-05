@@ -1288,7 +1288,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     still resolve. Module-less C tensor method descriptors are admitted when bound to a
     Tensor class (so the whole C tensor-op surface keeps resolving).
 
-    Raw-pointer family (r50): every torch tensor / storage CLASS, every inspectable
+    Raw-pointer family: every torch tensor / storage CLASS, every inspectable
     pointer / address / handle-taking callable and every builtin of a ``torch._C.*``
     submodule not EXACTLY listed is denied before the module gate (``_raw_pointer_denial``),
     closing the ``cdata=`` constructor families and the pybind pointer adopters as a CLASS.
@@ -1316,13 +1316,13 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # ``_is_side_effecting_callable_name`` (whose second caller gates facet recipes).
     if _is_denied_forward_dunder_name(_terminal_callable_name(real)):
         return False
-    # r41: deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
+    # deny higher-order / callback-taking ops by SIGNATURE shape (``torch.cond`` /
     # ``while_loop`` / ``handle_torch_function`` / ``_check_with`` / ``_disable_dynamo``),
     # which carry no ``map`` / ``register`` name marker, BEFORE the module gate so one in
     # the allowlisted ``torch`` namespace cannot slip; no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally BEFORE the module gate,
+    # deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally BEFORE the module gate,
     # whose bare ``torch`` / ``torch._C`` prefixes admit deeper submodules.
     if _unchecked.is_unchecked_memory_kernel(real):
         return False

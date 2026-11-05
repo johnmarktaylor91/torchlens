@@ -704,7 +704,7 @@ def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]])
 def apply_patch_items(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
     """Apply ordered ``(facet path, value)`` pairs to any journal shape (DoR 4.4).
     ``OpRecord``s fold via :func:`record_with_path_updates`, row handles via their
-    overlay (``with_patch``), compat ``OpEvent``s via ``PATH_TO_FLAT`` (dies in S15).
+    overlay (``with_patch``), compat ``OpEvent``s via ``PATH_TO_FLAT`` (dies).
     """
 
     if isinstance(event, OpRecord):

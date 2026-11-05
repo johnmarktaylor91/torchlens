@@ -13,7 +13,7 @@ callable, or the closed ``"dims"`` shape token mapped to node width/height
 minimums (Graphviz ``fixedsize=false`` -- a label can never be truncated by
 an encoding, and the max clamp bounds encoded area at
 :data:`SIZE_BY_MAX_AREA_MULT` times the typical node area). The shipped
-multi-dim -> geometry mapping is the D4 DEFAULT (memo 3.2 C2, AREA-ONLY:
+multi-dim -> geometry mapping is the DEFAULT (AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
 preserved) with the default ``scale="sqrt"`` -- no rule was
 set for this, so the default applies and is marked as default-applied.
@@ -544,7 +544,7 @@ class EncodingState:
     stack_spec: EncodingChannelSpec | None = None
     stack_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
     stack_notes: list[str] = field(default_factory=list)
-    # Skin-supplied ramp stop list, low value first (N4). None keeps the
+    # Skin-supplied ramp stop list, low value first. None keeps the
     # module fallback stops.
     ramp_stops: tuple[str, ...] | None = None
 
@@ -1625,7 +1625,7 @@ def attach_encoding_state(
             size_spec=size_spec,
             size_scale=size_scale,
             stack_spec=stack_spec,
-            # The skin's ramp stops (N4). The low stop is off-ground by
+            # The skin's ramp stops. The low stop is off-ground by
             # construction: an encoded-lowest node is never invisible (the
             # measured white-on-white absence defect).
             ramp_stops=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,

@@ -800,7 +800,7 @@ def _render_raw_input(
         if not include_more:
             strings = strings[:max_items]
         # Lazy: ..viz top-imports this package, so an import-time edge back
-        # into ..viz would mint a bidirectional package cycle (b5 R51).
+        # into ..viz would mint a bidirectional package cycle.
         from ..viz import _batch_summary as batch_summary
 
         return {

@@ -130,11 +130,11 @@ class TensorMeta(TorchLensMeta):
     label_raw: str | None = None
     address: str | None = None
     buffer_source: str | None = None
-    # r83 C1: monotonic token of the capture session that issued ``label_raw``
+    # monotonic token of the capture session that issued ``label_raw``
     # (and, after promotion, ``buffer_source``). The per-object anchor that
     # makes label provenance current-session; see the label-session block below.
     label_session: int | None = None
-    # r85: STRONG reference to the ``UntypedStorage`` the object held when its
+    # STRONG reference to the ``UntypedStorage`` the object held when its
     # label was last stamped by ``set_tensor_label`` -- the label rung's
     # storage-integrity pin, the activation/label twin of r81's buffer-address
     # keeper (``_SessionBufferStamp.storage``). The IDENTITY anchor
@@ -148,7 +148,7 @@ class TensorMeta(TorchLensMeta):
     # inventory, whose weakness is required for exactly that reason). Only a
     # genuinely rebound (adversarial) object leaves its superseded storage pinned
     # for the object's lifetime, which is what makes the ``data_ptr`` comparison a
-    # true identity proof rather than a recyclable-pointer heuristic (r81 S2).
+    # true identity proof rather than a recyclable-pointer heuristic.
     label_storage: Any | None = None
     # Capture-local provenance for tensors returned by ``Tensor.data`` and
     # storage-sharing aliases/views derived from them. The getter is represented
@@ -360,7 +360,7 @@ def mark_detached_saved_activation(
 
     # These `requires_grad`/`grad_fn` reads are TorchLens-internal bookkeeping run for
     # every saved activation (including registered-buffer sources). Mark them as internal
-    # scalar reads so the r65 host-escape witness does not record them as host declared-state
+    # scalar reads so the host-escape witness does not record them as host declared-state
     # facts.
     with internal_scalar_read():
         source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
@@ -463,7 +463,7 @@ def detached_saved_activation_label(tensor: Tensor) -> str | None:
 # ``set_tensor_label`` -- the single choke point through which every label stamp
 # in the torch backend flows (verified: no other site assigns ``label_raw``). A
 # stamp therefore cannot come into existence without its anchor, and a future
-# stamp site cannot silently escape the belt (the r80 F1 root-A failure mode).
+# stamp site cannot silently escape the belt (the root-A failure mode).
 # Tokens are monotonic and never reused, so a label issued by an earlier capture
 # can never match the active one however the object re-enters, and whether or
 # not cleanup managed to reach it. Being a field on metadata the caller already
@@ -477,7 +477,7 @@ def detached_saved_activation_label(tensor: Tensor) -> str | None:
 # attribution ladder, the buffer-write producer and the replay-template
 # ``ParentRef`` builder are all closed at once. Gating the two provenance rungs
 # in ``ops._tensor_has_known_provenance`` alone was empirically NOT sufficient:
-# the r82 free-lane launder rode the layout/origin rungs instead.
+# the free-lane launder rode the layout/origin rungs instead.
 #
 # ``_LabelSession.stamped`` is a WEAK inventory of the objects stamped this
 # session, used only by the inventory-driven cleanup. It is weak because labels
@@ -516,7 +516,7 @@ class _LabelSession:
         # O(aliases) instead of scanning every stamped object. Keyed by the
         # stamp-time ``UntypedStorage.data_ptr()``; consumers re-validate the
         # LIVE storage before acting, so a stale (rebound/dead) entry is inert.
-        # SF-52: almost every storage has exactly ONE labeled tensor, and a
+        # almost every storage has exactly ONE labeled tensor, and a
         # full ``WeakIdKeyDictionary`` per bucket cost ~6 marginal objects per
         # op. The single-alias case stores one bare ``weakref.ref``; a second
         # live distinct alias upgrades the bucket to a WeakIdKeyDictionary.
@@ -638,7 +638,7 @@ def session_labeled_tensors() -> list[Any]:
 
 
 def storage_alias_index_key(storage: Any) -> int | None:
-    """Return the alias-index key for one ``UntypedStorage`` (meta-safe, D20).
+    """Return the alias-index key for one ``UntypedStorage`` (meta-safe).
 
     Every meta storage reports ``data_ptr() == 0``, so the pointer key would
     alias-collapse ALL meta tensors into one bucket — measured to relabel an
@@ -816,7 +816,7 @@ def _pinned_storage(t: Any) -> Any | None:
 def session_label_storage_intact(meta: TensorMeta | None, tensor: Any) -> bool:
     """Return whether a labeled object's LIVE storage is still its stamp-time storage.
 
-    The STORAGE-INTEGRITY axis of label/activation provenance (r85), the twin of
+    The STORAGE-INTEGRITY axis of label/activation provenance, the twin of
     r81's :func:`session_validated_buffer_address` storage check for the buffer
     ``address`` rung. A label anchor (:func:`session_meta_is_anchored`) proves an
     object is the current-session labeled producer; this proves that object's
@@ -868,7 +868,7 @@ def session_label_storage_intact(meta: TensorMeta | None, tensor: Any) -> bool:
 def _session_storage_gate_blocks(meta: TensorMeta, t: Any) -> bool:
     """Return whether an active capture must reject this label for a STORAGE rebind.
 
-    The STORAGE twin of :func:`_session_gate_blocks` (r85), sharing the same two
+    The STORAGE twin of:func:`_session_gate_blocks`, sharing the same two
     accessor choke points so the belt stays exhaustive: even a CURRENT-session
     anchored label is not trusted -- so its object never binds as a graph parent
     or roots a layout/origin chain -- when the object's LIVE storage was
@@ -1054,13 +1054,13 @@ def set_tensor_label(t: Any, label: str) -> None:
 
     Notes
     -----
-    r83 C1: the stamp and its current-session anchor are written together
+    the stamp and its current-session anchor are written together
     here, the single choke point every torch-backend label stamp flows
     through (verified: no other site assigns ``TensorMeta.label_raw``), so a
     label can never come into existence without its anchor and no future
     stamp site can silently escape the belt.
 
-    r85: the storage-integrity pin (``label_storage``) is re-established here on
+    the storage-integrity pin (``label_storage``) is re-established here on
     EVERY label stamp -- the same choke point -- so a tracked op that (re)labels
     the object also re-affirms the storage it legitimately produced. Because
     ``_unattributed_tensor_arg_positions`` reads an op's INPUT provenance BEFORE
@@ -1086,7 +1086,7 @@ def set_tensor_label(t: Any, label: str) -> None:
             # Not weak-referenceable: the anchor still holds; only the
             # inventory-driven cleanup skips it.
             pass
-    # Storage-alias index (W3 F1): registered on EVERY stamp (a relabel keeps
+    # Storage-alias index: registered on EVERY stamp (a relabel keeps
     # the same storage, so re-insertion is idempotent) so in-place ops can
     # resolve overlapping live labeled aliases of their target. The
     # ``data_ptr()`` read is TorchLens bookkeeping on an already-pinned
@@ -1119,7 +1119,7 @@ def get_tensor_label(t: Any) -> str | None:
 
     Notes
     -----
-    r83 C1: this is the single gate through which every label consumer in the
+    this is the single gate through which every label consumer in the
     torch backend reads provenance -- the graph-parent binder, the layout
     ancestry rooting rung, the dispatch-origin ladder, the host-escape
     attribution ladder, the buffer-write producer, and the replay-template
@@ -1130,7 +1130,7 @@ def get_tensor_label(t: Any) -> str | None:
     installed (postprocess, and any read after ``end_label_session``) the raw
     label is returned unchanged, so post-capture behaviour is untouched.
 
-    r85: the same choke point also rejects a CURRENT-session anchored label
+    the same choke point also rejects a CURRENT-session anchored label
     whose object was ``.data=``/``set_``-rebound to foreign/input-derived
     storage after labeling (:func:`_session_storage_gate_blocks`), so the
     rebound activation never re-binds as its same-named graph parent and the
@@ -1226,7 +1226,7 @@ def get_live_tensor_label(t: Any, live_labels: Iterable[str]) -> str | None:
 
     Notes
     -----
-    r83 C1: resolution requires BOTH that the label text is live in this
+    resolution requires BOTH that the label text is live in this
     capture AND that this object's stamp was issued by this session (the
     ``get_tensor_label`` gate). Text alone let a tensor carrying a colliding
     label from an earlier capture become a graph PARENT of the same-named
@@ -1403,7 +1403,7 @@ def get_label_list(tensors: Iterable[Any]) -> list[str]:
 
     Notes
     -----
-    r83 C1: this is the fastlog/predicate recorder's graph-parent binder, so it
+    this is the fastlog/predicate recorder's graph-parent binder, so it
     carries the same current-session anchor gate as :func:`get_tensor_label` --
     a foreign tensor holding a colliding label from an earlier capture must not
     become a parent on this path either.
@@ -1715,14 +1715,14 @@ def copy_replacement_meta(src: Any, dst: Any) -> None:
 
     Notes
     -----
-    r83 C1: the copy carries ``label_session`` with the rest of the dataclass,
+    the copy carries ``label_session`` with the rest of the dataclass,
     so an intervention replacement inherits the source's anchor exactly -- a
     live source's replacement keeps provenance, and a STALE source's label
     stays stale rather than laundering into a fresh object. The replacement is
     joined to the session inventory only when it is genuinely current-session,
     so cleanup can reach it.
 
-    r85: the STORAGE pin (``label_storage``) is re-established to ``dst``'s OWN
+    the STORAGE pin (``label_storage``) is re-established to ``dst``'s OWN
     storage rather than inheriting the source's keeper -- ``dst`` is a distinct
     current-session object taking over the label, so its integrity pin must
     reference the storage it actually holds, or the label would be spuriously

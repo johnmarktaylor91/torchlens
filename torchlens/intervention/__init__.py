@@ -45,7 +45,7 @@ from ._metrics import (
 from ._population import Population, population
 from ._regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
 
-# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
+# The PUBLIC immutable multi-clause spec (C03 substrate)
 # claims the package-level ``InterventionSpec`` name. The historical mutable
 # sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
 # internal code and persisted pickles are untouched.

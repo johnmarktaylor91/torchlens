@@ -294,7 +294,7 @@ def _honesty_banner_rows(trace: Trace, request: ResolvedRenderRequest, *, edited
     """Return the capture-honesty banner rows as caption HTML.
 
     A poisoned/diverged sparse run, an unverified capture, or an episode
-    capture must not RENDER clean (WT1 A-V row 23): the graph is a publishable
+    capture must not RENDER clean: the graph is a publishable
     artifact, so the caption carries the facts. The picture keeps a cited
     source location's file name and line only. A view may move named lines
     to its own record (:data:`LENS_BANNER_OMIT_KEY`; the interventions census);

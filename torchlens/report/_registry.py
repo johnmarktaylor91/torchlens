@@ -36,7 +36,7 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 
-#: Closed subject vocabulary (D12).
+#: Closed subject vocabulary.
 SUBJECTS: tuple[str, ...] = (
     "MODEL",
     "RUN-RESOURCES",

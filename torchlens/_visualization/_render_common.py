@@ -18,7 +18,7 @@ from pathlib import Path
 # `Tuple` are deliberately re-exported through this module's __all__ for the
 # sibling renderers that do `from ._render_common import *`, which still
 # annotate with them. Modernizing the alias here means modernizing every
-# star-import consumer first. (Worded so no prose line lexes as a noqa directive, SF-24.)
+# star-import consumer first. (Worded so no prose line lexes as a noqa directive)
 from typing import (  # noqa: UP035
     TYPE_CHECKING,
     Any,

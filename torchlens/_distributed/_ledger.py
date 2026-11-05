@@ -1,6 +1,6 @@
 """Group-lifecycle ledger: per-rank evidence for cross-rank group identity.
 
-C0 of the merge-ranks tier records, on every rank core captured under the
+of the merge-ranks tier records, on every rank core captured under the
 distributed opt-in, an ordered ledger of every observed process-group
 lifecycle event: wrapped creations (with their assigned lifetime ordinal),
 wrapped destroys/aborts, and restricted seeding events. Per-membership

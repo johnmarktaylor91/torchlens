@@ -613,7 +613,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
             if op_passes is not None and hasattr(op_passes, "values"):
                 for layer_pass in op_passes.values():
                     layer_pass._autograd_grad_fn_handle = grad_fn_handle
-    # F44 injections stage 2: split persisted injected-op rows out of
+    # injections stage 2: split persisted injected-op rows out of
     # layer_list BEFORE the persisted-claim validators run (the site-key
     # totality check would correctly refuse the partial family) and
     # before any accessor can observe them; forged rows refuse typed

@@ -12,7 +12,7 @@ honesty terms:
   coded warning AND a rendered notice. Silence is never an option.
 - View-aware source-family resolution with the zero-coverage refusal
   and the mandatory rolled aggregation line.
-- The visible-detail budget resolver (N10) for rows that compact.
+- The visible-detail budget resolver for rows that compact.
 - Refusal taxonomy (memo section 2 item 5): overview never
   refuses; speed/memory/compute/dims refuse on missing EVIDENCE;
   transformer/sequence refuse on factual absence of SUBJECT. Every refusal

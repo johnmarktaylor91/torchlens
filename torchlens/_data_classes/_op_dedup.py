@@ -275,13 +275,13 @@ def _dedup_saved_activation_out(
         source_version = tensor_version_or_none(source_tensor)
     cached = identity_cache.get(source_key)
     if cached is not None and cached[0]() is not source_tensor:
-        # F20 W1a: weak source slot (see _dedup_cached_identity_out). A dead
+        # W1a: weak source slot (see _dedup_cached_identity_out). A dead
         # referent means a new tensor reused the address: a new source.
         cached = None
     if cached is not None:
         _, cached_label, cached_out, cached_version, cached_ordinal = cached
         if cached_version == source_version:
-            # B3R4-R21-1: dense trace-local ordinal, never the raw ``id()``.
+            # dense trace-local ordinal, never the raw ``id()``.
             annotations["dedup_source_id"] = cached_ordinal
             annotations["dedup_source_version"] = source_version
             annotations["dedup_reference_label"] = cached_label

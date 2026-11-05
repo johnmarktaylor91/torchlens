@@ -1557,7 +1557,7 @@ def _validate_call_arity(
         else:
             if not isinstance(head, str):
                 raise _refuse(f"keyword argument root {head!r} is not a string")
-            if _rawptr.is_raw_pointer_parameter_name(head):  # r50 raw-pointer family
+            if _rawptr.is_raw_pointer_parameter_name(head):  # raw-pointer family
                 detail = _rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}")
                 raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
             keyword_names.add(head)

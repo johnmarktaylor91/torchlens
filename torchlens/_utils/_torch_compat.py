@@ -3133,7 +3133,7 @@ def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     bool
         True while a ``torch.compile`` region is traced. False, with no import, while
         ``torch._dynamo`` is unimported (unless ``force_probe``) or no probe resolved: an absent
-        probe means "not compiling". True when a resolved probe RAISES (r-b4 R26-3), so the wrapper
+        probe means "not compiling". True when a resolved probe RAISES, so the wrapper
         takes the disclosed bypass instead of logging data-free FakeTensors. Both degraded paths
         flip ``HAS_DYNAMO_IS_COMPILING``.
 

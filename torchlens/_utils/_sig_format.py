@@ -8,7 +8,7 @@ __all__ = ["format_sig"]
 
 
 def format_sig(value: float, digits: int = 4) -> str:
-    """Precision-law scalar formatter (D7).
+    """Precision-law scalar formatter.
 
     4 significant digits with trailing zeros KEPT (``%.4g`` strips them, so
     ``0.99997`` printed ``1`` and no column aligned -- the live bug this

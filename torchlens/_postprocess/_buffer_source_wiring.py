@@ -50,7 +50,7 @@ def _buffer_source_value_matches(
 ) -> bool:
     """Return whether a buffer-version source op output equals the full buffer value.
 
-    Structure-only captures retain no payloads (W3), so the value comparison
+    Structure-only captures retain no payloads, so the value comparison
     cannot run; the verdict falls back to the DECLARED geometry (shape +
     dtype agreement between the producer op and the buffer's write record) —
     a hypothesis claim exactly like the shapes it rides on, corroborated or

@@ -559,7 +559,7 @@ def _write_argument(
             code=RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value,
         )
     if path[0] == "kwargs":
-        # r50 (raw-pointer family): defense in depth for an in-memory descriptor that
+        # (raw-pointer family): defense in depth for an in-memory descriptor that
         # never went through the loader's parse-time refusal. A keyword naming a raw
         # memory address (the legacy constructors' keyword-only ``cdata`` overload and
         # its siblings) is refused BEFORE the value is written, so no call can hand

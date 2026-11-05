@@ -22,7 +22,7 @@ Key entry points:
   same case ids; the record ships as `torchlens/backends/<name>/scorecard.json` and surfaces as
   `tl.report.doctor()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
   (`backends/_protocol.py`) stays torch's internal orchestration adapter.
-- Site keys + grouping surface (L1 wave 0, DOCUMENTED-UNSTABLE): every
+- Site keys + grouping surface (DOCUMENTED-UNSTABLE): every
   retained op carries the portable structural-position key `op.graph.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
@@ -330,7 +330,7 @@ Key entry points:
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   method-record note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
-  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
+  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`

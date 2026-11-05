@@ -28,7 +28,7 @@ __all__ = [
 MAX_INPUT_CONTAINER_DEPTH: int = 200
 
 INPUT_TREE_MAX_DEPTH: int = MAX_INPUT_CONTAINER_DEPTH
-"""The shared model-input boundary nesting ceiling (r-b4 R27-1).
+"""The shared model-input boundary nesting ceiling.
 
 Mirrors the artifact-side literal-decode ceiling
 (``_runnable_execution._MAX_DECODE_NESTING_DEPTH`` / the ``_io`` parse quartet):
@@ -43,7 +43,7 @@ refusal instead of an untyped stdlib crash.
 
 
 def raise_input_tree_depth_refusal(*, depth: int) -> None:
-    """Raise the typed over-depth input-boundary refusal (r-b4 R27-1).
+    """Raise the typed over-depth input-boundary refusal.
 
     Parameters
     ----------
@@ -95,7 +95,7 @@ def raise_input_tree_stack_refusal(cause: BaseException | None = None) -> None:
 
 
 def raise_input_tree_cycle_refusal(*, kind: str) -> None:
-    """Raise the typed cyclic-container input-boundary refusal (r-b4 R27-1).
+    """Raise the typed cyclic-container input-boundary refusal.
 
     Parameters
     ----------
