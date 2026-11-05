@@ -55,6 +55,11 @@
   or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
   promise. Error codes, return values and labels are unchanged.
 
+- **capture**: a module registered twice, first under a nested path and later under a shallower name
+  (MemN2N's `self.B = self.A[0]`), is now addressed by its first `named_modules()` path (`A.0`), and the
+  later name still resolves to the same module. Backward validation of such models now compares module
+  gradients under matching addresses.
+
 <!-- version list -->
 
 ## v2.38.1 (2026-11-04)
