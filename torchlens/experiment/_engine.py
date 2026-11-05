@@ -334,8 +334,8 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + _attach_hooks + run in place). Site-key terms cannot be matched mid-attach
-    (final structural numbering is absent), so they ride the
+    rerun door (fork + _attach_hooks + in-place run). Site-key terms cannot be
+    matched mid-attach (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
     member's own envelope EVENT row stamps lane="capture"; escalation is
@@ -352,12 +352,7 @@ def _run_live_candidate(
     except SelectorCapabilityError:
         from .._user_public_impls import trace as _trace
 
-        member = _trace(
-            model,
-            x,
-            capture=_capture_options_like(baseline),
-            intervene=spec,
-        )
+        member = _trace(model, x, capture=_capture_options_like(baseline), intervene=spec)
         return member, "capture"
 
 

@@ -55,7 +55,6 @@ from .._runnable.execution import (
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
 from .._runnable.verification import _run_fork_name
-from .._state import unregister_log
 from .._trace_state import TraceState
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
@@ -67,6 +66,7 @@ from ..errors import (
 )
 from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
+from ._live_hook_plan import run_result_fork
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
 from .rerun import _append_rerun, run as _rerun_impl
@@ -676,16 +676,16 @@ def _live_rerun_engine(
     ``call`` is ``(model, transformed_input, user_input)``. Both engines run on
     a fork of ``trace`` (the fast door's result fork, names.9): the source stays
     untouched, and the fork carries its live-model weak reference and staged
-    edits; ``in_place=True`` runs on ``trace`` itself. The guarded fast engine is a native forward with the staged spec
-    applied at real module boundaries, guarded by the sealed call fingerprint;
+    edits; ``in_place=True`` runs on ``trace`` itself. The guarded fast engine is
+    a native forward with the staged spec applied at real module boundaries,
+    guarded by the sealed call fingerprint;
     any typed refusal falls back to the capture rerun with the code in
     ``last_run``. A trace with nothing staged keeps the capture rerun.
     """
 
     run_model, transformed_input, user_input = call
     close_fast_run_session(trace)  # no fast-door hook stays armed on the model
-    result = trace if in_place else trace._fork_trace(name=_run_fork_name(trace))
-    try:
+    with run_result_fork(trace, in_place=in_place) as result:
         fast_refused: str | None = None
         if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
             fast_done, fast_refused = try_guarded_fast_rerun(
@@ -704,10 +704,6 @@ def _live_rerun_engine(
             output_transform=output_transform,
             fast_refused=fast_refused,
         )
-    except BaseException:
-        if result is not trace:
-            unregister_log(result)
-        raise
 
 
 def append(trace: Trace, inputs: Any, *, model: nn.Module | None = None) -> None:

@@ -6,12 +6,19 @@ sticky hook by its handle ids (``clear_edits(handle=...)``) takes effect at once
 like a torch hook handle: ``retire_live_hook_handles`` rebinds the published plan without the
 removed entries, and ``_drop_handles_removed_mid_run`` makes the rerun's fire
 audit and ledger count the recipe as it stands after the run.
+
+``Trace.run`` reruns into a result fork (names.9): ``run_result_fork`` makes
+it and links it to its source while the run is in progress, so a removal
+through the source's handle mid-run (``running_result``) also leaves the
+fork's recipe, as it did when the run refreshed the source in place.
 """
 
 from __future__ import annotations
 
+import weakref
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from .. import _state
@@ -131,3 +138,44 @@ def _drop_handles_removed_mid_run(
     if all(entry.handle is None or entry.handle in live_handles for entry in hook_plan):
         return hook_plan
     return [entry for entry in hook_plan if entry.handle is None or entry.handle in live_handles]
+
+
+_RUNNING_RESULTS: dict[int, weakref.ref[Any]] = {}
+"""Source trace id to the result fork its positional ``run`` is writing."""
+
+
+@contextmanager
+def run_result_fork(trace: Any, *, in_place: bool) -> Iterator[Any]:
+    """Yield the Trace a positional run writes: a fork of ``trace``, or ``trace`` itself.
+
+    The fork is named as the fast door's result is and stays linked to its
+    source until the run ends; a run that raises unregisters it, so no stray
+    Trace is left behind. ``in_place=True`` (internal engines rerunning their
+    own fork) yields ``trace`` unchanged.
+    """
+
+    if in_place:
+        yield trace
+        return
+    from .._runnable.verification import _run_fork_name
+
+    result = trace._fork_trace(name=_run_fork_name(trace))
+    previous = _RUNNING_RESULTS.get(id(trace))
+    _RUNNING_RESULTS[id(trace)] = weakref.ref(result)
+    try:
+        yield result
+    except BaseException:
+        _state.unregister_log(result)
+        raise
+    finally:
+        if previous is None:
+            _RUNNING_RESULTS.pop(id(trace), None)
+        else:
+            _RUNNING_RESULTS[id(trace)] = previous
+
+
+def running_result(trace: Any) -> Any | None:
+    """Return the result fork a positional run of ``trace`` is writing, else ``None``."""
+
+    ref = _RUNNING_RESULTS.get(id(trace))
+    return None if ref is None else ref()

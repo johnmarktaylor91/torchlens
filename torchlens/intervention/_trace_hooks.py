@@ -20,7 +20,7 @@ from .._errors import InvalidArgumentError
 from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._facet_union import split_facet_union_entries
-from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
+from ._live_hook_plan import retire_live_hook_handles, running_result, sticky_handle_ids
 from ._trace_edits import (
     ensure_intervention_spec,
     target_spec_from_site,
@@ -131,5 +131,8 @@ def clear_hooks(trace: Trace) -> Trace:
     mark_intervention_spec_mutated(trace)
     # Removal takes effect at once, in a rerun or backward pass in progress.
     retire_live_hook_handles(handles_before)
+    mirror = running_result(trace)  # a positional run in progress writes a fork
+    if mirror is not None:
+        clear_hooks(mirror)
     record_operation(trace, "clear_hooks")
     return trace

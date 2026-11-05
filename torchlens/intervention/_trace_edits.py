@@ -45,7 +45,7 @@ from ._edit_guards import (
     warn_if_root_mutation,
 )
 from ._facet_union import is_facet_union
-from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
+from ._live_hook_plan import retire_live_hook_handles, running_result, sticky_handle_ids
 from ._trace_run import rerun_in_place
 from ._trace_selection_edits import (
     apply_selection_batch_do,
@@ -263,6 +263,9 @@ def clear_edits(
         mark_intervention_spec_mutated(trace)
         # Removal takes effect at once, in a rerun or backward pass in progress.
         retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
+        mirror = running_result(trace)  # a positional run in progress writes a fork
+        if mirror is not None:
+            clear_edits(mirror, site, handle)
     record_operation(
         trace,
         "detach_hooks",
