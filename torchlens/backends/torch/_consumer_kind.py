@@ -27,3 +27,26 @@ def _classify_consumer_kind(filename: str, line: int) -> str:
     except Exception:  # noqa: BLE001 — classification must never mask the refusal
         return "scalar_escape"
     return "scalar_escape" if kind == "unknown" else kind
+
+
+def _source_unreadable(filename: str) -> bool:
+    """Return whether conditional tracking cannot read ``filename``'s source.
+
+    Step 5 ties a bool read to an ``if`` statement through the AST of the
+    file on disk. Code compiled from a string, piped on stdin or run as a
+    notebook cell has no such file, so no branch in it is ever recorded.
+
+    Parameters
+    ----------
+    filename:
+        Code-object filename of the bool read's user frame.
+
+    Returns
+    -------
+    bool
+        ``True`` when no AST index can be built for ``filename``.
+    """
+
+    from ..._postprocess.ast_branches import get_file_index
+
+    return get_file_index(filename) is None
