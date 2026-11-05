@@ -150,12 +150,12 @@ def _solve_projective_uncached(
     states_by_op: dict[str, dict[str, _InputState]] = {}
 
     for op in reversed(_topological_operations(operations, by_reference)):
-        if op.label not in active_labels:
+        # An op with no units (a zero-length axis) carries no value onward: it
+        # seeds no geometry as a target and relays none to its parents.
+        if op.label not in active_labels or _has_no_units(op):
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
         target = target_by_label.get(op.label)
-        if target is not None and 0 in tuple(target.shape):
-            target = None  # no units, so no projective geometry to seed
         if target is not None:
             seed = _seed_target(target)
             branches[seed.io_role].append(seed)
@@ -211,6 +211,16 @@ def _solve_projective_uncached(
         per_op=MappingProxyType(per_op),
         states=MappingProxyType(flattened_states),
     )
+
+
+def _has_no_units(op: Op) -> bool:
+    """Return whether ``op``'s captured tensor has a zero-length axis.
+
+    Such a tensor holds no units, so no unit of a parent reaches a target
+    through it. A shapeless op (``shape is None``) is not unit-less.
+    """
+
+    return op.shape is not None and 0 in tuple(op.shape)
 
 
 def _seed_target(op: Op) -> _InputState:
