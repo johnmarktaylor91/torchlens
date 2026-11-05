@@ -10,11 +10,15 @@ so capture saves that receiver rebuilt on a private copy of its base
 Replay rebuilds the receiver from a private clone of that context and writes the
 swapped-in parent values (saved or perturbed) into the view, so the call reads
 the bytes and view chain the captured call read around the values under test.
+
+Every other parent slot is written in the memory layout its argument had at the
+call (:func:`relay_to_captured_layout`): a saved out is a compact copy, and a kernel
+can round differently on a strided operand than on a contiguous one.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import torch
 
@@ -26,6 +30,7 @@ from .._storage_bindings import (
     storage_context_arg_index,
     views_part_of_its_storage,
 )
+from .._utils._tensor_layout import CaptureLayout, relay_to_layout
 from .._utils._torch_compat import get_force_original_view_tracking, get_view_func_replay
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
@@ -195,8 +200,90 @@ def write_replay_slot(
     """
     if not isinstance(key, tuple):
         if not write_into_receiver_storage_context(layer, input_args, arg_type, key, value):
-            input_args[arg_type][key] = value
+            input_args[arg_type][key] = relay_to_captured_layout(layer, arg_type, key, value)
     else:
         input_args[arg_type][key[0]] = _write_nested_replay_arg_value(
-            input_args[arg_type][key[0]], key[1:], value
+            input_args[arg_type][key[0]],
+            key[1:],
+            relay_to_captured_layout(layer, arg_type, key, value),
         )
+
+
+def relay_to_captured_layout(layer: Any, arg_type: str, key: Any, value: Any) -> Any:
+    """Return a replay value placed in the memory layout its slot had at the captured call.
+
+    Saved outs are compact copies, so the value written into a parent slot is
+    row-major even when the captured call received a strided view (one half of a
+    ``chunk``, a column slice, a transposed non-dense view). Kernels pick their
+    path by layout: a float32 ``gelu`` takes the oneDNN kernel only for a
+    contiguous input, and BLAS routines sum in a different order for a strided
+    operand, so a replay from the compact copy can miss the saved out by a
+    rounding step. Capture records each parent argument's non-contiguous layout on
+    the call's argument template (``ParentRef._capture_layout``); this copies the
+    value into that layout, keeping its values and its grad flags. Values are
+    unchanged, so the comparison is exactly as strict as before.
+
+    Parameters
+    ----------
+    layer:
+        Op being replayed.
+    arg_type:
+        Either ``"args"`` or ``"kwargs"``.
+    key:
+        Slot key, possibly a nested key path.
+    value:
+        Replay value headed for the slot (saved, perturbed or probed).
+
+    Returns
+    -------
+    Any
+        ``value`` itself when the slot has no recorded layout or ``value`` cannot
+        take it, else a copy laid out as recorded.
+    """
+
+    if not isinstance(value, torch.Tensor):
+        return value
+    layout = _slot_capture_layout(layer, arg_type, key)
+    if layout is None:
+        return value
+    if not value.requires_grad:
+        return relay_to_layout(value, layout)
+    detached = value.detach()
+    relayed = relay_to_layout(detached, layout)
+    if relayed is detached or not isinstance(relayed, torch.Tensor):
+        return value
+    with torch.enable_grad():
+        grad_leaf = relayed.detach().requires_grad_(True)
+        if value.is_leaf:
+            return grad_leaf
+        # A non-leaf stays a non-leaf that is not an autograd view, as
+        # ``_mirror_captured_requires_grad`` builds it, now in the recorded layout.
+        return relay_to_layout(grad_leaf.contiguous(), layout)
+
+
+def _slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout | None:
+    """Return the layout recorded for one parent slot on the op's argument template."""
+
+    # Read by attribute: importing the template types here would join this module
+    # to the intervention package's import cycle.
+    template = getattr(layer, "args_template", None)
+    if arg_type not in ("args", "kwargs"):
+        return None
+    component: Any = getattr(template, arg_type, None)
+    path = key if isinstance(key, tuple) else (key,)
+    for part in path:
+        component = _template_child(component, part)
+        if component is None:
+            return None
+    return cast("CaptureLayout | None", getattr(component, "_capture_layout", None))
+
+
+def _template_child(component: Any, part: Any) -> Any:
+    """Step one key into a template level: an index of a sequence, a key of a mapping."""
+
+    if not isinstance(component, tuple):
+        return None
+    if isinstance(part, int):
+        return component[part] if -len(component) <= part < len(component) else None
+    pairs = (item for item in component if isinstance(item, tuple) and len(item) == 2)
+    return next((item[1] for item in pairs if item[0] == part), None)
