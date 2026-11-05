@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._capture.structure_only import ValueDependentBranchError
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
 from torchlens._input_coerce import _is_modality_input
@@ -27,7 +28,9 @@ from torchlens.bridge.hf_attention import (
     register_attention,
 )
 
+from .. import preprocessing as _preprocessing
 from .._entry_refusals import refuse_processor_unresolved
+from ..options import merge_capture_options
 
 
 def _is_hf_chat_message(item: Any) -> bool:
@@ -139,8 +142,6 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     lower tier (memo D8). Nothing resolved refuses ``preprocessing_unresolved``
     naming the explicit ImageNet-default opt-in.
     """
-
-    from torchlens import preprocessing as _preprocessing
 
     return accept_image_resolution(model, _preprocessing.resolve(model=model))
 
@@ -301,15 +302,13 @@ def trace_text(
     no tokenizer resolvable
     """
 
-    import torchlens as tl
-
     tokenizer_was_explicit = tokenizer is not None
     tok = tokenizer or _resolve_tokenizer(model)
     structure_only = bool(getattr(kwargs.get("capture"), "structure_only", False))
     transform, transform_state = _make_text_transform(
         tok, chat_template=chat_template, structure_only=structure_only
     )
-    capture = tl.options.merge_capture_options(
+    capture = merge_capture_options(
         capture=kwargs.pop("capture", None),
         input_transform=transform,
     )
@@ -362,14 +361,14 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     InvalidArgumentError
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     transform, record = _resolve_image_preprocessing(model)
-    capture = tl.options.merge_capture_options(
+    capture = merge_capture_options(
         capture=kwargs.pop("capture", None),
         input_transform=_make_image_transform(transform),
     )
-    log = tl.trace(model, image, capture=capture, **kwargs)
+    log = _capture_trace(model, image, capture=capture, **kwargs)
     log._provenance_input_preprocessor = record
     return log
 
@@ -406,7 +405,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     no processor resolvable
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
@@ -419,11 +418,11 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
         config=_extract_hf_processor_config(processor),
         description=f"AutoProcessor: {name_or_path}",
     )
-    capture = tl.options.merge_capture_options(
+    capture = merge_capture_options(
         capture=kwargs.pop("capture", None),
         input_transform=_make_multimodal_transform(processor),
     )
-    log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
+    log = _capture_trace(model, cast(Any, input_dict), capture=capture, **kwargs)
     log._provenance_input_preprocessor = record
     return log
 
@@ -439,14 +438,13 @@ def _trace_text_capture(
     and code plus the one-line remedy (never an automatic backend switch).
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace  # deferred: cycle bridge
 
     if not structure_only:
-        return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
-    from torchlens._capture.structure_only import ValueDependentBranchError
+        return _capture_trace(model, cast(Any, text), capture=capture, **kwargs)
 
     try:
-        return tl.trace(model, cast(Any, text), capture=capture, **kwargs)
+        return _capture_trace(model, cast(Any, text), capture=capture, **kwargs)
     except ValueDependentBranchError as exc:
         offenses = cast(list[dict[str, Any]], exc.fields.get("offenses") or [])
         if not any(str(o.get("file", "")).endswith("masking_utils.py") for o in offenses):

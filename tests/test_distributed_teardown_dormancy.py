@@ -22,8 +22,9 @@ from test_weightsfree_fixtures import ConvBnPool, meta_like, weightsfree_trace
 from torch import nn
 
 import torchlens as tl
+from torchlens._distributed import _lifecycle as lifecycle
 from torchlens.backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
-from torchlens.distributed import _lifecycle as lifecycle, is_vetted_build
+from torchlens.distributed import is_vetted_build
 
 pytestmark = pytest.mark.skipif(
     not torch.distributed.is_available() or not torch.distributed.is_gloo_available(),

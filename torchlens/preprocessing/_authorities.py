@@ -28,6 +28,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from torchlens._data_classes.trace import ResolvedPreprocessing
 from torchlens._utils.torchvision_weights import match_torchvision_weights
 
 from ._attached import (
@@ -179,8 +180,6 @@ def _record(
     Resolution
         Assembled resolution.
     """
-
-    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     config: dict[str, Any] = {"resolution_method": "explicit"}
     if declared is not None:

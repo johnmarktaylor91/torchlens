@@ -7,6 +7,7 @@ from typing import Any
 
 import torch
 
+from torchlens._input_walk import classify_scalar
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
 from .. import _state
@@ -93,8 +94,6 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     would falsely diverge). Bit-pattern identity makes ``-0.0`` differ from
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
-
-    from torchlens._input_walk import classify_scalar
 
     # r71 B: a ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
     # component VALUES only, so ``slice(5) == slice(MyIntEnum.FAST)`` is True and a

@@ -15,15 +15,15 @@ from typing import Any
 import torch
 
 from ... import _state
-from ._internal_read import internal_scalar_read
-from ._storage_overlap import (
-    _storage_overlap_byte_interval,
-    _strided_views_share_storage_elements,
-)
-from ._tl import (
+from ..._utils._internal_read import internal_scalar_read
+from ..._utils._tensor_label import (
     get_tensor_label,
     session_storage_alias_candidates,
     storage_alias_index_key,
+)
+from ._storage_overlap import (
+    _storage_overlap_byte_interval,
+    _strided_views_share_storage_elements,
 )
 
 

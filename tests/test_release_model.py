@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._tl import get_module_meta
+from torchlens._utils._tensor_label import get_module_meta
 from torchlens.backends.torch.model_prep import is_forward_call_decorated
 
 

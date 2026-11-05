@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._tl import (
+from ..._utils._tensor_label import (
     TensorMeta,
     get_live_tensor_label,
     is_tensor_data_alias,

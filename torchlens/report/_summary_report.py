@@ -238,7 +238,7 @@ class SummaryReport(str):
         if style == "unicode":
             return str(payload.unicode_text)
         if style == "html":
-            from ._summary_result import render_result_html
+            from ._summary_result import render_result_html  # deferred: cycle report
 
             return render_result_html(payload)
 
@@ -253,7 +253,7 @@ class SummaryReport(str):
 
         import sys
 
-        from ._summary_charset import detect_style
+        from ._summary_charset import detect_style  # deferred: cycle report
 
         stream = file if file is not None else sys.stdout
         resolved = detect_style(stream) if style == "auto" else style
@@ -271,7 +271,7 @@ class SummaryReport(str):
     def details(self) -> str:
         """Capture facts as text (the relocated preamble's result-side face)."""
 
-        from ._summary_result import result_details
+        from ._summary_result import result_details  # deferred: cycle report
 
         return result_details(self)
 
@@ -280,7 +280,7 @@ class SummaryReport(str):
 
         if self._stats is not None:
             return self._stats.to_pandas()
-        from ._summary_result import result_to_pandas
+        from ._summary_result import result_to_pandas  # deferred: cycle report
 
         return result_to_pandas(self, scope)
 
@@ -288,10 +288,10 @@ class SummaryReport(str):
         """GitHub-flavored markdown table of the rendered rows."""
 
         if self._stats is not None:
-            from ._stats_view import stats_rows_markdown
+            from ._stats_view import stats_rows_markdown  # deferred: cycle report
 
             return stats_rows_markdown(self._stats, self._stats_columns)
-        from ._summary_result import result_to_markdown
+        from ._summary_result import result_to_markdown  # deferred: cycle report
 
         return result_to_markdown(self)
 
@@ -301,7 +301,7 @@ class SummaryReport(str):
         if self._stats is not None:
             return self._stats_html()
         payload = self._rebuilt_or_refuse("to_html")
-        from ._summary_result import render_result_html
+        from ._summary_result import render_result_html  # deferred: cycle report
 
         return render_result_html(payload)
 
@@ -435,7 +435,7 @@ class SummaryReport(str):
 
         if self._stats is None:
             return [dict(row.__dict__) for row in self._rows]
-        from ._stats_view import STATS_COLUMNS, _cell
+        from ._stats_view import STATS_COLUMNS, _cell  # deferred: cycle report
 
         return [
             {"row_id": row.row_id, **{column: _cell(row, column) for column in STATS_COLUMNS}}
@@ -448,7 +448,7 @@ class SummaryReport(str):
         if self._stats is not None:
             return self._stats_html()
         if self._rebuilt is not None:
-            from ._summary_result import render_result_html
+            from ._summary_result import render_result_html  # deferred: cycle report
 
             return render_result_html(self._rebuilt)
         import html
@@ -487,7 +487,7 @@ class SummaryReport(str):
 def _summary_rows(trace: Trace) -> tuple[SummaryRow, ...]:
     """DATA stage: op-grain typed rows from the canonical compute face."""
 
-    from ._compute_truth import compute_aggregation
+    from ._compute_truth import compute_aggregation  # deferred: cycle report
 
     rows: list[SummaryRow] = []
     params_by_label: dict[str, int | None] = {}
@@ -546,9 +546,9 @@ def build_summary_data(
 ) -> tuple[tuple[SummaryRow, ...], SummaryTotals, CaptureFacts]:
     """The DATA stage alone: typed rows, totals, and capture facts."""
 
-    from ._factcore import factcore
-    from ._health import health_facts
-    from ._summary_columns import optimizer_state_facts
+    from ._factcore import factcore  # deferred: cycle report
+    from ._health import health_facts  # deferred: cycle report
+    from ._summary_columns import optimizer_state_facts  # deferred: cycle report
 
     core = factcore(trace)
     facts = health_facts(trace)

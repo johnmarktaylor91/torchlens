@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.backends._backend_protocol import REFUSAL_CODES, VALIDATION_REASONS, BackendProtocol
 from torchlens.backends._protocols.tinygrad import TinygradProtocol
 from torchlens.backends.tinygrad._rules import (
@@ -18,7 +19,6 @@ from torchlens.backends.tinygrad._rules import (
     tinygrad_constant_ops,
 )
 from torchlens.errors import BackendUnsupportedError
-from torchlens.validation.status import ValidationStatus
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor

@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch import _tl
+from torchlens._utils import _tensor_label as _tl
 
 
 class _DeepcopyBuffer(nn.Module):

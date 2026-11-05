@@ -23,8 +23,8 @@ from ..._io import BlobRef
 from ..._ir.events import FunctionCallRef, ModuleFrame, OutputRef
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ._internal_read import internal_scalar_read
-from ._tl import get_param_meta
+from ..._utils._internal_read import internal_scalar_read
+from ..._utils._tensor_label import get_param_meta
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

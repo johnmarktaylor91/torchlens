@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, recorder_signature
 from ..backends.torch._autograd_grad_marker import (
@@ -99,8 +100,6 @@ def _tensor_leaf_paths(value: Any, path: tuple[Any, ...]) -> list[tuple[tuple[An
 def _write_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
     """Return ``container`` with the leaf at ``path`` replaced (tuples rebuilt)."""
 
-    from .._utils.collections import assign_to_sequence_or_dict
-
     if not path:
         return value
     child = _write_path(container[path[0]], path[1:], value)
@@ -143,7 +142,7 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
 def _concrete_label(trace: Trace, label: str) -> str:
     """Return the concrete op label a (possibly pass-less) graph label resolves to."""
 
-    from .core import _op_for_validation_label
+    from .core import _op_for_validation_label  # deferred: cycle validation
 
     return _op_for_validation_label(trace, label).label
 
@@ -184,7 +183,7 @@ def _perturbed_node(replayed: torch.Tensor, perturbed: torch.Tensor) -> torch.Te
 def _select_output(op: Op, output: Any) -> Any:
     """Pick the leaf one op represents out of its func's (possibly multi) return."""
 
-    from .core import _slice_recomputed_output_by_path
+    from .core import _slice_recomputed_output_by_path  # deferred: cycle validation
 
     container_path = tuple(getattr(op, "container_path", ()) or ())
     if container_path and not isinstance(output, torch.Tensor):
@@ -223,7 +222,7 @@ class _SubgraphReplay:
     def resolve(self, label: str) -> Op:
         """Resolve a parent label to its concrete op."""
 
-        from .core import _op_for_validation_label
+        from .core import _op_for_validation_label  # deferred: cycle validation
 
         return _op_for_validation_label(self.trace, label)
 
@@ -338,7 +337,7 @@ class _SubgraphReplay:
     def _replay_op(self, op: Op) -> torch.Tensor:
         """Re-execute one op from its saved arguments with replayed parents spliced in."""
 
-        from .core import (
+        from .core import (  # deferred: cycle validation
             _execute_func_with_restored_state,
             _prepare_input_args_for_validating_layer,
         )

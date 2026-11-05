@@ -31,6 +31,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from ..intervention.edge_semantics import distribution_relation
+from ..stats._tensor_stats import tensor_stats
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ..stats._tensor_stats import TensorStats
@@ -267,7 +270,7 @@ class StatsTable:
 def _row_state(op: Any) -> tuple[str, str | None]:
     """Classify one op's payload availability (typed, never a hollow zero)."""
 
-    from ._agent_json import _payload_state
+    from ._agent_json import _payload_state  # deferred: cycle report
 
     state = _payload_state(op)
     if state == "present":
@@ -281,8 +284,6 @@ def _row_state(op: Any) -> tuple[str, str | None]:
 
 def _parent_mark(trace: Trace, op: Any) -> tuple[str | None, str | None]:
     """Derive the D28 ``= parent`` mark for one op, fail-closed."""
-
-    from ..intervention.edge_semantics import distribution_relation
 
     for record in getattr(op, "edge_uses", ()) or ():
         verdict = distribution_relation(trace, record)
@@ -325,8 +326,7 @@ def build_stats_table(
 
     import torch
 
-    from ..stats._tensor_stats import tensor_stats
-    from ._factcore import capture_fingerprint
+    from ._factcore import capture_fingerprint  # deferred: cycle report
 
     rows: list[StatsTableRow] = []
     scanned_elements = 0

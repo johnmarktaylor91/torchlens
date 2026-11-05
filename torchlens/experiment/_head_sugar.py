@@ -26,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._semantic.facets import FacetView
 from ..errors.episode import BundleExperimentError
 
 if TYPE_CHECKING:
@@ -36,8 +37,6 @@ __all__ = ["head_ablation_candidates"]
 
 def _attention_geometry(baseline: Trace, module: str) -> tuple[int | None, int | None]:
     """(n_q_heads, n_kv_heads) from the module's facet view, or (None, None)."""
-
-    from .._semantic.facets import FacetView
 
     try:
         record = baseline.modules[module]

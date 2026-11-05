@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from ..._capture._lazy_contexts import LazyContextHistory, tensor_fields
-from ._tl import set_tensor_label
+from ..._utils._tensor_label import set_tensor_label
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

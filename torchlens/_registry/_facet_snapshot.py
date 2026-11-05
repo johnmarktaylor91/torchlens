@@ -25,7 +25,9 @@ FacetSnapshotProvider = Callable[[Sequence[Any] | None], Any]
 _PROVIDER: FacetSnapshotProvider | None = None
 
 
-def register_facet_snapshot_provider(provider: FacetSnapshotProvider) -> None:
+def register_facet_snapshot_provider(
+    provider: FacetSnapshotProvider, *, replace: bool = True
+) -> None:
     """Install ``provider`` as the function that builds a trace's facet snapshot.
 
     Parameters
@@ -33,10 +35,15 @@ def register_facet_snapshot_provider(provider: FacetSnapshotProvider) -> None:
     provider:
         ``(extra_recipes) -> FacetRegistrySnapshot``; the last registration wins
         (the facets module's direct ``snapshot`` replaces the door's lazy provider).
+    replace:
+        ``False`` installs ``provider`` only when none is registered yet, so the
+        capture door's lazy provider never replaces the direct one whichever of
+        the two modules loads first.
     """
 
     global _PROVIDER
-    _PROVIDER = provider
+    if replace or _PROVIDER is None:
+        _PROVIDER = provider
 
 
 def facet_snapshot(extra_recipes: Sequence[Any] | None) -> Any:

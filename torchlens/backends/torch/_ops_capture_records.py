@@ -15,17 +15,17 @@ from ..._ir.events import (
     ParentEdge,
 )
 from ..._utils._mutation_names import _is_inplace_augmented_assignment_dunder
+from ..._utils._tensor_label import (
+    active_label_session_token,
+    get_tensor_label,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
 from ._same_object_handoff import set_same_object_live_value, set_same_object_mutation
-from ._tl import (
-    active_label_session_token,
-    get_tensor_label,
-    set_tensor_label,
-)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
