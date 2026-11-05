@@ -2732,7 +2732,6 @@ docs-md	docs/maintainers/where.md	101
 docs-md	docs/maintainers/where.md	1016
 docs-md	docs/maintainers/where.md	102
 docs-md	docs/maintainers/where.md	103
-docs-md	docs/maintainers/where.md	1031
 docs-md	docs/maintainers/where.md	1032
 docs-md	docs/maintainers/where.md	104
 docs-md	docs/maintainers/where.md	1042
@@ -2761,7 +2760,6 @@ docs-md	docs/maintainers/where.md	1121
 docs-md	docs/maintainers/where.md	113
 docs-md	docs/maintainers/where.md	1136
 docs-md	docs/maintainers/where.md	114
-docs-md	docs/maintainers/where.md	1140
 docs-md	docs/maintainers/where.md	115
 docs-md	docs/maintainers/where.md	1152
 docs-md	docs/maintainers/where.md	1153
@@ -2847,7 +2845,6 @@ docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1579
 docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	159
-docs-md	docs/maintainers/where.md	1593
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
 docs-md	docs/maintainers/where.md	162
@@ -2858,7 +2855,6 @@ docs-md	docs/maintainers/where.md	163
 docs-md	docs/maintainers/where.md	164
 docs-md	docs/maintainers/where.md	1649
 docs-md	docs/maintainers/where.md	165
-docs-md	docs/maintainers/where.md	1656
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	168
 docs-md	docs/maintainers/where.md	169
@@ -2874,14 +2870,11 @@ docs-md	docs/maintainers/where.md	1749
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	177
-docs-md	docs/maintainers/where.md	1772
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
 docs-md	docs/maintainers/where.md	180
 docs-md	docs/maintainers/where.md	181
-docs-md	docs/maintainers/where.md	18184
-docs-md	docs/maintainers/where.md	18186
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
@@ -3332,8 +3325,6 @@ docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	680
-docs-md	docs/maintainers/where.md	680234
-docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
 docs-md	docs/maintainers/where.md	688
 docs-md	docs/maintainers/where.md	69
@@ -3427,14 +3418,11 @@ docs-md	docs/maintainers/where.md	862
 docs-md	docs/maintainers/where.md	863
 docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	870
-docs-md	docs/maintainers/where.md	874
 docs-md	docs/maintainers/where.md	875
 docs-md	docs/maintainers/where.md	88
-docs-md	docs/maintainers/where.md	887
 docs-md	docs/maintainers/where.md	89
 docs-md	docs/maintainers/where.md	891
 docs-md	docs/maintainers/where.md	90
-docs-md	docs/maintainers/where.md	900
 docs-md	docs/maintainers/where.md	91
 docs-md	docs/maintainers/where.md	92
 docs-md	docs/maintainers/where.md	923
@@ -6267,7 +6255,6 @@ package-docstrings	torchlens/_postprocess/finalization.py	17
 package-docstrings	torchlens/_postprocess/finalization.py	18
 package-docstrings	torchlens/_postprocess/finalization.py	19
 package-docstrings	torchlens/_postprocess/finalization.py	20
-package-docstrings	torchlens/_postprocess/finalization.py	52
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78
 package-docstrings	torchlens/_postprocess/graph_traversal.py	13
@@ -6492,12 +6479,9 @@ package-docstrings	torchlens/_selection/graph.py	2_3
 package-docstrings	torchlens/_selection/module_alias_guard.py	3.7
 package-docstrings	torchlens/_selection/resolver.py	1.6
 package-docstrings	torchlens/_selection/resolver.py	42
-package-docstrings	torchlens/_selection/selection.py	10
 package-docstrings	torchlens/_selection/selection.py	108
-package-docstrings	torchlens/_selection/selection.py	14
 package-docstrings	torchlens/_selection/selection.py	17
 package-docstrings	torchlens/_selection/selection.py	1_1
-package-docstrings	torchlens/_selection/selection.py	1_10
 package-docstrings	torchlens/_selection/selection.py	1_2
 package-docstrings	torchlens/_selection/selection.py	2_3
 package-docstrings	torchlens/_selection/selector_base.py	1.4
