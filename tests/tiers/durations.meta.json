@@ -1,14 +1,16 @@
 {
-  "files": 1606,
+  "carried_files": 1796,
+  "files": 1804,
   "inputs": [
-    "serial.junit.xml",
-    "durations.csv"
+    "mc202-serial.xml",
+    "mc202.xml"
   ],
-  "instrumented": true,
-  "measured_on": "2026-11-01",
-  "note": "not-rare, not-slow, not-serial tier at ad2e0300 under -n 8 with line-coverage tracing on (an upper bound), plus the serial tier at 6a9ede91 run alone; rows of the test files shrink round 3 deleted dropped at aa9431fee; rows of the four round-named resolver files converted to tests/test_resolver_refusal_rows.py dropped with their deletion",
+  "instrumented": false,
+  "measured_on": "2026-11-04",
+  "note": "tier-durations-regen-3: C-202 (host-reds-retire) test files and _fresh_plant importers re-measured on train f105a8934b",
+  "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "ad2e03000",
-  "tests": 24275,
-  "workers": 8
+  "source_commit": "786ec197fe",
+  "tests": 21513,
+  "workers": 4
 }
