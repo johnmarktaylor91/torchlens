@@ -316,7 +316,7 @@ def _make_once_visitor(
     def _visit_once(
         module: nn.Module,
         address: str,
-        child_entries: list[tuple[str, nn.Module, str]],
+        _child_entries: list[tuple[str, nn.Module, str]],
         is_root: bool,
     ) -> None:
         """Prepare one module and recursively visit its children once."""
@@ -324,25 +324,17 @@ def _make_once_visitor(
         # re-rooted away from as stale (role-swap bookkeeping).
         _state.record_module_root_prep(model, module)
 
-        # Annotate children with their full dotted address path (root-relative).
-        # The traversal visits a shared module once per registration path; its
-        # canonical address is the FIRST one (``named_modules()`` order, the
-        # address stock-torch module hooks and the glossary use), so a later
-        # path never overwrites it. The other paths stay alias addresses.
-        for _, child_module, child_address in child_entries:
-            if id(child_module) in addressed_module_ids:
-                continue
-            addressed_module_ids.add(id(child_module))
-            set_module_meta(
-                child_module,
-                address=child_address,
-                module_type=str(type(child_module).__name__),
-            )
-
         # Root module is handled separately by trace.
         if is_root:
             return
 
+        # The traversal is a pre-order DFS, the order ``named_modules()`` reports, and
+        # visits a shared module once per registration path. Its canonical address is
+        # the path that reaches it FIRST in that order (the address stock-torch module
+        # hooks and the glossary use), so it is stamped here, when the module itself is
+        # reached, and a later path never overwrites it; the other paths stay alias
+        # addresses. Stamping children while visiting their parent would let a shallow
+        # later alias (``self.B = self.A[0]``) win over the earlier nested path.
         if id(module) not in addressed_module_ids:
             addressed_module_ids.add(id(module))
             set_module_meta(module, address=address, module_type=str(type(module).__name__))

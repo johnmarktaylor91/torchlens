@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1729 modules, 701711 lines, 0 modules without a docstring.
+85 packages, 1729 modules, 701669 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6499 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4489 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 136 | 58706 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 136 | 58698 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9194 |
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38185 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38151 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -1463,7 +1463,7 @@ tinygrad backend preview. (10 modules, 4489 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (136 modules, 58706 lines)
+Torch backend implementation package for TorchLens capture. (136 modules, 58698 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1592,7 +1592,7 @@ Torch backend implementation package for TorchLens capture. (136 modules, 58706 
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 955 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 161 |
 | `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 309 |
-| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2240 |
+| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2232 |
 | `module_stack` | Manage the torch capture module-call stack. | 92 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture. | 214 |
 | `ops` | Log tensors produced by decorated torch operations. | 604 |
@@ -1863,7 +1863,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38185 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38151 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1913,9 +1913,9 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_recipe_io` | Save and load a :class:'Recipe' as a ''.tlspec'' directory (manifest kind ''"recipe"''). | 309 |
 | `_region_graph` | Region instance connectivity and re-entry path search. | 64 |
 | `_regions` | Regions: derived admissibility on the existing verbs. | 1025 |
-| `_replay` | Saved-DAG replay engine for TorchLens interventions. | 1635 |
+| `_replay` | Saved-DAG replay engine for TorchLens interventions. | 1636 |
 | `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 359 |
-| `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 378 |
+| `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 343 |
 | `_replay_grad_clear` | Clear recorded op and parameter gradient projections before a differentiable replay. | 50 |
 | `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 505 |
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 237 |
