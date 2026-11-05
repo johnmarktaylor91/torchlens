@@ -5419,7 +5419,9 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 4864fa282472ae7a65271aefa7aae71ead417e2e (dirty)
 recorded: 2026-11-05T10:25:41.634463+00:00
-=======
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: lru cache descent in session walkers
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
