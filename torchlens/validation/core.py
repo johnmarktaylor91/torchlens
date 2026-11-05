@@ -75,7 +75,7 @@ from ._index_domain import (
     _raise_retry_strategies,
     index_domain_rotation_values,
     index_domain_single_entry_values,
-    layer_has_index_domain_parent,
+    layer_takes_single_entry_probe,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
 from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs
@@ -3486,15 +3486,15 @@ def _perturbation_retry_strategies(
     if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb or ()):
         return [_INDEX_SINGLE_ENTRY_STRATEGY]
     strategies = _value_retry_strategies(layer)
-    if layer_has_index_domain_parent(layer):
+    if layer_takes_single_entry_probe(layer):
         # The default probe rotates EVERY index by one domain position, a
         # permutation that leaves histogram-only outputs (per-relation edge
-        # counts on balanced relations) unchanged, and the uniform steps
-        # leave the domain and raise. The single-entry move changes the
-        # histogram in-domain (``index_domain_single_entry_values``). It runs
-        # LAST: for a non-index parent it yields no perturbation, which ends
-        # the retry loop, so placing it earlier would cut off the bool-output
-        # and magnitude rungs for that parent.
+        # counts on balanced relations) and same-scalar ``__setitem__`` writes
+        # unchanged, and the uniform steps leave the domain and raise. The
+        # single-entry move (``index_domain_single_entry_values``) changes them
+        # in-domain. It runs LAST: for a non-index parent it yields no
+        # perturbation, which ends the retry loop, so placing it earlier would
+        # cut off the bool-output and magnitude rungs for that parent.
         strategies.append(_INDEX_SINGLE_ENTRY_STRATEGY)
     return strategies
 
