@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._ir.events import BackwardPassStart, OpGradObserved
+from .._utils._autograd_view_nodes import is_view_backward_class
 from ..backends.registry import TORCH_BACKEND_NAME
 from ..backends.torch.backward import _resolve_op_grad_event_label as _impl
 
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
 __all__ = (
     "_check_backward_pass_domain_invariants",
     "_layer_feeds_recorded_backward_roots",
+    "_view_write_gradient_runs_through_copy_slices",
     "_layer_postdates_all_backward_triggers",
     "_backward_trigger_forward_positions",
     "_backward_pass_root_forward_position",
@@ -274,6 +276,44 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
                 ):
                     frontier.append(child_label)
     return False
+
+
+def _view_write_gradient_runs_through_copy_slices(trace: Trace, layer: Layer | Op) -> bool:
+    """Return whether a layer is a view write whose gradient may run through a ``CopySlices``.
+
+    An in-place op that writes through a view records the view's regenerated
+    node (a view backward class), while autograd carries the write's gradient on
+    the base's ``CopySlices``. A capture that keeps the historical topology (a
+    reader of the written base bound to the base's pre-write producer) gives the
+    op no forward children, so the dead-branch reachability walk cannot see that
+    the written base is read. While the backward walk visited a ``CopySlices`` no
+    op owns, the op is therefore NOT provably outside the walk, and the
+    dead-branch carve-out must not excuse its missing backpointer.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward projections.
+    layer:
+        Layer record whose missing backpointer is being judged.
+
+    Returns
+    -------
+    bool
+        True when the layer is an in-place op recording a view backward node and
+        backward visited an unowned ``CopySlices``.
+    """
+
+    if not record_member(layer, "is_inplace", False):
+        return False
+    class_name = record_member(layer, "grad_fn_class_name", None)
+    if not isinstance(class_name, str) or not is_view_backward_class(class_name):
+        return False
+    return any(
+        getattr(grad_fn, "class_name", None) == "CopySlices"
+        and not getattr(grad_fn, "has_op", True)
+        for grad_fn in trace._grad_fn_logs.values()
+    )
 
 
 def _backward_trigger_forward_positions(trace: Trace) -> list[int]:

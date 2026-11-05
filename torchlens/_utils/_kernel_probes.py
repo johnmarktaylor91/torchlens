@@ -53,6 +53,45 @@ def probe_cached_untyped_storage_wrapper() -> bool:
     return first is second
 
 
+def probe_node_sequence_nr() -> bool:
+    """Return whether autograd nodes expose their creation order (``Node._sequence_nr()``).
+
+    The in-place view-write rebind proves that a ``CopySlices`` node belongs to the
+    write that just ran by comparing creation order with every recorded node.
+
+    Returns
+    -------
+    bool
+        ``True`` when a fresh node answers ``_sequence_nr()`` with an ``int``.
+    """
+
+    try:
+        with torch.enable_grad():
+            node = (torch.ones(1, requires_grad=True) * 2.0).grad_fn
+        return isinstance(node._sequence_nr(), int)
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
+
+def probe_schema_alias_info() -> bool:
+    """Return whether aten op schemas expose argument alias annotations.
+
+    ``aten::slice``'s ``Tensor(a) self`` must read as aliased and not written;
+    the in-place view-write rebind classifies view backward nodes from it.
+
+    Returns
+    -------
+    bool
+        ``True`` when the annotation reads as an alias that is not a write.
+    """
+
+    try:
+        alias = torch.ops.aten.slice.Tensor._schema.arguments[0].alias_info
+        return alias is not None and alias.is_write is False
+    except (AttributeError, IndexError, RuntimeError):
+        return False
+
+
 def probe_cpu_half_kernels() -> bool:
     """Return whether common CPU kernels accept Half-dtype operands.
 

@@ -449,6 +449,11 @@ def test_torch_capability_snapshot_contract() -> None:
         # values so floor legs stay green.
         "HAS_GRADIENT_EDGE": tc.HAS_GRADIENT_EDGE,
         "HAS_NODE_PREHOOK": tc.HAS_NODE_PREHOOK,
+        # The in-place view-write rebind proves its binding from node creation
+        # order and aten schema alias annotations; without either it refuses to
+        # rebind. Mirror the live values (not measured on the floor matrix).
+        "HAS_NODE_SEQUENCE_NR": tc.HAS_NODE_SEQUENCE_NR,
+        "HAS_SCHEMA_ALIAS_INFO": tc.HAS_SCHEMA_ALIAS_INFO,
         # L8 floor fixes: deterministic uninit-memory fill, device-agnostic
         # GradScaler, torch.nn.attention, torch.nn.RMSNorm, and tuple-dim
         # any()/all() all postdate the torch>=2.1 floor (OPTIONAL flags --

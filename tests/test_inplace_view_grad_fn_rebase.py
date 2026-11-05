@@ -19,8 +19,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._autograd_view_nodes import is_view_backward_class
 from torchlens.backends.torch import param_mutation
-from torchlens.backends.torch._user_grad_fn import _orphaned_view_nodes
+from torchlens.backends.torch._user_grad_fn import (
+    _MAX_VIEW_REBASE_DEPTH,
+    _orphaned_view_nodes,
+    _writer_node_for_read_view,
+)
 from torchlens.errors._validation import MetadataInvariantError
 from torchlens.validation._invariants_backward_graph import _check_backward_graph_invariants
 
@@ -204,19 +209,54 @@ def test_view_consumed_before_write_keeps_its_node(read_view_after: bool) -> Non
     _assert_reader_edge_lands_on_view_op(_traced_backward(_ConsumedBeforeWrite(read_view_after)))
 
 
-def test_view_consumed_before_write_and_read_after_keeps_invariants() -> None:
-    """With the written view read afterwards, the whole backward graph holds."""
+@pytest.mark.parametrize("read_view_after", [False, True], ids=["base_read", "view_read"])
+def test_view_consumed_before_write_keeps_invariants(read_view_after: bool) -> None:
+    """The whole backward graph holds whether the written base or the view is read after.
 
-    _check_backward_graph_invariants(_traced_backward(_ConsumedBeforeWrite(read_view_after=True)))
+    ``base_read`` is the shape where the write's gradient reaches the loss only
+    through the base's ``CopySlices``; the in-place op must be bound to it.
+    """
+
+    _check_backward_graph_invariants(_traced_backward(_ConsumedBeforeWrite(read_view_after)))
+
+
+def _backward_verdict(model: nn.Module) -> object:
+    """Return ``tl.validate(scope="backward")``'s verdict, or the invariant error's name."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            return tl.validate(model, _input(), scope="backward")
+        except MetadataInvariantError as error:
+            return type(error).__name__
 
 
 @pytest.mark.parametrize("read_view_after", [False, True], ids=["base_read", "view_read"])
 def test_view_consumed_before_write_backward_validates(read_view_after: bool) -> None:
-    """Backward validation passes when a view is read before its in-place write."""
+    """Backward validation passes because the in-place op is bound to the node backward uses.
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(_ConsumedBeforeWrite(read_view_after), _input(), scope="backward")
+    Backward validation runs the backward-graph invariant on its own capture.
+    Before the writer was bound to ``CopySlices``, ``base_read`` failed it there
+    too: the write through the view recorded the view's regenerated node, which
+    backward never visits.
+    """
+
+    assert _backward_verdict(_ConsumedBeforeWrite(read_view_after)) is True
+
+
+def test_writer_of_a_read_view_is_bound_to_copy_slices() -> None:
+    """The base's reader after the write reaches the in-place op's own node.
+
+    The view's reader before the write keeps the view's node, so the view op is
+    not rebound; the in-place op records the base's ``CopySlices`` (the node that
+    carries its gradient), and the base reader's edge lands on it.
+    """
+
+    trace = _traced_backward(_ConsumedBeforeWrite())
+    writer = _only_layer(trace, ("add_",))
+    base_sum = [layer for layer in trace._layer_list if layer.func_name == "sum"][-1]
+    assert writer.autograd.grad_fn.class_name == "CopySlices"
+    assert writer.autograd.grad_fn.grad_fn_object_id in base_sum.autograd.grad_fn.next_grad_fn_ids
 
 
 class _TwoViewsWritten(nn.Module):
@@ -249,10 +289,12 @@ def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyP
     rebind = param_mutation.rebind_rebased_view_producers
     after_each_write: list[list[str]] = []
 
-    def _spy(trace: tl.Trace, receiver: torch.Tensor) -> None:
-        rebind(trace, receiver)
+    def _spy(trace: tl.Trace, receiver: torch.Tensor) -> object:
+        writer_node = rebind(trace, receiver)
         handles = trace.capture_events.grad_fn_handles_by_label_raw.values()
         after_each_write.append([type(node).__name__ for node in handles])
+        assert writer_node is None
+        return writer_node
 
     monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _spy)
     with warnings.catch_warnings():
@@ -321,22 +363,137 @@ def test_orphaned_view_nodes_refuses_a_view_older_than_the_last_write() -> None:
     assert _orphaned_view_nodes(second_node, y.grad_fn, handles) == []
 
 
-def test_a_wrong_handle_still_fails_the_backward_invariant(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Validation stays a tripwire: a view op bound to a node off the graph raises."""
+def _assert_both_entry_points_reject(model_factory: Callable[[], nn.Module], label: str) -> None:
+    """A managed backward's invariant and backward validation both reject the capture."""
 
-    stray = (torch.ones(1, requires_grad=True) * 2.0).grad_fn
+    with pytest.raises(MetadataInvariantError, match=label):
+        _check_backward_graph_invariants(_traced_backward(model_factory()))
+    assert _backward_verdict(model_factory()) is not True
 
-    def _bind_stray(trace: tl.Trace, receiver: torch.Tensor) -> None:
+
+def test_a_wrong_view_op_handle_fails_both_entry_points(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validation catches a view op bound to a real node of the graph that backward skips.
+
+    The rebind runs, then the view op's handle is put back on the view's own
+    pre-write node: a node of this forward's autograd graph (its edge reads the
+    base's producer) that the write cut out of the backward walk. Everything else
+    in the capture is right, so only validation can reject it, and both entry
+    points do.
+    """
+
+    rebind = param_mutation.rebind_rebased_view_producers
+
+    def _undo_onto_old_node(trace: tl.Trace, receiver: torch.Tensor) -> object:
         handles = trace.capture_events.grad_fn_handles_by_label_raw
-        trace.__dict__.setdefault("_backward_gradfn_refs", []).append(stray)
+        before = dict(handles)
+        writer_node = rebind(trace, receiver)
         for raw_label, handle in list(handles.items()):
-            if type(handle).__name__ == "SliceBackward0":
-                handles[raw_label] = stray
+            if type(handle).__name__ == "CopySlices" and before.get(raw_label) is not handle:
+                handles[raw_label] = before[raw_label]
+        return writer_node
 
-    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _bind_stray)
-    trace = _traced_backward(_Plain(_view_used))
-    with pytest.raises(MetadataInvariantError, match="getitem"):
-        _check_backward_graph_invariants(trace)
+    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _undo_onto_old_node)
+    _assert_both_entry_points_reject(lambda: _Plain(_view_used), "getitem")
+
+
+def test_a_wrong_writer_handle_fails_both_entry_points(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validation catches the in-place op bound to the view's regenerated node.
+
+    The regenerated node is a real node of the graph (it reads the base's
+    ``CopySlices``), but backward never visits it when only the base is read
+    after the write. Binding the writer there instead of ``CopySlices`` must fail
+    the managed backward's invariant and backward validation alike.
+    """
+
+    rebind = param_mutation.rebind_rebased_view_producers
+
+    def _regenerated_node(trace: tl.Trace, receiver: torch.Tensor) -> object:
+        writer_node = rebind(trace, receiver)
+        return receiver.grad_fn if writer_node is not None else None
+
+    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _regenerated_node)
+    _assert_both_entry_points_reject(_ConsumedBeforeWrite, "add_")
+
+
+class _DeadViewWrite(nn.Module):
+    """Read a view, write it in place, then read neither the view nor the base."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a sum of the earlier reader only; the write is a dead branch."""
+
+        y = self.lin(x)
+        v = y[:, 5:6]
+        a = v * 3.0
+        v.add_(1.0)
+        return a.sum()
+
+
+@pytest.mark.parametrize("writer_bound", [True, False], ids=["bound", "unbound"])
+def test_a_dead_view_write_is_still_excused(
+    monkeypatch: pytest.MonkeyPatch, writer_bound: bool
+) -> None:
+    """A view write that feeds nothing stays outside the backward walk, bound or not.
+
+    No ``CopySlices`` is visited when neither the base nor the view is read after
+    the write, so the stricter view-write rule leaves the dead-branch exemption in
+    place, with the writer on ``CopySlices`` or on its regenerated view node.
+    """
+
+    if not writer_bound:
+        monkeypatch.setattr(
+            param_mutation, "rebind_rebased_view_producers", lambda trace, receiver: None
+        )
+    _check_backward_graph_invariants(_traced_backward(_DeadViewWrite()))
+    assert _backward_verdict(_DeadViewWrite()) is True
+
+
+def test_writer_node_needs_a_reader_and_a_proven_chain() -> None:
+    """``CopySlices`` is the writer's node only when a recorded reader holds the view's node."""
+
+    view_node, copy_slices, handles = _write_then_handles(lambda y, v: {})
+    assert _writer_node_for_read_view(view_node, copy_slices, handles) is None
+    view_node, copy_slices, handles = _write_then_handles(lambda y, v: {"a": (v * 3.0).grad_fn})
+    assert _writer_node_for_read_view(view_node, copy_slices, handles) is copy_slices
+    assert _writer_node_for_read_view(handles["y"], copy_slices, handles) is None
+    handles["later"] = (torch.ones(2, requires_grad=True) * 5.0).grad_fn
+    assert _writer_node_for_read_view(view_node, copy_slices, handles) is None
+
+
+@pytest.mark.parametrize(
+    ("class_name", "is_view"),
+    [
+        ("SliceBackward0", True),
+        ("AsStridedBackward0", True),
+        ("MulBackward0", False),
+        ("UnsafeViewBackward0", False),
+        ("CopySlices", False),
+        ("NoSuchBackward9", False),
+    ],
+)
+def test_view_backward_classes_are_read_from_torch_schemas(class_name: str, is_view: bool) -> None:
+    """View classes come from aten schema alias annotations; anything unresolvable is not one."""
+
+    assert is_view_backward_class(class_name) is is_view
+
+
+@pytest.mark.parametrize("depth", [3, _MAX_VIEW_REBASE_DEPTH + 1], ids=["short", "over_bound"])
+def test_view_chain_walk_stops_at_its_depth_bound(depth: int) -> None:
+    """A chain of views proves up to the bound; a longer one proves nothing."""
+
+    y = torch.randn(depth + 4, 2, requires_grad=True) * 2.0
+    base_node = y.grad_fn
+    view = y
+    for _ in range(depth):
+        view = view[1:]
+    view_node = view.grad_fn
+    view.add_(1.0)
+    chain = _orphaned_view_nodes(view_node, y.grad_fn, {"y": base_node, "v": view_node})
+    assert len(chain) == (depth if depth <= _MAX_VIEW_REBASE_DEPTH else 0)
 
 
 def test_without_the_rebind_the_backward_invariant_fails(monkeypatch: pytest.MonkeyPatch) -> None:

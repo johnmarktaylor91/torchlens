@@ -232,6 +232,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),
     _row("HAS_NN_ATTENTION_MODULE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_NODE_PREHOOK"),
+    _row("HAS_NODE_SEQUENCE_NR", measured=False),
     _row("HAS_ORIGINAL_VIEW_TRACKING", measured=False),
     _row(
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",
@@ -242,6 +243,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_REV_VIEW_FUNC_UNSAFE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_MPS_MEMORY_QUERY", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_RMSNORM_MODULE", absent_on=("2.1.2", "2.2.2", "2.3.1")),
+    _row("HAS_SCHEMA_ALIAS_INFO", measured=False),
     _row("HAS_SAFE_WEIGHTS_ONLY_LOAD", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
     _row("HAS_SAVED_TENSORS_HOOKS_PATCHABLE"),
     _row(
