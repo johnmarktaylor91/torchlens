@@ -443,6 +443,7 @@ def add_legend_table_to_graphviz(
     sections: tuple[LegendSection, ...],
     *,
     anchor: str | None = None,
+    fit: bool = False,
 ) -> None:
     """Emit the one legend table node in a dedicated rank.
 
@@ -459,11 +460,16 @@ def add_legend_table_to_graphviz(
         edge ties the legend into the anchor's component so dot stops packing
         it BESIDE the model (the 2.86x page-width defect); the dedicated
         ``rank=sink`` keeps it at the terminal rank.
+    fit:
+        Size every text cell from the bundled face's measured width plus the
+        key's margin (:func:`build_legend_table_label`). Without it a cell is
+        exactly as wide as Graphviz measured its words, so any viewer face a
+        little wider than that measurement runs the words past the border.
     """
 
     if not sections:
         return
-    label = build_legend_table_label(sections, theme)
+    label = build_legend_table_label(sections, theme, fit=fit)
     with dot.subgraph() as legend_rank:
         legend_rank.attr(rank="sink")
         legend_rank.node(

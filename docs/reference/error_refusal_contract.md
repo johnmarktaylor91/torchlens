@@ -1305,7 +1305,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `visualization_direction_invalid` | Render direction is unknown | Choose `bottomup`, `topdown`, `leftright`, or `rightleft` |
 | `visualization_renderer_invalid` | Visualization renderer is unknown | Choose `graphviz` or a registered renderer |
 | `visualization_theme_invalid` | Visualization theme is unknown | Choose a supported theme |
-| `visualization_mode_invalid` | Backend visualization mode is unsupported | Choose a backend-supported mode |
+| `visualization_mode_invalid` | Backend visualization mode is unsupported, including `module=` on `trace.draw(graph='backward')` or `graph='combined'` (module focus is forward-only) | Choose a backend-supported mode; drop `module=` or draw `graph='forward'` |
 | `visualization_node_style_invalid` | Node style is unknown | Choose a documented style |
 | `viz_highlighter_not_drawn` | WARNING (not a refusal): `draw(show_cone=True)` could not lay the downstream highlighter into the requested format (PDF or PNG without `cairosvg`, or another raster format); the graph is drawn without it and the edited node keeps its ring and edit row; once per call site | Draw with `file_format='svg'`, or install `cairosvg` for PDF and PNG |
 | `watch_budget_exceeded` | A hard preflight cap (sites/bytes/elements per step) is exceeded by the resolved plan FACTS; nothing was emitted and no loop time was spent (`WatchConfigError`; spelling DOCUMENTED-UNSTABLE) | Narrow `select=`, reduce requested signals, or raise the budget deliberately |

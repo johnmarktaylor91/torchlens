@@ -233,6 +233,7 @@ never folds.
 ## Focusing on one module
 
 `module=` draws only the inside of one module, given as its address or its `Module` record.
+It focuses the forward graph only: `graph="backward"` and `graph="combined"` refuse it.
 
 [![The inside of blocks.1, with its neighbours as stubs](../images/visualization/module_focus.png)](../images/visualization/module_focus.png)
 
@@ -401,6 +402,8 @@ the forward pass, and `graph="combined"` draws both.
 Each node is one autograd step (`grad_fn`). `@linear_2_3` names the forward operation the step
 differentiates, and the `module fc2` and `param fc2.bias` rows come from
 `show_module_paths=True`. `[i]` marks a step with no forward operation of its own, and a
+`grad` row gives the shape of the gradient a step passed back when that gradient was saved
+(gradients are saved per forward operation, so `[i]` steps have no `grad` row). A
 dotted **accum** arrow is a gradient being accumulated into a parameter. `show_grad_values=True`
 adds the norm and largest absolute value of each captured gradient.
 
