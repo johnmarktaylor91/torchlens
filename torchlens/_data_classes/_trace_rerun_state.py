@@ -173,6 +173,10 @@ def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
     refresh_rerun_layer_logs_from(trace, new_log)
     refresh_rerun_trace_fields_from(trace, new_log)
     refresh_rerun_primitive_profile_from(trace, new_log)
+    # The rerun settled its own outcome; adopt it as ``replace_state_from`` does, so a
+    # run's result fork reports the run, not the fork stamp it was created with.
+    if "_capture_outcome" in new_log.__dict__:
+        trace.__dict__["_capture_outcome"] = new_log.__dict__["_capture_outcome"]
     trace.__dict__.pop("_validation_replay_status", None)
     _invalidate_trace_op_layer_accessor_caches(trace)
     _invalidate_trace_module_call_accessor_cache(trace)
