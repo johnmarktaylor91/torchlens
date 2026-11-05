@@ -5308,6 +5308,22 @@ torch: 2.13.0+cpu
 source: bd6482c4452c0ea46f2ea96ff427155aedebf845 (dirty)
 recorded: 2026-11-05T09:40:47.632708+00:00
 ---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: jax preview: perturbation candidate generators move to their own module
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e1702e4e80b51eeeb6b0f745be6dc5752067a9d6 (dirty)
+recorded: 2026-11-05T11:08:40.791418+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: jax preview: perturbation candidate generators move to their own module
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e1702e4e80b51eeeb6b0f745be6dc5752067a9d6 (dirty)
+recorded: 2026-11-05T11:08:49.375143+00:00
+---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: perturbation crossing helpers (tensor clamp bounds, saturated activations) read Op fields

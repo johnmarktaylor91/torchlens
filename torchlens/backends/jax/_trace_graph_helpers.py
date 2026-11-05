@@ -17,6 +17,7 @@ from typing import Any
 from ..._ir.container import DictKey, TupleIndex
 from ..._ir.events import is_control_edge_use
 from .._validation_shared import float_replay_tolerances
+from ._perturbation_probes import _all_bool_outputs, _candidate_stream
 from .jaxpr import JaxEquationCapture, replay_equation
 
 
@@ -115,6 +116,66 @@ def _saved_single_output(
     return output
 
 
+_NO_RECORDED_INPUT: Any = object()
+
+
+def _saved_parent_input(
+    parent_op: Any,
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]] | None,
+    recorded_input: Any = _NO_RECORDED_INPUT,
+) -> Any:
+    """Return the saved parent payload a child consumed at one argument position.
+
+    A multi-result equation (``split``) materializes as one op whose payload is
+    the tuple of its outputs, and capture wired each child to the one output it
+    read, by value identity. Replay must hand the child that element, never the
+    whole tuple: the element identical to the child's recorded input, else the
+    single saved element equal to it. A saved tuple with no matching element
+    (a dropped or corrupted payload) raises, so the replay fails closed.
+
+    Parameters
+    ----------
+    parent_op
+        Materialized parent operation.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
+    recorded_input
+        The child's captured input value at this position; omitted for a
+        single-result op read whole (a region projection).
+
+    Returns
+    -------
+    Any
+        The saved payload (one element of a multi-result parent).
+    """
+
+    saved = _saved_single_output(parent_op, hidden_outputs_by_label)
+    if recorded_input is _NO_RECORDED_INPUT or not isinstance(saved, tuple | list):
+        return saved
+    for element in saved:
+        if element is recorded_input:
+            return element
+    for element in saved:
+        if _same_array(element, recorded_input):
+            return element
+    raise ValueError("JAX multi-output parent saved no output matching the child's input.")
+
+
+def _same_array(left: Any, right: Any) -> bool:
+    """Return whether two arrays agree exactly in shape, dtype and values (NaN-equal)."""
+
+    import jax.numpy as jnp
+
+    if getattr(left, "shape", None) != getattr(right, "shape", None):
+        return False
+    if getattr(left, "dtype", None) != getattr(right, "dtype", None):
+        return False
+    try:
+        return bool(jnp.array_equal(left, right, equal_nan=True))
+    except TypeError:  # key arrays and other non-numeric payloads have no value equality
+        return False
+
+
 def _parent_perturbations_change_output(
     capture: JaxEquationCapture,
     op: Any,
@@ -152,11 +213,7 @@ def _parent_perturbations_change_output(
         positions_by_parent.setdefault(parent_label, []).append(position)
     bool_child = _all_bool_outputs(saved_outputs)
     for positions in positions_by_parent.values():
-        first_position = positions[0]
-        candidates = _perturb_candidates(inputs[first_position])
-        if bool_child:
-            candidates = (*candidates, *_bool_child_substitutes(capture, inputs, positions))
-        for candidate in candidates:
+        for candidate in _candidate_stream(capture, inputs, positions, bool_child=bool_child):
             perturbed_inputs = list(inputs)
             for position in positions:
                 perturbed_inputs[position] = candidate
@@ -169,135 +226,6 @@ def _parent_perturbations_change_output(
             if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
                 return True
     return False
-
-
-#: Elementwise comparison primitives whose bool output admits the comparand
-#: straddle (torch parity: ``validation/_influence_probes.py``).
-_COMPARISON_PRIMITIVES = frozenset({"eq", "ne", "lt", "le", "gt", "ge"})
-
-
-def _all_bool_outputs(saved_outputs: tuple[Any, ...]) -> bool:
-    """Return whether every saved output of an equation is a bool array."""
-
-    import jax.numpy as jnp
-
-    return bool(saved_outputs) and all(
-        getattr(output, "dtype", None) == jnp.bool_ for output in saved_outputs
-    )
-
-
-def _bool_child_substitutes(
-    capture: JaxEquationCapture, inputs: Sequence[Any], positions: Sequence[int]
-) -> tuple[Any, ...]:
-    """Return threshold-crossing substitutes for one parent of a bool-output equation.
-
-    A bool child is a threshold op, so the additive steps of
-    :func:`_perturb_candidates` routinely fail to cross it (``mask != 0`` on an
-    all-nonzero mask, the ``x != x`` NaN test). As the torch validator does
-    for bool children, the parent is also replaced by a dtype battery (zero,
-    one, sign, non-finite and extreme values) and, for a two-operand
-    comparison where the parent fills one operand, by the comparand and its
-    two adjacent representable values. A substitute that moves the output
-    proves the edge transmits value; when every substitute leaves the output
-    at its saved value the check still fails.
-
-    Parameters
-    ----------
-    capture
-        Captured JAX equation metadata.
-    inputs
-        Replay inputs derived from trace graph parents.
-    positions
-        Primitive argument positions the perturbed parent fills.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Substitute values with the parent's shape and dtype.
-    """
-
-    import jax.numpy as jnp
-
-    parent = jnp.asarray(inputs[positions[0]])
-    substitutes = list(_bool_probe_battery(parent))
-    if (
-        str(capture.primitive) in _COMPARISON_PRIMITIVES
-        and len(inputs) == 2
-        and len(positions) == 1
-    ):
-        other = jnp.asarray(inputs[1 - positions[0]])
-        substitutes.extend(_straddle_substitutes(parent, other))
-    return tuple(substitutes)
-
-
-def _bool_probe_battery(parent: Any) -> tuple[Any, ...]:
-    """Return dtype-directed substitutes that flip a value-transmitting predicate."""
-
-    import jax.numpy as jnp
-
-    dtype = parent.dtype
-    if dtype == jnp.bool_:
-        return (jnp.zeros_like(parent), jnp.ones_like(parent), jnp.logical_not(parent))
-    if jnp.issubdtype(dtype, jnp.complexfloating):
-        return (
-            jnp.zeros_like(parent),
-            jnp.ones_like(parent),
-            jnp.full_like(parent, 1j),
-            jnp.full_like(parent, complex(float("nan"), 0.0)),
-        )
-    if jnp.issubdtype(dtype, jnp.floating):
-        return (
-            jnp.zeros_like(parent),
-            jnp.ones_like(parent),
-            -jnp.ones_like(parent),
-            -parent,
-            jnp.full_like(parent, jnp.nan),
-            jnp.full_like(parent, jnp.inf),
-            jnp.full_like(parent, -jnp.inf),
-            jnp.full_like(parent, jnp.finfo(dtype).max / 2),
-        )
-    if jnp.issubdtype(dtype, jnp.integer):
-        info = jnp.iinfo(dtype)
-        battery = [
-            jnp.zeros_like(parent),
-            jnp.ones_like(parent),
-            jnp.full_like(parent, info.max),
-            jnp.full_like(parent, info.min),
-        ]
-        if info.min < 0:
-            battery.append(-jnp.ones_like(parent))
-        return tuple(battery)
-    return ()
-
-
-def _straddle_substitutes(parent: Any, other: Any) -> tuple[Any, ...]:
-    """Return the comparand and its two adjacent representable values, shaped as ``parent``."""
-
-    import jax.numpy as jnp
-
-    dtype = parent.dtype
-    numeric = jnp.issubdtype(dtype, jnp.floating) or jnp.issubdtype(dtype, jnp.integer)
-    if not numeric or not (
-        jnp.issubdtype(other.dtype, jnp.floating) or jnp.issubdtype(other.dtype, jnp.integer)
-    ):
-        return ()
-    try:
-        base = jnp.broadcast_to(other.astype(dtype), parent.shape)
-    except ValueError:  # the comparand broadcasts wider than the parent: no straddle
-        return ()
-    if jnp.issubdtype(dtype, jnp.floating):
-        if not bool(jnp.all(jnp.isfinite(base))):
-            return ()
-        try:
-            return (
-                base,
-                jnp.nextafter(base, jnp.full_like(base, -jnp.inf)),
-                jnp.nextafter(base, jnp.full_like(base, jnp.inf)),
-            )
-        except (TypeError, NotImplementedError):  # no nextafter for this float dtype
-            return (base,)
-    one = jnp.ones_like(base)
-    return (base, base - one, base + one)
 
 
 def _control_parent_labels(op: Any) -> set[str]:
@@ -487,63 +415,6 @@ def _edge_parent_label(edge: Any) -> str | None:
     if isinstance(edge, tuple) and edge and isinstance(edge[0], str):
         return edge[0]
     return None
-
-
-def _perturb_candidates(value: Any) -> tuple[Any, ...]:
-    """Return deterministic perturbation candidates for a JAX value.
-
-    Parameters
-    ----------
-    value
-        Parent payload to perturb.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Perturbed values with the same shape and dtype family.
-    """
-
-    import jax
-    import jax.numpy as jnp
-
-    array = jnp.asarray(value)
-    if str(array.dtype).startswith("key<"):
-        if not array.shape:
-            return (jax.random.fold_in(value, 1),)
-        flat = jnp.reshape(array, (-1,))
-        folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
-        return (jnp.reshape(folded, array.shape),)
-    if array.dtype == jnp.bool_:
-        return (jnp.logical_not(array),)
-    if jnp.issubdtype(array.dtype, jnp.integer):
-        info = jnp.iinfo(array.dtype)
-        base_candidates = [
-            array + jnp.asarray(1, dtype=array.dtype),
-            array - jnp.asarray(1, dtype=array.dtype),
-            jnp.zeros_like(array),
-            jnp.full_like(array, info.max),
-        ]
-        if info.min < 0:
-            base_candidates.append(jnp.full_like(array, info.min))
-        return (
-            *base_candidates,
-            jnp.bitwise_xor(array, jnp.asarray(info.max, dtype=array.dtype)),
-        )
-    if jnp.issubdtype(array.dtype, jnp.complexfloating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.real.dtype)
-        return (
-            array + jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-            array - jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-        )
-    if jnp.issubdtype(array.dtype, jnp.floating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
-        candidates: tuple[Any, ...] = (array + magnitude, array - magnitude)
-        if not bool(jnp.all(jnp.isfinite(array))):
-            # A NaN or inf parent absorbs any additive perturbation; finite
-            # replacements are the only candidates that can move the child.
-            candidates = (*candidates, jnp.zeros_like(array), jnp.ones_like(array))
-        return candidates
-    return (array,)
 
 
 def _values_close(left: Any, right: Any) -> bool:
