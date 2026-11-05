@@ -110,7 +110,8 @@ def test_chunked_rerun_returns_new_trace_and_leaves_source() -> None:
     """The chunked capture rerun writes a new Trace; the source keeps its values."""
 
     model = _model()
-    source = tl.trace(model, _x(3, batch=4))
+    # Captured at the chunk's batch so each chunk replays the captured graph.
+    source = tl.trace(model, _x(3, batch=2))
     before = _snapshot(source)
     new_x = _x(4, batch=4)
 

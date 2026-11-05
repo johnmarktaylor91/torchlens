@@ -247,12 +247,15 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
     new_x = torch.tensor([-5.0, 1.0])
     log = tl.trace(InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_args=True))
     add_site = log["add_1_1"]
-    original_add_site_id = id(add_site)
+    source_versions = add_site.out_versions_by_child["relu_1_2"].clone()
+    source = log
 
     log = log.run(InplaceVersionModel(), new_x)
 
     refreshed_add_site = log["add_1_1"]
-    assert id(refreshed_add_site) == original_add_site_id
+    assert refreshed_add_site is not add_site  # the run returns a new Trace
+    assert source["add_1_1"] is add_site
+    assert torch.equal(add_site.out_versions_by_child["relu_1_2"], source_versions)
     assert log.last_run["fast_refresh"] is True
     assert torch.equal(
         refreshed_add_site.out_versions_by_child["relu_1_2"],

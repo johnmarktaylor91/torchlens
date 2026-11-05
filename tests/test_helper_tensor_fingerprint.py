@@ -93,7 +93,7 @@ def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> N
 
     model, x, direction = setup
     trace = _staged_trace(model, x, direction, door)
-    trace = trace.run(model, x)
+    trace.run(model, x)  # a run's result fork holds a copy; this trace aliases the tensor
     readout = trace.output_ops[0].out.clone()
     staged = trace._intervention_spec.freeze().hook_specs
     version = direction._version

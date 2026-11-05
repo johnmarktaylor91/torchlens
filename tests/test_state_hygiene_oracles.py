@@ -532,10 +532,11 @@ def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged
     )
     staged = _staged(trace)
     result = trace.run(model, x2)
-    assert result is trace
+    assert result is not trace
     assert result.last_run["engine"] in {"rerun", "guarded_fast"}
-    assert torch.equal(trace[label].out, value)
+    assert torch.equal(result[label].out, value)
     assert _staged(trace) == staged
+    assert _staged(result) == staged
 
 
 # ---------------------------------------------------------------------------

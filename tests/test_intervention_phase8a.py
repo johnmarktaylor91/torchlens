@@ -259,10 +259,11 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
 
     result = log.run(ReluAdd(), x)
 
-    assert result is log
-    assert log.state is TraceState.RERUN_PROPAGATED
-    assert log._out_recipe_revision == log._spec_revision
-    assert log._recipe_is_clean()
+    assert result is not log
+    assert log._out_recipe_revision == 0  # the source is unchanged
+    assert result.state is TraceState.RERUN_PROPAGATED
+    assert result._out_recipe_revision == result._spec_revision
+    assert result._recipe_is_clean()
 
 
 def test_fork_and_auto_do_are_implemented_by_phase8b() -> None:
