@@ -16,7 +16,8 @@ A differing snapshot is explained when
 - the parent is itself an in-place op: a reader of the base or of another alias of
   the view it wrote through is bound to the write, and its value is that alias, not
   the written view; the snapshot has the write's dtype and the shape of an op on the
-  write's receiver chain (content is not compared); or
+  write's receiver chain, or, for ``set_(storage, ...)``, exactly the bytes of the
+  storage it bound the receiver to (content is not compared); or
 - the parent is not an in-place op, the snapshot has the parent's shape and dtype
   (an in-place write never changes either), and an in-place op the child ALSO
   consumes wrote through the parent's lineage: the call reads a base together
@@ -129,12 +130,33 @@ def _write_alias_geometry(
     written = saved_out(parent_layer)
     if not isinstance(written, torch.Tensor) or snapshot.dtype != written.dtype:
         return False
+    if _covers_set_storage(snapshot, parent_layer):
+        return True
     shape = tuple(snapshot.shape)
     for label in receiver_lineage(parent_layer, resolve):
         alias = saved_out(resolve(label))
         if isinstance(alias, torch.Tensor) and tuple(alias.shape) == shape:
             return True
     return False
+
+
+def _covers_set_storage(snapshot: torch.Tensor, parent_layer: Op) -> bool:
+    """Return whether ``snapshot`` spans exactly the storage a ``set_(storage, ...)`` parent bound.
+
+    ``set_(storage, offset, size, stride)`` rebinds its receiver onto that storage, so a
+    later reader of the storage's owner is bound to the write and reads the whole storage,
+    not the receiver's view of it. Capture saves the storage argument by value at the
+    call; only a snapshot of exactly that many bytes (the dtype is checked by the caller)
+    is explained, and only for the storage overload of ``set_``.
+    """
+
+    if record_member(parent_layer, "func_name", None) != "set_":
+        return False
+    saved_args = record_member(parent_layer, "saved_args", None) or ()
+    storage = saved_args[1] if len(saved_args) > 1 else None
+    return isinstance(storage, torch.UntypedStorage) and (
+        snapshot.numel() * snapshot.element_size() == storage.nbytes()
+    )
 
 
 def _foreign_write_marked(
