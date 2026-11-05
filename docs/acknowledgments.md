@@ -349,7 +349,7 @@ Visual Inference Lab at Columbia University. Thank you to Kale Kundert for
 helpful discussion and code contributions enabling PyTorch Lightning
 compatibility. Logo created by Nikolaus Kriegeskorte.
 
-## Adding a credit
+## Maintenance rule
 
 A change that lands a borrowed idea adds or extends a row on this page and a
 point-of-use "inspired by" note in the feature's own doc, in the same change.
