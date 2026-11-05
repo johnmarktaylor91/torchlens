@@ -9,6 +9,12 @@ payload persistence, and derived gradients; true backward capture remains deferr
 
 ## Tutorial
 
+Install the runtime first:
+
+```bash
+pip install "torchlens[tf]"
+```
+
 ```python
 # tutorial: executed by tests/backends/test_tf_docs_page.py under the tf_backend marker
 import keras

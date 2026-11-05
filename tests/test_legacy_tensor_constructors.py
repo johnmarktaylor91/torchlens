@@ -512,3 +512,56 @@ def test_c_constructor_recovery_refuses_what_it_cannot_prove() -> None:
     assert owner is PyNew and not is_c_new_entry(entry)
     assert recover_c_new_from_bases(Child) is None
     assert is_c_new_entry(object.__dict__["__new__"])
+
+
+class SparseAdjacency(nn.Module):
+    """The early graph-network idiom: a legacy sparse COO adjacency times node features."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        idx = torch.LongTensor([[0, 1, 2], [1, 2, 0]])
+        adj = torch.sparse.FloatTensor(idx, h.sum(1).sigmoid(), torch.Size([3, 3]))
+        return torch.sparse.mm(adj, h)
+
+
+@pytest.mark.filterwarnings("ignore:torch.sparse.SparseTensor:UserWarning")
+def test_legacy_sparse_constructor_is_one_logged_op_with_parents_and_validates() -> None:
+    """``torch.sparse.FloatTensor(indices, values, size)`` owns its COO dispatch.
+
+    Unwrapped, ``aten._sparse_coo_tensor_with_dims_and_tensors`` dispatched with
+    no owning op, ``bfs_completeness`` failed, and the adjacency reached
+    ``sparse.mm`` with no provenance. The op records the indices and the
+    input-dependent values as its parents, and the dense class stays distinct.
+    Like the dense classes, the op never becomes runnable from a bundle: the
+    sparse classes carry the same hidden ``cdata=`` overload.
+    """
+
+    from torchlens._io.runnable import (
+        build_sparse_run_descriptor,
+        preflight_sparse_run_descriptor,
+    )
+    from torchlens._runnable import ResolverStatus
+    from torchlens.backends.torch import legacy_ctors
+
+    x = torch.randn(3, 4)
+    torch.manual_seed(0)
+    trace = tl.trace(SparseAdjacency(), x)
+    ops = [op for op in trace._layer_list if op.func_name == "sparse_FloatTensor"]
+    assert len(ops) == 1
+    assert len(ops[0].parents) == 2
+    installed = legacy_ctors.installed_legacy_constructor_classes()
+    assert installed["sparse_FloatTensor"] is torch.sparse.FloatTensor
+    assert installed["FloatTensor"] is torch.FloatTensor
+    assert _validate(SparseAdjacency(), x)
+    options = tl.options.CaptureOptions(
+        replayable=True, capture_container_structure=True, cache=False
+    )
+    runnable = tl.trace(SparseAdjacency().eval(), x, capture=options)
+    report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(runnable))
+    assert attachments is None
+    statuses = {rec.recorded_key.qualname: rec.status for rec in report.resolver_records}
+    assert statuses["FloatTensor"] is ResolverStatus.UNAVAILABLE
