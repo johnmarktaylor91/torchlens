@@ -23,7 +23,6 @@ from torchlens.validation import _autograd_grad_replay as grad_replay
 from torchlens.validation._core import _op_for_validation_label
 from torchlens.validation._replay_storage_context import (
     alias_provenance_holds,
-    alias_value_holds,
     replayed_storage_alias,
     writes_through_view,
 )
@@ -257,10 +256,10 @@ def test_alias_value_check_compares_the_saved_read() -> None:
     """The hand-off is checked against the slot's saved value, NaN-aware, shape first."""
 
     base = torch.tensor([[1.0, float("nan")], [3.0, 4.0]])
-    assert alias_value_holds(base, base.clone())
-    assert not alias_value_holds(base, base + 1.0)
-    assert not alias_value_holds(base, base[:1].clone())
-    assert not alias_value_holds(base, None)
+    assert grad_replay._reproduces(base, base.clone())
+    assert not grad_replay._reproduces(base, base + 1.0)
+    assert not grad_replay._reproduces(base, base[:1].clone())
+    assert not grad_replay._reproduces(base, None)
 
 
 def test_alias_provenance_needs_the_written_storage_and_recorded_layout() -> None:

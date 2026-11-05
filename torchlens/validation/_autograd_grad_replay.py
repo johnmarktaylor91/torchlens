@@ -43,7 +43,6 @@ from ..backends.torch._autograd_grad_marker import (
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 from ._replay_storage_context import (
     alias_provenance_holds,
-    alias_value_holds,
     check_view_context_receiver,
     rebuilt_alias,
     receiver_lineage,
@@ -458,25 +457,20 @@ class _SubgraphReplay:
             found = rebuilt_alias(replayed, layout, slot_capture_layout(parent, "args", 0))
         if found is None and tuple(replayed.shape) == shape:
             return replayed  # another layout: relay_to_layout copies it into the recorded one
-        if found is None:
-            raise AutogradGradReplayError(f"no alias after {parent.label!r} has the shape read")
+        alias = replayed if found is None else found
         if self.perturbed_run:
-            proven = alias_provenance_holds(found, replayed, (shape, layout))
+            proven = alias_provenance_holds(alias, replayed, (shape, layout))
         else:
-            proven = alias_value_holds(found, saved)
-        if not proven:
-            raise AutogradGradReplayError(f"the alias after {parent.label!r} differs from the read")
-        return found
+            proven = _reproduces(alias, saved.to(device=alias.device))
+        _require_reproduced(proven, f"storage alias read after in-place op {parent.label!r}")
+        return alias
 
     def _enclosing(self) -> _Enclosing:
         """Return what a replay nested in this one's subgraph inherits."""
 
-        owned = [
-            value
-            for value in (*self.values.values(), *self.param_leaves.values())
-            if value.layout == torch.strided
-        ]
-        storages = self.enclosing_storages | {storage_key(value) for value in owned}
+        owned = (*self.values.values(), *self.param_leaves.values())
+        storages = {storage_key(value) for value in owned if value.layout == torch.strided}
+        storages |= self.enclosing_storages
         return _Enclosing(self.param_leaves, self.perturbed_run, frozenset(storages))
 
     def _replay_op(self, op: Op) -> torch.Tensor:
@@ -512,7 +506,7 @@ def _bind_inputs(
     trace: Trace,
     inputs_value: Any,
     inputs_slot: tuple[str, Any],
-    outer: _ParamLeaves | None,
+    outer: _Enclosing | None,
 ) -> tuple[Any, dict[tuple[Any, ...], str], dict[str, torch.Tensor], _ParamLeaves]:
     """Split the ``inputs`` argument into op inputs and parameter leaves.
 
@@ -521,7 +515,7 @@ def _bind_inputs(
     leaves (an enclosing replay's leaves overlaid with this call's own).
     """
 
-    substitutions: _ParamLeaves = dict(outer or {})
+    substitutions: _ParamLeaves = dict(outer.param_leaves if outer is not None else {})
     op_slots = {
         path: _concrete_label(trace, label)
         for path, label in _parent_slots_under(layer, inputs_slot).items()
@@ -547,8 +541,6 @@ def _replayed_outputs(
 ) -> Any:
     """Return the ``outputs`` argument with each recorded root replaced by its replay."""
 
-    from .._utils.tensor_utils import tensor_nanequal
-
     root_slots = _parent_slots_under(layer, outputs_slot)
     replay.replay_roots(list(root_slots.values()))
     for path, root_label in root_slots.items():
@@ -557,14 +549,29 @@ def _replayed_outputs(
         saved_root = read_at_path(outputs_value, path)
         if label in perturbed:
             replayed_root = _perturbed_node(replayed_root, saved_root)
-        elif not perturbed and not tensor_nanequal(
-            replayed_root.detach(), saved_root.detach(), allow_tolerance=True
-        ):
-            raise AutogradGradReplayError(
-                f"replayed autograd.grad root {label!r} does not reproduce its saved value"
+        elif not perturbed:
+            _require_reproduced(
+                _reproduces(replayed_root, saved_root), f"autograd.grad root {label!r}"
             )
         outputs_value = replace_at_path(outputs_value, path, replayed_root)
     return outputs_value
+
+
+def _reproduces(replayed: torch.Tensor, saved: Any) -> bool:
+    """Return whether ``replayed`` equals the value capture saved (NaN-aware, within tolerance)."""
+
+    from .._utils.tensor_utils import tensor_nanequal
+
+    if not isinstance(saved, torch.Tensor) or tuple(saved.shape) != tuple(replayed.shape):
+        return False
+    return tensor_nanequal(replayed.detach(), saved.detach(), allow_tolerance=True)
+
+
+def _require_reproduced(proven: bool, what: str) -> None:
+    """Fail the replay when a replayed value (a root, a handed-over alias) is not capture's."""
+
+    if not proven:
+        raise AutogradGradReplayError(f"replayed {what} does not reproduce its saved value")
 
 
 def _boundary_source_trace(layer: Op) -> Trace:
@@ -587,11 +594,7 @@ def _replay_boundary(
     args = list(input_args["args"])
     bound = grad_signature(original_autograd_grad()).bind(*args, **dict(input_args["kwargs"]))
     inputs_value, op_slots, input_values, param_leaves = _bind_inputs(
-        layer,
-        trace,
-        bound.arguments["inputs"],
-        _slot_root(bound, "inputs", len(args)),
-        outer.param_leaves if outer is not None else None,
+        layer, trace, bound.arguments["inputs"], _slot_root(bound, "inputs", len(args)), outer
     )
     perturbed = frozenset(_concrete_label(trace, label) for label in layers_to_perturb)
     replay = _SubgraphReplay(trace, input_values, perturbed, param_leaves, outer)
@@ -761,11 +764,7 @@ def _replay_backward_boundary(
     args = list(input_args["args"])
     bound = recorder_signature().bind(*args, **dict(input_args["kwargs"]))
     inputs_value, op_slots, input_values, param_leaves = _bind_inputs(
-        layer,
-        trace,
-        bound.arguments["inputs"],
-        _slot_root(bound, "inputs", len(args)),
-        outer.param_leaves if outer is not None else None,
+        layer, trace, bound.arguments["inputs"], _slot_root(bound, "inputs", len(args)), outer
     )
     perturbed = frozenset(_concrete_label(trace, label) for label in layers_to_perturb)
     replay = _SubgraphReplay(trace, input_values, perturbed, param_leaves, outer)

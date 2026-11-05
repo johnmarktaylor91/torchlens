@@ -344,22 +344,6 @@ def storage_key(tensor: torch.Tensor) -> tuple[torch.device, int]:
     return tensor.device, tensor.untyped_storage().data_ptr()
 
 
-def alias_value_holds(found: torch.Tensor, saved: Any) -> bool:
-    """Return whether a handed-over alias equals the value its slot saved at capture.
-
-    Replay runs in capture's event order and writes in place as capture did, so at
-    the reader the replayed storage must hold what the reader saw (NaN-aware, within
-    the replay tolerance).
-    """
-
-    from .._utils.tensor_utils import tensor_nanequal  # deferred: as the replay's root check
-
-    if not isinstance(saved, torch.Tensor) or tuple(saved.shape) != tuple(found.shape):
-        return False
-    expected = saved.detach().to(device=found.device, dtype=found.dtype)
-    return tensor_nanequal(found.detach(), expected, allow_tolerance=True)
-
-
 def alias_provenance_holds(
     found: torch.Tensor, written: torch.Tensor, geometry: tuple[tuple[int, ...], Any]
 ) -> bool:
