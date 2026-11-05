@@ -135,8 +135,9 @@ def test_photo_drawing_renders_from_another_working_directory(
     """Draw, notebook display and save all render when the caller's cwd is elsewhere.
 
     The photo sits in an HTML ``<IMG>`` cell whose path is relative to the trace's
-    scratch root (R19-6), and a missing ``<IMG>`` file is a Graphviz error, not a
-    warning; so every render of the returned drawing must run Graphviz from that root.
+    scratch root (so DOT bytes stay stable), and a missing ``<IMG>`` file is a
+    Graphviz error, not a warning; so every render of the returned drawing must run
+    Graphviz from that root.
     """
 
     elsewhere = tmp_path / "elsewhere"
