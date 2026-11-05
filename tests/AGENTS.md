@@ -123,8 +123,8 @@ commit-level gate is `python scripts/smoke_ci_parity.py [-n N]`, not a plain
 their goldens were recorded under and fail closed on any other non-CI interpreter by design,
 so a smoke run in your own venv reports those few golden tests as failures. The script builds a
 venv pinned to CI's enforcing smoke row (once, in `.venv-ci-smoke/`) and runs the workflow's
-smoke-step commands there; `tests/test_ci_packaging_gates.py` keeps its pins in lockstep with
-`tests.yml` and these docs. A smoke run off that environment ends with a `torchlens CI parity:`
+smoke-step commands there; `tests/test_ci_packaging_gates.py` keeps its pins and its pytest
+commands in lockstep with the smoke job of `.github/workflows/pr.yml` and these docs. A smoke run off that environment ends with a `torchlens CI parity:`
 line naming the differences. The `test` extra includes `tabular`, because CI installs it on
 every row and the tabular surfaces are smoke-tier paths.
 
