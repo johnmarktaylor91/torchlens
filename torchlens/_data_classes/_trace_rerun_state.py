@@ -433,18 +433,11 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
     trace.facet_functions = getattr(new_log, "facet_functions", None)
 
 
-_FROZEN_DATACLASS_TYPES: dict[type, bool] = {}
-
-
 def _is_frozen_dataclass_instance(value: Any) -> bool:
-    """Return whether ``value`` is an instance of a frozen dataclass (cached per type)."""
+    """Return whether ``value`` is an instance of a frozen dataclass."""
 
-    kind = type(value)
-    frozen = _FROZEN_DATACLASS_TYPES.get(kind)
-    if frozen is None:
-        params = getattr(kind, "__dataclass_params__", None)
-        frozen = _FROZEN_DATACLASS_TYPES[kind] = bool(getattr(params, "frozen", False))
-    return frozen
+    params = getattr(type(value), "__dataclass_params__", None)
+    return bool(getattr(params, "frozen", False))
 
 
 def _hands_over(value: Any) -> bool:
