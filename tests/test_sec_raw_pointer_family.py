@@ -451,8 +451,8 @@ def test_loaded_validation_never_runs_or_verifies_a_pointer_call(tmp_path: Path)
     """With resolution bypassed, replay still never calls the op and never reports a pass.
 
     A spy stands in for a callable that slipped past resolution: the replay belt must
-    refuse before the call, and no broad handler may turn that refusal into a verdict
-    of verified.
+    refuse before the call, the refusal surfaces as a failed replay the user is warned
+    about, and no broad handler turns it into a verdict of verified.
     """
 
     path, reference = _crafted_new_bundle(tmp_path, {"cdata": 0})
@@ -460,11 +460,9 @@ def test_loaded_validation_never_runs_or_verifies_a_pointer_call(tmp_path: Path)
     crafted = next(op for op in loaded._layer_list if op.func_name == "new")
     calls: list[Any] = []
     crafted.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
-    outcome: Any
     try:
-        outcome = loaded.validate_forward_pass(reference)
-    except (RunPreconditionError, ArtifactError) as refusal:
-        outcome = refusal
+        with pytest.warns(UserWarning, match="treating as failed validation"):
+            outcome = loaded.validate_forward_pass(reference)
     finally:
         crafted.func = None
     assert calls == [], f"the pointer call executed with {calls}"
