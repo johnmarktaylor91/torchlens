@@ -773,7 +773,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The edit: zero_ablate, replay engine", "node(text~edited)", at="edited"),
+            Key("The edit: zero_ablate", 'node(text~"Δ zero_ablate")', at="edited"),
             Key(
                 "The target's site cohort: no fire recorded at this instance",
                 'node(text~"no fire")',
@@ -1505,7 +1505,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
             ("hook node", "interventions", "b", "node(shape=diamond)"),
-            ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
+            ("recorded edit (surgery)", "surgery", "a", 'node(text~"Δ zero_ablate")'),
         ),
         "alphabet-lines": (
             ("data flows here", "start-here", "a", "edge(style=solid)"),

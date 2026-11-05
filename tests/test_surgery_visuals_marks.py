@@ -174,11 +174,12 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     edited = _dot_node_statement(source, "linear_1_1pass1")
     cohort = _dot_node_statement(source, "linear_1_1pass2")
     # The plain label prints the fired edit; the view adds the solid border.
-    assert "zero_ablate" in edited
+    assert "\N{GREEK CAPITAL LETTER DELTA} zero_ablate" in edited
+    assert "penwidth=3" in edited
     assert "no fire recorded" not in edited
     assert "dashed" not in edited
     assert "no fire recorded" in cohort
-    assert "zero_ablate" not in cohort
+    assert "\N{GREEK CAPITAL LETTER DELTA} zero_ablate" not in cohort
     assert "dashed" in cohort
     assert "penwidth=2.25" in cohort
 
