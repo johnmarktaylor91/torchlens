@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.debug._common import _nonfinite_kind_of
-from torchlens.errors import CaptureError, TraceCaptureError
+from torchlens.errors import CaptureAttemptFailedWarning, CaptureError, TraceCaptureError
 from torchlens.types import PartialTrace
 
 
@@ -114,6 +115,34 @@ def test_find_nan_accepts_explicit_capture_options() -> None:
 
     assert result.found is True
     assert result.scope == "first non-finite tensor"
+
+
+def test_find_nan_success_path_routes_no_capture_failed_advisory() -> None:
+    """Finding the NaN is the success case: the designed stop raises no advisory."""
+
+    handler_before = warnings.showwarning
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = tl.debug.find_nan(NonFiniteFixture(), _input_tensor())
+
+    assert result.found is True
+    assert result.kind == "nan"
+    assert not [w for w in caught if issubclass(w.category, CaptureAttemptFailedWarning)]
+    assert warnings.showwarning is handler_before
+
+
+def test_find_nan_real_capture_failure_still_routes_the_advisory() -> None:
+    """A capture that fails for another reason keeps the advisory and the error."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(TraceCaptureError) as exc_info:
+            tl.debug.find_nan(ForwardErrorFixture(), _input_tensor())
+
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    advisories = [w for w in caught if issubclass(w.category, CaptureAttemptFailedWarning)]
+    assert len(advisories) == 1
+    assert ".partial_trace" in str(advisories[0].message)
 
 
 def test_first_nonfinite_rescans_after_saved_activation_changes() -> None:

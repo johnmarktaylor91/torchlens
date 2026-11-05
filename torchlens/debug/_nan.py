@@ -10,6 +10,7 @@ import torch
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report, at_source
 from .._io.payload_codec import get_payload_codec
+from ..backends.torch.rescue import _defer_capture_failed_warnings, _flush_deferred_warnings
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -25,6 +26,7 @@ from ._common import (
     _runs_on_torch,
     _source_line,
 )
+from ._nan_labels import _op_label, _unsaved_ancestors
 
 
 @dataclass(frozen=True)
@@ -217,99 +219,6 @@ class FindNanReport(FoundReport):
         )
 
 
-def _op_by_any_label(trace: Trace) -> dict[str, Op]:
-    """Build a lookup of final and raw labels to trace ops.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose graph labels should be indexed.
-
-    Returns
-    -------
-    dict[str, Op]
-        Label lookup for parent traversal.
-    """
-
-    lookup: dict[str, Op] = {}
-    for op in _ordered_ops(trace):
-        for label in (
-            getattr(op, "label", None),
-            getattr(op, "layer_label", None),
-            getattr(op, "_label_raw", None),
-        ):
-            if isinstance(label, str):
-                lookup[label] = op
-    return lookup
-
-
-def _op_label(op: Op) -> str:
-    """Return the canonical public label for an op.
-
-    Routes through the ONE resolver convention (observe item 1): the step-8
-    final LOOKUP spelling -- bare ``layer_label`` for single-pass layers,
-    pass-qualified ``label`` for multi-pass layers (an unqualified spelling on
-    a recurrent block would name every pass at once). A record with no
-    finalized label renders ``"unknown"``; a raw spelling is NEVER stripped
-    into a public one, because the raw-to-final ordinal offset is not a
-    constant and stripping fabricates a name that may belong to a different
-    op.
-
-    Parameters
-    ----------
-    op:
-        Operation whose label should be rendered.
-
-    Returns
-    -------
-    str
-        Canonical public label, or ``"unknown"`` when none exists.
-    """
-
-    from .._capture._nonfinite_prefix import canonical_public_label
-
-    label = canonical_public_label(op)
-    return label if label else "unknown"
-
-
-def _unsaved_ancestors(trace: Trace, op: Op) -> tuple[str, ...]:
-    """Return unsaved computational ancestors of an op in execution order.
-
-    Parameters
-    ----------
-    trace:
-        Trace containing ``op``.
-    op:
-        First saved non-finite op.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Labels of ancestor ops that do not retain output payloads.
-    """
-
-    by_label = _op_by_any_label(trace)
-    pending = list(getattr(op, "parents", ()) or ())
-    visited: set[str] = set()
-    unsaved: set[str] = set()
-    while pending:
-        parent_label = pending.pop()
-        if parent_label in visited:
-            continue
-        visited.add(parent_label)
-        parent = by_label.get(parent_label)
-        if parent is None:
-            continue
-        pending.extend(getattr(parent, "parents", ()) or ())
-        if not bool(getattr(parent, "is_input", False)) and not bool(
-            getattr(parent, "has_saved_activation", False)
-        ):
-            unsaved.add(_op_label(parent))
-    return tuple(
-        _op_label(candidate) for candidate in _ordered_ops(trace) if _op_label(candidate) in unsaved
-    )
-
-
 def _result_from_op(
     op: Op,
     *,
@@ -440,68 +349,140 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
         trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
     else:
         trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
+    # The stop at the first non-finite output IS a CaptureError by design, and the
+    # failed-capture teardown routes a CaptureAttemptFailedWarning pointing at the
+    # error's ``.partial_trace``. That advisory is only truthful when the error
+    # reaches the user: park it, drop it when the stop becomes a report, and
+    # re-emit it on every path that re-raises.
+    deferred: list[tuple[Any, Any, tuple[Any, ...], dict[str, Any]]] = []
     try:
-        trace(model, inputs, **trace_kwargs)
+        with _defer_capture_failed_warnings(deferred):
+            trace(model, inputs, **trace_kwargs)
     except CaptureError as exc:
-        fields = exc.fields
-        if "op" not in fields or "layer" not in fields:
+        try:
+            report = _report_from_nonfinite_stop(exc)
+        except BaseException:
+            _flush_deferred_warnings(deferred)
             raise
-        partial = getattr(exc, "partial_trace", None)
-        partial_trace = getattr(partial, "trace", None)
-        finalized = bool(
-            partial_trace is not None
-            and partial_trace.__dict__.get("_nonfinite_prefix_finalized", False)
-        )
-        # Fields carry the FINAL label (or None + status) and the raw-named identity.
-        raw_layer_field = fields.get("layer")
-        label: str | None = raw_layer_field if isinstance(raw_layer_field, str) else None
-        label_status = str(
-            fields.get("layer_status", "final" if label is not None else "unavailable")
-        )
-        raw_label = fields.get("layer_raw", fields.get("layer"))
-        op = None
-        if finalized and label is not None and partial_trace is not None:
-            try:
-                op = partial_trace[label]
-            except Exception:  # noqa: BLE001 - the structured fallback below still answers.
-                op = None
-        if op is not None:
-            try:
-                op_out = op.out
-            except ValueError:
-                op_out = None
-            kind = _nonfinite_kind(op_out) if isinstance(op_out, torch.Tensor) else "nan"
-            return _result_from_op(op, kind=kind, source_line=_exception_source_line(exc))
-        raw_op = next(
-            (
-                entry
-                for entry in reversed(getattr(partial, "raw_layers", ()))
-                if getattr(entry, "_label_raw", None) == raw_label
-            ),
-            None,
-        )
-        shape = fields["shape"]
-        if not isinstance(shape, tuple) or not all(
-            isinstance(dimension, int) for dimension in shape
-        ):
-            raise ValueError("CaptureError non-finite payload has an invalid shape field.")
-        return FindNanReport(
-            True,
-            raw_op,
-            label,
-            _module_address(raw_op) if raw_op is not None else None,
-            str(fields["op"]),
-            str(fields["dtype"]),
-            tuple(int(dimension) for dimension in shape),
-            ("output",),
-            _exception_source_line(exc),
-            "nan",
-            "first non-finite tensor",
-            (),
-            str(exc),
-            label_status,
-        )
+        if report is None:  # not a non-finite stop: the failure is the user's to see
+            _flush_deferred_warnings(deferred)
+            raise
+        return report
+    except BaseException:
+        _flush_deferred_warnings(deferred)
+        raise
+    _flush_deferred_warnings(deferred)
     return _no_finding_result(scope="live operation outputs")
+
+
+def _report_from_nonfinite_stop(exc: CaptureError) -> FindNanReport | None:
+    """Turn the live ``on_nonfinite="raise"`` stop into a :class:`FindNanReport`.
+
+    Parameters
+    ----------
+    exc:
+        Capture error raised while :func:`find_nan` ran its stopping capture.
+
+    Returns
+    -------
+    FindNanReport | None
+        The first non-finite op, or ``None`` when ``exc`` carries no
+        non-finite payload (an unrelated capture failure the caller re-raises).
+
+    Raises
+    ------
+    ValueError
+        When the non-finite payload carries a malformed ``shape`` field.
+    """
+
+    fields = exc.fields
+    if "op" not in fields or "layer" not in fields:
+        return None
+    partial = getattr(exc, "partial_trace", None)
+    partial_trace = getattr(partial, "trace", None)
+    finalized = bool(
+        partial_trace is not None
+        and partial_trace.__dict__.get("_nonfinite_prefix_finalized", False)
+    )
+    # Fields carry the FINAL label (or None + status) and the raw-named identity.
+    raw_layer_field = fields.get("layer")
+    label: str | None = raw_layer_field if isinstance(raw_layer_field, str) else None
+    label_status = str(fields.get("layer_status", "final" if label is not None else "unavailable"))
+    op = None
+    if finalized and label is not None and partial_trace is not None:
+        try:
+            op = partial_trace[label]
+        except Exception:  # noqa: BLE001 - the structured fallback below still answers.
+            op = None
+    if op is not None:
+        try:
+            op_out = op.out
+        except ValueError:
+            op_out = None
+        kind = _nonfinite_kind(op_out) if isinstance(op_out, torch.Tensor) else "nan"
+        return _result_from_op(op, kind=kind, source_line=_exception_source_line(exc))
+    return _structured_stop_report(exc, partial, label, label_status)
+
+
+def _structured_stop_report(
+    exc: CaptureError, partial: Any, label: str | None, label_status: str
+) -> FindNanReport:
+    """Build the non-finite report from the stop's structured payload alone.
+
+    Used when the partial trace has no finalized op for the stopping label.
+
+    Parameters
+    ----------
+    exc:
+        Capture error carrying the non-finite payload (``op``, ``layer``,
+        ``dtype``, ``shape`` and optional ``layer_raw``).
+    partial:
+        The error's partial capture, searched for the raw-named stopping op.
+    label:
+        Final label of the stopping op, or ``None`` when it was never final.
+    label_status:
+        Whether ``label`` is final or why it is unavailable.
+
+    Returns
+    -------
+    FindNanReport
+        Found report naming the stopping op from the payload fields.
+
+    Raises
+    ------
+    ValueError
+        When the payload's ``shape`` field is not a tuple of ints.
+    """
+
+    fields = exc.fields
+    raw_label = fields.get("layer_raw", fields.get("layer"))
+    raw_op = next(
+        (
+            entry
+            for entry in reversed(getattr(partial, "raw_layers", ()))
+            if getattr(entry, "_label_raw", None) == raw_label
+        ),
+        None,
+    )
+    shape = fields["shape"]
+    if not isinstance(shape, tuple) or not all(isinstance(dimension, int) for dimension in shape):
+        raise ValueError("CaptureError non-finite payload has an invalid shape field.")
+    return FindNanReport(
+        True,
+        raw_op,
+        label,
+        _module_address(raw_op) if raw_op is not None else None,
+        str(fields["op"]),
+        str(fields["dtype"]),
+        tuple(int(dimension) for dimension in shape),
+        ("output",),
+        _exception_source_line(exc),
+        "nan",
+        "first non-finite tensor",
+        (),
+        str(exc),
+        label_status,
+    )
 
 
 def _exception_source_line(exc: CaptureError) -> str | None:
