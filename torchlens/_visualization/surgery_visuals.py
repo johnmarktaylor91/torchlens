@@ -620,11 +620,12 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
         )
         if not any_fact:
             spec.style = f"{spec.style},dashed" if spec.style else "dashed"
-        shown = node_marks[:_MAX_MARK_ROWS_PER_NODE]
-        for mark in shown:
-            spec.lines.append(mark.row)
-        if len(node_marks) > len(shown):
-            spec.lines.append(f"+{len(node_marks) - len(shown)} more surgery mark(s)")
+        # The plain label already prints each fired edit (its delta row), so
+        # fire marks add only the border; their rows stay in the census.
+        rows = [mark.row for mark in node_marks if mark.kind != "fire"]
+        spec.lines.extend(rows[:_MAX_MARK_ROWS_PER_NODE])
+        if len(rows) > _MAX_MARK_ROWS_PER_NODE:
+            spec.lines.append(f"+{len(rows) - _MAX_MARK_ROWS_PER_NODE} more edit mark(s)")
         return spec
 
     return surgery_mark_spec_fn

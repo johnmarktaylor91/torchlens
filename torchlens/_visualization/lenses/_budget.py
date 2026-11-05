@@ -262,7 +262,9 @@ def resolve_budget(
 def _float_resolution(step: Any, coverage: float | None, *, in_band: bool) -> BudgetResolution:
     """Build the resolution record for one float-schedule step."""
 
-    lines = [f"detail: modules collapsed to {step.visible_count} nodes (collapse={step.t:g})"]
+    # No node count here: repeat folding after the collapse changes it, and
+    # the header already prints the drawn count.
+    lines = [f"detail: modules drawn as boxes (collapse={step.t:g})"]
     if coverage is not None:
         lines.append(
             f"coverage: encoded {int(round(coverage * step.visible_count))} of "
