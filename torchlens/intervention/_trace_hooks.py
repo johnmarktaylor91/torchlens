@@ -51,7 +51,7 @@ def attach_sticky_hooks(  # noqa: PLR0913 - trace stands in for self on the move
 
     warn_if_root_mutation(trace)
     if isinstance(hooks_or_site, PublicInterventionSpec):
-        # C03 spec door: the one immutable spec is accepted unchanged; its rules
+        # Spec door: the one immutable spec is accepted unchanged; its rules
         # already carry site and action, so extra arguments have nothing to bind to.
         if hook is not None or extra_hooks:
             raise InvalidArgumentError(

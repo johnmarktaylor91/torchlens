@@ -810,7 +810,7 @@ class MergedTrace:
         self._refuse_surface("intervene()")
 
     def backward(self, *args: Any, **kwargs: Any) -> Any:
-        """Refused: backward/gradient merging is deferred (fork F1, typed)."""
+        """Refused: backward/gradient merging is deferred (typed)."""
 
         self._refuse_surface("backward()")
 

@@ -1,7 +1,6 @@
 """Buffer-node visibility predicates shared across the render pipeline.
 
-Split out of ``_render_edges.py`` under the R43 file-size ratchet
-(FIXD03-F13). The tri-state ``show_buffer_layers`` semantics live here;
+Split out of ``_render_edges.py`` under the file-size ratchet. The tri-state ``show_buffer_layers`` semantics live here;
 ``_render_edges`` re-exports the names for its historical importers.
 """
 

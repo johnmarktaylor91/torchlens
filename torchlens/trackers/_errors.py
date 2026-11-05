@@ -52,7 +52,7 @@ class SinkDeliveryError(TrackersError):
 
 
 class TagGrammarError(TrackersError):
-    """Raised for tag-safety and namespace-grammar refusals (D4 majority).
+    """Raised for tag-safety and namespace-grammar refusals.
 
     Examples
     --------

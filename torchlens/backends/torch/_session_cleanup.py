@@ -89,7 +89,7 @@ def _clear_module_attribute_tensor_metadata(
     the sweep found). An empty container is also never memoised in ``seen``:
     revisiting it is the same no-op. EXACT ``type()`` membership on purpose,
     as in the walker (the reduce_op shim answers ``isinstance`` with a
-    FutureWarning, SF-45); subclasses take the guarded walker call.
+    FutureWarning); subclasses take the guarded walker call.
 
     Parameters
     ----------

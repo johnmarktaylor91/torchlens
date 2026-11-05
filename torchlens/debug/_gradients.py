@@ -634,8 +634,8 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         DataFrame described here.
         Ranked audit rows with counts in ``df.attrs``. The optional view over
         :func:`gradient_flow_audit_rows` (the pandas-free core). New fix-pack
-        columns: ``module``, ``is_frontier`` (the culprit localizer, memo
-        D3), ``grad_norm_raw``, ``rms``, ``numel``, ``verdict``, ``stage``,
+        columns: ``module``, ``is_frontier`` (the culprit localizer),
+        ``grad_norm_raw``, ``rms``, ``numel``, ``verdict``, ``stage``,
         ``scale_provenance``, and ``source_line`` (``"file:line"`` of the user
         code that ran the op). The printed card names the loss scale the
         verdicts used, and an empty report prints the capture recipe

@@ -57,9 +57,9 @@ __all__ = [
 def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
     """Return a user annotation image path for a rendered node.
 
-    One of the three record-derived image mechanisms in the closed 2.4(i)
+    One of the three record-derived image mechanisms in the closed
     image-origin predicate (``_encoding.is_record_derived_image_node``).
-    Moved here from ``_render_nodes`` (S5 territory; ratchet offload).
+    Moved here from ``_render_nodes`` (ratchet offload).
 
     Returns
     -------

@@ -290,7 +290,7 @@ def collapse_schedule(
     _ = weights
     optimizer = _optimizer()
     if len(trace._layer_list) > optimizer.COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER:
-        # Pathological pre-gate (memo D5(i); r8 R60-13 preserved): the
+        # Pathological pre-gate: the
         # revision snapshot below is an uncached O(N) deep walk, pointless
         # when the optimizer will decline. Over-budget but non-pathological
         # traces proceed: select_collapse_plan serves the deterministic

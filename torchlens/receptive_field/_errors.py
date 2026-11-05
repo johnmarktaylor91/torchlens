@@ -27,7 +27,7 @@ class ReceptiveFieldConfigurationError(ReceptiveFieldError, ValueError):
     Covers invalid public arguments and rule-registration mistakes (bad
     tolerances, unknown table levels, malformed rule names, out-of-range
     display options). Subclasses :class:`ValueError` so existing callers
-    catching the historical raw errors keep working (SF-07 typed stratum).
+    catching the historical raw errors keep working.
 
     Examples
     --------

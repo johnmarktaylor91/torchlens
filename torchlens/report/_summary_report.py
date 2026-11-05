@@ -49,8 +49,8 @@ class SummaryRow:
     """One typed accounting-unit row (op grain; families coincide there).
 
     ``exclusive`` and ``subtree`` value families are both present so module
-    rollups (F08's ladder) extend the SAME row type; at op grain they
-    coincide (costreport D5). Every numeric field is a plain int or None.
+    rollups extend the SAME row type; at op grain they
+    coincide. Every numeric field is a plain int or None.
 
     Examples
     --------

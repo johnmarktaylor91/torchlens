@@ -247,7 +247,7 @@ def _torchvision_member(constructor_name: str) -> Callable[[], tuple[Any, Any]]:
     """Return a guarded random-init torchvision builder (geometry strata).
 
     Random init serves the STRUCTURAL strata (geometry, budget, coverage);
-    the battery's real-weights legs are D03's, per the memo corpus rules.
+    the battery's real-weights legs are separate.
     """
 
     def _build() -> tuple[Any, Any]:

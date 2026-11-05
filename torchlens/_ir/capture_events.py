@@ -123,7 +123,7 @@ class SealedJournalAmendmentError(SealedJournalWriteError):
 
 class SealedJournalAppendError(SealedJournalWriteError):
     """A forward-lane event was appended to a sealed source journal.
-    Finding B1-15: sealed-journal enforcement was HALF-HEIGHT -- only the
+    Sealed-journal enforcement was HALF-HEIGHT -- only the
     amendment lane checked ``amendments_sealed``, while the op lane's
     :meth:`CaptureEvents.append` and every forward sibling appender wrote
     unconditionally. Code holding a sealed journal could therefore diverge the

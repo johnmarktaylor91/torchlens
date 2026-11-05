@@ -79,7 +79,7 @@ def ops(trace: Trace) -> TraceOpAccessor:
     # recycled ``id`` can never mistranslate) plus length: every internal
     # rebind (build, rerun refresh) changes identity, every removal
     # changes length, and the in-place rename/refresh paths call
-    # ``_invalidate_trace_op_layer_accessor_caches`` explicitly. The r3
+    # ``_invalidate_trace_op_layer_accessor_caches`` explicitly. The
     # by-value label-tuple key (98909fc7) additionally auto-detected
     # DIRECT equal-length in-place edits of ``layer_list``, but priced
     # every memo HIT at O(n), turning hot ``trace.ops`` sweeps O(n^2)
@@ -114,7 +114,7 @@ def layers(trace: Trace) -> LayerAccessor:
     # Same identity+len key scheme (and contract) as ``ops`` above:
     # reassignment changes identity, removal changes length, and the
     # in-place rename/refresh paths call the explicit invalidator
-    # (r3 R52-1 -- the by-value key priced every HIT at O(n)).
+    # (the by-value key priced every HIT at O(n)).
     container = trace._layer_logs
     cache_entry = trace.__dict__.get(_TRACE_LAYER_ACCESSOR_ATTR)
     if cache_entry is not None and cache_entry[0] is container and cache_entry[1] == len(container):

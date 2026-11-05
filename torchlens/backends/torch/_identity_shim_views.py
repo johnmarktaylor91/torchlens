@@ -44,7 +44,7 @@ class _LedgerResolvingTable(dict):
     wrapper-poisoning census gate keeps holding); only ``in``/``[]``/``get``
     additionally accept the live wrapper alias, so the documented
     ``func in torch.overrides.get_testing_overrides()`` membership check
-    answers the same in both wrap epochs (grind-r5 b7 R55-A).
+    answers the same in both wrap epochs.
     """
 
     def __contains__(self, key: Any) -> bool:
@@ -84,11 +84,10 @@ class _LedgerResolvingMembers(list):
 class _LedgerResolvingDefaultTable(collections.defaultdict):
     """Wrapper-resolving view that PRESERVES defaultdict semantics.
 
-    ``get_overridable_functions()`` returns a ``defaultdict(list)``; the r5
+    ``get_overridable_functions()`` returns a ``defaultdict(list)``; an earlier
     membership fix rebuilt it as a plain resolving dict, so a caller indexing
     a namespace with no recorded entries -- auto-vivification the upstream
-    type guarantees -- started raising KeyError (grind-r6 b8 R56, opus
-    wave-introduced residue). Ledger resolution runs BEFORE the default
+    type guarantees -- started raising KeyError. Ledger resolution runs BEFORE the default
     factory so a wrapper alias still finds its original's row rather than
     minting an empty one.
     """

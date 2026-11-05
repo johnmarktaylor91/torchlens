@@ -167,7 +167,7 @@ _object_setattr = object.__setattr__
 # Fields whose reads go through the lazy-materialization path in
 # ``Op.__getattribute__``; every other name short-circuits straight to the slot.
 _LAZY_READ_FIELDS = frozenset({"grad", "out"})
-# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the M7
+# ``equivalent_ops``/``recurrent_ops`` were copy-on-read fields here; the
 # live group views (shared ``GroupRef`` cells, cached immutable ``_GroupViewField``
 # reads) make sharing alias-safe without per-read copies.
 _INTERCEPTED_READ_FIELDS = _LAZY_READ_FIELDS
@@ -3024,7 +3024,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         return _op_relations.get_parents(self)
 
     def _repr_html_(self) -> str:
-        """Return the notebook Op card (treescope memo B2).
+        """Return the notebook Op card.
 
         Identity / value / context zones with the PROOF row; cost wrappers
         pass through ``str()`` untouched; the budgeted array view rides the

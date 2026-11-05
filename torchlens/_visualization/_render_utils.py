@@ -50,7 +50,7 @@ def _reap_finished_viewers() -> None:
 def _wait_and_release_viewer(proc: subprocess.Popen[bytes]) -> None:
     """Reap one viewer child the moment it exits.
 
-    b6-opus/sol R40 (carried MED): the registry alone reaped only on the
+    The registry alone reaped only on the
     NEXT launch, so one ``draw()`` that opened a viewer left one zombie for
     the life of the process — and retaining the ``Popen`` handle disabled
     even the finalizer's opportunistic reap. A per-viewer daemon waiter
@@ -125,7 +125,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
             os.startfile(filepath)  # type: ignore[attr-defined]
         else:
             opener = "open" if sys.platform == "darwin" else "xdg-open"
-            # r-b6 R40-1/3a: retain the handle and reap prior viewer children
+            # Retain the handle and reap prior viewer children
             # (the discarded Popen left one persistent zombie per process),
             # and detach the viewer into its own session so a later render
             # timeout kill cannot orphan its grandchildren onto us.

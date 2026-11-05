@@ -35,7 +35,7 @@ __all__ = [
 def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
     """Refuse live backward capture on a bundle-loaded analysis trace.
 
-    WT1 A-IV item 21 (lane A08): a loaded trace carries no live autograd
+    A loaded trace carries no live autograd
     handles tied to its recorded forward, so ``backward`` used to hook
     whatever FOREIGN graph the caller's loss came from, half-mutate the trace
     (backward passes and grad_fns from an unrelated forward), and die with an
@@ -139,7 +139,7 @@ def sync_backward_projection_if_needed(trace: Trace) -> None:
     _close_implicit_backward_pass_if_open(trace)
     # A read from INSIDE an engine invocation journals but must not
     # materialize while the close's FINALIZE step is still pending:
-    # materializing there would publish records ahead of the R36-1 D2H
+    # materializing there would publish records ahead of the D2H
     # fence. The first post-pass read finalizes fully.
     if not _backward_finalize_pending(trace):
         _materialize_backward_projections(trace)

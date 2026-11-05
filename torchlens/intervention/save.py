@@ -231,7 +231,7 @@ def save_intervention(
 def _spec_is_predicate_derived(spec: InterventionSpec) -> bool:
     """Return whether every hook of ``spec`` was staged by the predicate door.
 
-    C03 / leverage B7: such a spec carries only DERIVED resolved-label TARGETS.
+    Such a spec carries only DERIVED resolved-label TARGETS.
     The recipe stamps the fact so a reload discloses "the persisted ADDRESSING is
     derived" instead of presenting derived labels as authored addressing. The
     stamp keys the DOOR, never the metadata riders (spec_where_repr /
@@ -378,7 +378,7 @@ def _spec_with_recipe_metadata(recipe: Mapping[str, Any], root: Path) -> Interve
         "function_registry_keys": recipe.get("function_registry_keys", []),
         "append_state": recipe.get("append_state", {}),
         "loaded_from_tlspec": str(root),
-        # C03 / leverage B7: disclose reloads whose persisted ADDRESSING is
+        # Disclose reloads whose persisted ADDRESSING is
         # derived per-site labels (predicate-door lowering).
         "spec_derived": bool(recipe.get("spec_derived", False)),
         "recipe_placeholders": [

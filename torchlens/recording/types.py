@@ -305,7 +305,7 @@ class Recording(TraceLike):
     # validating ``outcome`` property IS the settlement truth (stamped-record re-parse +
     # conservative derivation, never blessing COMPLETE). Without it ``outcome_for`` read the absent
     # ``__dict__`` as UNKNOWN and every capability gate refused settled Recordings with a false
-    # hand-built-object warning (WT1 A-IV item 21, lane A08).
+    # hand-built-object warning.
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
 
     records: list[ActivationRecord]

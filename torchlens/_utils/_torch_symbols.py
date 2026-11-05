@@ -192,7 +192,7 @@ def torch_namespace(namespace: str) -> Any | None:
     """
 
     parts = namespace.removeprefix("torch.").split(".")
-    # r49 secF_1: the FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
+    # The FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
     # ``__getattr__`` can fire a lazy submodule import; resolve it through ``torch_attr``.
     # Later hops are off submodule/class roots that carry no lazy-import hazard.
     current: Any = torch_attr(parts[0])
@@ -228,7 +228,7 @@ def getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | N
         return None
     if root is None:
         return None
-    # r42 secC_1: the PEP-562 lazy-submodule hazard lives ONLY on the top-level ``torch``
+    # The PEP-562 lazy-submodule hazard lives ONLY on the top-level ``torch``
     # module, so it is read through its ``__dict__``; class roots and the proxying
     # ``torch._VF`` module expose inherited/proxied callables only through ``getattr``.
     value = torch_attr(qualname) if root is torch else getattr(root, qualname, None)

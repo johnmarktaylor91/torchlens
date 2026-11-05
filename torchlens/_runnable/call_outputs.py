@@ -169,8 +169,8 @@ def _bind_call_outputs(
         if op is not None and bool(getattr(op, "has_saved_activation", False)):
             # Snapshot only what the capture saved: the result trace keeps the capture's
             # saved set, and an unsaved output (a huge ``expand`` view, say) is never
-            # copied out. r59 gate 3: byte-guard the fork ``Op.out`` snapshot BEFORE it
-            # materializes a tampered view (r58 free_2) and before the shape check below.
+            # copied out. Byte-guard the fork ``Op.out`` snapshot BEFORE it
+            # materializes a tampered view and before the shape check below.
             op._internal_set(
                 "out",
                 ceiling.guarded_clone(

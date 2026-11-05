@@ -12,8 +12,8 @@ import sys
 
 # STRUCTURAL close of the denylist-completeness class. The explicit
 # ``_DENIED_MODULES`` denylist above is inherently incomplete: successive audits kept
-# finding *more* resolvable stdlib/builtin gadgets (r26 exec/spawn
-# ``_frozen_importlib``; r30 ``_imp`` / ``zipimport`` / ``io`` / ``linecache`` /
+# finding *more* resolvable stdlib/builtin gadgets (exec/spawn
+# ``_frozen_importlib``; ``_imp`` / ``zipimport`` / ``io`` / ``linecache`` /
 # ``fileinput`` / ``py_compile`` / ``compileall`` / ``gc`` / ``mmap`` / ``fcntl`` ...).
 # Chasing modules one at a time never terminates. Instead we close the CLASS with a
 # POSITIVE structural rule: on the TRUSTED foreign resolution path, DENY any resolved

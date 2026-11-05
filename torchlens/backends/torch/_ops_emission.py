@@ -97,7 +97,7 @@ def _dropped_edge_at_slot(
     gone because its "deliberately excluded from parents" premise no longer
     holds anywhere.
 
-    r29 F3c: ORDERED per-slot identity. When the recorder stamped a parent
+    ORDERED per-slot identity. When the recorder stamped a parent
     label AT this exact slot it must be one of the live tensor's own provenance
     labels, else the call recipe binds the WRONG producer here (a slot
     permutation between value-identical producers passed the former set check).
@@ -241,7 +241,7 @@ def _unattributed_tensor_arg_positions(
         # warning for that unsafe lvalue position when an input-derived RHS would otherwise
         # appear fully represented; the data-alias witness ceilings replay independently.
         unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
-        # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
+        # ``t.data = rhs``: the setter is
         # logged as the canonical single-argument ``detach(rhs)`` call, so
         # the rebound receiver never appears as a recorded argument and no
         # receiver-slot exemption exists here -- ``arg0`` IS the RHS and is
@@ -253,7 +253,7 @@ def _unattributed_tensor_arg_positions(
         # parent of its mutation op (``promote_mutated_parameters``), so it is
         # witnessed by the label branch below, not the parameter rung.
         if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
-            # r29 F3a: the parameter rung. A Parameter never appears in
+            # The parameter rung. A Parameter never appears in
             # ``parent_arg_positions`` (the recorder skips it) and
             # ``tensor_session_parent_labels`` returns ``()`` for it, so a
             # dropped PARAM edge was invisible to both witness branches.

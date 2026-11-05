@@ -92,7 +92,7 @@ def _validate_draw_flag_options(
 ) -> None:
     """Validate the bool-typed public draw kwargs and ``show_containers``.
 
-    R64-F3: strings such as ``order_siblings='yes'`` were accepted silently,
+    Strings such as ``order_siblings='yes'`` were accepted silently,
     and ``'no'``/``'false'`` truthily meant ON. Only real bools are accepted;
     ``show_containers`` additionally allows its closed string vocabulary.
 

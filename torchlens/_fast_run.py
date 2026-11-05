@@ -268,7 +268,7 @@ class _FastSparseSession:
         engine's ``unresolved`` ceiling flag -- ``True`` when the three-valued
         alias engine could prove neither overlap nor disjointness for a
         same-storage input pair. The caller MUST thread that flag into
-        ``_path_faithfulness`` (r35 decision D: unknown is never VERIFIED).
+        ``_path_faithfulness`` (unknown is never VERIFIED).
         """
 
         values: dict[str, torch.Tensor] = {}
@@ -354,7 +354,7 @@ class _FastSparseSession:
                     details=(("expected", repr(expected_paths)), ("actual", repr(actual_paths))),
                 ),
             )
-        # grind-r5 b7 R23-A: op_labels is an independent persisted field, so a
+        # op_labels is an independent persisted field, so a
         # descriptor with fewer labels would truncate this zip and skip the
         # shape/dtype/device guards for the trailing slots while reporting
         # clean. The slow-path twin enforces exactly this parity inside its
@@ -1211,8 +1211,7 @@ class _FastLiveSession(_NestedEventTracker):
             if lossy or truncation is not None or hooked is not None
             else PathFaithfulness.VERIFIED
         )
-        # Same declaration contract as the ordinary live provider (deephunt
-        # F2): a host-RNG capture's fast report must not read as a
+        # Same declaration contract as the ordinary live provider: a host-RNG capture's fast report must not read as a
         # deterministic-looking empty tuple next to VERIFIED.
         runnable_seam = getattr(self.trace, "_runnable", None)
         nondeterministic_sources: tuple[str, ...] = (
@@ -1339,7 +1338,7 @@ class _FastLiveSession(_NestedEventTracker):
             if len(input_leaves) != len(input_labels):
                 # Guard-and-poison exactly like the output branch below:
                 # a truncating zip here silently kept STALE capture-time
-                # activations on the surplus input ops (R22-2 layer 2).
+                # activations on the surplus input ops.
                 failed = _contract_check(
                     "fast_live_model_input_structure",
                     False,

@@ -2,7 +2,7 @@
 
 v1 ships the COLOR channel (``color_by``): a value source (Layer/Op field
 name, scalar node-overlay builtin, or callable ``node -> value``) compiled
-down to the existing NodeSpec chain as a fillcolor transform in the C3
+down to the existing NodeSpec chain as a fillcolor transform in the
 precedence slot (after the node-style preset and intervention styling, before
 the user ``node_spec_fn``), plus an auto-legend that disclosures the
 transform.
@@ -14,13 +14,13 @@ an encoding, and the max clamp bounds encoded area at
 :data:`SIZE_BY_MAX_AREA_MULT` times the default node area). The shipped
 multi-dim -> geometry mapping is the DEFAULT (AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
-preserved) with the default ``scale="sqrt"`` -- D4 was UNRULED at this
-merge, so the METAPLAN default applies and is marked as default-applied.
+preserved) with the default ``scale="sqrt"`` -- no rule was
+set for this, so the default applies and is marked as default-applied.
 Size REFUSES where color degrades on rolled multi-pass nodes
 (``size_by_rolled_varying``): an unencoded box is visually indistinguishable
 from an encoded small box, so size has no honest "n/a" rendering.
 
-Resolution is TWO-PHASE (design memo 2.3):
+Resolution is TWO-PHASE:
 
 * PHASE A -- a presentation PREPASS over the already-chosen visible-node
   universe (:func:`populate_encoding_state`, called from
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 # ---------------------------------------------------------------------------
-# Rolled-aggregate source allowlist rows (design memo 2.3b, shape).
+# Rolled-aggregate source allowlist rows (shape).
 #
 # A FIELD or BUILTIN source resolving on a rolled MULTI-PASS Layer node
 # (len(layer.ops) > 1) is classified by the NAME-KEYED table below. A name in
@@ -410,7 +410,7 @@ LIGHT_RAMP = ("#FFF7BC", "#993404")
 DARK_RAMP = ("#3A2E22", "#FED98E")
 
 # ---------------------------------------------------------------------------
-# SIZE channel constants (wave 1; D4 DEFAULT-APPLIED).
+# SIZE channel constants (DEFAULT-APPLIED).
 # ---------------------------------------------------------------------------
 
 #: The one shape-valued builtin source token, legal for ``size_by`` only
@@ -860,7 +860,7 @@ def _is_rolled_multipass(node: Any) -> bool:
 
 
 def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
-    """THE closed image-origin predicate for pre-user image nodes (memo 2.4(i)).
+    """THE closed image-origin predicate for pre-user image nodes.
 
     Covers all three record-derived image mechanisms: the visualizer_path
     branch, the annotation-image branch, and the raw-input montage input
@@ -1432,7 +1432,7 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
 
 
 def _compute_size_geometry(state: EncodingState) -> None:
-    """Map collected size values to (width, height) minimums (D4 default).
+    """Map collected size values to (width, height) minimums (default).
 
     ``scale="sqrt"`` (default) compresses the dynamic range; ``"linear"``
     keeps area ~ value for the literal motif. Normalization is min-max over

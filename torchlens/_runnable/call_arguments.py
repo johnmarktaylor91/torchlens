@@ -56,8 +56,8 @@ def _has_numeric_literal(value: Any, _depth: int = 0) -> bool:
     (the other is a tensor operand -- ``_has_tensor_operand``). "Carries a
     size-relevant literal" means the decoded tree holds any non-bool ``int`` or
     any *finite* ``float`` -- the float branch covers multiplier parameters such as
-    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed
-    (r56 free_1). ``bool`` is excluded (never a size argument), and non-finite
+    ``F.interpolate(scale_factor=<float>)`` that an integer-only gate missed.
+    ``bool`` is excluded (never a size argument), and non-finite
     float sentinels (``inf``/``nan``) are not size authorities and fall through to
     the existing literal validation. Bounded recursion mirrors the literal-nesting
     ceiling. Whether such a call is *actually* size-driving is then decided
@@ -88,8 +88,8 @@ def _has_tensor_operand(value: Any, _depth: int = 0) -> bool:
     broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/``einsum``/``diag`` --
     and the zero-numel family ``mm``/``matmul``/``einsum`` on ``[N,0] @ [0,N]``,
     where numel is a PRODUCT so a 0 dim hides arbitrarily large sibling dims)
-    carries a tensor operand, so no amplifier can be pre-filtered out: the r60
-    free_1 has-literal premise hole is closed structurally, not by an op list.
+    carries a tensor operand, so no amplifier can be pre-filtered out: the
+    has-literal premise hole is closed structurally, not by an op list.
     Over-depth returns True (fail-closed: project).
     """
 
@@ -215,7 +215,7 @@ def _new_allocation_bytes(
                 nbytes = int(node.numel()) * int(node.element_size())
                 device = node.device
             except Exception as size_error:
-                # grind-r5 b7 R22 (sol HIGH): an unreadable projected size
+                # An unreadable projected size
                 # must never charge ZERO -- that converts "unknown
                 # allocation" into an empty byte charge and lets the real
                 # call allocate before any backstop. Refuse typed upstream.
@@ -243,7 +243,7 @@ def _preflight_call_allocation(
     Runs the resolved callable under a count-instrumented
     ``FakeTensorMode(allow_non_fake_inputs=True)`` (ZERO allocation) for EVERY taken-path
     call carrying a size source: a non-bool numeric literal (``_has_numeric_literal``) OR
-    a tensor operand (``_has_tensor_operand``, r61 -- the has-literal-only gate's premise,
+    a tensor operand (``_has_tensor_operand`` -- the has-literal-only gate's premise,
     "no literal implies bounded by live shapes", is FALSE for shape amplifiers such as
     ``outer``/``kron``/broadcast-``mul``/``cartesian_prod``/``tensordot(dims=0)``/
     ``einsum``/``diag`` and the zero-numel ``mm``/``matmul``/``einsum`` on ``[N,0]@[0,N]``).
@@ -252,7 +252,7 @@ def _preflight_call_allocation(
     (``_projection_required_by_arguments``). Two structural bounds fire before the real
     call:
 
-    * output COUNT (r59 free_1): the count-bounded mode caps realized fake outputs at
+    * output COUNT: the count-bounded mode caps realized fake outputs at
       ``max(recorded * 8, 4096)`` DURING fanout construction and raises
       ``_ProjectionCountExceeded`` -- caught here BEFORE the generic fail-open and
       converted to a typed ``op_output_count_preflight`` refusal, so a
@@ -268,7 +268,7 @@ def _preflight_call_allocation(
     with capture-invalid ``output_size``) -- it FAILS OPEN to the run-prep bound, so a
     legitimate such op is never over-refused (the over-catch anti-pattern). But an
     ALLOCATION-classed projection failure (``std::bad_alloc`` in the C++ prelude at
-    int-limit N) fails CLOSED typed (r59 section 2.4): the real op's identical prelude
+    int-limit N) fails CLOSED typed: the real op's identical prelude
     would die too, so failing open just runs the death twice. An unavailable
     ``FakeTensorMode`` fails open identically. ``entry`` is retained for call-site
     stability but no longer gates the projection.

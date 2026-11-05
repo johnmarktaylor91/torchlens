@@ -1,4 +1,4 @@
-"""Declarative user-named pattern folding, v1 (collapse memo D11 / K5).
+"""Declarative user-named pattern folding, v1.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 

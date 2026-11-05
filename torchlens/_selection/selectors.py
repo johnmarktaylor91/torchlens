@@ -922,8 +922,8 @@ class BackwardPassSelector(BaseSelector):
 class EpisodeStepSelector(BaseSelector):
     """Episode-step selector: match ops recorded inside declared step(s).
 
-    Lane F42 (attested coupling; spelling DOCUMENTED-UNSTABLE pending the
-    naming session): steps are the 0-based episode ledger rows -- stepped-
+    Attested coupling; spelling DOCUMENTED-UNSTABLE pending the
+    naming session. Steps are the 0-based episode ledger rows -- stepped-
     module call ``k`` is step ``k``, matching ``trace.episode.rows``. At
     capture time the selector reads the LIVE step position (the armed join
     session's boundary hooks); post hoc it reads the persisted
@@ -1713,7 +1713,7 @@ def grad(site: Any, /) -> GradSelector:
 
 
 def at_step(*steps: int) -> EpisodeStepSelector:
-    """Create an episode-step selector (lane F42's step qualifier).
+    """Create an episode-step selector (the step qualifier).
 
     Matches ops recorded inside the named 0-based episode step(s) -- the
     stepped-module calls declared by ``tl.trace(..., episode=...)``, aligned

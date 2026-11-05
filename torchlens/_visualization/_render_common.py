@@ -135,7 +135,7 @@ from .themes import (
 def strict_collapse_checks_enabled() -> bool:
     """Return whether collapse/sibling-order verification failures should raise.
 
-    THE one parser of ``TORCHLENS_COLLAPSE_STRICT`` (r-b7 R42-9: it used to be
+    THE one parser of ``TORCHLENS_COLLAPSE_STRICT`` (it used to be
     duplicated byte-for-byte in ``auto_collapse`` and ``_render_dot``, a
     divergence hazard for a verification-arming knob).
 
@@ -154,8 +154,8 @@ def strict_collapse_checks_enabled() -> bool:
     Raises
     ------
     InvalidArgumentError
-        When the variable is set to an unrecognized value (round-7 b7 R47:
-        the historical exact-``"1"`` parse silently left this
+        When the variable is set to an unrecognized value (the
+        historical exact-``"1"`` parse silently left this
         verification-arming tripwire OFF on ``=true`` or a typo while the
         exporter believed it was armed).
     """

@@ -323,7 +323,7 @@ def _log_output_tensor_info(
     # own ``CloneBackward`` node. The wrapper stamped the USER op's live
     # autograd node on the copy; that snapshot is the operation's metadata.
     user_grad_fn = pop_user_grad_fn(t)
-    # TorchLens bookkeeping ``grad_fn`` read (same r65 receiver aliasing note
+    # TorchLens bookkeeping ``grad_fn`` read (same receiver aliasing note
     # as the ``_version`` read above).
     with internal_scalar_read():
         op_grad_fn = recorded_op_grad_fn(user_grad_fn, t)

@@ -202,7 +202,7 @@ def _is_torch_storage_instance(obj: Any) -> bool:
         return False
 
 
-# ALLOCATION-CONSTRUCTOR TYPE surface (tensor/ndarray-construct regap). The r49
+# ALLOCATION-CONSTRUCTOR TYPE surface (tensor/ndarray-construct regap). The
 # belt denies only STORAGE construction, but a torch storage is NOT the only
 # pickle-reachable attacker-sized allocator: a bare REDUCE/NEWOBJ of ``torch.Tensor(N)``
 # / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` with an attacker-supplied size

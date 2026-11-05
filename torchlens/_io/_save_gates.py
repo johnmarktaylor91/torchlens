@@ -307,8 +307,8 @@ _RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
     """Refuse a runnable payload family whose entry labels load would reject.
 
-    (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
-    ``register_parameter``'s empty-name validation, captures, and SAVED an
+    ``self._parameters[""] = nn.Parameter(...)`` bypasses
+    ``register_parameter``'s empty-name validation and captures, so a save could write an
     artifact whose weight tensor entry carried label ``""`` -- which
     ``validate_tlspec`` categorically refuses at load ("requires a canonical
     label"). A save door must never produce a stillborn artifact, so this
@@ -365,7 +365,7 @@ def _capture_weight_blob_specs(
     StateBindingError
         If the full state dict disagrees with the descriptor contract.
     RunnablePreflightError
-        If a state name is not a canonical (non-empty) label (r79 save-side
+        If a state name is not a canonical (non-empty) label (save-side
         mirror of the load door's canonical-label check).
     """
 
@@ -411,7 +411,7 @@ def _capture_nonpersistent_buffer_blob_specs(
     StateBindingError
         If a required captured value is missing or violates its slot contract.
     RunnablePreflightError
-        If a buffer name is not a canonical (non-empty) label (r79 save-side
+        If a buffer name is not a canonical (non-empty) label (save-side
         mirror of the load door's canonical-label check).
     """
 
@@ -603,7 +603,7 @@ _NONPERSISTENT_DISCLOSURE_WARNED = False
 """One-time process flag for the non-persistent buffer save disclosure."""
 
 _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = False
-"""One-time process flag for the unattestable-activation-archive save disclosure (r6 H2)."""
+"""One-time process flag for the unattestable-activation-archive save disclosure."""
 
 
 def _warn_nonpersistent_buffer_disclosure_once() -> None:

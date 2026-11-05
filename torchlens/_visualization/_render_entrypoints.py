@@ -117,7 +117,7 @@ def render_backward_graph(
     show_legend:
         Tri-state. ``None`` (AUTO) and ``True`` render the in-frame backward
         key -- one row per style ACTUALLY painted (cream = order 2, ``[i]``,
-        ``accum``, ...; vizmech item 17/D30, the WGAN-GP acceptance
+        ``accum``, ...; the WGAN-GP acceptance
         contract's "every active style has an automatic legend row").
         ``False`` suppresses it.
     theme:

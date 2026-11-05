@@ -29,9 +29,9 @@ field hulls) is carried as provenance disclosure (``provenance.relation``,
 one of the closed lattice ``exact | upper_bound | lower_bound | unknown``),
 never as a fuzzy mask.
 
-The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary (S2-routed).
+The kind vocabulary ``ACT | PARAM | EDGE`` is a CLOSED public vocabulary.
 Mixed-kind composition refuses typed (``selection_kind_incompatible``); the matrix
-cells change only via explicit D-ruling landing as an amendment, never a lane-local edit.
+cells change only via an explicit, documented change, never a local edit.
 
 ``Selection`` is SESSION-TIME ONLY and is never persisted.
 """
@@ -771,7 +771,7 @@ def _lift(value: Any) -> Selector | Selection | None:
 
 
 def _check_kinds(op: str, left_kind: str, right_kind: str) -> None:
-    """Refuse incoherent mixed-kind composition (closed matrix, S2-homed)."""
+    """Refuse incoherent mixed-kind composition (closed matrix)."""
 
     if left_kind != right_kind:
         raise SelectionError(
@@ -963,7 +963,7 @@ def _unresolvable(
     """Build the closed-reason resolver refusal.
 
     ``code`` defaults to the contracted ``selection_unresolvable``; the
-    keyword lets a raise site spell its code visibly (the S-17
+    keyword lets a raise site spell its code visibly (the
     census counts site-visible codes, the ``_encoding_error`` pattern).
     """
 

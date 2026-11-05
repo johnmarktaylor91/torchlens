@@ -248,7 +248,7 @@ def _finalize_provider_run(
     state_carried: bool = False,
     truncation: Any = None,
 ) -> RunResult:
-    """THE single provider settlement finalizer (r39 CLASS B sparse<->live parity immunizer).
+    """THE single provider settlement finalizer (sparse<->live parity immunizer).
 
     Both providers -- loaded sparse and live refresh -- settle EXCLUSIVELY here: the monotonic
     Trace-poison mark (``mark_trace_path_status``), divergence-policy enforcement

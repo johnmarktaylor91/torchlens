@@ -64,8 +64,7 @@ _WEDGE_SAFE_SHAPES = frozenset({"oval", "ellipse", "circle"})
 #: Human legend wording per state. The fill motif renders as a two-tone
 #: fill on stripe/wedge-safe shapes and degrades to the border cue
 #: elsewhere, so the caption names BOTH -- promising "stripes" while a
-#: degrade mode renders solid two-tone fills misdescribes the picture
-#: (D03 AMBER, judge-flagged).
+#: degrade mode renders solid two-tone fills misdescribes the picture.
 _STATE_LEGEND = {
     "finite": "finite (checked, clean)",
     "nan": "NaN present (red-and-white fill, or red border where the shape cannot stripe)",

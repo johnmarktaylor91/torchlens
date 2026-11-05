@@ -1,15 +1,15 @@
-"""The loop-session chassis + standalone check registry (checks memo D1/4.2).
+"""The loop-session chassis + standalone check registry.
 
 ONE internal loop session owns the S-A hook family (per-parameter
 ``register_post_accumulate_grad_hook`` counting hooks), the S-B/S-C
 optimizer step hooks, local backward / attempted / accepted step ids, the
 scale/skip/clip ledgers, exact snapshots, the batched scan kernel, and one
-bounded immutable event stream (the C06 ``EventStream``). The registry is
+bounded immutable event stream (the ``EventStream``). The registry is
 standalone and CAPTURE-FREE: it constructs and runs with TorchLens capture
 entirely off, and it runs on ``torch.compile``'d models (the step-check
 family uses only public optimizer/tensor hooks -- the deliberate Recorder
 guards that refuse checks-only construction and compiled models are exactly
-why the mount fork dissolved 3-0 for standalone, memo section 8).
+why the mount fork dissolved 3-0 for standalone).
 
 Contracts, all tested: every hook handle removed on every exit
 path; all check arithmetic under ``torch.no_grad()`` + ``pause_logging()``;
@@ -110,7 +110,7 @@ class _RatioObservation:
 
 
 class _StepBoundary:
-    """The explicit per-attempt boundary (memo D18, boundary mode).
+    """The explicit per-attempt boundary (boundary mode).
 
     One ``with`` line per optimizer attempt: the canonical exact mode and
     the ONLY source of caller ``global_step`` and exact accumulation
@@ -278,7 +278,7 @@ class ChecksSession:
 
         if isinstance(model, torch.nn.Module):
             # remove_duplicate=False so tied tensors surface EVERY alias
-            # (memo 4.2: dedup by identity, no alias lost).
+            # (dedup by identity, no alias lost).
             raw: list[tuple[str, torch.Tensor]] = list(
                 model.named_parameters(remove_duplicate=False)
             )
@@ -636,12 +636,12 @@ class ChecksSession:
     def step(
         self, *, global_step: int | None = None, micro_batches: int | None = None
     ) -> _StepBoundary:
-        """Open the explicit per-attempt boundary (memo D18 boundary mode)."""
+        """Open the explicit per-attempt boundary (boundary mode)."""
 
         return _StepBoundary(self, global_step, micro_batches)
 
     # ------------------------------------------------------------------
-    # Attach-time capability + disclosures (memo D4: disclosures, not checks)
+    # Attach-time capability + disclosures (disclosures, not checks)
     # ------------------------------------------------------------------
 
     def _validate_ownership(self) -> None:
@@ -908,7 +908,7 @@ class ChecksSession:
                     continue
                 grad = param.grad.detach()
                 # S-B grads are already unscaled -- NEVER divide by the scale
-                # here (standing law, memo 4.3: dividing again under-reports
+                # here (standing law: dividing again under-reports
                 # by exactly the loss scale; 17.2% of a real model mislabeled).
                 stats.append((f"grad_norm::{name}", torch.linalg.vector_norm(grad)))
                 stats.append((f"nonfinite::{name}", (~torch.isfinite(grad)).sum()))
@@ -1444,7 +1444,7 @@ class ChecksSession:
         return "explicit" if self._boundary is not None else "hook_only"
 
     def _provenance(self) -> str:
-        """Step provenance for findings (memo D10 vocabulary)."""
+        """Step provenance for findings."""
 
         return "explicit" if self._boundary is not None else "inferred"
 
@@ -1454,7 +1454,7 @@ class ChecksSession:
         return self._boundary.global_step if self._boundary is not None else None
 
     def _publish_watchdog(self) -> None:
-        """Publish the watchdog verdict series (memo 4.7 new series)."""
+        """Publish the watchdog verdict series."""
 
         snapshot = self._watchdog.snapshot()
         self.events.publish(

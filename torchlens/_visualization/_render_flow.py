@@ -71,8 +71,8 @@ def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
         SVG image href value.
     image_root:
         Directory a relative href is resolved against — the graph-level
-        ``imagepath`` root Graphviz itself used (r-b6 R19-6 emits node image
-        attrs relative to the visualizer scratch dir). Falls back to the
+        ``imagepath`` root Graphviz itself used (node image
+        attrs are emitted relative to the visualizer scratch dir). Falls back to the
         working directory when the root is unset or the rooted file does not
         exist, matching Graphviz's own search order.
 

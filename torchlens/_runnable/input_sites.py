@@ -321,8 +321,8 @@ def _fact_path_tuple_or_none(fact: Mapping[str, Any]) -> tuple[Any, ...] | None:
 
     Parse refuses a non-sequence fact ``path`` as ``context_field_invalid`` before any
     execution-side consumer runs; this belt keeps the execution readers total anyway so a
-    malformed path can never crash ``tuple(...)`` into an untyped lane. r77 L1 extends
-    the belt one nesting level down to match the parse contract: a non-``str``/``int``
+    malformed path can never crash ``tuple(...)`` into an untyped lane. The belt
+    also extends one nesting level down to match the parse contract: a non-``str``/``int``
     COMPONENT (a nested list/mapping/slice decoded literal) also fails closed here
     instead of riding into the runtime-tree resolvers as an unresolvable key.
     """
@@ -441,8 +441,7 @@ def _input_derived_layout_stale(descriptor: SparseRunDescriptor, inputs: Any) ->
     strided only). The envelope fact carries the rooting leaf's capture-time stride
     tuple; this check compares it against the RAW runtime leaf's strides (shape equality
     is already contract-enforced, so the tuples are commensurable; ``storage_offset``
-    never propagates to a fresh-storage intermediate, and input VIEWS are the r31
-    view-read gap's domain, so strides are the complete comparison basis).
+    never propagates to a fresh-storage intermediate, and input VIEWS are the view-read gap's domain, so strides are the complete comparison basis).
 
     Equal strides -> ``False``: a same-layout runtime input reproduces every propagated
     layout bit, so an honest channels_last-on-channels_last model stays VERIFIED (zero

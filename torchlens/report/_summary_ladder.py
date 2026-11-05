@@ -1,4 +1,4 @@
-"""The summary auto ladder (F08; summary memo item 11, decisions 3.1/3.4).
+"""The summary auto ladder.
 One deterministic view resolver: given a finished trace and a body-row
 budget, resolve the deepest informative rung of the view ladder --
 1. COALESCED HYBRID, full depth: every executed compute op appears exactly

@@ -326,7 +326,7 @@ def assemble_bundle(
 
     Writer-owned keys are bare; an unknown bare key refuses (``bundle_section_unknown``),
     namespaced keys load opaque and re-save verbatim, member relations are checked against
-    the loaded member names, and the lineage sections restore verbatim (a pre-F03 artifact
+    the loaded member names, and the lineage sections restore verbatim (an older artifact
     reads as origin ``loaded``).
     """
 

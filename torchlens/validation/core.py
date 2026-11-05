@@ -767,7 +767,7 @@ def _comparator_self_test() -> None:
         nan_vs_number = torch.tensor([0.25, 1.0], dtype=fp32)
         neg_zero = torch.tensor([-0.0, 1.0], dtype=fp32)
         pos_zero = torch.tensor([0.0, 1.0], dtype=fp32)
-        # R74r6-F1: bound the EFFECTIVE fp32 band from BOTH sides, not just
+        # Bound the EFFECTIVE fp32 band from BOTH sides, not just
         # non-vacuity. The loosest sentinel above is a 1/3 relative gap, so
         # any rtol below 0.333 would pass -- a 5,461x-loosened band would run
         # this self-test green and bless 30% corruption of every replayed

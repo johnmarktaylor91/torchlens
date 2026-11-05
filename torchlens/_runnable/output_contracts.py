@@ -216,7 +216,7 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
         has_spec = getattr(op, "container_spec", None) is not None
         has_path = bool(getattr(op, "container_path", ()) or ())
         if not has_spec and not has_path and _fresh_bare_tensor_root(trace):
-            # Genuine single bare-tensor model output: no container to reconstruct. r39
+            # Genuine single bare-tensor model output: no container to reconstruct.
             # Gated on the FRESH refresh proof's ``bare_tensor_root`` fact -- an
             # opaque set/frozenset/custom container the traversal fell back on produces the
             # SAME "one leaf, no spec, no path" signature, so without this positive proof a
@@ -572,8 +572,8 @@ def _input_structure_witness_check(
 
     The runtime snapshot comes from the SAME spine function that produced the persisted
     fact, so capture and runtime can never diverge in vocabulary. Any node mismatch --
-    kind swap at any depth (hon1-F2a), exact-class swap (free-F3/hon1-F2b), empty-
-    dataclass arity (free-F2/hon1-F2c), ordered-key or grammar-key drift (hon1-F1),
+    kind swap at any depth, exact-class swap, empty-
+    dataclass arity, ordered-key or grammar-key drift,
     registered schema drift -- fails the check (``input_tree_mismatch``
     class), as does RUNTIME-ADDED undeclared instance state (the symmetric bind-side
     proof: a runtime snapshot refusal can never pass).

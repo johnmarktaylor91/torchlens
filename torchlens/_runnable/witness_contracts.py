@@ -113,7 +113,7 @@ def _tensor_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
-        # (hon1-F1): mapping keys route through the ONE type-strict codec so a
+        # Mapping keys route through the ONE type-strict codec so a
         # tensor child under a grammar key (2.5 / None / bool / safe tuple) enters the
         # leaf accounting; a non-grammar key is skipped here (its subtree is already
         # opaque-ceilinged / save-refused by the structure spine).
@@ -290,7 +290,7 @@ def _container_leaf_paths(
         return tuple(paths)
     if isinstance(value, Mapping):
         paths = []
-        # (hon1-F1): same ONE type-strict key codec as the capture-side path
+        # Same ONE type-strict key codec as the capture-side path
         # normalization -- lockstep by construction.
         for key, child in value.items():
             component = _codec_component(key)
@@ -325,8 +325,8 @@ def _container_kind(value: Any) -> str:
     if not isinstance(value, type) and get_registered_container(type(value)) is not None:
         return "registered"
     # HF ModelOutput subclasses ARE dataclasses, so the HF check must run
-    # FIRST, exactly as the capture-side spec builder dispatches (F32 rider:
-    # the inverted order classified a real GPT-2 CausalLMOutput as
+    # FIRST, exactly as the capture-side spec builder dispatches (the
+    # inverted order classified a real GPT-2 CausalLMOutput as
     # "dataclass" against its recorded "hf_model_output" witness, so every
     # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
     # the same bug class as the registered-branch fix above).

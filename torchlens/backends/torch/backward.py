@@ -2825,8 +2825,8 @@ def _run_backward_with_capture(
         # justify discarding a failure here, so fold it into cleanup_error
         # like the sibling steps. suppress(BaseException) would silently discard
         # a KeyboardInterrupt delivered during handle removal after a
-        # successful backward and backward returned normally (grind-r6
-        # b8 R63, fable probe). Already-removed / framework-debris handles
+        # successful backward and backward returned normally.
+        # Already-removed / framework-debris handles
         # still never mask a real first failure: the fold keeps the FIRST.
         for handle in handles:
             try:

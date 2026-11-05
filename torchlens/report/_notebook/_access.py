@@ -1,4 +1,4 @@
-"""The copy-expression root ladder (B2, F16; treescope memo section 4).
+"""The copy-expression root ladder.
 
 Every card header and graph-context link carries an EXECUTABLE access
 expression (``log['conv2d_1_1']``) -- the rendered surface teaches the

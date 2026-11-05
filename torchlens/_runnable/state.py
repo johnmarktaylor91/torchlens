@@ -144,7 +144,7 @@ def snapshot_capture_state(model: object) -> Mapping[str, torch.Tensor] | None:
         for name, value in state.items()
     ):
         return None
-    # Pending lazy slots refuse TYPED (quickstart memo 4.5): a pending slot
+    # Pending lazy slots refuse TYPED: a pending slot
     # passes the Tensor mapping check above but has no bytes to baseline.
     raise_if_pending_state_slots(state)
     # The clone loop sits INSIDE its guard (unclonable values are the None-contract
@@ -229,7 +229,7 @@ _STATE_METADATA_BIND_SCOPE: tuple[tuple[str, Any], ...] = (
     ("is_quantized", False),
     ("has_named_dims", False),
 )
-"""LOAD-SURVIVING signature dims (r63 C1 bind gate) and their canonical values.
+"""LOAD-SURVIVING signature dims (bind gate) and their canonical values.
 
 Inclusion principle: a dim belongs here iff its source-side value SURVIVES oracle-1's default
 ``load_state_dict(strict=True, assign=False)`` copy into a canonical destination -- either by
@@ -254,7 +254,7 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     # deliberately ABSENT: they are OBSERVED-VALUE read kinds -- the honest
     # producer predicate is the user's one actual accessor return against the
     # device-defined staged canonical (``_state_placement_canonical``), never a
-    # pre-forward signature stamp (free-F4: the CUDA-init proof-by-absence stamped
+    # pre-forward signature stamp (the CUDA-init proof-by-absence stamped
     # canonical False on genuinely pinned XPU/MPS/externally-registered memory). The
     # staged runtime tripwire checks them with real reads on TorchLens's OWN staged
     # clones (``_staged_placement_violations``).
@@ -266,7 +266,7 @@ _STATE_METADATA_PHYSICAL_SCOPE: tuple[tuple[str, Any], ...] = (
     ("grad_is_none", True),
     ("storage_nbytes_is_tight", True),
 )
-"""Destination-owned PHYSICAL signature dims (r63 C1; r65 full mirror) and their canonicals.
+"""Destination-owned PHYSICAL signature dims and their canonicals.
 
 These are normalized by transport (the snapshot clone compacts ``storage_offset``,
 materializes conj/neg, drops sharing/pinning/inference-ness/view-ness/autograd state, and
@@ -275,7 +275,7 @@ recorded path that READ one of them on captured state rests on an unwitnessable 
 assumption whenever the captured value was non-canonical. They are enforced ESCAPE-GATED at the
 producer (only when the dim was actually read on that slot) and unconditionally by the staged
 runtime tripwire (staging guarantees canonical form). ``requires_grad`` (+ ``grad_fn``
-presence) is deliberately ABSENT: it is a DECLARED-STATE FACT (r65 F-1 ruling) staging
+presence) is deliberately ABSENT: it is a DECLARED-STATE FACT staging
 REPRODUCES, never a canonicality dim -- escape-gating it would refuse every frozen model.
 """
 
@@ -302,7 +302,7 @@ _STATE_METADATA_READ_REQUIRED_DIMS: Mapping[str, tuple[str, Any]] = MappingProxy
         "storage_nbytes": ("storage_nbytes_is_tight", True),
     }
 )
-"""Witnessed state-metadata READ kinds -> the signature dim each read exposes (r63 C1, r65 X).
+"""Witnessed state-metadata READ kinds -> the signature dim each read exposes.
 
 ``contiguous_default`` (a bare ``is_contiguous()``) is reproducible iff the captured slot was
 row-major contiguous; ``stride_exact`` (a ``stride()`` read, ``is_contiguous`` probed with an
@@ -331,7 +331,7 @@ def _state_placement_canonical(kind: str, device_type: Any) -> bool | None:
     every device. ``is_shared``: the ``share_memory_()`` CPU transport backing is dropped by
     staging (canonical ``False`` on CPU), while off-CPU ``is_shared()`` is a DEVICE CONSTANT
     ``True`` (device memory is inherently "shared" in torch's sense) that a staged clone on
-    the slot device reproduces (r65 regap ruling). Unknown device -> ``None`` (fail closed).
+    the slot device reproduces. Unknown device -> ``None`` (fail closed).
     """
 
     if not isinstance(device_type, str) or not device_type:
@@ -350,7 +350,7 @@ observation predicate; the producer refuses the save iff the captured pre-clone 
 that canonical (the escape gate), and the staged runtime tripwire enforces it unconditionally."""
 
 ORACLE_POLICY_DECLARED_REPRODUCED = "declared_reproduced"
-"""Policy: the read records a DECLARED-STATE FACT staging REPRODUCES (r65 F-1 ``requires_grad``
+"""Policy: the read records a DECLARED-STATE FACT staging REPRODUCES (``requires_grad``
 / ``grad_fn`` presence) -- never a canonicality dim, never an escape-gated refusal except a
 fact staging provably cannot reproduce."""
 
@@ -360,7 +360,7 @@ state the layout dim already pins); nothing is recorded."""
 
 ORACLE_POLICY_REFUSE_ON_ANY_READ = "refuse_on_any_read"
 """Policy: NO artifact-independent canonical value exists on the oracle-1 destination, so ANY
-attributed read refuses the runnable save (``state_metadata_mismatch``). r67 C4: ``_version``
+attributed read refuses the runnable save (``state_metadata_mismatch``). ``_version``
 is the charter member -- oracle-1's default copy increments constructor-owned counters
 (``0 -> 1`` for plain slots, ``1 -> 2`` for initialized modules), so no static expected scalar
 is honest and no engineered staging form may manufacture one."""
@@ -437,7 +437,7 @@ def _default_dense_stride(shape: tuple[int, ...]) -> tuple[int, ...]:
 
 
 def _state_metadata_signature(value: Any) -> dict[str, Any]:
-    """Compute THE state-tensor metadata/layout signature (r63 C1 -- the ONE helper).
+    """Compute THE state-tensor metadata/layout signature (the ONE helper).
 
     Every state-metadata comparison choke (bind gate, producer preflight, runtime tripwire)
     consumes this signature; future physical dims are added ONLY here, never as scattered
@@ -531,13 +531,13 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         signature["is_neg"] = bool(value.is_neg())
     except (RuntimeError, TypeError, AttributeError, NotImplementedError):
         pass
-    # -- r65 Cluster X dims (each exception-guarded to None: unreadable == UNKNOWN, and
+    # -- Further dims (each exception-guarded to None: unreadable == UNKNOWN, and
     # every consumer treats UNKNOWN as non-canonical -- fail closed, never a pass).
     # ``is_shared``/``is_pinned`` are deliberately NOT stamped here: the honest
     # authority for those reads is the user's ONE actual accessor return (the observation
     # ledger), and a pre-forward speculative stamp is both forbidden (a TorchLens-added
     # ``is_pinned()`` could lazily initialize an accelerator as a capture side effect on
-    # pre-guard-era torch) and dishonest (free-F4: the CUDA-init proof-by-absence stamped
+    # pre-guard-era torch) and dishonest (the CUDA-init proof-by-absence stamped
     # canonical False on genuinely pinned XPU/MPS/externally-registered memory). --
     try:
         signature["is_inference"] = bool(value.is_inference())
@@ -570,7 +570,7 @@ def _state_metadata_signature(value: Any) -> dict[str, Any]:
         # ALWAYS the actual ``.grad`` read, under local warning suppression (the
         # non-leaf access warning) -- torch 2.8 allows assigning ``.grad`` on a non-leaf,
         # so the former "a non-leaf without retains_grad structurally carries no grad"
-        # shortcut asserted a fact it never read (free-F5). Failure stays UNKNOWN.
+        # shortcut asserted a fact it never read. Failure stays UNKNOWN.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             signature["grad_is_none"] = value.grad is None
@@ -617,7 +617,7 @@ def state_metadata_bind_violations(value: Any) -> list[tuple[str, Any, Any]]:
 
 
 def _staged_placement_violations(value: Any) -> list[tuple[str, Any, Any]]:
-    """Return staged-clone placement violations via REAL run-time reads (r67 C3 tripwire leg).
+    """Return staged-clone placement violations via REAL run-time reads (tripwire leg).
 
     The staged runtime tripwire keeps enforcing ``is_shared``/``is_pinned`` on TorchLens's
     OWN staged clones -- these are run-time self-checks on TorchLens-constructed tensors,
@@ -745,7 +745,7 @@ def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     * DISTINCT objects whose touched bytes ``overlap`` (or are ``unknown``, including
       an unprovable footprint) -> a save-time REFUSAL record: the v2 schema has no
       backing-storage/view recipe, so serializing the pair as independent values
-      would silently change in-place propagation semantics on replay (the corr2-4
+      would silently change in-place propagation semantics on replay (the
       false-VERIFIED class);
     * proved-``disjoint`` pairs (including disjoint views of one storage) serialize
       independently.
@@ -1119,16 +1119,15 @@ def _apply_state_metadata_facts(
     detaches, so the bit is transport-lost). The recorded bit ALWAYS wins:
     user-supplied ``load_state_dict`` tensors carrying a different ``requires_grad``
     still stage the recorded value -- capture truth, strictly more oracle-1-faithful
-    than the detached default and aligned with the LOCKED F-1 declared-fact
-    ruling. ``grad_fn`` presence needs no application: True refuses at save AND parse
+    than the detached default and aligned with the locked declared-fact
+    rule. ``grad_fn`` presence needs no application: True refuses at save AND parse
     (no staged leaf can carry a grad_fn) and False is what every staged clone already
     exhibits.
 
     The staging belt is re-pointed at the PARSE-DERIVED required set: the
     witness-derived facts must equal the binding-derived facts EXACTLY -- impossible
     to violate post-parse; a descriptor that somehow reached staging with a deficit
-    fails closed typed instead of silently omitting a declared bit (the
-    free-F1-secondary strip lane).
+    fails closed typed instead of silently omitting a declared bit.
     """
 
     facts = recorded_state_metadata_facts(descriptor)
@@ -1263,7 +1262,7 @@ def _prepare_runnable_state(trace: Any, seed: int | None = None) -> PreparedRunn
     """
 
     descriptor = _require_descriptor(trace)
-    # free_1: bound every recorded op-output allocation BEFORE the DAG runs, on
+    # Bound every recorded op-output allocation BEFORE the DAG runs, on
     # every state source (staged/embedded/random-init), so a tampered self-consistent
     # descriptor cannot drive an out-of-budget op allocation and OOM-kill the host.
     from .retention import (
@@ -1592,7 +1591,7 @@ def _validate_named_slot_mapping(
             # supplied value (the strict binder accepts an expanded view whose
             # storage is tiny), and user/embedded state never enters the run-prep
             # representative sum -- so this is the load-bearing byte bound on the
-            # state re-materialization chain. r63 C1: the clone stages through the
+            # state re-materialization chain. The clone stages through the
             # canonical destination (default load_state_dict copy semantics).
             value = _staged_state_clone(
                 values_by_name[binding.state_dict_name],
@@ -1831,7 +1830,7 @@ def _initialize_state_slots(
             groups.values(), key=lambda items: min(item.slot_id for item in items)
         )
     ]
-    # free_1: refuse an infeasible total BEFORE the first allocation, once
+    # Refuse an infeasible total BEFORE the first allocation, once
     # per alias group (aliases share one allocation).
     _preflight_random_init_allocation([ordered[0] for ordered in ordered_groups])
 
@@ -1922,7 +1921,7 @@ smaller multiple would false-refuse a legitimate high-arity op; never drop it.
 """
 
 _OUTPUT_COUNT_FLOOR = 4096
-"""Absolute realized-output floor (r59, LOAD-BEARING -- do not simplify to ``rec * MARGIN``).
+"""Absolute realized-output floor (LOAD-BEARING -- do not simplify to ``rec * MARGIN``).
 
 A legit LOW-arity op DECOMPOSES into many fake intermediates during projection -- measured
 up to 55 fakes per 1 recorded output (``interpolate`` = 55, ``batch_norm`` = 28,
@@ -1945,7 +1944,7 @@ def _guarded_defensive_materialize() -> Iterator[None]:
 
     * never the CALLER's ambient -- a user calling ``.run()`` / binding state inside
       ``torch.inference_mode()`` or ``torch.no_grad()`` must not mint inference-mode
-      clones that trip the staged-state tripwire (corr1-2's false
+      clones that trip the staged-state tripwire (a false
       ``PathDivergenceError(state_metadata_mismatch is_inference)``) or strip the mirror
       of attestation eligibility on an otherwise-exact run;
     * never the RECORDED ambient -- recorded ambient/per-call contexts govern sparse
@@ -1973,7 +1972,7 @@ def _byte_guarded_clone(
 ) -> torch.Tensor:
     """Byte-guard ONE TorchLens-owned re-materialization clone before it allocates.
 
-    THE single byte-guard core (r61 corr_2): ``numel * itemsize`` (pure integer math,
+    THE single byte-guard core: ``numel * itemsize`` (pure integer math,
     no allocation) is compared to the SAME never-under-estimating per-device budget
     run-prep uses; a clone that could never fit is refused typed at
     ``clone_allocation_preflight`` BEFORE the materializing ``.detach().clone()``. The
@@ -2027,7 +2026,7 @@ def _staged_state_clone(
     slot_id: str | None = None,
     state_dict_name: str | None = None,
 ) -> torch.Tensor:
-    """Stage ONE state tensor through the canonical destination (r63 C1 Part 3).
+    """Stage ONE state tensor through the canonical destination.
 
     THE single state staging helper: every user ``load_state_dict``, embedded
     ``state_dict_v1``, and non-persistent-buffer bind clone routes here (source tripwire:
@@ -2056,7 +2055,7 @@ def _staged_state_clone(
             canonical = False
         if not canonical:
             clone = clone.clone(memory_format=torch.contiguous_format)
-        # The r65 "staging hardening (b)" extra clone that engineered ``_version == 0``
+        # The former extra staging clone that engineered ``_version == 0``
         # is REMOVED with the ``version_is_zero`` dim itself: ``_version`` is a
         # ``refuse_on_any_read`` policy row (oracle-1's default copy leaves 1 or 2, never a
         # stable scalar), so no staged form needs to -- or may -- manufacture a version value.
@@ -2167,11 +2166,11 @@ class RunResourceCeiling:
         budget run-prep uses; a clone that could never fit is refused typed at
         ``clone_allocation_preflight`` BEFORE the materializing ``.clone()`` and before
         any shape-mismatch check. This closes the view-exclusion / bind-clone
-        composition (r58 free_2): the projection correctly charges a view zero NEW
+        composition: the projection correctly charges a view zero NEW
         bytes, and this bounds the framework's own re-materialization of that view at
         every snapshot site -- op outputs, the accepted runtime input mirror, and the
-        run-time state clone (r61 corr_2). ``mirror_requires_grad=True`` restores the
-        source leaf's ``requires_grad`` on the clone where legal (the corr2-7
+        run-time state clone. ``mirror_requires_grad=True`` restores the
+        source leaf's ``requires_grad`` on the clone where legal (the
         runtime-mirror rule); state clones keep their recorded-``trainable`` rule at
         the call site instead. An honest clone equals an honest recorded slot that
         already passed the run-prep bound, so a faithful run is never refused here.
@@ -2195,7 +2194,7 @@ class RunResourceCeiling:
 
 
 _OP_OUTPUT_SLOT_ROLES = frozenset({TensorSlotRole.INTERMEDIATE, TensorSlotRole.OUTPUT})
-"""Slot roles whose tensors are ALLOCATED by an op during replay (r55 free_1).
+"""Slot roles whose tensors are ALLOCATED by an op during replay.
 
 Parameters/buffers are declared state (covered by the summed state pass); model
 inputs are user-supplied; constants are embedded payloads. Only INTERMEDIATE and
@@ -2215,7 +2214,7 @@ def _preflight_run_allocation(
     output_slots: Iterable[TensorSlotDescriptor] = (),
     unretained_view: Callable[[TensorSlotDescriptor], bool] | None = None,
 ) -> frozenset[str]:
-    """Refuse an infeasible run allocation BEFORE any op executes (r53 free_1 / r55 free_1).
+    """Refuse an infeasible run allocation BEFORE any op executes.
 
     Two per-device passes against the never-under-estimating live budget
     (:func:`_allocation_budget_bytes`), so a refusal can only fire on a request
@@ -2232,7 +2231,7 @@ def _preflight_run_allocation(
       ``arange(10**12)``-scale artifact before the DAG allocates
       (``op_allocation_preflight``).
 
-    W2's per-call ``FakeTensorMode`` projection preflight composes with this: it is
+    The per-call ``FakeTensorMode`` projection preflight composes with this: it is
     the primary op-agnostic projection, this is the run-prep fallback bound.
 
     An output slot over the budget is charged its logical size unless
@@ -2301,7 +2300,7 @@ def _preflight_run_allocation(
 def _preflight_random_init_allocation(
     representatives: Sequence[TensorSlotDescriptor],
 ) -> None:
-    """Backward-compatible spelling for the state-only preflight (r53 free_1).
+    """Backward-compatible spelling for the state-only preflight.
 
     Retained so existing callers keep the summed random role-init behavior;
     :func:`_preflight_run_allocation` is the generalized entry that also bounds
@@ -2441,7 +2440,7 @@ def _initialize_slot_neutral(
     try:
         value = torch.empty(slot.shape, dtype=dtype, device=device)
     except (RuntimeError, MemoryError) as exc:
-        # free_1 belt: the allocation preflight refuses infeasible totals
+        # Belt: the allocation preflight refuses infeasible totals
         # before this point; a RESIDUAL allocator failure (budget shifted under
         # us, fragmentation) still surfaces as the SAME typed diagnostic, never
         # a raw allocator traceback.
@@ -2685,7 +2684,7 @@ def _binding_error(diagnostics: tuple[RunnableDiagnostic, ...]) -> StateBindingE
     """Build one structured strict state-binding exception."""
 
     codes = tuple(diagnostic.code.value for diagnostic in diagnostics)
-    # Surface the per-diagnostic detail in the message (R65: the aggregate used
+    # Surface the per-diagnostic detail in the message (the aggregate used
     # to name only the codes, hiding the slot names / shapes the diagnostics
     # already carry). Bounded to the first few so a mass mismatch stays legible.
     shown = diagnostics[:5]
@@ -2743,7 +2742,7 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
     Raises
     ------
     RunPreconditionError
-        If the tensor is not a plain strided dense tensor (r35 I5 defense in
+        If the tensor is not a plain strided dense tensor (defense in
         depth: the digest helper itself refuses exotic layouts typed instead of
         surfacing a raw backend error mid-materialization).
     """
@@ -2766,8 +2765,8 @@ def runnable_tensor_byte_digest(value: torch.Tensor) -> str:
         # Buffer-protocol digest: streaming the prefix and the
         # uint8 view into one hasher is byte-identical to the old
         # ``sha256(prefix + payload.tobytes())`` while skipping the
-        # whole-payload bytes copy (per parameter/buffer staged). r8 R35:
-        # the transport + uint8 reinterpret live in ONE authority
+        # whole-payload bytes copy (per parameter/buffer staged).
+        # The transport + uint8 reinterpret live in ONE authority
         # (``_transport.digest_byte_view``), which also resolves lazy
         # conj/neg bits -- the hand-rolled view here crashed on conj state.
         payload_view = digest_byte_view(value)

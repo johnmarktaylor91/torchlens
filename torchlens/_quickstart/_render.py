@@ -8,8 +8,8 @@ and the legacy wrapper keeps its own defaults.
 
 Viewer policy: never auto-open, anywhere, by default -- ``open_viewer=True``
 is explicit opt-in. Notebook policy (settled 3:0): inline display, no
-implicit file, no viewer. Script policy is maintainer fork F1; branch A (the panel's
-2:1 recommendation) ships as the default, switched by ONE constant below.
+implicit file, no viewer. Script policy: branch A (write a file in plain scripts) ships as the
+default, switched by ONE constant below.
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -31,7 +31,7 @@ from ._resolve import attach_provenance, resolve_inputs
 
 __tl_layer__ = "FACADE"
 
-#: FORK F1 (both branches designed, this one constant switches them).
+#: Script policy (both branches designed, this one constant switches them).
 #: True = branch A: a bare ``tl.draw`` call in a plain script writes a
 #: collision-safe ``<ModelClass>-graph.<format>`` and prints the path on one
 #: line. False = branch B: no implicit filesystem action ever; the caller
@@ -112,7 +112,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     path:
         Explicit paths write and report. With no path, notebooks display inline without a file;
         scripts write collision-safe ``<ModelClass>-graph.pdf`` plus one printed line when
-        ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (fork F1 branch A).
+        ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (branch A).
     file_format:
         Format for a path with no extension (an extension picks it): ``"svg"`` inline, else ``"pdf"``.
     open_viewer:

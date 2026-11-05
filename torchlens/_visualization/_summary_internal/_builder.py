@@ -39,7 +39,7 @@ def format_model_repr(trace: Trace) -> str:
         )
 
     layer_logs = {} if husked else (trace._layer_logs or {})
-    # Weightsfree memo L7: the repr was an unmarked channel — a slice of a
+    # The repr was an unmarked channel — a slice of a
     # hypothesis is a hypothesis, and so is the identity card. The claim
     # ladder rides the session discharge state (HYPOTHESIS / CORROBORATED /
     # REFUTED), never a bare flag.

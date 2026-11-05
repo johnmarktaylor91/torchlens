@@ -268,7 +268,7 @@ def log_source_tensor_predicate(
                 transformed_ram_payload=transformed_ram_payload,
                 predicate_matched=source_kept,
             )
-        # Echo narrator slot (snoop D1, source seam): once per committed event, after the append.
+        # Echo narrator slot (source seam): once per committed event, after the append.
         _emit_source_echo(self, ctx)
         _evaluate_halt(ctx, state.options, frontier_output=t)
     except StopSignal:

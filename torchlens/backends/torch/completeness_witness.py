@@ -325,7 +325,7 @@ them is redundant and is pinned by regression tests instead.
 """
 
 HOST_VALUE_ESCAPE_MODULE_FUNCS: frozenset[str] = frozenset({"equal", "allclose", "is_nonzero"})
-"""``torch.*`` MODULE predicate spellings of the pure tensor->``bool`` escapes (r39 hon2_1).
+"""``torch.*`` MODULE predicate spellings of the pure tensor->``bool`` escapes.
 
 The module-level ``equal`` / ``allclose`` / ``is_nonzero`` functions return a raw Python bool
 DIRECTLY from the dispatcher and, under an explicit ``_disable_current_modes()`` region, bypass

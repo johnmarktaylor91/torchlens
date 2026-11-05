@@ -64,11 +64,10 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_options_mode": FieldPolicy.KEEP,
     # L7a structure-only mode marker: persists as of tlspec v8 (the
     # coordinated bump) with the marker-coherence load-validation rows in
-    # torchlens/_io/forgery_validation.py (M-C2/M-C3; M-C1's form-(a)
+    # torchlens/_io/forgery_validation.py (the form-(a)
     # stripped-marker case is a documented scope statement there).
     "_options_structure_only": FieldPolicy.KEEP,
-    # tlspec v9 entry-dark evidence envelope (C07; weightsfree memo
-    # section 5): None until the writer lands; coherence-validated
+    # tlspec v9 entry-dark evidence envelope: None until the writer lands; coherence-validated
     # at load (only a structure-only capture may carry one).
     "_graph_structure_evidence": FieldPolicy.KEEP,
     # L6 resolved-intervention audit record: persists as of tlspec v8
@@ -204,8 +203,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_source_forward_signature": FieldPolicy.KEEP,
     "_source_forward_docstring": FieldPolicy.KEEP,
     "_source_frames": FieldPolicy.KEEP,
-    # tlspec v9 entry-dark source-snapshot table (C07; convert memo item
-    # 24): one row per (path, digest), empty until the writer lands;
+    # tlspec v9 entry-dark source-snapshot table: one row per (path, digest), empty until the writer lands;
     # fail-closed row validation at load.
     "_source_snapshots": FieldPolicy.KEEP,
     "_provenance_cache_hit": FieldPolicy.KEEP,
@@ -230,7 +228,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # stamp validates at load (_postprocess/_grouping_stamp.py).
     "_options_grouping": FieldPolicy.KEEP,
     "_options_grouping_policy": FieldPolicy.KEEP,
-    # L8/F6 shard-local capture marker (merge-ranks substrate):
+    # Shard-local capture marker (merge-ranks substrate):
     # persists as of tlspec v8 with the closed-vocabulary load validation
     # in torchlens/_io/forgery_validation.py. Value vocabulary
     # ("rank_local_shard") is DOCUMENTED-UNSTABLE pending its amendment.

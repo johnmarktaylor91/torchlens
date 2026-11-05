@@ -20,7 +20,7 @@ from ._render_edges import *
 from ._render_leaf import *
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
+# Home moved to node_spec to keep this
 # file under its ratchet ceiling; re-exported here for existing importers.
 # The spec-slot context lives there too, so the intervention callback reads it
 # without importing this module.
@@ -40,7 +40,7 @@ BOX_SCOPE_HELPERS = BoxScopeHelpers(
 def _tooltip_repr(value: Any) -> str:
     """Return a repr for a DOT tooltip with memory addresses masked.
 
-    (b6-fable carried LOW): a default-repr object (or a custom Sequence
+    A default-repr object (or a custom Sequence
     container with the default ``object.__repr__``) leaks ``0x...``
     addresses into the DOT bytes, making otherwise-identical renders
     nondeterministic across processes. Mask the addresses; an unreprable
@@ -731,8 +731,8 @@ def _queue_segment_node(
     # One ``presentation`` arg (PLR0913); a bare string is vis_mode only.
     pres = presentation if isinstance(presentation, tuple) else (presentation,)
     vis_mode, theme, encoding = (*pres, None, None)[:3]
-    # K4 capsule colors derive from the active theme (F11 memo item 10:
-    # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
+    # Capsule colors derive from the active theme (the
+    # hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
     from .themes import THEME_PRESETS, collapse_tokens
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
@@ -1890,7 +1890,7 @@ def _apply_node_spec_fn(
     node_spec_fn:
         Optional user callback. Unrolled nodes are represented to the callback
         by their parent Layer. Encoding channels ride this slot as a per-node
-        wrapper (``_encoding.channel_wrapped_node_spec_fn``; C3 order:
+        wrapper (``_encoding.channel_wrapped_node_spec_fn``; order:
         preset -> channel -> user).
 
     Returns

@@ -193,7 +193,7 @@ def _row_findings(
     max_fraction: float,
     subnormal_fraction_threshold: float,
 ) -> list[CheckFinding]:
-    """Score one scanned row into audit findings (memo 4.4 severities)."""
+    """Score one scanned row into audit findings."""
 
     findings: list[CheckFinding] = []
     names = (row.name, *row.aliases)

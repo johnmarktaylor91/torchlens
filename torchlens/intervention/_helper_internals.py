@@ -702,7 +702,7 @@ def _population_mean_spec(
     """Build the ``mean_ablate`` spec whose source is a population.
 
     The fill is computed eagerly at construction (populations are prepared
-    before hooks install, D10); the record says ``stochastic=False`` and no
+    before hooks install); the record says ``stochastic=False`` and no
     seed is ever invented. ``axes="members"`` is the elementwise
     across-member mean, which must match the site's geometry exactly;
     ``"all"`` reduces that mean to one scalar and explicit axes reduce it

@@ -94,7 +94,7 @@ def _canonical_display_labels(labels: Any) -> list[str]:
 def _extrema_questions(values: dict[str, float]) -> list[KeyQuestion]:
     """The extrema/ordinal probe family over the resolved channel values.
 
-    A tied extremum accepts EVERY tied label (D03-R7: a key that demands
+    A tied extremum accepts EVERY tied label (a key that demands
     one label on a tie is battery ambiguity, not an evaluator error);
     distractors never name a tied label.
     """

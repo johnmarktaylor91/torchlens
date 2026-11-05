@@ -97,7 +97,7 @@ class _ProbeCall:
     def substituted(self, substitute: torch.Tensor) -> tuple[list[Any], dict[str, Any]]:
         """Return fresh call arguments with the perturbed slot replaced.
 
-        Every retained tensor operand is cloned per call (r8 R08, fable MH):
+        Every retained tensor operand is cloned per call:
         the probed universe includes IN-PLACE ops (``logical_and_``,
         ``bitwise_*_`` masks), and executing one against the record's retained
         ``saved_args`` would mutate the capture evidence itself.

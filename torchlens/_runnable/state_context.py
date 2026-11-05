@@ -550,7 +550,7 @@ def _count_bounded_fake_tensor_mode_class() -> type[Any] | None:
     The subclass counts fake tensor leaves produced by EACH ``__torch_dispatch__`` and
     raises ``_ProjectionCountExceeded`` the instant the running total passes the per-call
     ceiling -- DURING fanout construction, before the whole fake output tree materializes.
-    This kills the ``tensor_split(x, N)`` self-DoS (r58 free_1): projecting the real op to
+    This kills the ``tensor_split(x, N)`` self-DoS: projecting the real op to
     "see" its size would itself build N fake objects; counting during construction aborts
     at ``ceiling + 1`` fakes regardless of N. Data-dependent ops (``nonzero``/``unique``)
     still raise their own ``DynamicOutputShapeException`` through ``super()`` untouched, so

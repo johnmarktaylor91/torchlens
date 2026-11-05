@@ -253,7 +253,7 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
 def _record_capture_intervention_event(
     trace: Trace, intervene_request: Any, *, fired_rule_ids: Collection[str]
 ) -> None:
-    """Write the capture-door InterventionEvent envelope (C03 fire evidence).
+    """Write the capture-door InterventionEvent envelope (fire evidence).
 
     One envelope per intervened capture attempt -- fired or not. The capture
     door was one of the two measured audit-empty doors;
