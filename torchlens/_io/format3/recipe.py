@@ -47,7 +47,7 @@ PLACEHOLDER_PORTABILITY: Final = "callable_placeholder"
 #: Edit name of a rule staged from a raw callable hook.
 _CUSTOM_EDIT_NAME: Final = "custom"
 #: Dotted class of ``Edit``: a nested edit is a ``record`` of this type.
-_EDIT_CLASS_PATH: Final = "torchlens.intervention._types.Edit"
+_EDIT_CLASS_PATH: Final = "torchlens.intervention.types.Edit"
 
 
 class CallablePlaceholder(NamedTuple):

@@ -132,3 +132,14 @@ def test_format3_class_paths_keep_the_persisted_intervention_module_path() -> No
         path = f"torchlens.intervention.types.{cls.__qualname__}"
         assert class_path(cls) == path
         assert table[path] is cls
+
+
+def test_format3_recipe_edit_path_is_the_persisted_class_path() -> None:
+    """The recipe encoder writes a nested Edit under the same persisted path the reader admits."""
+
+    from torchlens._io.format3 import recipe
+    from torchlens._io.format3.values import class_path, record_type_table
+    from torchlens.intervention._types import Edit
+
+    assert class_path(Edit) == recipe._EDIT_CLASS_PATH
+    assert record_type_table()[recipe._EDIT_CLASS_PATH] is Edit
