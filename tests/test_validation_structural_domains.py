@@ -168,6 +168,26 @@ def test_offsets_move_skips_a_padding_entry() -> None:
     assert frozen.decision == "failed", (frozen.decision, frozen.reason)
 
 
+class _RepeatToSize(nn.Module):
+    """torch_frame offsets to bag ids: ``repeat_interleave`` with a traced ``output_size``."""
+
+    def forward(self, lengths: torch.Tensor) -> torch.Tensor:
+        ids = torch.arange(lengths.numel())
+        return torch.repeat_interleave(ids, lengths, output_size=lengths.sum()) * 1.0
+
+
+def test_repeats_edge_with_pinned_total_is_verified_and_a_frozen_replay_still_fails() -> None:
+    inputs = [torch.tensor([1, 0, 2, 1, 0, 2])]
+    trace = _capture(_RepeatToSize().eval(), inputs)
+    op = _op(trace, "repeat_interleave")
+    repeats_label = op.call.parent_arg_positions["args"][1]
+    verified = _perturb(trace, op, repeats_label)
+    assert verified.decision == "validated", (verified.decision, verified.reason)
+    _freeze(op)
+    frozen = _perturb(trace, op, repeats_label)
+    assert frozen.decision == "failed", (frozen.decision, frozen.reason)
+
+
 def test_shape_read_view_validates_and_walks_the_receptive_field() -> None:
     model, inputs = _ShapeReadView().eval(), [torch.ones(1, 12, dtype=torch.long)]
     trace = tl.trace(model, inputs)

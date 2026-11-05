@@ -67,7 +67,49 @@ def structural_domain_values(
         return embedding_bag_offsets_values(layer, parent_values)
     if layer.func_name in _RESHAPE_FUNCS:
         return reshape_size_values(layer, parent_label, parent_values)
+    if layer.func_name == "repeat_interleave" and _occupies(layer, parent_label, 1, "repeats"):
+        return repeats_with_fixed_total_values(layer, parent_values)
     return None
+
+
+def repeats_with_fixed_total_values(layer: Op, repeats: torch.Tensor) -> torch.Tensor | None:
+    """Move one repeat between two entries when ``output_size`` pins the total.
+
+    ``repeat_interleave(..., output_size=n)`` requires ``repeats.sum() == n``,
+    so every draw and +1/-1 step that changes the total raises. Taking one
+    repeat from the first positive entry and giving it to its neighbour keeps
+    the total and every count non-negative while changing which element fills
+    one output position. Without ``output_size`` the generic draw is valid and
+    runs as before.
+
+    Parameters
+    ----------
+    layer:
+        The ``repeat_interleave`` op.
+    repeats:
+        Saved repeats parent value.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The total-preserving repeats, or ``None`` when ``output_size`` is not
+        given, ``repeats`` is not 1-D, or no two entries exist.
+    """
+
+    kwargs = layer.call.saved_kwargs or {}
+    args: Sequence[Any] = layer.call.saved_args or ()
+    output_size = kwargs.get("output_size", args[3] if len(args) > 3 else None)
+    if output_size is None or repeats.ndim != 1 or repeats.numel() < 2:
+        return None
+    flat = [int(value) for value in repeats.tolist()]
+    donor = next((index for index, value in enumerate(flat) if value > 0), None)
+    if donor is None:
+        return None
+    taker = donor + 1 if donor + 1 < len(flat) else donor - 1
+    moved = repeats.detach().clone()
+    moved[donor] -= 1
+    moved[taker] += 1
+    return moved
 
 
 def reshape_size_values(layer: Op, parent_label: str, size: torch.Tensor) -> torch.Tensor | None:
