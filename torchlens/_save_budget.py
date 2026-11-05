@@ -43,9 +43,9 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
     available_device_bytes,
 )
 from ._state import pause_logging
-from ._utils import _torch_compat
 from ._utils._byte_format import format_bytes
 from ._utils._display_bounded import short_dataclass_repr
+from ._utils._storage_refs import payload_weakref_is_safe
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a
@@ -650,9 +650,7 @@ class SaveBudget:
         to such a wrapper can leave freed memory behind and crash CPython later.
         """
 
-        if not isinstance(payload, torch.Tensor) and not (
-            _torch_compat.HAS_CACHED_UNTYPED_STORAGE_WRAPPER
-        ):
+        if not payload_weakref_is_safe(payload):
             return
         budget_ref = self._self_ref
         if budget_ref is None:

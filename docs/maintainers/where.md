@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1597 modules, 680697 lines, 0 modules without a docstring.
+83 packages, 1598 modules, 680722 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 34495 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 34493 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3030 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4500 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 57 | 18339 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 58 | 18366 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46756 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34495 lines)
+TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34493 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -153,7 +153,7 @@ TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34495 li
 | `_robustness` | Tensor-variant detection and pre-flight guards for ''trace''. | 755 |
 | `_robustness_offenses` | Offense records for the tensor-variant pre-flight check (''_robustness''). | 124 |
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 95 |
-| `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 965 |
+| `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 963 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
 | `_state` | Global state for torchlens toggle-gated decoration. | 1408 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 279 |
@@ -862,7 +862,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (57 modules, 18339 lines)
+Shared helpers used by two or more TorchLens packages. (58 modules, 18366 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -899,6 +899,7 @@ Shared helpers used by two or more TorchLens packages. (57 modules, 18339 lines)
 | `_sparse_parts` | Sparse tensor components: the index and value tensors per layout, and rebuilding with new values. | 79 |
 | `_stdlib_denial` | Structural stdlib/builtin denial for resolved callables. | 91 |
 | `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |
+| `_storage_refs` | Whether a payload may safely carry a weak reference on this torch. | 27 |
 | `_subclass_mode_pause` | Dispatch-mode pauses around TorchLens's own work on strict Tensor subclasses. | 86 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
 | `_tensor_layout` | Capture-time argument layouts for saved-DAG replay. | 93 |

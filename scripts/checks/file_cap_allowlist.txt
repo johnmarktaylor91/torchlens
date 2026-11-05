@@ -427,7 +427,7 @@ torchlens/_runnable/verification.py::_attestation_state_matches	61
 torchlens/_runnable/verification.py::_value_at_path	78
 torchlens/_runnable/witness_contracts.py::_tensor_derived_scalar_stale	69
 torchlens/_runnable/witness_contracts.py::_unbound_state_escape_stale	63
-torchlens/_save_budget.py	955
+torchlens/_save_budget.py	953
 torchlens/_save_budget.py::SaveBudget._message	69
 torchlens/_save_budget.py::_retained_storage_identities	68
 torchlens/_save_budget.py::resolve_save_budget	83
