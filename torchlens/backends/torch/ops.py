@@ -539,7 +539,7 @@ class ExhaustiveOpDraft:
     def freeze(self) -> Any:
         """Commit the final draft ONCE as a row-backed journal handle (capture C2b)."""
 
-        return commit_row_record(self)
+        return _ops_row_journal.commit_row_record(self)
 
 
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
@@ -591,4 +591,6 @@ setattr(
 for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
     register_row_release_property(_ancestor_field_name)
 del _ancestor_field_name
-from ._ops_row_journal import commit_row_record  # noqa: E402
+# Module import: a cold import of ``_ops_row_journal`` reaches this module (through
+# ``_ops_arguments``) before it defines ``commit_row_record``.
+from . import _ops_row_journal  # noqa: E402

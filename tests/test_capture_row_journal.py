@@ -25,7 +25,7 @@ import torchlens as tl
 import torchlens._postprocess as postprocess_module
 from torchlens._ir import _row_journal
 from torchlens._ir.op_record import OpRecord, record_with_path_updates
-from torchlens.backends.torch import ops as torch_ops
+from torchlens.backends.torch import _ops_row_journal
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
 
 
@@ -175,9 +175,9 @@ def commit_spy(monkeypatch: pytest.MonkeyPatch) -> Iterator[_CommitSpy]:
     """Wrap the exhaustive row commit and the first ingest clone with a spy."""
 
     spy = _CommitSpy()
-    real_commit = torch_ops.commit_row_record
+    real_commit = _ops_row_journal.commit_row_record
     monkeypatch.setattr(
-        torch_ops, "commit_row_record", lambda draft: spy.commit(real_commit, draft)
+        _ops_row_journal, "commit_row_record", lambda draft: spy.commit(real_commit, draft)
     )
     real_clone = postprocess_module._clone_op_event_for_replay
 
