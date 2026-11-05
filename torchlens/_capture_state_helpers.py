@@ -44,10 +44,10 @@ from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
+from .backends.torch._tracing_pass import lift_hop_entry_compiles
 
-# Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
-# under the R43 file-size ratchet. Re-exported here because the historical import
-# surface for the capture-cache key helpers is torchlens._capture_state_helpers.
+# Content-fingerprint / attribute-fragment family (split to _capture_fingerprint.py), re-exported:
+# the historical import surface for the capture-cache key helpers is this module.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
@@ -543,7 +543,7 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
 
     with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
         sites = compiled_plain_callable_sites(model)
-        with force_eager_stance_scope() as stance_active:
+        with force_eager_stance_scope() as stance_active, lift_hop_entry_compiles():
             if stance_active:
                 if sites:
                     _warn_compiled_plain_callables_forced_eager_once(sites)

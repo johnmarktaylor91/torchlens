@@ -24,5 +24,15 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 SaveBudgetOption = str | int | float | None
 """Accepted ``save_budget`` spellings: ``"auto"``, a fraction, bytes, or ``None``."""
-#: ``Trace.draw(highlight=...)`` values: the one place they are spelled.
-DrawHighlightLiteral = Literal["interventions"]
+#: ``Trace.draw(view=...)`` values: the one place they are spelled.
+DrawViewLiteral = Literal[
+    "overview",
+    "debug",
+    "speed",
+    "dims",
+    "transformer",
+    "memory",
+    "sequence",
+    "compute",
+    "interventions",
+]

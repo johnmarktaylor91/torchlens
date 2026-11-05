@@ -161,7 +161,7 @@ def render_backward_graph(
         raise InvalidArgumentError(
             f"vis_mode must be either 'rolled' or 'unrolled'; received {vis_mode!r}",
             code="visualization_mode_invalid",
-            remedy="pass vis_mode='rolled' or 'unrolled'",
+            remedy="pass rolled=True or rolled=False to trace.draw",
             argument="vis_mode",
         )
     pass_filter = _normalize_backward_pass_filter(bwd)
@@ -402,14 +402,14 @@ def render_combined_graph(
         # Preserve the public NotImplementedError and name the supported
         # way out (R65 -- retyping with a code is a public API decision).
         raise NotImplementedError(
-            "draw_combined does not support vis_mode='rolled' yet; pass "
-            "vis_mode='unrolled' (the supported combined layout)."
+            "trace.draw(graph='combined') does not support rolled=True yet; pass "
+            "rolled=False (the supported combined layout)."
         )
     if vis_mode != "unrolled":
         raise InvalidArgumentError(
             f"vis_mode must be either 'unrolled' or 'rolled'; received {vis_mode!r}",
             code="visualization_mode_invalid",
-            remedy="pass vis_mode='unrolled' or 'rolled'",
+            remedy="pass rolled=False or rolled=True to trace.draw",
             argument="vis_mode",
         )
     if not self._autograd_has_backward_pass or not self._grad_fn_logs:

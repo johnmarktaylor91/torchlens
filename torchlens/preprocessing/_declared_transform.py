@@ -102,25 +102,74 @@ def transform_from_declared(declared: DeclaredPreprocessing) -> Callable[[Any], 
         stats = _stats_pair(declared)
     except (TypeError, ValueError):
         return None
-    steps: list[Any] = []
-    resize = _size_arg(declared.resize_size)
-    if resize is not None:
-        mode_name = _INTERPOLATION_MODES[declared.interpolation or "bilinear"]
-        antialias = declared.antialias if isinstance(declared.antialias, bool) else True
-        steps.append(
-            T.Resize(
-                resize, interpolation=getattr(InterpolationMode, mode_name), antialias=antialias
-            )
-        )
-    crop = _size_arg(declared.crop_size)
-    if crop is not None:
-        steps.append(T.CenterCrop(crop))
+    steps = _geometric_steps(declared, T, InterpolationMode)
     if not steps and stats is None:
         return None
     steps.append(T.ToTensor())
     if stats is not None:
         steps.append(T.Normalize(mean=stats[0], std=stats[1]))
     return T.Compose(steps)
+
+
+def _geometric_steps(declared: DeclaredPreprocessing, transforms: Any, modes: Any) -> list[Any]:
+    """Return the declared resize and center-crop steps, in pipeline order.
+
+    Parameters
+    ----------
+    declared:
+        Normalized declaration fields.
+    transforms:
+        The ``torchvision.transforms`` module.
+    modes:
+        ``torchvision.transforms.InterpolationMode``.
+
+    Returns
+    -------
+    list[Any]
+        Zero, one or two torchvision steps.
+    """
+
+    steps: list[Any] = []
+    resize = _size_arg(declared.resize_size)
+    if resize is not None:
+        mode_name = _INTERPOLATION_MODES[declared.interpolation or "bilinear"]
+        antialias = declared.antialias if isinstance(declared.antialias, bool) else True
+        steps.append(
+            transforms.Resize(resize, interpolation=getattr(modes, mode_name), antialias=antialias)
+        )
+    crop = _size_arg(declared.crop_size)
+    if crop is not None:
+        steps.append(transforms.CenterCrop(crop))
+    return steps
+
+
+def geometry_from_declared(declared: DeclaredPreprocessing) -> Callable[[Any], Any] | None:
+    """Build the declared resize and center crop alone: PIL image in, PIL image out.
+
+    Used to show a captured photo in the model's input pixel space (receptive-field
+    overlays) without normalizing it. ``None`` when torchvision is unavailable, the
+    declaration cannot be executed faithfully, or it declares no geometric step.
+
+    Parameters
+    ----------
+    declared:
+        Normalized declaration fields.
+
+    Returns
+    -------
+    Callable[[Any], Any] | None
+        The geometric pipeline, or ``None``.
+    """
+
+    try:
+        from torchvision import transforms as T
+        from torchvision.transforms import InterpolationMode
+    except ImportError:
+        return None
+    if not _declaration_is_executable(declared):
+        return None
+    steps = _geometric_steps(declared, T, InterpolationMode)
+    return T.Compose(steps) if steps else None
 
 
 __all__ = ["transform_from_declared"]

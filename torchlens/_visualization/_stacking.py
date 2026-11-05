@@ -89,7 +89,7 @@ def resolve_stack_by(stack_by: Any, vis_mode: str) -> EncodingChannelSpec | None
             "aggregate node per layer, so there are no per-pass nodes to "
             "stack into columns",
             code="stack_by_requires_unrolled",
-            remedy="pass vis_mode='unrolled' (the default), or drop stack_by",
+            remedy="pass rolled=False (the default), or drop stack_by",
             argument="stack_by",
         )
     if stack_by is True:

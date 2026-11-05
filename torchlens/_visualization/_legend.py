@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
+from ._edit_change import CHANGED_NODE_CLASS
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 from ._encoding import _color_legend_rows, _non_color_legend_rows
 from ._render_common import (
@@ -106,6 +107,7 @@ LEGEND_ROLES = (
     "mutated parameter",
     "boolean",
     "edited",
+    "changed value",
     "changed by the edit",
 )
 
@@ -156,8 +158,8 @@ def drawn_legend_roles(
 
     A role counts only when a node was painted with it: its rendered fill
     (and, for buffers and mutated Parameters, the cylinder), or for
-    interventions the ``tl_edited`` and ``tl_downstream`` SVG classes the
-    edit marks carry.
+    interventions the ``tl_edited``, ``tl_downstream`` and ``tl_changed`` SVG
+    classes the edit marks carry.
     Collapsed module boxes (``box3d``) are not plain ops; a parameterized one
     counts as parameterized.
     """
@@ -175,6 +177,8 @@ def drawn_legend_roles(
             roles.add("edited")
         if DOWNSTREAM_NODE_CLASS in classes:
             roles.add("changed by the edit")
+        if CHANGED_NODE_CLASS in classes:
+            roles.add("changed value")
         if shape == "cylinder":
             if fill in fills["buffer"]:
                 roles.add("buffer")

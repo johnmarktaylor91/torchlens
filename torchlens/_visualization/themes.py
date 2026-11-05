@@ -580,6 +580,65 @@ def _legible_ink(fill: str | None, ink: str) -> str:
     return best if (_worst_contrast(best, str(fill)) or 0.0) > current else ink
 
 
+def ink_on_fill(fill: str | None, ink: str | None) -> str | None:
+    """Return a text colour readable on ``fill``: ``ink`` when it already is.
+
+    A colour channel paints its ramp after the skin chose the node's text
+    colour, so the dark end of a ramp (the speed lens's brown, the paper
+    skin's near-black grey) needs the ink checked again.
+
+    Parameters
+    ----------
+    fill:
+        The node's final fill colour (``#RRGGBB``, a gradient, or ``None``).
+    ink:
+        The text colour chosen so far; ``None`` means Graphviz's black.
+
+    Returns
+    -------
+    str | None
+        ``ink``, or a fallback ink with at least 4.5:1 contrast on ``fill``.
+
+    Examples
+    --------
+    >>> from torchlens._visualization.themes import ink_on_fill
+    >>> ink_on_fill("#993404", "#111111")
+    '#FFFFFF'
+    >>> ink_on_fill("#FFF7BC", "#111111")
+    '#111111'
+    """
+
+    if fill is None:
+        return ink
+    return _legible_ink(fill, ink or "#000000")
+
+
+def fill_with_ink(spec: NodeSpec, fill: str) -> NodeSpec:
+    """Return ``spec`` filled with ``fill`` and its text colour rechecked.
+
+    Parameters
+    ----------
+    spec:
+        The node's spec so far.
+    fill:
+        The fill a colour channel chose.
+
+    Returns
+    -------
+    NodeSpec
+        A copy with ``fillcolor=fill`` and a legible ``fontcolor``.
+
+    Examples
+    --------
+    >>> from torchlens._visualization.themes import fill_with_ink
+    >>> from torchlens._vocab.node_spec import NodeSpec
+    >>> fill_with_ink(NodeSpec(lines=["relu"], fontcolor="#111111"), "#993404").fontcolor
+    '#FFFFFF'
+    """
+
+    return spec.replace(fillcolor=fill, fontcolor=ink_on_fill(fill, spec.fontcolor))
+
+
 def _theme_line_ink(theme: VisualizationTheme, color: str | None) -> str | None:
     """Return the skin's edge colour for the renderer's default black edge ink."""
 

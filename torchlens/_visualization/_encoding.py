@@ -67,6 +67,7 @@ from ._encoding_size_layout import (
 from ._render_nodes import _annotation_image_path_for_node
 from .node_spec import NodeSpec
 from .overlays import builtin_overlay_value
+from .themes import fill_with_ink
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1141,7 +1142,7 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1228,7 +1229,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
         f"rolled multi-pass node {_node_key(node)!r}: {why}{detail}",
         code="size_by_rolled_varying",
         remedy=(
-            "unroll the graph (vis_mode='unrolled') to size each pass by its "
+            "unroll the graph (rolled=False) to size each pass by its "
             "own value, choose a cross-pass total (total_*), or pass a "
             "callable asserting your own aggregate semantics"
         ),
@@ -1247,7 +1248,7 @@ def _require_size_rolled_row(node: Any, field_name: str) -> str:
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1608,14 +1609,9 @@ def populate_encoding_state(
 def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
     """Format a domain endpoint for the legend (builtin-aware, with units)."""
 
-    if spec is not None and spec.source_kind == "builtin":
-        from .overlays import format_overlay_value
+    from .overlays import legend_domain_text
 
-        formatted = format_overlay_value(spec.source, value)
-        return formatted.split(": ", 1)[-1]
-    if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
-    return f"{value:.4g}"
+    return legend_domain_text(spec, value)
 
 
 def _color_legend_rows(state: EncodingState) -> list[Any]:
@@ -1790,7 +1786,7 @@ def channel_wrapped_node_spec_fn(
         """Apply the channel fill/size, then let the user callback override them."""
 
         if channel_fill is not None:
-            spec = spec.replace(fillcolor=channel_fill)
+            spec = fill_with_ink(spec, channel_fill)
         if channel_size is not None:
             # Minimums only: fixedsize=false means the box can only GROW
             # from the label's natural size (a label can never be truncated

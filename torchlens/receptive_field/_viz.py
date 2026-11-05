@@ -11,11 +11,14 @@ from PIL import Image, ImageDraw
 from .._plots import node_plots
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..errors import InvalidArgumentError
+from ..preprocessing._card import declared_from_record
+from ..preprocessing._declared_transform import geometry_from_declared
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,
     ReceptiveFieldError,
 )
+from ._path import resolve_graph_point
 from ._types import (
     GradReceptiveField,
     ReceptiveField,
@@ -25,7 +28,10 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module, ModuleCall
     from .._data_classes.op import Op
+    from ..preprocessing._records import DeclaredPreprocessing
     from ._types import ReceptiveFieldView
 
 
@@ -159,7 +165,7 @@ def _blend_heatmap(
 
 
 def node_spec(
-    op: Op,
+    op: Op | Layer | ModuleCall | Module,
     *,
     unit: Sequence[int] | None = None,
     input_op: Any | None = None,
@@ -178,7 +184,9 @@ def node_spec(
     Parameters
     ----------
     op:
-        Target operation whose receptive-field ancestry is shown.
+        Target whose receptive-field ancestry is shown: an ``Op``, or a single-pass
+        ``Layer``, single-call ``ModuleCall`` or single-call ``Module`` resolved to its
+        output operation on the trace that owns it.
     unit, input, cone, overlay, gradient, dim_others, box_color, alpha, cmap:
         Draw-time RF options. ``unit`` is forwarded only when an input-node
         overlay is requested.
@@ -192,6 +200,11 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+    ReceptiveFieldError
+        If ``op`` is not one of the accepted handles (a bare label string carries no trace
+        to resolve against), or a layer or module has several passes or calls.
+    MultiOutputModuleError
+        If a module call has zero or several output operations.
 
     Examples
     --------
@@ -202,6 +215,7 @@ def node_spec(
     """
 
     _ = overlay, grad, box_color, alpha, cmap
+    op = _node_spec_target(op)
     resolved_direction = ReceptiveFieldDirection(direction)
     selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _descriptor_for_op(op, selected, resolved_direction)
@@ -214,6 +228,14 @@ def node_spec(
         else frozenset()
     )
 
+    return _cone_node_spec_fn(trace, cone_labels, descriptor.io_role, dim_others)
+
+
+def _cone_node_spec_fn(
+    trace: Any, cone_labels: frozenset[str], io_role: str, dim_others: bool
+) -> NodeSpecFn:
+    """Build the draw callback that highlights ``cone_labels`` and dims the rest."""
+
     def node_spec_fn(layer: Any, spec: NodeSpec) -> NodeSpec | None:
         """Style one rendered layer according to on-demand cone membership."""
 
@@ -223,11 +245,22 @@ def node_spec(
             if not dim_others:
                 return None
             return spec.replace(fillcolor=_DIM_FILL, fontcolor="#707070", tooltip=spec.tooltip)
-        node_descriptor = _descriptor_for_labels(trace, labels, descriptor.io_role)
+        node_descriptor = _descriptor_for_labels(trace, labels, io_role)
         tooltip = _tooltip(node_descriptor) if node_descriptor is not None else "RF ancestor cone"
         return spec.replace(fillcolor=_CONE_FILL, color="#D97706", penwidth=2.0, tooltip=tooltip)
 
     return node_spec_fn
+
+
+def _node_spec_target(handle: object) -> Op:
+    """Resolve a ``node_spec`` target handle to one operation on the trace that owns it.
+
+    Op, Layer, ModuleCall and Module handles carry their trace and resolve the way the
+    other receptive-field entry points resolve them; anything else, a bare label string
+    included, has no trace and reaches the resolver's typed refusal.
+    """
+
+    return resolve_graph_point(getattr(handle, "_source_trace", None), handle)
 
 
 def _select_descriptor(view: ReceptiveFieldView, selected: Any | None) -> ReceptiveField:
@@ -358,8 +391,9 @@ def _base_image(
         from ..repgeom import _matching_pil_image_batch
 
         batch = _matching_pil_image_batch(getattr(trace, "input", None), descriptor.input_shape[0])
-        if batch:
-            return batch[0].convert("RGB")
+        photo = _aligned_photo(trace, batch[0], descriptor, rendered_axes) if batch else None
+        if photo is not None:
+            return photo
         try:
             input_op = trace[descriptor.input_op_label]
             tensor = input_op.out
@@ -372,6 +406,70 @@ def _base_image(
         32 if len(rendered_axes) == 1 else max(1, int(descriptor.input_shape[rendered_axes[0]]))
     )
     return Image.new("RGB", (width, height), "white")
+
+
+def _aligned_photo(
+    trace: Any, photo: Image.Image, descriptor: ReceptiveField, axes: tuple[int, ...]
+) -> Image.Image | None:
+    """Return the captured photo in model-input pixel space, or ``None`` when none exists.
+
+    The box is drawn in model-input coordinates scaled to the base image, so a photo is a
+    usable base only at the input's spatial size. In order: the photo as captured when it
+    already has that size; the photo after replaying the trace's declared resize and center
+    crop (geometry only); else the preprocessed input tensor itself, de-normalized with the
+    same declaration, which is the photo exactly as the model saw it. ``None`` (the caller
+    keeps the plain tensor rendering) when none of these is a 3-channel image of that size.
+    """
+
+    if len(axes) != 2:
+        return None
+    size = (int(descriptor.input_shape[axes[1]]), int(descriptor.input_shape[axes[0]]))
+    rgb = photo.convert("RGB")
+    if rgb.size == size:
+        return rgb
+    record = getattr(getattr(trace, "provenance", None), "input_preprocessor", None)
+    declared = declared_from_record(record)
+    geometry = None if declared is None else geometry_from_declared(declared)
+    replayed = None if geometry is None else geometry(rgb)
+    if isinstance(replayed, Image.Image) and replayed.size == size:
+        return replayed.convert("RGB")
+    try:
+        tensor = trace[descriptor.input_op_label].out
+    except (KeyError, AttributeError):
+        return None
+    if not isinstance(tensor, torch.Tensor):
+        return None
+    seen = _tensor_rgb_image(tensor, declared, axes)
+    return seen if seen is not None and seen.size == size else None
+
+
+def _tensor_rgb_image(
+    tensor: torch.Tensor, declared: DeclaredPreprocessing | None, axes: tuple[int, ...]
+) -> Image.Image | None:
+    """Render the first image of a preprocessed ``(batch, 3, height, width)`` tensor as RGB.
+
+    Undoes the declared per-channel normalization (``mean`` and ``std``) when there is one;
+    otherwise scales each channel to its own range. ``None`` for any other tensor layout.
+    """
+
+    if tensor.ndim != 4 or int(tensor.shape[1]) != 3 or axes != (2, 3):
+        return None
+    data = tensor[0].detach().float().cpu()
+    mean = None if declared is None else declared.mean
+    std = None if declared is None else declared.std
+    if (
+        isinstance(mean, (list, tuple))
+        and isinstance(std, (list, tuple))
+        and len(mean) == len(std) == 3
+    ):
+        data = data * torch.tensor([float(s) for s in std]).view(3, 1, 1)
+        data = data + torch.tensor([float(m) for m in mean]).view(3, 1, 1)
+    else:
+        low = data.amin(dim=(1, 2), keepdim=True)
+        high = data.amax(dim=(1, 2), keepdim=True)
+        data = (data - low) / (high - low).clamp_min(1e-12)
+    array = (data.clamp(0.0, 1.0) * 255.0).round().to(torch.uint8).permute(1, 2, 0).numpy()
+    return Image.fromarray(array, mode="RGB")
 
 
 def _tensor_image(

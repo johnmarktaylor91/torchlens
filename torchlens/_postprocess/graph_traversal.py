@@ -48,35 +48,14 @@ from ._orphan_seeds import (
     _orphan_flood_seeds,
     _remember_orphan_rows,
 )
+from ._output_payload import (
+    output_copy_detaches,
+    output_payload_aliases_parent as output_payload_aliases_parent,  # re-exported for tests
+    output_rides_parent_payload,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-
-
-def output_payload_aliases_parent(returned: Any, retained: Any) -> bool:
-    """True iff the returned output tensor IS the producer's retained payload value.
-
-    The output pseudo-row may share the producer's ONE retained payload
-    (HONESTY 13-R1) exactly when the tensor the model returned equals the
-    producer's retained ``out`` bit-for-bit under the same shape, dtype and
-    device (NaN-equal, so a NaN output is not a spurious "difference"). Any
-    other case -- unretained producer, meta payloads, a cross-device
-    ``output_device`` policy, an in-place mutation after the producer, a view
-    whose base shape differs -- keeps the historical physical copy so the
-    variation is recorded, never hidden.
-    """
-
-    if not (torch.is_tensor(returned) and torch.is_tensor(retained)):
-        return False
-    if returned.is_meta or retained.is_meta:
-        return False
-    if (
-        tuple(returned.shape) != tuple(retained.shape)
-        or returned.dtype != retained.dtype
-        or str(returned.device) != str(retained.device)
-    ):
-        return False
-    return bool(tensor_nanequal(returned, retained))
 
 
 def _resolve_output_parent_labels(
@@ -463,26 +442,21 @@ def _add_output_layers(
         new_output_node.has_out_variations = False
         new_output_node.out_versions_by_child = {}
         if output_node.has_saved_activation:
-            # The recomputed payload must inherit the PARENT payload's
-            # detachment state: cooked/sparse traces store detached payloads
-            # (a retained graph would poison later captures), while live
-            # traces keep the graph-attached output — it is the very handle
-            # backward() differentiates through.
+            # The recomputed payload inherits the PARENT payload's detachment: cooked/sparse
+            # traces store detached payloads (a retained graph would poison later captures);
+            # live traces keep the graph-attached output, the handle backward() differentiates
+            # through, also when it gained its history after the producer (_output_payload).
             _parent_payload = (
                 output_node.out if output_node.out is not None else output_node.transformed_out
             )
-            _detach_payload = not (
-                torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
-            )
-            if output_payload_aliases_parent(output_tensor, output_node.out):
-                # HONESTY 13-R1: the producer already retains this exact value,
-                # so the output pseudo-row rides that ONE retained payload
-                # instead of a second physical copy (the byte model charged
-                # both: a full duplicate of the logits on large models). The
-                # A1 identity partition already says the producer owns the
-                # bytes; the payload now agrees. Differing values (an in-place
-                # mutation after the producer) still copy below and record
-                # the variation.
+            _detach_payload = output_copy_detaches(output_tensor, _parent_payload, self)
+            if output_rides_parent_payload(output_tensor, output_node.out, self):
+                # HONESTY 13-R1: the producer already retains this exact value, so the output
+                # pseudo-row rides that ONE retained payload instead of a second physical copy
+                # (the byte model charged both: a full duplicate of the logits on large
+                # models). The A1 identity partition already says the producer owns the bytes;
+                # the payload now agrees. Differing values (an in-place mutation after the
+                # producer) still copy below and record the variation.
                 actual_output_raw = output_node.out
             else:
                 actual_output_raw = safe_copy(output_tensor, detach_tensor=_detach_payload)

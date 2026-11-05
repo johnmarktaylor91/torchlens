@@ -601,7 +601,8 @@ def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | 
     Returns
     -------
     Sequence[Any] | None
-        PIL image sequence when the length exactly matches the coordinates.
+        PIL image sequence when the length exactly matches the coordinates. A single PIL
+        image (what an image-path capture stores as ``trace.input``) is a batch of one.
     """
 
     if raw_input is None or isinstance(raw_input, str | bytes | bytearray):
@@ -610,7 +611,10 @@ def _matching_pil_image_batch(raw_input: Any, n_coords: int) -> Sequence[Any] | 
         from PIL import Image
     except ImportError:
         return None
-    if isinstance(raw_input, Sequence):
+    sequence: Sequence[Any]
+    if isinstance(raw_input, Image.Image):
+        sequence = (raw_input,)
+    elif isinstance(raw_input, Sequence):
         sequence = raw_input
     elif hasattr(raw_input, "__len__") and hasattr(raw_input, "__iter__"):
         sequence = tuple(raw_input)
