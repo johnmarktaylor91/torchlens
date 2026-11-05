@@ -3,9 +3,9 @@
 ``wrappers._propagate_mutation_label_to_storage_aliases`` advances a base
 tensor's label to an in-place op on one of its views; this module finds the
 live labeled aliases that mutation reaches and answers whether a ``.data``
-alias write will reach a labeled base. The write-back of an augmented slice
-assignment is bound to the base's pre-mutation producer by
-``_ops_capture_records._bind_writeback_receiver_label``.
+alias write will reach a labeled base. A call that reads both the base and the
+written view binds the base to its pre-mutation producer for that call
+(``_ops_capture_records._bind_call_alias_labels``).
 """
 
 from __future__ import annotations
