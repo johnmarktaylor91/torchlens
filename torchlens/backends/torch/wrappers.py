@@ -96,6 +96,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
+from ._fused_norm_writes import fused_call_writes
 from ._logged_arguments import logged_args
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1150,6 +1151,7 @@ def torch_func_decorator(
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
+    writes_args = mutates_receiver or reconstructs_receiver_output or is_mutating_property_setter
     has_inplace_signature = (
         mutates_first_arg
         or func_name.endswith("_")
@@ -1232,11 +1234,10 @@ def torch_func_decorator(
             # aliases sharing those storages. Disarmed cost is one dict-truthiness check; with
             # pending aliases, only mutation-signature calls pay the storage lookups.
             if _COW_PENDING and (
-                mutates_receiver
-                or is_mutating_property_setter
-                or reconstructs_receiver_output
+                writes_args
                 or "out" in kwargs
                 or _call_requests_inplace(inplace_param_index, args, kwargs)
+                or fused_call_writes(func_name, args, kwargs)
             ):
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1401,11 +1402,10 @@ def torch_func_decorator(
         # via its property-setter signature — a spurious materialization is merely a wasted clone,
         # never a correctness risk.
         if _COW_PENDING and (
-            mutates_receiver
-            or is_mutating_property_setter
-            or reconstructs_receiver_output
+            writes_args
             or "out" in kwargs
             or _call_requests_inplace(inplace_param_index, args, kwargs)
+            or fused_call_writes(func_name, args, kwargs)
         ):
             materialize_deferred_for_call(arg_tensorlike)
 
