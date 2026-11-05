@@ -5,28 +5,65 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+from collections.abc import Callable, Iterator
+from types import ModuleType
 
 import pytest
 
+_MISSING = object()
 
-def _drop_module(module_name: str) -> None:
-    """Remove a module and its loaded children from ``sys.modules``.
 
-    Parameters
-    ----------
-    module_name : str
-        Fully qualified module name to remove.
+def _is_under(loaded_name: str, module_name: str) -> bool:
+    """Return whether ``loaded_name`` is ``module_name`` or one of its children."""
+
+    return loaded_name == module_name or loaded_name.startswith(f"{module_name}.")
+
+
+@pytest.fixture
+def drop_module() -> Iterator[Callable[[str], None]]:
+    """Drop a module and its children for a fresh import; restore both at teardown.
+
+    The fresh import rebinds the parent package's attribute and leaves a second
+    copy of every child in ``sys.modules``. Without the restore, a later test
+    holding the original (``from torchlens.neuro import _brainpipe`` at
+    collection) sees ``tl.neuro`` resolve through the copy, so the result
+    depends on test order.
     """
-    for loaded_name in list(sys.modules):
-        if loaded_name == module_name or loaded_name.startswith(f"{module_name}."):
+
+    saved_modules = dict(sys.modules)
+    dropped: list[str] = []
+    parent_attrs: list[tuple[ModuleType, str, object]] = []
+
+    def _drop(module_name: str) -> None:
+        dropped.append(module_name)
+        for loaded_name in list(sys.modules):
+            if not _is_under(loaded_name, module_name):
+                continue
+            parent_name, _, leaf = loaded_name.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None:
+                parent_attrs.append((parent, leaf, vars(parent).get(leaf, _MISSING)))
             del sys.modules[loaded_name]
+
+    yield _drop
+    for loaded_name in list(sys.modules):
+        if any(_is_under(loaded_name, name) for name in dropped):
+            del sys.modules[loaded_name]
+    for loaded_name, module in saved_modules.items():
+        if any(_is_under(loaded_name, name) for name in dropped):
+            sys.modules[loaded_name] = module
+    for parent, leaf, value in reversed(parent_attrs):
+        if value is _MISSING:
+            vars(parent).pop(leaf, None)
+        else:
+            setattr(parent, leaf, value)
 
 
 def test_notebook_attribute_access_reports_missing_dependency(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, drop_module: Callable[[str], None]
 ) -> None:
     """Unknown attribute access teaches AttributeError-lineage regardless of deps."""
-    _drop_module("torchlens.report._notebook")
+    drop_module("torchlens.report._notebook")
 
     module = importlib.import_module("torchlens.report._notebook")
 
@@ -38,16 +75,16 @@ def test_notebook_attribute_access_reports_missing_dependency(
             module.anything
 
 
-def test_neuro_import_stays_inert() -> None:
+def test_neuro_import_stays_inert(drop_module: Callable[[str], None]) -> None:
     """``import torchlens.neuro`` never imports its foreign extra deps.
 
     Package import must not touch ``rsatoolbox`` / ``brainscore_core`` as a
     side effect, regardless of whether the extra is installed -- the
     dependency check is deferred to first attribute access.
     """
-    _drop_module("torchlens.neuro")
-    _drop_module("rsatoolbox")
-    _drop_module("brainscore_core")
+    drop_module("torchlens.neuro")
+    drop_module("rsatoolbox")
+    drop_module("brainscore_core")
 
     module = importlib.import_module("torchlens.neuro")
 
@@ -73,10 +110,12 @@ def test_neuro_import_stays_inert() -> None:
         assert f"torchlens.neuro.{implementation}" not in sys.modules
 
 
-def test_neuro_attribute_access_reports_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_neuro_attribute_access_reports_missing_dependency(
+    monkeypatch: pytest.MonkeyPatch, drop_module: Callable[[str], None]
+) -> None:
     """Known-name access with the dependency absent names the missing package."""
     pytest.importorskip("rsatoolbox")
-    _drop_module("torchlens.neuro")
+    drop_module("torchlens.neuro")
 
     module = importlib.import_module("torchlens.neuro")
 
@@ -104,12 +143,12 @@ def test_neuro_attribute_access_reports_missing_dependency(monkeypatch: pytest.M
     ],
 )
 def test_attribute_access_when_deps_present(
-    first_dep: str, second_dep: str, module_name: str
+    first_dep: str, second_dep: str, module_name: str, drop_module: Callable[[str], None]
 ) -> None:
     """When deps are installed, attribute access raises AttributeError, not ImportError."""
     pytest.importorskip(first_dep)
     pytest.importorskip(second_dep)
-    _drop_module(module_name)
+    drop_module(module_name)
 
     module = importlib.import_module(module_name)
 

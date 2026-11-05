@@ -23,6 +23,29 @@ from ._torch_compat import get_numpy_bridge_support
 from ._torch_symbols import torch_dtype_named
 from .tensor_leaves import copy_host_bytes, flat_byte_view, tensor_payload_bytes
 
+# Dtype names torch's own bridge converts (``Tensor.numpy`` and ``torch.from_numpy``).
+# The fallbacks check this table rather than asking NumPy whether it knows the name:
+# importing ``ml_dtypes`` (onnx, jax and tensorflow do) registers ``bfloat16`` and the
+# ``float8_*`` names with NumPy, and the fallback must still refuse what torch refuses.
+_BRIDGE_DTYPE_NAMES = frozenset(
+    {
+        "bool",
+        "uint8",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float16",
+        "float32",
+        "float64",
+        "complex64",
+        "complex128",
+    }
+)
+
 
 def _bridge_works() -> bool:
     """Return :func:`get_numpy_bridge_support`, probing with capture logging paused.
@@ -72,10 +95,9 @@ def tensor_to_numpy(tensor: torch.Tensor, *, force: bool = False) -> Any:
     if _bridge_works():
         return tensor.numpy(force=True) if force else tensor.cpu().numpy()
     dtype_name = str(tensor.dtype).removeprefix("torch.")
-    try:
-        numpy_dtype = np.dtype(dtype_name)
-    except TypeError as exc:
-        raise TypeError(f"Got unsupported ScalarType {dtype_name}") from exc
+    if dtype_name not in _BRIDGE_DTYPE_NAMES:
+        raise TypeError(f"Got unsupported ScalarType {dtype_name}")
+    numpy_dtype = np.dtype(dtype_name)
     host = tensor.detach().resolve_conj().resolve_neg().cpu().contiguous()
     payload = bytearray(copy_host_bytes(flat_byte_view(host)))
     return np.frombuffer(payload, dtype=numpy_dtype).reshape(tuple(tensor.shape))
@@ -138,7 +160,11 @@ def tensor_from_numpy(array: Any) -> torch.Tensor:
     # caller's shape explicitly.
     shape = tuple(np.shape(array))
     contiguous = np.ascontiguousarray(array)
-    torch_dtype = torch_dtype_named(contiguous.dtype.name)
+    torch_dtype = (
+        torch_dtype_named(contiguous.dtype.name)
+        if contiguous.dtype.name in _BRIDGE_DTYPE_NAMES
+        else None
+    )
     if torch_dtype is None:
         raise TypeError(
             f"can't convert np.ndarray of type numpy.{contiguous.dtype.name}; torch has "
