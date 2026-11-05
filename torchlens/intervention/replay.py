@@ -520,7 +520,7 @@ def _run_replay(
     errors_non_fatal = 0
     loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
 
-    for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
+    for site in progress_bar(cone, total=len(cone), desc="torchlens.push", delay=2.0):
         site_key = _replay_site_key(site)
         if preserve_origins and site_key in state.origin_keys:
             state.pending_updates[site_key] = state.overlay[site_key]
