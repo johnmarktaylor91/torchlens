@@ -32,6 +32,7 @@ import torch
 
 from .._utils._raw_pointer_denial import refuse_pointer_keywords
 from .._utils._record_group_table import record_member
+from .._utils._sparse_invariant_guard import call_with_sparse_invariants, refuse_invariant_switch
 from ._replay_warnings import replay_warnings_ignored
 
 if TYPE_CHECKING:
@@ -164,6 +165,7 @@ def _substitutes_move_output(
 
     # Raised OUTSIDE the probe refusals: a probe that cannot run keeps an exemption.
     refuse_pointer_keywords(layer, call.kwargs)
+    refuse_invariant_switch(layer, call.kwargs)
     try:
         with torch.no_grad(), replay_warnings_ignored():
             substitutes = build_substitutes()
@@ -171,7 +173,7 @@ def _substitutes_move_output(
                 return None
             for substitute in substitutes:
                 args, kwargs = call.substituted(substitute)
-                probe_output = func(*args, **kwargs)
+                probe_output = call_with_sparse_invariants(func, args, kwargs)
                 if not isinstance(probe_output, torch.Tensor):
                     return None
                 if not tensor_nanequal(probe_output, saved_output, allow_tolerance=False):

@@ -45,8 +45,9 @@ from ...recording._types import (
     StorageIntent,
 )
 from ._aten_capture import _note_aten_owner_verdict
-from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
+from ._ops_arguments import _iter_tree_tensors
 from ._ops_payload_stream import _stream_predicate_payloads
+from ._ops_saved_arg_copies import _copy_saved_arg_tree, _copy_saved_call_args
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

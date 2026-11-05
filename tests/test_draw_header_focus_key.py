@@ -42,11 +42,18 @@ from torchlens._visualization._header_block import (
     network_count_line,
     params_caption_detail,
 )
-from torchlens._visualization._label_format import compact_count, decimal_size, format_memory
+from torchlens._visualization._label_format import (
+    collapsed_param_detail,
+    compact_count,
+    decimal_size,
+    format_memory,
+    param_count,
+)
 from torchlens._visualization._render_nodes import (
     _format_batch_topk_output_lines,
     _format_label_score_row,
 )
+from torchlens._visualization._segment_descriptors import _format_param_count
 from torchlens._visualization.modes import _compact_size
 from torchlens._visualization.overlays import format_overlay_value, legend_domain_text
 from torchlens._visualization.themes import (
@@ -226,6 +233,19 @@ def test_output_node_topk_labels_print_tiny_probabilities_as_under_one_percent()
     assert lines == ["output", "1. tabby >99%", "2. tiger cat <1%", "3. lynx 0%"]
     assert _format_label_score_row("tabby", 0.001) == "tabby <1%"
     assert _format_label_score_row("tabby", 1.0) == "tabby 100%"
+
+
+def test_parameter_counts_print_one_way_in_header_boxes_and_segments() -> None:
+    assert param_count(999) == "999"
+    assert param_count(3_600) == "3.6K"
+    assert collapsed_param_detail(3_600, 0) == "3.6K params (all trainable)"
+    assert collapsed_param_detail(999, 999) == "999 params (all frozen)"
+    assert collapsed_param_detail(3_770, 1_200) == "3.77K params (2.57K trainable, 1.2K frozen)"
+    header = params_caption_detail(_param_trace(3_770, 3_770))  # type: ignore[arg-type]
+    assert header.startswith("3.77K params (") and collapsed_param_detail(3_770, 0).startswith(
+        "3.77K params ("
+    )
+    assert _format_param_count(15_432) == "15.4K"
 
 
 def test_drawn_counts_carry_thousands_separators() -> None:

@@ -3047,7 +3047,7 @@ docs-md	docs/maintainers/where.md	15,
 docs-md	docs/maintainers/where.md	15.5
 docs-md	docs/maintainers/where.md	15.5.
 docs-md	docs/maintainers/where.md	150
-docs-md	docs/maintainers/where.md	15010
+docs-md	docs/maintainers/where.md	15011
 docs-md	docs/maintainers/where.md	1504
 docs-md	docs/maintainers/where.md	151
 docs-md	docs/maintainers/where.md	15152
@@ -3097,6 +3097,7 @@ docs-md	docs/maintainers/where.md	1713
 docs-md	docs/maintainers/where.md	1717
 docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	1722
+docs-md	docs/maintainers/where.md	1723
 docs-md	docs/maintainers/where.md	1726
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1734
@@ -3205,6 +3206,7 @@ docs-md	docs/maintainers/where.md	232
 docs-md	docs/maintainers/where.md	233
 docs-md	docs/maintainers/where.md	234
 docs-md	docs/maintainers/where.md	23485
+docs-md	docs/maintainers/where.md	23427
 docs-md	docs/maintainers/where.md	236
 docs-md	docs/maintainers/where.md	237
 docs-md	docs/maintainers/where.md	238
@@ -3284,7 +3286,6 @@ docs-md	docs/maintainers/where.md	293
 docs-md	docs/maintainers/where.md	294
 docs-md	docs/maintainers/where.md	295
 docs-md	docs/maintainers/where.md	296
-docs-md	docs/maintainers/where.md	297
 docs-md	docs/maintainers/where.md	298
 docs-md	docs/maintainers/where.md	299
 docs-md	docs/maintainers/where.md	3.0
@@ -3327,7 +3328,7 @@ docs-md	docs/maintainers/where.md	320
 docs-md	docs/maintainers/where.md	321
 docs-md	docs/maintainers/where.md	323
 docs-md	docs/maintainers/where.md	324
-docs-md	docs/maintainers/where.md	32434
+docs-md	docs/maintainers/where.md	32442
 docs-md	docs/maintainers/where.md	325
 docs-md	docs/maintainers/where.md	326
 docs-md	docs/maintainers/where.md	327
@@ -3352,6 +3353,7 @@ docs-md	docs/maintainers/where.md	346
 docs-md	docs/maintainers/where.md	34682
 docs-md	docs/maintainers/where.md	347
 docs-md	docs/maintainers/where.md	349
+docs-md	docs/maintainers/where.md	34991
 docs-md	docs/maintainers/where.md	35
 docs-md	docs/maintainers/where.md	350
 docs-md	docs/maintainers/where.md	351
@@ -3395,6 +3397,7 @@ docs-md	docs/maintainers/where.md	386
 docs-md	docs/maintainers/where.md	3864
 docs-md	docs/maintainers/where.md	387
 docs-md	docs/maintainers/where.md	388
+docs-md	docs/maintainers/where.md	389
 docs-md	docs/maintainers/where.md	39
 docs-md	docs/maintainers/where.md	3906
 docs-md	docs/maintainers/where.md	391
@@ -3489,6 +3492,7 @@ docs-md	docs/maintainers/where.md	483
 docs-md	docs/maintainers/where.md	485
 docs-md	docs/maintainers/where.md	48690
 docs-md	docs/maintainers/where.md	487
+docs-md	docs/maintainers/where.md	48707
 docs-md	docs/maintainers/where.md	488
 docs-md	docs/maintainers/where.md	489
 docs-md	docs/maintainers/where.md	49
@@ -3559,8 +3563,8 @@ docs-md	docs/maintainers/where.md	57
 docs-md	docs/maintainers/where.md	570
 docs-md	docs/maintainers/where.md	572
 docs-md	docs/maintainers/where.md	575
-docs-md	docs/maintainers/where.md	57645
 docs-md	docs/maintainers/where.md	577
+docs-md	docs/maintainers/where.md	57741
 docs-md	docs/maintainers/where.md	579
 docs-md	docs/maintainers/where.md	58
 docs-md	docs/maintainers/where.md	581
@@ -3612,6 +3616,8 @@ docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	643
 docs-md	docs/maintainers/where.md	644
 docs-md	docs/maintainers/where.md	646
+docs-md	docs/maintainers/where.md	645
+docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	6476
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	649
@@ -3646,6 +3652,7 @@ docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	6976
 docs-md	docs/maintainers/where.md	698
 docs-md	docs/maintainers/where.md	698158
+docs-md	docs/maintainers/where.md	698508
 docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
 docs-md	docs/maintainers/where.md	700
@@ -3679,7 +3686,6 @@ docs-md	docs/maintainers/where.md	743
 docs-md	docs/maintainers/where.md	7434
 docs-md	docs/maintainers/where.md	744
 docs-md	docs/maintainers/where.md	746
-docs-md	docs/maintainers/where.md	748
 docs-md	docs/maintainers/where.md	75
 docs-md	docs/maintainers/where.md	750
 docs-md	docs/maintainers/where.md	752
@@ -7401,7 +7407,7 @@ package-docstrings	torchlens/_visualization/_geometry_audit.py	356
 package-docstrings	torchlens/_visualization/_geometry_audit.py	39
 package-docstrings	torchlens/_visualization/_geometry_audit.py	877
 package-docstrings	torchlens/_visualization/_header_block.py	1,000
-package-docstrings	torchlens/_visualization/_header_block.py	1024
+package-docstrings	torchlens/_visualization/_header_block.py	1000
 package-docstrings	torchlens/_visualization/_header_block.py	11
 package-docstrings	torchlens/_visualization/_header_block.py	11.7
 package-docstrings	torchlens/_visualization/_header_block.py	124
@@ -7415,6 +7421,7 @@ package-docstrings	torchlens/_visualization/_header_block.py	372
 package-docstrings	torchlens/_visualization/_header_block.py	44.6
 package-docstrings	torchlens/_visualization/_label_format.py	0.87,
 package-docstrings	torchlens/_visualization/_label_format.py	0.95
+package-docstrings	torchlens/_visualization/_label_format.py	1,000,
 package-docstrings	torchlens/_visualization/_label_format.py	1.02
 package-docstrings	torchlens/_visualization/_label_format.py	1.02,
 package-docstrings	torchlens/_visualization/_label_format.py	1.5
@@ -7429,8 +7436,10 @@ package-docstrings	torchlens/_visualization/_label_format.py	156
 package-docstrings	torchlens/_visualization/_label_format.py	16
 package-docstrings	torchlens/_visualization/_label_format.py	1_500_000_000
 package-docstrings	torchlens/_visualization/_label_format.py	2.31
+package-docstrings	torchlens/_visualization/_label_format.py	3.6
 package-docstrings	torchlens/_visualization/_label_format.py	3072,
 package-docstrings	torchlens/_visualization/_label_format.py	32
+package-docstrings	torchlens/_visualization/_label_format.py	3600
 package-docstrings	torchlens/_visualization/_label_format.py	48
 package-docstrings	torchlens/_visualization/_label_format.py	588
 package-docstrings	torchlens/_visualization/_label_format.py	588.0
@@ -7439,6 +7448,7 @@ package-docstrings	torchlens/_visualization/_label_format.py	768
 package-docstrings	torchlens/_visualization/_label_format.py	85.8
 package-docstrings	torchlens/_visualization/_label_format.py	85798656
 package-docstrings	torchlens/_visualization/_label_format.py	9,999
+package-docstrings	torchlens/_visualization/_label_format.py	999
 package-docstrings	torchlens/_visualization/_label_format.py	9999
 package-docstrings	torchlens/_visualization/_label_format.py	999_999
 package-docstrings	torchlens/_visualization/_legend.py	1048
@@ -7502,7 +7512,7 @@ package-docstrings	torchlens/_visualization/_render_utils.py	224
 package-docstrings	torchlens/_visualization/_render_utils.py	29
 package-docstrings	torchlens/_visualization/_render_utils.py	40
 package-docstrings	torchlens/_visualization/_render_utils.py	65
-package-docstrings	torchlens/_visualization/_segment_descriptors.py	15.4
+package-docstrings	torchlens/_visualization/_segment_descriptors.py	1,000
 package-docstrings	torchlens/_visualization/_segment_descriptors.py	19
 package-docstrings	torchlens/_visualization/_segment_descriptors.py	24
 package-docstrings	torchlens/_visualization/_segment_descriptors.py	27

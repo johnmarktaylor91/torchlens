@@ -12,6 +12,7 @@ from .._utils._raw_pointer_denial import (
     pointer_keyword_refusal_detail,
     raw_pointer_keyword_name,
 )
+from .._utils._sparse_invariant_guard import call_with_sparse_invariants
 from ..errors import (
     RunCapabilityUnavailableError,
     RunPreconditionError,
@@ -473,7 +474,7 @@ def _execute_sparse_call(
     # below still runs the real call for every non-refused request).
     _preflight_call_allocation(registry_entry, func, args, kwargs, call, ceiling)
     try:
-        return func(*args, **kwargs)
+        return call_with_sparse_invariants(func, args, kwargs)
     except RunCapabilityUnavailableError:
         # A typed capability refusal from a nested guard (e.g. a re-materialization
         # clone inside a resolved callable) is already correct -- never re-cloak it as
