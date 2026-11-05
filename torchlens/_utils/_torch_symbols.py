@@ -407,6 +407,8 @@ def tensor_reads(tensor: Any, *names: str) -> tuple[Callable[[Any], Any], ...]:
         One callable per name, each as :func:`tensor_read` would return it.
     """
 
+    # Complexity C (11) on purpose: hot path. The gate and the per-name memo check stay
+    # inline so a hit makes no call beyond the one gate predicate per scope.
     bound = _INTERNAL_READS
     cls = tensor.__class__
     resolved: tuple[Callable[[Any], Any], ...] = ()
