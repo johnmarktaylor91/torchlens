@@ -69,6 +69,17 @@ _FLAT_PATH: dict[str, str] = {
     "has_internal_source_ancestor": "ancestry.has_internal_source_ancestor",
 }
 _OVERLAY_PATHS: frozenset[str] = frozenset(_FLAT_PATH.values())
+#: Overlay paths a taken row absorbs: the output-promotion families' paths,
+#: whose store cells ``op_record_scatter._write_overlay_cells`` rewrites.
+_ROW_TAKE_PATHS: frozenset[str] = frozenset(
+    (
+        "core.output",
+        "graph.is_output_parent",
+        "policy.policy",
+        "policy.predicate_matched",
+        "recording.capture_spec",
+    )
+)
 
 
 #: ``object.__new__``: the commit builds handles and residuals without an ``__init__`` call.
@@ -192,16 +203,18 @@ class _RowOpRecord:
         return record
 
     def take_row(self) -> tuple[list[Any], OpRecord] | None:
-        """Return this unamended handle's row and its built record, for ingest (capture C2c).
+        """Return this handle's row and its built record, for ingest (capture C2c).
 
-        The record is built first, from the row as committed, so ingest may
-        then write join cells into the row and adopt it as the op's store row.
-        Returns ``None`` for an amended or already built handle, which ingest
-        reads through the record path instead.
+        The record is built first, from the row as committed plus the overlay,
+        so ingest may then write join cells into the row and adopt it as the
+        op's store row. An overlay limited to the output-promotion paths is
+        taken too: the caller rewrites those cells from the record (see
+        ``_ROW_TAKE_PATHS``). Returns ``None`` for an already built handle or
+        any other overlay, which ingest reads through the record path instead.
         """
 
         row = self._row
-        if row is None or self._patch:
+        if row is None or not _ROW_TAKE_PATHS.issuperset(self._patch):
             return None
         return row, self.materialize()
 

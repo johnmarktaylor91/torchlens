@@ -29,6 +29,7 @@ from typing import Any
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir._op_row_seed import layout_keys, seed_op_values
 from .._ir._row_journal import _RowOpRecord
+from .._ir.op_record_scatter import _write_overlay_cells
 from .._ir.refs import journal_record
 from .._trace_core.op_store import _MISSING
 
@@ -64,7 +65,7 @@ def hand_off_capture_rows(
     Returns
     -------
     tuple[list[Any], dict[int, list[Any]]]
-        The projected entries (an unamended handle's built record, else
+        The projected entries (a taken handle's built record, else
         ``clone(entry)``) and ``id(record) -> capture row`` for each taken row.
         Each record is fresh (its mutable containers are copies of the row's),
         so the projection shares no mutable state with the row ingest writes.
@@ -74,6 +75,7 @@ def hand_off_capture_rows(
         return list(map(journal_record, source.amended_op_records())), {}
     projected: list[Any] = []
     capture_rows: dict[int, list[Any]] = {}
+    overlaid: list[tuple[list[Any], Any, Any]] = []
     for event in session.seal().events:
         taken = event.take_row() if type(event) is _RowOpRecord else None
         if taken is None:
@@ -82,6 +84,8 @@ def hand_off_capture_rows(
         row, record = taken
         capture_rows[id(record)] = row
         projected.append(record)
+        if event._patch:
+            overlaid.append((row, event._journal.fids, record))
     if capture_rows:
         # Ingest writes into the taken rows: build any other handle over one
         # first (a raw-lane or live-index entry that is not the sealed entry).
@@ -93,6 +97,10 @@ def hand_off_capture_rows(
                 and id(event._row) in taken_ids
             ):
                 event.materialize()
+        # Only now, with every other handle over the row built from the row as
+        # committed, fold each amended row's overlay into its cells.
+        for row, fids, record in overlaid:
+            _write_overlay_cells(row, fids, record)
     return projected, capture_rows
 
 

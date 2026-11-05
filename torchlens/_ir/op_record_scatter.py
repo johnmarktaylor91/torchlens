@@ -582,3 +582,49 @@ def _write_function_ref_cells(row: Any, f: Any, function: Any) -> None:
     row[f["func_non_tensor_args"]] = list(function.func_non_tensor_args)
     row[f["is_inplace"]] = function.is_inplace
     row[f["func_config"]] = dict(function.func_config)
+
+
+def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
+    """Rewrite the cells an output-promotion overlay feeds, from the amended ``record``.
+
+    A row-direct capture row is written before the capture-end amendments
+    (``core.output``, ``graph.is_output_parent``, ``policy.policy``) are
+    folded onto its handle; ingest takes the row after this rewrite instead
+    of scattering the whole record. ``policy.predicate_matched`` and
+    ``recording.capture_spec`` feed no store cell. Values match
+    :func:`scatter_record_to_cells` for the same record; ``row`` is a layout
+    row and ``f`` its field ids.
+    """
+
+    output = record.core.output
+    transformed = output.transformed_tensor
+    row[f["has_saved_activation"]] = output.has_saved_activation
+    row[f["output_device"]] = output.output_device
+    row[f["activation_transform"]] = output.activation_transform
+    row[f["detach_saved_activations"]] = output.detach_saved_activations
+    row[f["visualizer_path"]] = output.visualizer_path
+    row[f["in_multi_output"]] = output.in_multi_output
+    row[f["multi_output_index"]] = output.multi_output_index
+    row[f["container_path"]] = tuple(output.container_path)
+    row[f["container_spec"]] = output.container_spec
+    portable = _portable_blob_ref_type()
+    blob_ref = output.tensor.blob_ref
+    row[f["_pending_blob_id"]] = blob_ref.blob_id if isinstance(blob_ref, portable) else None
+    if transformed is None:
+        row[f["transformed_out_shape"]] = None
+        row[f["transformed_out_dtype"]] = None
+        row[f["transformed_activation_memory"]] = None
+        row[f["transformed_out"]] = None
+        row[f["_pending_transformed_out_blob_id"]] = None
+    else:
+        row[f["transformed_out_shape"]] = transformed.shape
+        row[f["transformed_out_dtype"]] = _resolve_dtype(transformed.dtype)
+        row[f["transformed_activation_memory"]] = transformed.memory
+        row[f["transformed_out"]] = transformed.payload
+        blob_ref = transformed.blob_ref
+        row[f["_pending_transformed_out_blob_id"]] = (
+            blob_ref.blob_id if isinstance(blob_ref, portable) else None
+        )
+    row[f["is_output_parent"]] = _facet(record, "graph").is_output_parent
+    policy = _facet(record, "policy").policy
+    row[f["save_grads"]] = None if policy is None else policy.save_grad
