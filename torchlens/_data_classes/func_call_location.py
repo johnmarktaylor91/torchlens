@@ -714,14 +714,14 @@ class FuncCallLocation:
         return len(self.code_context)
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M8 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M8 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -748,7 +748,7 @@ class FuncCallLocation:
         record_state_restore(self, state)
 
 
-# The M8 facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
+# The facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
 # keys) become row-cell descriptors; the instance dict keeps only the store
 # binding + user extras. FuncCallLocation records are per-trace (cached in
 # ``Trace._code_context_cache``), so cell storage is trace-scoped like every

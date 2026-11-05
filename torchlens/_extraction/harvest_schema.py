@@ -1,4 +1,4 @@
-"""Counterfactual-harvest schema (leverage B17 / D-13): fields land NOW.
+"""Counterfactual-harvest schema (leverage B17 /): fields land NOW.
 
 The manifest/resume schema for intervened dataset extraction lands at launch
 unconditionally — adding a resume-compared policy field to a RELEASED
@@ -41,10 +41,10 @@ _ENGINES = ("live_hook", "replay")
 
 #: Closed verification vocabulary. The cone oracle is the universal one:
 #: movers are a subset of the cone; equality only ever as a per-fixture
-#: declared expectation (leverage D-12).
+#: declared expectation (leverage).
 _VERIFICATIONS = ("none", "movers_subset_of_cone")
 
-#: Closed address-class vocabulary, coarsest first (memo D-13 gate order).
+#: Closed address-class vocabulary, coarsest first (memo gate order).
 ADDRESS_CLASSES = ("module", "type", "save_predicate", "label", "op", "selection")
 
 #: Address classes whose EXECUTION gates an owner has certified (receipt
@@ -133,7 +133,7 @@ class HarvestSpec:
         if not self.receipt_digest:
             raise InvalidArgumentError(
                 "an intervened harvest must carry its fire receipt digest — "
-                "fire evidence IS the receipt (leverage D-6), and a "
+                "fire evidence IS the receipt, and a "
                 "counterfactual record without one is not a record.",
                 code="harvest_schema_invalid",
                 remedy="record the intervention receipt digest",
@@ -158,7 +158,7 @@ def require_executable(spec: HarvestSpec) -> None:
             f"counterfactual harvest execution for address class "
             f"{spec.address_class!r} is GATED: its receipt lane, save path, "
             "and the real 64-image resnet18 workload must be certified green "
-            "by the execution owner first (leverage D-13). The schema and "
+            "by the execution owner first. The schema and "
             "manifest fields are live; execution per class flips in beside "
             "its measured gate evidence. Requests are never silently "
             "coarsened to another class.",

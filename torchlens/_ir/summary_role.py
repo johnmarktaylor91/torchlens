@@ -1,4 +1,4 @@
-"""The non-differentiable summary-transform role (explorer P1; lane F25).
+"""The non-differentiable summary-transform role (explorer P1).
 
 A SUMMARY transform is a user reducer that is contractually OUTSIDE the
 autograd graph: TorchLens applies it to a DETACHED VIEW of the saved tensor

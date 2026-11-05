@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 #: Role declaration (architecture memo build item 2, seeding the layer map
-#: the C01 lint consumes): this module is a FACADE-role cross-layer
+#: the lint consumes): this module is a FACADE-role cross-layer
 #: re-export aggregator -- thin and logic-free; its upward import edges are
 #: licensed by the facade role (Rule F), not by a layer claim of its own.
 __tl_role__ = "FACADE"

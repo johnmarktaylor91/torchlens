@@ -5,7 +5,7 @@ results (``HealthReport``, ``DeterminismReport``, ``NonfiniteReport``, ...) subc
 it, and the tabular helpers (``hot_path``, ``dead_neurons``, ``compare``,
 ``recompute_candidates``, ``grad_health``, ``compare_params``)
 return a tabular :class:`Report` whose ``.to_pandas()`` is the frame
-they used to return. The object HAS a table, it never IS one (the F10
+they used to return. The object HAS a table, it never IS one (the
 report protocol, ``torchlens.report._report_protocol.BoundedReport``).
 
 The common surface:

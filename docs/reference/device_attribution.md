@@ -1,8 +1,8 @@
 # Device attribution: what TorchLens can and cannot tell you about GPU time
 
-<!-- F09 (costreport D28): every python code block on this page executes in CI
+<!-- Every python code block on this page executes in CI
      (tests/test_report_family_docs.py). The honest limit up front: the
-     correlation-ID join SHIPS (F27) but its >= 95% real-GPU acceptance gate
+     correlation-ID join SHIPS but its >= 95% real-GPU acceptance gate
      has not run, so device-time and rate CLAIMS stay gated; the door refuses
      honestly on CPU-only hosts. -->
 

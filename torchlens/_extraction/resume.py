@@ -1,6 +1,6 @@
-"""Resume machinery + the D16 signature for extraction v2 (lane F18).
+"""Resume machinery + the signature for extraction v2.
 
-The KNOWN-FIELDS signature builder, the manifest loader/creator, the D8
+The KNOWN-FIELDS signature builder, the manifest loader/creator, the
 callable-identity resume rules, the field-by-field mismatch refusals, and
 the disk-run preparation (trusted-prefix resolution, v1 refusal,
 completed-compatible no-op resume). The store pipeline itself lives in
@@ -64,7 +64,7 @@ NATIVE_FORMATS = {"pt": "pt_shards_v1", "safetensors": "safetensors_shards_v1"}
 #: Maximum number of tensor elements sampled into the stimulus digest.
 _DIGEST_SAMPLE_ELEMENTS = 4096
 
-#: Closed D7 checksum-level vocabulary.
+#: Closed checksum-level vocabulary.
 _CHECKSUM_LEVELS = ("fast", "crypto", "none")
 
 
@@ -107,7 +107,7 @@ class DatasetExtractionResumeError(_ActionableErrorMixin, ConfigurationError, Ru
 
 
 def validate_checksums_level(checksums: Any) -> str:
-    """Validate the ``checksums=`` kwarg against the closed D7 vocabulary.
+    """Validate the ``checksums=`` kwarg against the closed vocabulary.
 
     Parameters
     ----------
@@ -199,7 +199,7 @@ def _stimuli_signature(stimuli: Any) -> dict[str, Any]:
 
 
 def _collate_signature(plan: _RunPlan) -> dict[str, Any]:
-    """Build the signature's collate-policy disclosure (D9 + D16).
+    """Build the signature's collate-policy disclosure.
 
     Policy facts only (stable before the run starts); the resolved
     tokenizer's identity is an observation recorded at plan freeze.
@@ -230,7 +230,7 @@ def _collate_signature(plan: _RunPlan) -> dict[str, Any]:
 
 
 def _callable_identity_signature(plan: _RunPlan) -> dict[str, Any] | None:
-    """Build the D8 callable-identity signature block.
+    """Build the callable-identity signature block.
 
     Classifies the raw callables the static chain cannot reconstruct: the
     user collate (when supplied) and every opaque transform step.
@@ -267,14 +267,14 @@ def _callable_identity_signature(plan: _RunPlan) -> dict[str, Any] | None:
 
 
 def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> dict[str, Any]:
-    """Build the v2 resume-compatibility signature (the D16 KNOWN-FIELDS).
+    """Build the v2 resume-compatibility signature (the KNOWN-FIELDS).
 
     Parameters
     ----------
     plan:
         Resolved run configuration.
     model_identity_record:
-        The D6 identity record.
+        The identity record.
 
     Returns
     -------
@@ -322,7 +322,7 @@ def build_signature(plan: _RunPlan, model_identity_record: dict[str, Any]) -> di
 def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
     """Return the signature's layer plan, naming the stored ids key.
 
-    A VALUE-level extension of the existing D16 ``layer_plan`` field (the
+    A VALUE-level extension of the existing ``layer_plan`` field (the
     tvscope B5 precedent): runs without ``store_input_ids=True`` keep the
     historical value byte-for-byte, and a run that stores ids differs in a
     field every resuming release already compares, so no release can
@@ -349,7 +349,7 @@ def _signature_layer_plan(plan: _RunPlan) -> dict[str, str]:
 def _signature_model_mode(plan: _RunPlan) -> Any:
     """Return the signature's model mode, naming the intervention.
 
-    A VALUE-level extension of the existing D16 ``model_mode`` field: a
+    A VALUE-level extension of the existing ``model_mode`` field: a
     clean run keeps the historical ``"eval_no_grad"`` byte-for-byte, so a
     pre-intervention artifact resumes under a clean run, while an intervened run
     records its intervention identity there, so every resuming release
@@ -380,10 +380,10 @@ MODEL_STRUCTURE_ALGORITHM_ID = "tl_model_structure_v1"
 def model_structure_record(model: nn.Module) -> dict[str, Any]:
     """Digest the model's ARCHITECTURE: module tree qualnames + ``extra_repr``.
 
-    The D6 identity record measures ``state_dict()`` only, so two models with
+    The identity record measures ``state_dict()`` only, so two models with
     identical weights and different hyperparameters (``padding_mode``,
     activation class, ``eps``, ``stride``) shared one identity and a resume
-    across them completed a MIXED artifact (audit 2.10a). This record folds
+    across them completed a MIXED artifact. This record folds
     every module's registered name, class qualname, and ``extra_repr()`` in
     ``named_modules()`` order; it is compared on resume beside the identity
     record and refuses under the same code.
@@ -591,7 +591,7 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
 
 
 def validate_stimulus_ids(ids: list[str] | None) -> None:
-    """Validate stimulus identifiers as non-empty strings (extract D2).
+    """Validate stimulus identifiers as non-empty strings.
 
     Duplicates are LEGAL (recorded as ``ids_unique`` provenance); empty or
     non-string identifiers are not.
@@ -624,7 +624,7 @@ def validate_stimulus_ids(ids: list[str] | None) -> None:
 def _apply_callable_identity_rules(
     recorded: Any, current: Any, *, continuation: bool, manifest_path: Path
 ) -> list[dict[str, Any]]:
-    """Apply the D8 resume rules to the callable-identity blocks.
+    """Apply the resume rules to the callable-identity blocks.
 
     A complete-class digest match resumes WITHOUT ceremony; a partial slot
     refuses unless ``pipeline_id=`` matches the recorded one (a resume-time
@@ -695,7 +695,7 @@ def _apply_callable_identity_rules(
                 f"pipeline_id={current_pid!r} was supplied at resume time but "
                 "the artifact's prefix recorded NO pipeline_id; a newly "
                 "invented ID cannot retroactively attest old callable "
-                "semantics (extract D8, strict continuity).",
+                "semantics (strict continuity).",
                 code="extraction_resume_pipeline_id_invalid",
                 remedy=(
                     "start a fresh artifact, or set pipeline_id= from the "
@@ -785,10 +785,10 @@ def _refuse_signature_mismatch(
     *,
     continuation: bool,
 ) -> list[dict[str, Any]]:
-    """Compare v2 signatures field by field and refuse typed on mismatch (D16).
+    """Compare v2 signatures field by field and refuse typed on mismatch.
 
     ``model_identity`` mismatches get their own code (the T-MODELSWAP
-    hazard); ``callable_identity`` is governed by the D8 rules (which may
+    hazard); ``callable_identity`` is governed by the rules (which may
     permit an ASSERTED continuation and return its audit rows).
 
     Parameters
@@ -811,7 +811,7 @@ def _refuse_signature_mismatch(
     ------
     DatasetExtractionResumeError
         ``extraction_resume_model_identity_mismatch`` /
-        ``extraction_resume_signature_mismatch`` and the D8 refusals.
+        ``extraction_resume_signature_mismatch`` and the refusals.
     """
 
     audits = _apply_callable_identity_rules(
@@ -863,7 +863,7 @@ def _refuse_signature_mismatch(
 def _rehydrate_ragged_state(
     manifest: Mapping[str, Any], audit: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
-    """Rebuild the D4 ragged gate's frozen state from the manifest (2.10b).
+    """Rebuild the ragged gate's frozen state from the manifest (2.10b).
 
     A continuation must compare every new batch against the ARTIFACT's
     frozen layouts and post-pool shapes, never against its own first batch:
@@ -1009,7 +1009,7 @@ def _prepare_disk_run(
         prep_state["resume_audit"].extend(audits)
         if is_complete:
             # A completed compatible resume is a true no-op: the model is
-            # neither moved to a device nor mode-flipped (extract memo D3).
+            # neither moved to a device nor mode-flipped.
             return (
                 plan,
                 ArtifactWriter(container_path, existing),
@@ -1053,7 +1053,7 @@ def _prepare_disk_run(
         repair_ledger_tail(container_path)
         existing["status"] = "in_progress"
         # No manifest rewrite for a continuation: creation, batch-zero plan
-        # freeze, and terminal status are the only three writes (D1).
+        # freeze, and terminal status are the only three writes.
         return plan, ArtifactWriter(container_path, existing), rows, None, prep_state
 
     if resume and (
@@ -1101,7 +1101,7 @@ def _start_fresh_run(plan: _RunPlan, container_path: Path) -> tuple[_RunPlan, Ar
         with contextlib.suppress(OSError):
             (container_path / stale).unlink()
     # Higher-index shards of a longer prior run would otherwise outlive the
-    # new ledger as unledgered debris (audit 4.7): readers are ledger-driven,
+    # new ledger as unledgered debris: readers are ledger-driven,
     # so nothing read them, but the directory lied about its contents.
     for stale_shard in _stale_shard_files(container_path):
         with contextlib.suppress(OSError):
@@ -1116,7 +1116,7 @@ def _start_fresh_run(plan: _RunPlan, container_path: Path) -> tuple[_RunPlan, Ar
 
 
 def resolve_model_identity(model: nn.Module, model_identity: Any) -> dict[str, Any]:
-    """Resolve the ``model_identity=`` kwarg into the D6 identity record.
+    """Resolve the ``model_identity=`` kwarg into the identity record.
 
     Parameters
     ----------

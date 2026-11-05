@@ -52,7 +52,7 @@ _REGISTRY: dict[type, dict[str, FieldPolicy]] = {}
 #: Registered gated ANNOTATIONS keys: sub-keys of the (already-persisting)
 #: ``Trace.annotations`` mapping that constitute NEW persistence write paths
 #: under the frozen tlspec version. They are scrubbed OUT of every persisted
-#: state unless the test-only switch is active (the S7 episode-ledger home
+#: state unless the test-only switch is active (the episode-ledger home
 #: rides this row). Value = a short owner/reason string for the inventory.
 _ANNOTATIONS_KEY_REGISTRY: dict[str, str] = {}
 
@@ -292,10 +292,9 @@ def validate_prerelease_state(state: dict[str, Any], *, cls_name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Live sprint-gated registrations (S3 registrar inventory rows). Each row is
+# Live gated registrations (registrar inventory rows). Each row is
 # retired at the coordinated tlspec version bump that activates its family.
 # The tlspec v8 bump (2026-08-17) retired every feature-work row; the
-# tlspec v9 bump (2026-08-27, lane C07) retired the C01 "sidecar" annotations
-# row. The registry is empty again until the next sprint gates a new family
-# here.
+# tlspec v9 bump retired the "sidecar" annotations
+# row. The registry is empty until a new family is gated here.
 # ---------------------------------------------------------------------------

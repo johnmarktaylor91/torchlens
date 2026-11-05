@@ -1,8 +1,8 @@
 """``MergedTrace``: a presenter over lazy rank handles + the join table.
 
 Composition, never inheritance (design-merge-ranks-c v5, 2.1): a merged trace
-is NOT a ``Trace`` and NOT a ``Bundle``. Rank cores stay the single truth
-(P1); the presenter only references them. Structural access is authority --
+is NOT a ``Trace`` and NOT a ``Bundle``. Rank cores stay the single truth;
+the presenter only references them. Structural access is authority --
 ``merged.ranks[r][label]`` and ``merged.at(...)``; the ``r{rank}/label``
 string is validated sugar. Refused surfaces raise typed
 (:class:`MergedSurfaceUnsupportedError`); merged replay does not exist.
@@ -44,7 +44,7 @@ def _rank_raw_to_final_op_labels(rank: int, trace: Any) -> Mapping[str, str]:
     for it through a string ``getattr(trace, "_raw_to_final_op_labels", {})``
     default made a renamed or absent field degrade SILENTLY into raw-label
     resolution -- fail-OPEN, contradicting merged/'s fail-closed ethos, and
-    invisible to SLF001 (b5 R45-2 / SF-41). The read is now a direct private
+    invisible to SLF001. The read is now a direct private
     access: a rename breaks loudly here, and absence refuses typed.
 
     Parameters
@@ -164,7 +164,7 @@ class CollectiveJoin:
         return self.record.per_rank[int(rank)].op_labels_raw
 
     def __repr__(self) -> str:
-        """Semantic join line (F10; lovely bug 19 + ASCII rule).
+        """Semantic join line (lovely bug 19 + ASCII rule).
 
         The membership digest is a correlation-key INTERNAL: the repr names
         the join semantically (kind, ordinal, channel, seq delta, presence,
@@ -207,7 +207,7 @@ class MergeReport:
     degradations: tuple[str, ...] = ()
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): verdicts lead; ranks and findings are counted."""
+        """Bounded identity card: verdicts lead; ranks and findings are counted."""
 
         return (
             f"MergeReport({len(self.ranks)} rank(s), alignment={self.alignment.value!r}, "
@@ -276,7 +276,7 @@ def _report_from(derivation: MergeDerivation, degradations: tuple[str, ...] = ()
     effective_value_status = derivation.stored_value_status
     if degradations and effective_value_status is MergeValueStatus.ATTESTED_COMPLETE:
         # An unparseable member can never support a COMPLETE attestation claim
-        # (R18-5 presenter half; same demote-only cap as the alignment above).
+        # (same demote-only cap as the alignment above).
         effective_value_status = MergeValueStatus.ATTESTED_PARTIAL
     return MergeReport(
         ranks=derivation.ranks,
@@ -296,7 +296,7 @@ class MergedTrace:
     Never construct directly: use :func:`merge_ranks` (live/loaded inputs)
     or :func:`torchlens.load` (a saved ``merged-directory`` artifact).
 
-    Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
+    Lifetime contract: the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins
     both rank traces (and their retained activations) until the presenter is
     dropped or :meth:`cleanup` is called. Call :meth:`cleanup` when finished
@@ -351,8 +351,7 @@ class MergedTrace:
     def cleanup(self) -> None:
         """Drop every rank-trace handle so the member traces can be reclaimed.
 
-        The counterpart of ``Trace.cleanup()`` for the presenter (R37 /
-        b2:B20, contract section 8): the derivation record, verdict
+        The counterpart of ``Trace.cleanup()`` for the presenter (contract section 8): the derivation record, verdict
         properties, findings, and ``degradations`` stay readable, but
         every surface that resolves a member trace (``ranks``,
         ``__getitem__``, ``super_op()``, ``join_ops()``, ``save()``) refuses
@@ -407,7 +406,7 @@ class MergedTrace:
         EFFECTIVE like ``alignment``: a rank core that no longer parses on
         this runtime cannot support a COMPLETE attestation claim, so load
         degradations cap ``attested_complete`` at ``attested_partial``
-        (R18-5 presenter half; demote-only, the stored value stays visible
+        (demote-only; the stored value stays visible
         through ``stored_value_status``).
         """
 
@@ -520,7 +519,7 @@ class MergedTrace:
             try:
                 hits[rank_id] = self.ranks[rank_id][item]
             except (KeyError, ValueError):
-                # Narrowed like super_op (b5 R45-2): a lookup miss is a miss,
+                # Narrowed like super_op: a lookup miss is a miss,
                 # but any OTHER failure is a defect in the rank core and must
                 # surface -- a broad catch read a corrupt core as a miss and
                 # presented another rank's hit as an unambiguous single-rank
@@ -573,7 +572,7 @@ class MergedTrace:
             except (KeyError, ValueError):
                 # Documented SPMD contract: a rank where the label does not
                 # resolve (miss) or resolves ambiguously is simply absent from
-                # the fan. Narrow on purpose (b5 R45-2) -- any OTHER failure is
+                # the fan. Narrow on purpose -- any OTHER failure is
                 # a defect in the rank core and must surface, not shrink the fan.
                 continue
         if not fan:
@@ -590,7 +589,7 @@ class MergedTrace:
         boundary (barrier, object collectives) records no op-label
         back-references and yields an empty tuple for that rank.
 
-        Fail-closed (b5 R45-2): a rank core without the declared seam, and a
+        Fail-closed: a rank core without the declared seam, and a
         recorded back-reference that the core cannot resolve to a node, both
         refuse typed. Silently dropping an unresolvable boundary op would
         present a SHORTER fan than the evidence recorded -- a presence claim
@@ -791,7 +790,7 @@ class MergedTrace:
 
         The contract declares merged runnable export, receptive/projective
         fields, and intervention chaining "refused typed", but these surfaces
-        previously raised bare AttributeError (R18-9 presenter half).
+        previously raised bare AttributeError.
         """
 
         raise MergedSurfaceUnsupportedError(
@@ -841,7 +840,7 @@ def merge_ranks(
     *,
     expected_ranks: Iterable[int] | None = None,
 ) -> MergedTrace:
-    """Merge N rank-local captures at their collective boundaries (rung C1).
+    """Merge N rank-local captures at their collective boundaries.
 
     Parameters
     ----------
@@ -862,8 +861,8 @@ def merge_ranks(
     Raises
     ------
     MergeInputError
-        On invalid inputs or out-of-C1-scope boundaries (p2p/pipeline: C3;
-        DTensor topologies: C2).
+        On invalid inputs or out-of-scope boundaries (p2p/pipeline:;
+        DTensor topologies:).
     MergeConflictError
         When the presented cores structurally contradict each other
         (pre-join lineage-audit conflicts, relation violations, order

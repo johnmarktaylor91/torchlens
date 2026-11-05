@@ -1,6 +1,6 @@
-"""The layer map: one declared stratum per package/module (C01 item 1).
+"""The layer map: one declared stratum per package/module.
 
-The ten-layer model (architecture memo 3.1). A module's layer resolves
+The ten-layer model. A module's layer resolves
 module attribute first (``__tl_layer__`` in the module), then the most
 specific row here. ``FACADE`` is a ROLE, not a layer: thin, lazy,
 logic-free modules whose deferred upward imports are the one legal upward
@@ -8,8 +8,7 @@ door (Rule F). The assurance plane (tests/) never appears here.
 
 This table is CONTRACT DATA (org rule 11): the layer lint
 (tests/test_arch_spine_layer_lint.py) derives the eager-upward inversion
-baseline from it, and lane F35's placement-table coverage sweep audits it
-against every memo build list. Spellings are DOCUMENTED-UNSTABLE pending
+baseline from it, and a placement-table coverage sweep audits it. Spellings are DOCUMENTED-UNSTABLE pending
 the naming sprint; the SEPARATIONS are the decision.
 """
 
@@ -47,7 +46,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "io": "FACADE",
     "_user_funcs": "FACADE",
     "experimental": "FACADE",
-    # quickstart is a FACADE-role package (lane F17): its verbs sit over the
+    # quickstart is a FACADE-role package: its verbs sit over the
     # capture engine, the inference search, and the renderer, with upward
     # imports deferred per Rule F; its interior modules declare their own
     # __tl_layer__ (plan/grammar L2, resolver/gate L3).
@@ -85,7 +84,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io._format3_runnable_bind": "L3",
     "_io.accessor_rebuild": "L3",
     "_io.forgery_validation": "L3",
-    # W051-IO: the AUD-CODE 3.0 load validators split out of forgery_validation
+    # the AUD-CODE 3.0 load validators split out of forgery_validation
     # (R43 size cap) sit at ITS tier; the module imports its shared refusal/
     # census helpers back from it eagerly.
     "_io._load_validators": "L3",
@@ -177,14 +176,13 @@ PACKAGE_LAYERS: dict[str, str] = {
 #: Packages licensed to touch torch privates: direct ``torch._*`` use or
 #: consumption of the sanctioned torch-compat chokepoint
 #: (``torchlens/_utils/_torch_compat.py``). The license is a PER-MODULE
-#: contract orthogonal to layer (memo 3.2); this count is printed by the
+#: contract orthogonal to layer; this count is printed by the
 #: lint and may only SHRINK -- a new package touching torch privates
 #: without a row here is RED. Target: burn down toward engine- and
-#: persistence-adjacent packages only (measured census 2026-08-27, C01
-#: item 12).
+#: persistence-adjacent packages only (measured census 2026-08-27).
 TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
     {
-        # F04 one-backward reads: attribution/onebackward gates on the
+        # one-backward reads: attribution/onebackward gates on the
         # HAS_GRADIENT_EDGE / HAS_NODE_PREHOOK capability flags, which live
         # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the
         # package holds no direct torch._ touches of its own.
@@ -194,7 +192,7 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         # chokepoint (_utils/_torch_compat); the package holds no direct
         # torch._ touches of its own.
         "receptive_field",
-        # F27 Kineto join + memory-parity oracle: observability consumes the
+        # Kineto join + memory-parity oracle: observability consumes the
         # HAS_KINETO_INMEMORY_EVENTS / HAS_KINETO_EVENT_SCOPE /
         # HAS_MEMORY_PROFILE capability flags and their accessors, all living
         # at the ONE sanctioned probe chokepoint (_utils/_torch_compat); the

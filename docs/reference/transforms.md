@@ -31,7 +31,7 @@ paths = tl.extract_dataset(
 ## Six things worth knowing before a harvest
 
 Every number below names the corpus that produced it, and yours will differ
-(contract clause T-C12). Two corpora appear: the design panel's **128 varied
+(per the transform contract). Two corpora appear: the design panel's **128 varied
 COCO test2017 images** and this repo's **vendored fixture** (128 rows
 augmented from 32 CC0/public-domain photographs,
 `tests/transforms_corpus/`), both measured on real resnet50 IMAGENET1K_V2
@@ -105,7 +105,7 @@ Bernoulli matrix of the JL literature — the fixed per-column count has
 variance 0 where the i.i.d. hypothesis requires 44-316 — so it records
 `distance_claim="empirical_only"` at every density: the oracle suite is its
 entire warrant, and it is geometrically indistinguishable from the i.i.d.
-construction on real activations (the O1e gate). `iid_bernoulli` IS the
+construction on real activations. `iid_bernoulli` IS the
 i.i.d. matrix (the O1f distribution-identity gate proves it) and ALSO
 records `empirical_only` until the literature task verifies Achlioptas 2003
 against the paper itself; its O(D*k) generation cost is disclosed at plan
@@ -121,7 +121,7 @@ machine-gated suite (`tests/test_transforms_lib_gpu_gate.py`, the C-XFORM
 cluster row) must run green first. On CPU, the `dense` / `sparse_csr` /
 `dense_chunked` multiply paths all run one row-local fold (elementwise
 multiplies and adds in canonical slot order), so they are bit-identical and a
-projected row never depends on which rows share its batch (T-C10); byte
+projected row never depends on which rows share its batch; byte
 reduction on the
 measured chains was 92-184x — while taking ZERO off the retained forward
 peak (that win belongs to emission-time streaming; every built-in declares

@@ -1,6 +1,6 @@
 """The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers.
 
-The persistence four-way ruling (architecture memo 3.2): the format contract
+The persistence four-way ruling: the format contract
 and its record-adjacent helpers -- ``TLSPEC_VERSION``, ``FieldPolicy``,
 ``BlobRef``, payload load hints, version read, fill-state defaults, container
 coercion -- live at L1 beside ``data_classes/``. These names define the
@@ -31,14 +31,14 @@ __tl_layer__ = "L1"
 
 # v6 adds persisted ModuleCall forward-pre-hook provenance value objects.
 # v7 adds the persisted capture outcome (`_capture_outcome`, string-only payload).
-# v8 is the coordinated feature-sprint activation: every S3 pre-release-gated
+# v8 is the coordinated feature-sprint activation: every pre-release-gated
 # family flips to its persisting policy together (Op.site_key, the L6 edge/
 # audit families, L1 grouping + grouping_policy, L8 distributed_scope, L9
 # grad_fn_timing_provenance + checkpoint_invocation_witness, the L7a
 # structure_only marker, the L3 primitive-op profile + kernel telemetry, the
-# S6 Bundle member_relations key, and the S7 episode annotations ledger),
+# Bundle member_relations key, and the episode annotations ledger),
 # with their load-validation rows live on real artifacts.
-# v9 is the completeness-work coordinated schema write (C07): the audit
+# v9 is the completeness-work coordinated schema write: the audit
 # row grammar admits the shipped ACT per-site "source" disclosure, PARAM
 # rows/recipes, and the EVENT (intervention_event_v2) row family with its
 # optional hash-chain extension; the "sidecar" annotations namespace flips
@@ -48,9 +48,9 @@ __tl_layer__ = "L1"
 # injection provenance (Op.injection_provenance), source snapshots
 # (Trace.source.snapshots + FuncCallLocation.source_file_digest), and the
 # structure-only evidence envelope (Trace.graph.structure_evidence) are declared
-# with fail-closed load validation so their Phase-3 writers (F01/F30/F33)
+# with fail-closed load validation so their Phase-3 writers
 # need no further version bump.
-# The C07X amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
+# The amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
 # every slot optional/entry-dark): bundle relation grammar v2 (required/
 # optional split, successor_of evidence envelope + carry_mode/state_source,
 # the graded-claim vocabulary, the 1 MiB per-row evidence budget) with the
@@ -62,8 +62,8 @@ __tl_layer__ = "L1"
 # perturbed/intervention_digest/fire_count coupling slots, optional
 # step_join); the Trace.provenance.root_entry_point identity fact (written
 # unconditionally) with the Op.tl_authored_root marker and Op.episode_step
-# stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
-# F-EPISODE/F-WITNESS writers need no further version bump.
+# stamp -- all with fail-closed load validation so those writers need no further
+# version bump.
 # v10 is the batch-2 coordinated schema write: ONE bump for every new saved
 # field of the window (each addition is admitted by the v10 field registry
 # before its writer lands, so no further version bump follows), the corrected
@@ -218,7 +218,7 @@ def below_floor_error(
         this origin (the 2.16 ModelLog format).
     code:
         Always ``"artifact_version_below_floor"``; raise sites pass it
-        explicitly so the S-17 census sees the code where the raise happens,
+        explicitly so the census sees the code where the raise happens,
         not buried in this factory (registry-kernel precedent).
 
     Returns
@@ -451,7 +451,7 @@ def above_ceiling_error(
         Artifact path, when the caller has one.
     code:
         Always ``"artifact_version_above_runtime"``; raise sites pass it
-        explicitly so the S-17 census sees the code where the raise happens,
+        explicitly so the census sees the code where the raise happens,
         not buried in this factory (registry-kernel precedent).
 
     Returns

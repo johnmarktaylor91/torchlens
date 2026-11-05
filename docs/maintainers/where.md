@@ -250,7 +250,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_trace_capture_error` | Build the exception a capture door raises when the forward fails. | 225 |
 | `_weightsfree_admission` | Scoped meta admission for weights-free capture (weightsfree ). | 497 |
 | `arg_positions` | O(1) tensor/parameter extraction from torch function arguments via lookup table. | 2638 |
-| `compute_record` | The two-term compute record (A5/A6): true MACs, never flops // 2. | 525 |
+| `compute_record` | The two-term compute record: true MACs, never flops // 2. | 525 |
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 762 |
@@ -962,7 +962,7 @@ Computational graph visualization via Graphviz. (89 modules, 46756 lines)
 | `_cairosvg` | Lazy capability probe for ''cairosvg'', the SVG rasterizer behind PDF and PNG composition. | 70 |
 | `_collapse_disclosures` | Human-facing collapse disclosure warnings (collapse ). | 160 |
 | `_collapse_frontier` | Frontier records and merge algebra for the collapse optimizer. | 216 |
-| `_collapse_runs` | Run-fold legality over indexed flow adjacency, de-quadratic (B2). | 349 |
+| `_collapse_runs` | Run-fold legality over indexed flow adjacency, de-quadratic. | 349 |
 | `_collapse_signatures` | Structural fingerprints for collapse fold honesty, with the B1 memo cache. | 369 |
 | `_color_sources` | Resolve the non-string ''color_by='' sources of ''Trace.draw''. | 96 |
 | `_condensed_flow` | Child condensed-flow-graph construction for smart module collapse. | 814 |

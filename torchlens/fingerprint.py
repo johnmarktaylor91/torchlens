@@ -113,7 +113,7 @@ def _update_content_digest(digest: Any, value: Any) -> None:
         # for scalar inputs), hashes through the buffer protocol (no
         # whole-payload ``bytes`` copy; digest bytes identical to the prior
         # ``.tobytes()`` spelling), and resolves lazy conj/neg bits first
-        # (r8 R35: the hand-rolled view here crashed on ``x.conj()`` inputs).
+        # (the hand-rolled view here crashed on ``x.conj()`` inputs).
         byte_view = digest_byte_view(tensor)
         digest.update(byte_view.nbytes.to_bytes(8, "big"))
         digest.update(byte_view)

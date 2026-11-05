@@ -9,10 +9,9 @@ expert ``lazy=True, materialize_nested=False`` loads must call
 ``torchlens.io.materialize_nested()`` before re-save, and lazy refs open,
 verify, and close blob files per materialization instead of sharing handles.
 
-Split per the persistence four-way ruling (architecture memo 3.2 / s9 item
-3): the IO error vocabulary lives in :mod:`torchlens._io.format_errors`
+Split per the persistence four-way ruling: the IO error vocabulary lives in :mod:`torchlens._io.format_errors`
 (logical L0), the format CONTRACT and its record-adjacent helpers in
-:mod:`torchlens._io.format_contract` (L1, beside ``data_classes/``), and this
+:mod:`torchlens._io.format_contract` (beside ``data_classes/``), and this
 ``__init__`` is the declared re-export facade -- every historical spelling
 resolves here unchanged.
 """

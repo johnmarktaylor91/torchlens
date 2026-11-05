@@ -1,4 +1,4 @@
-"""Load-time rehydration of a coreless trace into the columnar store (F9).
+"""Load-time rehydration of a coreless trace into the columnar store.
 
 ``_trace_core`` is ``FieldPolicy.DROP``, so every unpickled Trace (plain
 pickle AND ``.tlspec`` bundle loads, which route through the same
@@ -54,7 +54,7 @@ from .._trace_core.record_rows import CORE_KEY, BackwardEpoch
 if TYPE_CHECKING:
     from .trace import Trace
 
-#: Record kind table names keyed by facade class name (M8 vocabulary).
+#: Record kind table names keyed by facade class name.
 _KIND_BY_CLASS_NAME = {
     "Param": "param",
     "Buffer": "buffer",
@@ -196,7 +196,7 @@ def rehydrate_trace_core(trace: Trace) -> bool:
         # Without this the owner count stays 0, so forking the loaded trace
         # (which DOES adopt: count -> 1) and then dropping that fork drops the
         # count back to 0 and evicts the SEALED base's tensor payloads --
-        # silently NULLing the live loaded parent's saved activations (R37-1).
+        # silently NULLing the live loaded parent's saved activations.
         store.adopt_payload_owner(core)
         for kind_store in core.kind_rows.values():
             kind_store.freeze()

@@ -1,4 +1,4 @@
-"""Host peak-memory instrumentation helpers (F20, brainpipe memo D-7).
+"""Host peak-memory instrumentation helpers (brainpipe).
 
 Split out of ``_capture/trace.py`` under the R43 file-size ratchet: the
 process RSS readers, the per-capture resident high-water scoping, and the
@@ -175,7 +175,7 @@ def _approximate_rss_bytes() -> int | None:
 def read_peak_pair(trace: Any) -> dict[str, Any] | None:
     """Return a trace's (live, resident) forward peak pair, when measured.
 
-    F20 brainpipe D-7 (spelling DOCUMENTED-UNSTABLE): live allocation and
+    Spelling DOCUMENTED-UNSTABLE: live allocation and
     resident high-water are different physical quantities that can differ
     by more than an order of magnitude on shipped modes, so the measured
     peak is a PAIR with its backend named, never one number. Keys:

@@ -37,7 +37,7 @@ __tl_layer__ = "L6"
 
 
 class SiteInventoryError(_ActionableErrorMixin, ConfigurationError, ValueError):
-    """Typed selector-resolution refusal from the site inventory (B6).
+    """Typed selector-resolution refusal from the site inventory.
 
     Codes: ``site_selector_unknown`` (nothing matched; remedy names the
     nearest working spellings) and ``site_selector_ambiguous`` (several
@@ -346,7 +346,7 @@ def _op_selector(trace: Any, layer: Any, address_counts: Counter[str]) -> str:
 
 
 def sites_of_trace(trace: Any) -> SiteInventory:
-    """Build the forward-rung inventory from an existing trace (B6).
+    """Build the forward-rung inventory from an existing trace.
 
     Parameters
     ----------

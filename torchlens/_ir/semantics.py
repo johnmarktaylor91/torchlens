@@ -39,7 +39,7 @@ class BackendSemantics:
 class CapturePolicy:
     """Resolved per-output capture policy.
 
-    R47-2: only the three CONSUMED facts remain. The six former fields
+    only the three CONSUMED facts remain. The six former fields
     (must_keep_topology, requires_isolation, save_args, save_code, save_rng,
     stream) were declaration-only -- populated at every constructor site,
     four of them computed per-op on the torch hot path, then never read

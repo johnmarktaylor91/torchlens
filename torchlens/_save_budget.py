@@ -441,7 +441,7 @@ class SaveBudget:
             Ledger with its limit resolved on first use.
         """
 
-        # Canonicalize the ledger identity (R36-7b): ``torch.device("cuda")``
+        # Canonicalize the ledger identity: ``torch.device("cuda")``
         # and ``torch.device("cuda:0")`` are the SAME physical device, but
         # ``str()`` keyed them into two ledgers, each enforcing only half the
         # footprint against a full-device limit.
@@ -520,7 +520,7 @@ class SaveBudget:
         try:
             self._raise_if_over_budget(label, device, ledger, phase=_SITE_PHASES[site][0])
         except BaseException:
-            # Refusal rollback (r8 R34, opus A): the refused reservation used
+            # Refusal rollback: the refused reservation used
             # to stay CHARGED -- never-allocated bytes inflated every later
             # figure (a second refusal reported phantom activations) and,
             # under return_partial/attach_partial recovery, a fresh save that
@@ -620,7 +620,7 @@ class SaveBudget:
                 continue
             ledger_key = str(payload.device)
             ledger = self._ledger_for(payload.device)
-            # Component-granular identities (r8 R34, sol 1): the historical
+            # Component-granular identities (sol 1): the historical
             # ONE aggregate identity per sparse wrapper made two retained
             # sparse tensors sharing index storage charge the shared indices
             # TWICE ((indices+values_a) + (indices+values_b) instead of the
@@ -854,7 +854,7 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
         (COO and compressed layouts) have no top-level storage and yield one
         entry PER COMPONENT (index tensor(s) AND values), so partially
         overlapping sparse tensors dedup on the shared component instead of
-        double-charging it under one aggregate identity (r8 R34, sol 1).
+        double-charging it under one aggregate identity (sol 1).
         The historical fallback billed unreadable payloads at
         ``numel() * element_size()`` — LOGICAL dense bytes — under an
         id-based identity. A meta-device tensor has no physical storage at
@@ -932,7 +932,7 @@ def _retained_storage_identity(tensor: torch.Tensor) -> tuple[tuple[Any, ...], i
 def retained_activation_bytes(ops: Any) -> int:
     """Return alias-aware physical bytes of the activations actually retained.
 
-    The ONE byte model's aggregate read (F20, brainpipe memo D-17): a saved
+    The ONE byte model's aggregate read (brainpipe): a saved
     op contributes the physical storage of what capture actually kept -- the
     raw payload, the transformed payload, or both -- with each physical
     storage counted ONCE across the whole trace (dedup-shared and aliased

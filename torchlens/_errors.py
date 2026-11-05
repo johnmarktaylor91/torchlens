@@ -15,7 +15,7 @@ from .errors._base import (
 _ProjectionT = TypeVar("_ProjectionT")
 
 #: Layer declaration (architecture memo build item 2, seeding the layer map
-#: the C01 lint consumes): the exception vocabulary is homed at L0 BASIS --
+#: the lint consumes): the exception vocabulary is homed at L0 BASIS --
 #: frozen vocabularies and contracts that execute no torchlens behavior --
 #: so importing it from any layer is a downward edge, never an inversion.
 __tl_layer__ = "L0"
@@ -202,7 +202,7 @@ class StructureOnlyOptionConflictError(ArgumentConflictError):
 
     One code (``structure_only_option_conflict``) covers every arm; the
     offending option name rides ``fields["arguments"]``. DOCUMENTED-UNSTABLE:
-    class name and code are provisional pending naming-session/S2
+    class name and code are provisional pending naming
     ratification (no deprecation shim owed on rename).
     """
 
@@ -210,27 +210,26 @@ class StructureOnlyOptionConflictError(ArgumentConflictError):
 class SubstrateMismatchError(CaptureError, RuntimeError):
     """Raised when a weights-free capture mixes meta and real substrates.
 
-    Admission (weightsfree memo D2/D11) requires substrate UNIFORMITY: every
+    Admission requires substrate UNIFORMITY: every
     input tensor leaf meta AND every registered parameter/buffer meta. Mixed
     cells refuse typed in BOTH directions at entry, and a real tensor
     discovered mid-forward on an admitted meta capture (a stale pre-wrap
     factory reference, a `device="cpu"` literal) refuses through the same
-    family at the user's source line (W1-CLS). ``fields["code"]`` is always
+    family at the user's source line. ``fields["code"]`` is always
     ``structure_only_substrate_mismatch``; ``fields["meta_side"]`` /
-    ``fields["real_side"]`` name which side is which. DOCUMENTED-UNSTABLE,
-    S2-gated.
+    ``fields["real_side"]`` name which side is which. DOCUMENTED-UNSTABLE.
     """
 
 
 class WeightsfreeIntegrityError(CaptureError, RuntimeError):
     """Raised when weights-free admission or settlement cannot self-certify.
 
-    Two codes (weightsfree memo D20/D22, both S2-gated,
+    Two codes (both
     DOCUMENTED-UNSTABLE): ``structure_only_meta_identity_unavailable`` (no
     trustworthy storage-identity primitive on this torch build — admission
     refuses rather than guessing identity where ``data_ptr()`` reads 0) and
     ``structure_only_settlement_incoherent`` (an admitted meta capture tried
-    to settle with incoherent structural accounting — the D22 net; a
+    to settle with incoherent structural accounting — the net; a
     TorchLens bug, never a user error).
     """
 
@@ -528,8 +527,7 @@ class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeEr
 class MissingDependencyError(_ActionableErrorMixin, ConfigurationError, AttributeError):
     """Raised when a real facade name's declared foreign dependency is absent.
 
-    The facade step-4 per-name dependency gate (architecture memo 5.4, neuro
-    memo D15). CPython refuses ``class X(ImportError, AttributeError)`` with
+    The facade step-4 per-name dependency gate. CPython refuses ``class X(ImportError, AttributeError)`` with
     an instance-layout conflict, so the two memos' requirements cannot both
     hold at the class level; the load-bearing property is the one that
     decided the design (``hasattr`` answers ``False`` and never raises), so

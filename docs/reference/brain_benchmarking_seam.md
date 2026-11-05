@@ -5,7 +5,7 @@ TorchLens draws one explicit identity boundary for brain-benchmarking work
 Net2Brain's nine evaluation methods, TorchLens supplies every geometric
 prerequisite -- features, RDMs, alignment, interchange -- and refuses every
 inferential step with a typed error naming the tool that owns it. This page
-is the ledger of that boundary (brainpipe memo D-24). Every TorchLens
+is the ledger of that boundary (brainpipe). Every TorchLens
 spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
 The working surfaces behind the "we supply" column:

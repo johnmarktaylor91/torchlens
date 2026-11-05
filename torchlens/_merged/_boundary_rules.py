@@ -79,10 +79,10 @@ KNOWN_KINDS = frozenset(
         "scatter_object_list",
     }
 )
-"""The closed C0 boundary-kind vocabulary; an unknown kind refuses typed."""
+"""The closed boundary-kind vocabulary; an unknown kind refuses typed."""
 
 P2P_KINDS = frozenset({"send", "recv"})
-"""Point-to-point kinds: out of C1 scope (pipeline pairing is rung C3)."""
+"""Point-to-point kinds: out of scope (pipeline pairing is unsupported)."""
 
 # The provenance vocabularies are defined once in ``_rules``; these are the
 # reader-side names ``_evidence`` re-exports for the writer-lockstep tests.
@@ -103,10 +103,10 @@ def _refuse(
 ) -> MergeInputError:
     """Build the typed parse refusal for malformed rank evidence.
 
-    Carries a ``fields["remedy"]`` like every other merged refusal (R65-12:
+    Carries a ``fields["remedy"]`` like every other merged refusal (
     this shared constructor was the one remedy-less family in the package).
     ``code`` defaults to the schema refusal; a raise site may spell it
-    explicitly so the S-17 census reads the site as coded.
+    explicitly so the census reads the site as coded.
     """
 
     return MergeInputError(
@@ -201,7 +201,7 @@ def check_scalar_records(entry: dict[str, Any], kind: Any, where: str, source: s
     # raw TypeError instead of the promised typed refusal (the load-side
     # descriptor check in _artifact already enforced this; parse now matches).
     # The KEY itself is required: the recorder always writes it (null when the
-    # probe is absent), so a deleted key is tamper, not honest absence (R18-3).
+    # probe is absent), so a deleted key is tamper, not honest absence.
     if "c10d_group_seq" not in entry:
         raise _refuse(f"{where} lacks its c10d_group_seq record", source=source)
     c10d_group_seq = entry.get("c10d_group_seq")
@@ -513,7 +513,7 @@ def check_op_label_backrefs(entry: dict[str, Any], kind: Any, where: str, source
         raise _refuse(f"{where} lacks op_labels_raw back-references", source=source)
     if any(not isinstance(label, str) for label in op_labels_raw):
         raise _refuse(f"{where} op_labels_raw contains a non-string label", source=source)
-    # Back-reference cardinality vs kind (R18-1 i): the recorder emits an op
+    # Back-reference cardinality vs kind: the recorder emits an op
     # node (>= 1 labeled output tensor) for EVERY op-bearing kind and none for
     # tensorless kinds, and each label names a DISTINCT logged output tensor.
     # An empty list on an op-bearing boundary, labels on a journal-only

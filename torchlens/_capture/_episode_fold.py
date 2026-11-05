@@ -1,9 +1,9 @@
-"""The S6-floor episode fold: member outcomes -> a DERIVED episode status.
+"""The episode fold: member outcomes -> a DERIVED episode status.
 
 `derive_episode_status` folds per-step Bundle member outcomes (plus optional
 ledger geometry) into an `EpisodeFoldResult` -- a DERIVATION, never a settled
 `CaptureOutcome` (the R06 discipline; Bundle has no outcome authority). Split
-from `_episode_ledger.py` at the C07X amendment (R43 size discipline); the
+from `_episode_ledger.py` at the amendment (R43 size discipline); the
 ledger module re-exports both names, and `Bundle.episode_status` is
 the public consumer.
 """
@@ -43,7 +43,7 @@ class EpisodeFoldResult:
         The deciding FAILED member's phase, disclosed verbatim, or
         ``"unattributed"`` when the shipped record carries none.
     provenance_tier:
-        Episode tier: the MINIMUM of the members' tiers (S2 mixed row),
+        Episode tier: the MINIMUM of the members' tiers,
         ``exact`` only when every member is exact.
     """
 
@@ -142,7 +142,7 @@ def derive_episode_status(
         The episode ledger when available (in-process floor use), else
         ``None``.
     escalation_members:
-        Indices of members that are S6 ``escalates`` targets — excluded from
+        Indices of members that are ``escalates`` targets — excluded from
         the fold domain before evaluation (E-B5: they annotate the episode,
         they are not part of the prefix).
     member_tiers:
@@ -158,7 +158,7 @@ def derive_episode_status(
     # Lane F40c: the fold is a BLESSING claim over the whole episode; a
     # measured broken join refuses typed BEFORE any arm fires (trace-verb
     # verdict: "a blessing fold refuse typed"). Unmeasured ledgers keep the
-    # shipped fold behavior (the F40a disclosure stance).
+    # shipped fold behavior (the disclosure stance).
     if ledger is not None and ledger.header.step_join is not None:
         from ._episode_join import refuse_broken_join_claim
 

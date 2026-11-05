@@ -1,4 +1,4 @@
-"""Thin views over the lazy reader (extract D14's views layer).
+"""Thin views over the lazy reader (the views layer).
 
 These functions consume ONLY the reader's public protocol — metadata,
 ``iter_batches``, ``rows`` — and are therefore structurally unable to reach

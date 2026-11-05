@@ -244,7 +244,7 @@ def _nonfinite_verdict_tensor(out: torch.Tensor) -> torch.Tensor | None:
 def _scan(log: Any, kind: str, stop_at_first: bool) -> tuple[list[Any], _ScanMemo]:
     """Run a real scan, returning the examined layers and the memo to record.
 
-    SYNC BATCHING (C02; sumfam item 17): the full scan computes every
+    SYNC BATCHING (sumfam item 17): the full scan computes every
     payload's 0-d finiteness verdict device-side, then reads them back in
     ONE host transfer per device -- the historical loop synced once per op
     (~151 syncs on resnet18). The stop-at-first path keeps the sequential
@@ -385,7 +385,7 @@ def has_scan_evidence(log: Any, kind: str = "saved") -> bool:
 
     True when the capture-time record exists (``track_nonfinite=True`` --
     zero read cost) or a prior saved-payload scan left its memo on this
-    log. Render surfaces bound by the D4 cost-attribution law (no
+    log. Render surfaces bound by the cost-attribution law (no
     implicit payload scans) branch on THIS before reading health facts;
     the explicit ``trace.health_facts`` door stays the one
     spelling that may pay for a first scan.

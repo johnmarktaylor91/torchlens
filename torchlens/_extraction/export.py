@@ -1,4 +1,4 @@
-"""Read-only streaming exporters + the self-contained contract (D15).
+"""Read-only streaming exporters + the self-contained contract.
 
 NPY, HDF5, and MAT converters: complete-only, streaming (one shard of
 working memory), READ-ONLY — destructive ``reclaim=`` was withdrawn by its
@@ -117,7 +117,7 @@ def _widen_for_export(
 
 
 def _preflight_destination(dest: Path, needed_bytes: int) -> None:
-    """Refuse an export whose destination lacks the exact byte room (D15).
+    """Refuse an export whose destination lacks the exact byte room.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def _disambiguate_sanitized(keys: list[str]) -> dict[str, str]:
 
 
 class _DestinationLedger:
-    """The exporter's own append-only destination ledger (D15)."""
+    """The exporter's own append-only destination ledger."""
 
     def __init__(self, path: Path) -> None:
         """Open the ledger for appends.
@@ -245,7 +245,7 @@ def export_extraction(
     keys: list[str] | None = None,
     widen_unsupported: bool = True,
 ) -> Path:
-    """Export one COMPLETE extraction artifact (read-only, streaming; D15).
+    """Export one COMPLETE extraction artifact (read-only, streaming).
 
     Parameters
     ----------
@@ -535,7 +535,7 @@ def _export_hdf5(job: _ExportJob) -> list[dict[str, Any]]:
 
 
 def _export_mat(job: _ExportJob) -> list[dict[str, Any]]:
-    """Export keys as MATLAB v5, refusing BEFORE the 2 GB limit (D15).
+    """Export keys as MATLAB v5, refusing BEFORE the 2 GB limit.
 
     Parameters
     ----------
@@ -679,7 +679,7 @@ def _write_contract(
     export_format: str,
     members: list[dict[str, Any]],
 ) -> None:
-    """Write the self-contained export contract file (D15).
+    """Write the self-contained export contract file.
 
     Parameters
     ----------

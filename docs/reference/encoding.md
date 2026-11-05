@@ -25,7 +25,7 @@ rolled-ambiguous values leave nodes unencoded with a legend note.
 
 ![color_by=time](../images/encoding/color_by_time.svg)
 
-`color_by="device_time"` / `size_by="device_time"` (torchnative W2.3) read
+`color_by="device_time"` / `size_by="device_time"` (torchnative.3) read
 the session-time Kineto join: exact-attribution device nanoseconds per
 pass-qualified op, summed with the mandatory aggregation legend line on
 rolled nodes. The channel exists only on a trace captured under an owned

@@ -1,4 +1,4 @@
-"""SURFACE-table machinery: the root surface as machine-readable rows (C01 item 7).
+"""SURFACE-table machinery: the root surface as machine-readable rows.
 
 One row per reachable ROOT public name (the ``__all__`` names plus every
 lazy-facade namespace), each carrying its home module, implementation layer
@@ -15,7 +15,7 @@ live surface both directions against the table, so no generated renderer
 (root ``__all__``, budget, badges) can drift from the truth.
 
 Wave-1 scope: the ROOT surface. The full deep reachable walk (every
-submodule member) is lane F35's SURFACE-table audit tail; the oracles
+submodule member) is left to the SURFACE-table audit tail; the oracles
 harness already owns the reachable-surface walk it will consume.
 """
 

@@ -78,8 +78,8 @@ def _structure_only_forward_boundary(trace: "Trace") -> "contextlib.AbstractCont
 def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
     """Compose the admitted-meta scope around the structure-only belt.
 
-    The admitted-meta scope (W1-CTX factory slot, W1-AC autocast shim, D19
-    ambient-context absorption, W1 transparency activation) wraps OUTSIDE
+    The admitted-meta scope (factory-device slot, autocast shim,
+    ambient-context absorption, transparency activation) wraps OUTSIDE
     the belt boundary so belt refusals still classify while the scope's
     state restores on any exit path. No-op without a pending admission
     (real-substrate structure-only captures).
@@ -98,7 +98,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
 
     Stores the peak on ``trace.cost.forward_peak_memory`` and the backend label on
     ``trace.provenance.forward_memory_backend``. CUDA snapshots ``max_memory_allocated``
-    around the forward WITHOUT ``reset_peak_memory_stats`` (R36-2): resetting
+    around the forward WITHOUT ``reset_peak_memory_stats``: resetting
     clobbered the caller's process-wide high-water counter on every capture
     (the CPU branch below explicitly refuses the analogous clobber). When the
     forward pushes a new device peak the reported figure is that exact peak;
@@ -171,7 +171,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 peak_after = int(torch_module.cuda.max_memory_allocated(cuda_device))
                 # New device peak -> the forward's exact peak. No new peak ->
                 # the forward stayed under the pre-existing high-water mark
-                # and the figure honestly reads 0 (see docstring, R36-2).
+                # and the figure honestly reads 0 (see docstring).
                 live_peak = peak_after if peak_after > peak_before else 0
                 trace._cost_forward_peak_memory = Bytes(live_peak)
                 trace._cost_forward_peak_memory_reason = None  # the pair moves together
@@ -179,7 +179,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 reserved_after = int(torch_module.cuda.max_memory_reserved(cuda_device))
                 resident_peak = reserved_after if reserved_after > reserved_before else 0
             trace._provenance_forward_memory_backend = backend_label
-            # F20 peak PAIR (brainpipe D-7): live allocation vs resident
+            # peak PAIR (brainpipe): live allocation vs resident
             # high-water are different physical quantities; a single number
             # cannot be both correct and portable. Session-time only.
             trace._forward_peak_memory_pair = {
@@ -196,7 +196,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
     else:
         backend_label = "cpu"
         before = process_rss_bytes()
-    # F20 peak PAIR (brainpipe D-7): scope the host resident high-water mark to
+    # peak PAIR (brainpipe): scope the host resident high-water mark to
     # THIS capture, but only under the measure_host_peak_memory opt-in:
     # the reset is process-wide and also resets the caller's ru_maxrss.
     host_requested = bool(getattr(trace, "measure_host_peak_memory", False))
@@ -265,7 +265,7 @@ def _forward_peak_memory_bracket(trace: "Trace", device: "object | None") -> "It
                 after = process_rss_bytes()
         rss_delta = max(0, after - before)
         trace._provenance_forward_memory_backend = backend_label
-        # F20 peak PAIR (brainpipe D-7). ``live`` is a Python-allocation peak
+        # peak PAIR (brainpipe). ``live`` is a Python-allocation peak
         # and exists only when the tracemalloc opt-in paid for it; ``None``
         # means unmeasured, never zero. ``resident`` is the host high-water
         # growth over this bracket; ``resident_basis`` discloses its scope or
@@ -614,7 +614,7 @@ def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any)
     """Stamp the host-RNG witness verdict after the monitor tore down."""
 
     if channels is not None:
-        # r65 CLUSTER Z stamping split: a torch RNG ``replayable_read`` (the
+        # CLUSTER Z stamping split: a torch RNG ``replayable_read`` (the
         # ``initial_seed`` family, a host scalar fully determined by the
         # capture seed) sets CONSUMED without poisoning the capture seed, so
         # a run at the capture seed stays verified while any other/absent
@@ -626,7 +626,7 @@ def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any)
         self._runnable.host_rng_channels = tuple(sorted(channels.channels))
         self._runnable.host_rng_replayable_reads = tuple(sorted(channels.replayable_reads))
         self._runnable.rng_monitor_uncertain = bool(channels.uncertain)
-        # r39 CLASS A: name the offending threads / coverage failure so the
+        # Name the offending threads / coverage failure so the
         # INCOMPLETE ceiling's readiness diagnostic is actionable.
         self._runnable.rng_monitor_uncertain_detail = tuple(channels.uncertain_detail)
     else:

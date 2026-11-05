@@ -148,14 +148,14 @@ if TYPE_CHECKING:
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
-# Coarse anti-DoS ceiling on ``metadata.pkl`` (B8-16), for parity with the JSON
+# Coarse anti-DoS ceiling on ``metadata.pkl``, for parity with the JSON
 # boundary's byte ceiling (512 MiB, ``_json._MAX_JSON_BYTES``). Structural trace
 # metadata (tensor payloads live in separate safetensors blobs) never approaches
 # this, so the cap only refuses an absurd artifact; it is deliberately generous
 # to avoid refusing a real save.
 _MAX_METADATA_PKL_BYTES = 512 * 1024**2
 
-# THE single authority for the load-provenance transient family (R50-2): every
+# THE single authority for the load-provenance transient family: every
 # attribute _io/bundle attaches to a LOADED trace that must never persist into
 # a re-save. One conceptual family used to have four declaration stories and a
 # function-local strip tuple as its only complete inventory; the strip pass in
@@ -171,7 +171,7 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
     "payload_load_status",
     "_validation_replay_status",
 )
-# Object-count ceiling for ``metadata.pkl`` (R60/F6): the byte cap alone does not
+# Object-count ceiling for ``metadata.pkl``: the byte cap alone does not
 # bound allocation -- a pickle of tiny values expands its byte size into RSS
 # BEFORE any structural check can refuse it. This is the same lesson the JSON
 # boundary's ``_MAX_JSON_NODES`` prescan already encodes, carried to the sibling
@@ -179,7 +179,7 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
 # allocation) with an early stop, so its own worst case is bounded CPU, never
 # unbounded memory.
 #
-# CALIBRATION (r6 R60-F1 recalibration): the original 64M value was derived
+# CALIBRATION: the original 64M value was derived
 # from a ~5x bytes->RSS expansion assumption, but the measured worst case for
 # dict-of-tiny-dict payloads is 22-26x -- about 70 BYTES OF RSS PER OPCODE --
 # so a within-ceiling hostile artifact still projected to ~2.8 GiB of RSS and
@@ -193,7 +193,7 @@ _MAX_METADATA_PKL_OPCODES = 24_000_000
 # Count opcodes only on files large enough for the ceiling to be reachable: below this
 # the count would tax every real load for a ceiling no stream that size can hit.
 _METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
-# Belt bound on the persisted PARTIAL failure-reason sentinel (B8-12).
+# Belt bound on the persisted PARTIAL failure-reason sentinel.
 _MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
 
@@ -376,7 +376,7 @@ def save(
         of this flag (used non-persistent buffers ship separately there as the
         REQUIRED, independently disclosed ``runnable_nonpersistent_buffer_v1``
         family). Structure-only saves resolve the omitted default to
-        ``False`` (W3: a weights-free artifact must not carry
+        ``False`` (a weights-free artifact must not carry
         training-derived buffer values) and refuse an explicit ``True``.
     strict:
         Whether unsupported tensors should abort the save instead of being skipped.
@@ -420,10 +420,10 @@ def save(
     # N1 gate below to it read the container's empty outcome sidecar as
     # UNKNOWN and false-refused EVERY bundle tl.Bundle() built (with the
     # hand-built-object warning) while bundle.save() worked -- the third
-    # instance of the two-answers outcome-authority disease (foldB D9).
+    # instance of the two-answers outcome-authority disease.
     # Trace.save delegates to the ONE container door before any per-trace gate;
     # each member's own save applies the N1 gate PER MEMBER inside the
-    # container write (D8: a container-level status is a fold reported
+    # container write (a container-level status is a fold reported
     # beside results, never a gate on a member it does not describe). Same
     # sys.modules shape as the presenter refusals above: a Bundle can only
     # exist after its module was imported. This DELEGATION precedes the
@@ -461,7 +461,7 @@ def save(
     from .._capture.outcome import CaptureOutcomeError, require_capture_capability
 
     require_capture_capability(trace, "save_analysis")
-    # L7a: a structure-only trace refuses persistence wholesale until the
+    # A structure-only trace refuses persistence wholesale until the
     # wave-3 coordinated bump lands the marker + load-validation rows (the
     # registrar's test-only activation switch is the one sanctioned
     # exit-gate round-trip; every switch-on write stamps the fail-closed
@@ -469,9 +469,9 @@ def save(
     from .._capture.structure_only import require_structure_only_capability
 
     require_structure_only_capability(trace, "save_analysis_artifact")
-    # L6 stage 3: THE v7 PERSISTENCE BOUNDARY for edge-intervened traces,
+    # THE v7 PERSISTENCE BOUNDARY for edge-intervened traces,
     # keyed on TWO conjuncts — tier-(ii) edge-substitution entries PRESENT
-    # AND the S3 pre-release switch INACTIVE (the state in which the gated
+    # AND the pre-release switch INACTIVE (the state in which the gated
     # fields scrub DROP, i.e. every state v7 production code can reach). No
     # occurrence-granular carrier survives a v7 save at ANY level, so an
     # edge-intervened trace is SESSION-ONLY in production until the wave-3
@@ -480,15 +480,14 @@ def save(
     # this refusal PRECEDES artifact_save_level_unsupported. SAVE-ENTRY
     # REFUSAL ORDER (owners disjoint, all fail closed — do not silently
     # reorder another owner's refusal): (1) MergedTrace presenter refusal,
-    # (2) N1 capture-outcome gate, (3) L7a structure-only chokepoint,
-    # (4) this L6 edge boundary. Reviewers of record for this hunk: L4 + S3
-    # registrar + L7 (chokepoint co-owner).
+    # (2) capture-outcome gate, (3) structure-only chokepoint,
+    # (4) this edge boundary.
     _refuse_edge_intervened_save(trace)
-    # (5) L8 shard-local erasure prevention: appended AFTER the pinned
+    # (5) shard-local erasure prevention: appended AFTER the pinned
     # four-refusal order above (owners disjoint; nothing reordered). Same
-    # two-conjunct key shape as the L6 edge boundary.
+    # two-conjunct key shape as the edge boundary.
     _refuse_shard_local_erasure(trace)
-    # (6) F44 injections stage 2: the injected family persists at analysis
+    # (6) Injections: the injected family persists at analysis
     # level (synthesized op rows appended by injection_codec below); the
     # RUNNABLE sparse core cannot carry it, so a runnable save of a logged
     # trace refuses typed rather than silently dropping recorded
@@ -503,7 +502,7 @@ def save(
     # product (its _FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
     # closes the hand-built wrapper-around-a-settled-trace residual, which
-    # before the b1-opus-R06-1 outcome delegation fail-closed only by ACCIDENT
+    # before the outcome delegation fail-closed only by ACCIDENT
     # (the gate read the wrapper's empty ``__dict__`` as UNKNOWN) and would
     # now otherwise crash untyped deeper in the save machinery. Same
     # sys.modules shape as the MergedTrace refusal: a PartialTrace can only
@@ -661,8 +660,8 @@ def save(
             include_outs=include_outs,
             include_grads=include_grads,
         )
-        # F44: append one synthesized op row per recorded injected op (the
-        # C07 injection_provenance slot verbatim) AFTER every 1:1
+        # append one synthesized op row per recorded injected op (the
+        # injection_provenance slot verbatim) AFTER every 1:1
         # live/scrubbed pairing consumer and BEFORE the blob-write loop, so
         # injected payload specs write like any other blob.
         if sparse_run_descriptor is None:
@@ -1195,7 +1194,7 @@ def load(
         custom imports must be listed even if ``trust_custom_callables=True``.
     unknown_relations:
         Bundle loader-doctrine policy for member-relation rows of unknown
-        NAMESPACED kinds (the C07X preserve-and-disclose amendment):
+        NAMESPACED kinds (the preserve-and-disclose amendment):
         ``"opaque"`` (default) loads them preserved, disclosed, unchecked,
         and never executed; ``"refuse"`` restores the strict typed refusal.
         Bare unknown kinds refuse under both policies.
@@ -1276,7 +1275,7 @@ def load(
         )
     # Stable ``fields["code"]`` on the six distinct tl.load front-door causes so a
     # caller can branch on the cause instead of parsing one content-free string
-    # (R65): a symlinked load path, an unreadable manifest, a non-object manifest
+    # a symlinked load path, an unreadable manifest, a non-object manifest
     # root, a metadata-integrity refusal (tagged at the unpickle boundary below), a
     # below-floor version, and a generic bundle-load failure.
     _reject_symlink_path(bundle_path, context="bundle path", code="load_path_symlink_rejected")
@@ -1359,7 +1358,7 @@ def _load_trace_payload(
 
         python_major_mismatch = _python_major_mismatch(manifest)
         with metadata_path.open("rb") as handle:
-            # Coarse allocation guard for parity with the JSON boundary (B8-16):
+            # Coarse allocation guard for parity with the JSON boundary:
             # every JSON read enforces a byte ceiling, but ``metadata.pkl`` had
             # none. This bounds an absurd on-disk pickle before it is streamed into
             # the unpickler; the SafeBundleUnpickler allowlist remains the actual
@@ -1379,7 +1378,7 @@ def _load_trace_payload(
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
             ).load()
         if not isinstance(scrubbed_state, dict):
-            # R65/F10: without this guard a corrupt/hostile payload escapes
+            # Without this guard a corrupt/hostile payload escapes
             # tl.load() as a raw stdlib TypeError/ValueError from the downstream
             # dict() walk, naming a "dictionary update sequence element".
             raise ArtifactError(
@@ -1405,7 +1404,7 @@ def _load_trace_payload(
         # A guarded-unpickler denylist refusal or corrupt/truncated pickle stream
         # is a bundle-INTEGRITY signal, not environmental drift: it is tagged with
         # a stable code so a downstream loader (e.g. the merged-artifact rank-core
-        # loader, A-R58-1) can refuse it as tamper rather than laundering it into
+        # loader) can refuse it as tamper rather than laundering it into
         # the "no longer parses on this runtime" degradation channel.
         raise ArtifactError(
             f"Failed to load bundle metadata from {metadata_path}.{hint}",
@@ -1413,7 +1412,7 @@ def _load_trace_payload(
         ) from exc
     except (OSError, AttributeError, ImportError, TypeError, ValueError) as exc:
         # Generic bundle-load failure (torch/codec drift, missing dep): the sixth
-        # tl.load front-door cause gets its own stable code (R65).
+        # tl.load front-door cause gets its own stable code.
         raise ArtifactError(
             f"Failed to load bundle at {bundle_path}.", code="bundle_load_failed"
         ) from exc
@@ -1430,7 +1429,7 @@ def _load_trace_payload(
             resolved_blobs_dir=resolved_blobs_dir,
         )
     except RecursionError as exc:
-        # b4:R27-3 sub-fix: a hostile scrubbed-state object graph deeply nested
+        # A hostile scrubbed-state object graph deeply nested
         # enough to blow the C stack during the rehydrate walk must surface as a
         # typed artifact error, not an uncaught RecursionError that escapes
         # ``tl.load(path)``. Pairs with the load-walk depth ceiling.
@@ -1442,7 +1441,7 @@ def _load_trace_payload(
     # state. Runs AFTER rehydrate so the owner-specific persisted-claim refusals
     # (injection codec, site keys, graph structure, ...) keep precedence.
     check_manifest_metadata_anchors(manifest, persisted_rows, bundle_path)
-    # W051-CAPT3 (EPISODE remainder): inside ``Trace.__setstate__`` the root
+    # Inside ``Trace.__setstate__`` the root
     # output was an unmaterialized blob handle, so the episode ledger's
     # evidence anchor had nothing to compare. Payloads are attached now; the
     # load itself refutes a ledger re-minted over another execution.
@@ -1479,7 +1478,7 @@ def _load_trace_payload(
 
 
 def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str:
-    """Return ``"bind"`` / ``"skip"`` / ``"error"`` for one runnable payload family (r39 corr2_3).
+    """Return ``"bind"`` / ``"skip"`` / ``"error"`` for one runnable payload family.
 
     THE single structural disposition every payload binder (weights, non-persistent buffers,
     archived activations, and any future execution-only family) consults before decoding a blob,
@@ -1492,7 +1491,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
       (``provider == LOADED_SPARSE``, ``descriptor is None``, readiness UNAVAILABLE with the typed
       diagnostic). Its payload blobs stay unbound (no supported descriptor validates them) and the
       typed readiness diagnostic survives -- the load must NOT hard-fail on the payload binder
-      (the round-38 corr2_3 bug: an ``include_weights`` artifact with a tampered context field
+      (an ``include_weights`` artifact with a tampered context field
       raised an untyped IO error pointing at intact weights and lost the typed diagnostic).
     * ``"error"`` -- a genuine analysis artifact (``provider == LOADED_ANALYSIS`` / no runnable
       descriptor) carrying STRAY runnable payload blobs is a real inconsistency; hard-fail.
@@ -1550,7 +1549,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
     disposition = _runnable_payload_disposition(trace, entries)
     if disposition == "skip":
         # Parse-refused / legacy analysis-only degradation: payload blobs stay unbound and the
-        # typed readiness diagnostic survives (r39 corr2_3).
+        # typed readiness diagnostic survives.
         return
     if disposition == "error":
         raise ArtifactError(
@@ -1625,7 +1624,7 @@ def _bind_embedded_weight_payload(
     )
     disposition = _runnable_payload_disposition(trace, weight_entries)
     if disposition == "skip":
-        # r39 corr2_3: an ``include_weights`` artifact whose sparse descriptor was refused at
+        # an ``include_weights`` artifact whose sparse descriptor was refused at
         # parse (e.g. ``context_field_invalid``) loads ANALYSIS-ONLY; the intact weight blobs
         # stay unbound and the typed diagnostic survives -- never an untyped hard IO error.
         return
@@ -1698,7 +1697,7 @@ def _bind_archived_activation_payload(
     }
     disposition = _runnable_payload_disposition(trace, tuple(activation_entries.values()))
     if disposition == "skip":
-        # Parse-refused / legacy analysis-only degradation (r39 corr2_3): archived activation
+        # Parse-refused / legacy analysis-only degradation: archived activation
         # blobs stay unbound and the typed readiness diagnostic survives.
         return
     if disposition == "error":
@@ -1893,7 +1892,7 @@ def _preflight_unified_trace_manifest(
     try:
         validate_tlspec(bundle_path, allow_unsupported_runnable_versions=True)
     except ValueError as exc:
-        # Never launder an already-typed refusal (R65-4): re-wrapping a
+        # Never launder an already-typed refusal: re-wrapping a
         # ValueError-lineage TorchLens error here stripped its stable code and
         # structured fields into one content-free message.
         if isinstance(getattr(exc, "fields", None), dict) and exc.fields.get("code"):  # type: ignore[attr-defined]
@@ -2291,7 +2290,7 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
     bundle_path = Path(path)
     _reject_symlink_path(bundle_path, context="cleanup target")
     removed: list[Path] = []
-    # B8-11: the bundle basename is DATA, not a pattern. Escaping it stops glob
+    # the bundle basename is DATA, not a pattern. Escaping it stops glob
     # metacharacters in a legal filename (e.g. ``job*``) from widening the sweep --
     # and, crucially, the backup RESTORATION below -- to sibling bundles.
     escaped_name = glob.escape(bundle_path.name)
@@ -2461,7 +2460,7 @@ def _apply_visualization_save_policy(
             scrubbed_layer.visualizer_path = None
             continue
         visualizer_dir.mkdir(parents=True, exist_ok=True)
-        # B8-10 parity: the sidecar tree must not escape the bundle's permission
+        # parity: the sidecar tree must not escape the bundle's permission
         # tightening -- copy2 preserves the scratch file's umask-derived mode and
         # would leak on cp -a/tar or a relaxed bundle root.
         _restrict_mode(visualizer_dir, 0o700)
@@ -2469,7 +2468,7 @@ def _apply_visualization_save_policy(
         destination_path = visualizer_dir / destination_name
         shutil.copy2(source_path, destination_path)
         _restrict_mode(destination_path, 0o600)
-        # Persist a bundle-RELATIVE path (R59-6): the absolute final path embeds
+        # Persist a bundle-RELATIVE path: the absolute final path embeds
         # $HOME/username, contradicting the scrub's basename-only PII policy, and
         # load re-anchors from the basename anyway (_reanchor_visualizer_paths),
         # so the absolute directory was never used -- only leaked.
@@ -2846,7 +2845,7 @@ _CUSTOM_ATTRIBUTE_WARNING_KEY_PREVIEW = 8
 
 
 def _warn_custom_attribute_embedding(disclosure: Mapping[str, Any]) -> None:
-    """Tell the SAVER that module attributes are shipping in the artifact (R62).
+    """Tell the SAVER that module attributes are shipping in the artifact.
 
     The manifest disclosure lands INSIDE the file the user is about to hand
     out -- the one reader guaranteed not to see it is the person saving. A
@@ -2880,7 +2879,7 @@ def _warn_custom_attribute_embedding(disclosure: Mapping[str, Any]) -> None:
 def _custom_attributes_disclosure(trace: Trace, *, included: bool) -> dict[str, Any]:
     """Summarize the harvested module-attribute channel for the manifest.
 
-    Save-time disclosure for disputed-r2 b8/R62: portable bundles persist every
+    Save-time disclosure: portable bundles persist every
     public, non-callable module instance attribute verbatim, so the manifest
     names the channel — whether it shipped, how many modules carry attributes,
     and the (bounded, sorted) union of top-level key names. Key NAMES only;
@@ -2988,7 +2987,7 @@ class _SaveDisclosures(NamedTuple):
 
     ``custom_attributes`` / ``buffer_values`` are the two harvested-channel
     payloads. ``persisted_op_rows`` is the PERSISTED op-row count (the scrubbed
-    ``layer_list``, which carries F44 injected-op rows the live ``layer_list``
+    ``layer_list``, which carries injected-op rows the live ``layer_list``
     never holds); the loader anchors ``manifest.n_layers`` against
     ``metadata.pkl`` (AUD-CODE 3.0b). ``None`` falls back to the live count.
     """
@@ -3018,7 +3017,7 @@ def _build_manifest(
         Unsupported tensor records accumulated under ``strict=False``.
     include_source:
         When ``False`` the environment-provenance git commit hash is omitted, so
-        ``include_source=False`` also drops the cwd repo's HEAD commit (B8-19).
+        ``include_source=False`` also drops the cwd repo's HEAD commit.
     disclosures:
         Save-time disclosures of the harvested module-attribute channel, the
         captured pre-forward buffer-value channel, and the persisted op-row count.
@@ -3069,7 +3068,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     trace:
         Source trace whose already-recorded capture facts should be certified.
     include_source:
-        When ``False`` the cwd repo's HEAD commit hash is omitted (B8-19): the
+        When ``False`` the cwd repo's HEAD commit hash is omitted: the
         manifest otherwise embedded the git commit of whatever repository contained
         the working directory at save time, with no opt-out. Tying it to the
         existing source-embedding flag lets ``include_source=False`` drop this
@@ -3115,7 +3114,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
             seen_autocast.add(encoded)
             autocast_facts.append(cast(dict[str, Any], normalized))
 
-    # grind-r5 b7 R22-7 (3rd round): could-not-compute must stay
+    # Could-not-compute must stay
     # distinguishable from does-not-apply. A digest failure used to silently
     # omit the engine (absence read as "engine not present") and the two
     # hashes degraded to None (indistinguishable from "no inputs"), so a
@@ -3197,7 +3196,7 @@ def _torchlens_package_dir() -> Path:
 def _git_commit_hash(cwd: Path) -> str | None:
     """Return the Git commit for ``cwd`` with a short best-effort timeout.
 
-    R21-2: the provenance git commit is resolved from the TORCHLENS package
+    the provenance git commit is resolved from the TORCHLENS package
     directory, not ``Path.cwd()``. Stamping the working directory's repository
     recorded the USER's unrelated repo commit (a privacy leak) and made the same
     capture saved from two directories differ (an ambient-environment dependence in a
@@ -3317,7 +3316,7 @@ _NESTED_BLOB_OBJECT = 4
 
 # WEAK type keys so a notebook-cell / factory-made class used once as a nested
 # blob value is not pinned (with its __globals__) for the process lifetime
-# (R60-12); matches the weak caches elsewhere in _io.
+# matches the weak caches elsewhere in _io.
 _NESTED_BLOB_KINDS: weakref.WeakKeyDictionary[type, int] = weakref.WeakKeyDictionary()
 
 
@@ -3672,7 +3671,7 @@ def _mark_partial(tmp_path: Path, *, reason: str | None = None) -> None:
         Optional failure reason string to persist alongside the sentinel. Callers
         pass a scrubbed value (the exception TYPE name, not ``str(exc)``, whose
         message can carry object reprs / paths / values); this sink additionally
-        length-bounds it as a belt (B8-12) so recovery debris never grows unbounded
+        length-bounds it as a belt so recovery debris never grows unbounded
         or leaks a large payload.
     """
 
@@ -3693,7 +3692,7 @@ def _run_save_recovery(
     *,
     primary: BaseException,
 ) -> None:
-    """Run the failed-save bookkeeping without ever masking ``primary`` (R63).
+    """Run the failed-save bookkeeping without ever masking ``primary``.
 
     The PARTIAL mark and the backup restore are the two contracts the save
     handlers exist to guarantee, but running them unguarded meant a

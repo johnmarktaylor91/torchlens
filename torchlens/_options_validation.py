@@ -186,7 +186,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 
 # Visualization option fields that accept ONLY real bools. Strings such as
 # ``'yes'`` or ``'no'`` used to be accepted silently, and ``'no'``/``'false'``
-# truthily meant ON (R64-F3).
+# truthily meant ON.
 _VISUALIZATION_BOOL_FIELDS = (
     "show_edge_shapes",
     "rolled",

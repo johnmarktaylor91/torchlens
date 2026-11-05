@@ -82,7 +82,7 @@ episode-declared and undeclared runs of the same seeded fixture.
 `EpisodeOptions(stepped_module=...)` declares the STEPPED MODULE — the
 `nn.Module` whose successive top-level calls define step boundaries. It must
 be a PROPER submodule of the traced episode root. On a BOUND-METHOD root
-(F41, the ruled root contract: `tl.trace(model.generate, ids,
+(the ruled root contract: `tl.trace(model.generate, ids,
 episode=EpisodeOptions(n_steps=N))` — the owner resolves via
 `method.__self__` and is the root `self` of the TL-authored wrapper root's
 tree; the stepped address recorded is `self`) `stepped_module` DEFAULTS to the owner; on a module root it is
@@ -114,7 +114,7 @@ value-free saves — the kind-conditional save rule), a structure-only marker
 (structure-only episodes are out of scope per the ratified
 marker-combination table), and non-torch backends.
 
-## The declared evidence derivation (foldA D8)
+## The declared evidence derivation
 
 Per-step evidence is DECLARATION-DRIVEN, never root-output-shape guessing:
 
@@ -163,7 +163,7 @@ stepped module called more than once per iteration -- refuses typed
 (`episode_declaration_invalid`) with the licensed widths named, instead of
 silently misattributing tokens to steps and then grading FALSE exogenous
 breaks against the misattributed column. The ONE further admission is the
-declared-crossing chain arm (W051 FIX2): when the root returns the FULL fed
+declared-crossing chain arm when the root returns the FULL fed
 id sequence -- every step's MEASURED entry is a prefix of it, row for row --
 each step's emission is the position right after its own entry, and
 positions a tool call injected between steps are admitted exactly when the
@@ -199,13 +199,13 @@ unretained payload — and a mismatch refuses/quarantines). The historical
 v1 form hashed identity alone, so two equal-length prompts minted identical
 digests and a rewritten ledger still attested bound; a persisted v1 digest
 now reads as PRE-BINDING (`episode_coupling_unmintable`, re-capture to
-bind), never as foreign. The attested-coupling work (F42) consumes the
+bind), never as foreign. The attested-coupling work consumes the
 binding; the travel policy below stays the negative guarantee it
 complements.
 
 ## Attested coupling (`episode=` x `intervene=`)
 
-The combination runs COUPLED (F42; the foldA D5 flip — the historical
+The combination runs COUPLED (the foldA flip — the historical
 pre-execution refusal retired when the verdict's evidence bar was met, and
 every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
 
@@ -226,7 +226,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
   fire-attribution session: every live `FireRecord` is attributed to its
   step (or the outside-step bucket for root-loop fires before/between/after
   steps — disclosed in the digest, never guessed into a row). Settlement
-  writes the reserved C07X slots: per-row `fire_count` (a measured `0` on
+  writes the reserved slots: per-row `fire_count` (a measured `0` on
   zero-fire started rows — zero and multiple fires are first-class facts;
   `None` only on rows that never started), the header
   `intervention_digest` (hex SHA-256 over the ordered fire facts and the
@@ -284,11 +284,11 @@ never presents another execution's step evidence. Plain `trace.fork()` is
 not a fresh execution and carries the ledger until an engine re-executes.
 Re-capture with `episode=` to derive step evidence for new inputs.
 
-## Cross-step continuity: the measured `step_join` (F40c)
+## Cross-step continuity: the measured `step_join`
 
 The header's `token_feed` reflects the user's DECLARATION of how step inputs
 were fed. The step JOIN — that step k+1's input actually CONTINUED step k's
-output — is MEASURED (F40c, the trace-verb verdict's mid-call oracle
+output — is MEASURED (the trace-verb verdict's mid-call oracle
 break contract): live boundary hooks on the stepped module snapshot each
 step's entry/exit under `pause_logging` (invisible to the recorded graph;
 the four-clause declaration invariant holds), and settlement re-grades every
@@ -338,7 +338,7 @@ attention MASK (false exogenous positions on a true continuation) and a
 timestep-first denoiser graded its TIMESTEP. Envelopes written before this
 slot existed load with the argument undisclosed (`entry_basis` absent).
 
-Three arms (both FORK-4 arms are BUILT; the ruling selects the default's
+Three arms (both arms are BUILT; the ruling selects the default's
 shape):
 
 - DEFAULT (`feed="open"`, `on_feed_break="disclose"`): the one Trace
@@ -352,7 +352,7 @@ shape):
   `episode_join_declared_crossing`). Ops, values, graph, audit, and
   per-segment reads are unaffected; the root call may truthfully be
   COMPLETE — the closed-episode claim is what breaks.
-- FORK-4 arm (b) (`on_feed_break="refuse"`): the settlement write raises
+- arm (b) (`on_feed_break="refuse"`): the settlement write raises
   `episode_feed_break_exogenous` typed, carrying the settled product (with
   its measured envelope) on `exc.partial_trace` — recoverable partial
   evidence, nothing discarded.
@@ -379,7 +379,7 @@ quarantines `episode_ledger_incoherent`.
 
 The per-step status ledger lands ON the product at
 `trace.annotations["episode"]` after settlement, in the GRAMMAR v2 shape
-(the C07X coordinated tlspec-v9 amendment; `episode_ledger_version=2`,
+(the coordinated tlspec-v9 amendment; `episode_ledger_version=2`,
 family-local — future grammar changes bump the family version, never the
 tlspec version): a header (`episode_id`, stepped-module address, the
 managed-RNG `entry_seed`, token feed, provenance tier, escalation
@@ -387,8 +387,8 @@ disclosures, the declared `step_output_kind` — `tokens` (default) /
 `digest` / `none` — with the `step_output_from` source disclosure, the
 declared `step_axis`, and the minted `capture_digest` binding (all written
 by the declared derivation above), plus the measured `step_join` envelope
-(F40c, the section above) and the `intervention_digest` coupling slot
-written on intervened captures (F42, the attested-coupling section
+(the section above) and the `intervention_digest` coupling slot
+written on intervened captures (the attested-coupling section
 above)) and one row per step
 (`episode_step`, `role`, `status`, coordinates, the generic `step_output`
 under the declared kind, the carried-state witness slots
@@ -418,7 +418,7 @@ witness (the SV-6 semantic ruling): `entry_state_digest` /
 `exit_state_digest` are channel-keyed digests of the carried state at the
 step's boundaries, `None` means NOT MEASURED — the only value any shipped
 writer emits — and no field may imply an unmeasured cache fact. The
-F-WITNESS work designs the full witness schema after the F20 retention seam
+F-WITNESS work designs the full witness schema after the retention seam
 and writes real digests; until then absence is the honest disclosure.
 
 Loads validate fail-closed: an episode ledger on a capture without the
@@ -430,11 +430,10 @@ rows stop being claims and the outcome derivation treats the ledger
 fail-closed. The family version field is CONSUMED at load: any
 `episode_ledger_version` other than 2 — including the version-less
 pre-amendment grammar v1 payload (`cache_len`/`tokens` rows) — quarantines
-with the grammar named, and never normalizes (foldA D9: the old-payload row
-is a quarantine record, never a normalization ladder). Lane F40b, authorized
-by the C07 owner, activated the generalized `step_output_from`/
-`step_output_kind` derivation on this grammar and self-authored its
-MIGRATIONS row (the D3 authorization line lives in `MIGRATIONS.md`).
+with the grammar named, and never normalizes (the old-payload row
+is a quarantine record, never a normalization ladder). The generalized
+`step_output_from`/`step_output_kind` derivation is active on this grammar, with its own
+MIGRATIONS row (the authorization line lives in `MIGRATIONS.md`).
 
 ## Persistence
 
@@ -508,7 +507,7 @@ and says so. Fidelity is a disclosure, never a settlement input.
 ## The floor: per-step Bundles + the derived fold
 
 The declared minimum episode product (invocable by the sprint orchestrator on
-size evidence only) is N per-step captures composed in a `Bundle` with S6
+size evidence only) is N per-step captures composed in a `Bundle` with
 `episode_member` relation rows, under OBSERVER DISCIPLINE: the driver's
 native forward owns the live carried state; each capture observes an isolated
 copy; a capture product is never the source of carried episode state.
@@ -528,9 +527,9 @@ comparability, and never dangle: mutators either cascade explicitly
 `docs/reference/error_refusal_contract.md` for the full episode/bundle
 refusal code family.
 
-## Relation grammar v2 (the C07X amendment)
+## Relation grammar v2 (the amendment)
 
-As of the C07X coordinated tlspec-v9 amendment, relation-kind param keys
+As of the coordinated tlspec-v9 amendment, relation-kind param keys
 split REQUIRED/OPTIONAL per kind (both sets closed; an undeclared key still
 refuses). `successor_of` — whose direction is PINNED: `from` is always the
 LATER member (the successor), `to` the earlier member it succeeds — admits

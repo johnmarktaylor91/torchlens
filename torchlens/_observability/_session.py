@@ -1,4 +1,4 @@
-"""The ONE profiler session engine (torchnative W1.3).
+"""The ONE profiler session engine (torchnative.3).
 
 Owned mode creates and closes ``torch.profiler.profile``; borrowed mode adds
 TorchLens markers inside a caller-owned profiler and never steps or closes
@@ -9,8 +9,7 @@ This module is the ONE activation knob: the kernel-enrolled
 ``profiler_doors`` registry has exactly one entry, and the dependency test
 (``tests/test_obs_substrate_spans.py``) forbids a second door -- any new
 ``torch.profiler.profile`` construction site outside this module (and the
-one reason-ledgered legacy seam in ``kernel_telemetry``, burn-down owner
-F27/W2.1) is red.
+one reason-ledgered legacy seam in ``kernel_telemetry``) is red.
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -30,7 +29,7 @@ from ._spans import SpanRegistry
 __tl_layer__ = "L5"
 
 #: Five-state session availability lattice (torchnative 4.1 rule 4). The
-#: substrate can reach every state except ``joined``, which the F27 Kineto
+#: substrate can reach every state except ``joined``, which the Kineto
 #: join flips; missing is None, never zero.
 AVAILABILITY = ("not_requested", "unavailable", "empty", "partial", "joined")
 
@@ -47,7 +46,7 @@ _PROFILER_DOORS.register(
     capabilities={
         "owned": True,
         "borrowed": True,
-        # Flipped by lane F27: the correlation-ID join consumes this door's
+        # The correlation-ID join consumes this door's
         # closed profiler through torchlens._observability.join_session.
         "kineto_join": True,
         "activation_knob": "torchlens._observability.session",
@@ -71,7 +70,7 @@ class SessionResult:
     """Normalized session result skeleton (torchnative 4.1).
 
     The substrate fills session facts and spans; launches/relations/coverage
-    are the F27 Kineto join's columns and stay empty with availability
+    are the Kineto join's columns and stay empty with availability
     honestly below ``joined`` until it lands.
     """
 
@@ -157,8 +156,8 @@ class ProfilerSession:
             if _ACTIVE_SESSION is not None:
                 raise ProfilerSessionError(
                     "A profiler session is already active. There is ONE "
-                    "session engine and ONE activation knob (torchnative "
-                    "W1.3); nesting owned sessions would double-close the "
+                    "session engine and ONE activation knob; "
+                    "nesting owned sessions would double-close the "
                     "profiler, and parallel sessions would split the span "
                     "stack.",
                     code="profiler_session_nested",
@@ -195,7 +194,7 @@ class ProfilerSession:
                 try:
                     self._owned_profiler.__exit__(exc_type, exc, tb)
                 finally:
-                    # Retained session-time for the F27 join's post-exit
+                    # Retained session-time for the join's post-exit
                     # in-memory event extraction (events are complete only
                     # after the profiler closes); never persisted.
                     self._closed_profiler = self._owned_profiler
@@ -231,7 +230,7 @@ class ProfilerSession:
 
     @property
     def closed_profiler(self) -> Any | None:
-        """The CLOSED profiler for post-exit event extraction (F27 join).
+        """The CLOSED profiler for post-exit event extraction (the join).
 
         Owned mode returns the profiler retained at ``__exit__``; borrowed
         mode returns the caller's instance (the caller is responsible for
@@ -250,7 +249,7 @@ def session(  # noqa: PLR0913 -- mirrors ProfilerSession.__init__ (the documente
     rank: int | None = None,
     profiler_kwargs: dict[str, Any] | None = None,
 ) -> ProfilerSession:
-    """The ONE profiler activation knob (torchnative W1.3).
+    """The ONE profiler activation knob (torchnative.3).
 
     Returns a context manager. ``mode='owned'`` creates and closes
     ``torch.profiler.profile`` (``profiler_kwargs`` forwards extra

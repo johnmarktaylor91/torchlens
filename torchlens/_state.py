@@ -22,7 +22,7 @@ Design rationale:
     state lives here so wrappers never need to import heavy torchlens modules
     just to check the toggle.
 
-Access policy (disputed-r2 b5/R45, exempt-by-declaration):
+Access policy (exempt-by-declaration):
     This module is the sanctioned shared toggle substrate. Direct READS of its published globals
     from other torchlens modules — including the bare ``_state._logging_enabled`` /
     ``_state._active_trace`` loads on the per-op wrapper hot path — are the documented design, not
@@ -70,7 +70,7 @@ duration of a forward pass inside ``active_logging()``.
 # ---------------------------------------------------------------------------
 
 _active_owner_thread_id: int | None = None
-"""Thread ident of the thread that entered ``active_logging()`` (r43 hon2_4).
+"""Thread ident of the thread that entered ``active_logging()``.
 
 TorchLens capture is single-owner-threaded by design (the aten census is a thread-local
 ``TorchDispatchMode``; the docs forbid concurrent captures). The torch-function wrapper,
@@ -85,7 +85,7 @@ exit.
 """
 
 _nonowner_belt_armed: bool = False
-"""Global gate for the r45 hon2_1 cross-thread captured-operand observer.
+"""Global gate for the cross-thread captured-operand observer.
 
 Set True (beside ``_WitnessState.belt_armed``) for exactly the runnable-capture forward
 window inside ``_observe_invisible_host_escapes`` and cleared in its ``finally``. The global
@@ -213,7 +213,7 @@ _active_record_spans: "contextvars.ContextVar[tuple[dict[str, Any], ...]]" = con
 )
 """Observer spans currently active around or inside a logging session.
 
-Context-local (r5 b2-sol R54): as a plain process-global list, a two-thread
+Context-local: as a plain process-global list, a two-thread
 probe showed one thread's captures/taps receiving the OTHER thread's active
 span annotations. A ``ContextVar`` holding an immutable tuple isolates spans
 per thread/context; each thread starts from the empty default.
@@ -222,7 +222,7 @@ per thread/context; each thread starts from the empty default.
 _naming_counters: dict[str, int] = {}
 """Process-global counters used by unnamed ``trace`` captures.
 
-Guarded by ``_naming_lock`` (r7 b8-sol R54): ``_auto_name`` runs during
+Guarded by ``_naming_lock``: ``_auto_name`` runs during
 capture setup BEFORE admission, so ``active_logging()``'s re-entrancy guard
 does not serialize it -- two racing pre-admission threads could interleave the
 read-modify-write and mint the SAME name for both captures (the refused loser
@@ -546,7 +546,7 @@ default on is a maintainer fork (cost + observer-effect trade), not a lane decis
 _runnable_ledger_armed: bool = False
 # ATen recorder edge-token arm (``CaptureOptions(aten_ops=True)``). Capture-scoped, never portable.
 _aten_recording_armed: bool = False
-"""Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
+"""Whether the event-lifecycle ledger requires wrapper ownership tokens.
 
 Armed around a runnable-eligible (``replayable``) capture forward and around an
 ``aten_ops=True`` capture, so the dispatch census can attribute raised / host-returning
@@ -882,7 +882,7 @@ def capture_reservation(resume: object | None = None) -> Iterator[object]:
     inner orchestration, and that orchestration re-enters here before
     ``active_logging`` without releasing the outer claim. A same-thread entry
     WITHOUT the token is a nested public capture started by user code inside
-    the reserved window and refuses typed (R55) -- the bare thread-ident
+    the reserved window and refuses typed -- the bare thread-ident
     passthrough used to let both captures run to completion. A genuinely
     nested capture (inside a live forward) refuses on the same predicate as
     ``active_logging``.
@@ -961,7 +961,7 @@ def publish_active_trace(trace: "Trace") -> Iterator[None]:
     target trace, and the ``finally`` restore could republish a since-finished
     trace, wedging every later capture's admission check. This helper refuses
     typed under the admission lock (same predicate as ``active_logging``),
-    sets ``_active_owner_thread_id`` so the r43 non-owner ``pause_logging``
+    sets ``_active_owner_thread_id`` so the non-owner ``pause_logging``
     protection covers the window, and clears to ``None`` on exit (a refused
     entry proves there was no previous trace to restore).
     """
@@ -1246,7 +1246,7 @@ class _PauseLogging:
     A pause entered from a NON-OWNER thread while a capture is live is a no-op:
     the toggle belongs to the owner's forward pass, and clearing it from another
     thread blinds that capture (ops silently missing, no error). This is the
-    general form of the r43 fix that ``materialize_deferred_for_call`` applied at
+    general form of the fix that ``materialize_deferred_for_call`` applied at
     one call site; every one of the ~40 ``pause_logging()`` sites is covered here,
     including the ones reachable with NO concurrent capture at all -- a thread
     merely analyzing an older Trace (``Trace.save``, validation, an ``.out``
@@ -1284,7 +1284,7 @@ class _PauseLogging:
             return
         if self._counted:
             _pause_depth -= 1
-        # b2:A2 remnant (r5 fable R54): re-check ownership at RESTORE time.
+        # Re-check ownership at RESTORE time.
         # This thread can have read owner=None an instant before another
         # thread's locked capture publication; restoring the stale pre-pause
         # value here would then silently blind the remainder of that

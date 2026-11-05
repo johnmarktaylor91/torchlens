@@ -1,21 +1,21 @@
-"""The ONE per-step history artifact schema (explorer D4-D7; lane C06).
+"""The ONE per-step history artifact schema.
 
-Four normalized layers (D4):
+Four normalized layers:
 
 - :class:`RunRecord` -- schema version, run/segment identity, resume
   ancestry, fingerprints, package versions, selector plan, histogram
   descriptor, reduction dtypes, cadences, budgets, device, rank/world.
 - :class:`SiteRecord` -- stable STRUCTURAL identity; labels are display
-  metadata only (D5). Topology drift ends a series and starts a new one --
+  metadata only. Topology drift ends a series and starts a new one --
   disclosure, never re-binding.
 - :class:`StepBlockRecord` -- the atomic training coordinate. A block
-  commits only when every scheduled observation has an outcome (D6).
+  commits only when every scheduled observation has an outcome.
 - :class:`ObservationRecord` -- (step, site, stream, phase) plus presence,
   spine, sketch, and disclosures. Missing is never zero: a non-observed
   presence token may not carry payloads.
 
 Integer counts merge EXACTLY; floating fields merge with the documented
-stable pairwise algorithm and are never called exact (D8's language rule).
+stable pairwise algorithm and are never called exact.
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
@@ -34,7 +34,7 @@ __tl_layer__ = "L5"
 #: (no ``trace_ref`` key) load unchanged with ``trace_ref=None``.
 HISTORY_SCHEMA_VERSION = 2
 
-#: The five v1 streams (D7), with lifecycle truth.
+#: The five v1 streams, with lifecycle truth.
 STREAMS = (
     "activation",
     "activation_grad",
@@ -43,7 +43,7 @@ STREAMS = (
     "param_delta",
 )
 
-#: Closed presence vocabulary (D6); missing is never zero.
+#: Closed presence vocabulary; missing is never zero.
 PRESENCE = (
     "observed",
     "not_scheduled",
@@ -54,7 +54,7 @@ PRESENCE = (
 )
 
 #: Closed phase vocabulary. param-grads finalize after accumulation and AMP
-#: unscale, before clipping, by default (D7); pre-clip and post-clip are
+#: unscale, before clipping, by default; pre-clip and post-clip are
 #: distinct phases; the param-delta boundary is the optimizer step.
 PHASES = (
     "forward",
@@ -66,15 +66,15 @@ PHASES = (
     "step",
 )
 
-#: Gradient scale truth (D7): unknown never masquerades as either.
+#: Gradient scale truth: unknown never masquerades as either.
 GRAD_SCALE_PROVENANCE = ("scaled", "unscaled", "unknown")
 
-#: Step-boundary provenance (D17): the implicit optimizer-hook spelling
+#: Step-boundary provenance: the implicit optimizer-hook spelling
 #: records unknown for what it cannot determine; explicit is authoritative.
 STEP_PROVENANCE = ("explicit", "implicit")
 
 #: Optimizer outcome for one StepBlock: a skipped GradScaler step records
-#: ``skipped`` and NO fake update (D7/D11).
+#: ``skipped`` and NO fake update.
 OPTIMIZER_STATUS = ("applied", "skipped", "unknown")
 
 #: Tri-state disclosure token for unscale/clip facts the collector cannot
@@ -101,7 +101,7 @@ def _require_token(field_name: str, value: str, vocabulary: tuple[str, ...]) -> 
 
 @dataclass(frozen=True)
 class RunRecord:
-    """Run-level identity and configuration (D4).
+    """Run-level identity and configuration.
 
     ``segment_index`` / ``parent_segment_id`` carry resume ancestry: a
     restart appends a NEW segment -- the boundary is preserved so a merged
@@ -140,7 +140,7 @@ class RunRecord:
             if not isinstance(cadence, int) or cadence < 1:
                 raise HistorySchemaError(
                     f"cadence for stream {stream!r} must be a positive int, got "
-                    f"{cadence!r}. Cadence is per-STREAM (D21).",
+                    f"{cadence!r}. Cadence is per-STREAM.",
                     code="history_vocab_invalid",
                     field="cadences",
                     value=cadence,
@@ -150,7 +150,7 @@ class RunRecord:
 
 @dataclass(frozen=True)
 class SiteRecord:
-    """Stable structural site identity (D5); labels are display metadata.
+    """Stable structural site identity; labels are display metadata.
 
     ``site_id`` is the artifact-local structural key. ``structural_key``
     carries the L1 ``site_key`` spelling when the site was derived from a
@@ -174,7 +174,7 @@ class SiteRecord:
     def __post_init__(self) -> None:
         """Validate the closed site kinds.
 
-        ``op`` and ``facet`` are the Route-B tiers (F25): an op site is one
+        ``op`` and ``facet`` are the Route-B tiers: an op site is one
         fastlog structural op position; a facet site is one declared slice
         of an op site (e.g. an attention head), its parent recorded in
         ``module_path`` alongside the facet spelling in ``display_label``.
@@ -183,7 +183,7 @@ class SiteRecord:
         _require_token("kind", self.kind, ("module", "param", "op", "facet"))
 
     def ended(self, step: int, reason: str) -> SiteRecord:
-        """Return a copy marking this series ended at ``step`` (D5 drift).
+        """Return a copy marking this series ended at ``step`` (drift).
 
         Drift ends a series and starts a new one -- disclosure, not refusal
         and not re-binding.
@@ -194,7 +194,7 @@ class SiteRecord:
 
 @dataclass(frozen=True)
 class StepBlockRecord:
-    """The atomic training coordinate (D4/D6/D17).
+    """The atomic training coordinate.
 
     ``trace_ref`` is the nullable pointer to a retained ``Trace`` for this
     step (an interesting step a check or the caller chose to keep). There is
@@ -239,8 +239,8 @@ class ObservationRecord:
     """(step, site, stream, phase) plus presence, payloads, disclosures.
 
     ``presence != 'observed'`` carries NO payloads: a missing value must
-    never read as zero (D6). Disclosures ride ``grad_scale`` (mandatory for
-    gradient streams), ``reduction_dtype``, ``estimated`` (the D11 update
+    never read as zero. Disclosures ride ``grad_scale`` (mandatory for
+    gradient streams), ``reduction_dtype``, ``estimated`` (the update
     channel), and ``sample_size``.
     """
 
@@ -267,8 +267,7 @@ class ObservationRecord:
         if self.presence == "observed":
             if self.spine is None:
                 raise HistorySchemaError(
-                    "An 'observed' observation must carry a spine payload; the "
-                    "spine is always-on (D8).",
+                    "An 'observed' observation must carry a spine payload; the spine is always-on.",
                     code="history_vocab_invalid",
                     field="spine",
                     remedy="Attach the SpineResult, or use a non-observed presence token.",
@@ -277,7 +276,7 @@ class ObservationRecord:
                 raise HistorySchemaError(
                     "Gradient-stream observations must state grad_scale "
                     "('scaled' | 'unscaled' | 'unknown'); unknown never "
-                    "masquerades (D7), and without the stamp a dashboard cannot "
+                    "masquerades, and without the stamp a dashboard cannot "
                     "label its own y-axis.",
                     code="history_vocab_invalid",
                     field="grad_scale",
@@ -287,7 +286,7 @@ class ObservationRecord:
             raise HistorySchemaError(
                 f"presence={self.presence!r} may not carry payloads: a "
                 "non-observed observation with numbers would let missing read "
-                "as data (D6).",
+                "as data.",
                 code="history_vocab_invalid",
                 field="presence",
                 remedy="Drop the payloads or mark the observation 'observed'.",
@@ -304,7 +303,7 @@ def merge_spine_results(a: RunningStatsResult, b: RunningStatsResult) -> Running
     """Merge two finalized spines; integer counts EXACT, floats stable.
 
     Moments merge with Chan's parallel algorithm; sums add pairwise. The
-    result's floating fields are documented approximate across merges (D8).
+    result's floating fields are documented approximate across merges.
     """
 
     if a.num_finite == 0:
@@ -363,7 +362,7 @@ def merge_histogram_results(a: HistogramResult, b: HistogramResult) -> Histogram
     if a.descriptor != b.descriptor:
         raise StatKernelError(
             "Cannot merge histograms across unequal grid descriptors "
-            f"({a.descriptor!r} vs {b.descriptor!r}); rebinning is banned (D9).",
+            f"({a.descriptor!r} vs {b.descriptor!r}); rebinning is banned.",
             code="sketch_descriptor_mismatch",
             mine=repr(a.descriptor),
             theirs=repr(b.descriptor),
@@ -393,7 +392,7 @@ def merge_observations(a: ObservationRecord, b: ObservationRecord) -> Observatio
     if a.identity != b.identity:
         raise HistorySchemaError(
             f"Cannot merge observations with different identities {a.identity} "
-            f"vs {b.identity}; merge is within-a-series only (D12): across "
+            f"vs {b.identity}; merge is within-a-series only: across "
             "steps, micro-batches, ranks, runs -- never across sites.",
             code="history_merge_incompatible",
             mine=a.identity,
@@ -405,7 +404,7 @@ def merge_observations(a: ObservationRecord, b: ObservationRecord) -> Observatio
             raise HistorySchemaError(
                 f"Cannot merge observations with conflicting grad_scale stamps "
                 f"({a.grad_scale!r} vs {b.grad_scale!r}); a merged gradient "
-                "number with a mixed scale basis is unlabelable (D7).",
+                "number with a mixed scale basis is unlabelable.",
                 code="history_merge_incompatible",
                 mine=a.grad_scale,
                 theirs=b.grad_scale,
@@ -456,7 +455,7 @@ def validate_step_order(
     *,
     same_segment: bool,
 ) -> None:
-    """Refuse duplicate/decreasing explicit steps within one segment (D6).
+    """Refuse duplicate/decreasing explicit steps within one segment.
 
     A resume declares a NEW segment; within a segment the step axis is
     strictly increasing.
@@ -466,7 +465,7 @@ def validate_step_order(
         raise HistorySchemaError(
             f"global_step {step} is not greater than the previous step "
             f"{prior_step} in the same segment. Duplicate or decreasing steps "
-            "refuse without a declared new segment (D6): a silently reused "
+            "refuse without a declared new segment: a silently reused "
             "coordinate corrupts every series that shares the axis.",
             code="history_step_regression",
             prior_step=prior_step,

@@ -106,7 +106,7 @@ class RankEvidence:
 
 
 def _validate_boundary(entry: dict[str, Any], index: int, source: str) -> None:
-    """Validate one journal entry against the closed C0 vocabularies.
+    """Validate one journal entry against the closed vocabularies.
 
     Runs the rule groups of ``_boundary_rules`` in their contract order; when
     an entry carries several defects, the earliest group's refusal wins.
@@ -180,11 +180,11 @@ def _distributed_record(trace: Any, source: str) -> dict[str, Any]:
 def _refuse_funcol_boundary(entry: dict[str, Any], index: int, source: str) -> None:
     """Refuse a core carrying a functional-collective (funcol) boundary.
 
-    Merge-ranks C2 recording (fail-closed): funcol boundaries carry the
-    documented-unstable v0 payload, which the frozen C1 derivation cannot
+    Merge-ranks recording (fail-closed): funcol boundaries carry the
+    documented-unstable v0 payload, which the frozen derivation cannot
     join. Refusing the CORE typed is strictly honest; the shipped alternative
     was merging with the funcol traffic invisibly absent. The merged-side
-    funcol join is C2 merged-side work behind its own ruling (L8 plan 3.2c).
+    funcol join is merged-side work behind its own ruling (L8 plan 3.2c).
 
     Raises
     ------
@@ -244,7 +244,7 @@ class _CoreCoherence:
 
         Presence is uniform per group within one rank core. Without this,
         stripping ``my_group_rank`` from one boundary of a slice-witnessed join
-        silently deleted its value_divergence finding (R18-2; findings must
+        silently deleted its value_divergence finding (findings must
         never disappear by record deletion).
         """
 
@@ -420,7 +420,7 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
     record = _distributed_record(trace, source)
     boundaries = record["boundaries"]
     if not isinstance(boundaries, (list, tuple)):
-        # W051-CAPT3 (IO remainder): the per-rank journal the merge JOINS is
+        # The per-rank journal the merge JOINS is
         # validated here at merge entry, live and loaded cores alike. A
         # non-sequence ``boundaries`` (an int, a bool, a mapping, a string)
         # previously escaped as a bare TypeError from the row walk or was

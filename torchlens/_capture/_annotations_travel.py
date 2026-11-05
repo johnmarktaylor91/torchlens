@@ -1,4 +1,4 @@
-"""Per-sub-key TRAVEL POLICY for ``Trace.annotations`` (lane F40a, foldA D6).
+"""Per-sub-key TRAVEL POLICY for ``Trace.annotations``.
 
 ``Trace.annotations`` is classified as inheritable graph state
 (``data_classes/_trace_components.py``), so every sub-key rides every
@@ -15,7 +15,7 @@ Pattern-of-record: :mod:`torchlens._io.prerelease`'s
 ``_ANNOTATIONS_KEY_REGISTRY`` (a per-sub-key registry for the persistence
 policy dimension); this is the sibling registry for the TRAVEL dimension.
 
-THE RULE (foldA D6, shed 0): capture-evidence annotations never ride a fresh
+THE RULE (shed 0): capture-evidence annotations never ride a fresh
 execution. ``path_faithfulness=VERIFIED`` may NEVER coexist with foreign step
 evidence. The seam is the ONE provider settlement finalizer
 (``torchlens._runnable.providers._finalize_provider_run``), which every run
@@ -26,20 +26,20 @@ records still hold the capture's own values), so forks carry these keys
 until an engine re-executes; the fork builder cross-references this module
 instead of deciding per key.
 
-This lane deliberately mints NO digest and NO persisted field (foldA D7): the
-positive "this ledger belongs to this product" claim is F40b's mint and F42's
+This lane deliberately mints NO digest and NO persisted field: the
+positive "this ledger belongs to this product" claim is the mint of the capture and coupling digests, and the
 consumption. This module only stops the ledger riding a fresh execution.
 
-The per-op ``Op.episode_step`` stamps (lane F42, written at settlement) are
+The per-op ``Op.episode_step`` stamps (written at settlement) are
 evidence of the SAME captured execution as the ledger, so the policy scrubs
-them on every fresh-execution product alongside the ledger drop (W051 fix
+them on every fresh-execution product alongside the ledger drop
 for audit finding AUD-CODE 1.1: a stamped product whose ledger became a
 travel note read as ``capture_kind="plain"`` and could be SAVED but never
-LOADED -- the C07X identity-fact gate refuses stamps without a declaration,
+LOADED -- the identity-fact gate refuses stamps without a declaration,
 correctly; the defect was the surviving stamps, never the gate).
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session;
-semantics are pinned by the foldA memo (D6) and the red tests in
+semantics are pinned by the foldA memo and the red tests in
 ``tests/test_episode_truth_travel_policy.py``.
 """
 
@@ -104,8 +104,8 @@ class AnnotationsTravelPolicy:
 
 
 #: Registered sub-key travel rows. ``sidecar`` is deliberately ABSENT: its
-#: travel semantics belong to the C01 sidecar-seam owner, argued in that
-#: lane, per key, once (foldA s8).
+#: travel semantics belong to the sidecar-seam owner, argued in that
+#: lane, per key, once.
 _TRAVEL_REGISTRY: dict[str, AnnotationsTravelPolicy] = {}
 
 
@@ -144,8 +144,7 @@ def register_travel_policy(
         raise ValueError("annotations travel-policy key must be a non-empty string")
     if policy != TRAVEL_CAPTURE_EVIDENCE:
         raise ValueError(
-            f"unknown annotations travel policy {policy!r}; only "
-            f"{TRAVEL_CAPTURE_EVIDENCE!r} ships (foldA D6)"
+            f"unknown annotations travel policy {policy!r}; only {TRAVEL_CAPTURE_EVIDENCE!r} ships"
         )
     if (drop_mode == "note") != (note_code is not None):
         raise ValueError(
@@ -265,7 +264,7 @@ def scrub_fresh_execution_annotations(trace: Any) -> tuple[str, ...]:
 
 
 # ---------------------------------------------------------------------------
-# Registered rows (lane F40a). ``sidecar`` stays with its C01 owner.
+# Registered rows. ``sidecar`` stays with its owner.
 # ---------------------------------------------------------------------------
 
 register_travel_policy(

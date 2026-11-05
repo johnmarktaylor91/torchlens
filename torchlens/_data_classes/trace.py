@@ -408,7 +408,7 @@ class Conditional:
 
     # Declared so the scrubber walks this record and applies the source-privacy
     # policy to ``source_file`` (the absolute forward-module path) instead of
-    # persisting it verbatim (B8-18). ``ClassVar`` so ``@dataclass`` ignores it.
+    # persisting it verbatim. ``ClassVar`` so ``@dataclass`` ignores it.
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "id": FieldPolicy.KEEP,
         "arms": FieldPolicy.KEEP,
@@ -479,7 +479,7 @@ class ConditionalAccessor:
 
     # Declared so the scrubber descends into ``_list``/``_dict`` and reaches each
     # ``Conditional`` (whose ``source_file`` must be privacy-scrubbed) rather than
-    # persisting the whole accessor subtree verbatim (B8-18). ``_list`` and ``_dict``
+    # persisting the whole accessor subtree verbatim. ``_list`` and ``_dict``
     # share the same ``Conditional`` objects, so the scrub memo keeps them identical.
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_list": FieldPolicy.KEEP,
@@ -954,9 +954,9 @@ class Trace(TraceOutputMixin, TraceLike):
         # L7a: a structure-only capture; value consumers gate through
         # torchlens._capture.structure_only. DOCUMENTED-UNSTABLE spelling.
         self._options_structure_only: bool = False
-        # tlspec v9 entry-dark slots (C07): the structure-only evidence
-        # envelope (F33 writer) and the (path, digest) source-snapshot table
-        # (F30 writer). Declared, persisted, load-validated; no writer yet.
+        # tlspec v9 entry-dark slots: the structure-only evidence
+        # envelope and the (path, digest) source-snapshot table.
+        # Declared, persisted, load-validated; no writer yet.
         self._graph_structure_evidence: dict[str, Any] | None = None
         self._source_snapshots: list[dict[str, Any]] = []
         # L6: session-time audit rows of resolved-selection interventions (query repr,
@@ -964,7 +964,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self.intervention_audit: list[dict[str, Any]] = []
         self._runnable = RunnableTraceState()
         self._fast_run_session: Any | None = None
-        # Merge-ranks C2 plane-P: session-time physical dispatch observation
+        # Merge-ranks plane-P: session-time physical dispatch observation
         # journal for armed captures (census criteria 2-4 evidence). DROP
         # under its private name; never survives save/load. DOCUMENTED-UNSTABLE.
         self._distributed_plane_p: Any | None = None
@@ -1064,7 +1064,7 @@ class Trace(TraceOutputMixin, TraceLike):
         # written by each producer once step-7 grouping settles.
         self._options_grouping = "structural"
         self._options_grouping_policy: dict[str, Any] | None = None
-        # L8/F6: set to "rank_local_shard" by C2 capture when any param/input
+        # Set to "rank_local_shard" by capture when any param/input
         # carries a non-Replicate DTensor placement (the sharded predicate in
         # torchlens.distributed._dtensor). Unreachable until the D-L8-CAP
         # capture relaxation: every sharded capture still refuses at entry.
@@ -1308,7 +1308,7 @@ class Trace(TraceOutputMixin, TraceLike):
         )
 
     def check_plan(self, plan: Any) -> Any:
-        """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
+        """Audit-only plan check (nnsight-scan parity).
 
         Resolves each plan entry's selector against this trace, checks
         multiplicity, and compares declared replacement geometry (a meta
@@ -1633,12 +1633,12 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.report()._trace_summary._trace_repr(self)
 
     def _repr_honesty_suffix(self) -> str:
-        """Outcome + health suffix tokens for the identity repr (F10)."""
+        """Outcome + health suffix tokens for the identity repr."""
 
         return _doors.report()._trace_summary._trace_honesty_suffix(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
-        """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.
+        """Thin lazy treescope hook: the dataclass-dump guard.
 
         Delegates to the bridge; falls through to ``NotImplemented`` on the
         ``disabled()`` scope or any fault -- never an exception in a cell.
@@ -1810,7 +1810,7 @@ class Trace(TraceOutputMixin, TraceLike):
         )
         # A deepcopy stays inside the live session, so the SAME-process copy
         # keeps the full verification verdict -- the pickle path deliberately
-        # refuses to persist a positive claim (grind-r5 P7).
+        # refuses to persist a positive claim.
         cloned._provenance_verified = self._provenance_verified
         cloned._provenance_verification_reason = self._provenance_verification_reason
         memo[id(self)] = cloned
@@ -1934,7 +1934,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def discharge_against(self, real_trace: "Trace") -> Any:
         """Discharge this structure-only trace's hypotheses against a real run.
 
-        DOCUMENTED-UNSTABLE surface (L7a; no deprecation shim owed on
+        DOCUMENTED-UNSTABLE surface (no deprecation shim owed on
         rename). Only defined on a structure-only capture; ``real_trace``
         must be an ordinary settled COMPLETE capture of the same graph.
         Returns a frozen ``StructureDischarge`` record (per-claim table +
@@ -3412,7 +3412,7 @@ attach_trace_docs(Trace)
 Trace._FIELD_FORK_POLICY = fork_policy_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
 Trace._DEFAULT_FILL_STATE = default_fill_state_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
 
-# The tlspec v8 coordinated bump retired this class's S3 pre-release
+# The tlspec v8 coordinated bump retired this class's pre-release
 # registrations: every formerly gated Trace field above now declares its
 # persisting policy directly. The registrar mechanism itself stays for
 # future sprints (torchlens/_io/prerelease.py).

@@ -1,4 +1,4 @@
-"""The one-call device-profiling door (torchnative 4.3; FLIP-1 consumer).
+"""The one-call device-profiling door.
 
 ``kernel_profile(model, x)`` runs ONE execution at the save-nothing tier
 (the measurement tier: cheaper and more attributable than a saving capture)
@@ -94,7 +94,7 @@ class KernelProfileReport:
     session_facts: dict[str, Any]
 
     def __repr__(self) -> str:
-        """Bounded identity card (D31): availability leads; the trace is never dumped."""
+        """Bounded identity card: availability leads; the trace is never dumped."""
 
         return (
             f"KernelProfileReport(availability={self.availability!r}, "
@@ -241,7 +241,7 @@ def _write_native_chrome(
 
     ``raw_chrome_bytes``, when given, is the exact export the event
     extraction already pulled from this same profiler (the chrome-stream
-    fallback path, W2.1): torch's Kineto result object permits exactly ONE
+    fallback path): torch's Kineto result object permits exactly ONE
     ``export_chrome_trace`` save per profiler and raises ``RuntimeError:
     Trace is already saved.`` on a second call, so this reuses those bytes
     verbatim instead of re-exporting.

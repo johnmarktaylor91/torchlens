@@ -125,7 +125,7 @@ class TorchPayloadCodec:
         Past that guard the old body called ``.numpy()`` with NO bfloat16 handling, so had
         it ever been reached it would have raised a raw
         ``TypeError: Got unsupported ScalarType BFloat16`` from deep inside torch -- for a
-        dtype ``tensor_policy._SUPPORTED_DTYPES`` declares SUPPORTED (r6 M5). Rather than
+        dtype ``tensor_policy._SUPPORTED_DTYPES`` declares SUPPORTED. Rather than
         invent untested transport semantics for a path that cannot run, the method stays
         (the ``PayloadCodec`` protocol requires it) and fails CLOSED naming the real
         routing. bfloat16 payloads round-trip through ``_write_tensor_blob``; that is
@@ -322,7 +322,7 @@ class JaxPayloadCodec:
         try:
             return jax.device_put(value, target_device)
         except (TypeError, ValueError, RuntimeError) as exc:
-            # r6 L6: this used to swallow the failure and ``return value``, handing back an
+            # This used to swallow the failure and ``return value``, handing back an
             # array on the WRONG device while silently dropping the caller's explicit
             # ``map_location``. Every sibling codec raises
             # ``BackendRuntimeCompatibilityError`` when it cannot honor a requested
@@ -484,7 +484,7 @@ class TinygradPayloadCodec:
                 "the installed tinygrad runtime."
             )
 
-        # r54 sec_2: the artifact ``logical_device``/``device_at_save`` string is
+        # the artifact ``logical_device``/``device_at_save`` string is
         # attacker-controlled and was passed straight into ``Tensor(device=...)``,
         # where tinygrad's ``disk:<path>`` backend writes an attacker-named file on
         # a default ``tl.load()``. Route it through the shared closed device
@@ -711,7 +711,7 @@ class PaddlePayloadCodec:
 
         place = _resolve_paddle_place(paddle, map_location)
         if place is None:
-            # r54 sec_2 (sibling unification): the artifact ``logical_device`` is
+            # (sibling unification): the artifact ``logical_device`` is
             # attacker data -- gate it through the shared closed device grammar
             # before it reaches Paddle's place resolver, so no codec can smuggle a
             # path/scheme token (probe D: 0 legit Paddle tokens over-refused).
@@ -1226,7 +1226,7 @@ def _logical_shape_from_metadata(codec_metadata: Any) -> tuple[int, ...] | None:
         return None
     if not all(isinstance(dim, int) and not isinstance(dim, bool) for dim in logical_shape):
         return None
-    # Reject negative dims (R10-8): a forged ``-1`` silently drives a
+    # Reject negative dims: a forged ``-1`` silently drives a
     # ``reshape``-inferred never-declared shape (and two ``-1``s escape as a raw
     # numpy ValueError). Real logical shapes are non-negative, matching the
     # manifest-level dim ceilings in manifest.py.

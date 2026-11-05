@@ -142,7 +142,7 @@ class BackwardPass:
     _source_trace_ref: Any = None
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M9 facade hook).
+        """Yield live state pairs from the backing row (facade hook).
 
         A live pass with a recorded census contributes its counted executed
         backward as ``_executed_flops_record``, so every saved copy carries it.
@@ -173,7 +173,7 @@ class BackwardPass:
         return executed_flops_record(attribute_census(trace, self, ops))
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M9 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -316,7 +316,7 @@ class BackwardPass:
         return pd.DataFrame([row], columns=list(row))
 
 
-# The M9 facade: the declared stored fields become row-cell descriptors
+# The facade: the declared stored fields become row-cell descriptors
 # (dataclass defaults are baked into the generated __init__). Rows adopt
 # into the owning backward epoch's stores.
 _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (

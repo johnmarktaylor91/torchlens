@@ -4,15 +4,15 @@ The declared late-bind posture (design memo sec 5/8): a structure-only
 capture's declared state slots carry GEOMETRY digests at capture time and
 receive their VALUES at bind time, where real byte digests are computed so a
 late-bound run is attestable against what was ACTUALLY bound. The
-closed-vocabulary ``StateSource`` member this posture needs is an S2
-AMENDMENT REQUEST (R-L7B-1) authored by the S2 author; this module therefore
+closed-vocabulary ``StateSource`` member this posture needs is an
+amendment request; this module therefore
 ships ENTRY-DARK — pure functions with no public wiring, no new vocabulary,
 no trace state — behind :data:`STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN`. The
 capability rows ``save_runnable`` / ``live_replay`` /
 ``runnable_ready_composition`` keep refusing until the amendment lands and
 the L7b implementation PR flips them with evidence.
 
-S1 CONSUMER DISCIPLINE: late-bound values validate through the published
+CONSUMER DISCIPLINE: late-bound values validate through the published
 seam surface ``validate_nonpersistent_buffer_mapping_for_descriptor``
 (``torchlens/_runnable/state.py`` extension point E3); this module never
 reads runnable Trace state and never adds a binding/validation layer of its
@@ -35,7 +35,7 @@ collide by construction (pinned in tests/test_structure_only_bridge.py).
 
 NAMING: every spelling here is DOCUMENTED-UNSTABLE pending naming-session
 ratification; the refusal reuses the existing closed
-``state_metadata_mismatch`` vocabulary (a dedicated code, if any, is the S2
+``state_metadata_mismatch`` vocabulary (a dedicated code, if any, is the
 amendment's to assign — this module mints none).
 """
 
@@ -57,9 +57,9 @@ __all__ = [
 STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN: Final[bool] = False
 """Entry gate for the structure-only -> runnable bridge.
 
-``False`` until the S2 StateSource amendment (request R-L7B-1) lands; it is
-flipped ONLY by the L7b amendment implementation PR, in the same change that
-wires the bridge into the S1 coordinator verbs and flips the three L7b
+``False`` until the StateSource amendment lands; it is
+flipped ONLY by the amendment implementation, in the same change that
+wires the bridge into the coordinator verbs and flips the three
 capability rows with evidence. While ``False`` the bridge is test-reachable
 pure machinery and the capability-row refusals are the only public behavior.
 """
@@ -175,7 +175,7 @@ def compute_bound_state_digests(values: Mapping[str, Any]) -> dict[str, str]:
 class BoundBufferBinding:
     """Frozen result of validating and digesting late-bound buffer values.
 
-    ``staged`` is the detached, slot-keyed mapping returned by the S1
+    ``staged`` is the detached, slot-keyed mapping returned by the
     validator; ``bind_digests`` are the mandatory bind-time byte digests of
     exactly the staged values; ``declared_digests`` are the geometry digests
     of the same slots (the capture-time posture), kept alongside so the two
@@ -194,7 +194,7 @@ def validate_and_digest_bound_buffers(
     """Validate late-bound non-persistent buffer values and digest them.
 
     The one binding path of the declared late-bind posture: values validate
-    through the EXISTING S1 surface
+    through the EXISTING surface
     :func:`torchlens._runnable.state.validate_nonpersistent_buffer_mapping_for_descriptor`
     (no new validation layer — the memo's resized delta), then every staged
     value receives its mandatory bind-time byte digest and every slot its
@@ -218,7 +218,7 @@ def validate_and_digest_bound_buffers(
     ------
     StateBindingError
         If names, shapes, dtypes, roles, or aliases violate the slot
-        contracts (S1 validator, unchanged), or if any mandatory bind digest
+        contracts (validator, unchanged), or if any mandatory bind digest
         cannot be computed.
     """
 

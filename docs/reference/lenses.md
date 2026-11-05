@@ -60,26 +60,26 @@ leftright + `color_by="flops"`), `debug_edge_shapes`.
 
 ## Honesty machinery
 
-- **View-aware source families (N16).** Perf rows declare a FAMILY
+- **View-aware source families.** Perf rows declare a FAMILY
   (`time`/`bytes`/`flops`); resolution binds `func_duration` on unrolled
   views and `total_func_duration` on rolled views, the rolled case carries
   the mandatory aggregation line, and zero coverage refuses typed
   (`lens_source_zero_coverage`) -- never a populated legend over an
   unencoded graph.
-- **The budget resolver (N10).** Rows that compact search the shipped
+- **The budget resolver.** Rows that compact search the shipped
   dials (float collapse schedule below the optimizer ceiling; call-depth
   truncation above it) for the coarsest setting inside the two-sided band
   (floor 100 / target 160 / ceiling 220), plus a coverage floor (0.80) when
   a colour channel is active. `collapse="none"` wins when it fits; the
   resolved dial is disclosed BY NAME, always.
-- **Six-state nonfinite channel (N6).** The debug lens derives
+- **Six-state nonfinite channel.** The debug lens derives
   finite / nan / +inf / -inf / mixed / not_checked per op from saved
   payloads and paints motifs per the per-shape table (striped fills on
   boxes, wedged on ellipses, border-only degrade elsewhere -- box3d
   explicitly covered). Degrade is two-mode: zero coverage = one legend
   line, no motifs; partial coverage = per-node `not_checked` marks.
   NOT-CHECKED-as-FINITE is a zero-tolerance honesty class.
-- **Display filter (N9).** `DisplayFilter(exclude=...)` /
+- **Display filter.** `DisplayFilter(exclude=...)` /
   `DisplayFilter(include=...)` with the closed v1 tokens `reshapes`,
   `constants`, `non_module_ops` (documented as torchview MIGRATION PARITY,
   never the headline), a same-trace Selection, or a raw predicate (the

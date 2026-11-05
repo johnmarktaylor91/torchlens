@@ -248,7 +248,7 @@ class _TlSpecWriter:
             )
         target_path = Path(path)
         _reject_symlink_path(target_path, context="bundle tlspec target")
-        # Target-PREFIXED staging/backup names (R38+R59, one defect two labs):
+        # Target-PREFIXED staging/backup names (one defect two labs):
         # the old target-independent ``tmp.<hex>`` / ``tmp.bak.<hex>`` names
         # were invisible to ``cleanup_tmp(target)`` (it globs
         # ``{name}.tmp.*`` / ``{name}.bak.*``), so a SIGKILL between the two
@@ -356,12 +356,12 @@ class _TlSpecWriter:
 
     @staticmethod
     def _add_gated_member_relations(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
-        """Write the S6 ``member_relations`` key into ``bundle.json``.
+        """Write the ``member_relations`` key into ``bundle.json``.
 
         The key persists plainly as of the tlspec v8 coordinated bump; the
-        load side validates it against the closed S6 row schema and re-checks
-        R1 against the loaded member names. An empty table writes nothing
-        (S6 R7: absence means a plain bundle).
+        load side validates it against the closed row schema and re-checks
+        that every endpoint names a loaded member. An empty table writes
+        nothing (absence means a plain bundle).
         """
 
         relation_table = getattr(bundle, "_member_relations", None)
@@ -371,13 +371,13 @@ class _TlSpecWriter:
 
     @staticmethod
     def _add_lineage_sections(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
-        """Write the F03 lineage sections into ``bundle.json``.
+        """Write the lineage sections into ``bundle.json``.
 
-        The C07X split-off join shapes (foldB s4.4 item 12): container
+        The split-off join shapes: container
         identity (``bundle_id`` / ``forked_from_bundle_id``), per-member
         ``member_construction`` origin anchors, the hash-chained
         ``operations`` chronology, and the ``member_effect_tables`` registry.
-        Empty surfaces write nothing (entry-dark on plain bundles; a pre-F03
+        Empty surfaces write nothing (entry-dark on plain bundles; an older
         reader in the same unreleased window sees only known keys).
         """
 
@@ -405,7 +405,7 @@ class _TlSpecWriter:
     def _add_preserved_sections(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
         """Re-emit preserved unknown namespaced ``bundle.json`` sections.
 
-        Loader doctrine leg (c) (the C07X amendment): sections a load
+        Loader doctrine leg (c) (the amendment): sections a load
         preserved opaque write back verbatim so re-save never silently
         destroys another provider's well-formed data. A preserved key can
         never collide with a writer-owned key — the loader only preserves

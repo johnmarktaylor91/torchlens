@@ -6,7 +6,7 @@ Layout (design-merge-ranks-c v5, 4.1)::
       manifest.json            # root integrity record (merged-directory)
       merge/descriptor.json    # canonical-JSON derivation CACHE
       members/rank_NNNN.tlspec # ordinary rank-core bundles, byte-identical
-                               # to standalone saves (P1)
+                               # to standalone saves
 
 The descriptor is a CACHE; the rank cores are the authority (4.3). Every load
 verifies integrity (descriptor bytes vs root-manifest checksum, member tree
@@ -52,7 +52,7 @@ _EXC_TEXT_LIMIT = 300
 
 
 def _bounded_exc(exc: BaseException) -> str:
-    """Bounded ``TypeName: text`` rendering of a chained cause (R65-14).
+    """Bounded ``TypeName: text`` rendering of a chained cause.
 
     Artifact-controlled exception strings are interpolated into refusal
     messages; without a cap a hostile artifact chooses the message size.
@@ -70,7 +70,7 @@ surrogates, LF, no insignificant whitespace."""
 
 
 def _reject_noncanonical(obj: Any, path: str = "$") -> None:
-    """Refuse payload shapes ``json.dumps`` would coerce or die on (R73).
+    """Refuse payload shapes ``json.dumps`` would coerce or die on.
 
     The output feeds SHA-256 integrity digests and byte-equality derivation
     oracles, so silent coercion is a canonicalization COLLISION: ``{1: "a"}``
@@ -223,7 +223,7 @@ def _tamper(detail: str, *, remedy: str = _TAMPER_REMEDY, **payload: Any) -> Mer
 def _schema_refusal(
     detail: str, *, remedy: str = _SCHEMA_REMEDY, **payload: Any
 ) -> MergedArtifactError:
-    """Build the typed merged-artifact schema refusal (carries a remedy, R65)."""
+    """Build the typed merged-artifact schema refusal (carries a remedy)."""
 
     return MergedArtifactError(
         f"Merged artifact schema refusal: {detail}",
@@ -239,7 +239,7 @@ def _restrict_mode(path: Path, mode: int) -> None:
     ``mkdir``/``write_bytes`` honor the ambient umask, so under the common
     umask 002 the merged root, its ``merge/`` subdir, and the descriptor /
     manifest sidecars were left group-writable/readable even though the copied
-    rank cores inside stay 0600/0700 (B8-10 parity, missed for the merged
+    rank cores inside stay 0600/0700 (missed for the merged
     writer). Best-effort: a filesystem that ignores mode bits is not a save
     failure.
 
@@ -280,7 +280,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
     """
 
     root = Path(path)
-    # ``reason`` disambiguates the frozen MERGE_INPUT_INVALID code (R65-4):
+    # ``reason`` disambiguates the frozen MERGE_INPUT_INVALID code:
     # bad merge EVIDENCE and save-target FILESYSTEM conditions shared the one
     # code with nothing but message text to tell them apart.
     if root.is_symlink():
@@ -297,7 +297,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
             reason="save_target_exists",
             remedy="pass overwrite=True or choose a fresh target path",
         )
-    # Re-verify derivation-vs-members BEFORE writing anything (deep-hunt F12):
+    # Re-verify derivation-vs-members BEFORE writing anything (deep-hunt):
     # a live input trace whose distributed annotations were mutated between
     # merge_ranks and save() would otherwise produce an artifact whose members
     # never rederive to the cached descriptor -- every future load refuses as
@@ -342,9 +342,9 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
                 source = Path(handle.path)
                 if source.is_dir():
                     # Copy is the only link mode: member bytes stay byte-identical
-                    # to the standalone rank-core save (P1). ``symlinks=True``
+                    # to the standalone rank-core save. ``symlinks=True``
                     # copies a symlink AS a symlink instead of DEREFERENCING it
-                    # (b4:R38-5): the default ``symlinks=False`` followed a symlink
+                    # the default ``symlinks=False`` followed a symlink
                     # inside the source rank core and copied its TARGET's bytes
                     # (e.g. a private file outside the core) INTO the shareable
                     # merged artifact -- an exfiltration channel. Preserved
@@ -400,7 +400,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
             # Coarse system-machine form, matching the core bundle writer's
             # deliberate choice: the full platform.platform() string leaks the
             # kernel build, libc, and cloud image tag into a shareable
-            # artifact (B8-22).
+            # artifact.
             "platform": f"{platform_module.system().lower()}-{platform_module.machine().lower()}",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -414,7 +414,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
         # cannot leave a "successfully saved" artifact holding zero-length or
         # partial files. load_merged requires EXACT descriptor-sha + per-member
         # tree-hash equality, so a torn publish reads back as a PERMANENT false
-        # merged_descriptor_invalid accusation on an honest save (deep-hunt F12);
+        # merged_descriptor_invalid accusation on an honest save (deep-hunt);
         # the previous version is already renamed aside. Mirrors the .tlspec
         # writers (_io/bundle.py, _io/tlspec.py).
         fsync_tree(staging_root)
@@ -458,7 +458,7 @@ def save_merged(merged: MergedTrace, path: str | Path, *, overwrite: bool = Fals
 
                 # Categorized so operators can filter it with
                 # filterwarnings(category=TorchLensWarning); a bare UserWarning
-                # cannot be targeted (R66 F7).
+                # cannot be targeted.
                 warnings.warn(
                     f"Failed to restore the previous merged artifact after a "
                     f"failed overwrite; it remains recoverable at {backup_root}",
@@ -474,7 +474,7 @@ def _cached_verdict(cached: dict[str, Any], key: str, enum_type: Any) -> Any:
     The degraded-load branch is the ONE consumer of cache fields that exact
     rederivation equality has not already proven well-formed, so a missing key
     or a value outside the closed vocabulary previously escaped as a raw
-    KeyError/ValueError instead of the documented typed refusal (R18-5).
+    KeyError/ValueError instead of the documented typed refusal.
     """
 
     if key not in cached:
@@ -579,7 +579,7 @@ def _cached_join_refs(join: Any, index: int) -> tuple[dict[str, Any], dict[int, 
 def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> None:
     """Lower-bound the cached verdicts against what could have been derived.
 
-    Deep-hunt F1: with a member unparseable, the exact rederivation-equality
+    With a member unparseable, the exact rederivation-equality
     tamper oracle is off, and the substitute monotone checks only refused
     structural conflicts and a DIVERGENT rederivation under a non-DIVERGENT
     cache -- they never checked the ATTESTATION direction, so forging the
@@ -828,7 +828,7 @@ def load_merged(path: str | Path) -> MergedTrace:
     # types BEFORE any value is used: a validly hashed descriptor with
     # `"members": [{}]` (or a non-mapping entry, a boolean rank, ...)
     # previously escaped the documented typed refusal as a raw
-    # KeyError/TypeError (p2 R58 sol-R58-1).
+    # KeyError/TypeError.
     validated_members: dict[int, tuple[str, str]] = {}
     seen_paths: set[str] = set()
     for entry in members:
@@ -894,8 +894,7 @@ def load_merged(path: str | Path) -> MergedTrace:
             # evidence about the artifact: the member's bytes were just read
             # successfully by tree_hash above, so "no longer parses on this
             # runtime" would be an actively misleading description and would
-            # silently cap the merge at partial (B2R4-17, the resource half of
-            # A-R58-1). Resource errors surface to the caller raw; they never
+            # silently cap the merge at partial. Resource errors surface to the caller raw; they never
             # enter the degradation channel.
             raise
         except Exception as exc:
@@ -903,7 +902,7 @@ def load_merged(path: str | Path) -> MergedTrace:
             # guarded-unpickler denylist refusal or a corrupt/truncated pickle
             # stream -- is a tampered artifact, not environmental drift, and must
             # refuse typed exactly like the parses-but-invalid class below
-            # (A-R58-1: the bare handler laundered a `pickle.UnpicklingError`
+            # (the bare handler laundered a `pickle.UnpicklingError`
             # denylist refusal into the "no longer parses on this runtime"
             # channel, silently capping the merge at partial off the remaining
             # members while the adjacent handler refused the same tamper class).
@@ -927,7 +926,7 @@ def load_merged(path: str | Path) -> MergedTrace:
         # artifact -- a non-rank-core bundle dropped into a member slot -- not
         # an environmental degradation. Laundering it into the runtime-parse
         # channel silently caps the merge at partial instead of refusing
-        # (b3-opus). Refuse typed.
+        # Refuse typed.
         try:
             rank_evidence = extract_rank_evidence(trace, str(member_path))
         except MergeInputError as exc:
@@ -937,12 +936,12 @@ def load_merged(path: str | Path) -> MergedTrace:
                 "valid rank capture is a tampered artifact, never a runtime "
                 "degradation"
             ) from exc
-        # Rank-IDENTITY binding (b3-opus HIGH): the descriptor's member table
+        # Rank-IDENTITY binding: the descriptor's member table
         # merely LABELS which rank each slot holds, but each core proves its OWN
         # global rank from its boundary records. Nothing tied the two, so one
         # honest core byte-duplicated across N member slots read back as N
         # distinct attesting ranks -- making ATTESTED_COMPLETE structurally
-        # guaranteed and bypassing the R18-1 digest fix. The core's self-proven
+        # guaranteed and bypassing the digest fix. The core's self-proven
         # rank is the authority; a slot/label disagreement is tamper.
         if rank_evidence.rank != declared_rank:
             raise _tamper(
@@ -994,7 +993,7 @@ def load_merged(path: str | Path) -> MergedTrace:
 
         stored_alignment = _cached_verdict(cached, "stored_alignment", MergeAlignment)
         stored_value_status = _cached_verdict(cached, "stored_value_status", MergeValueStatus)
-        # Monotone coherence (R18-5): evidence is demote-only, so the cached
+        # Monotone coherence: evidence is demote-only, so the cached
         # full-set verdicts can never be BETTER than what the surviving cores
         # prove. A byte-exact digest mismatch among survivors cannot have been
         # attested with more ranks present, and survivors that structurally
@@ -1015,7 +1014,7 @@ def load_merged(path: str | Path) -> MergedTrace:
                 f"but the descriptor cache claims {stored_value_status.value!r}; "
                 "witness evidence is demote-only, so the cache was edited"
             )
-        # Attestation lower bound (deep-hunt F1): the two checks above only
+        # Attestation lower bound: the two checks above only
         # guard the DIVERGENT/structural direction, so a forged cache could
         # still upgrade an honest UNWITNESSED merge to attested_* once one
         # member was made unparseable. Recompute the cached verdicts from the

@@ -1,4 +1,4 @@
-"""Named per-phase capture/postprocess workspaces (M10).
+"""Named per-phase capture/postprocess workspaces.
 
 The former ``TraceBuildState`` — one flat 19-field scratchpad shared by every
 capture and postprocess phase — dissolves into three named workspaces, each
@@ -99,15 +99,14 @@ class RawGraphWorkspace:
 class ReleasedTensorStub:
     """Payload-free surrogate for a released module-forward-arg tensor.
 
-    F20 W1a (capture-floor release-at-emission): the module-arg stash held a
+    Release at emission: the module-arg stash would otherwise hold a
     strong reference to every module call's live input tensors for the whole
-    forward -- one of the two dominant capture-floor holders (brainpipe memo
-    section 3.3). At module exit the tensor leaves are replaced with these
+    forward -- one of the two dominant capture-floor holders. At module exit the tensor leaves are replaced with these
     stubs, which carry exactly what the two downstream consumers read: the
     ``shape``/``dtype`` pair for ``format_call_arg`` summaries and the shape
     for quantized-module FLOPs estimation. The payload itself is never
-    consumed after module exit on the torch trace path (GC-11 nulls
-    ``ModuleCall.forward_args`` before the trace is returned).
+    consumed after module exit on the torch trace path (``ModuleCall.forward_args`` is
+    nulled before the trace is returned).
     """
 
     shape: tuple[int, ...]

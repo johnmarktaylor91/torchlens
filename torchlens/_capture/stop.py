@@ -156,7 +156,7 @@ class StopDirective:
                 code="predicate_return_invalid",
             )
         if result:
-            # F6 stop-request latch + settlement boundary facts. The boundary
+            # stop-request latch + settlement boundary facts. The boundary
             # label prefers ``raw_label`` so the recorded label resolves
             # through ``trace[...]`` even on the prefix-alias compatibility
             # retry, where ``ctx.label`` is a bare prefix.
@@ -213,7 +213,7 @@ class StopDirective:
             "TorchLens capture stopped at first non-finite tensor: "
             f"op={func_name!r}, layer={raw_label!r}, shape={shape}, dtype={dtype}."
         )
-        # Structural marker for settle-time classification (and the F6 latch):
+        # Structural marker for settle-time classification (and the latch):
         # the settlement authority reads it to settle ABORTED_NONFINITE instead
         # of generic FAILED, and the boundary checkpoint uses it to detect a
         # swallowed abort. Set via the process-level active-trace slot because
@@ -238,7 +238,7 @@ class StopDirective:
             # The latch carries the exact exception's identity (weakly):
             # settlement classifies ABORTED_NONFINITE only for THIS error, so
             # an unrelated CaptureError after a swallowed abort keeps its own
-            # FAILED diagnostics (R06).
+            # FAILED diagnostics.
             active_trace.__dict__["_stop_requested"] = StopRequest(
                 kind="nonfinite",
                 reason=message,

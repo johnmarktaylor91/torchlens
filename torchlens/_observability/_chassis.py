@@ -1,11 +1,11 @@
 """The observer/check slot: one bounded immutable event stream (checks 4.7).
 
-This is the chassis SEAM the checks (F23) and trackers (F26) families plug
+This is the chassis SEAM the checks and trackers families plug
 into. Checks own detection, loop-phase and scale correctness, cadence,
 severity/action; trackers own buffering, aggregation, namespaces, sinks.
 Neither repeats the tensor scan; both consume the one stream published here.
 
-Event schema contract (checks memo 4.7, load-bearing):
+Event schema contract (load-bearing):
 
 - ``kind`` is one of ``scalar | histogram_counts | verdict | unavailable``;
   ``unavailable`` is MANDATORY vocabulary -- the structural answer to silent
@@ -36,7 +36,7 @@ __tl_layer__ = "L5"
 #: Closed event kinds (checks 4.7).
 EVENT_KINDS = ("scalar", "histogram_counts", "verdict", "unavailable")
 
-#: Closed step-axis provenance for events (D17 + hook-only mode).
+#: Closed step-axis provenance for events (including hook-only mode).
 AXIS_PROVENANCE = ("explicit", "implicit", "hook_only")
 
 #: Default stream bound: old events fall off the front; the stream is a

@@ -134,7 +134,7 @@ def do_event_extra(
         extra["selection_batch"] = {
             "pairs": len(site),
             "kinds": kinds,
-            # Kind-specific staged-store slots (D33), one count per door.
+            # Kind-specific staged-store slots, one count per door.
             "staged_stores": {
                 door: sum(kind == door.upper() for kind in kinds)
                 for door in ("act", "param", "edge")

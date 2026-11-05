@@ -7,7 +7,7 @@ blocks + interiors, the collector's documented prefix match), transformers
 in the declared band. Two independent legs, each n=20 interleaved A/B
 repeats against its own same-workload noise-band calibration.
 
-Publication rule (explorer D25): a row publishes only when its effect sits
+Publication rule (explorer): a row publishes only when its effect sits
 OUTSIDE the measured same-workload noise band at n >= 20 interleaved
 repeats; within-noise rows are disclosed as non-results, never quoted as
 numbers.
@@ -15,7 +15,7 @@ numbers.
 | Row | Median A (ms) | Median B (ms) | Ratio | IQR A/B (ms) | Noise band | Verdict | Note |
 |---|---:|---:|---:|---|---:|---|---|
 | gpt2-cpu module-tier SPINE-ONLY (132 sites, cadence 1) | 790.10 | 1097.11 | 1.389x | 516.70/790.16 | 1.541x | WITHIN NOISE -- not published | gpt2-124M CPU b1xs16; AdamW; loaded shared box |
-| gpt2-cpu module-tier spine + SKETCH (132 sites, sketch cadence 1) | 849.44 | 1940.53 | 2.284x | 1170.28/1935.59 | 1.296x | published | worst-case basis: every-site sketches every step on a tiny (b1xs16) forward; D21's shipped guidance is sketch cadence 10-100 |
+| gpt2-cpu module-tier spine + SKETCH (132 sites, sketch cadence 1) | 849.44 | 1940.53 | 2.284x | 1170.28/1935.59 | 1.296x | published | worst-case basis: every-site sketches every step on a tiny (b1xs16) forward; the shipped guidance is sketch cadence 10-100 |
 
 Collection facts from the sketch leg (exact, not timings): 132 sites, 22
 committed StepBlocks, plan totals 2,801,664 reduced elements and 573,408
@@ -27,7 +27,7 @@ byte-deterministic SVG, page 1 of 11 with the mandatory N-of-M footer.
 Reading the two rows together honestly: the always-on scalar spine is not
 distinguishable from noise on this loaded box even at cadence 1; the
 every-step full-sketch tier at this deliberately tiny per-step compute is a
-measured 2.28x and is exactly why cadence is per-stream (D21) and the
+measured 2.28x and is exactly why cadence is per-stream and the
 sketch tier defaults sparser than the spine. Neither row is a CUDA claim.
 
 The CUDA gate rows (module-tier <= 15% median full-train-step overhead,

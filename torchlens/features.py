@@ -1,4 +1,4 @@
-"""The ONE named, recorded feature-matrix shaping operation (tvscope B7/D15).
+"""The ONE named, recorded feature-matrix shaping operation.
 
 Every consumer that needs "stimuli x features" 2-D matrices -- the export
 contract, the rsatoolbox/xarray adapters, bring-your-own-alignment file
@@ -119,7 +119,7 @@ def as_matrix(
     batch_axis: int = 0,
     row_ids: list[str] | None = None,
 ) -> tuple[torch.Tensor, ShapingRecord]:
-    """Shape one tensor into the documented "stimuli x features" matrix (B7).
+    """Shape one tensor into the documented "stimuli x features" matrix.
 
     The stimulus axis moves to axis 0 (when it is not already there) and
     every remaining axis flattens, C-contiguously, into the feature axis --

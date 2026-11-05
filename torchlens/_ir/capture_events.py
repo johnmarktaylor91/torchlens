@@ -44,14 +44,14 @@ from .predicate import RecordContext
 from .refs import ParamRef, ReservedLabel, _clone_frozen_record
 
 # Op-record count at which a running capture DISCLOSES its growth exactly
-# once (r8 R60-1). Purely informational -- capture continues -- sized from
+# once. Purely informational -- capture continues -- sized from
 # the measured ~31KB/op journal+row cost (a 50k-op forward holds roughly
 # 1.5GB of op records before postprocess).
 OP_COUNT_DISCLOSURE_THRESHOLD = 50_000
 
 # The journal op lane's record union: compat flat events (legacy producer,
 # preview backends) and decomposed records (torch decomposed producer). The
-# compat member dies in S15.
+# compat member dies.
 JournalOp = OpEvent | OpRecord
 
 
@@ -85,9 +85,9 @@ LANE_MERGE_POLICIES: dict[str, str] = {
 
 # Lanes whose events carry a ``target_seq`` reference into the op lane's seq
 # domain: concat rebinds those references through the merge seq map so a
-# genuinely-bound record follows its target into the combined journal (DoR
-# 4.6). Any new target-carrying lane MUST register here or its references
-# dangle silently after a merge.
+# genuinely-bound record follows its target into the combined journal. Any new
+# target-carrying lane must register here or its references dangle silently after a
+# merge.
 REBINDABLE_TARGET_LANES: frozenset[str] = frozenset({"intervention_events", "op_amendments"})
 
 _LANE_APPENDERS: dict[str, str] = {
@@ -128,8 +128,8 @@ class SealedJournalAppendError(SealedJournalWriteError):
     :meth:`CaptureEvents.append` and every forward sibling appender wrote
     unconditionally. Code holding a sealed journal could therefore diverge the
     live stream from its sealed ``CapturedRunCore`` snapshot with no signal at
-    all. The op lane and the forward sibling lanes are now the same fence the
-    amendment lane always had; post-seal work belongs on a working projection
+    all. The op lane and the forward sibling lanes are the same fence the
+    amendment lane has; post-seal work belongs on a working projection
     (``_copy_for_replay``).
 
     The backward lane is deliberately NOT fenced: backward capture runs after
@@ -290,7 +290,7 @@ class CaptureEvents:
     # working projections reset this and accept appends.
     amendments_sealed: bool = False
     # False only for projections seeded from multiple concatenated seq
-    # domains (multi-pass fastlog); gates the target_seq cross-check (O-N6).
+    # domains (multi-pass fastlog); gates the target_seq cross-check.
     single_seq_domain: bool = True
     _amended_fold_cache: tuple[tuple[int, int], list[JournalOp], dict[str, JournalOp]] | None = (
         field(default=None, repr=False)
@@ -677,7 +677,7 @@ class CaptureEvents:
         journals merge, so when the SAME label names several events each
         amendment folds onto the occurrence carrying its ``target_seq``
         (refusing fail-closed when no occurrence of that label carries it).
-        Multi-domain projections have no single seq domain (O-N6): there
+        Multi-domain projections have no single seq domain: there
         resolution is by ``target_label_raw`` and the fold lands on the LAST
         occurrence, matching the live index's last-wins label semantics.
         Every amendment re-validates against the closed registry at fold
@@ -795,7 +795,7 @@ class CaptureEvents:
         return self.event_seq
 
     def _refuse_sealed_append(self, lane_name: str) -> None:
-        """Refuse a forward-lane append on a sealed source journal (B1-15).
+        """Refuse a forward-lane append on a sealed source journal.
 
         Parameters
         ----------
@@ -826,7 +826,7 @@ class CaptureEvents:
         ``core`` for decomposed ``OpRecord``s; both are frozen dataclasses and
         this append path is their single sequencing authority.
 
-        Refuses on a sealed journal (B1-15): the op spine IS the sealed core's
+        Refuses on a sealed journal: the op spine IS the sealed core's
         ``events`` tuple.
         """
         self._refuse_sealed_append("op_events")
@@ -837,7 +837,7 @@ class CaptureEvents:
             object.__setattr__(event, "seq", seq)
         self.op_events.append(event)
         if len(self.op_events) == OP_COUNT_DISCLOSURE_THRESHOLD:
-            # Capture-side op-count disclosure (r8 R60-1): the save budget
+            # Capture-side op-count disclosure: the save budget
             # bounds retained activation BYTES only, so a million-op forward
             # with nothing saved grew op records unbounded with no
             # torchlens-side signal until the OOM killer fired. This is a
@@ -944,9 +944,9 @@ class CaptureEvents:
         if other is self:
             return
         lane_names = tuple(lanes) if lanes is not None else tuple(LANE_MERGE_POLICIES)
-        # Target-rebinding precondition (B1-15 companion): every amendment's
+        # Target-rebinding precondition: every amendment's
         # ``target_seq`` is rebound through the merge seq map built from the OP
-        # lane. Merging the amendment lane WITHOUT the op lane leaves that map
+        # lane. Merging the amendment lane without the op lane leaves that map
         # empty, so each rebind silently falls back to the source-domain value
         # and binds against this journal's unrelated seq domain. Refuse the lane
         # selection instead.

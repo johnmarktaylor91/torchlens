@@ -60,7 +60,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
   recordings.
 - `PartialTrace.outcome` — forwards the inner trace's sidecar.
 - `Bundle.outcome` — the DERIVED worst-of-members fold (declared container
-  authority, foldB D9: instance three of the two-answers disease after
+  authority, never a second stored answer, as with
   PartialTrace and Recording). The status is the most severe member status
   under the fold's total severity order (`complete < unattested < halted <
   aborted_nonfinite < failed < unknown` — capability-table restrictiveness,
@@ -69,7 +69,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
   fail-closed, `derived=True` always, and the settlement note names the
   driving member. The fold is a DISCLOSURE reported beside results, never a
   settlement and never a per-member gate: capability gating applies at the
-  member whose facts a read cites (foldB D8). Both public save doors agree
+  member whose facts a read cites. Both public save doors agree
   by construction — `bundle.save(path, ...)` delegates to the container door
   (`Bundle.save`), whose member writes run the N1 gate per member; per-trace
   payload options refuse typed (`bundle_save_option_unsupported`).
@@ -219,7 +219,7 @@ postprocessing (orphans) count as `unmapped`. Verdicts reflect the tensors
 ops actually produced — an intervened op's verdict is of the replaced value
 downstream consumers saw.
 
-## The stop-request latch (F6)
+## The stop-request latch
 
 `evaluate_halt`, `raise_nonfinite`, and imperative `tl.recording.stop()` all
 latch a stop request on the active trace before raising. If the forward then
@@ -262,7 +262,7 @@ sits inside a region whose only success exit reaches an authority stamp.
   finalizer leaked `_output_attribution_input_tensors`, refusing every
   export); it now works, per the capability table.
 - Postprocess-tail failures (steps 18–20, the core freeze) used to be MASKED
-  by an `AttributeError: _raw_graph_ws` cleanup double-fault; F5's guarded
+  by an `AttributeError: _raw_graph_ws` cleanup double-fault; guarded
   cleanups let the original exception propagate, and the settlement stamp in
   `finally` survives any double-fault.
 - A refresh now re-arms `on_nonfinite='raise'` (F2); it silently disarmed before.

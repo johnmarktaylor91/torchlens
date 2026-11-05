@@ -1,4 +1,4 @@
-"""Observe kit (workstream F24): memory truth + diagnostics substrates.
+"""Observe kit: memory truth and diagnostics substrates.
 
 Built on TorchLens's OWN captured records (the sibling ``torchlens.debug``
 kit holds the tool-shaped diagnostics: ``check_determinism``,
@@ -14,8 +14,8 @@ kit holds the tool-shaped diagnostics: ``check_determinism``,
   ``CaptureOptions(track_device_memory=...)`` (``_device_memory``).
 
 Access spelling is ``import torchlens._observe`` for now; root-facade routing
-is an F35 registration fragment. Every spelling here is DOCUMENTED-UNSTABLE
-pending naming-session ratification.
+is a separate registration step. Every spelling here is DOCUMENTED-UNSTABLE
+pending naming ratification.
 """
 
 from __future__ import annotations

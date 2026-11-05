@@ -1,4 +1,4 @@
-"""Attested episode-intervention coupling (lane F42).
+"""Attested episode-intervention coupling.
 
 The trace-verb verdict's evidence bar for the ``episode=`` x ``intervene=``
 COUPLED cell: the ledger is BOUND to its exact product (the capture digest,
@@ -10,8 +10,8 @@ a fresh ledger or refuses, and facts across a broken join scope PER SEGMENT
 The live half is one funnel note: every live ``FireRecord`` lands through
 ``intervention.runtime._append_active_spec_records``, which notifies the one
 armed coupling session; the session attributes each fire to the live step
-position (the F40c join session's boundary hooks) or to the outside-step
-bucket. The settlement half writes the reserved C07X slots (header
+position (the join session's boundary hooks) or to the outside-step
+bucket. The settlement half writes the reserved slots (header
 ``intervention_digest``, row ``fire_count``, ``fidelity_basis="perturbed"``)
 -- a behavior change on reserved slots, never a schema break.
 
@@ -282,7 +282,7 @@ def _rows_and_envelope(payload: Mapping[str, Any]) -> tuple[list[Any], Any]:
 
 
 def coupling_segments(subject: Any) -> tuple[CouplingSegment, ...]:
-    """Derive the per-segment facts of one episode product (lane F42).
+    """Derive the per-segment facts of one episode product.
 
     Segments split at measured BREAK joins (``exogenous``/``declared``
     grades): a claim never spans a break. Rows that never started
@@ -356,7 +356,7 @@ class CouplingAttestation:
     fire_counts: tuple[int | None, ...]
     outside_step_fires: int | None
     segments: tuple[CouplingSegment, ...]
-    #: W051 (audit 3.2): whether the evidence column was re-derived from the
+    #: Whether the evidence column was re-derived from the
     #: product's RETAINED root output and matched (``True``); ``None`` when
     #: nothing could be compared (kind ``none``, unretained payload) -- the
     #: binding then rests on identity + ledger content alone, disclosed.
@@ -384,11 +384,11 @@ def _coupling_error(message: str, *, code: str, **payload: Any) -> Exception:
 
 
 def attest_coupling(subject: Any) -> CouplingAttestation | None:
-    """Attest one episode product's ledger-to-product binding (lane F42).
+    """Attest one episode product's ledger-to-product binding.
 
     Recomputes the capture digest from the product's own persisted facts
     (ordered recorded op labels, stepped-module call count, entry seed,
-    stepped address -- the F40b minting inputs) and compares it to the
+    stepped address -- the minting inputs) and compares it to the
     header's binding; equality is the positive "this ledger belongs to this
     product" claim. Returns ``None`` for products without a finalized
     episode ledger (mirrors ``Trace.episode``).
@@ -506,7 +506,7 @@ def refuse_coupled_replay(subject: Any) -> None:
 
 
 def quarantine_episode_after_perturbed_replay(fork: Any) -> None:
-    """Quarantine episode evidence on a ``do()``-edited fork (lane F42).
+    """Quarantine episode evidence on a ``do()``-edited fork.
 
     ``fork.do(...)`` replays a perturbed cone in place: the fork's inherited
     episode ledger then describes the ORIGINAL execution while values are

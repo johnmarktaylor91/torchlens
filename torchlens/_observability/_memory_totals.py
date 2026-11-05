@@ -1,4 +1,4 @@
-"""Transformed-payload memory totals (explorer P4, lane F25).
+"""Transformed-payload memory totals (explorer P4).
 
 Module-level read-time derivations over per-op ``transformed_*_memory``
 fields. These deliberately live HERE, not as ``Trace`` properties: the

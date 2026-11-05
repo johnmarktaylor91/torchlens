@@ -139,7 +139,7 @@ def extract_tensors_and_params(
     # ``_foreach_add`` arg 1: a single Tensor in the ``.Tensor`` overload, a
     # Tensor list in ``.List``) was already fully extracted above --
     # ``_append_tensor_or_param`` walks shallow sequences -- so re-walking it
-    # here would duplicate every member's parent edge (round-31 M3).
+    # here would duplicate every member's parent edge.
     position_set = set(spec.positions)
     for pos in spec.sequence_positions:
         if pos < len(args) and pos not in position_set:
@@ -291,7 +291,7 @@ def _apply_schema_tensor_position_corrections() -> None:
     """Upgrade under-specified static specs from ATen schemas.
 
     Every static spec is widened by the union of its ATen schemas' input-tensor
-    slots (round-22 F1/F2/F4/F5 class fix). The pass previously refused to touch
+    slots. The pass previously refused to touch
     non-unary-style specs (any nonzero position or sequence position), which left
     hand-grouped multi-operand entries permanently exempt from schema correction:
     ``lu_solve`` keyed to the generic binary (0, 1) spec dropped its third tensor
@@ -450,7 +450,7 @@ def _cache_dynamic_spec(
 ) -> None:
     """Construct, union-merge, and cache an ArgSpec from BFS crawl results (Tier 3).
 
-    Round-22 F3 hardening. The cache used to freeze the FIRST observed call shape
+    Hardening: the cache used to freeze the FIRST observed call shape
     for the lifetime of the process, so one ``x % scalar`` observation dropped the
     tensor RHS parent of every later ``a % b`` -- in the same trace AND in every
     later ``tl.trace`` (``_state._dynamic_arg_specs`` is never cleared). Now:
@@ -1153,7 +1153,7 @@ _BINARY_FUNCS = [
     # "mod" is Tensor.__mod__, the PUBLIC ``%`` operator (the only decorated callable
     # normalizing to this key). It was missing here, so it fell to the Tier-2 dynamic
     # cache and a first ``x % scalar`` observation froze positions=(0,), dropping the
-    # tensor RHS parent of every later ``a % b`` (round-22 F3a).
+    # tensor RHS parent of every later ``a % b``.
     "mod",
     "rsub",
     "pow",
@@ -1386,7 +1386,7 @@ FUNC_ARG_SPECS["full"] = ArgSpec(positions=(1,), tensor_kwargs=("fill_value",))
 # dataflow corruption can never recur unnoticed.
 _BINARY_FACTORY_KEY_COLLISIONS = set(_BINARY_FUNCS) & set(_FACTORY_FUNCS)
 if _BINARY_FACTORY_KEY_COLLISIONS:
-    # A real ``raise``, never ``assert`` (R24-1): ``python -O`` strips
+    # A real ``raise``, never ``assert``: ``python -O`` strips
     # asserts, and this guard's whole promise is that the corruption "can
     # never recur unnoticed" -- under ``-O`` a future table collision would
     # import clean and silently mis-assign tensor parents (wrong dataflow
@@ -1424,7 +1424,7 @@ FUNC_ARG_SPECS["newtensor"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "
 # (legal; torch emits a UserWarning recommending clone().detach() but executes).
 # That is a data-lineage edge exactly like ``as_tensor``/``clone``/``detach``, so the
 # source must become a graph parent; dropping it disconnected the op from its input
-# ancestry with NO unattributed marker (round-22 F6 -- the only fully silent drop
+# ancestry with NO unattributed marker (the only fully silent drop
 # found, because the narrower scalar-only ``aten::tensor`` packet disarmed the
 # witness; see _arg_position_is_tensor_operand in backends/torch/ops.py for the
 # witness-side fix). Scalar/list ``data`` holds no tensor, so extraction's
@@ -1804,7 +1804,7 @@ FUNC_ARG_SPECS["addr"] = ArgSpec(positions=(0, 1, 2), tensor_kwargs=("input", "v
 # pinned torch<=2.12 CI legs still decorate ``Tensor.align_as``; deleting the spec there would
 # make it a decorated-without-static-spec op absent from the arg-spec ledger, hard-failing
 # tests/test_arg_spec_coverage.py::test_every_decorated. It is version-varying, so it is dropped
-# from _HIGH_CONFIDENCE_STATIC_NAMES (mirrors F5's handling of torch-version-varying fills).
+# from _HIGH_CONFIDENCE_STATIC_NAMES (mirrors the handling of torch-version-varying fills).
 FUNC_ARG_SPECS["alignas"] = ArgSpec(positions=(0, 1), tensor_kwargs=("self", "other"))
 FUNC_ARG_SPECS["binarycrossentropy"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("input", "target", "weight")

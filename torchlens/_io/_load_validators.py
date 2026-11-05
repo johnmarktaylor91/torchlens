@@ -1,12 +1,12 @@
 """Load-boundary structural validators for the op graph, edge carriers, and annotations.
 
-AUD-CODE 3.0 (a)/(b)/(d) (W051-IO): three claim families the portable loader
+Three claim families the portable loader
 never checked before -- the retained op family's label/pass/relation
-coherence (``artifact_graph_structure_invalid``), the L6 tier-(ii) edge/param
+coherence (``artifact_graph_structure_invalid``), the tier-(ii) edge/param
 substitution carriers corroborated against the intervention audit and the
 ``region_do`` operation stream (``artifact_edge_substitutions_invalid``), and
 the TorchLens-owned annotation families (``artifact_annotations_invalid``).
-Split from ``_io/forgery_validation.py`` (R43 size discipline, T102); the one
+Split from ``_io/forgery_validation.py``; the one
 consumer is ``validate_persisted_forgery_surfaces``, and every refusal routes
 through that module's shared teaching ``_refuse``.
 """
@@ -131,9 +131,9 @@ def _edge_invalid(message: str, reason: str) -> NoReturn:
 def _region_anchor_index(trace: Trace) -> dict[str, set[str]]:
     """Map each persisted ``region_do`` digest to the exit addresses it applied.
 
-    Region edits (F43) ride the free-form ``state_history`` operation stream,
-    not the closed ``intervention_audit`` grammar (a new audit-row KIND is a
-    C07-owned amendment), so region-kind carriers corroborate against that
+    Region edits ride the free-form ``state_history`` operation stream,
+    not the closed ``intervention_audit`` grammar (a new audit-row KIND would
+    amend it), so region-kind carriers corroborate against that
     stream: the entry's ``resolve_digest`` is the region digest and its
     occurrence address must be among the recorded exits.
     """
@@ -255,7 +255,7 @@ def _validate_edge_entry(op: Any, key: Any, entry: Any, stamp: Any, anchors: _Ed
     kind = entry.get("substitution_kind")
     address = repr((func_call_id, *key))
     if kind == "region":
-        # Region digests are the F43 ``region-<hex>`` identity, anchored on
+        # Region digests are the ``region-<hex>`` identity, anchored on
         # the persisted ``region_do`` operation rows, never on the audit.
         addresses = anchors.region_exits.get(digest) if isinstance(digest, str) else None
         if addresses is None:

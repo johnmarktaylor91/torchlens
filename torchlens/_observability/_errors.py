@@ -1,4 +1,4 @@
-"""Typed refusal classes for the observability substrates (lane C06).
+"""Typed refusal classes for the observability substrates.
 
 Every raise site in ``torchlens._observability`` carries a stable
 ``fields["code"]`` plus a non-empty ``fields["remedy"]`` and is ledgered in

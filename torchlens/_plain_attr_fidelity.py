@@ -308,7 +308,7 @@ def restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> 
     # The two trees are zipped POSITIONALLY, so a deepcopy that adds or drops a
     # submodule (a __deepcopy__ hook, lazy child materialization) used to
     # silently shift every later pair and align attributes onto the WRONG
-    # modules (T11.10). Arity is checked BEFORE the loop (a lazy strict zip
+    # modules. Arity is checked BEFORE the loop (a lazy strict zip
     # would fire only at exhaustion, after shifted pairs already mutated the
     # copy); on mismatch the caller's existing fallback validates against the
     # live model with a disclosure.

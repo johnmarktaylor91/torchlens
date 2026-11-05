@@ -158,7 +158,7 @@ def walk_selector(selector: Any, *, unwrap: bool = False) -> Iterator[Any]:
 
     from .._selection.selectors import GradSelector
 
-    # r-b4 R27-6a: iterative pre-order walk -- a deep (nested-binary or
+    # Iterative pre-order walk -- a deep (nested-binary or
     # deserialized) selector tree must never blow the interpreter stack from a
     # diagnostic/validation walk.
     stack: list[Any] = [selector]
@@ -333,7 +333,7 @@ def flatten_and_conjuncts(children: Sequence[Any]) -> tuple[Any, ...]:
         Conjuncts with nested ``and`` composites expanded, in evaluation order.
     """
 
-    # r-b4 R27-6a: iterative expansion (same order as the historical recursion)
+    # Iterative expansion (same order as the historical recursion)
     # so a deep nested-``and`` tree cannot blow the interpreter stack here.
     flat: list[Any] = []
     stack: list[Any] = list(reversed(children))
@@ -482,7 +482,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
 #: out because backward live hooks route them through the backward matcher.
 _UPFRONT_UNSUPPORTED_KINDS: dict[str, frozenset[str]] = {
     "site": frozenset({"followed_by", "preceded_by", "facet"}),
-    # "site" (the C03 structural selector): live hook-attach proxies carry no
+    # "site" (the structural selector): live hook-attach proxies carry no
     # structural key mid-forward; final structural addressing there is
     # exactly the impossibility that creates the escrow lane (leverage
     # G-LIVE), so it refuses typed rather than guessing.
@@ -684,7 +684,7 @@ def _match_not(subject: Any, *, matcher: _Matcher) -> bool:
 
 
 def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
-    """Compile ``site`` (C03 structural position; address law: valid in every lane).
+    """Compile ``site`` (structural position; address law: valid in every lane).
 
     Post hoc it reads the persisted ``op.site_key``; on the capture lane it
     reads the streaming live minter armed by the ``tl.trace`` entry; the live
@@ -943,7 +943,7 @@ def _episode_step_matches(subject: Any, *, value: Any, lifecycle: str) -> bool:
         if session is None:
             from torchlens.intervention._bind_step import active_bind_decode_step
 
-            # Capture-free door (N-IV-12): an armed binding counts root
+            # Capture-free door: an armed binding counts root
             # forwards, so a bound generate answers the step qualifier with
             # its decode step (prefill is step 0); the episode semantics above
             # are unchanged.

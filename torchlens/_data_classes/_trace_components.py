@@ -1,4 +1,4 @@
-"""Declared Trace field-to-component ownership map (M10 decomposition).
+"""Declared Trace field-to-component ownership map.
 
 Every field in ``Trace._FIELD_POLICY`` (declared FIELD_ORDER surface plus
 portable/runtime internals) is owned by exactly ONE lifecycle component of
@@ -13,12 +13,12 @@ totals (aggregate counts/memory/timing), runnable (RunnableTraceState),
 session (non-portable runtime, caches, append/intervention state, build
 workspaces).
 
-Second map: ``TRACE_EXTERNAL_WRITE_EXEMPTIONS`` (b5 R50-1a). Backends,
+Second map: ``TRACE_EXTERNAL_WRITE_EXEMPTIONS``. Backends,
 capture, validation, viz, and I/O still ATTACH private attributes to a Trace
 from outside ``data_classes/`` without declaring them anywhere -- neither in
 ``Trace._FIELD_POLICY`` nor (for most of them) in ``_io/scrub.py``'s
 runtime-only allowance. Each such attribute is a field of the god object with
-no owner, no policy, and no schema row; SF-39 was one instance fixed by hand
+no owner, no policy, and no schema row; one instance was fixed by hand
 and nothing stopped the next. The exemption ledger below makes the class
 CLOSED and reason-bearing: ``tests/test_trace_attr_ownership.py`` fails on any
 external private write that is neither declared here nor owned above, so a new
@@ -57,8 +57,8 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_provenance_param_source": "header",
     "_autograd_derived_grads": "graph",
     "_primitive_op_profile": "graph",
-    # Union additions (2026-08-13 grind): fields declared by the G2/F3a/B1-04
-    # fixes now carry owners. Semantic-output scratch + predicate keys are
+    # Union additions: fields declared by later capture fixes now carry
+    # owners. Semantic-output scratch + predicate keys are
     # session-lifetime; validation side channels are session; bundle-source
     # provenance rides source_metadata.
     "_output_tokenizer": "session",
@@ -68,7 +68,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_rerun_save_request": "session",
     "_tl_predicate_intervention_spec_keys": "session",
     "_tl_predicate_intervention_target_keys": "session",
-    # F01 log_injections stage 0-1: one consolidated session transient
+    # log_injections stage 0-1: one consolidated session transient
     # (five loose transients consolidated per the size pressure).
     "_tl_injection_state": "session",
     "_source_bundle_manifest_sha256": "source_metadata",
@@ -76,13 +76,13 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_mode": "header",
     # L7a mode marker: witness-owned per the memo (sibling of
     # capture_verified); stamped from the validated flag at entry today, by
-    # the settlement witness machinery after S2 ratification (seam labeled in
+    # the settlement witness machinery after ratification (seam labeled in
     # user_funcs.py).
     "_options_structure_only": "witness",
     "intervention_audit": "session",
     "_runnable": "runnable",
     "_fast_run_session": "graph",
-    # L8/C2 physical-dispatch evidence is part of capture fidelity, so it
+    # Physical-dispatch evidence is part of capture fidelity, so it
     # belongs with the other witness journals rather than the semantic graph.
     "_distributed_plane_p": "witness",
     "_health_escape_detector_mode": "witness",
@@ -157,7 +157,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_nonfinite_prefix_finalized": "capture_config",
     "_nonfinite_prefix_finalize_error": "capture_config",
     # Whole-field classification only: per-SUB-KEY travel across fresh
-    # executions is governed by _capture/_annotations_travel.py (foldA D6);
+    # executions is governed by _capture/_annotations_travel.py;
     # the provider settlement finalizer applies it to every run product.
     "annotations": "graph",
     "_provenance_observer_spans": "graph",
@@ -196,15 +196,15 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_options_recurrence_detection": "capture_config",
     "_options_grouping": "capture_config",
     "_options_grouping_policy": "capture_config",
-    # L8/F6 is a trace-wide semantic-scope marker, not a user capture knob.
+    # This is a trace-wide semantic-scope marker, not a user capture knob.
     # It belongs to the header beside backend and identity-mode facts.
     "_provenance_distributed_scope": "header",
     # L9 backward residuals: timing clock provenance + checkpoint witness are
     # capture-evidence disclosures, not graph structure.
     "grad_fn_timing_provenance": "witness",
     "checkpoint_invocation_witness": "witness",
-    # tlspec v9 entry-dark Trace slots (C07): the F30 source-snapshot table is
-    # a model-source fact beside the other source rows; the F33 structure-only
+    # tlspec v9 entry-dark Trace slots: the source-snapshot table is
+    # a model-source fact beside the other source rows; the structure-only
     # evidence envelope is capture-honesty evidence beside structure_only.
     "_source_snapshots": "source_metadata",
     "_graph_structure_evidence": "witness",
@@ -410,7 +410,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
 
 #: Private Trace attributes ATTACHED FROM OUTSIDE ``data_classes/`` that carry
 #: no declared owner above, each with the reason it is tolerated. Seeded from
-#: the b5 census (36 names / 62 write sites at 2026-08-14; only the eight noted
+#: a census (36 names / 62 write sites; only the eight noted
 #: as "scrub-declared" have a home in ANY other authority). Exact-equality
 #: ledger: a new undeclared attachment fails the gate, and enrolling one
 #: requires deleting its row here.
@@ -502,7 +502,7 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "core the Recording wraps; recording/_recorder.py pops it on read"
     ),
     "_echo_session": (
-        "snoop (lane F28): the read-only echo narration observer bound at "
+        "snoop: the read-only echo narration observer bound at "
         "capture entry; runtime-only by design, never a declared field, "
         "never persisted"
     ),
@@ -519,14 +519,13 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     # `_source_bundle_path` / `_source_bundle_manifest_sha256` ARE declared;
     # these siblings were never enrolled with them. The complete family and
     # its save-time strip behavior are declared ONCE in
-    # ``torchlens._io.bundle.LOAD_PROVENANCE_TRANSIENT_ATTRS`` (R50-2).
+    # ``torchlens._io.bundle.LOAD_PROVENANCE_TRANSIENT_ATTRS``.
     "_loaded_from_bundle": "bundle load: marks a loaded trace (undeclared sibling of the two owned)",
     "_source_bundle_created_at": "bundle load: manifest created_at (undeclared sibling)",
     "_source_bundle_provenance": "bundle load: manifest provenance (undeclared sibling)",
     "_source_bundle_model_fingerprint": (
         "bundle load: manifest model fingerprint, read back by the runnable "
-        "tlspec writer (was the one family member outside every authority, "
-        "R50-1/R50-2)"
+        "tlspec writer (was the one family member outside every authority)"
     ),
     # --- One-shot warning latches -----------------------------------------
     "_warned_direct_write_propagation": "intervention: one-shot warning latch (replay + rerun)",
@@ -540,10 +539,10 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "(scrub-declared runtime-only)"
     ),
     "_last_render_geometry": (
-        "viz: last draw's layout-execution geometry record (vizmech D24) for "
+        "viz: last draw's layout-execution geometry record for "
         "diagnostics (scrub-declared runtime-only)"
     ),
-    # --- __dict__-spelled transients surfaced by the r6 R45 gate widening --
+    # --- __dict__-spelled transients surfaced by the R45 gate widening --
     # Every row below is popped/consumed within its own window; none can
     # reach Trace.save on the exhaustive path (the counter that COULD --
     # _backward_grad_fn_type_counter -- was fixed to rewalk-scoped scratch
@@ -583,7 +582,7 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "fastlog: predicate-pass grad RecordContexts keyed by public label; lives on the "
         "recorder's session trace only, never on a cooked to_trace() result"
     ),
-    # --- FLIP-2 grad_fn marker sink diagnostics (F27) ----------------------
+    # --- grad_fn marker sink diagnostics ----------------------
     "_tl_gradfn_marker_leaks": (
         "torch backward: session-time leak counter for markers closed at a pass "
         "boundary rather than their own posthook; read back with a dict.get "
@@ -594,7 +593,7 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "degraded to unmarkered; read back with a dict.get default by the test "
         "suite, never persisted"
     ),
-    # --- Accelerate offload/dispatch hook shims (F37, R5) ------------------
+    # --- Accelerate offload/dispatch hook shims ------------------
     "_offload_hook_shims": (
         "torch model prep: session-scoped shim list set only while an "
         "accelerate offload hook exists, deleted at uninstall so no live-trace "

@@ -51,7 +51,7 @@ _STRUCTURAL_KINDS = frozenset(
 
 
 def _guard_scope(evidence: Mapping[int, RankEvidence]) -> None:
-    """Refuse out-of-C1-scope boundaries typed (p2p/pipeline: C3; DTensor: C2)."""
+    """Refuse out-of-scope boundaries typed (p2p/pipeline:; DTensor:)."""
 
     for rank in sorted(evidence):
         if evidence[rank].shard_local:
@@ -321,7 +321,7 @@ def build_group_table(
             # attestations under semantics the other ranks never recorded.
             # Disagreement is a relation violation like the member list, and
             # the disputed backend demotes to None so every witness verdict
-            # on the group is NOT_APPLICABLE (demote-only, P3).
+            # on the group is NOT_APPLICABLE (demote-only).
             if (
                 uid in group_backend
                 and uid not in backend_disputed
@@ -495,7 +495,7 @@ def absolute_seq_mismatch(
     # is structurally blind to this class (each rank's base is taken at its
     # own delta 0, so a constant offset cancels); the absolute counters are
     # not. Seeded ranks stay out: their arm-time histories differ, so
-    # absolute bases are legitimately rank-local facts (P3).
+    # absolute bases are legitimately rank-local facts.
     armed_seq_abs = {
         rank: seq_abs
         for rank, seq_abs in seq_abs_by_rank.items()

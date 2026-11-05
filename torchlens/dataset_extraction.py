@@ -2,7 +2,7 @@
 
 This module is the public face of the extraction v2 runtime (extract memo
 items 4-19; the engine lives in :mod:`torchlens._extraction`). In disk mode
-(``path=``) the artifact directory is the v2 layout (extract D1): a
+(``path=``) the artifact directory is the v2 layout: a
 BOUNDED ``manifest.json`` (written at creation, once when batch zero freezes
 the plan, and at terminal status — never per shard), an APPEND-ONLY fsynced
 ``ledger.jsonl`` with one line per committed shard, a write-once ordered
@@ -11,16 +11,16 @@ the plan, and at terminal status — never per shard), an APPEND-ONLY fsynced
 ``shard_format="pt"``). The commit protocol is validate -> temp shard ->
 flush/fsync -> atomic rename -> append/fsync ledger row.
 
-Every batch travels the ONE manifested store pipeline (extract D13)::
+Every batch travels the ONE manifested store pipeline::
 
     collate -> position/mask validation -> model call -> selected output
             -> pool (captured dtype, raw axes, mask) -> postprocess
             -> row + logical-shape validation -> per-key save-dtype cast
             -> CPU-contiguous snapshot -> writer
 
-The run signature carries MODEL IDENTITY (extract D6), the collate policy,
-callable identity (extract D8), pool/dtype/ragged policies, and the
-selector request — all compared FIELD BY FIELD on resume (extract D16).
+The run signature carries MODEL IDENTITY, the collate policy,
+callable identity, pool/dtype/ragged policies, and the
+selector request — all compared FIELD BY FIELD on resume.
 
 Read artifacts back through :func:`open_extraction` (the documented lazy
 path) or :func:`load_extraction` (the eager compatibility wrapper behind an
@@ -92,7 +92,7 @@ from .transforms._pipeline import pipeline_record as _pipeline_record
 def _coerce_transform_slot(
     transform: Any, layer_plan: dict[str, str]
 ) -> tuple[dict[str, TransformPipeline | None], Any]:
-    """Route the ``output_transform=`` slot through the one coercion door (memo B1).
+    """Route the ``output_transform=`` slot through the one coercion door.
 
     Parameters
     ----------
@@ -314,7 +314,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         composed predicates), or a selector-valued mapping. Selector
         requests resolve against batch zero in execution order, FREEZE
         (ordered site keys + pass-qualified labels), and every later batch
-        must attest the exact plan (extract D12).
+        must attest the exact plan.
     batch_size:
         Number of stimuli per forward pass.
     device:
@@ -332,7 +332,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     resume:
         Disk mode only (DOCUMENTED-UNSTABLE): continue an interrupted run
         from its trusted ledger prefix. Every semantic signature field is
-        compared individually (extract D16); the skipped prefix is
+        compared individually; the skipped prefix is
         replayed at zero forward cost and verified against the ledgered
         per-shard ``input_digest`` where recorded.
     stimulus_ids:
@@ -375,20 +375,19 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         the HF text helper (tokenizer-once, pad-token refusals, full
         mapping).
     pool:
-        Optional pool preset (DOCUMENTED-UNSTABLE; extract D10): one of
+        Optional pool preset (DOCUMENTED-UNSTABLE): one of
         ``flatten`` / ``spatial_mean`` / ``spatial_max`` / ``token_mean``
         / ``token_max`` / ``token_sum`` / ``cls`` / ``last_token`` (token
         presets are MASK-AWARE), a ``{"preset": ..., "unmasked": true}``
         recorded override, or a per-key mapping. Runs in captured dtype on
         raw axes BEFORE transforms; the documented raggedness-killer.
     dtype:
-        Optional save dtype (DOCUMENTED-UNSTABLE; extract D11): a
+        Optional save dtype (DOCUMENTED-UNSTABLE): a
         ``torch.dtype``/name or per-key mapping; ``None`` preserves. Cast
         after pool/postprocess, before the snapshot (the host copy in disk
         mode); bf16/fp8 store byte-exact in safetensors shards.
     ragged:
-        ``"refuse"`` (default) | ``"trim"`` | ``"as_captured"`` (extract
-        D4). ``refuse`` fails typed BEFORE committing the first
+        ``"refuse"`` (default) | ``"trim"`` | ``"as_captured"``. ``refuse`` fails typed BEFORE committing the first
         width-drifted shard; ``trim`` stores true per-stimulus extents as
         the packed values/offsets/shapes carrier (mask-derived
         ``(start, extent)`` slicing — left padding is why extent alone
@@ -398,11 +397,11 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         ``None`` (default: safetensors on fresh runs, the recorded format
         on resume) | ``"safetensors"`` | ``"pt"``.
     checksums:
-        The D7 integrity level: ``"fast"`` (final-file CRC-32 plus the
+        The integrity level: ``"fast"`` (final-file CRC-32 plus the
         on-device value reduction; default), ``"crypto"`` (blake2b file
         digests), ``"none"`` (recorded opt-out; verification refuses).
     pipeline_id:
-        Caller-asserted pipeline identity (extract D8): permits resuming
+        Caller-asserted pipeline identity: permits resuming
         past a PARTIAL callable classification or a deliberate
         complete-class refactor, with strict continuity — the id must
         already be recorded in the artifact's prefix.
@@ -542,7 +541,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         # VALUE-level extension of the existing transform_pipeline field
         # (tvscope B5): runs without an input path keep the historical value
         # shape byte-for-byte, and any input-path difference (including
-        # against a pre-block artifact) mismatches through the one D16 door.
+        # against a pre-block artifact) mismatches through the one door.
         transform_record = {"output": transform_record, "input": input_identity}
     plan = _RunPlan(
         model=model,
@@ -636,7 +635,7 @@ def load_extraction(
 
     This is a thin materialization over :func:`open_extraction` — the
     documented lazy path — behind an EXACT byte guard computed from ledger
-    facts before any allocation (extract D14).
+    facts before any allocation.
 
     Parameters
     ----------
@@ -676,7 +675,7 @@ def load_extraction(
 
 
 def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, Any]:
-    """Relabel a COMPLETE artifact's stimulus ids (the audited verb, D2).
+    """Relabel a COMPLETE artifact's stimulus ids (the audited verb).
 
     Relabeling is deliberately OUT of resume — the sidecar is write-once
     there — and produces a NEW artifact identity: the manifest's id digest

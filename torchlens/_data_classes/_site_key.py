@@ -195,7 +195,7 @@ class SiteKeyMinter:
     ordinal is the 1-based occurrence count of ``(module_site, layer_type,
     output_slot)`` within one pass-qualified innermost call instance.
     Pruned/orphan ops never reach a minter (they consume no ordinals and
-    carry no keys -- the SF-63 ruling).
+    carry no keys -- the ruling).
     """
 
     __slots__ = ("_seen",)

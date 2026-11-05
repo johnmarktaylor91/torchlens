@@ -196,7 +196,7 @@ def build_bill_of_materials(
     return {
         "capture": _capture_section(trace, poison_facts, advisories),
         "graph": {
-            # The explicit counts vocabulary (sumfam D3): both grains print
+            # The explicit counts vocabulary (sumfam): both grains print
             # under their names, never a bare "operations".
             "num_ops": core.counts.tracked_tensor_rows,
             "num_compute_ops": core.counts.compute_ops,
@@ -221,7 +221,7 @@ def build_bill_of_materials(
         "buffers": {
             "num_buffer_tensors": len(getattr(trace, "buffers", {}) or {}),
         },
-        # Payload-scope law (C02; sumfam D8): BOM answers "what does THIS
+        # Payload-scope law (sumfam): BOM answers "what does THIS
         # object retain?", so its byte figures are retained_now -- the
         # at_capture facts print beside them, never under the same name.
         # (Before-pin: three surfaces claimed 64 MB of data an artifact did
@@ -240,7 +240,7 @@ def build_bill_of_materials(
             "num_backward_passes": len(trace._backward_pass_logs or {}),
         },
         "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
-        # log_value read-back (sumfam D20): logged values are inventory, not
+        # log_value read-back (sumfam): logged values are inventory, not
         # just an opaque annotations key name.
         "logged_values": dict(logged_values) if isinstance(logged_values, dict) else {},
     }

@@ -1010,7 +1010,7 @@ class ModuleCall:
         return self._single_output_value("grad")
 
     def __repr__(self) -> str:
-        """One line: address:pass, class, op span (F10). Never raises."""
+        """One line: address:pass, class, op span. Never raises."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import module_call_repr_line
@@ -1051,14 +1051,14 @@ class ModuleCall:
         return pd.DataFrame([row], columns=MODULE_PASS_LOG_FIELD_ORDER)
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M8 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M8 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -1812,14 +1812,14 @@ class Module(_ModuleRouting):
         return runtime_handle_from_trace(self._source_trace, resolve_module)
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M8 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M8 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -2321,7 +2321,7 @@ class Module(_ModuleRouting):
         return None
 
     def __repr__(self) -> str:
-        """One line: address/class/calls/ops/params/mode (F10). Never raises."""
+        """One line: address/class/calls/ops/params/mode. Never raises."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import module_repr_line
@@ -2332,7 +2332,7 @@ class Module(_ModuleRouting):
         )
 
     def __str__(self) -> str:
-        """Bounded Module card with tie/alias disclosure (F10).
+        """Bounded Module card with tie/alias disclosure.
 
         The output core prints only when exactly one saved output site is
         in scope; plural output sites are named explicitly (matrix rule:

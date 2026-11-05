@@ -39,7 +39,7 @@ DEFAULT_ESCROW_SPILL_BUDGET_BYTES = 16 * 1024**3
 """Default declared bound on escrow disk spill per capture (16 GiB).
 
 Generous enough that no measured real workload reaches it accidentally
-(the leverage panel's resnet18 b8 crash spilled ~190 MB), small enough
+(a measured resnet18 batch-8 crash spilled ~190 MB), small enough
 that a runaway whole-graph escrow cannot silently fill a disk."""
 
 

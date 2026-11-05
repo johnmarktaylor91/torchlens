@@ -1,6 +1,6 @@
 # Memory debugging: which question, which tool
 
-<!-- torchnative W0.10: the defer-by-name recipe page. The snapshot API and
+<!-- torchnative.10: the defer-by-name recipe page. The snapshot API and
      pickle format are underscore-private and allocator block reuse breaks
      per-op causality, so TorchLens NEVER parses snapshots -- it names the
      authority and hands you the tested recipe. Verified on torch 2.13.0. -->

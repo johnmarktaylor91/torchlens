@@ -121,7 +121,7 @@ def _index_by_group_rank(
     ------
     MergeInputError
         On a group rank outside ``0 <= group_rank < group_size``. Parse
-        already pins ``my_group_rank`` to the membership position (R18-2);
+        already pins ``my_group_rank`` to the membership position;
         this belt keeps a permuted or out-of-range value from reaching the
         slice pairing below as a raw ``IndexError`` or a silently rebound
         pairing.

@@ -1,4 +1,4 @@
-"""The extraction v2 store pipeline and run engines (extract D13 + F18).
+"""The extraction v2 store pipeline and run engines.
 
 One manifested order per batch::
 
@@ -8,10 +8,10 @@ One manifested order per batch::
             -> contiguous snapshot (host copy in disk mode) -> writer
 
 Every selected output must retain the INPUT batch's row count after
-postprocessing or refuse typed (D13); the batch context carries identity
+postprocessing or refuse typed; the batch context carries identity
 and geometry facts and never retains raw examples after commit (item 4);
-resume compares every semantic fact field-by-field (D16) with the callable
-identity rules (D8) and the skip-replay ``input_digest`` verification
+resume compares every semantic fact field-by-field with the callable
+identity rules and the skip-replay ``input_digest`` verification
 (item 16) layered on top.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -120,19 +120,19 @@ class _RunPlan:
     collate:
         Optional collate callable (engine-flavored or plain user callable).
     pool_policy / pool_record:
-        Resolved pool presets and their signature record (extract D10).
+        Resolved pool presets and their signature record.
     dtype_policy / dtype_record:
-        Resolved save-dtype casts and their signature record (extract D11).
+        Resolved save-dtype casts and their signature record.
     ragged:
-        The validated ragged mode (extract D4).
+        The validated ragged mode.
     shard_format:
         Validated shard format (``None`` = default: recorded format on
         resume, safetensors on fresh runs).
     checksums:
-        The D7 integrity level.
+        The integrity level.
     pipeline_id:
         Caller-asserted pipeline identity for callable-identity resume
-        overrides (extract D8).
+        overrides.
     transform_raw:
         The caller's original ``output_transform=`` value (classified for the
         callable-identity block when chains hold opaque steps).
@@ -194,7 +194,7 @@ class _RunPlan:
             ``False`` iff any output key's chain holds an opaque step OR
             the input path runs an opaque callable (tvscope B5: an opaque
             input transform's identity is a disclosure, not a proof); the
-            D8 callable identity rules govern output-chain resume there.
+            callable identity rules govern output-chain resume there.
         """
 
         if self.input_opaque:
@@ -232,7 +232,7 @@ def _pipeline_for(plan: _RunPlan, key: str) -> TransformPipeline | None:
 def _collate_to_envelope(
     plan: _RunPlan, raw: Any, run_state: dict[str, Any], batch_index: int
 ) -> BatchEnvelope:
-    """Collate one batch's raw material into the typed envelope (D9).
+    """Collate one batch's raw material into the typed envelope.
 
     Parameters
     ----------
@@ -480,7 +480,7 @@ def _mask_not_right_aligned(mask: torch.Tensor) -> bool:
 
 
 def _derive_position_ids(mask: torch.Tensor) -> torch.Tensor:
-    """Derive per-row position indices from an attention mask (D5).
+    """Derive per-row position indices from an attention mask.
 
     Parameters
     ----------
@@ -497,7 +497,7 @@ def _derive_position_ids(mask: torch.Tensor) -> torch.Tensor:
 
 
 def _raise_left_padding_refusal(model: nn.Module, batch_index: int, detail: str) -> None:
-    """Raise the typed left-padding refusal (extract MEMO D5, rule 2/3).
+    """Raise the typed left-padding refusal (rule 2/3).
 
     Parameters
     ----------
@@ -536,7 +536,7 @@ def _raise_left_padding_refusal(model: nn.Module, batch_index: int, detail: str)
 def _correct_envelope_positions(
     model: nn.Module, envelope: BatchEnvelope, batch_index: int, run_state: dict[str, Any]
 ) -> tuple[BatchEnvelope, str]:
-    """Correct or refuse non-right-aligned pad geometry on one envelope (D5).
+    """Correct or refuse non-right-aligned pad geometry on one envelope.
 
     Parameters
     ----------
@@ -613,7 +613,7 @@ def _inference_guard(model: nn.Module) -> Iterator[None]:
     ``torch.no_grad`` is used deliberately instead of ``inference_mode``
     (inference-mode tensors poison later autograd use); every submodule's
     exact ``training`` flag is snapshotted and restored in a ``finally``
-    block, exception paths included (extract D3).
+    block, exception paths included.
 
     Parameters
     ----------
@@ -633,7 +633,7 @@ def _inference_guard(model: nn.Module) -> Iterator[None]:
 
 @contextlib.contextmanager
 def _warning_dedup(run_state: dict[str, Any]) -> Iterator[None]:
-    """Deduplicate capture warnings with counts for the manifest (D9).
+    """Deduplicate capture warnings with counts for the manifest.
 
     The first instance of each distinct warning is shown; repeats are
     counted into ``run_state["warning_counts"]`` and the counts ride the
@@ -675,7 +675,7 @@ def _capture_outputs(
     run_state: dict[str, Any],
     batch_index: int,
 ) -> tuple[dict[str, torch.Tensor], dict[str, Any] | None]:
-    """Run the model call and harvest the selected outputs (D13 model step).
+    """Run the model call and harvest the selected outputs (the model step).
 
     Parameters
     ----------
@@ -790,9 +790,9 @@ def _resolve_trace_outputs(
 def _apply_site_pipeline(
     pipeline: TransformPipeline | None, key: str, tensor: torch.Tensor
 ) -> torch.Tensor:
-    """Apply one output key's chain with the T-C2 stimulus-axis guard.
+    """Apply one output key's chain with the stimulus-axis guard.
 
-    Dispatch inside the chain is by DECLARATION (transforms memo P2): raw
+    Dispatch inside the chain is by DECLARATION : raw
     callables are invoked unary, declared context steps receive the context
     — never ``inspect.signature``.
 
@@ -834,7 +834,7 @@ def _apply_site_pipeline(
             f"Transform chain for output key {key!r} changed the stimulus "
             f"axis: {tensor.shape[0]} rows in, "
             f"{'a 0-dim scalar' if result.dim() == 0 else result.shape[0]} out. "
-            "Every transform step must preserve row count and order (T-C2); "
+            "Every transform step must preserve row count and order; "
             "a per-batch reduction over the stimulus axis makes each row "
             "depend on its batch-mates.",
             code="transform_row_axis_violated",
@@ -854,7 +854,7 @@ def _apply_ragged_gate(
     pooled: torch.Tensor,
     run_state: dict[str, Any],
 ) -> bool:
-    """Apply the D4 entry gate to one POST-POOL tensor.
+    """Apply the entry gate to one POST-POOL tensor.
 
     Pool is the documented raggedness-killer, so the gate runs on the
     pooled product: batch zero freezes each key's pooled per-stimulus
@@ -904,7 +904,7 @@ def _apply_ragged_gate(
     # A key frozen DENSE at batch zero (no mask, or equal widths) that only
     # now proves ragged is REFUSED, never late-admitted: the manifest layout
     # is frozen once per artifact, and a trimmed shard under a dense key
-    # made materialize()/load_extraction drop rows silently (audit 1.3).
+    # made materialize()/load_extraction drop rows silently.
     raise_ragged_refusal(
         key,
         batch_index,
@@ -921,7 +921,7 @@ def _store_batch(
     context: BatchContext,
     run_state: dict[str, Any],
 ) -> tuple[dict[str, torch.Tensor | RaggedBatch], dict[str, dict[str, Any]]]:
-    """Run the store pipeline on one batch (D13 order after the model call).
+    """Run the store pipeline on one batch (in order, after the model call).
 
     pool (captured dtype, raw axes, mask) -> postprocess -> row validation -> ragged trim
     -> save-dtype cast -> snapshot (a host copy in disk mode); the D7 value reduction runs
@@ -997,9 +997,9 @@ def _store_batch(
 def _freeze_transform_plans(
     plan: _RunPlan, batch_outputs: dict[str, torch.Tensor], trimmed_keys: set[str]
 ) -> dict[str, Any]:
-    """Plan every output key's chain against batch zero (the T-C6 freeze).
+    """Plan every output key's chain against batch zero (the plan freeze).
 
-    Trimmed keys (D4) freeze their token axis as ``None`` — ragged shape is
+    Trimmed keys freeze their token axis as ``None`` — ragged shape is
     validated per shard against the mask geometry, never inferred forever
     from batch one.
 
@@ -1058,7 +1058,7 @@ def _freeze_transform_plans(
 def _validate_against_plan(
     manifest: dict[str, Any], processed: Mapping[str, torch.Tensor | RaggedBatch]
 ) -> None:
-    """Refuse a shard whose observed output contradicts the frozen plan (T-C6).
+    """Refuse a shard whose observed output contradicts the frozen plan.
 
     Parameters
     ----------
@@ -1092,7 +1092,7 @@ def _validate_against_plan(
                 f"Output key {key!r} produced {observed_shape} / "
                 f"{stored.dtype}, contradicting the frozen transform plan "
                 f"{expected_shape} / {expected_dtype}; the shard is refused "
-                "BEFORE publication (T-C6: runtime output must match the "
+                "BEFORE publication (runtime output must match the "
                 "declared plan, and ragged shape is validated per shard, "
                 "never inferred forever from batch one).",
                 code="transform_plan_violated",
@@ -1200,8 +1200,8 @@ def _layer_metadata(
         }
         if key in trimmed:
             entry["stored_per_stimulus_shape"] = [None] + (stored_shape[1:] if stored_shape else [])
-        # The frozen POST-POOL shape the D4 ragged gate compares against;
-        # resume rehydrates the gate from it (audit 2.10b). Trimmed keys
+        # The frozen POST-POOL shape the ragged gate compares against;
+        # resume rehydrates the gate from it. Trimmed keys
         # vary on the token axis, recorded as None.
         pooled_shape = list((run_state.get("pooled_shapes") or {}).get(key) or [])
         if key in trimmed:
@@ -1220,7 +1220,7 @@ def _layer_metadata(
 
 
 def _ids_range_digest(plan: _RunPlan, row_start: int, n_rows: int) -> str | None:
-    """Digest one shard's stimulus-id slice for its ledger row (D1 ID facts).
+    """Digest one shard's stimulus-id slice for its ledger row.
 
     Parameters
     ----------
@@ -1261,7 +1261,7 @@ def _ids_range_digest(plan: _RunPlan, row_start: int, n_rows: int) -> str | None
 
 
 def _check_ids_complete(plan: _RunPlan, n_stimuli: int) -> None:
-    """Refuse completion when surplus identifiers remain (extract D2).
+    """Refuse completion when surplus identifiers remain.
 
     Unsized iterables advance examples and IDs in lockstep; exact equality
     is checked BEFORE completion — a mismatch never yields
@@ -1462,7 +1462,7 @@ def _process_one_batch(
     dict[str, dict[str, Any]],
     str,
 ]:
-    """Run the full D13 pipeline on one raw batch.
+    """Run the full pipeline on one raw batch.
 
     Parameters
     ----------
@@ -1538,7 +1538,7 @@ def _store_input_ids(
     """Store one batch's token ids as the ordinary ``input_ids`` key.
 
     The ids bypass pool, transform, and save-dtype casts (they are the
-    stimulus, not an activation) but ride the same D4 ragged gate as every
+    stimulus, not an activation) but ride the same ragged gate as every
     other key: under ``ragged="trim"`` they are trimmed by the batch mask
     exactly as the token-axis activations are, so stored token ``j`` of
     stimulus ``i`` is the id whose activation sits at the same position.
@@ -1626,7 +1626,7 @@ def _freeze_batch_zero(
     ],
     run_state: dict[str, Any],
 ) -> None:
-    """Perform the ONE batch-zero manifest write (layers + plans; D1).
+    """Perform the ONE batch-zero manifest write (layers + plans).
 
     Parameters
     ----------
@@ -1680,7 +1680,7 @@ def _continuation_run_state(
     Returns
     -------
     dict[str, Any]
-        Run state holding the adopted selector plan, the frozen D4 ragged
+        Run state holding the adopted selector plan, the frozen ragged
         state, the frozen intervention sites, and the prefix's per-shard
         fire counts.
     """
@@ -1690,7 +1690,7 @@ def _continuation_run_state(
         run_state["selector_plan"] = prep_state["selector_plan_record"]
     ragged_state = prep_state.get("ragged_state")
     if ragged_state is not None:
-        # A continuation freezes NOTHING from its own first batch: the D4
+        # A continuation freezes NOTHING from its own first batch: the
         # gate compares against the manifest's frozen layouts and shapes
         # (audit 2.10b: a resumed run could otherwise commit [4,16,16]
         # shards under a [4,8,8] key, or trimmed shards under a dense one).
@@ -1780,7 +1780,7 @@ def run_to_disk(plan: _RunPlan, container_path: Path, resume: bool) -> list[Path
     )
     if complete_paths is not None:
         # A completed compatible resume is a true no-op: the model is neither
-        # moved to a device nor mode-flipped (extract MEMO D3).
+        # moved to a device nor mode-flipped.
         return complete_paths
     if plan.device is not None:
         plan.model.to(plan.device)

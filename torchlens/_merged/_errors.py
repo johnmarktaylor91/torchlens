@@ -2,7 +2,7 @@
 
 Every raise carries ``fields["code"]`` (a :class:`MergedErrorCode` value) and,
 where findings exist, ``fields["findings"]`` -- callers branch on structure,
-never message text (design-merge-ranks-c v5, P4).
+never message text (design-merge-ranks-c v5).
 """
 
 from __future__ import annotations

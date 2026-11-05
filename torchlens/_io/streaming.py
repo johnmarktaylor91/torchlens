@@ -323,7 +323,7 @@ class BundleStreamWriter:
         try:
             prepared = self._prepare_deferred_snapshot(tensor)
         except BaseException as exc:
-            # Same safety-net contract as write_blob (round-8 F3): any
+            # Same safety-net contract as write_blob: any
             # snapshot failure marks the temp dir PARTIAL and re-raises
             # non-Exception BaseExceptions unwrapped.
             reason = f"Failed to snapshot streaming blob_id={blob_id} for {label}: {exc}"

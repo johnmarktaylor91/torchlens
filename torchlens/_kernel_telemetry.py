@@ -89,13 +89,13 @@ def _payload_from_events(
     *,
     telemetry_available: bool,
 ) -> _TelemetryPayload:
-    """Join unique ATen markers to device events by runtime correlation (W2.1).
+    """Join unique ATen markers to device events by runtime correlation.
 
     Consumes NORMALIZED events from the one extraction adapter
     (``torchlens._observability._kineto.extract_events``); the historical
     chrome-trace temp-file path is deleted. Same-thread INNERMOST containment
     identifies the runtime API calls one redispatched ATen operation made
-    (the cross-thread timestamp comparison defect class TN-D2 is gone);
+    (this avoids the cross-thread timestamp comparison defect class);
     Kineto's runtime correlation identifier then follows asynchronous work
     onto device events, including events whose timestamps fall outside the
     CPU marker. No operator or launch-name substring is used.
@@ -442,7 +442,7 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
     The factory must capture with ``CaptureOptions(aten_ops=True)``; a trace
     without ATen rows is refused typed. It routes through the ONE profiler session engine
     (``torchlens._observability.session``) and the in-memory extraction
-    adapter -- the chrome-trace temp-file path is deleted (W2.1). On hosts
+    adapter -- the chrome-trace temp-file path is deleted. On hosts
     without CUDA, the factory still runs once and every primitive row
     receives a typed ``unavailable`` disclosure; no launch is fabricated.
 
@@ -488,7 +488,7 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
     return trace
 
 
-# The tlspec v8 coordinated bump retired the telemetry S3 pre-release rows:
+# The tlspec v8 coordinated bump retired the telemetry pre-release rows:
 # KernelLaunch/_TelemetryPayload declare FieldPolicy.KEEP directly and the
 # private annotations section persists plainly, validated at load by
 # torchlens/_io/forgery_validation.py.

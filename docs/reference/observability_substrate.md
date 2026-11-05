@@ -87,7 +87,7 @@ capacity/policy, event stream, update sample size) ride the frozen
   `min(numel, 4096)` indices per parameter (private RNG, never the model's);
   full coverage degrades gracefully to EXACT with `estimated=False`. A
   skipped optimizer step records `skipped` and NO fake update.
-- `activation_grad` rides the F24 observer seam, not this collector.
+- `activation_grad` rides the observer seam, not this collector.
 
 Lifecycle purity is a tested contract: every hook handle is removed on every
 exit path, and a bitwise same-seed observed run equals the unobserved control
@@ -96,8 +96,8 @@ state).
 
 ## The observer/check slot
 
-`EventStream` is the bounded immutable event stream checks (F23) and trackers
-(F26) both consume; neither repeats the tensor scan. `ObserverEvent` kinds
+`EventStream` is the bounded immutable event stream checks and trackers
+both consume; neither repeats the tensor scan. `ObserverEvent` kinds
 are `scalar | histogram_counts | verdict | unavailable` (`unavailable` is
 mandatory vocabulary and needs a reason); every gradient scalar carries
 `stage` + `scale_provenance`. A throwing subscriber cannot corrupt
@@ -126,12 +126,12 @@ every marker and the active-session slot. The kernel-enrolled
 `profiler_doors` registry holds exactly one entry, and the dependency test
 (`tests/test_obs_substrate_spans.py::TestOneProfilerDoor`) forbids a second
 `torch.profiler.profile` construction site (the kernel_telemetry legacy seam
-was burned down by F27/W2.1: its ATen activation now routes through this
+was burned down by.1: its ATen activation now routes through this
 door) and any parallel grad_fn node-hook stack. Session results carry the
 five-state availability lattice (`not_requested | unavailable | empty |
 partial | joined`).
 
-## The Kineto join (F27, on this substrate)
+## The Kineto join (on this substrate)
 
 `torchlens.report.kernel_profile(model, x)` runs ONE save-nothing
 capture under the owned session and joins device events to captured ops by

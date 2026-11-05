@@ -42,7 +42,7 @@ _CHECKPOINT_VERDICTS = frozenset(
     }
 )
 _KERNEL_ATTRIBUTION_STATUSES = frozenset({"ambiguous", "attributed", "unattributed", "unavailable"})
-# tlspec v9 (C07): closed vocabularies for the EVENT audit row family (the
+# tlspec v9: closed vocabularies for the EVENT audit row family (the
 # intervention_event_v2 transaction envelope promoted to a first-class
 # intervention_audit row kind; ledger memo D1a / build item 1).
 _EVENT_STATUSES = frozenset({"fired", "no_fire", "error", "armed"})
@@ -69,7 +69,7 @@ _EVENT_REQUIRED_FIELDS = frozenset(
 )
 # Hash-chain extension fields (ledger build item 10 plumbing: the event
 # schema + chain fields ride the v9 write; the persistent ledger writer
-# lands with F03 and writes against this contract without another bump).
+# lands with and writes against this contract without another bump).
 _EVENT_OPTIONAL_FIELDS = frozenset({"seq", "prev_event_digest"})
 _KERNEL_LAUNCH_FIELDS = frozenset(
     {
@@ -801,10 +801,9 @@ def _validate_param_audit_row(
 ) -> frozenset[tuple[str, str]]:
     """Validate the PARAM-kind field set and parameter rows of one audit row.
 
-    tlspec v9 (C07): the shipped param-substitution writer appends PARAM rows
+    tlspec v9: the shipped param-substitution writer appends PARAM rows
     (params[] consumer/occurrence payload + disclosure); the pre-v9 validator
-    refused the kind, so a saved param-intervened trace refused its own load
-    (C03 measured defect).
+    refused the kind, so a saved param-intervened trace refused its own load.
 
     Parameters
     ----------
@@ -851,11 +850,11 @@ def _validate_audit_sites(index: int, sites: Any) -> tuple[str, ...]:
 
     if not _is_sequence(sites):
         _audit_invalid(f"ACT row {index} sites must be a sequence", "sites_type")
-    # tlspec v9 (C07): "source" is the optional per-site provenance
-    # disclosure (the A04 dense-subspace point-of-use stamp) the shipped
+    # tlspec v9: "source" is the optional per-site provenance
+    # disclosure (the dense-subspace point-of-use stamp) the shipped
     # selection-door writer already emits; the pre-v9 closed set refused it,
-    # so a saved selection-intervened artifact refused its own load (C03
-    # measured defect). Admitted optional, string-typed, never weakened.
+    # so a saved selection-intervened artifact refused its own load.
+    # Admitted optional, string-typed, never weakened.
     required_fields = {"relation", "selected", "site_key"}
     allowed_fields = required_fields | {"source"}
     anchors: list[str] = []
@@ -945,7 +944,7 @@ def _validate_audit_edges(index: int, edges: Any) -> tuple[str, ...]:
 
 
 def _validate_audit_params(index: int, params: Any) -> tuple[str, ...]:
-    """Validate PARAM audit parameter rows (tlspec v9, C07).
+    """Validate PARAM audit parameter rows (tlspec v9).
 
     Parameters
     ----------
@@ -1029,12 +1028,12 @@ def _validate_param_occurrence(index: int, occurrence: Any) -> None:
 
 
 def _validate_audit_event(index: int, row: Mapping[str, Any]) -> None:
-    """Validate one EVENT-kind audit row (tlspec v9, C07).
+    """Validate one EVENT-kind audit row (tlspec v9).
 
     The ``intervention_event_v2`` transaction envelope as a first-class
     ``intervention_audit`` row kind: closed field set and vocabularies, plus
     the optional hash-chain extension (``seq`` / ``prev_event_digest``) the
-    persistent experiment ledger writes when it lands (F03) -- declared at
+    persistent experiment ledger writes when it lands -- declared at
     the coordinated v9 write so no later version bump is needed.
 
     Parameters
@@ -1214,7 +1213,7 @@ def _validate_selection_recipe(index: int, recipe: Mapping[str, Any]) -> tuple[s
         _validate_repr_tuple(recipe["edge_address"], f"selection recipe {index} edge_address")
         return digest, "EDGE", str(recipe["edge_address"])
     if set(recipe) == {"edge_address", "note", "param_address", "resolve_digest"}:
-        # tlspec v9 (C07): the shipped param-substitution FireRecord recipe
+        # tlspec v9: the shipped param-substitution FireRecord recipe
         # (per-occurrence PARAM disclosure); the pre-v9 validator refused
         # the form, so a saved param-intervened trace refused its own load
         # (same measured defect class as the PARAM audit row).
@@ -1296,15 +1295,15 @@ def _structure_only_invalid(message: str, reason: str) -> NoReturn:
 
 
 def _validate_structure_only_coherence(trace: Trace) -> None:
-    """Validate the structure-only marker's coherence rules (M-C2/M-C3).
+    """Validate the structure-only marker's coherence rules.
 
-    M-C2: a marked trace carrying ANY retained value payload is incoherent
-    (structure-only captures retain no values). M-C3: a marked trace claiming
+    a marked trace carrying ANY retained value payload is incoherent
+    (structure-only captures retain no values). A marked trace claiming
     ``capture_verified=True`` is incoherent (verification requires values);
     this runs BEFORE the ``__setstate__`` no-claim degradation, so the forged
     positive claim refuses loudly rather than degrading silently.
 
-    SCOPE STATEMENT (M-C1, form (a)): a stripped-marker structure-only
+    SCOPE STATEMENT: a stripped-marker structure-only
     artifact carries no load-visible anchor on the current persistence
     surface — its input digests are absent (no payloads to hash), its
     param/buffer geometry records are device-neutral, and payload-free
@@ -1564,7 +1563,7 @@ def _sidecar_invalid(message: str, reason: str) -> NoReturn:
 
 
 def _validate_sidecar_namespace(trace: Trace) -> None:
-    """Validate the persisted sidecar namespace shape (tlspec v9, C07).
+    """Validate the persisted sidecar namespace shape (tlspec v9).
 
     Envelope SHAPE only: the namespace must be family-id-keyed with
     self-describing ``{schema_id, version, owner, payload}`` envelopes.
@@ -1636,9 +1635,9 @@ def _advisories_invalid(message: str, reason: str) -> NoReturn:
 
 
 def _validate_capture_advisories(trace: Trace) -> None:
-    """Validate the persisted capture-advisory rows (tlspec v9, C07).
+    """Validate the persisted capture-advisory rows (tlspec v9).
 
-    Advisories are capture-time honesty disclosures (A09: ScalarEscapeWarning
+    Advisories are capture-time honesty disclosures (ScalarEscapeWarning
     and friends stop evaporating); a forged row is only text, but a
     malformed one would crash the report preambles that render it. Rows are
     ``{kind, count, first_location, message}`` with string/int typing;
@@ -1648,7 +1647,7 @@ def _validate_capture_advisories(trace: Trace) -> None:
     refusal: its shipped consumer contract is fail-closed degradation (a
     malformed or revision-mismatched payload renders NOT-CHECKED with the
     ``persisted_invalid`` basis, never clean and never a crash), which is
-    the C02-reviewed honesty model for that family.
+    the honesty model for that family.
     """
 
     annotations = _annotations_mapping_of(trace)
@@ -1679,14 +1678,14 @@ def _validate_capture_advisories(trace: Trace) -> None:
 
 
 def _validate_injection_provenance(trace: Trace) -> None:
-    """Validate injected-op identity records (tlspec v9 entry-dark, C07).
+    """Validate injected-op identity records (tlspec v9 entry-dark).
 
-    The surgery-memo 3.5 durable structural key, declared at the coordinated
-    v9 write so the F01 ``log_injections`` stage-2 writer needs no further
+    The durable structural key, declared at the coordinated
+    v9 write so the ``log_injections`` stage-2 writer needs no further
     version bump: ``(host_site_key, spec_rule_id, host_pass, firing_index,
     nesting_path, local_op_ordinal, output_slot)``. ``None`` on every model
     op; a present record validates fail-closed. Genuine injected rows are
-    split out of ``layer_list`` BEFORE this runs (the F44 codec seam in
+    split out of ``layer_list`` BEFORE this runs (the codec seam in
     ``Trace.__setstate__``), so any row still carrying the slot here is
     residual forgery surface.
     """
@@ -1724,12 +1723,12 @@ def _snapshot_invalid(message: str, reason: str) -> NoReturn:
 
 
 def _validate_source_snapshots(trace: Trace) -> None:
-    """Validate the source-snapshot table (tlspec v9 entry-dark, C07).
+    """Validate the source-snapshot table (tlspec v9 entry-dark).
 
     Convert-memo item 24: one row per ``(path, digest)`` -- the per-file
     content digest recorded at capture, with the snapshot text optional
     (digest-only rows disclose a frame-filtered or withheld file). Empty
-    until the F30 writer lands; present rows validate fail-closed.
+    until the writer lands; present rows validate fail-closed.
     """
 
     rows = trace.__dict__.get("_source_snapshots")
@@ -1814,10 +1813,10 @@ def _evidence_invalid(message: str, reason: str) -> NoReturn:
 
 
 def _validate_structure_evidence(trace: Trace) -> None:
-    """Validate the structure-only evidence envelope (tlspec v9, C07).
+    """Validate the structure-only evidence envelope (tlspec v9).
 
     Weightsfree-memo section 5: ONE immutable envelope, computed once,
-    consumed by every surface. Entry-dark until the F33 writer lands. Two
+    consumed by every surface. Entry-dark until the writer lands. Two
     rules from day one: only a structure-only capture may carry an envelope
     (a values-bearing capture claiming one is incoherent), and a present
     envelope's closed keys and claim vocabularies validate fail-closed.

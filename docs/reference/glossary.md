@@ -643,7 +643,7 @@ shape `[num_q_heads, d_model, d_model]` built from `head_weight_views` (Transfor
 `model.QK` / `model.OV` convention; biases excluded; under grouped-query attention each query head
 pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `ComponentStack` with
 one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
-input), a verified bias constant, and the D7 grading; unselected neurons under `neurons=` fold into
+input), a verified bias constant, and the grading; unselected neurons under `neurons=` fold into
 one exact `other_neurons` row.
 
 `patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None,
@@ -2141,7 +2141,7 @@ routing-table read without saved router weights or expert indices. Its
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.provenance.distributed_scope** — *unstable — no deprecation shim owed*
-: The persisted shard-local capture marker (L8/F6): `None` for ordinary captures,
+: The persisted shard-local capture marker: `None` for ordinary captures,
   `"rank_local_shard"` when any parameter or input the capture saw was one rank's local
   shard — the trace is a rank-local recording, never whole-model truth. Persists as of
   tlspec v8 with closed-vocabulary load validation; the bundle-save chokepoint refuses
@@ -2582,8 +2582,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 shim owed; S2-gated vocabulary*
 : Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
   grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
-  own reviewed design lands), `"fold_sites"` (the D1 within-capture folding
-  axis; refuses typed on plain captures until an affirmative D1 ruling).
+  own reviewed design lands), `"fold_sites"` (the within-capture folding
+  axis; refuses typed on plain captures until an affirmative ruling).
   Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
   refuse `grouping_policy_unavailable`. The mirror field `trace.options.grouping`
   records the requested value. Distinct from the display-only `fold_repeats`
@@ -2648,7 +2648,7 @@ S2-gated*
   `structure_only_type_invalid`.
 
 **Selector / Selection / `__selection__`** — *unstable — no
-deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
+deprecation shim owed (do/Selection spellings slate-ratified)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `trace[selector]` (the one
@@ -2923,7 +2923,7 @@ shim owed; S2-gated*
   every pass-qualified spelling, `:last`, `:all` and `trace[label]`, which gives the
   aggregate Layer; spellings DOCUMENTED-UNSTABLE).
 
-**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
+**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5,
 default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
@@ -2952,7 +2952,7 @@ default-keep); mask-application semantics documented-unstable*
   `selection_apply_invalid` (closed reason set
   `shape | dtype | device | broadcast | not_maskable`). Learned-parameter
   edits route through PARAMETER SUBSTITUTION on the replay engine (see the
-  entry below; the 2026-08-17 decision supersedes the D3 typed-refusal
+  entry below; the 2026-08-17 decision supersedes the typed-refusal
   default there — rerun/set_only keep refusing typed). Each
   Selection-targeted do() appends an audit record (query repr + resolve
   digest + per-site relations) to `trace.intervention_audit` (persisted as
@@ -3402,7 +3402,7 @@ deprecation shim owed*
 **Trace.grad_fn_timing_provenance** — *unstable — no deprecation shim owed*
 : The per-fire timing clock-provenance marker: `"unmeasured"` until a timing
   prehook arms, `"perf_counter"` on the universal path
-  (`"perf_counter_grad_saved_only"` reserved for the D15 fallback mode).
+  (`"perf_counter_grad_saved_only"` reserved for the fallback mode).
   Persists as of tlspec v8, where the persisted `GradFnCall` stamps carry
   the per-fire `perf_counter` pair this marker discriminates; an untimed
   fire persists `(None, None)` and reads a `None` duration.
@@ -3798,7 +3798,7 @@ deprecation shim owed*
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
   opt-in. A CPU forward that measured zero (resident high-water growth,
   end-of-forward RSS delta and, when opted in, the Python-allocation peak all 0) is recorded as
-  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)` (forks.13).
+  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)`.
   `None` when a value was measured, and on artifacts that predate the field. Persisted
   (KEEP); a loaded reason beside a number refuses
   `artifact_forward_peak_memory_invalid`. CUDA and MPS keep their numeric semantics.
@@ -4062,7 +4062,7 @@ describe each surface in depth.
 | `tl.recording.cleanup_partial` | Remove partial recording bundles and sibling temp directories |
 | `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |
 | `tl.recording.recover` | Recover a finalized or partial recording bundle |
-| `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat) |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.viz.Drawing` | The picture every draw returns: DOT source (or animation HTML), format, written path; `save(path, editable=)`, `show()`, `close()` (releases a retained trace; idempotent; the `with` block exit calls it); a forward drawing also carries `collapse_plan` and `collapse_schedule` |
@@ -4197,7 +4197,7 @@ describe each surface in depth.
 | `PlanSite.exclusion_reason` | Actionable reason when excluded; never silently dropped |
 | `PlanSite.is_batch_invariant` | Whether the site's bytes did NOT scale with batch |
 | `PlanSite.is_included` | Whether the site is in the run's save set |
-| `PlanSite.transform_seconds` | Measured live transform time at the probe batch (D-15: the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
+| `PlanSite.transform_seconds` | Measured live transform time at the probe batch (the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
 | `PlanSite.transformed_bytes` | Post-transform bytes at the probe batch, when a transform ran |
 | `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
 | `ProjectionSource.has_fused_qkv` | Whether the role is a column slice of a fused QKV weight |

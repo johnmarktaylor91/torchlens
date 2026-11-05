@@ -375,7 +375,7 @@ exploding_threshold=1e4, grad_scale=None, grad_scales=None, basis="total_norm")`
 ranks saved gradients and flags zero, vanishing, and exploding norms. Capture
 with `save_grads=True`, then call `trace.backward(...)` first.
 
-The F23 fix pack added (all additive): `module` + `is_frontier` columns (a
+The fix pack added (all additive): `module` + `is_frontier` columns (a
 dead layer zeroes the gradient of everything upstream, so the frontier — a
 flagged op none of whose children share the flag — names the culprit),
 `grad_norm_raw` / `rms` / `numel` columns (`rms = norm/sqrt(numel)` kills the
@@ -606,7 +606,7 @@ do N isolated same-seed runs agree? Every run executes on a fresh released deep 
 with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state
 (`repeatable_under_test` / `nondeterminism_observed` / `inconclusive`) and never
 generalizes to "deterministic". The report carries environment witnesses (deterministic
-algorithms, cuDNN, TF32, `CUBLAS_WORKSPACE_CONFIG`, thread counts), the first divergence
+algorithms, cuDNN, `CUBLAS_WORKSPACE_CONFIG`, thread counts), the first divergence
 in EXECUTION order, RNG-consuming ops attributed to the CONSUMING op, and host-entropy
 facts quoted from the capture. `seed_sensitivity=True` adds exactly ONE differently
 seeded run (total cost disclosed as runs+1) landing in a SECOND named verdict slot.
@@ -631,7 +631,7 @@ input-cloning primitive. The caller's model, inputs, and RNG streams are untouch
 
 ## `walk_grad_fn` / `sketch_grad_fn`
 
-The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings, F37): draw the
+The post-hoc autograd-graph walker (DOCUMENTED-UNSTABLE spellings): draw the
 `grad_fn` graph of a tensor you ALREADY HAVE — computed in an earlier notebook cell or
 inside someone else's training loop — with no re-execution and no capture context (the
 `make_dot(y)`-class torchviz capability). Both are explicitly STRUCTURE-ONLY: the walk

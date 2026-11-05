@@ -1,10 +1,10 @@
-"""Op/facet-grain history collection, Route B via fastlog (explorer D15; F25).
+"""Op/facet-grain history collection, Route B via fastlog (explorer).
 
 The differentiator tier: "we see inside the block, they see the block".
 One :func:`torchlens.record` pass per logged training step captures every
 selected OP site (567 on gpt2, vs ~125 leaf modules), reduced at the save
-point by a declared summary transform (P1) with the raw clone skipped
-(P2) -- the observation payload per site is one fused spine vector plus
+point by a declared summary transform with the raw clone skipped
+-- the observation payload per site is one fused spine vector plus
 one sketch count vector, folded into the SAME per-step history artifact
 Route A writes (site kinds ``op`` / ``facet``).
 
@@ -13,8 +13,8 @@ output (graph intact), so a training loop replaces its ``model(x)`` call
 with ``collector.observe_step(...)`` inside the step bracket -- one
 forward per step, never two. Cost is DISCLOSED, never estimated silently:
 ``discover()`` runs one metadata-only fastlog pass and prints the same
-elements-per-step plan table Route A uses (D21); the per-step wrapper
-overhead is a measured gate row (D25), not a docs adjective.
+elements-per-step plan table Route A uses; the per-step wrapper
+overhead is a measured gate row, not a docs adjective.
 
 Facet sites: ``facets={selector_or_label: splitter}`` declares slices of
 an op site (e.g. attention heads); each declared slice becomes its own
@@ -111,8 +111,8 @@ def _facet_site_id(label: str, facet: str) -> str:
 class _OpReducer:
     """The per-op summary reducer: fused spine + sketch, facets included.
 
-    Declared summary role (P1) so the reduce-only path skips the raw clone
-    (P2), and ctx-aware (``_tl_wants_ctx``) so declared facet splitters
+    Declared summary role so the reduce-only path skips the raw clone,
+    and ctx-aware (``_tl_wants_ctx``) so declared facet splitters
     apply at the one site where the raw view exists. The payload is
     ``{"op": packed, "facets": {name: packed}}`` where ``packed`` is the
     15-slot float64 spine concatenated with the int64 sketch counts (cast
@@ -128,14 +128,14 @@ class _OpReducer:
         #: label -> facet-name row order of the LAST observed split; the
         #: collector reads it at fold time (single-threaded by design).
         self.facet_names: dict[str, tuple[str, ...]] = {}
-        #: label -> reason string for the LAST reducer failure (D14).
+        #: label -> reason string for the LAST reducer failure.
         self.failures: dict[str, str] = {}
 
     def _pack(self, tensor: torch.Tensor) -> torch.Tensor:
         """Reduce one detached view to the packed observation vector.
 
         Stays ON DEVICE: the collector batches ONE host transfer per step
-        over all sites (the D16 transfer invariant; never a per-site
+        over all sites (the transfer invariant; never a per-site
         ``.cpu()``).
         """
 
@@ -150,7 +150,7 @@ class _OpReducer:
         the rest the declared facet slices in the recorded name order (a
         plain tensor keeps every fastlog projection surface happy).
 
-        Total and fail-open (D14): a reducer failure on ONE site (an
+        Total and fail-open: a reducer failure on ONE site (an
         unsupported dtype, a raising splitter) returns the empty ``[0, W]``
         sentinel, which the collector folds as a per-site
         ``capture_failed`` observation -- the user's training step always
@@ -286,7 +286,7 @@ class OpTierCollector:
         with warnings.catch_warnings():
             # Fastlog's zero-match WARNING is superseded here by the plan-time
             # TYPED refusal below (strictly stronger: a warning at step 0 of a
-            # ten-hour run is not disclosure, D6).
+            # ten-hour run is not disclosure).
             warnings.filterwarnings("ignore", message=".*matched zero sites.*")
             recording = _record(
                 self.model,
@@ -393,7 +393,7 @@ class OpTierCollector:
 
         ``StepTruth`` can only say ``applied`` or ``skipped``; a watcher that
         saw no optimizer boundary inside the step must be able to say
-        ``unknown`` instead of the bracket's assumed ``applied`` (D17: the
+        ``unknown`` instead of the bracket's assumed ``applied`` (the
         collector never guesses). Values given here win over the opening
         ``StepTruth`` at commit; ``None`` keeps the opening value.
         ``trace_ref`` points the block at a retained ``Trace`` for this step.
@@ -474,7 +474,7 @@ class OpTierCollector:
         )
         output = recording.output
         step = self._open_block_step()
-        # Batch the host transfer (D16): one stacked .cpu() per device per
+        # Batch the host transfer: one stacked .cpu() per device per
         # step over every packed row, never a per-site sync.
         pending: list[tuple[str, Any, str | None, torch.Tensor]] = []
         observations = self._open_block_observations()
@@ -485,7 +485,7 @@ class OpTierCollector:
                 continue
             label = ctx.raw_label or ctx.label
             if payload.shape[0] == 0:
-                # D14 fail-open sentinel: the reducer failed on this site;
+                # fail-open sentinel: the reducer failed on this site;
                 # record capture_failed (with the reason) and move on -- the
                 # training step already survived.
                 site_id = _op_site_id(label)
@@ -514,7 +514,7 @@ class OpTierCollector:
         step: int,
         pending: list[tuple[str, Any, str | None, torch.Tensor]],
     ) -> None:
-        """Land pending rows with ONE stacked ``.cpu()`` per device (D16), then fold."""
+        """Land pending rows with ONE stacked ``.cpu()`` per device, then fold."""
 
         if not pending:
             return
@@ -554,7 +554,7 @@ class OpTierCollector:
     def _ensure_site(
         self, step: int, site_id: str, *, label: str, ctx: Any, parent: str | None = None
     ) -> None:
-        """Register one site row on first sight (D5: drift adds rows).
+        """Register one site row on first sight (drift adds rows).
 
         The kind is derived: a site with a ``parent`` op is a ``facet``
         site, a parentless one an ``op`` site.

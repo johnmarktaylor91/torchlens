@@ -1,4 +1,4 @@
-"""The correlation-ID device-time join (torchnative W2.2 / W2.0 consumers).
+"""The correlation-ID device-time join (torchnative.2 /.0 consumers).
 
 Runtime correlation IDs are the ONLY device join; names are display
 metadata. A launch is counted once -- several owners form a launch group,
@@ -10,8 +10,7 @@ The joiner is a pure function over normalized events (``_kineto``) plus an
 optional trace for owner resolution, so every correctness property is
 testable on synthetic fixtures with hand-set thread ids (the ONLY sanctioned
 cross-thread negative control -- torch's profiler records nothing on a plain
-Python thread, so a live-thread control would pass on an empty trace,
-TN-D19).
+Python thread, so a live-thread control would pass on an empty trace).
 
 Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -47,7 +46,7 @@ ROW_STATUS = ("attributed", "ambiguous", "unattributed", "unavailable")
 _DEVICE_KINDS = frozenset(("kernel", "memcpy", "memset"))
 
 #: Closed owner classes (forward wave; the backward taxonomy extends this
-#: set with its seven evidence-bearing classes as FLIP-2 links land).
+#: set with its seven evidence-bearing classes as links land).
 OWNER_CLASSES = (
     "forward_op",
     "grad_fn",
@@ -223,7 +222,7 @@ def _innermost_owner_by_runtime(
     runtime-event start points are merged in time order; a stack of open
     markers makes the innermost owner a stack top. Marker spans and runtime
     events on DIFFERENT threads never match (the cross-thread
-    misattribution defect class, TN-D2). A correlation id reached through
+    misattribution defect class). A correlation id reached through
     SEVERAL runtime events can accumulate several distinct owners -- the
     caller publishes those rows as ``ambiguous``, never split or
     duplicated.

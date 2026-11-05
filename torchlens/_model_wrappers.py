@@ -8,7 +8,7 @@ dies partway through with an internal ``AttributeError`` -- an undebuggable
 crash for the exact user most likely to hit it (a TransformerLens 3.x
 convert whose first torchlens command is tracing their bridged model). This
 module turns that crash into a typed refusal that teaches the remedy at the
-point of failure (mikit fix F10).
+point of failure (mikit fix).
 
 Detection is STRUCTURAL and narrow: only the known offender class is
 refused, by MRO scan, with no probe writes to the user's model (the bridge

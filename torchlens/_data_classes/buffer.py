@@ -111,14 +111,14 @@ class Buffer:
         self._source_ref = weakref.ref(source_trace) if source_trace is not None else None
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M8 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M8 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -354,7 +354,7 @@ class Buffer:
         return pd.DataFrame([_buffer_log_to_row(self)], columns=columns)
 
     def __repr__(self) -> str:
-        """One envelope+core line with the explicit value basis (F10).
+        """One envelope+core line with the explicit value basis.
 
         The core is computed from the capture-time snapshot when one was
         retained (basis ``snapshot at capture``); otherwise metadata only.
@@ -370,7 +370,7 @@ class Buffer:
         )
 
     def __str__(self) -> str:
-        """Bounded Buffer card: module path + version facts (F10)."""
+        """Bounded Buffer card: module path + version facts."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import buffer_card
@@ -378,7 +378,7 @@ class Buffer:
         return fail_open(lambda: buffer_card(self), lambda _error: self.__repr__())
 
 
-# The M8 facade: the five declared stored fields become row-cell
+# The facade: the five declared stored fields become row-cell
 # descriptors; the instance dict keeps only the store binding + user extras.
 _BUFFER_STORED_FIELDS: tuple[str, ...] = (
     "address",
@@ -457,7 +457,7 @@ class BufferAccessor(Accessor["Buffer"]):
         return True
 
     def _composition_note(self) -> str | None:
-        """Composition breakdown: overwritten vs read-only buffers (F10)."""
+        """Composition breakdown: overwritten vs read-only buffers."""
 
         overwritten = sum(1 for bl in self._list if bl.is_overwritten)
         if not overwritten:

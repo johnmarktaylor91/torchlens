@@ -1,4 +1,4 @@
-"""Versioned per-step history artifact: disk-first, append-only (D19/D20).
+"""Versioned per-step history artifact: disk-first, append-only.
 
 Directory layout::
 
@@ -16,7 +16,7 @@ recovery never silently drops committed data.
 
 The RAM ring (default 256 committed StepBlocks) is a CACHE when the disk
 archive is on -- eviction is plain LRU and not an event. RAM-only mode has
-three EXPLICIT policies (D19/D20): ``refuse`` (default; typed refusal BEFORE
+three EXPLICIT policies: ``refuse`` (default; typed refusal BEFORE
 the next scheduled block naming the remedies), ``drop_oldest`` (with
 counters), and ``coarsen`` (exact pairwise count-preserving merges, each
 record carrying its [step_lo, step_hi] span).
@@ -51,10 +51,10 @@ from ._schema import (
 
 __tl_layer__ = "L5"
 
-#: Default RAM ring capacity in committed StepBlocks (D19).
+#: Default RAM ring capacity in committed StepBlocks.
 DEFAULT_RING_CAPACITY = 256
 
-#: Closed RAM-only retention policies (D19/D20).
+#: Closed RAM-only retention policies.
 RAM_POLICIES = ("refuse", "drop_oldest", "coarsen")
 
 _SPINE_FLOAT_FIELDS = (
@@ -96,7 +96,7 @@ class CommittedBlock:
 
     ``step_lo``/``step_hi`` carry the coarsening span: an uncoarsened block
     has ``step_lo == step_hi == block.global_step``; a coarsened record is
-    an exact pairwise count-preserving merge labelled with its span (D19).
+    an exact pairwise count-preserving merge labelled with its span.
     """
 
     block: StepBlockRecord
@@ -113,7 +113,7 @@ def coarsen_pair(a: CommittedBlock, b: CommittedBlock) -> CommittedBlock:
     exactly; the merged record carries the union [step_lo, step_hi] span and
     is stamped ``coarsened=True``. The step axis coordinate of the merged
     block is the span's low edge -- consumers must read the span, and the
-    renderers draw variable-width columns where coarsening happened (D24).
+    renderers draw variable-width columns where coarsening happened.
     """
 
     lo, hi = min(a.step_lo, b.step_lo), max(a.step_hi, b.step_hi)
@@ -194,7 +194,7 @@ class RamRing:
         """Refuse BEFORE the next scheduled block when full under ``refuse``.
 
         Called by the collector before scheduling a block so the refusal
-        lands at the boundary, not after work was done (D20).
+        lands at the boundary, not after work was done.
         """
 
         if self.disk_backed or self.policy != "refuse" or len(self._blocks) < self.capacity:
@@ -202,7 +202,7 @@ class RamRing:
         raise HistoryArtifactError(
             f"The RAM-only history ring is full ({self.capacity} committed "
             "StepBlocks) under the default 'refuse' policy. Nothing was "
-            "dropped or degraded (D20: no automatic tier shedding, anywhere).",
+            "dropped or degraded (no automatic tier shedding, anywhere).",
             code="history_ram_budget_exceeded",
             capacity=self.capacity,
             remedy=(
@@ -610,7 +610,7 @@ class HistoryReader:
     ) -> list[ObservationRecord]:
         """Materialize observations, optionally filtered; verifies checksums.
 
-        The artifact is indexed by step AND by site/stream (D19): chunk rows
+        The artifact is indexed by step AND by site/stream: chunk rows
         carry [step_lo, step_hi], so a step filter skips chunks without
         opening them.
         """

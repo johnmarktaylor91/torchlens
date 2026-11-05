@@ -1,4 +1,4 @@
-"""Pool presets: axis-explicit, mask-aware, refuse ambiguity (extract D10).
+"""Pool presets: axis-explicit, mask-aware, refuse ambiguity.
 
 Presets (spellings DOCUMENTED-UNSTABLE): ``flatten``, ``spatial_mean`` /
 ``spatial_max`` (4D feature maps), ``token_mean`` / ``token_max`` /
@@ -27,7 +27,7 @@ __tl_layer__ = "L5"
 
 __all__ = ["POOL_PRESETS", "apply_pool", "resolve_pool_policy"]
 
-#: Closed preset vocabulary (extract D10).
+#: Closed preset vocabulary.
 POOL_PRESETS: tuple[str, ...] = (
     "flatten",
     "spatial_mean",
@@ -144,7 +144,7 @@ def _spec_for_key(policy: Mapping[str, Any] | None, key: str) -> dict[str, Any] 
 
 
 def _refuse_axes(key: str, preset: str, tensor: torch.Tensor, expectation: str) -> None:
-    """Raise the axis-ambiguity refusal (extract D10).
+    """Raise the axis-ambiguity refusal.
 
     Parameters
     ----------
@@ -221,7 +221,7 @@ def apply_pool(
     policy: Mapping[str, Any] | None,
     mask: torch.Tensor | None,
 ) -> torch.Tensor:
-    """Apply the resolved pool policy to one captured tensor (extract D10).
+    """Apply the resolved pool policy to one captured tensor.
 
     Runs in the CAPTURED dtype on RAW axes, before postprocess transforms.
 
@@ -259,7 +259,7 @@ def apply_pool(
         raise InvalidArgumentError(
             f"pool preset {preset!r} cannot run in captured dtype "
             f"{tensor.dtype} (fp8 reduction kernels are unsupported); pool "
-            "runs in the captured dtype by contract (D10), so the compute "
+            "runs in the captured dtype by contract, so the compute "
             "refuses rather than silently upcasting.",
             code="extraction_pool_dtype_unsupported",
             remedy="capture in a wider dtype and use dtype= to store fp8 after pooling",
@@ -325,7 +325,7 @@ def _pool_token(
     mask: torch.Tensor | None,
     unmasked: bool,
 ) -> torch.Tensor:
-    """Apply the mask-aware token presets with the D10 mask rules.
+    """Apply the mask-aware token presets with the mask rules.
 
     Parameters
     ----------

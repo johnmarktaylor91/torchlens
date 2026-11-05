@@ -1,12 +1,11 @@
 """Saved-activation dedup helpers for retained payload copies.
 
-Split out of ``op.py`` (F20 FIX-2 size-ratchet split, the ``_op_transforms``
-precedent): the identity/content dedup probes that decide whether a payload
+Split out of ``op.py`` (a size-ratchet split, like ``_op_transforms``): the identity/content dedup probes that decide whether a payload
 about to be retained can reuse an already-saved copy, plus the content hash
 they share. ``op.py`` re-exposes the two dedup entry points unchanged (the
 torch backend imports through it), so the public import site is unmoved.
 ``IdentityCacheEntry`` is the per-trace ``_out_identity_cache`` value shape:
-the source slot is a weakref (F20 W1a) so dedup bookkeeping never pins a
+the source slot is a weakref so dedup bookkeeping never pins a
 live forward intermediate.
 """
 
@@ -50,13 +49,13 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
     collide with the float32 tensor of the same values (content-mode dedup
     aliasing across dtypes). The payload is hashed through the buffer
     protocol (no whole-payload ``tobytes`` copy), the transport is the
-    shared zero-copy-when-possible ``to_cpu_contiguous`` (r7 b5 R35-1: the
+    shared zero-copy-when-possible ``to_cpu_contiguous``; the
     old ``safe_copy(...).cpu().contiguous()`` paid one unconditional full
     clone for an already-contiguous CPU tensor and materialized twice for a
-    CUDA/permuted source), and bf16 hashes its OWN bytes -- the uint8
-    reinterpret view needs no numpy-transport upcast (R35 fable: the
-    bf16->f32 copy was pointless once the logical dtype was framed; this
-    digest is process-local, so the byte change is invisible).
+    CUDA/permuted source. bf16 hashes its OWN bytes -- the uint8
+    reinterpret view needs no numpy-transport upcast (the bf16->f32 copy was
+    pointless once the logical dtype was framed; this digest is
+    process-local, so the byte change is invisible).
     """
 
     if is_functorch_wrapped_tensor(value):
@@ -66,7 +65,7 @@ def _tensor_content_hash(value: torch.Tensor) -> str:
     from .._transport import digest_byte_view
 
     with pause_logging():
-        # r8 R35: conj/neg resolution + the uint8 reinterpret live in the
+        # Conj/neg resolution + the uint8 reinterpret live in the
         # ONE transport authority (``_transport.digest_byte_view``); the
         # local resolve guard this site pioneered moved there so the other
         # digest sites cannot drift from it.
@@ -131,12 +130,12 @@ def _dedup_cached_identity_out(
     if cached is None:
         return None
     cached_source_ref, cached_label, cached_out, cached_version, cached_ordinal = cached
-    # F20 W1a: the source slot is a weakref so bookkeeping never pins a live
+    # W1a: the source slot is a weakref so bookkeeping never pins a live
     # forward intermediate; a dead referent is an ordinary miss (the id may
     # have been reused by a new tensor).
     cached_source = cached_source_ref()
     if cached_source is source_tensor and cached_version == source_version:
-        # B3R4-R21-1: the annotation carries the trace-local dense dedup
+        # the annotation carries the trace-local dense dedup
         # ordinal, never the raw ``id()`` bookkeeping key -- a memory address
         # in a persisted field made same-program artifacts byte-differ per
         # process and exposed a meaningless public value.
@@ -221,8 +220,8 @@ def _dedup_saved_activation_out(
         trace._out_identity_cache = identity_cache
 
     source_key = id(source_tensor)
-    # r65: TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
-    # internal-read marker so the r65 state-metadata property observer never mistakes it
+    # TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
+    # internal-read marker so the state-metadata property observer never mistakes it
     # for a user ``._version`` read on a registered buffer/param receiver (unmarked it
     # fires for every saved state source and would spuriously refuse any model whose
     # consumed buffer was ever mutated in place before capture). Imported lazily:
@@ -234,10 +233,10 @@ def _dedup_saved_activation_out(
     cached = identity_cache.get(source_key)
     if cached is not None:
         cached_source_ref, cached_label, cached_out, cached_version, cached_ordinal = cached
-        # F20 W1a: weak source slot -- see _dedup_cached_identity_out.
+        # W1a: weak source slot -- see _dedup_cached_identity_out.
         cached_source = cached_source_ref()
         if cached_source is source_tensor and cached_version == source_version:
-            # B3R4-R21-1: dense trace-local ordinal, never the raw ``id()``.
+            # dense trace-local ordinal, never the raw ``id()``.
             annotations["dedup_source_id"] = cached_ordinal
             annotations["dedup_source_version"] = source_version
             annotations["dedup_reference_label"] = cached_label

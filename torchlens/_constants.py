@@ -52,8 +52,7 @@ def _is_suffixed_raw_label(label: object) -> TypeGuard[str]:
 _RAW_LABEL_FIELD = "raw_label"
 ARG_EXPRESSIONS_FIELD = "arg_expressions"
 
-# The documented non-reproducible artifact surface (grind-r5 b7 R21, 3rd
-# round): every persisted field that LEGITIMATELY varies between two
+# The documented non-reproducible artifact surface: every persisted field that LEGITIMATELY varies between two
 # byte-level-identical captures (same model, same input, same seeds, same
 # PYTHONHASHSEED, fresh processes). Empirically derived from a same-seed
 # two-process control at 1d00442c -- these were the ONLY semantic diffs.
@@ -92,9 +91,9 @@ MODEL_LOG_FIELD_ORDER = [
     "_autograd_derived_grads",
     "_options_mode",
     "_options_structure_only",
-    # tlspec v9 entry-dark slot (C07; weightsfree memo section 5 / item 14):
+    # tlspec v9 entry-dark slot (weightsfree memo section 5 / item 14):
     # the immutable structure-only evidence envelope. Declared with
-    # fail-closed load validation now; the F33 writer lands later with no
+    # fail-closed load validation now; the writer lands later with no
     # further version bump. None everywhere until then.
     "_graph_structure_evidence",
     "intervention_audit",
@@ -174,10 +173,10 @@ MODEL_LOG_FIELD_ORDER = [
     "_source_forward_signature",
     "_source_forward_docstring",
     "_source_frames",
-    # tlspec v9 entry-dark slot (C07; convert memo item 24): the source
+    # tlspec v9 entry-dark slot (convert memo item 24): the source
     # snapshot table, one row per (path, digest) -- per-file digests at
     # capture with optional snapshot text. Declared with fail-closed load
-    # validation now; the F30 writer lands later with no further version
+    # validation now; the writer lands later with no further version
     # bump. Empty everywhere until then.
     "_source_snapshots",
     "_provenance_cache_hit",
@@ -220,12 +219,12 @@ MODEL_LOG_FIELD_ORDER = [
     "_source_class_qualname",
     "_provenance_param_hash_quick",
     "_provenance_param_hash_full",
-    # tlspec v9 root entry-point identity fact (C07X item (iv), foldA D10):
+    # tlspec v9 root entry-point identity fact:
     # the closed root invocation descriptor "kind:qualified_identity" with
     # kind in {module_call, bound_method, function_call}. Written
     # UNCONDITIONALLY on every capture (fail-closed rerun identity gating
-    # can only come from unconditional writes plus refuse-on-absence; F41
-    # joins it to the gate); None only on legacy artifacts.
+    # can only come from unconditional writes plus refuse-on-absence);
+    # None only on legacy artifacts.
     "_provenance_root_entry_point",
     "_provenance_input_object_id",
     "_provenance_input_signature_hash",
@@ -467,21 +466,20 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     # bridging relation -- FieldPolicy.DROP until the coordinated tlspec bump,
     # prerelease-registered)
     "site_key",
-    # tlspec v9 entry-dark slot (C07; surgery memo 3.5 / items 8-9, 12): the
+    # tlspec v9 entry-dark slot: the
     # injected-op identity record ("from intervention X, not the model") --
     # the durable structural key (host_site_key, spec_rule_id, host_pass,
     # firing_index, nesting_path, local_op_ordinal, output_slot). None on
-    # every model op; the F01 log_injections writer lands later with no
+    # every model op; the log_injections writer lands later with no
     # further version bump. Fail-closed load validation from day one.
     "injection_provenance",
-    # tlspec v9 entry-dark episode-step stamp (C07X / foldB s4.4 item 5):
+    # tlspec v9 entry-dark episode-step stamp:
     # propagation of the ledger-row episode_step meaning onto the op record.
     # None on every op today; the F-EPISODE read-axis lane writes it with no further version bump.
     "episode_step",
-    # tlspec v9 entry-dark TL-authored-root marker (C07X item (iv), foldA
-    # D11/F41): True only on the root op record of a TL-authored bound-method
+    # tlspec v9 entry-dark TL-authored-root marker: True only on the root op record of a TL-authored bound-method
     # wrapper root, disclosing that TorchLens authored the synthetic root.
-    # None on every module-root op; F41 writes it on bound-method captures.
+    # None on every module-root op; bound-method captures write it.
     "tl_authored_root",
     # Graph info
     "parents",
@@ -1300,7 +1298,7 @@ def _get_torch_overridable_functions() -> list[tuple[str, str]]:
                 if ignore:
                     continue
                 if func.__get__ in ignored_funcs_set:
-                    # A real ``raise``, never ``assert`` (R24-4): under
+                    # A real ``raise``, never ``assert``: under
                     # ``python -O`` a torch release listing an overridable
                     # descriptor as ignored was silently excluded from the
                     # wrapper roster -- an invisible capture-gap generator on
@@ -1324,7 +1322,7 @@ def _get_torch_overridable_functions() -> list[tuple[str, str]]:
 
             # cannot be overridden by __torch_function__
             if func in ignored_funcs_set:
-                # A real ``raise``, never ``assert`` (grind-r5 b7 R24, the
+                # A real ``raise``, never ``assert`` (the
                 # descriptor branch's twin): under ``python -O`` the assert
                 # stripped and the ``continue`` silently excluded the function
                 # from the wrapper roster -- fault-injection proved

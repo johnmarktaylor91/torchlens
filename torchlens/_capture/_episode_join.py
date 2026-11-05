@@ -1,4 +1,4 @@
-"""Episode join arms (lane F40c): live + settlement ``step_join``.
+"""Episode join arms: live + settlement ``step_join``.
 
 ``step_join`` grades the OBSERVABLE join between one step's output and the
 next step's input -- direct continuation, a transform observed inside the
@@ -6,7 +6,7 @@ capture, a declared crossing, or a failed/unchecked join with a reason. It
 grades the join; it never claims to know whether the cause was a tool, a
 human, a file, a network, or a process (trace-verb verdict, section 2).
 
-Three arms (foldA MEMO s5 item 8; FORK-4 selects the DEFAULT's shape later,
+Three arms (a later ruling selects the DEFAULT's shape later,
 BOTH fork arms are built):
 
 - DEFAULT (``feed="open"``, ``on_feed_break="disclose"``): return the one
@@ -14,7 +14,7 @@ BOTH fork arms are built):
   envelope, and refuse every episode-dependent claim across it (step-series
   reads, whole-episode replay, the blessing fold, escalation). Ops, values,
   graph, audit, and per-segment replay remain usable.
-- FORK-4 arm (b) (``on_feed_break="refuse"``): the settlement write raises
+- arm (b) (``on_feed_break="refuse"``): the settlement write raises
   typed ``episode_feed_break_exogenous`` carrying the settled product on
   ``exc.partial_trace`` -- recoverable partial evidence, nothing discarded.
 - STRICT (``EpisodeOptions(feed="closed")``): for an undeclared crossing the
@@ -26,7 +26,7 @@ BOTH fork arms are built):
 The live check runs through ordinary ``nn`` forward pre/post hooks on the
 stepped module, armed for exactly one capture; every tensor read inside the
 hooks runs under ``pause_logging`` so the measurement is invisible to the
-recorded graph (the F40a four-clause declaration invariant is preserved).
+recorded graph (the four-clause declaration invariant is preserved).
 Measurement FAILURES never raise -- they degrade the affected join to
 ``unchecked`` with a reason; only the deliberate strict-arm refusals raise.
 
@@ -78,7 +78,7 @@ STEP_JOIN_SCHEMA = "episode_step_join_v1"
 #: Closed join-grade vocabulary (trace-verb verdict section 2). ``None`` in
 #: the grades column marks a join that does not exist (the prefill row and
 #: rows that never started); it is not a member of this vocabulary.
-#: ``forced`` (W051, audit 3.4): the entry continues the prior entry plus the
+#: ``forced``: the entry continues the prior entry plus the
 #: DECLARED ``forced_tokens`` token for that step -- a teacher-forced join,
 #: measured against the declaration, never against the model's emission (the
 #: evidence column of a forced episode is whatever the root returned, e.g.
@@ -109,14 +109,14 @@ _ENVELOPE_KEYS = frozenset(
     }
 )
 #: Optional v1 envelope slots (additive within the family; an envelope that
-#: lacks one reads the slot as undisclosed). ``entry_basis`` (W051, audit
+#: lacks one reads the slot as undisclosed). ``entry_basis`` (audit
 #: 3.3): per-step disclosure of WHICH call argument the entry evidence came
 #: from (``"positional[i]"`` / ``"kwarg[name]"``).
 _OPTIONAL_ENVELOPE_KEYS = frozenset({"entry_basis"})
 
 #: The one armed join session of the running capture (captures are
 #: single-threaded by design; ``armed_capture`` sets and clears it). Lane
-#: F42's step-qualified selectors and the coupling fire attribution read the
+#: The step-qualified selectors and the coupling fire attribution read the
 #: live step position through the accessors below, never the session object.
 _ACTIVE_JOIN_SESSION: EpisodeJoinSession | None = None
 
@@ -132,7 +132,7 @@ def active_episode_step() -> int | None:
 
     ``None`` outside an episode capture AND between stepped-module calls
     inside one (root-loop ops before/after/between steps belong to no step;
-    lane F42 attributes them as outside-step facts, never guesses a row).
+    attributes them as outside-step facts, never guesses a row).
     """
 
     session = _ACTIVE_JOIN_SESSION
@@ -240,7 +240,7 @@ def _tensor_digest(value: Any) -> str:
 
 #: Keyword names that NAME the carried step input on the shipped realism
 #: shapes (HF causal/seq2seq LMs, diffusers/flow-matching denoisers); a tensor
-#: under one of these is preferred over positional order (W051, audit 3.3).
+#: under one of these is preferred over positional order.
 _PREFERRED_ENTRY_KWARGS: tuple[str, ...] = (
     "input_ids",
     "decoder_input_ids",
@@ -319,7 +319,7 @@ def _select_entry(
     Returns ``(basis_label, tensor)``; ``(None, None)`` when no tensor
     argument qualifies (the join degrades to ``unchecked``, never a guess).
 
-    Selection, in order (W051, audit 3.3 -- the historical rule was "first
+    Selection, in order (audit 3.3 -- the historical rule was "first
     tensor argument" with no disclosure, so a timestep-first denoiser graded
     its TIMESTEP and a kwargs-first masked LM graded its ATTENTION MASK):
 
@@ -396,7 +396,7 @@ class _StepBoundary:
     unavailable_reason: str | None = None
     #: Which call argument the entry evidence was read from
     #: (``"positional[i]"`` / ``"kwarg[name]"``); persisted per step in the
-    #: envelope's ``entry_basis`` slot (W051, audit 3.3).
+    #: envelope's ``entry_basis`` slot.
     entry_argument: str | None = None
 
 
@@ -423,7 +423,7 @@ def _suffix_alignment(cur: Sequence[int], expected: Sequence[int], wildcard_tail
 def _exogenous_position_count(
     cur: Sequence[int], expected: Sequence[int], wildcard_tail: int
 ) -> int:
-    """Count the entry positions NOT explained by ``expected`` (W051, 3.5).
+    """Count the entry positions NOT explained by ``expected``.
 
     The count is a POSITIONAL DIFF under the most charitable of two
     alignments, never the length of the unaligned suffix:
@@ -550,7 +550,7 @@ class EpisodeJoinSession:
         self.live_grades: dict[int, str] = {}
         self.live_break_step: int | None = None
         #: 0-based step currently executing inside the stepped module, or
-        #: ``None`` between calls (lane F42 reads it via
+        #: ``None`` between calls (the coupling reads it via
         #: :func:`active_episode_step` for live step attribution).
         self.in_step: int | None = None
         self._handles: list[Any] = []
@@ -818,7 +818,7 @@ def _expected_feed_for_step(
 ) -> tuple[tuple[int, ...] | None, tuple[Any, ...] | None]:
     """The ``(forced, emitted)`` feed the join into ``step`` is graded against.
 
-    Teacher forcing (W051, audit 3.4): the join into step k feeds the DECLARED
+    Teacher forcing: the join into step k feeds the DECLARED
     token ``forced_tokens[k-1]``; the evidence column is whatever the root
     returned (often the model's predictions), so grading against it would
     report a false exogenous break. Without forcing, the emitted evidence is
@@ -899,8 +899,8 @@ def settle_step_join(
         "live_break_step": session.live_break_step,
         "exogenous_positions": exogenous_positions,
         "reasons": reasons,
-        # W051 (audit 3.3): WHICH call argument each step's entry evidence
-        # was read from. Optional in the v1 envelope (pre-W051 envelopes
+        #: WHICH call argument each step's entry evidence
+        # was read from. Optional in the v1 envelope (earlier envelopes
         # lack it and load as "argument undisclosed"); never a guess.
         "entry_basis": entry_basis,
     }
@@ -1070,7 +1070,7 @@ def check_series_join_claim(subject: Any) -> None:
     The strong claim door: a measured broken join refuses with the verbatim
     teaching text; an UNCHECKED join or an absent envelope refuses
     ``episode_join_unmeasured`` -- an unmeasured cross-step join can never
-    support a series claim (the F40a claim-off honesty, now typed).
+    support a series claim (the claim-off honesty, now typed).
     """
 
     envelope = step_join_envelope_for(subject)
@@ -1128,7 +1128,7 @@ def refuse_broken_join_claim(subject: Any) -> None:
 def _validated_join_declaration(
     spec: EpisodeOptions, declared_steps: int | None
 ) -> tuple[int, ...]:
-    """Validate the join-arm declaration triple (lane F40c).
+    """Validate the join-arm declaration triple.
 
     Raises
     ------
@@ -1186,7 +1186,7 @@ def _validated_join_declaration(
 def _raise_settled_break_arm(
     resolved: ResolvedEpisode, header: EpisodeLedgerHeader, join_envelope: Mapping[str, Any]
 ) -> None:
-    """Raise the strict / FORK-4(b) settlement refusal on a measured break."""
+    """Raise the strict settlement refusal on a measured break."""
 
     broken = step_join_break(header)
     if broken is None or broken[1] != "exogenous":
@@ -1203,7 +1203,7 @@ def _raise_settled_break_arm(
             break_step=break_step,
         )
     if resolved.on_feed_break == "refuse":
-        # FORK-4 arm (b): typed refusal carrying recoverable partial
+        # arm (b): typed refusal carrying recoverable partial
         # evidence, built beside the disclose default (the ruling only
         # selects which shape is the DEFAULT).
         count = join_envelope.get("exogenous_positions", {}).get(str(break_step))
@@ -1264,7 +1264,7 @@ def _live_step_join_envelope(
 def armed_capture(
     episode_resolved: Any, run_capture: Callable[[], Any]
 ) -> Iterator[Callable[[], Any]]:
-    """Yield the capture callable with the live join hooks armed (F40c).
+    """Yield the capture callable with the live join hooks armed.
 
     Arms the resolved episode's join session for exactly one capture and
     yields a callable that resets the session's recorded boundaries per
@@ -1282,7 +1282,7 @@ def armed_capture(
     if join_session is None:
         yield run_capture
         return
-    # Attested coupling (lane F42): the fire-attribution session arms and
+    # Attested coupling: the fire-attribution session arms and
     # clears in lockstep with the join session it reads step positions from.
     coupling_session = getattr(episode_resolved, "coupling_session", None)
     from ._episode_coupling import _set_active_coupling

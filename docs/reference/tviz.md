@@ -210,7 +210,7 @@ and a documented recipe, not a supported bridge.
 
 ## Recipe: Ecco-style NMF factor view (docs recipe, hardened)
 
-NMF is a docs recipe by decision (D20): the multi-row strip renderer is the
+NMF is a docs recipe by decision: the multi-row strip renderer is the
 product; the factorization is yours, with the disclosures below mandatory.
 
 ```python

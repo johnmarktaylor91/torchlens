@@ -1,10 +1,10 @@
 """C07X identity-fact load validators (tlspec v9 entry-dark slots).
 
 The Trace-level root entry-point fact (``Trace.provenance.root_entry_point``, written
-unconditionally at capture; foldA D10) and the two entry-dark Op facts the
-C07X amendment declares (``Op.episode_step``, F-EPISODE writes;
-``Op.tl_authored_root``, F41 writes), each with fail-closed load
-validation. Split from ``_io/forgery_validation.py`` at the C07X amendment
+unconditionally at capture) and the two entry-dark Op facts the
+amendment declares (``Op.episode_step``, F-EPISODE writes;
+``Op.tl_authored_root``, writes), each with fail-closed load
+validation. Split from ``_io/forgery_validation.py`` at the amendment
 (R43 size discipline); the one consumer is
 ``validate_persisted_forgery_surfaces``.
 """
@@ -47,19 +47,19 @@ def _ops_of(trace: Trace) -> tuple[Any, ...]:
     return _trace_ops(trace)
 
 
-#: Closed root entry-point kind tokens (C07X item (iv), foldA D10/D11):
-#: ``module_call`` (nn.Module/callable-model roots), ``bound_method`` (F41's
-#: bound-method roots), ``function_call`` (preview function roots).
+#: Closed root entry-point kind tokens:
+#: ``module_call`` (nn.Module/callable-model roots), ``bound_method``
+#: (bound-method roots), ``function_call`` (preview function roots).
 _ROOT_ENTRY_POINT_KINDS = frozenset({"module_call", "bound_method", "function_call"})
 
 
 #: First tlspec stamp on which an ABSENT ``Trace.provenance.root_entry_point`` refuses.
-#: The C07X writers stamp the fact unconditionally, but they ride the SAME v9
+#: The writers stamp the fact unconditionally, but they ride the SAME v9
 #: window as pre-C07X v9 writers whose artifacts are checked in (e.g.
 #: ``tests/fixtures/tlspec_v9/clean.tlspec``: tlspec 9, torchlens 2.34.1,
 #: no root_entry_point), so within v9 the slot is ENTRY-DARK by construction
 #: and absence cannot be told from deletion. The tripwire is armed for the
-#: next coordinated bump (AUD-CODE 3.0e; W051-IO).
+#: next coordinated bump (AUD-CODE 3.0e).
 _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC = 10
 
 
@@ -94,13 +94,13 @@ def _refuse_absent_root_entry_point_on_current_schema(trace: Trace) -> None:
 
 
 def _validate_root_entry_point(trace: Trace) -> None:
-    """Validate the Trace-level root entry-point identity fact (C07X).
+    """Validate the Trace-level root entry-point identity fact.
 
     Grammar: ``"<kind>:<qualified_identity>"`` with a closed kind vocabulary
     and a non-empty identity. ``None`` is legal only as the legacy-artifact
     reading (pre-C07X saves); every current capture writes the fact
-    unconditionally (foldA D10), and the rerun identity gate consumes it
-    FAIL-CLOSED (F41).
+    unconditionally, and the rerun identity gate consumes it
+    FAIL-CLOSED.
     """
 
     value = trace._provenance_root_entry_point
@@ -130,7 +130,7 @@ def _validate_root_entry_point(trace: Trace) -> None:
 
 
 def _validate_episode_step_stamps(trace: Trace) -> None:
-    """Validate per-op episode-step stamps (tlspec v9 entry-dark, C07X).
+    """Validate per-op episode-step stamps (tlspec v9 entry-dark).
 
     ``None`` on every op today (the F-EPISODE read-axis lane writes the
     stamp). A present value must be a non-negative int, and stamps are only
@@ -174,10 +174,10 @@ def _validate_episode_step_stamps(trace: Trace) -> None:
 
 
 def _validate_tl_authored_root(trace: Trace) -> None:
-    """Validate the TL-authored-root marker (tlspec v9 entry-dark, C07X).
+    """Validate the TL-authored-root marker (tlspec v9 entry-dark).
 
-    ``None`` on every module-root op; F41 writes ``True`` on the root op
-    record of its TL-authored bound-method wrapper. A present value must be
+    ``None`` on every module-root op; bound-method captures write ``True`` on the root op
+    record of the TL-authored bound-method wrapper. A present value must be
     a bool, and ``True`` is only coherent beside a ``bound_method`` root
     entry-point fact (the marker discloses the wrapper the fact names).
     """

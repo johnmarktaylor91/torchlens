@@ -1,7 +1,7 @@
-"""Observability substrates (workstream C06).
+"""Shared observability substrate.
 
-The shared substrate the observe / checks / trackers / explorer / snoop /
-torchnative feature families build on:
+The substrate the observe, checks, trackers, explorer, snoop and native-profile
+feature families build on:
 
 - ONE per-step history artifact schema (``_schema`` / ``_artifact``): four
   normalized layers (Run / Site / StepBlock / Observation), a fixed signed
@@ -16,8 +16,8 @@ torchnative feature families build on:
   engine (``_spans`` / ``_region`` / ``_session``).
 
 Access spelling is ``import torchlens._observability`` for now; root-facade
-routing (``tl.region`` etc.) is an F35 registration fragment. Every spelling
-here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+routing (``tl.region`` etc.) is a separate registration step. Every spelling
+here is DOCUMENTED-UNSTABLE pending naming ratification.
 """
 
 from __future__ import annotations

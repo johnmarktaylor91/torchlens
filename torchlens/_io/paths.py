@@ -35,8 +35,8 @@ def reject_symlink_path(
     trailing_period:
         Whether to end the message with ``"."``.
     code:
-        Optional stable ``fields["code"]`` for callers that branch on the cause
-        (R65). Attached only when ``exc_type`` is a ``TorchLensError`` subclass,
+        Optional stable ``fields["code"]`` for callers that branch on the cause.
+        Attached only when ``exc_type`` is a ``TorchLensError`` subclass,
         which accepts structured payload; ignored for foreign exception types.
 
     Returns

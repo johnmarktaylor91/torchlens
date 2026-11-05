@@ -1,20 +1,20 @@
-"""Single-sourced model-input boundary traversal (r65 Cluster Y, the normative dispatch).
+"""Single-sourced model-input boundary traversal (the normative dispatch).
 
 Every walker of the MODEL-INPUT boundary tree routes through
 :func:`walk_input_boundary`:
 
-* W1 -- capture literal-leaf walker
+* capture literal-leaf walker
   (``torchlens._capture.trace._record_runnable_input_literal_leaves``),
-* W2 -- capture metadata-read-site walker
+* capture metadata-read-site walker
   (``torchlens._capture.trace._record_runnable_input_tensor_sites``),
-* W3 -- runtime literal-path walker
+* runtime literal-path walker
   (``torchlens._runnable.execution._runtime_nontensor_leaf_paths``).
 
 One shared container dispatch is an HONESTY invariant, not a refactor: the walkers
 witness the same physical tree for different fact families (literal values vs
 metadata-read sites), so a container kind handled by one walker but missed by another
-silently drops a whole fact family for every leaf beneath it. That is exactly the r64
-Finding-1 false-VERIFIED: the metadata-site walker did not descend dataclass
+silently drops a whole fact family for every leaf beneath it. That is the
+false-VERIFIED this prevents: the metadata-site walker did not descend dataclass
 containers, so ``box.x.is_contiguous()`` on a dataclass input field recorded no
 metadata witness and a same-value non-contiguous twin replayed the captured branch as
 ``verified``. With the dispatch single-sourced here, a future container kind MUST be
@@ -38,21 +38,20 @@ Dual mapping-key vocabulary (DECLARED here, residual R6)
 Two mapping-key path-component vocabularies coexist, both defined in THIS module and
 only here:
 
-* :func:`tagged_mapping_key_component` -- the persisted LITERAL vocabulary (W1/W3,
-  decoded at run time by ``_value_at_path``): keys are gated by the frozen literal
+* :func:`tagged_mapping_key_component` -- the persisted LITERAL vocabulary (decoded at run time by ``_value_at_path``): keys are gated by the frozen literal
   grammar (a non-representable key routes its whole child subtree to
   ``on_opaque_key_subtree``, downgrading witness coverage instead of silently dropping
   the subtree) and a bool key is tagged ``(BOOL_KEY_PATH_TAG, key)`` so ``{True: x}``
-  stays type-distinct from ``{1: x}`` in the persisted leaf-path set (r29-C2 / F6).
-* :func:`raw_mapping_key_component` -- the metadata-fact-site vocabulary (W2, and the
-  historical binding/W4 path family): the raw key object, every key accepted. Raw
+  stays type-distinct from ``{1: x}`` in the persisted leaf-path set.
+* :func:`raw_mapping_key_component` -- the metadata-fact-site vocabulary (and the
+  historical binding path family): the raw key object, every key accepted. Raw
   bool/int keys CONFLATE (``{True: x}`` and ``{1: x}`` hash equal), which is honest
   today because (a) fact-site paths are in-memory attribution keys resolved through a
   mapping that conflates the two identically at capture and at run, and (b) the
-  bool-vs-int input-tree swap itself diverges through the r33 ``_type_strict_path``
-  symmetric belt on the tensor-leaf set contract. Re-vocabularying W2 to tagged keys
+  bool-vs-int input-tree swap itself diverges through the ``_type_strict_path``
+  symmetric belt on the tensor-leaf set contract. Re-vocabularying to tagged keys
   would change persisted fact paths for zero honesty gain. Full single-vocabulary
-  unification is residual R6 -- a deliberate future persisted-path migration round,
+  unification is a deliberate future persisted-path migration,
   never a silent drift.
 """
 
@@ -86,15 +85,15 @@ INPUT_CONTAINER_KINDS: frozenset[str] = frozenset(
 )
 """The CLOSED container-kind vocabulary of the model-input boundary (see module doc).
 
-r67 C2 adds ``registered`` (a ``tl.types.register_container`` type, descended through its own
-``flatten`` with indexed children) and extends ``empty`` to zero-field dataclasses.
+It includes ``registered`` (a ``tl.types.register_container`` type, descended through its own
+``flatten`` with indexed children), and ``empty`` covers zero-field dataclasses.
 """
 
 
 MAX_INPUT_CONTAINER_DEPTH: int = 200
 
 INPUT_TREE_MAX_DEPTH: int = MAX_INPUT_CONTAINER_DEPTH
-"""The shared model-input boundary nesting ceiling (r-b4 R27-1).
+"""The shared model-input boundary nesting ceiling.
 
 Mirrors the artifact-side literal-decode ceiling
 (``_runnable_execution._MAX_DECODE_NESTING_DEPTH`` / the ``_io`` parse quartet):
@@ -109,7 +108,7 @@ refusal instead of an untyped stdlib crash.
 
 
 def raise_input_tree_depth_refusal(*, depth: int) -> None:
-    """Raise the typed over-depth input-boundary refusal (r-b4 R27-1).
+    """Raise the typed over-depth input-boundary refusal.
 
     Parameters
     ----------
@@ -131,7 +130,7 @@ def raise_input_tree_depth_refusal(*, depth: int) -> None:
 
 
 def raise_input_tree_stack_refusal(cause: BaseException | None = None) -> None:
-    """Raise the typed stack-budget input-boundary refusal (grind-p3 T11.4).
+    """Raise the typed stack-budget input-boundary refusal.
 
     The nesting ceiling is a DEPTH bound, but the actual failure class is
     STACK BUDGET: the live walkers burn ~2-3 interpreter frames per level, so
@@ -161,7 +160,7 @@ def raise_input_tree_stack_refusal(cause: BaseException | None = None) -> None:
 
 
 def raise_input_tree_cycle_refusal(*, kind: str) -> None:
-    """Raise the typed cyclic-container input-boundary refusal (r-b4 R27-1).
+    """Raise the typed cyclic-container input-boundary refusal.
 
     Parameters
     ----------
@@ -179,7 +178,7 @@ def raise_input_tree_cycle_refusal(*, kind: str) -> None:
 
 
 def raise_input_tree_namedtuple_refusal(*, declared: int, physical: int) -> None:
-    """Raise the typed non-total-namedtuple-schema input refusal (B3R4-R12-1).
+    """Raise the typed non-total-namedtuple-schema input refusal.
 
     A tuple subclass DECLARING a ``_fields`` schema that does not account for
     the physical tuple (a malformed non-tuple-of-str ``_fields``, or a declared
@@ -259,7 +258,7 @@ def declares_namedtuple_fields(value: Any) -> bool:
 
     Resolved through the raw MRO (:func:`_raw_mro_attr`), never through the instance.
     The historical ``hasattr(value, "_fields")`` spelling ran the instance's
-    ``__getattribute__``/``__getattr__`` -- the exact untrusted hook the r71 C contract
+    ``__getattribute__``/``__getattr__`` -- the exact untrusted hook the C contract
     promises never executes during ``snapshot_input_boundary`` -- and let the hook STEER
     classification: a genuine namedtuple subclass whose ``__getattribute__`` raised
     ``AttributeError`` for ``"_fields"`` classified as a plain ``sequence``, so neither
@@ -319,7 +318,7 @@ def iter_physical_sequence(value: Any) -> Iterator[tuple[int, Any]]:
 
 
 def empty_input_container_kind(value: Any) -> str | None:
-    """Return the KIND of an EMPTY non-tensor container, else ``None`` (inert; r29-C2).
+    """Return the KIND of an EMPTY non-tensor container, else ``None`` (inert).
 
     The canonical implementation, resolving a namedtuple's declared schema through
     :func:`declares_namedtuple_fields`/:func:`_instance_fields` rather than a live
@@ -440,7 +439,7 @@ def classify_input_container(value: Any) -> str:
 
     if isinstance(value, torch.Tensor):
         return "tensor"
-    # r67 C2 (corr1-3): a REGISTERED container type is the user's explicit declaration and
+    # A REGISTERED container type is the user's explicit declaration and
     # wins over the generic kinds -- capture and runtime both descend its ``flatten``
     # children, so a registered input can never be admitted at save and then fail
     # traversal at bind (advertise-then-fail).
@@ -460,13 +459,13 @@ def classify_input_container(value: Any) -> str:
 
 
 def tagged_mapping_key_component(key: Any) -> Any:
-    """Persisted-literal mapping-key vocabulary (W1/W3; decoded by ``_value_at_path``).
+    """Persisted-literal mapping-key vocabulary (decoded by ``_value_at_path``).
 
     Gates the key through the frozen literal grammar (``_encode_literal_key`` raises
     ``_UnsupportedLiteralError`` for a non-representable key -- enum, object, bytes,
     ... -- which :func:`walk_input_boundary` routes to ``on_opaque_key_subtree``) and
     tags a bool key as ``(BOOL_KEY_PATH_TAG, key)`` so it stays type-distinct from
-    the equal-valued int key (r29-C2 / F6).
+    the equal-valued int key.
     """
 
     from torchlens._io.runnable import _encode_literal_key, input_path_key_component
@@ -476,13 +475,13 @@ def tagged_mapping_key_component(key: Any) -> Any:
 
 
 def raw_mapping_key_component(key: Any) -> Any:
-    """Metadata-fact-site mapping-key vocabulary (W2): the ONE codec, every key accepted.
+    """Metadata-fact-site mapping-key vocabulary: the ONE codec, every key accepted.
 
-    r67 C2 retires the dual vocabulary (residual R6): W2 components now come from the
+    There is no dual vocabulary: metadata-site components come from the
     SAME type-strict codec as the persisted literal paths, so ``{True: x}`` and
     ``{1: x}`` fact sites stay distinct and every path family speaks one language. A
     NON-grammar key keeps the raw key object as an in-memory-only attribution component
-    (W2 must accept every key; the literal walker's OPAQUE leaf independently ceilings
+    (the metadata-site walker must accept every key; the literal walker's OPAQUE leaf independently ceilings
     such a subtree, so a dropped metadata fact under an exotic key can never yield a
     false VERIFIED).
     """
@@ -571,7 +570,7 @@ def walk_input_boundary(
                 on_empty_container(empty_kind, path)
             return
         if kind == "registered":
-            # r67 C2 (corr1-3): descend the registration's OWN flatten children with
+            # Descend the registration's OWN flatten children with
             # indexed components; a throwing/nonconforming hook routes the node to the
             # opaque handler (fail closed: witness coverage downgrades / save refuses),
             # never a silent drop and never an advertise-then-fail at bind.
@@ -591,7 +590,7 @@ def walk_input_boundary(
             return
         if kind == "namedtuple":
             if namedtuple_arity_mismatch(value):
-                # Fail closed (B3R4-R12-1): descending only the declared names
+                # Fail closed: descending only the declared names
                 # -- NOTHING for a malformed schema -- silently dropped the
                 # remaining tensor leaves from every capture-side walker (the
                 # trace showed NO input node and misattributed the gap as an
@@ -652,16 +651,16 @@ def walk_input_boundary(
         _descend(value, path)
     except RecursionError as exc:
         # A legal (<= ceiling) tree can still exhaust the stack when the caller
-        # entered capture deep in its own recursion; refuse typed (T11.4).
+        # entered capture deep in its own recursion; refuse typed.
         raise_input_tree_stack_refusal(exc)
 
 
 def refuse_nontotal_namedtuple_inputs(
     input_args: Iterable[Any], input_kwargs: Mapping[Any, Any]
 ) -> None:
-    """Refuse capture entry on any non-total namedtuple input schema (B3R4-R12-1).
+    """Refuse capture entry on any non-total namedtuple input schema.
 
-    The runnable walkers (W1/W2/W3) run only for intervention-ready captures,
+    The runnable walkers run only for intervention-ready captures,
     so a PLAIN capture never traversed its input boundary through the shared
     dispatch: a malformed-``_fields`` tuple subclass reached the tensor-
     extraction BFS, which cannot see positional slots of tuple subclasses, and
@@ -683,19 +682,18 @@ def refuse_nontotal_namedtuple_inputs(
         walk_input_boundary(value, (), key_component=raw_mapping_key_component)
 
 
-# --- r67 C2: the input-boundary SNAPSHOT spine -----------------------------------------------
+# --- the input-boundary SNAPSHOT spine ------------------------------------------------------
 #
-# The r66 C2 findings (free-F2/F3, hon1-F1/F2a/F2b/F2c, corr1-3) share one root: the structure
-# witness recorded ROOT kind only, so nested kinds, exact classes, empty-dataclass arity,
-# non-str/int grammar keys, hidden instance state, and registered containers could be lost or
-# treated inconsistently. One traversal per model-input site now produces an immutable
+# A structure witness that recorded ROOT kind only would lose or mis-treat nested kinds,
+# exact classes, empty-dataclass arity, non-str/int grammar keys, hidden instance state,
+# and registered containers. One traversal per model-input site now produces an immutable
 # per-node record list -- kind, exact (module, qualname) type, declared child schema, ordered
 # type-strict-encoded mapping keys, and an instance-state/losslessness proof -- persisted by
 # the runnable producer and re-derived at bind time by the SAME function, so capture and
 # runtime can never diverge in vocabulary.
 
 _KEY_CODEC_TAG = "\x00tlk:"
-"""Reserved prefix of the canonical type-strict mapping-key codec (r67 C2).
+"""Reserved prefix of the canonical type-strict mapping-key codec.
 
 Every non-``str``/``int`` grammar key (bool, float, None, safe tuple) -- and any string key
 that could collide with an encoding -- is encoded into ONE tagged string component, so the
@@ -705,7 +703,7 @@ sets and ordered-key facts).
 """
 
 _RESERVED_NAMESPACE_PREFIX = "\x00"
-"""The reserved input-path component namespace (r71 D).
+"""The reserved input-path component namespace.
 
 Every TorchLens-synthesized path sentinel lives under the null-byte prefix
 (``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG`` / the codec tag). A REAL dict
@@ -715,10 +713,10 @@ it can never collide with a sentinel interpreted before mapping lookup.
 
 
 def reserved_input_path_components() -> frozenset[str]:
-    """The closed registry of reserved input-path SENTINELS (r71 D).
+    """The closed registry of reserved input-path SENTINELS.
 
     Every string sentinel any runtime consumer interprets POSITIONALLY before a mapping
-    lookup (``_value_at_path``) is enumerated here; the r71 D meta-test asserts each such
+    lookup (``_value_at_path``) is enumerated here; the D meta-test asserts each such
     sentinel is a member AND that ``encode_mapping_key(sentinel) != sentinel`` (a real
     dict key equal to a sentinel is always escaped, never round-tripped raw).
     """
@@ -729,7 +727,7 @@ def reserved_input_path_components() -> frozenset[str]:
 
 
 def _stock_numpy_scalar_types() -> frozenset[type]:
-    """Every CONCRETE stock NumPy scalar class, enumerated programmatically (r69 B).
+    """Every CONCRETE stock NumPy scalar class, enumerated programmatically.
 
     Identity-based membership from ``np.typecodes['All']`` -- never a name/module
     string check, so a user subclass can never enter the set regardless of spoofed
@@ -771,13 +769,13 @@ _STOCK_NP_SCALAR_CACHE: tuple[frozenset[type], frozenset[type]] | None = None
 
 
 def classify_scalar(value: Any) -> tuple[str, Any]:
-    """THE closed input-boundary scalar type-class lattice (r69 B/D).
+    """THE closed input-boundary scalar type-class lattice.
 
     Every scalar type dispatch on the model-input boundary -- snapshot leaf
     disposition, literal encoding (``_encode_literal``), runtime literal comparison
     (``_literal_leaf_equal``), and mapping-key encoding (``encode_mapping_key``) --
     consumes this ONE classifier, so a scalar can never be classified two different
-    ways by two different code paths (the r68 B/D conflation root). Classification
+    ways by two different code paths (the B/D conflation root). Classification
     order is load-bearing:
 
     1. ``("semantic", None)`` -- ``enum.Enum`` FIRST (``IntEnum`` / ``IntFlag`` /
@@ -833,10 +831,10 @@ def classify_scalar(value: Any) -> tuple[str, Any]:
 
 
 COMPOSITE_LITERAL_COMPONENT_POLICY: Mapping[str, tuple[str, ...]] = {
-    # r71 B: the ONE shared composite-literal component policy table. Each recursive
+    # The ONE shared composite-literal component policy table. Each recursive
     # ``NonTensorLiteral`` composite node kind lists the classifier-backed lane every
     # sub-component MUST route through, so a semantic-typed scalar can never launder
-    # through ANY composite edge (secA-F1: slice components were the ungated seam).
+    # through ANY composite edge (slice components were the ungated seam).
     # This table is BOTH implementation authority and the future-kind meta-test: a
     # new composite ``NonTensorLiteral`` without a declared policy REDs
     # ``test_r71b_composite_component_policy_covers_every_edge``.
@@ -848,13 +846,13 @@ COMPOSITE_LITERAL_COMPONENT_POLICY: Mapping[str, tuple[str, ...]] = {
     ),  # keys via codec, values via encoder
     "LiteralTupleKey": ("encode_mapping_key",),  # recursive tuple-key items via the key codec
 }
-"""Closed policy: every composite ``NonTensorLiteral`` edge -> its classifier lane (r71 B)."""
+"""Closed policy: every composite ``NonTensorLiteral`` edge -> its classifier lane."""
 
 
 def slice_semantic_component(value: slice) -> str | None:
     """Return the field name of the first semantic-typed slice component, else ``None``.
 
-    r71 B: applies the ``LiteralSlice`` component policy (``classify_scalar`` first) to
+    Applies the ``LiteralSlice`` component policy (``classify_scalar`` first) to
     a runtime/capture ``slice`` leaf. A component classifying ``semantic`` (enum member,
     builtin/np-scalar subclass) is outside the grammar -- the snapshot preflight and the
     runtime comparison both refuse/diverge on it, so a plain-int capture and a same-value
@@ -871,7 +869,7 @@ def slice_semantic_component(value: slice) -> str | None:
 
 
 def encode_mapping_key(key: Any) -> str | int:
-    """Encode one grammar mapping key into the canonical type-strict component (r69 D).
+    """Encode one grammar mapping key into the canonical type-strict component.
 
     THE sole mapping-key identity authority: snapshot ordered-key facts, literal
     leaf paths, tensor binding paths, and runtime lookup all speak this token
@@ -911,7 +909,7 @@ def encode_mapping_key(key: Any) -> str | int:
             # Legacy ``s:`` lane: a real key colliding with the codec prefix itself.
             return f"{_KEY_CODEC_TAG}s:{key[len(_KEY_CODEC_TAG) :]}"
         if key.startswith(_RESERVED_NAMESPACE_PREFIX):
-            # r71 D: any OTHER null-byte-prefixed key could collide with a reserved
+            # Any OTHER null-byte-prefixed key could collide with a reserved
             # input-path sentinel (``EMPTY_CONTAINER_PATH_MARKER`` / ``BOOL_KEY_PATH_TAG``
             # / any future ``\x00`` marker interpreted positionally before mapping
             # lookup). Escape the WHOLE ``\x00`` namespace into the unambiguous
@@ -942,7 +940,7 @@ def decode_mapping_key(component: str | int) -> Any:
 
     Retained for legitimate output-dict reconstruction and diagnostics; RUNTIME
     INPUT BINDING never decodes -- ``_value_at_path`` encodes each runtime candidate
-    and compares exact canonical tokens (r69 D).
+    and compares exact canonical tokens.
     """
 
     if isinstance(component, int) or not component.startswith(_KEY_CODEC_TAG):
@@ -954,7 +952,7 @@ def decode_mapping_key(component: str | int) -> Any:
     if tag == "s":
         return _KEY_CODEC_TAG + payload
     if tag == "r":
-        # r71 D: the reserved-namespace escape (any ``\x00``-prefixed real key).
+        # The reserved-namespace escape (any ``\x00``-prefixed real key).
         return bytes.fromhex(payload).decode("utf-8")
     if tag == "n":
         return None
@@ -991,7 +989,7 @@ def decode_mapping_key(component: str | int) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class InstanceStateInspection:
-    """One inert instance-state inspection result (r71 C).
+    """One inert instance-state inspection result.
 
     ``complete`` is ``True`` only when the enumeration is PROVABLY total inertly;
     ``reason`` names the closed fail-closed cause otherwise. ``uncertainty is NEVER
@@ -1019,9 +1017,10 @@ def _raw_mro_attr(value: Any, attr: str) -> Any:
 
 
 def inspect_instance_state(value: Any) -> InstanceStateInspection:
-    """Inertly enumerate the SET instance-state NAMES on ``value``, fail-closed (r71 C).
+    """Inertly enumerate the SET instance-state NAMES on ``value``, fail-closed.
 
-    THE single instance-state inspector for declared-schema containers. It NEVER routes the instance ``__dict__`` through ``getattr`` (r70 hon1-F1: a property/descriptor-shadowed
+    THE single instance-state inspector for declared-schema containers. It NEVER routes the
+    instance ``__dict__`` through ``getattr`` (a property/descriptor-shadowed
     ``__dict__`` executes user code returning attacker-chosen ``{}``, turning
     "untrustworthy" into "proved empty"). Instead:
 
@@ -1105,7 +1104,7 @@ def _protocol_container_instance_state_fact(value: Any) -> tuple[list[list[str]]
     """Ordered ``(name, token)`` instance-state facts for protocol-container subclasses.
 
     The exact-type node fact catches a class SWAP but not changed fields on
-    another instance of the SAME class (r66 R1 reopened by r2-B3: a
+    another instance of the SAME class (a
     ``ModeBox(dict)`` whose ``box.mode`` flipped ``'a' -> 'b'`` between capture
     and replay walked to the same tensor-leaf structure and replayed a wrong
     output VERIFIED). Enumerate the instance state inertly and witness each
@@ -1140,7 +1139,7 @@ def _protocol_container_instance_state_fact(value: Any) -> tuple[list[list[str]]
 
 
 def instance_state_names(value: Any) -> frozenset[str]:
-    """Enumerate the SET instance-state names inertly (r69 C; r71 C fail-closed helper).
+    """Enumerate the SET instance-state names inertly (fail-closed helper).
 
     Thin compatibility wrapper over :func:`inspect_instance_state`: an INCOMPLETE
     (uninspectable) inspection returns the empty set here for legacy callers, but the
@@ -1174,7 +1173,7 @@ _TUPLEGETTER_TYPE_CACHE: type | None = None
 
 
 def _namedtuple_field_descriptors_shadowed(value: Any) -> bool:
-    """Return whether any declared namedtuple field's descriptor is non-stock (T11.1).
+    """Return whether any declared namedtuple field's descriptor is non-stock.
 
     Mirrors the slots rule: each declared field must resolve (raw MRO, never
     ``getattr``) to the stock ``_tuplegetter`` bound to that field's OWN tuple
@@ -1204,7 +1203,7 @@ def _namedtuple_field_descriptors_shadowed(value: Any) -> bool:
 
 
 def _declared_schema_uninspectable(value: Any) -> bool:
-    """Return whether a custom attribute hook blinds the declared-field proof (r71 C).
+    """Return whether a custom attribute hook blinds the declared-field proof.
 
     A dataclass/namedtuple with a non-standard ``__getattribute__`` or ANY MRO
     ``__getattr__`` can compute or hide declared-field values, so the walker cannot
@@ -1213,7 +1212,7 @@ def _declared_schema_uninspectable(value: Any) -> bool:
     to uninspectable BEFORE any declared-field read. Namedtuples pass by default
     (``tuple`` does not override ``__getattribute__`` and declares no ``__getattr__``)
     but every declared field must additionally resolve to the stock positional
-    ``_tuplegetter`` (:func:`_namedtuple_field_descriptors_shadowed`, T11.1) --
+    ``_tuplegetter`` (:func:`_namedtuple_field_descriptors_shadowed`) --
     a property-shadowed field reads a decoy no other net can catch.
     """
 
@@ -1249,18 +1248,18 @@ def _declared_schema_uninspectable(value: Any) -> bool:
 
 
 def undeclared_instance_state(value: Any, kind: str) -> bool:
-    """Return whether a container INSTANCE carries state its DECLARED schema drops (r69 C).
+    """Return whether a container INSTANCE carries state its DECLARED schema drops.
 
     Scope: kinds with a declared FIELD schema. A dataclass or namedtuple subclass
     carrying live instance state outside its declared fields would silently lose that
     state on replay reconstruction -- and it can steer control flow the declared schema
-    never witnesses (r66 R1: ``box.mode``; r68 hon1-F2: a ``__slots__`` subclass; r68
-    hon1-F3: ``hasattr`` presence on a ``None``-valued extra). The live state set comes
+    never witnesses (``box.mode``; a ``__slots__`` subclass;
+    ``hasattr`` presence on a ``None``-valued extra). The live state set comes
     from the ONE inert inspector :func:`inspect_instance_state` (raw-MRO ``__dict__``
     descriptor + all-MRO set slots, presence counting regardless of value -- NO
     ``None`` carve-out), minus the declared field names.
 
-    r71 C fail-closed: an UNINSPECTABLE inspection (property/descriptor-shadowed
+    C fail-closed: an UNINSPECTABLE inspection (property/descriptor-shadowed
     ``__dict__``, non-dict result, custom ``__getattribute__`` / ``__getattr__`` on
     the declared-schema container) reads as undeclared state PRESENT -- the walker
     can never inertly prove completeness, and it must never invoke the shadowing hook
@@ -1274,7 +1273,7 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
     custom Mapping input) -- it is WITNESSED instead, by the snapshot's per-node
     ``instance_state`` fact (:func:`_protocol_container_instance_state_fact`):
     literal-valued attributes carry type-strict tokens and diverge structurally
-    when changed between capture and replay (the r66 R1 / r2-B3 ``box.mode``
+    when changed between capture and replay (the ``box.mode``
     class), opaque values carry a type-identity token. A same-type changed
     OPAQUE attribute value remains the documented residual; the class swap
     itself still diverges through the exact-type node fact.
@@ -1288,7 +1287,7 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
     )
     if not (is_dataclass_kind or is_namedtuple_kind):
         return False
-    # r71 C: a custom attribute hook on the declared-schema container blinds the
+    # A custom attribute hook on the declared-schema container blinds the
     # field-completeness proof BEFORE any field is read -- fail closed.
     if _declared_schema_uninspectable(value):
         return True
@@ -1303,7 +1302,7 @@ def undeclared_instance_state(value: Any, kind: str) -> bool:
 
 
 def _instance_fields(value: Any) -> tuple[str, ...]:
-    """Read a namedtuple's ``_fields`` at TYPE level (r71 C; inert, no instance hook).
+    """Read a namedtuple's ``_fields`` at TYPE level (inert, no instance hook).
 
     Resolves ``_fields`` through the raw MRO so a shadowed instance ``_fields`` cannot
     forge the declared schema; requires a tuple of strings (else empty -> the
@@ -1317,7 +1316,7 @@ def _instance_fields(value: Any) -> tuple[str, ...]:
 
 
 def snapshot_input_boundary(value: Any) -> dict[str, Any]:
-    """Build ONE immutable per-node structure snapshot of a model-input site (r67 C2).
+    """Build ONE immutable per-node structure snapshot of a model-input site.
 
     Returns ``{"nodes": [...], "refusals": [...]}`` where every node record carries
     ``path`` (canonical components), ``kind`` (closed vocabulary + ``registered``),
@@ -1382,7 +1381,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
         symmetric runtime snapshot.
         """
 
-        # r67 heavy-gate fix: only CONTAINER nodes carry the exact-class witness. A
+        # heavy-gate fix: only CONTAINER nodes carry the exact-class witness. A
         # tensor leaf's identity is the admission gate's domain, and a scalar LEAF
         # literal's semantics are the literal-witness VALUE contract (numeric equality
         # across float subclasses: a captured ``np.float64(2.0)`` re-run with plain
@@ -1399,7 +1398,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             registration = get_registered_container(type(item))
         if registration is not None:
             node["kind"] = "registered"
-            # r71 C adjacent closure: the registration's ``state_complete`` trust
+            # C adjacent closure: the registration's ``state_complete`` trust
             # rule reads the instance ``__dict__`` through the ONE inert inspector
             # (never a live ``getattr`` __dict__ read -- a property-shadowed __dict__
             # would blind or forge the state check). An uninspectable registered
@@ -1431,7 +1430,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
             for index, child in enumerate(children):
                 _descend(child, (*path, index))
             return
-        # r71 C: a declared-schema container whose attribute hooks / __dict__ cannot
+        # A declared-schema container whose attribute hooks / __dict__ cannot
         # be inspected inertly refuses with the DISTINCT ``instance_state_uninspectable``
         # reason BEFORE any declared field is read, so the shadowing hook never runs.
         if kind in {"dataclass", "namedtuple", "empty"} and _declared_schema_uninspectable(item):
@@ -1511,7 +1510,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
                 # the witnessed structure identically on the capture and runtime
                 # snapshots -- a false-VERIFIED shape, the same forgery lane
                 # ``physical_sequence_len`` closes for sequences and namedtuples.
-                # Entry-level, not count-only (R12): a count-preserving decoy
+                # Entry-level, not count-only: a count-preserving decoy
                 # entry hid a physically stored tensor from every snapshot node.
                 # A refusal (not a node fact) keeps persisted snapshot shapes
                 # byte-stable for existing artifacts while failing closed on
@@ -1527,7 +1526,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
                     encodable = False
                     break
             if encodable and len(set(keys)) != len(keys):
-                # r69 D: two distinct key objects encoding to ONE canonical token
+                # Two distinct key objects encoding to ONE canonical token
                 # (e.g. multiple same-bit NaN objects -- hash-equal, eq-False, so
                 # separate dict slots) make key identity ambiguous: ordered-key
                 # facts self-collide and token binding would be first-match-wins.
@@ -1553,7 +1552,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
                 _descend(child, (*path, index))
             return
         # Literal leaf: the VALUE is witnessed by the literal walker, but the scalar
-        # TYPE-CLASS disposition is decided here by the ONE classifier (r69 B). A
+        # TYPE-CLASS disposition is decided here by the ONE classifier. A
         # semantic-typed scalar (enum member, builtin/np-scalar subclass) steers host
         # control flow through type identity that no persisted value fact can carry,
         # so it refuses the runnable save typed (``semantic_scalar_type``); the SAME
@@ -1561,8 +1560,8 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
         # capture replayed with a same-value semantic type diverges structurally.
         if classify_scalar(item)[0] == "semantic":
             refusals.append({"path": list(path), "reason": "semantic_scalar_type"})
-        # r71 B: a COMPOSITE literal leaf (a ``slice``) is one opaque snapshot leaf, but
-        # its sub-components carry type identity too (secA-F1). Apply the shared
+        # A COMPOSITE literal leaf (a ``slice``) is one opaque snapshot leaf, but
+        # its sub-components carry type identity too. Apply the shared
         # component policy: a semantic slice component emits the SAME
         # ``semantic_scalar_type`` refusal at save AND in the symmetric runtime
         # snapshot, so a plain-slice capture replayed with a same-value semantic
@@ -1593,7 +1592,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
         compares equal to itself. Sequence nodes carry their exact kind so a
         ``tuple`` aux cannot launder into a ``list`` one.
 
-        Sequence admission is EXACT-TYPE (T11.9): the documented type-strict
+        Sequence admission is EXACT-TYPE: the documented type-strict
         schema accepted ``list``/``tuple`` SUBCLASSES via ``isinstance`` and
         encoded them as their plain base kind, erasing the exact class -- the
         very identity every other input-boundary edge witnesses -- plus any
@@ -1622,6 +1621,6 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
     try:
         _descend(value, ())
     except RecursionError as exc:
-        # Same stack-budget class as the walk direction: typed, never raw (T11.4).
+        # Same stack-budget class as the walk direction: typed, never raw.
         raise_input_tree_stack_refusal(exc)
     return {"nodes": nodes, "refusals": refusals}

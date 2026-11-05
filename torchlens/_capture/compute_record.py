@@ -1,8 +1,8 @@
-"""The two-term compute record (A5/A6): true MACs, never flops // 2.
+"""The two-term compute record: true MACs, never flops // 2.
 
 Split from ``_capture/flops.py`` (size ratchet); the cost TABLES stay there,
 the record layer lives here. Spellings DOCUMENTED-UNSTABLE pending
-naming-session ratification; the C02 FactCore substrate consumes this.
+naming-session ratification; the FactCore substrate consumes this.
 """
 
 from dataclasses import dataclass
@@ -136,7 +136,7 @@ _WEIGHT_RANK = {"linear": 2}
 #: Transposed convolutions count over the input's elements.
 _TRANSPOSED_NAMES = frozenset({"conv_transpose1d", "conv_transpose2d", "conv_transpose3d"})
 
-#: Zero-arithmetic tensor CONSTRUCTIONS (costreport D3): ops that allocate or
+#: Zero-arithmetic tensor CONSTRUCTIONS: ops that allocate or
 #: fill a tensor without floating-point arithmetic. Classified zero-by-rule
 #: per op NAME with two-sided witnesses in the test suite; anything ambiguous
 #: (rand/randn draw RNG, linspace interpolates) STAYS unknown -- a confident

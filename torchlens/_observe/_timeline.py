@@ -169,7 +169,7 @@ def _event(**fields: Any) -> dict[str, Any]:
     unknown = set(fields) - set(_EVENT_DEFAULTS)
     if unknown:
         # Internal invariant (a typo'd column would silently mint a wrong
-        # row); builtin error class, deliberately outside the S-17 census.
+        # row); builtin error class, deliberately outside the census.
         raise KeyError(f"unknown timeline event columns: {sorted(unknown)}")
     row = dict(_EVENT_DEFAULTS)
     row["module_stack"] = []
@@ -183,7 +183,7 @@ def _event(**fields: Any) -> dict[str, Any]:
 
 
 def _tied_groups(trace: Any) -> tuple[tuple[str, ...], ...]:
-    """Return the FactCore tied-parameter groups (C02 identity authority).
+    """Return the FactCore tied-parameter groups (the identity authority).
 
     An unavailable FactCore degrades to no tying knowledge, never a crash.
     """

@@ -89,7 +89,7 @@ A tensor argument with no recorded graph or source provenance fails forward vali
 
 ## Structure-only capture
 
-`structure_only=True` (DOCUMENTED-UNSTABLE surface; L7a wave 0, D8-default)
+`structure_only=True` (DOCUMENTED-UNSTABLE surface, default)
 records the op graph, module hierarchy, parameter geometry, and per-op
 shape/dtype as HYPOTHESES, never tensor values. The capability contract lives
 in [structure_only_capabilities.md](structure_only_capabilities.md).
@@ -101,7 +101,7 @@ in [structure_only_capabilities.md](structure_only_capabilities.md).
 | `structure_only=True` combined with `on_nonfinite='raise'`, `replayable`, or a not-provably-value-free `stop_after=`. | `structure_only_option_conflict` at entry. | Drop the conflicting option; use structured value-free selectors as `stop_after=`. |
 | Any value-payload request (save selection, gradients, streaming sinks, raw input/output retention, output decoding). | `structure_only_values_unsupported` at entry. | Drop the payload request or run a real capture. |
 | Replaying / validating / backward / runnable save on a structure-only trace. | Typed `structure_only_*_unsupported` refusals via the capability chokepoint. Analysis-level saves work as of tlspec v8: the artifact persists the `structure_only` marker plainly and every value claim stays a HYPOTHESIS on load. | Verify hypotheses with `trace.discharge_against(real_trace)`. |
-| A meta-materialized model WITHOUT `structure_only=True`. | The entry gate refuses (`unsupported_tensor_variant`) and the teach names the admitted spelling: weights-free capture is admitted ONLY under the structure-only contract (D8 granted 2026-08-26). Mixed meta/real substrates refuse `structure_only_substrate_mismatch` in both directions. | Pass `capture=CaptureOptions(structure_only=True)` with an all-meta model and all-meta inputs (see docs/reference/weightsfree_capture.md), or materialize on a real device. |
+| A meta-materialized model WITHOUT `structure_only=True`. | The entry gate refuses (`unsupported_tensor_variant`) and the teach names the admitted spelling: weights-free capture is admitted ONLY under the structure-only contract (granted 2026-08-26). Mixed meta/real substrates refuse `structure_only_substrate_mismatch` in both directions. | Pass `capture=CaptureOptions(structure_only=True)` with an all-meta model and all-meta inputs (see docs/reference/weightsfree_capture.md), or materialize on a real device. |
 
 Unenumerated REAL-value escapes in form (b) do not die and cannot be
 intercepted; that residual is exactly why every value-bearing claim stays a
@@ -145,7 +145,7 @@ HYPOTHESIS until discharged against a real capture.
 | The bounded distributed preflight scan hits an inspection boundary that could hide refusing state (an attribute read raises, a container walk is cut off). | `DistributedCaptureUnsupportedError` with a finding of kind `scan_incomplete`: the scan refuses rather than certifying absence it cannot prove. | Expose the model/input state through ordinary inspectable attributes, or remove the raising/opaque holder from the traced objects. |
 | Explicit Python `torch.distributed` collectives execute in a rank-local forward. | They are captured only after `tl.distributed.arm()`. Async completion is marked `completion_binding="unobserved"`; wildcard receive refuses typed. Runnable save/forward replay refuses with `collective_boundary_unsupported`. | Arm at process start (`tl.distributed.arm()` is idempotent; `tl.distributed.is_armed()` reports the state and `tl.distributed.disarm()`, primarily for tests, removes the wraps -- ordinary programs stay armed for the process lifetime), use synchronous source-specific collectives, validate metadata, then combine ranks with `tl.merge_report` / `tl.merge_ranks`. |
 | Rank cores disagree on membership, ordering, or collective correlation. | `tl.merge_report(...)` returns conflicted findings; `tl.merge_ranks(...)` refuses rather than inventing joins. | Fix process-group lifecycle and capture the same program on every rank. Digest witnesses can demote evidence but never rescue a conflict. |
-| Point-to-point pipeline graphs or DTensor topologies are passed to rank merge. | Typed C3/C2 construction refusal; merged replay does not exist. | Keep rank-local traces for inspection or capture a supported dense explicit-collective SPMD program. |
+| Point-to-point pipeline graphs or DTensor topologies are passed to rank merge. | Typed construction refusal; merged replay does not exist. | Keep rank-local traces for inspection or capture a supported dense explicit-collective SPMD program. |
 | Distributed state is hidden behind descriptor-only/slots-only holders, opaque wrapped TP hooks, beyond the bounded walk, or created inside `forward`. | These are disclosed scan residuals; preflight cannot positively certify absence through opaque state. | Expose registered state/hooks through inspectable module attributes and run `tl.report.doctor(model, inputs)` on the concrete inputs. |
 
 ## Preview backends

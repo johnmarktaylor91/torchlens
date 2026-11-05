@@ -6,7 +6,7 @@ common result carrier, and a `by=` door so "select the k most important
 sites" is one line. Every SPELLING on this page is DOCUMENTED-UNSTABLE
 pending the naming sprint; the semantics and the stable error codes
 (`docs/reference/error_refusal_contract.md`) are the contract. Design of
-record: the M(reads) design memo (F04).
+record: the M(reads) design memo.
 
 ```python
 import torchlens as tl
@@ -191,7 +191,7 @@ receiver's pre-norm input with `frozen=None` (the total derivative). See
   attribution patching does not need it (see the EDGE row kind above).
 - **Dataset-mean attribution**: nullable `sample_id`, `sample_count`
   provenance, and the streaming-reduction seam ship now.
-- **Frozen-LN / full published linearization (R10)**: the frozen-policy
+- **Frozen-LN / full published linearization**: the frozen-policy
   registry ships; the v1 vocabulary is `{'mlp_out'}` and there is NO
   `'attribution_graph'` preset name until R10 lands.
 - **R4 position targets**: the closed `METHODS` tuple is the vocabulary

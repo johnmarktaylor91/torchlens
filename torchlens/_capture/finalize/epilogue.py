@@ -198,12 +198,12 @@ def _settle_epilogue_tail(trace: Trace, request: CaptureRequest) -> None:
 
     episode_resolved = facts.get("episode_resolved")
     if episode_resolved is not None:
-        # Settlement-time episode ledger (S7): written ONCE, after postprocess
+        # Settlement-time episode ledger: written ONCE, after postprocess
         # and outcome settlement, from the settled record + module-call truth.
         write_episode_ledger(trace, episode_resolved)
 
-    # Weightsfree settlement (F33): wrap-generation stamp on every capture
-    # (W1-ORD preflight input), D22 invariant net + persisted evidence
+    # Weightsfree settlement: wrap-generation stamp on every capture
+    # (preflight input), invariant net + persisted evidence
     # envelope on structure-only captures.
     from .._structure_evidence import settle_weightsfree_capture
 
@@ -295,7 +295,7 @@ def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) 
 
     Failures here only warn -- the user's exception is never masked.
 
-    FAILED-path episode ledger attach (lane F40a; split out of the ledger, folded
+    FAILED-path episode ledger attach (split out of the ledger, folded
     into the FINALIZE epilogue by the capture rebuild). A failed forward's
     partial product has a settled FAILED outcome but no finished module-call
     records, so step truth is recovered from the surviving module enter/exit
@@ -370,7 +370,7 @@ def _failed_step_counts(
     """Derive ``(started, returned)`` stepped-call counts on the FAILED path.
 
     Exact where module enter/exit event lanes survive; non-upgrading raw-op
-    module-stack fallback otherwise. Strict-arm truth (lane F40c): the join
+    module-stack fallback otherwise. Strict-arm truth: the join
     hooks fire BEFORE the wrapped forward, so a feed-closed halt at step k's
     entry raises before the module-enter event -- the step's input arrived
     (it ENTERED in the join sense) but no event witnesses it. The typed

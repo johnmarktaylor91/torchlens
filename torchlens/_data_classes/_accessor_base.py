@@ -25,7 +25,7 @@ def attach_source_honesty(frame: Any, records: list[Any]) -> Any:
 
     Walks ``records`` for the first one whose ``_source_trace_ref`` weakref
     still resolves and asks that trace to attach its shared capture-honesty
-    facts to ``frame`` (WT1 A-V row 24: no tabular export without them). The
+    facts to ``frame`` (no tabular export without them). The
     trace is the parameter that reaches ``_capture_honesty``; this module
     imports nothing above layer L1.
 

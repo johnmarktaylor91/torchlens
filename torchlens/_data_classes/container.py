@@ -365,7 +365,7 @@ class Container:
     def _append_repr_lines(self, lines: list[str], *, indent: int) -> None:
         """Append child tree lines to a representation buffer.
 
-        Bounded display walk (r-b4 R27-5): nesting past 50 levels renders a
+        Bounded display walk: nesting past 50 levels renders a
         ``<max-depth>`` marker instead of crashing ``repr`` on an over-deep
         (or forged self-referential) container spec.
 
@@ -531,7 +531,7 @@ def _container_from_registry(op: Op) -> Container | None:
     if getattr(op, "container_spec", None) is None and not _op_is_final_output(op):
         # A per-op spec is the opt-in metadata (capture_container_structure /
         # replayable); the FINAL-output snapshot is registered on every
-        # capture (W051-HONESTY H2), so final-output ops read the registry even
+        # capture , so final-output ops read the registry even
         # when their own record carries no spec.
         return None
     index = _output_registry_index(trace)
@@ -817,7 +817,7 @@ def _trace_container_capability(trace: Any, role: Role) -> str:
         ``"none"``, ``"paths_only"``, or ``"full_spec"``.
     """
 
-    # b1 R22 F2 (carried r1-F3): both fallthroughs used to return
+    # Both fallthroughs used to return
     # "full_spec" -- the STRONGEST capability claim (full structure plus
     # supports_reconstruct=True) -- for a backend that never declared
     # container structure. A trace WITHOUT a backend field predates the

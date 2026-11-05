@@ -1,4 +1,4 @@
-"""``TraceSlice``: the sub-DAG view presenter (L6 graph slice, P2).
+"""``TraceSlice``: the sub-DAG view presenter (L6 graph slice).
 
 Composition, never inheritance (the ``MergedTrace`` precedent): a slice of
 a trace is NOT a ``Trace``. A ``Trace`` promises inputs, outputs, module
@@ -310,10 +310,10 @@ class TraceSlice(_SelectionOperand):
             f"{self._source})"
         )
 
-    # Region door (F01) --------------------------------------------------------
+    # Region door --------------------------------------------------------
 
     def as_region(self, *, exits: Any = None) -> Any:
-        """Derive an admissible region operated on as ONE unit (F01).
+        """Derive an admissible region operated on as ONE unit.
 
         Runs the derived admissibility checks (complete exits, convexity,
         pass-instance partition) and returns the typed

@@ -1,4 +1,4 @@
-"""The ONE guarded cross-capture delta projection (leverage B15, D-2/D-7).
+"""The ONE guarded cross-capture delta projection (leverage B15).
 
 ``diff(subject, reference)`` enumerates BOTH captures' structural
 site keys and settles every position into exactly one row of a closed
@@ -8,7 +8,7 @@ consumers read instead of re-deriving their own joins:
 - ``added``              key present on the subject only (declared, never guessed)
 - ``removed``            key present on the reference only
 - ``unresolved``         the guarded join refused the pairing (verdict disclosed)
-- ``excluded_machinery`` an engine-inserted op (D-7: excluded from model-effect
+- ``excluded_machinery`` an engine-inserted op (excluded from model-effect
                          rows with an explicit count, disclosed as a typed
                          structural addition — never painted as a changed
                          model site, never hidden)
@@ -21,7 +21,7 @@ consumers read instead of re-deriving their own joins:
 Pairing authority is the shipped guarded site join
 (:mod:`torchlens._postprocess._site_join`): ``corroborated`` and
 ``positional`` verdicts admit comparison, refused verdicts become
-``unresolved`` rows, and labels never enter the join key (leverage D-2).
+``unresolved`` rows, and labels never enter the join key (leverage).
 The report is SESSION-ONLY and never persisted. Every spelling here is
 DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -38,7 +38,7 @@ from ._record_type import record_type
 
 __all__ = ["DiffRow", "DiffReport", "diff"]
 
-#: Engine-inserted machinery layer types (leverage D-7 exclusion rule).
+#: Engine-inserted machinery layer types (leverage exclusion rule).
 _MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
 
 #: Closed row-status vocabulary (leverage B15).

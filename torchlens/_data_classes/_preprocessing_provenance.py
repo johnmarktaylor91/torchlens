@@ -1,4 +1,4 @@
-"""Preprocessing provenance derivations that live WITH the record (tvscope).
+"""Preprocessing provenance derivations that live WITH the record.
 
 :class:`~torchlens._data_classes.trace.ResolvedPreprocessing` (the persisted
 authority-provenance record) lives in ``torchlens._data_classes.trace``; the
@@ -21,13 +21,13 @@ if TYPE_CHECKING:
 
     from .trace import ResolvedPreprocessing, Trace
 
-#: Closed authority-standing vocabulary (tvscope memo D4).
+#: Closed authority-standing vocabulary.
 STATUS_AUTHORITATIVE = "authoritative"
 STATUS_UNVERIFIED_FALLBACK = "unverified_fallback"
 STATUS_UNKNOWN = "unknown"
 
 #: Resolver sources that are TorchLens-authored recipes, never authorities
-#: (tvscope memo D9: the tier-4 ImageNet fallback is demoted -- never the
+#: (the tier-4 ImageNet fallback is demoted -- never the
 #: reference for a verdict, never ``verified``).
 _FALLBACK_SOURCES = frozenset({"imagenet_default"})
 
@@ -35,13 +35,13 @@ _FALLBACK_SOURCES = frozenset({"imagenet_default"})
 def status_of(record: ResolvedPreprocessing) -> str:
     """Derive the closed authority-standing status from a provenance record.
 
-    The mapping is total over every record TorchLens mints (tvscope memo D4):
+    The mapping is total over every record TorchLens mints:
 
     - ``verified=True`` (metadata read off the user's own model object) or an
       explicitly supplied authority (``resolution_method="explicit"`` in the
       config) is ``"authoritative"``.
     - The TorchLens-authored ImageNet default is ``"unverified_fallback"``
-      (memo D9: demoted -- never an authority, never a verdict reference).
+      (demoted -- never an authority, never a verdict reference).
     - Everything else -- nothing resolved, opaque user transforms, raw user
       tensors -- is ``"unknown"``.
 
@@ -68,7 +68,7 @@ def status_of(record: ResolvedPreprocessing) -> str:
 
 
 def stamp_user_transform_provenance(trace: Trace, input_transform: Callable[..., Any]) -> None:
-    """Populate ``trace.provenance.input_preprocessor`` for a user-supplied transform (B1).
+    """Populate ``trace.provenance.input_preprocessor`` for a user-supplied transform.
 
     A capture that APPLIED an input transform carries provenance on every
     path, not only the HF bridges (which stamp a richer record over this one

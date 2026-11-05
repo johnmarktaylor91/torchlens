@@ -3,7 +3,7 @@
 Split from :mod:`torchlens.options` along the episode option-family seam
 (R43 file-size ratchet); the public spelling stays
 ``tl.options.EpisodeOptions`` (re-exported there). Semantics are pinned by the
-ratified S2/S6/S7 contracts; the doc of record is
+ratified contracts; the doc of record is
 ``docs/reference/episode_capture.md``.
 """
 
@@ -28,7 +28,7 @@ class EpisodeOptions(_OptionsDisplay):
 
     Every spelling here is DOCUMENTED-UNSTABLE pending the rolling naming
     session (no deprecation shim owed); semantics are pinned by the ratified
-    S2/S6/S7 contracts.
+    contracts.
 
     DIAGNOSTIC-TIER COST WARNING: the wrapped episode tier is the
     verification oracle / deep-dive product for TENS of steps, not hundreds.
@@ -48,7 +48,7 @@ class EpisodeOptions(_OptionsDisplay):
         (``episode_declaration_invalid``) otherwise. Step tallying is FLAT:
         each top-level call of this module is one step regardless of any
         loop nesting inside the episode root's ``forward``. On a
-        bound-method root (F41: ``tl.trace(model.generate, ids,
+        bound-method root (``tl.trace(model.generate, ids,
         episode=...)``) it DEFAULTS to the bound method's owner
         (``method.__self__``); on a module root it is required and ``None``
         refuses typed.
@@ -68,7 +68,7 @@ class EpisodeOptions(_OptionsDisplay):
         prompt+completion — keeps its prompt prefix out of the evidence
         column, and an emitted-only root is the equal-size special case.
     step_output_kind:
-        Declared per-step evidence kind (foldA D8): ``"tokens"`` (default)
+        Declared per-step evidence kind: ``"tokens"`` (default)
         reads integer token ids from the source; ``"digest"`` reads
         per-step content digests (any dtype — the float/hidden-state
         shape); ``"none"`` derives no evidence at all (a status-only
@@ -88,13 +88,13 @@ class EpisodeOptions(_OptionsDisplay):
         driver feeds instead of model emissions. Declaring it stamps
         ``token_feed="forced"`` and ``fidelity_basis="forced"`` on the
         ledger header — an explicitly NON-VERIFYING disclosed mode; token
-        fidelity obligations (E-A3) never verify a forced episode.
+        fidelity obligations never verify a forced episode.
     state:
         Declared episode-carried state items beyond the built-in scope
         (token prefix, KV cache, RNG streams). EVERY declared item is
         preflighted at DECLARATION time, unconditionally: an item without
         snapshot/restore support refuses typed
-        (``episode_state_unsnapshotable``) before execution (E-A4).
+        (``episode_state_unsnapshotable``) before execution.
     rng:
         Seeding discipline. Only ``"managed"`` ships: the capture's
         effective ``random_seed`` is drawn-or-passed as today and recorded
@@ -114,7 +114,7 @@ class EpisodeOptions(_OptionsDisplay):
         Escalation reason, closed vocabulary
         ``{"step_failed", "divergence", "requested"}``.
     feed:
-        Join-arm strictness (lane F40c). ``"open"`` (default) captures
+        Join-arm strictness. ``"open"`` (default) captures
         across cross-step feed breaks and grades every join in the measured
         ``step_join`` envelope; episode-dependent claims refuse across a
         broken join, everything else stays usable. ``"closed"`` is the
@@ -126,7 +126,7 @@ class EpisodeOptions(_OptionsDisplay):
         ``exc.partial_trace``, and a DECLARED crossing stops before entry
         (``episode_declared_crossing_stop``).
     on_feed_break:
-        The FORK-4 arm switch (both arms built; the ruling selects the
+        The arm switch (both arms built; the ruling selects the
         default's shape). ``"disclose"`` (default, the panel 2-1): return
         the one Trace with the break marked and claims refused across it.
         ``"refuse"``: the settlement write raises typed

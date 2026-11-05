@@ -110,7 +110,7 @@ _REMOVED_LAYER_MEMBERS: dict[str, str] = {
 _LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "arg_names": (),
     "param_shapes": [],
-    # Relation view fields (M6, FORK-1): declared restore type is the
+    # Relation view fields: declared restore type is the
     # IMMUTABLE view; ``coerce_container_typed_state`` normalizes legacy
     # list/set state on load so loaded Layers present the same immutable
     # relation surface as live finished captures.
@@ -134,7 +134,7 @@ _LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
 
 
 # ---------------------------------------------------------------------------
-# The M8 aggregate facade.
+# The aggregate facade.
 #
 # ``Layer`` no longer copies ~86 representative fields from its first pass at
 # build time (the "~78-field per-pass copy" of the pre-columnar era). Each
@@ -317,7 +317,7 @@ class Layer(_SelectionOperand):
     """
 
     if TYPE_CHECKING:
-        # The M8 mirror fields are runtime-installed data descriptors
+        # The mirror fields are runtime-installed data descriptors
         # (``_install_layer_mirror_descriptors``); declared here so static
         # analysis sees the public surface.
         layer_label: Any
@@ -526,7 +526,7 @@ class Layer(_SelectionOperand):
     def __init__(self, first_pass: "Op") -> None:
         """Initialize the aggregate facade for one layer.
 
-        The M8 facade stores ONLY the genuinely per-layer state (the trace
+        The facade stores ONLY the genuinely per-layer state (the trace
         back-reference, the aggregate merge containers, and the pass
         accessor); the ~86 representative fields the dict era copied from
         ``first_pass`` are class-level mirror descriptors that read through
@@ -565,7 +565,7 @@ class Layer(_SelectionOperand):
         # initialized a fresh empty dict here rather than copying from the
         # first pass, so layer annotations must not alias ``ops[0]``'s dict
         # (mirroring leaked op annotations into the layer and vice versa).
-        # The ONE exception is the reserved "collective" namespace (R18-7):
+        # The ONE exception is the reserved "collective" namespace:
         # a collective boundary layer surfaces its first pass's portable
         # collective_boundary_v1 payload, seeded here as an independent
         # deep copy so neither side can mutate the other. Other op
@@ -794,7 +794,7 @@ class Layer(_SelectionOperand):
         pickle strips the weakref; cleanup clears it) refuses with the same
         typed ``RecordBindingError`` family as the collected-Trace case, so
         no ``None`` can escape behind the ``-> Trace`` signature and crash a
-        caller untyped (r4 b7-opus R52-A).
+        caller untyped.
         """
         ref = self.__dict__.get("_source_trace_ref")
         if ref is None:
@@ -844,7 +844,7 @@ class Layer(_SelectionOperand):
         """Labels of ops equivalent to this layer.
 
         On finished traces the value is the group's ONE cached immutable
-        ``frozenset`` view (M7 live group views), read through the M8 mirror
+        ``frozenset`` view (live group views), read through the mirror
         from the representative op and passed through unchanged — alias-safe
         because it cannot be mutated. A raw staging ``set`` (mid-postprocess
         reads, legacy loads before coercion) still hands back a private copy
@@ -915,7 +915,7 @@ class Layer(_SelectionOperand):
         Declared fields come first in the exact ``__dict__`` insertion order
         of the dict-era ``__init__`` (the order every pickle golden was frozen
         against); mirror fields resolve through the representative op. Extra
-        instance attributes (user-set names, FORK-7) follow in insertion
+        instance attributes (user-set names) follow in insertion
         order. Tombstoned fields are omitted, matching dict-era deletion.
         """
 
@@ -932,10 +932,10 @@ class Layer(_SelectionOperand):
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Install a state mapping as per-layer ``__dict__`` shadows.
 
-        The explicit counterpart of ``__tl_state_items__`` (M11: no record
+        The explicit counterpart of ``__tl_state_items__`` (no record
         class relies on the generic introspection fallback). ``Layer`` is
         dict-backed by design — restored fields become per-layer shadows over
-        the M8 mirror descriptors, byte-identical to the dict-era
+        the mirror descriptors, byte-identical to the dict-era
         ``__dict__.update``.
         """
 
@@ -952,7 +952,7 @@ class Layer(_SelectionOperand):
         # any model with trainable params does not crash. `grad_fn` (a picklable
         # `GradFn` record after a backward pass) is intentionally retained.
         state["grad_fn_handle"] = None
-        # R10-7 (mirroring ``Op.__getstate__``): user transform callables
+        # (mirroring ``Op.__getstate__``): user transform callables
         # (FieldPolicy.DROP) serialize to the loaded-artifact form (None) -- a
         # lambda transform= made pickle.dumps crash on rolled layer records
         # while Trace.save succeeded on the same trace.
@@ -1076,7 +1076,7 @@ class Layer(_SelectionOperand):
     def _warn_synthesized_read(self, site: str) -> None:
         """Fire the once-per-trace synthesized-value read warning when due.
 
-        Quickstart memo D7 (F17): the FIRST raw value read on a trace whose
+        The FIRST raw value read on a trace whose
         input values were synthesized warns once per Trace -- the handoff
         case a persisted provenance record alone cannot reach. The inline
         precheck keeps the gold/legacy fast path to two attribute reads;
@@ -1260,7 +1260,7 @@ class Layer(_SelectionOperand):
     def children(self) -> tuple[str, ...]:
         """Union of child layers (no-pass labels) across all ops.
 
-        Immutable view (M6, FORK-1): computed per read, so mutating the
+        Immutable view: computed per read, so mutating the
         returned container could never reach stored state anyway; the tuple
         makes that contract explicit and matches the Op relation surface.
         """
@@ -1270,7 +1270,7 @@ class Layer(_SelectionOperand):
     def parents(self) -> tuple[str, ...]:
         """Union of parent layers (no-pass labels) across all ops.
 
-        Immutable view (M6, FORK-1); see ``children``.
+        Immutable view; see ``children``.
         """
         return layer_parents(self)
 
@@ -1632,7 +1632,7 @@ class Layer(_SelectionOperand):
 
         s = f"Layer {self.layer_label}:"
         if self.num_passes > 1:
-            # One pass/op vocabulary (A10): an aggregate multi-pass layer is
+            # One pass/op vocabulary: an aggregate multi-pass layer is
             # "xN passes", never "N ops".
             s += f" (x{self.num_passes} passes)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.activation_memory}"
@@ -1673,14 +1673,14 @@ class Layer(_SelectionOperand):
         return ref is None or ref() is None
 
     def _repr_html_(self) -> str:
-        """Return the pass-aware notebook Layer card (treescope memo B2).
+        """Return the pass-aware notebook Layer card.
 
         Per-pass fields render via ``ops[k]`` rows (pass rows are the
         card's SHAPE); a single-pass layer degenerates to the Op card
         through the one shared code path. Never raises: any internal
         failure degrades to a one-line ``card unavailable`` fragment, and
         the treescope-bridge suppression sentinel replaces the card
-        exactly when the bridge just rendered this object (memo 3.6).
+        exactly when the bridge just rendered this object.
         """
 
         from ..report._notebook.cards import layer_repr_html

@@ -63,7 +63,7 @@ def _intervene_rule_pairs(intervene_predicate: Any) -> list[tuple[Any, Any]]:
     """
 
     if isinstance(intervene_predicate, Recipe):
-        # C03 spec door: EVERY rule of a multi-clause spec is read -- a
+        # spec door: EVERY rule of a multi-clause spec is read -- a
         # single-selector read would silently drop all but a lone clause.
         return [(rule.target, rule.decision) for rule in intervene_predicate.rules]
     return [
@@ -256,7 +256,7 @@ def _record_capture_intervention_event(
     """Write the capture-door InterventionEvent envelope (C03 fire evidence).
 
     One envelope per intervened capture attempt -- fired or not. The capture
-    door was one of the two measured audit-empty doors (ledger memo 3.1);
+    door was one of the two measured audit-empty doors;
     zero matches are DATA (``status="no_fire"``), never silence.
 
     Parameters
@@ -537,7 +537,7 @@ def _warn_zero_match_capture_selectors(
         disclosure family: a typo'd layer name retained only the
         always-retained output tail and disclosed NOTHING, live and in the
         artifact -- the highest-traffic instance of the cc2cabbb class
-        (grind-r6 b3 R15, opus MED). The request is re-resolved against the
+        (opus MED). The request is re-resolved against the
         FINAL label space here; zero matches record and warn like the
         sibling slots.
 
@@ -546,8 +546,8 @@ def _warn_zero_match_capture_selectors(
     None
         Emits at most one warning for each configured selector slot, and
         appends a matching string-only record to the PERSISTED
-        ``trace.annotations["unmatched_capture_selectors"]`` ledger
-        (B3R4-R15-1): the warning is the most losable disclosure kind, and
+        ``trace.annotations["unmatched_capture_selectors"]`` ledger.
+        The warning is the most losable disclosure kind, and
         without a durable record a zero-match ablation sweep read as "this
         layer does not matter" on the returned and saved Trace alike.
     """

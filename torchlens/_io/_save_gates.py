@@ -54,14 +54,14 @@ __tl_layer__ = "L3"
 
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
-    """PERMANENT erasure-prevention invariant for edge substitutions (L6 4.3).
+    """PERMANENT erasure-prevention invariant for edge substitutions.
 
     The tlspec v8 coordinated bump persists ``Op.edge_substitutions``
     (BLOB_RECURSIVE) and ``Op.edge_replacement_stamps`` (KEEP), so ordinary
     saves of edge-intervened traces now proceed. Like the shard-local guard
     below, the predicate keys on the ACTIVE SCHEMA rather than being deleted:
     it refuses typed IFF tier-(ii) entries are present AND the active policy
-    would drop them (a schema regression re-dropping the carrier, with the S3
+    would drop them (a schema regression re-dropping the carrier, with the
     switch inactive). Any such regression re-fires this refusal instead of
     silently presenting post-edit values with zero edge provenance.
     """
@@ -103,13 +103,13 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
 def _refuse_shard_local_erasure(trace: Any) -> None:
     """PERMANENT erasure-prevention invariant for the shard-local disclosure.
 
-    L8/F6 (census plan 3.2b): an ordinary bundle write must NEVER complete if
+    An ordinary bundle write must NEVER complete if
     it would silently drop the shard-local disclosure -- a saved shard-local
     trace reloading as a plain dense-looking trace is the marker-free-artifact
     class this invariant keeps EMPTY BY CONSTRUCTION. Refuses typed IFF the
     trace carries ``distributed_scope == "rank_local_shard"`` AND the marker
     is not persisted by the active schema (still ``FieldPolicy.DROP`` with the
-    S3 pre-release switch inactive). The wave-3 coordinated bump changes the
+    pre-release switch inactive). The wave-3 coordinated bump changes the
     ENVIRONMENT, not this predicate: once the policy persists, the second
     conjunct goes false by construction and ordinary saves proceed; the code,
     predicate, and forced-DROP tamper red all REMAIN so any schema regression
@@ -173,7 +173,7 @@ def _save_bundle_via_container_door(
 
     Both public save doors resolve to ``Bundle.save`` (the container door),
     so they agree on every settled bundle by construction: the N1 capture-
-    outcome gate runs PER MEMBER inside each member's own save (foldB D8/D9),
+    outcome gate runs PER MEMBER inside each member's own save,
     never against the container. Per-trace payload options the container door
     cannot honor refuse typed rather than being silently dropped.
 
