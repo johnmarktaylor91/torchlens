@@ -271,9 +271,9 @@ def copy_with_view_context(
         The rebuilt view, or a compact detached clone as described above.
     """
 
-    viewable = tensor._is_view() and tensor._base is not None
-    if force_tracking is not None and replay_view_func is not None and viewable:
-        base_copy = copy_with_storage_context(tensor._base.detach())
+    base = tensor._base if tensor._is_view() else None
+    if force_tracking is not None and replay_view_func is not None and base is not None:
+        base_copy = copy_with_storage_context(base.detach())
         with force_tracking(True):
             rebuilt = replay_view_func(tensor, base_copy)
         if isinstance(rebuilt, torch.Tensor) and has_view_geometry_of(rebuilt, tensor):
