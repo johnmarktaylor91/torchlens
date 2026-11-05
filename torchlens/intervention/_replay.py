@@ -29,7 +29,7 @@ from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
 from .._utils._record_group_table import record_member
 from .._utils._tensor_layout import relay_to_layout
-from .._utils.display import progress_bar
+from .._utils.display import delayed_progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch.backward import _purge_trace_from_backward_registry
 from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
@@ -484,7 +484,7 @@ def _run_replay(
     errors_non_fatal = 0
     loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
 
-    for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
+    for site in delayed_progress_bar(cone, total=len(cone), desc="torchlens.push", delay=2.0):
         site_key = _replay_site_key(site)
         if preserve_origins and site_key in state.origin_keys:
             state.pending_updates[site_key] = state.overlay[site_key]

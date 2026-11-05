@@ -38,6 +38,10 @@ from torchlens.options import (
 )
 
 replay_module = importlib.import_module("torchlens.intervention._replay")
+# ``_trace_selection_edits`` binds ``replay_from_op`` by name when it is first
+# imported. Load it here, before any test wraps that name: a worker whose first
+# edge-door call happened inside the patched test kept the wrapper for good.
+importlib.import_module("torchlens.intervention._trace_selection_edits")
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 _GRAD_CAPTURE = tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True)
