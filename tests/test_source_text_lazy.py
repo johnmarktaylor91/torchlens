@@ -133,9 +133,10 @@ def test_op_card_shows_location_and_text(toy) -> None:
     function = _function_name()
     assert (frame.func_qualname or frame.func_name) == function
     assert _source_row(card).endswith(f"{path.name}:{line} in {function}")
-    # The text left the card (B8); the card points at .code_context, which holds it.
+    # The text left the card (B8); the card points at .source.frames, whose frames hold it.
     assert "z = torch.relu(y)" not in card
-    assert ".code_context" in card.splitlines()[-1]
+    assert ".source.frames" in card.splitlines()[-1]
+    assert ".code_context" not in card and ".func_config" not in card
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
 
 

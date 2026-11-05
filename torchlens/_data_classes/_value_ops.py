@@ -24,7 +24,7 @@ from ._value_state import (
 )
 from .func_call_location import display_frame, short_source_path, stale_location_note
 
-_OP_MORE = (".out", ".parents", ".children", ".func_config", ".code_context", ".lookup_keys")
+_OP_MORE = (".out", ".parents", ".children", ".call.config", ".source.frames", ".lookup_keys")
 _LAYER_MORE = (".ops", ".parents", ".children", ".to_pandas()")
 
 

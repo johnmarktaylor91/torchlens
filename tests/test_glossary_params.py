@@ -258,6 +258,42 @@ def test_a_row_naming_a_keyword_the_callable_lacks_is_stale() -> None:
     assert glossary_params.stale(rows, TABLE) == [("Bundle.rank_changes", "k")]
 
 
+def _grad_for_row() -> dict[str, object]:
+    """Build the ``bwd=`` parameter row of ``OpAutograd.grad_for`` with its derived spellings."""
+
+    member = {
+        "module": "torchlens._data_classes._record_groups_autograd",
+        "owner": "torchlens._data_classes._record_groups_autograd:OpAutograd",
+        "name": "grad_for",
+    }
+    spellings = glossary_params._group_spellings(member, glossary_params._group_access_paths())
+    assert spellings == ["Op.autograd.grad_for"]
+    return _row("OpAutograd.grad_for", "bwd", aliases=["OpAutograd.grad_for", *spellings])
+
+
+def test_concern_group_methods_are_spelled_by_their_access_path() -> None:
+    """``Op.autograd.grad_for(bwd=)`` is named by a row spelling the path users type."""
+
+    from torchlens._data_classes._record_groups_payload import OpPayload
+    from torchlens._data_classes.op import Op
+
+    paths = glossary_params._group_access_paths()
+    assert paths[id(OpPayload)] == "Op.payload"
+    assert id(Op) not in paths
+    text = TABLE + "| `bwd=` | keyword of `Op.autograd.grad_for` (keyword-only; required): pass |\n"
+    assert glossary_params.missing([_grad_for_row()], text) == []
+
+
+def test_concern_group_method_keyword_without_a_row_still_fails() -> None:
+    """A group method keyword no row names stays a gap; a wrong group path does not count."""
+
+    row = _grad_for_row()
+    assert glossary_params.missing([row], TABLE) == [{**row, "keyword_row": False}]
+    for owner in ("Trace.draw", "Op.payload.grad_for", "Op.grad_for"):
+        text = TABLE + f"| `bwd=` | keyword of `{owner}` (keyword-only; required): pass |\n"
+        assert glossary_params.missing([row], text) == [{**row, "keyword_row": True}], owner
+
+
 @pytest.mark.heavy
 def test_no_glossary_keyword_row_names_a_parameter_the_code_lacks() -> None:
     """A keyword row never says a public callable takes a keyword it does not take.
