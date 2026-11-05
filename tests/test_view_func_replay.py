@@ -11,6 +11,7 @@ base stays a value input under the perturbation check.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 
 import pytest
@@ -18,7 +19,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens._constants import get_orig_torch_funcs
+from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.options import CaptureOptions
 from torchlens.validation._core import validate_saved_outs
 from torchlens.validation._diagnostics import get_validation_failure
@@ -310,3 +313,45 @@ def test_compact_new_view_is_a_replay_error() -> None:
         assert "raised an exception" in failure.message
     finally:
         trace.cleanup()
+
+
+def _wrapped_view_and_base() -> tuple[torch.Tensor, torch.Tensor]:
+    """Return a transposed view and its base after a capture installed the wrappers."""
+
+    tl.trace(nn.Identity(), torch.ones(2))
+    base = torch.arange(6.0).reshape(2, 3)
+    return _tracked_view(_transpose, base), base
+
+
+@pytest.mark.parametrize("method", _VIEW_FUNCS)
+def test_bound_view_func_repr_never_renders_the_receiver(method: str) -> None:
+    """A wrapped view-function method bound to a view reprs like torch's builtin method.
+
+    Torch's fake-tensor describer stores ``t._view_func_unsafe`` and reprs it when
+    structured-trace logging is on (pytest's log capture turns it on). A plain bound
+    method's repr renders the receiver's values, which runs tensor ops inside scan's
+    backward ``make_fx`` and hits torch's PythonFallbackKernel internal assert.
+    """
+
+    view, _ = _wrapped_view_and_base()
+    assert is_decorated_function(getattr(torch.Tensor, method))
+    text = repr(getattr(view, method))
+    assert "tensor(" not in text
+    assert text == f"<built-in method {method} of Tensor object at {id(view):#x}>"
+
+
+@pytest.mark.parametrize("method", _VIEW_FUNCS)
+def test_bound_view_func_keeps_the_bound_method_contract(method: str) -> None:
+    """The quiet bound form compares, hashes, copies and calls like a bound method."""
+
+    view, base = _wrapped_view_and_base()
+    first, second = getattr(view, method), getattr(view, method)
+    assert first == second and hash(first) == hash(second)
+    assert first != getattr(_tracked_view(_transpose, base), method)
+    assert first.__self__ is view and first.__func__ is getattr(torch.Tensor, method)
+    assert copy.copy(first) == first
+    assert copy.deepcopy(first).__func__ is first.__func__
+    stock = _state._decorated_to_orig[id(first.__func__)]
+    new_base = base * 2
+    argument = _transpose(new_base) if method == "_rev_view_func_unsafe" else new_base
+    torch.testing.assert_close(first(argument), stock(view, argument))

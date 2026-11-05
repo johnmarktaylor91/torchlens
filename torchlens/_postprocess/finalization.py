@@ -23,7 +23,6 @@ Step 20 (_release_param_refs): Drops live parameter references after finalizatio
 
 import time
 from collections import defaultdict, deque
-from itertools import zip_longest
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast
 
@@ -47,22 +46,24 @@ from .._quantities import Bytes, Duration, Flops
 from .._utils._display_constructor import bind_template_keys
 from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
 from .._utils.hashing import sha256_file
-from ..backends._constants import is_constant_op
 from ..backends.torch._tl import clear_meta
+from . import _column_passes_finalize
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
     _make_public_conditional_ids,
     _merge_conditional_role_labels,
+    _ordered_branch_kinds,
     _resolve_conditional_bool_op,
     _roles_by_label,
     roles_held_by_pass,
 )
-from ._layer_conditional_merge import (
-    _merge_layer_log_conditional_fields,
-    _rebuild_conditional_edge_call_indices,
-    _rebuild_layer_log_conditional_views,
+from ._layer_conditional_merge import _rebuild_conditional_edge_call_indices
+from ._module_census import (
+    _call_io_layers,
+    bind_layer_conditional_roles,
+    op_space_labels,
+    uncalled_module_addresses,
 )
-from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
 from ._pre_hook_provenance import _pre_hook_provenance_for_call
 from ._root_module_log import (
@@ -542,62 +543,6 @@ def _build_submodule_call_logs(
     return ops, call_labels_list
 
 
-def _call_io_layers(
-    self: "Trace",
-    call_label: str,
-    pass_layers: list[str],
-    pass_input_layers_by_call: dict[str, list[str]] | None,
-) -> tuple[list[str], list[str], list[str], list["Op"]]:
-    """Derive one module call's input and output layers from its Op fields.
-
-    Parameters
-    ----------
-    self:
-        Trace being finalized.
-    call_label:
-        Module call label (``address:call_index``).
-    pass_layers:
-        Op labels executed inside the call.
-    pass_input_layers_by_call:
-        Pre-collected input layers keyed by call label, if any.
-
-    Returns
-    -------
-    tuple[list[str], list[str], list[str], list[Op]]
-        Input layer labels, output layer labels, output op labels and the
-        output Op entries.
-    """
-
-    pass_input_layers = list((pass_input_layers_by_call or {}).get(call_label, []))
-    pass_output_layers = []
-    pass_output_ops = []
-    pass_outputs = []
-    for op_label in pass_layers:
-        try:
-            te = self.ops[op_label]
-        except (KeyError, TypeError):
-            continue
-        # B3R7-R05-1: ``input_to_module_calls`` is the authoritative
-        # fed-call fact. The old ``len(module_call_stack) > 0`` companion
-        # test was a proxy for the same thing only while the enter lane
-        # wrote both together; under containment semantics it would drop
-        # top-level-created inputs (e.g. the model input) from the call's
-        # input roster.
-        if (
-            call_label in te.module_context.input_to_module_calls
-            and te.layer_label not in pass_input_layers
-        ):
-            pass_input_layers.append(te.layer_label)
-        if (
-            te.module_context.is_module_output
-            and call_label in te.module_context.output_of_module_calls
-        ):
-            pass_output_layers.append(te.layer_label)
-            pass_output_ops.append(te.label)
-            pass_outputs.append(te)
-    return pass_input_layers, pass_output_layers, pass_output_ops, pass_outputs
-
-
 def _resolve_call_hierarchy(
     ops: dict[int, "ModuleCall"],
 ) -> tuple[list[str], str | None]:
@@ -926,7 +871,7 @@ def _honest_multipass_shape(values: list[Any]) -> tuple:
     return tuple(dims)
 
 
-def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
+def _reconcile_multipass_layer_fields(layer_log: "Layer", read: Any = getattr) -> None:
     """Make multi-pass aggregate Layer fields honest about divergent passes.
 
     ``Layer`` construction projects pass-1 values onto 78+ aggregate fields on the
@@ -955,6 +900,8 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
     ----------
     layer_log:
         Aggregate layer with its ``ops`` accessor fully populated.
+    read:
+        ``getattr``-shaped per-pass field reader (step 15.5 binds column getters).
     """
 
     if len(layer_log.ops) <= 1:
@@ -976,7 +923,7 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         return False
 
     for field_name in _MULTIPASS_SHAPE_FIELDS:
-        values = [record_member(op, field_name, None) for op in pass_ops]
+        values = [read(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             setattr(layer_log, layer_attr(field_name), _honest_multipass_shape(values))
 
@@ -984,18 +931,16 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
         *((name, Bytes) for name in _MULTIPASS_BYTES_FIELDS),
         *((name, Flops) for name in _MULTIPASS_FLOPS_FIELDS),
     ):
-        values = [record_member(op, field_name, None) for op in pass_ops]
+        values = [read(op, field_name, None) for op in pass_ops]
         if record_if_varying(field_name, values):
             numeric = [value for value in values if isinstance(value, (int, float))]
             if numeric and len(numeric) == len(values):
                 setattr(layer_log, layer_attr(field_name), quantity_type(int(max(numeric))))
 
     for field_name in _MULTIPASS_MARKER_ONLY_FIELDS:
-        record_if_varying(field_name, [record_member(op, field_name, None) for op in pass_ops])
+        record_if_varying(field_name, [read(op, field_name, None) for op in pass_ops])
 
-    module_stacks = [
-        [module_pass[0] for module_pass in (getattr(op, "modules", None) or ())] for op in pass_ops
-    ]
+    module_stacks = [[pair[0] for pair in (read(op, "modules", None) or ())] for op in pass_ops]
     record_if_varying("modules", module_stacks)
 
     if record_if_varying("params", pass_param_addresses(pass_ops)):
@@ -1003,37 +948,6 @@ def _reconcile_multipass_layer_fields(layer_log: "Layer") -> None:
 
     if varying:
         layer_log.annotations["varying_across_passes"] = varying
-
-
-def _merge_io_role(layer_io_role: str, pass_io_role: str) -> str:
-    """Char-merge two ``io_role`` strings, ``'*'`` marking differing characters.
-
-    Parameters
-    ----------
-    layer_io_role:
-        The aggregate layer's current ``io_role``.
-    pass_io_role:
-        The merging pass's ``io_role``.
-
-    Returns
-    -------
-    str
-        Merged role (``"output.0"`` + ``"output.1"`` -> ``"output.*"``).
-    """
-
-    merged = "".join(
-        c if c == s else "*"
-        for c, s in zip_longest(
-            layer_io_role,
-            pass_io_role,
-            fillvalue="",
-        )
-    )
-    if merged.endswith("."):
-        merged = merged[:-1]
-    if merged.endswith("*"):
-        merged = merged.rstrip("*") + "*"
-    return merged
 
 
 def _build_layer_logs(self: "Trace") -> None:
@@ -1064,109 +978,11 @@ def _build_layer_logs(self: "Trace") -> None:
     Note: output_of_modules/output_of_module_calls are NOT updated during merge
     (same structural position implies same modules).
     """
-    from collections import OrderedDict
-
     from .._data_classes.layer import Layer
 
-    layer_logs = OrderedDict()
-
-    for pass_log in self._layer_list:
-        no_call_label = pass_log.layer_label
-        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
-        pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
-
-        if no_call_label not in layer_logs:
-            # First pass: create Layer from this pass's data.
-            layer_log = Layer(pass_log)
-            layer_logs[no_call_label] = layer_log
-        else:
-            # Subsequent pass: merge only the 3 aggregate fields.
-            layer_log = layer_logs[no_call_label]
-            # Merge field 1/3: has_input_ancestor (OR across ops).
-            if pass_log.graph.has_input_ancestor:
-                layer_log._graph_has_input_ancestor = True
-            # Merge field 2/3: io_role (char-merge with '*').
-            if layer_log.graph.io_role is not None and pass_log.graph.io_role is not None:
-                layer_log._graph_io_role = _merge_io_role(
-                    layer_log.graph.io_role, pass_log.graph.io_role
-                )
-            # Merge field 3/3: is_atomic_module (OR across ops).
-            if pass_log.module_context.is_atomic_module:
-                layer_log._module_context_is_atomic_module = True
-
-        layer_log.ops[pass_log.pass_number] = pass_log
-        layer_log.call_labels.append(pass_log.label)
-        _merge_layer_log_conditional_fields(layer_log, pass_log)
-
-    autograd_memory = 0
-    has_autograd_saved_value = False
-    for layer_log in layer_logs.values():
-        for pass_log in layer_log.ops.values():
-            linked_labels = []
-            for param_log in pass_log._param_logs:
-                # Tied parameters list every aliasing address in ``all_addresses`` (primary
-                # first); co-occurring distinct tensors (``co_parent_params``) are not tying.
-                for alias_address in getattr(param_log, "all_addresses", []):
-                    if alias_address == param_log.address:
-                        continue
-                    linked_labels.append(f"{param_log.address} → {alias_address}")
-            if linked_labels:
-                pass_log.annotations["tied_parameter_notation"] = linked_labels
-        pass_autograd_bytes = [
-            pass_log.cost.autograd_memory
-            for pass_log in layer_log.ops.values()
-            if pass_log.cost.autograd_memory is not None
-        ]
-        pass_autograd_tensor_counts = [
-            pass_log.autograd.num_autograd_tensors
-            for pass_log in layer_log.ops.values()
-            if pass_log.autograd.num_autograd_tensors is not None
-        ]
-        if pass_autograd_bytes:
-            layer_autograd_memory = Bytes(sum(int(value) for value in pass_autograd_bytes))
-            layer_log._cost_autograd_memory = layer_autograd_memory
-            layer_log._cost_total_autograd_memory = layer_autograd_memory
-            layer_log._autograd_num_autograd_tensors = sum(pass_autograd_tensor_counts)
-            autograd_memory += layer_autograd_memory
-            has_autograd_saved_value = True
-        else:
-            layer_log._cost_autograd_memory = None
-            layer_log._cost_total_autograd_memory = None
-            layer_log._autograd_num_autograd_tensors = None
-        _reconcile_multipass_layer_fields(layer_log)
-        _rebuild_layer_log_conditional_views(layer_log)
-
-    self._cost_total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
-    self._layer_logs = layer_logs
+    _column_passes_finalize.build_layer_logs(self, Layer, _reconcile_multipass_layer_fields)
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
-
-
-def _ordered_branch_kinds(event: Any) -> list[str]:
-    """Return a conditional event's branch kinds in arm order.
-
-    Parameters
-    ----------
-    event:
-        Conditional event whose ``branch_ranges`` name its AST arms.
-
-    Returns
-    -------
-    list[str]
-        ``"then"``, the ``elif_<n>`` kinds by index, then ``"else"`` and
-        ``"fallthrough"`` when present.
-    """
-
-    ast_branch_kinds = list(event.branch_ranges)
-    ordered_branch_kinds = ["then"]
-    ordered_branch_kinds.extend(
-        sorted(
-            (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
-            key=lambda kind: int(kind.split("_", 1)[1]),
-        )
-    )
-    ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
-    return ordered_branch_kinds
 
 
 def _build_conditional_records(self: "Trace") -> None:

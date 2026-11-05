@@ -225,3 +225,30 @@ def roles_held_by_pass(
         if role.role != "body"
         or arm_stack_entries.get((role.conditional_id, role.arm_index)) in pass_stack
     ]
+
+
+def _ordered_branch_kinds(event: Any) -> list[str]:
+    """Return a conditional event's branch kinds in arm order.
+
+    Parameters
+    ----------
+    event:
+        Conditional event whose ``branch_ranges`` name its AST arms.
+
+    Returns
+    -------
+    list[str]
+        ``"then"``, the ``elif_<n>`` kinds by index, then ``"else"`` and
+        ``"fallthrough"`` when present.
+    """
+
+    ast_branch_kinds = list(event.branch_ranges)
+    ordered_branch_kinds = ["then"]
+    ordered_branch_kinds.extend(
+        sorted(
+            (kind for kind in ast_branch_kinds if kind.startswith("elif_")),
+            key=lambda kind: int(kind.split("_", 1)[1]),
+        )
+    )
+    ordered_branch_kinds.extend(k for k in ("else", "fallthrough") if k in ast_branch_kinds)
+    return ordered_branch_kinds

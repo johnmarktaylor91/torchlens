@@ -67,7 +67,7 @@ from .._utils._record_group_table import (
     op_spelling,
 )
 from .._utils.facade import refuse_removed_member, removed_set_remedy
-from . import _doors
+from . import _doors, _familiar_names
 
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
@@ -1386,7 +1386,7 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        raise _familiar_names.missing_attribute_error(type(self).__name__, name)
 
     # ********************************************
     # ************ User-facing custom_methods ***********

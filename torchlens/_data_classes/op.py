@@ -94,7 +94,7 @@ from ..intervention._types import (
     FunctionRegistryKey,
 )
 from ..intervention.errors import DirectActivationWriteWarning
-from . import _doors, _labels, _op_cost, _op_relations, _op_save, _removed_members
+from . import _doors, _familiar_names, _labels, _op_cost, _op_relations, _op_save, _removed_members
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
@@ -1672,7 +1672,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             if not name.startswith("_"):
                 refuse_removed_member("Op", name, _removed_members.REMOVED_MEMBERS["Op"])
                 _refuse_read_without_trace(self, member=name)
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+            raise _familiar_names.missing_attribute_error(type(self).__name__, name)
 
     def __setattr__(
         self,
