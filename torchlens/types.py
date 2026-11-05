@@ -1,7 +1,6 @@
 """Public TorchLens type aliases and rarely used data classes."""
 
 import importlib
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 #: Role declaration (architecture memo build item 2, seeding the layer map
@@ -10,11 +9,17 @@ from typing import TYPE_CHECKING, Any
 #: licensed by the facade role (Rule F), not by a layer claim of its own.
 __tl_role__ = "FACADE"
 
-import torch
 
 from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
+from ._data_classes._record_groups import LayerControlFlow, LayerCost, OpControlFlow, OpCost
+from ._data_classes._record_groups_autograd import LayerAutograd, OpAutograd
+from ._data_classes._record_groups_call import LayerCall, OpCall
+from ._data_classes._record_groups_graph import LayerGraph, OpGraph
+from ._data_classes._record_groups_module_context import LayerModuleContext, OpModuleContext
+from ._data_classes._record_groups_payload import LayerPayload, OpPayload
+from ._data_classes._record_groups_source import LayerSource, OpSource
 from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
 from ._data_classes._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._data_classes.aten_op import AtenOp, OpRef
@@ -33,7 +38,7 @@ from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStat
 from ._selection.selection import Site
 from ._selection.subspace import BasisProvenance
 from .intervention import SpecCompat, TargetManifestDiff
-from .intervention.types import Relationship
+from .intervention._types import Relationship
 
 if TYPE_CHECKING:
     from ._data_classes.container import Container
@@ -45,10 +50,12 @@ if TYPE_CHECKING:
     from ._quickstart._grammar import InputSpec
     from ._quickstart._provenance import InputProvenance
     from ._trace_slice import TraceSlice
-    from .recording.types import RecordingSettings
+    from .recording._types import RecordingSettings
 
-_ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
-_GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
+from ._literals import (
+    _ActivationPostfunc as _ActivationPostfunc,
+    _GradientPostfunc as _GradientPostfunc,
+)
 
 __all__ = [
     "Accessor",
@@ -61,6 +68,22 @@ __all__ = [
     "TraceSettings",
     "TraceHealth",
     "UnencodableValue",
+    "OpCost",
+    "LayerCost",
+    "OpControlFlow",
+    "LayerControlFlow",
+    "OpCall",
+    "OpSource",
+    "OpAutograd",
+    "OpModuleContext",
+    "OpPayload",
+    "OpGraph",
+    "LayerSource",
+    "LayerAutograd",
+    "LayerModuleContext",
+    "LayerPayload",
+    "LayerGraph",
+    "LayerCall",
     "NarrationEvent",
     "RunnableDiagnostic",
     "RunnableCompatibility",
@@ -143,7 +166,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MergeValueStatus": ("torchlens._merged._enums", "MergeValueStatus"),
     "MergedTrace": ("torchlens._merged._presenter", "MergedTrace"),
     "PartialTrace": ("torchlens._partial", "PartialTrace"),
-    "RecordingSettings": ("torchlens.recording.types", "RecordingSettings"),
+    "RecordingSettings": ("torchlens.recording._types", "RecordingSettings"),
     "TraceSlice": ("torchlens._trace_slice", "TraceSlice"),
     "register_container": ("torchlens._ir.container", "register_container"),
 }

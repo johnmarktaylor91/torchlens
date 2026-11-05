@@ -16,21 +16,21 @@ import torchlens as tl
 from torchlens._data_classes._compaction import _COMPACTED_TRACES
 from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens._record_type import record_type
-from torchlens.backends.jax.backend import (
-    _control_parent_labels,
-    _data_parent_arg_positions,
-    _data_parent_labels,
-)
-from torchlens.errors import BackendUnsupportedError
-from torchlens.intervention.types import EdgeUseRecord
-from torchlens.validation.invariants import MetadataInvariantError
-from torchlens.validation.status import (
+from torchlens._validation_status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
     ValidationStatus,
 )
+from torchlens.backends.jax.backend import (
+    _control_parent_labels,
+    _data_parent_arg_positions,
+    _data_parent_labels,
+)
+from torchlens.errors import BackendUnsupportedError
+from torchlens.intervention._types import EdgeUseRecord
+from torchlens.validation._invariants import MetadataInvariantError
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")
@@ -844,8 +844,8 @@ def test_jax_repeated_op_block_groups_into_passes() -> None:
     assert {op.layer_label for op in add_ops} == {add_ops[0].layer_label}
     assert {op.layer_label for op in mul_ops} == {mul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*add_ops, *mul_ops))
-    assert add_ops[0].recurrent_ops == tuple(op.label for op in add_ops)
-    assert mul_ops[0].recurrent_ops == tuple(op.label for op in mul_ops)
+    assert add_ops[0].graph.recurrent_ops == tuple(op.label for op in add_ops)
+    assert mul_ops[0].graph.recurrent_ops == tuple(op.label for op in mul_ops)
     assert trace._layer_num_calls[add_ops[0].layer_label] == 2
     assert trace._layer_num_calls[mul_ops[0].layer_label] == 2
     assert trace.validate_forward_pass([])
@@ -893,9 +893,9 @@ def test_jax_validation_fails_when_parent_edge_is_rewired_wrong() -> None:
         ),
     )
     add_op = _jax_equation_op(trace, "add")
-    wrong_parent = add_op.parent_arg_positions["args"][0]
+    wrong_parent = add_op.call.parent_arg_positions["args"][0]
 
-    add_op.parent_arg_positions["args"][1] = wrong_parent
+    add_op.call.parent_arg_positions["args"][1] = wrong_parent
     add_op.parents = [wrong_parent]
 
     assert trace.validate_forward_pass([], validate_metadata=False) is False
@@ -949,8 +949,8 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
                 arg_kind="positional",
                 arg_path=(),
                 view_or_copy="unknown",
-                parent_func_call_id=control_parent.func_call_id,
-                child_func_call_id=cast(int, mul_op.func_call_id),
+                parent_func_call_id=control_parent.call.call_id,
+                child_func_call_id=cast(int, mul_op.call.call_id),
                 edge_use="control",
             ),
         ],
@@ -1405,11 +1405,11 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"dot_general"}
     assert unsaved_ops
-    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.out is None and op._out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(
-        int(op.activation_memory or 0) for op in saved_ops
+        int(op.cost.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([]) is True
 

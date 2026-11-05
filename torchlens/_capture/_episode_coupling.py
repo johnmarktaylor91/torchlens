@@ -8,7 +8,7 @@ a fresh ledger or refuses, and facts across a broken join scope PER SEGMENT
 -- never one whole-episode claim spanning a break.
 
 The live half is one funnel note: every live ``FireRecord`` lands through
-``intervention.runtime._append_active_spec_records``, which notifies the one
+``intervention._runtime._append_active_spec_records``, which notifies the one
 armed coupling session; the session attributes each fire to the live step
 position (the join session's boundary hooks) or to the outside-step
 bucket. The settlement half writes the reserved slots (header
@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._utils.hashing import sha256_canonical_json
+from ..errors._episode import EpisodeCaptureError
+from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
 
 __all__ = [
     "INTERVENTION_DIGEST_SCHEMA",
@@ -378,8 +380,6 @@ def _episode_payload(subject: Any) -> Mapping[str, Any] | None:
 def _coupling_error(message: str, *, code: str, **payload: Any) -> Exception:
     """Build the typed coupling refusal (codes ride ``exc.fields``)."""
 
-    from ..errors.episode import EpisodeCaptureError
-
     return EpisodeCaptureError(message, code=code, **payload)
 
 
@@ -415,7 +415,6 @@ def attest_coupling(subject: Any) -> CouplingAttestation | None:
             "Re-capture with this TorchLens version to mint the binding.",
             code="episode_coupling_unmintable",
         )
-    from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
 
     recomputed, legacy = recompute_capture_digests(subject, payload)
     if recomputed != persisted:

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
+from .._utils._record_group_table import record_member
 from ._hooks_support import _multi_call_addresses
 from .errors import SiteResolutionError
 
@@ -33,7 +34,7 @@ def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
     with ``facet_selector_module_multi_call`` when the selector is scoped to it.
     """
 
-    record_address = getattr(record, "address", None)
+    record_address = record_member(record, "address", None)
     if selector.module_address is not None and record_address != selector.module_address:
         return None
     call_addresses = _multi_call_addresses(record)
@@ -189,3 +190,64 @@ def _facet_fire_scope(spec: Any, selector: FacetSelector) -> Iterator[None]:
         yield
     finally:
         _ACTIVE_FACET_FIRE.reset(token)
+
+
+def _fused_attention_write_remedy(facet_name: str, *, reconstructed: bool = True) -> str:
+    """Explain why an attention-interior facet cannot be written, and what can.
+
+    Parameters
+    ----------
+    facet_name:
+        The requested facet (``pattern``, ``scores``, ``z`` or ``result``).
+    reconstructed:
+        Whether the facet is rebuilt from a fused kernel's saved arguments
+        (fused attention). ``False`` means a facet computed from captured
+        values (``result``, ``z_h @ W_O_h``), read-only on eager attention too.
+
+    Returns
+    -------
+    str
+        The cause and the remedies, for the refusal message.
+    """
+
+    if not reconstructed:
+        return (
+            f"The {facet_name!r} facet is computed from other captured values (for "
+            "'result', each head's 'z' times its slice of the output projection), so no "
+            "captured op holds it and it is read-only under every attention "
+            "implementation. Write the facet it is computed from instead: replacing a "
+            "head's 'z' replaces exactly its 'result'."
+        )
+    return (
+        f"Under fused attention (torch scaled_dot_product_attention, the transformers "
+        f"default attn_implementation='sdpa') the {facet_name!r} facet is reconstructed "
+        "read-only from the kernel's saved arguments: the kernel computes it internally, "
+        "so there is no captured tensor op to write. To write it, load the model with "
+        "attn_implementation='eager' (on a transformers model, "
+        "model.set_attn_implementation('eager')) and capture again. On the fused model "
+        "the 'q'/'k'/'v' facets (the projection outputs feeding the kernel) stay "
+        "writable, and tl.mechinterp.patch_head lowers a single head or pattern patch "
+        "exactly to the real output projection."
+    )
+
+
+def _facet_write_mask(selector: FacetSelector, spec: Any) -> torch.Tensor:
+    """Return a detached copy of ``spec``'s write mask.
+
+    A read-only attention facet (fused attention, or a reconstructed facet)
+    raises ``RuntimeError`` from ``write_mask``; that becomes a
+    ``SiteResolutionError`` naming the eager-attention remedy.
+    """
+
+    try:
+        return spec.write_mask().detach().clone()
+    except RuntimeError as exc:
+        if selector.name in {"pattern", "scores", "z", "result"}:
+            raise SiteResolutionError(
+                f"facet selector {selector!r} resolved only read-only "
+                "attention facets. "
+                + _fused_attention_write_remedy(
+                    selector.name, reconstructed=spec.capability_flags.reconstructed
+                )
+            ) from exc
+        raise

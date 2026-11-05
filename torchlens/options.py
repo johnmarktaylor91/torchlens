@@ -26,6 +26,7 @@ from ._literals import (
     FoldRepeatsLiteral,
     OnNonfiniteLiteral,
     OutputDeviceLiteral,
+    SaveBudgetOption,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisNodeModeLiteral,
@@ -47,7 +48,6 @@ from ._options_validation import (
     _validate_visualization_values,
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
-from ._save_budget import SaveBudgetOption
 from ._utils._display_options import _OptionsDisplay
 from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
@@ -56,7 +56,7 @@ from ._vocab.node_spec import NodeSpec
 if TYPE_CHECKING:
     from ._data_classes.layer import Layer
     from ._data_classes.module import Module
-    from .recording.options import RecordingOptions as RecordingOptions
+    from .recording._options import RecordingOptions as RecordingOptions
 
 T = TypeVar("T")
 _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -168,7 +168,6 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
     "strict",
-    "append",
     "chunk_size",
     "allow_changed_params",
 )
@@ -256,7 +255,6 @@ _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "strict": "strict",
-    "append": "append",
     "chunk_size": "chunk_size",
     "allow_changed_params": "allow_changed_params",
 }
@@ -1212,8 +1210,6 @@ class ReplayOptions(_OptionsDisplay):
     ----------
     strict:
         Whether divergence warnings should raise.
-    append:
-        Whether rerun appends a compatible batch chunk.
     chunk_size:
         Forward chunk size for rerun chunking sugar. Splits positional input
         along dimension 0 and appends compatible chunks.
@@ -1231,7 +1227,6 @@ class ReplayOptions(_OptionsDisplay):
     """
 
     strict: bool = False
-    append: bool = False
     chunk_size: int | None = None
     allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
@@ -1239,7 +1234,6 @@ class ReplayOptions(_OptionsDisplay):
     def __init__(  # noqa: PLR0913 -- an options group's constructor takes one keyword per field
         self,
         strict: bool | MissingType = MISSING,
-        append: bool | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
@@ -1248,7 +1242,6 @@ class ReplayOptions(_OptionsDisplay):
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
-            "append": _resolve_option_value("append", append, False, specified_fields),
             "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
             "allow_changed_params": _resolve_option_value(
                 "allow_changed_params", allow_changed_params, False, specified_fields
@@ -1710,7 +1703,7 @@ if TYPE_CHECKING:
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "HtmlReportOptions": ("torchlens.export._report", "HtmlReportOptions"),
-    "RecordingOptions": ("torchlens.recording.options", "RecordingOptions"),
+    "RecordingOptions": ("torchlens.recording._options", "RecordingOptions"),
 }
 
 

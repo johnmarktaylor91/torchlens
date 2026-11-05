@@ -22,13 +22,15 @@ from typing import Any
 
 import numpy as np
 
+from .._utils._numpy_bridge import tensor_to_numpy
+
 __tl_layer__ = "L8"
 
 
 def _site_matrix(source: Any, site: str) -> Any:
     """Shape one site through the shared operation (B7)."""
 
-    from torchlens import features as _features
+    from .. import features as _features
 
     return _features.site_matrix(source, site)
 
@@ -50,7 +52,7 @@ def _assembly_pieces(source: Any, site: str) -> tuple[np.ndarray, dict[str, Any]
     """
 
     site_matrix = _site_matrix(source, site)
-    array = site_matrix.matrix.numpy()
+    array = tensor_to_numpy(site_matrix.matrix)
     coords: dict[str, Any] = {
         "presentation": np.arange(array.shape[0]),
         "neuroid": np.arange(array.shape[1]),

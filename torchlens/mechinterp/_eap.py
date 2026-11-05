@@ -109,7 +109,7 @@ def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
     ids has none otherwise); a plain ``tl.trace`` never changes those flags.
     """
 
-    from .._user_funcs import trace as capture_trace
+    from .._user_public_impls import trace as capture_trace
 
     with torch.enable_grad(), frozen_parameter_gradients():
         return capture_trace(model, inputs, intervene=intervene)
@@ -218,7 +218,7 @@ def _reads(trace: Any, graph: ComponentGraph) -> dict[str, _Read]:
 def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
     """Return ``(logits label, dM/dlogits, per-example M)`` for one evaluation point."""
 
-    from ._anchors import resolve_lm_head
+    from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     head = resolve_lm_head(trace).head
     outputs = list(getattr(head, "output_ops", ()) or ())
@@ -267,7 +267,7 @@ def _grad_rows(table: Any) -> dict[str, torch.Tensor]:
 def _site_gradients(trace: Any, seed_label: str, cotangent: Any, sites: list[str]) -> dict:
     """One backward from ``seed_label`` (cotangent given) to every site, element grain."""
 
-    from ..attribution.onebackward import read, seed
+    from ..attribution._onebackward import read, seed
 
     population = None
     for site in sites:
@@ -289,7 +289,7 @@ def _local_pullbacks(
 ) -> list[torch.Tensor | None]:
     """Pull several seed cotangents back to one receiver input (local, batched)."""
 
-    from ..attribution.onebackward import read, seed
+    from ..attribution._onebackward import read, seed
 
     targets = [seed(label, cotangent=cot) for label, cot in seeds]
     element_bytes = sum(int(cot.numel()) * cot.element_size() for _label, cot in seeds)
@@ -347,8 +347,8 @@ def _interpolation_points(
     write)."""
 
     from .._selection.selectors import module as module_selector
-    from ..intervention.predicates import add
-    from ..intervention.spec import when
+    from ..intervention._predicates import add
+    from ..intervention._spec import when
 
     site = module_selector(site_module)
     for k in range(steps):
@@ -479,7 +479,7 @@ def edge_scores(  # noqa: PLR0913 -- the public door: five keyword-only spec-pin
         per_example = (deltas[edge.sender.name] * (grad / m)).flatten(1).sum(dim=1)
         reduced = per_example.mean() if example_reduction == "mean" else per_example.sum()
         scores[name] = float(reduced)
-    from ..attribution.onebackward._table import edge_read_table
+    from ..attribution._onebackward._table import edge_read_table
 
     return edge_read_table(
         _edge_rows(clean, scores, statuses),

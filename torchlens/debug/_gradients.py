@@ -272,7 +272,7 @@ def _collect_norm_rows(
         module = _module_address(op)
         source_line = _source_line(op)
         try:
-            grad = op.grad_for(bwd=selected_bwd)
+            grad = op.autograd.grad_for(bwd=selected_bwd)
         except (KeyError, ValueError) as exc:
             rows.append(_unavailable_row(label, module, str(exc), source_line))
             counts["unavailable"] += 1

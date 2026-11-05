@@ -318,7 +318,7 @@ mask's sha256 the same way and saves at `level="portable"`; an edit that needs u
 refuses `intervention_spec_not_portable`.
 `tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
 (`artifact.subspace(site, positions=...)` and `artifact.edit`); see
-[from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
+[from pyvene](migration/from_pyvene.md#pyvene-feeds-torchlens).
 
 ```python
 # docs-test: expected=[True, True, True]
@@ -396,8 +396,8 @@ Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture 
 Append mode is for memory-constrained evaluation over compatible chunks:
 
 ```text
-trace.run(model, first_chunk)
-trace.run(model, next_chunk, replay=tl.options.ReplayOptions(append=True))
+trace = trace.run(model, first_chunk)
+trace.append(next_chunk, model=model)
 ```
 
 The appended run must match the original graph shape, labels, dtypes, and non-batch dimensions.

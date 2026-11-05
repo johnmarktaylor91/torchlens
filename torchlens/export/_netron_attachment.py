@@ -29,6 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
 from ..errors import ConfigurationError
 from ._netron_fields import _quantity, module_path_of
@@ -120,7 +121,7 @@ def _default_rows(
         path = module_path_of(source)
         if path:
             metadata.append({"kind": "node", "target": name, "name": "module path", "value": path})
-        duration = _quantity(getattr(source, "func_duration", None)) or _quantity(
+        duration = _quantity(record_member(source, "func_duration", None)) or _quantity(
             getattr(source, "forward_duration", None)
         )
         if duration:
@@ -134,7 +135,7 @@ def _default_rows(
                     "type": "us",
                 }
             )
-        flops = _quantity(getattr(source, "flops_forward", None))
+        flops = _quantity(record_member(source, "flops_forward", None))
         if flops:
             total_flops += flops
             metrics.append(
@@ -145,7 +146,7 @@ def _default_rows(
                     "value": f"{flops:.0f}",
                 }
             )
-        memory = _quantity(getattr(source, "activation_memory", None))
+        memory = _quantity(record_member(source, "activation_memory", None))
         if memory:
             metrics.append(
                 {

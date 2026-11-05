@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .._utils._display_numbers import format_count
+from .._utils._record_group_table import record_member
+from ._label_format import param_count
+from ._render_common import format_collapsed_module_contents
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
@@ -51,10 +53,10 @@ def _make_child_segment_descriptor(
                     continue
                 seen_bases.add(base)
                 num_layers += 1
-                num_buffers += bool(entry.is_buffer)
+                num_buffers += bool(entry.graph.is_buffer)
         else:
             num_layers = len(covered_entries)
-            num_buffers = sum(bool(entry.is_buffer) for entry in covered_entries)
+            num_buffers = sum(bool(entry.graph.is_buffer) for entry in covered_entries)
     else:
         num_layers = sum(
             len(getattr(trace.modules[address], "layer_labels", ()) or ()) for address in addresses
@@ -157,7 +159,7 @@ def _effective_render_module_stack(op: Op) -> tuple[str, ...]:
     """
 
     modules = [str(module) for module in getattr(op, "modules", ()) or ()]
-    if getattr(op, "is_atomic_module", False) and modules:
+    if record_member(op, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     return tuple(modules)
 
@@ -314,7 +316,7 @@ def _op_segment_label(
 
     first = endpoint(labels[0], concrete[0])
     last = endpoint(labels[-1], concrete[-1])
-    return f"{first} ... {last} -- {len(labels)} ops"
+    return f"{first} ... {last} -- {len(labels):,} ops"
 
 
 def _segment_owner_key(
@@ -340,12 +342,37 @@ def _segment_owner_key(
     """
 
     parent = addresses[0].rsplit(".", 1)[0] if "." in addresses[0] else "self"
-    if parent == "self" or parent not in trace.modules:
+    if parent == "self" or not _is_recorded_module_key(trace, parent):
         return None
     if vis_mode == "rolled":
         return parent
     parent_key = f"{parent}:1"
-    return parent_key if parent_key in trace.modules else parent
+    return parent_key if _is_recorded_module_key(trace, parent_key) else parent
+
+
+def _is_recorded_module_key(trace: Trace, key: str) -> bool:
+    """Return whether ``key`` names a module or module call with its own record.
+
+    Containers (``nn.ModuleList``, ``nn.ModuleDict``) are never called, so their
+    addresses (``encoder.layers``) have no module record and never render as a
+    cluster. Every owner-key rule that names a lexical ancestor as a cluster
+    (segment owners here, collapsed-box owners and edge owners in the renderer)
+    asks this one question first.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    key:
+        Pass-free module address or pass-qualified module call label.
+
+    Returns
+    -------
+    bool
+        ``True`` when the trace recorded that module or call.
+    """
+
+    return key in trace.modules
 
 
 def _members_are_name_consecutive(addresses: tuple[str, ...]) -> bool:
@@ -408,17 +435,15 @@ def _child_segment_label(
 ) -> str:
     """Return a class-free range label for a child segment."""
 
-    from ._render_common import format_collapsed_module_contents
-
     range_text = _child_segment_range_text(addresses)
     contents = format_collapsed_module_contents(num_layers, num_buffers)
     return (
-        f"{range_text} -- {len(addresses)} blocks, {contents}, "
+        f"{range_text} -- {len(addresses):,} blocks, {contents}, "
         f"{_format_param_count(num_params)} params"
     )
 
 
 def _format_param_count(value: int) -> str:
-    """Return a compact parameter count for segment labels (the shared ``15.4k`` spelling)."""
+    """Return a segment label's parameter count, compact from 1,000 like every drawn one."""
 
-    return format_count(value)
+    return param_count(value)

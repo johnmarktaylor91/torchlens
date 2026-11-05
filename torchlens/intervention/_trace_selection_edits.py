@@ -10,12 +10,16 @@ through the record's ``_attach_hooks`` and ``clear_edits`` verbs.
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 import torch
 
 from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
+from .._data_classes._trace_accessors import (
+    _invalidate_trace_module_call_accessor_cache,
+    _invalidate_trace_op_layer_accessor_caches,
+)
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
     clear_staged_unfired,
@@ -34,17 +38,19 @@ from .._selection.do_plan import bind_to_target, build_selection_do_plan
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
-from . import replay as replay_module
+from . import _replay as replay_module
+from ._audit import build_fire_record
+from ._edge_substitution import apply_edge_substitution_do
 from ._edit_guards import detach_handles, internal_mutation
+from ._module_replacement import (
+    MODULE_BOUNDARY_KEY,
+    materialize_module_replacements,
+    snapshot_module_boundary_sites,
+    tag_module_boundary_items,
+)
 from ._param_fingerprint import changed_param_scope
-from ._replay_context import journal_replay_state, restore_replay_state
-from ._replay_sites import _require_hook_origins
-from .audit import build_fire_record
-from .edge_substitution import apply_edge_substitution_do
-from .errors import EngineDispatchError
-from .hooks import _normalize_sticky_hook_specs, _normalize_value_specs, make_hook_context
-from .param_substitution import apply_param_substitution_do, buffer_operand_selection
-from .replay import (
+from ._param_substitution import apply_param_substitution_do, buffer_operand_selection
+from ._replay import (
     _commit_replay_updates,
     _normalize_replay_hooks,
     _origin_sites_for_hooks,
@@ -54,8 +60,12 @@ from .replay import (
     _warn_if_direct_writes_will_be_overlaid,
     replay_from_op,
 )
+from ._replay_context import journal_replay_state, restore_replay_state
+from ._replay_sites import _require_hook_origins
+from ._types import Edit
+from .errors import EngineDispatchError
+from .hooks import _normalize_sticky_hook_specs, _normalize_value_specs, make_hook_context
 from .stochastic import assign_batch_donor_groups
-from .types import Edit
 
 
 def is_selection_batch(value: Any) -> bool:
@@ -165,7 +175,7 @@ def batch_act_plan(
 ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
     """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
 
-    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    resolved, plan, audit = _plan_with_module_boundaries(trace, selection, edit)
     leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
     if leaf_sites:
         raise InvalidArgumentError(
@@ -291,7 +301,7 @@ def apply_selection_do(
             )
         selection = buffer_units
         lifted = _lift(selection)
-    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    resolved, plan, audit = _plan_with_module_boundaries(trace, selection, edit)
     leaf_items = [item for item in plan if item["is_leaf"]]
     hook_items = [item for item in plan if not item["is_leaf"]]
     if leaf_items and hook_items:
@@ -338,14 +348,17 @@ def attach_selection_plan_hooks(
     """
 
     attached: list[str] = []
+    boundary_by_handle: dict[str, str] = {}
     try:
         for item in hook_items:
             with internal_mutation():
-                attached.extend(
-                    trace._attach_hooks(
-                        label_selector(item["op"].label), item["edit"], strict=strict
-                    )
+                handle_ids = trace._attach_hooks(
+                    label_selector(item["op"].label), item["edit"], strict=strict
                 )
+            attached.extend(handle_ids)
+            if MODULE_BOUNDARY_KEY in item:
+                for handle_id in handle_ids:
+                    boundary_by_handle[handle_id] = item[MODULE_BOUNDARY_KEY]
     except BaseException:
         detach_handles(trace, attached)
         raise
@@ -358,6 +371,8 @@ def attach_selection_plan_hooks(
     for hook_spec in trace._ensure_intervention_spec().hook_specs:
         if hook_spec.handle in attached_ids:
             hook_spec.metadata["selection_do_engine_owned"] = True
+            if hook_spec.handle in boundary_by_handle:
+                hook_spec.metadata[MODULE_BOUNDARY_KEY] = boundary_by_handle[hook_spec.handle]
     mark_intervention_spec_mutated(trace)
     return tuple(attached)
 
@@ -498,7 +513,7 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
             build_fire_record(
                 target_label=op.layer_label,
                 call_label=op.label,
-                func_call_id=op.func_call_id,
+                func_call_id=op.call.call_id,
                 container_path=tuple(op.container_path or ()),
                 engine="replay",
                 edit=helper_spec,
@@ -513,13 +528,30 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
     _commit_replay_updates(trace, pending_updates, pending_records)
 
 
+def _own_specs(trace: Trace, wanted: frozenset[str]) -> list[Any]:
+    """The sticky-hook specs one transaction attached (handles in ``wanted``)."""
+
+    return [spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted]
+
+
 def _own_origin_entries(trace: Trace, wanted: frozenset[str]) -> Any:
     """Normalize the sticky-hook specs one transaction attached, as replay origins."""
 
-    own_specs = [
-        spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
-    ]
-    return _normalize_sticky_hook_specs(own_specs, allow_replay_only_site_targets=True)
+    return _normalize_sticky_hook_specs(
+        _own_specs(trace, wanted), allow_replay_only_site_targets=True
+    )
+
+
+def _materialize_module_edits(trace: Trace, boundary: list[Any]) -> None:
+    """Record each pushed ``tl.module(...)`` edit like its capture-time twin.
+
+    The edited value moves into a replacement op after the module's last op,
+    and the accessors that index the op population are rebuilt.
+    """
+
+    if materialize_module_replacements(trace, boundary):
+        _invalidate_trace_op_layer_accessor_caches(trace)
+        _invalidate_trace_module_call_accessor_cache(trace)
 
 
 def push_from_handles(
@@ -567,19 +599,37 @@ def push_from_handles(
     origin_entries = hook_entries
     if wanted or staged_values:
         origin_entries = _own_origin_entries(trace, wanted) + _normalize_value_specs(staged_values)
+    # A differentiable push replays onto a fresh fork and leaves ``trace`` as it was.
+    boundary = (
+        [] if differentiable else snapshot_module_boundary_sites(trace, _own_specs(trace, wanted))
+    )
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
+    run = _push_runner(differentiable)
     with changed_param_scope(False):
-        if differentiable:
-            result = replay_module._run_differentiable_replay(
-                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-            )
-        else:
-            # Through the module so a replay counter patched on it sees this push too.
-            result = replay_module._run_replay(
-                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-            )
+        result = run(
+            trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+        )
     clear_staged_unfired(trace)
+    _materialize_module_edits(trace, boundary)
     return result
+
+
+def _push_runner(differentiable: bool) -> Callable[..., Trace]:
+    """Return the replay runner for a push.
+
+    Looked up through the replay module at call time, so a replay counter
+    patched on that module sees this push too.
+    """
+
+    return replay_module._run_differentiable_replay if differentiable else replay_module._run_replay
+
+
+def _plan_with_module_boundaries(trace: Trace, selection: Any, edit: Any) -> tuple[Any, ...]:
+    """Build a selection do() plan whose ``tl.module`` interior items carry the address."""
+
+    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    tag_module_boundary_items(resolved, plan)
+    return resolved, plan, audit
 
 
 def settle_edited_product(trace: Any) -> None:

@@ -124,7 +124,7 @@ def run_loaded_sparse_trace(
     prepared_state = prepare_runnable_state(trace, seed=seed)
     ceiling.admit_unretained_views(prepared_state.admitted_view_slot_ids)
     slot_values.update(_clone_state_values(descriptor, prepared_state.slot_values, ceiling))
-    fork = trace._fork_trace(name=_run_fork_name(trace))
+    fork = _run_result_fork(trace)
     try:
         return _execute_loaded_sparse_transaction(
             trace,
@@ -322,5 +322,5 @@ from .transaction import (  # noqa: E402
 from .verification import (  # noqa: E402
     _raise_first_divergence,
     _raise_monotonic_divergence,
-    _run_fork_name,
+    _run_result_fork,
 )

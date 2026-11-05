@@ -22,6 +22,7 @@ import torch
 
 from .._quantities import Bytes, Flops
 from ._package_frames import is_torchlens_code
+from ._sig_format import format_sig
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 _T = TypeVar("_T")
+
+#: Name prefix of every trace's visualizer scratch folder (``ensure_trace_visualizer_dir``).
+VISUALIZER_DIR_PREFIX = "torchlens_visualizers_"
 
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -79,7 +83,7 @@ def ensure_trace_visualizer_dir(trace: Any) -> Path:
     current = getattr(trace, "_visualizer_dir", None)
     if current is not None and Path(current).is_dir():
         return Path(current)
-    output_dir = Path(tempfile.mkdtemp(prefix="torchlens_visualizers_"))
+    output_dir = Path(tempfile.mkdtemp(prefix=VISUALIZER_DIR_PREFIX))
     trace._visualizer_dir = str(output_dir)
     weakref.finalize(trace, shutil.rmtree, output_dir, ignore_errors=True)
     return output_dir
@@ -303,8 +307,6 @@ def _format_number(value: float | None) -> str:
 
     if value is None:
         return "n/a"
-    from ..stats._stats_render import format_sig
-
     return format_sig(float(value))
 
 
@@ -406,7 +408,7 @@ def tensor_stats_summary(tensor: Any) -> str:
     # to f64, building boolean masks, and syncing eight times per line. The
     # numbers come from ``torchlens.stats``.
     try:
-        from ..stats._tensor_stats import tensor_stats
+        from ..stats._tensor_stats import tensor_stats  # deferred: cycle stats
 
         stats = tensor_stats(tensor)
         if stats.num_true is not None:
@@ -474,21 +476,102 @@ def progress_bar(
 
     if not enabled or total is None or total <= threshold:
         return iterable
+    bar = _tqdm_bar(iterable, total=total, desc=desc)
+    return iterable if bar is None else cast(Iterable[_T], bar)
+
+
+def delayed_progress_bar(
+    iterable: Iterable[_T],
+    *,
+    total: int,
+    desc: str,
+    delay: float,
+    threshold: int = 10,
+) -> Iterable[_T]:
+    """Wrap an iterable with a progress bar that appears only once the loop runs long.
+
+    Parameters
+    ----------
+    iterable:
+        Iterable to wrap.
+    total:
+        Total iteration count.
+    desc:
+        Progress-bar label.
+    delay:
+        Seconds the loop must run before any bar is built. A loop that ends
+        sooner builds no bar object at all: no terminal bar, no notebook widget.
+    threshold:
+        Minimum total count required before a progress bar is considered.
+
+    Returns
+    -------
+    Iterable[_T]
+        Original iterable, or a generator that starts a bar once ``delay`` has passed.
+    """
+
+    if total <= threshold:
+        return iterable
+    return _delayed_progress(iterable, total=total, desc=desc, delay=delay)
+
+
+def _tqdm_bar(
+    iterable: Iterable[Any] | None, *, total: int, desc: str, initial: int = 0
+) -> Any | None:
+    """Build the tqdm bar for this environment, or None when tqdm is missing."""
+
     try:
         # tqdm's notebook bar needs ipywidgets; without it tqdm.notebook raises mid-construction
         # and the half-built bar prints "Exception ignored in tqdm.__del__" when collected.
         if in_notebook() and importlib.util.find_spec("ipywidgets") is not None:
             from tqdm.notebook import tqdm
 
-            return cast(Iterable[_T], tqdm(iterable, total=total, desc=desc))
+            return tqdm(iterable, total=total, desc=desc, initial=initial)
         from tqdm import tqdm
 
-        return cast(
-            Iterable[_T],
-            tqdm(iterable, total=total, desc=desc, disable=not sys.stderr.isatty()),
+        return tqdm(
+            iterable,
+            total=total,
+            desc=desc,
+            initial=initial,
+            disable=not sys.stderr.isatty(),
         )
     except ImportError:
-        return iterable
+        return None
+
+
+def _delayed_progress(
+    iterable: Iterable[_T], *, total: int, desc: str, delay: float
+) -> Iterator[_T]:
+    """Yield items bare until ``delay`` seconds pass, then continue under a bar.
+
+    tqdm's own ``delay=`` only defers drawing: tqdm.notebook still builds its
+    ipywidgets container at construction, so a sweep of short loops would open
+    one hidden widget per call. Building nothing until the deadline keeps a
+    short loop free of bar objects. The wait costs one clock read per item and
+    none after the bar starts.
+    """
+
+    iterator = iter(iterable)
+    deadline = time.monotonic() + delay
+    done = 0
+    for item in iterator:
+        yield item
+        done += 1
+        if done < total and time.monotonic() >= deadline:
+            break
+    else:
+        return
+    bar = _tqdm_bar(None, total=total, desc=desc, initial=done)
+    if bar is None:
+        yield from iterator
+        return
+    try:
+        for item in iterator:
+            yield item
+            bar.update(1)
+    finally:
+        bar.close()
 
 
 def in_notebook() -> bool:

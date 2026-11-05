@@ -426,6 +426,10 @@ def test_failed_capture_restores_force_eager_stance() -> None:
     with pytest.raises(TraceCaptureError, match="injected stance-scope failure") as _tce_info:
         tl.trace(_CompiledThenRaise(), x)
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
+    # The info object, its traceback and this frame form a cycle that would keep
+    # the partial trace's deferred payload aliases registered until a later
+    # collector pass, which can land inside a later test's Dynamo compile.
+    del _tce_info
     assert compile_events == [], "the stance must compile zero graphs"
 
     compiled_free(x)
@@ -483,7 +487,13 @@ def test_count_compiles_verifies_the_coexistence_contract() -> None:
     # The count freezes at block exit: later compile events (a fresh shape
     # compiling normally) must not leak into an already-measured block.
     frozen = during.frames_compiled
-    model(torch.randn(9, 4))
+    # The fresh shape recompiles static: an automatic-dynamic recompile under
+    # the default backend leaves fake tensors with symbolic shapes in a
+    # ShapeEnv reference cycle through C++ that neither gc nor
+    # ``torch.compiler.reset()`` frees, and a later test on the same worker
+    # that walks every live tensor's shape then meets an unhashable SymInt.
+    with torch._dynamo.config.patch(automatic_dynamic_shapes=False):
+        model(torch.randn(9, 4))
     assert during.frames_compiled == frozen
 
 

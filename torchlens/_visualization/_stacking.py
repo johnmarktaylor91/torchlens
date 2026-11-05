@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._multipass_access import get_multipass_attr
 from ._encoding import (
     LAYER_SOURCE_ROWS,
     EncodingChannelSpec,
@@ -38,6 +39,7 @@ from ._encoding import (
     _encoding_error,
     is_record_derived_image_node,
 )
+from ._render_common import _render_node_name
 
 if TYPE_CHECKING:  # typing only
     from .._data_classes.trace import Trace
@@ -87,7 +89,7 @@ def resolve_stack_by(stack_by: Any, vis_mode: str) -> EncodingChannelSpec | None
             "aggregate node per layer, so there are no per-pass nodes to "
             "stack into columns",
             code="stack_by_requires_unrolled",
-            remedy="pass vis_mode='unrolled' (the default), or drop stack_by",
+            remedy="pass rolled=False (the default), or drop stack_by",
             argument="stack_by",
         )
     if stack_by is True:
@@ -220,7 +222,6 @@ def _stack_value_for_node(state: EncodingState, node: Any) -> Any:
             ) from error
         state.stack_note(NOTE_STACK_CALLABLE)
         return value
-    from .._utils._multipass_access import get_multipass_attr
 
     return get_multipass_attr(node, spec.source, None, multipass=None)
 
@@ -238,8 +239,6 @@ def compute_stack_groups(state: EncodingState, trace: Trace, universe: Any) -> N
         return
     if spec.source_kind == "auto":
         check_lockstep_license(trace)
-
-    from ._render_common import _render_node_name
 
     groups: dict[Any, list[str]] = {}
     for unit in universe.units:

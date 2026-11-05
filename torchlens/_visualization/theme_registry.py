@@ -64,7 +64,7 @@ class LensPreset:
     Attributes
     ----------
     name:
-        Registry row name (``"overview"``, ``"blueprint"``, ...).
+        Registry row name (``"overview"``, ``"debug"``, ...).
     question:
         The one question this lens answers, verbatim from the roster.
     members:
@@ -76,7 +76,7 @@ class LensPreset:
     headline_evidence:
         Name of the capture-time evidence family whose absence makes the
         picture answer a different question (``None`` for lenses with no
-        headline -- overview/blueprint/debug never refuse on evidence).
+        headline -- overview/debug never refuse on evidence).
     secondary_members:
         Member names that DEGRADE with a mandatory rendered notice when
         their evidence is missing; silence is never an option.
@@ -135,27 +135,27 @@ def register_lens(lens: LensPreset) -> LensPreset:
     unknown = sorted(set(lens.members) - _DRAW_PARAMETER_NAMES)
     if unknown:
         raise InvalidArgumentError(
-            f"lens {lens.name!r} declares members that are not draw() parameters: "
+            f"view {lens.name!r} declares members that are not draw() parameters: "
             f"{', '.join(unknown)}",
-            code="lens_member_unknown",
-            remedy="use draw() parameter names as lens member keys",
+            code="view_member_unknown",
+            remedy="use draw() parameter names as view member keys",
             argument="members",
         )
     missing_secondary = sorted(set(lens.secondary_members) - set(lens.members))
     if missing_secondary:
         raise InvalidArgumentError(
-            f"lens {lens.name!r} marks SECONDARY members it does not set: "
+            f"view {lens.name!r} marks SECONDARY members it does not set: "
             f"{', '.join(missing_secondary)}",
-            code="lens_secondary_undeclared",
-            remedy="declare every SECONDARY member in the lens members mapping",
+            code="view_secondary_undeclared",
+            remedy="declare every SECONDARY member in the view members mapping",
             argument="secondary_members",
         )
     key = (lens.surface, lens.name)
     if key in _REGISTRY:
         raise InvalidArgumentError(
-            f"lens {lens.name!r} is already registered for surface {lens.surface!r}",
-            code="lens_name_taken",
-            remedy="pick an unregistered lens name or surface",
+            f"view {lens.name!r} is already registered for surface {lens.surface!r}",
+            code="view_name_taken",
+            remedy="pick an unregistered view name or surface",
             argument="name",
         )
     _REGISTRY[key] = lens
@@ -169,10 +169,10 @@ def get_lens(name: str, surface: str = GRAPHVIZ_DRAW_SURFACE) -> LensPreset:
     if lens is None:
         roster = ", ".join(sorted(row_name for _, row_name in _REGISTRY)) or "(empty)"
         raise InvalidArgumentError(
-            f"no lens named {name!r} is registered for surface {surface!r}; "
-            f"registered lenses: {roster}",
-            code="lens_unknown",
-            remedy="pick a registered lens name",
+            f"no view named {name!r} is registered for surface {surface!r}; "
+            f"registered views: {roster}",
+            code="view_unknown",
+            remedy="pick a registered view name",
             argument="name",
         )
     return lens
@@ -194,7 +194,7 @@ def describe_lens(name: str, surface: str = GRAPHVIZ_DRAW_SURFACE) -> str:
     """
 
     lens = get_lens(name, surface)
-    lines = [f"lens {lens.name!r} -- {lens.question}"]
+    lines = [f"view {lens.name!r} -- {lens.question}"]
     for member, value in sorted(lens.members.items()):
         marker = " (SECONDARY)" if member in lens.secondary_members else ""
         lines.append(f"  {member}={value!r}{marker}")
@@ -236,7 +236,7 @@ def resolve_lens_request(
     if unknown:
         raise InvalidArgumentError(
             f"unknown draw() parameter(s) in explicit kwargs: {', '.join(unknown)}",
-            code="lens_user_kwarg_unknown",
+            code="view_user_kwarg_unknown",
             remedy="pass draw() parameter names only",
             argument="user_kwargs",
         )
@@ -248,9 +248,9 @@ def resolve_lens_request(
 
 
 # ---------------------------------------------------------------------------
-# Built-in rows (PROVISIONAL: the roster proper is themes item 15; these two
-# never-refuse rows exist to prove the machinery and pin the memo's exact
-# settings for the default and the everything view).
+# Built-in row (the roster proper is lenses/_roster.py; this never-refuse
+# row pins the memo's exact overview settings; the everything picture is the
+# plain trace.draw()).
 # ---------------------------------------------------------------------------
 
 OVERVIEW_LENS = register_lens(
@@ -260,36 +260,11 @@ OVERVIEW_LENS = register_lens(
         members={
             "vis_mode": "rolled",
             "collapse": "auto",
-            "fold_repeats": None,
+            "fold_repeats": True,
             "node_mode": "default",
             "show_buffer_layers": "meaningful",
-            "show_containers": "collapsed",
             "show_legend": None,
         },
-        disclosure=(
-            "visible/hidden counts",
-            "fallback policy BY NAME",
-            "the blueprint escape",
-        ),
-    )
-)
-
-BLUEPRINT_LENS = register_lens(
-    LensPreset(
-        name="blueprint",
-        question="show me everything",
-        members={
-            # Fully PINNED row: today's bare-draw contract by name, so a
-            # future default flip cannot silently change it.
-            "vis_mode": "unrolled",
-            "collapse": "none",
-            "fold_repeats": False,
-            "show_containers": False,
-            "show_buffer_layers": "meaningful",
-        },
-        disclosure=(
-            "full detail at every scale; a graph too large to draw is refused "
-            "with instructions, never silently simplified",
-        ),
+        disclosure=("trace.draw() with no view draws every op",),
     )
 )

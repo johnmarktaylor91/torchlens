@@ -85,10 +85,11 @@ from .._runnable import (
 from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from .._utils._display_bounded import RecordTuple
+from .._utils._record_group_table import op_attr, record_member
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
-from ..errors.runnable import SparseCorePayloadError
-from ..intervention.types import (
+from ..errors._runnable import SparseCorePayloadError
+from ..intervention._types import (
     CapturedArgTemplate,
     FunctionRegistryKey,
     LiteralTensor,
@@ -98,6 +99,7 @@ from ..intervention.types import (
 )
 from . import ArtifactError
 from ._replay_diagnostics import intervention_replay_diagnostics
+from ._runnable_param_identity import _same_tensor_identity
 
 
 @dataclass(slots=True)
@@ -163,7 +165,7 @@ def _call_execution_context(representative: Any) -> CallExecutionContext | None:
     defaulted.
     """
 
-    state = getattr(representative, "func_autocast_state", None)
+    state = record_member(representative, "func_autocast_state", None)
     if not isinstance(state, Mapping):
         return None
     execution = state.get("__execution__")
@@ -392,7 +394,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     for call_number, call_ops in grouped_ops:
         representative = call_ops[0]
         call_id = f"call:{call_number}"
-        func_id = getattr(representative, "func_id", None)
+        func_id = record_member(representative, "func_id", None)
         if not isinstance(func_id, FunctionRegistryKey):
             diagnostics.append(
                 _diagnostic(
@@ -435,7 +437,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
             )
             continue
 
-        template = getattr(representative, "args_template", None)
+        template = record_member(representative, "args_template", None)
         if not isinstance(template, CapturedArgTemplate):
             diagnostics.append(
                 _diagnostic(
@@ -494,10 +496,10 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
                 registry_id=registry_id,
                 dispatch_kind=func_id.dispatch_kind,
                 argument_names=tuple(
-                    str(name) for name in getattr(representative, "arg_names", ())
+                    str(name) for name in record_member(representative, "arg_names", ())
                 ),
-                num_positional_args=int(getattr(representative, "num_pos_args", 0)),
-                num_keyword_args=int(getattr(representative, "num_kwargs", 0)),
+                num_positional_args=int(record_member(representative, "num_pos_args", 0)),
+                num_keyword_args=int(record_member(representative, "num_kwargs", 0)),
                 tensor_arguments=tuple(tensor_args),
                 literal_arguments=tuple(literal_args),
                 output_slot_ids=output_slot_ids,
@@ -836,8 +838,9 @@ def _normalize_trace_numpy_scalar_metadata(trace: Any) -> None:
             "args_template",
             "kwargs_template",
         ):
-            if hasattr(op, field_name):
-                setattr(op, field_name, _normalize_numpy_scalars(getattr(op, field_name)))
+            attr = op_attr(field_name)
+            if hasattr(op, attr):
+                setattr(op, attr, _normalize_numpy_scalars(getattr(op, attr)))
     leaves = trace._runnable.input_nontensor_leaves
     if leaves is not None:
         trace._runnable.input_nontensor_leaves = _normalize_numpy_scalars(leaves)
@@ -1279,7 +1282,7 @@ def _build_op_slot_drafts(
         role = _op_slot_role(op)
         if role is TensorSlotRole.BUFFER:
             buffer_names = set((getattr(trace, "_buffer_initial_values", {}) or {}).keys())
-            address = getattr(op, "address", None)
+            address = record_member(op, "address", None)
             if address not in buffer_names:
                 role = TensorSlotRole.CONSTANT_LIKE_TENSOR
                 diagnostics.append(
@@ -1457,7 +1460,7 @@ def _add_persistent_buffer_slot_drafts(
             parameter_names = set()
             param_logs = trace._param_logs
             for param_log in tuple(param_logs) if param_logs is not None else ():
-                address = getattr(param_log, "address", None)
+                address = record_member(param_log, "address", None)
                 if address is not None:
                     parameter_names.add(str(address))
                 for alias_address in getattr(param_log, "all_addresses", ()) or ():
@@ -1674,7 +1677,7 @@ def _build_call_arguments(
     literal_args: list[LiteralArgumentRef] = []
     is_record = isinstance(op, (_op_mod.Op, _layer_mod.Layer))
     parameter_candidates = list((op._param_logs if is_record else ()) or ())
-    non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
+    non_tensor_positional = iter(record_member(op, "non_tensor_pos_args", ()) or ())
     has_unmodelled_host_write = False
     append_component = partial(
         _append_argument_component,
@@ -1720,7 +1723,7 @@ def _build_call_arguments(
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
         append_component(component, path=path, literal_override=override)
-    non_tensor_kwargs = getattr(op, "non_tensor_kwargs", {}) or {}
+    non_tensor_kwargs = record_member(op, "non_tensor_kwargs", {}) or {}
     for key, component in template.kwargs:
         path = ("kwargs", str(key))
         override = non_tensor_kwargs.get(key, _NO_OVERRIDE)
@@ -2212,7 +2215,7 @@ def _match_parameter(
     identity_matches = [param for param in matches if _same_tensor_identity(tensor, param)]
     if len(identity_matches) == 1:
         return identity_matches[0]
-    argument_names = tuple(getattr(op, "arg_names", ()) or ())
+    argument_names = tuple(record_member(op, "arg_names", ()) or ())
     top_index = path[1] if len(path) > 1 and isinstance(path[1], int) else None
     argument_name = (
         str(argument_names[top_index])
@@ -2245,70 +2248,16 @@ def _captured_parameter_barcode(tensor: Any) -> str | None:
     return str(barcode) if barcode is not None else None
 
 
-def _same_tensor_identity(tensor: Any, param: Any) -> bool:
-    """Return whether ``tensor`` is the exact captured parameter object/storage."""
-
-    return any(_same_tensor_ref(tensor, param_ref) for param_ref in _parameter_refs(param))
-
-
-def _parameter_refs(param: Any) -> tuple[Any, ...]:
-    """Return live parameter objects associated with one cooked ``Param`` record."""
-
-    refs: list[Any] = []
-    param_ref = getattr(param, "_param_ref", None)
-    if param_ref is not None:
-        refs.append(param_ref)
-    source_trace_ref = getattr(param, "_source_trace_ref", None)
-    trace = source_trace_ref() if callable(source_trace_ref) else None
-    source_model_ref = getattr(trace, "_source_model_ref", None)
-    model = source_model_ref() if callable(source_model_ref) else None
-    named_parameters = getattr(model, "named_parameters", None)
-    if callable(named_parameters):
-        addresses = {str(getattr(param, "address", ""))}
-        addresses.update(str(address) for address in getattr(param, "all_addresses", ()) or ())
-        try:
-            for name, value in named_parameters(remove_duplicate=False):
-                if str(name) in addresses:
-                    refs.append(value)
-        except TypeError:
-            for name, value in named_parameters():
-                if str(name) in addresses:
-                    refs.append(value)
-    return tuple(dict.fromkeys(refs))
-
-
-def _same_tensor_ref(tensor: Any, reference: Any) -> bool:
-    """Return whether two tensors are the same object or share the same data pointer."""
-
-    if tensor is reference or id(tensor) == id(reference):
-        return True
-    tensor_ptr = _tensor_data_ptr(tensor)
-    reference_ptr = _tensor_data_ptr(reference)
-    return tensor_ptr is not None and tensor_ptr == reference_ptr
-
-
-def _tensor_data_ptr(tensor: Any) -> int | None:
-    """Return a tensor data pointer without raising for non-tensors."""
-
-    data_ptr = getattr(tensor, "data_ptr", None)
-    if not callable(data_ptr):
-        return None
-    try:
-        return int(data_ptr())
-    except RuntimeError:
-        return None
-
-
 def _group_computational_ops(ops: Sequence[Any]) -> list[tuple[int, list[Any]]]:
     """Group cooked computational output tensors by capture call ID."""
 
     groups: dict[int, list[Any]] = defaultdict(list)
     first_index: dict[int, int] = {}
     for index, op in enumerate(ops):
-        call_number = getattr(op, "func_call_id", None)
+        call_number = record_member(op, "func_call_id", None)
         if call_number is None or bool(getattr(op, "is_input", False)):
             continue
-        if bool(getattr(op, "is_buffer", False)) or bool(getattr(op, "is_output", False)):
+        if bool(record_member(op, "is_buffer", False)) or bool(getattr(op, "is_output", False)):
             continue
         call_number = int(call_number)
         groups[call_number].append(op)
@@ -2414,7 +2363,7 @@ def _input_binding_for_op(
                     container_path=container_path,
                 )
 
-    io_role = str(getattr(op, "io_role", ""))
+    io_role = str(record_member(op, "io_role", ""))
     if io_role.count(".") > 1:
         diagnostics.append(
             _diagnostic(
@@ -2465,10 +2414,10 @@ def _build_control_witnesses(
     dependencies_by_call: dict[str, list[ControlDependencyEdge]] = {}
     known_call_ids = {call.call_id for call in calls}
     for op in ops:
-        if not bool(getattr(op, "is_scalar_bool", False)):
+        if not bool(record_member(op, "is_scalar_bool", False)):
             continue
-        bool_value = getattr(op, "bool_value", None)
-        context_kind = getattr(op, "conditional_context_kind", None)
+        bool_value = record_member(op, "bool_value", None)
+        context_kind = record_member(op, "conditional_context_kind", None)
         if bool_value is None:
             diagnostics.append(
                 _diagnostic(
@@ -2480,7 +2429,7 @@ def _build_control_witnesses(
             )
             gap(WitnessGapKind.UNOBSERVED_PREDICATE, f"slot:{op.label}")
             continue
-        if context_kind in {None, "unknown"} and bool(getattr(op, "is_terminal_bool", False)):
+        if context_kind in {None, "unknown"} and bool(record_member(op, "is_terminal_bool", False)):
             diagnostics.append(
                 _diagnostic(
                     RunnableErrorCode.MISSING_CONTROL_CLASSIFICATION,
@@ -2495,7 +2444,7 @@ def _build_control_witnesses(
             if context_kind == "while"
             else ControlWitnessKind.SCALAR_BOOL
         )
-        call_number = getattr(op, "func_call_id", None)
+        call_number = record_member(op, "func_call_id", None)
         call_id = None if call_number is None else f"call:{call_number}"
         if call_id is None or call_id not in known_call_ids:
             # No surviving owner record can anchor this predicate: fail closed as an
@@ -3227,7 +3176,7 @@ def _escape_witnesses(
         # A bound param/buffer escape source (state address recorded) is witnessed by
         # PASS A's state digest; do NOT re-witness it as a tensor-op slot, and never
         # treat it as INCOMPLETE here (its state digest already covers the escape).
-        address = getattr(op, "address", None)
+        address = record_member(op, "address", None)
         if address is not None and str(address) in state_names:
             if is_escape:
                 covered_labels.add(str(op.label))
@@ -3237,8 +3186,8 @@ def _escape_witnesses(
         # present output/un-escaped input would falsely downgrade every changed run).
         if (is_input or is_output) and not is_escape:
             continue
-        if bool(getattr(op, "is_scalar_bool", False)) or bool(
-            getattr(op, "is_terminal_bool", False)
+        if bool(record_member(op, "is_scalar_bool", False)) or bool(
+            record_member(op, "is_terminal_bool", False)
         ):
             continue
         slot_id = f"slot:{op.label}"
@@ -3247,7 +3196,7 @@ def _escape_witnesses(
         call_id = call_id_by_slot.get(slot_id)
         if call_id is None and not (is_input or is_output):
             continue
-        is_sink = bool(getattr(op, "is_internal_sink", False))
+        is_sink = bool(record_member(op, "is_internal_sink", False))
         if not is_escape and not is_sink:
             continue
         escape_draft = slot_drafts.get(slot_id)
@@ -4338,7 +4287,7 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
     but never claim or require a canonical state-dict key.
     """
 
-    address = getattr(op, "address", None)
+    address = record_member(op, "address", None)
     if not isinstance(address, str) or not address:
         return None
     persistence = getattr(trace, "_buffer_persistence", {}) or {}
@@ -4399,7 +4348,7 @@ def _op_slot_role(op: Any) -> TensorSlotRole:
 
     if bool(getattr(op, "is_input", False)):
         return TensorSlotRole.MODEL_INPUT
-    if bool(getattr(op, "is_buffer", False)):
+    if bool(record_member(op, "is_buffer", False)):
         return TensorSlotRole.BUFFER
     if bool(getattr(op, "is_output", False)):
         return TensorSlotRole.OUTPUT
@@ -4781,9 +4730,9 @@ def _runtime_fingerprint(
             "version": func_id.version,
             "import_path": func_id.import_path,
         },
-        "argument_names": list(getattr(op, "arg_names", ()) or ()),
-        "num_positional_args": int(getattr(op, "num_pos_args", 0)),
-        "num_keyword_args": int(getattr(op, "num_kwargs", 0)),
+        "argument_names": list(record_member(op, "arg_names", ()) or ()),
+        "num_positional_args": int(record_member(op, "num_pos_args", 0)),
+        "num_keyword_args": int(record_member(op, "num_kwargs", 0)),
         "outputs": [
             {"shape": list(_shape_tuple(item.shape) or ()), "dtype": _dtype_name(item)}
             for item in call_ops

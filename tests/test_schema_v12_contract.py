@@ -96,3 +96,50 @@ def test_v12_reader_floor_moves_with_the_contract() -> None:
     assert v12["min_tlspec_version"] == 12
     assert v11["tlspec_version"] == 11, "v11 stays frozen"
     assert v11["min_tlspec_version"] == 11, "v11 stays frozen"
+
+
+def test_component_spec_keys_keep_the_persisted_intervention_module_path() -> None:
+    """Edit and FireRecord stay keyed by the module path the contract was digested under.
+
+    ``torchlens.intervention.types`` became private (``intervention._types``); the
+    writer contract keeps the persisted path, so the move cannot change the digest
+    and artifacts saved before it keep loading at the same tlspec version.
+    """
+
+    from torchlens._io.field_registry import component_spec_tables
+    from torchlens._io.writer_contract import writer_contract_digest
+    from torchlens.intervention._types import Edit, FireRecord
+
+    tables = component_spec_tables()
+    committed = _document(V12_CONTRACT)["contract"]["component_specs"]
+    for cls in (Edit, FireRecord):
+        assert cls.__module__ == "torchlens.intervention._types"
+        persisted = f"torchlens.intervention.types.{cls.__qualname__}"
+        assert persisted in tables
+        assert f"{cls.__module__}.{cls.__qualname__}" not in tables
+        assert tables[persisted] == committed[persisted]
+    assert writer_contract_digest() == _document(V12_CONTRACT)["writer_contract_digest"]
+
+
+def test_format3_class_paths_keep_the_persisted_intervention_module_path() -> None:
+    """Saved files name Edit and FireRecord by the persisted path, which resolves back."""
+
+    from torchlens._io.format3.values import class_path, record_type_table
+    from torchlens.intervention._types import Edit, FireRecord
+
+    table = record_type_table()
+    for cls in (Edit, FireRecord):
+        path = f"torchlens.intervention.types.{cls.__qualname__}"
+        assert class_path(cls) == path
+        assert table[path] is cls
+
+
+def test_format3_recipe_edit_path_is_the_persisted_class_path() -> None:
+    """The recipe encoder writes a nested Edit under the same persisted path the reader admits."""
+
+    from torchlens._io.format3 import recipe
+    from torchlens._io.format3.values import class_path, record_type_table
+    from torchlens.intervention._types import Edit
+
+    assert class_path(Edit) == recipe._EDIT_CLASS_PATH
+    assert record_type_table()[recipe._EDIT_CLASS_PATH] is Edit

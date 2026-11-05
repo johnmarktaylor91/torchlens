@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from ._data_classes.trace import Trace
 
 from ._data_classes._trace_missing_attrs import is_live_trace
+from ._utils._record_group_table import record_member
 
 #: Schema identifier stamped on the shared honesty fact block.
 CAPTURE_HONESTY_SCHEMA = "torchlens.capture_honesty.v1"
@@ -248,7 +249,7 @@ def _host_source_location(op: Any) -> str | None:
     tensor is the last one.
     """
 
-    for frame in reversed(tuple(getattr(op, "code_context", None) or ())):
+    for frame in reversed(tuple(record_member(op, "code_context", None) or ())):
         file = getattr(frame, "file", None)
         line = getattr(frame, "line_number", None)
         if isinstance(file, str) and isinstance(line, int) and "torchlens" not in file:
@@ -287,8 +288,8 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
             continue
         if (
             getattr(op, "parents", None)
-            or getattr(op, "parent_params", None)
-            or getattr(op, "unattributed_tensor_args", None)
+            or record_member(op, "parent_params", None)
+            or record_member(op, "unattributed_tensor_args", None)
         ):
             continue
         count += 1

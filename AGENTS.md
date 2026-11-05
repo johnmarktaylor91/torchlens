@@ -134,8 +134,8 @@ Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) 
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
-~0.4k tests (381/21,113 collect-only, measured 2026-11-03),
-a coverage-chosen subset of the former ~1.5k-test tier that holds every per-package coverage
+~0.4k tests (381/21,113 collect-only, measured 2026-11-04),
+a coverage-chosen subset (re-selected 2026-11-03 to 250-400 cases) of the former ~1.5k-test tier that holds every per-package coverage
 floor (see `tests/AGENTS.md`, "The smoke tier"). The smoke wall measurement (measured 2026-11-03, one
 4-core Linux worker, `-n 4`, one torch thread per worker) took 80s (~1 min) after about 50s
 of collection. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
@@ -156,8 +156,8 @@ parallel or coverage-instrumented measurement, plus a 2s grace). Regenerate the 
 FILE --workers N`; `python scripts/tier_durations.py shards --count N --index I` prints one
 duration-balanced shard of test files for a parallel gate. `pytest-xdist` ships in the
 `dev` extra: run `OMP_NUM_THREADS=1 pytest tests/ -m smoke -n N` with N equal to the cores you
-declared (never `-n auto`). Measured 2026-10-02 on a 32-core Linux worker: smoke took 5.5 min at
-`-n 8` against 28 min serial. Every worker collects first, so the gain shrinks below 4 workers.
+declared (never `-n auto`). Measured 2026-11-05 on an 8-core Linux worker: the 381-test selection ran in 70-93 s at
+`-n 4` after about 32 s of collection. Every worker collects first, so the gain shrinks below 4 workers.
 Smoke runs collect only the smoke file list: under `-m smoke` the tiers plugin skips every test
 module off it before import, and `python scripts/tier_durations.py files --tier smoke` recomputes
 the list from the tree on every call, so nothing needs regenerating. Measured 2026-11-02 on a

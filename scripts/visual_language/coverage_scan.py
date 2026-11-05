@@ -464,7 +464,7 @@ def emission_site_universe(files: Iterable[Path] | None = None) -> tuple[Emissio
 
 
 def encoding_legend_texts() -> list[LegendText]:
-    """Encoding-legend line prefixes: ``NOTE_*`` constants and the legend-row builders."""
+    """Encoding-legend line prefixes: ``NOTE_*`` constants and the key's line builders."""
 
     path = (PACKAGE_ROOT / "_visualization" / "_encoding.py").resolve()
     out: list[LegendText] = []
@@ -476,8 +476,10 @@ def encoding_legend_texts() -> list[LegendText]:
             and isinstance(node.value, ast.Constant)
         ):
             out.append(LegendText("TorchLens encoding", str(node.value.value), "_encoding"))
-    wanted = ("_color_legend_rows", "_non_color_legend_rows")
-    for node, index in _walk(_tree(path)):
+    # The key's line builders (the input-photo legend rewrite moved them to _encoding_key).
+    builders = (PACKAGE_ROOT / "_visualization" / "_encoding_key.py").resolve()
+    wanted = ("color_key", "size_key_line", "stack_key_line")
+    for node, index in _walk(_tree(builders)):
         if not isinstance(node, (ast.JoinedStr, ast.Constant)) or id(node) in index.fstring_parts:
             continue
         scope = _scope(index, node)
@@ -490,5 +492,5 @@ def encoding_legend_texts() -> list[LegendText]:
         else:
             continue
         if text:
-            out.append(LegendText("TorchLens encoding", text.strip(), f"_encoding.{scope[-1]}"))
+            out.append(LegendText("TorchLens encoding", text.strip(), f"_encoding_key.{scope[-1]}"))
     return out

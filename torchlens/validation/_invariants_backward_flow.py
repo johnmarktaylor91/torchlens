@@ -5,6 +5,17 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from typing import TYPE_CHECKING
 
+from .._ir.events import (
+    BackwardCoverageGap,
+    BackwardPassEnd,
+    BackwardPassStart,
+    GradFnDiscovered,
+    GradFnFired,
+    InterventionAppliedEvent,
+    OpGradObserved,
+    ParamGradObserved,
+)
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -34,16 +45,6 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
         If runtime backward sidecar events are internally inconsistent or no
         longer match projected records.
     """
-
-    from .._ir.events import (
-        BackwardCoverageGap,
-        BackwardPassEnd,
-        BackwardPassStart,
-        GradFnDiscovered,
-        GradFnFired,
-        OpGradObserved,
-        ParamGradObserved,
-    )
 
     capture_events = getattr(trace, "_capture_events", None)
     events = list(getattr(capture_events, "backward_events", ()) or ())
@@ -395,7 +396,6 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
         # live PASS after a save/load round trip, contradicting the locked
         # 2026-06-02 rule.
         return _persisted_replacement_stamp(layer) is True
-    from .._ir.events import InterventionAppliedEvent
 
     stream = getattr(trace, "_capture_events", None)
     # Causal binding: an edit counts only when it is bound to THIS stream's
@@ -427,7 +427,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
             getattr(layer, "layer_label", None),
         }
         candidate_labels.discard(None)
-        layer_func_call_id = getattr(layer, "func_call_id", None)
+        layer_func_call_id = record_member(layer, "func_call_id", None)
         for event in bound_edits:
             if event.label_raw not in candidate_labels:
                 continue
@@ -505,7 +505,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
         Whether the layer is synthetic input/output/buffer metadata.
     """
 
-    if layer.is_input or layer.is_output or layer.is_buffer:
+    if layer.is_input or layer.is_output or layer.graph.is_buffer:
         return True
     # A GENUINE raw-forward-hook output replacement is legitimately functionless
     # (the user substituted an opaque tensor for a module's output, so there is
@@ -521,7 +521,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     if (
         getattr(layer, "func_name", "") == "intervention_replacement"
         and getattr(layer, "is_edited", False)
-        and not getattr(layer, "is_internal_source", False)
+        and not record_member(layer, "is_internal_source", False)
         and op_has_genuine_replacement_evidence(layer)
     ):
         return True
@@ -538,14 +538,14 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     func_name = str(getattr(layer, "func_name", "")).lower()
     if (
         func_name == "none"
-        and bool(getattr(layer, "is_internal_source", False))
+        and bool(record_member(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
     ):
         return True
     # A closure-constant source (SPEC 2 rule 1) is a functionless source like
     # a buffer: no torch call, so no ``func_call_id``. The predicate is the
     # narrow shared one (parentless, internal source, no callable, no call id).
-    from ._constant_source import is_closure_constant_source
+    from ._constant_source import is_closure_constant_source  # deferred: cycle validation
 
     return is_closure_constant_source(layer)
 
@@ -572,9 +572,10 @@ def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_backward_domain import (  # noqa: E402
     _resolve_op_grad_event_label,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

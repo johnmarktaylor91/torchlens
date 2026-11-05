@@ -21,6 +21,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .errors import BindingPreflightError
+from .selectors import CompositeSelector, FollowedBySelector, NotSelector, PrecededBySelector
 
 #: Selector kinds whose value is a module address (bare or ``"addr:N"``).
 _MODULE_ADDRESS_KINDS = frozenset({"module", "in_module"})
@@ -86,13 +87,7 @@ def _direct_terms(source: Any) -> list[str]:
 def _children(source: Any) -> list[Any]:
     """Return the nested selector sources of one node (composites, specs, plans)."""
 
-    from ..intervention.spec import Recipe
-    from .selectors import (
-        CompositeSelector,
-        FollowedBySelector,
-        NotSelector,
-        PrecededBySelector,
-    )
+    from ..intervention._spec import Recipe
 
     if source is None or isinstance(source, str):
         return []

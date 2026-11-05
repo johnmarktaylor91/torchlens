@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -63,8 +64,8 @@ def test_capture_memory_fields_and_forward_source_line() -> None:
     model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU())
     log = tl.trace(model, torch.ones(1, 2))
     assert isinstance(log.source.forward_line, int)
-    assert all(hasattr(layer, "bytes_delta_at_call") for layer in log._layer_list)
-    assert all(hasattr(layer, "bytes_peak_at_call") for layer in log._layer_list)
+    assert all(hasattr(layer.cost, "bytes_delta_at_call") for layer in log._layer_list)
+    assert all(hasattr(layer.cost, "bytes_peak_at_call") for layer in log._layer_list)
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _trace_selector_helpers.py, campaign mutant kills.
@@ -258,3 +259,104 @@ def test_dedup_source_id_is_a_dense_trace_local_ordinal() -> None:
     assert second_hit == 2
     assert first_hit != id(source)
     assert second_hit != id(other)
+
+
+def test_dedup_ordinal_is_fresh_when_a_dead_source_address_is_reused() -> None:
+    """A new source at a dead source's ``id()`` slot gets its own dedup ordinal.
+
+    The identity cache is keyed by ``id()``. When a saved source dies and the
+    heap hands its address to a new tensor, the new tensor replaces the slot
+    without growing the cache. The ordinal must still be fresh: inheriting the
+    dead slot's ordinal gave two distinct sources one persisted
+    ``dedup_source_id`` and shifted every later ordinal with heap reuse.
+    """
+
+    trace = tl.trace(torch.nn.Identity(), torch.randn(1, 2))
+    fields = [_minimal_activation_fields(f"manual_{i}") for i in range(6)]
+    dead = torch.randn(2, 2)
+    _save_activation_fields(trace, fields[0], dead, (), {}, None)
+    _save_activation_fields(trace, fields[1], dead, (), {}, None)
+
+    # Emulate address reuse exactly: the dead source's slot now sits at the
+    # key of the next live tensor, with its weak source reference expired.
+    reused = torch.randn(2, 2)
+    cache = trace._out_identity_cache
+    entry = cache.pop(id(dead))
+    del dead
+    gc.collect()
+    assert entry[0]() is None
+    cache[id(reused)] = entry
+    _save_activation_fields(trace, fields[2], reused, (), {}, None)
+    _save_activation_fields(trace, fields[3], reused, (), {}, None)
+    later = torch.randn(2, 2)
+    _save_activation_fields(trace, fields[4], later, (), {}, None)
+    _save_activation_fields(trace, fields[5], later, (), {}, None)
+
+    ordinals = [fields[i]["annotations"]["dedup_source_id"] for i in (1, 3, 5)]
+    assert ordinals == [1, 2, 3]
+
+
+class _BufferWritingNet(torch.nn.Module):
+    """A repeated layer and a train-mode norm, so buffer reads dedup."""
+
+    def __init__(self) -> None:
+        """Build seeded layers."""
+        super().__init__()
+        torch.manual_seed(0)
+        self.inner = torch.nn.Linear(4, 4)
+        self.norm = torch.nn.BatchNorm1d(4)
+        self.head = torch.nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply a repeated layer, a norm and a residual head."""
+        for _ in range(3):
+            x = torch.relu(self.inner(x))
+        x = self.norm(x * 2 + 1)
+        return self.head(x) + x
+
+
+def _persisted_dedup_record(trace: tl.Trace, path: Path) -> list[tuple[Any, ...]]:
+    """Save ``trace``, load it back and return each op's dedup fields and payload bytes."""
+
+    trace.save(path)
+    loaded = tl.load(path)
+    record: list[tuple[Any, ...]] = []
+    for op in loaded._layer_list:
+        annotations = dict(getattr(op, "annotations", None) or {})
+        payload = op.out if isinstance(op.out, torch.Tensor) else None
+        payload_bytes = (
+            payload.detach().cpu().contiguous().numpy().tobytes() if payload is not None else None
+        )
+        record.append(
+            (
+                op.label,
+                annotations.get("dedup_source_id"),
+                annotations.get("dedup_source_version"),
+                annotations.get("dedup_reference_label"),
+                payload_bytes,
+            )
+        )
+    return record
+
+
+def test_dedup_ordinals_persist_equal_across_repeat_captures(tmp_path: Path) -> None:
+    """Identical captures in one process persist the same dedup ordinals and bytes.
+
+    Garbage allocated between captures perturbs which heap addresses are free,
+    so an ``id()``-derived ordinal would differ from one capture to the next.
+    """
+
+    records = []
+    held: list[torch.Tensor] = []
+    for run in range(6):
+        garbage = [torch.empty(n % 7 + 1) for n in range(32 * (run + 1))]
+        held.extend(garbage[::3])
+        del garbage
+        torch.manual_seed(0)
+        trace = tl.trace(_BufferWritingNet().train(), torch.randn(3, 4))
+        records.append(_persisted_dedup_record(trace, tmp_path / f"run_{run}.tlspec"))
+        del trace
+
+    assert any(row[1] is not None for row in records[0])
+    for record in records[1:]:
+        assert record == records[0]

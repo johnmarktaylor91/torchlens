@@ -55,7 +55,7 @@ def test_hook_fires_once_per_selected_op_per_pass(build: Callable[[Any], Any]) -
     assert all(op.is_edited for op in selected)
 
     capture_fires = len(run_states)
-    trace.run(_model(), x)
+    trace = trace.run(_model(), x)
     replay = run_states[capture_fires:]
     assert len(replay) == len(selected)
     assert all(state is replay[0] for state in replay)

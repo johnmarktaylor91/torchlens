@@ -14,10 +14,10 @@ import torchlens as tl
 from torchlens._capture.plan import CapturePlan, RetentionKind, RetentionProfile
 from torchlens._capture.session import CaptureSession
 from torchlens._trace_selector_helpers import _make_layers_to_save_predicate
-from torchlens.backends.default_specs import _tf_runtime_supported
+from torchlens.backends._default_specs import _tf_runtime_supported
 from torchlens.intervention.errors import SelectorCompositionError
 from torchlens.recording import RecordContext
-from torchlens.recording.exceptions import PredicateError
+from torchlens.recording._exceptions import PredicateError
 from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
 
 
@@ -281,7 +281,7 @@ def test_activation_escrow_spills_to_temp_and_materializes_exact_value() -> None
     control -- without the sidecar-stripping spill fix, this test fails.
     """
 
-    from torchlens.backends.torch._tl import set_tensor_label
+    from torchlens._utils._tensor_label import set_tensor_label
 
     session = _retention_session(
         RetentionProfile(

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from .._utils._record_group_table import record_member
 from .source_graph import SourceGraph
 
 if TYPE_CHECKING:
@@ -132,9 +133,9 @@ def _project_endpoint_units(
         keyed by visible unit id (raw render label for the projection map).
     """
 
-    from ._render_edges import _is_buffer_visible
-    from ._render_flow import _base_rendered_node_emission, _render_node_label
-    from ._render_leaf import _run_fold_graph_node_name
+    from ._render_edges import _is_buffer_visible  # deferred: cycle _visualization
+    from ._render_flow import _base_rendered_node_emission, _render_node_label  # deferred: cycle
+    from ._render_leaf import _run_fold_graph_node_name  # deferred: cycle _visualization
 
     trace = source_graph.trace
     request = source_graph.request
@@ -144,7 +145,7 @@ def _project_endpoint_units(
     endpoint_projection: dict[str, str] = {}
     for node in source_graph.entries_to_plot.values():
         raw_label = _render_node_label(node, request.vis_mode)
-        if getattr(node, "is_buffer", False) and not _is_buffer_visible(node, show_buffers):
+        if record_member(node, "is_buffer", False) and not _is_buffer_visible(node, show_buffers):
             # A buffer hidden by the visibility policy gets NO endpoint
             # projection: projecting it kept its dataflow edges alive while
             # the node itself was never emitted, so the rank path shipped
@@ -212,8 +213,8 @@ def build_node_universe(
     """
 
     del segments, containers
-    from ._boundary_bundle import bundle_member_nodes
-    from ._render_flow import (
+    from ._boundary_bundle import bundle_member_nodes  # deferred: cycle _visualization
+    from ._render_flow import (  # deferred: cycle _visualization
         _collapsed_container_leaf_nodes,
         _enumerate_base_rendered_node_emissions,
         _enumerate_run_fold_ellipsis_emissions,
@@ -335,7 +336,7 @@ def _project_edges(
         Projected occurrences in source traversal order.
     """
 
-    from ._render_flow import _render_node_label
+    from ._render_flow import _render_node_label  # deferred: cycle _visualization
 
     projected: list[ProjectedEdgeOccurrence] = []
     for source_label, edges in edge_map.items():

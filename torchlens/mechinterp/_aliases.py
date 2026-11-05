@@ -39,6 +39,7 @@ from importlib import resources
 from typing import Any
 
 from .._io import _json
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._heads import _attention_modules
 
@@ -220,7 +221,7 @@ def _parse_query(name: Any, prefer: str | None = None) -> _Query:
 def _facet_home_modules(trace: Any, facet: str, scope: str | None = None) -> list[Any]:
     """Return modules exposing ``facet`` in executed order, filtered by row scope."""
 
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     required = {facet} | set(_SCOPE_KEYS.get(scope or "", frozenset()))
     homes = []
@@ -318,7 +319,7 @@ def _condition_absence(module: Any, row: dict[str, Any] | None) -> str | None:
 
     if not row:
         return None
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     keys = _facet_keys_or_none(module) or set()
     only_if = row.get("only_if_facet")
@@ -365,7 +366,7 @@ def _site_coordinates(module: Any, facet: str) -> tuple[str | None, int | None]:
     value = module.facets.get(facet)
     spec = getattr(value, "spec", None)
     home = getattr(spec, "home", None)
-    return getattr(home, "site_key", None), getattr(home, "pass_number", None)
+    return record_member(home, "site_key", None), getattr(home, "pass_number", None)
 
 
 def _resolve_on(module: Any, query: _Query, facet: str) -> AliasResolution:

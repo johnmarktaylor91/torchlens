@@ -425,3 +425,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 72b8140ae019ac73c372ec2627bf5b81fc04c6f5 (dirty)
 recorded: 2026-10-30T02:30:07.600433+00:00
+---
+generator: test_module_containment_equality.py
+flag: TORCHLENS_UPDATE_MODULE_CONTAINMENT=1
+reason: torch 2.1 floor scales the MHA weights-path query by division (q / math.sqrt(E)); third spelling pinned as its own golden
+env: py3.11-torch2.1.2
+torch: 2.1.2+cpu
+source: c2d391c963781e60825d828d28c2013cc32214c7 (dirty)
+recorded: 2026-11-05T02:18:57.054045+00:00

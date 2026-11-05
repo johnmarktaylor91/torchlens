@@ -12,10 +12,12 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .core import ValidationCheckResult
+    from ._core import ValidationCheckResult
 
 
 def _check_edge_intervention_boundary(
@@ -42,7 +44,7 @@ def _check_edge_intervention_boundary(
     edge substitution replaces no node's output.
     """
 
-    entries = getattr(target_op, "edge_substitutions", None) or {}
+    entries = record_member(target_op, "edge_substitutions", None) or {}
     if not entries:
         return None
     failure = _fail_uncorroborated_edge_entries(trace, target_op, entries)
@@ -56,8 +58,8 @@ def _fail_uncorroborated_edge_entries(
 ) -> ValidationCheckResult | None:
     """Fail any tier-(ii) entry missing its FireRecord address or stamp verdict."""
 
-    from .core import ValidationCheckResult
-    from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
+    from ._core import ValidationCheckResult  # deferred: cycle validation
+    from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
     stamps = getattr(target_op, "edge_replacement_stamps", None) or {}
     fire_addresses = {
@@ -65,11 +67,11 @@ def _fail_uncorroborated_edge_entries(
         for record in (getattr(target_op, "edits", None) or ())
         if getattr(record, "edge_address", None) is not None
     }
-    from ..intervention.edge_substitution import tensor_content_digest
+    from ..intervention._edge_substitution import tensor_content_digest
 
     for store_key, payload in entries.items():
         arg_kind, arg_path = store_key
-        address = (target_op.func_call_id, arg_kind, tuple(arg_path))
+        address = (target_op.call.call_id, arg_kind, tuple(arg_path))
         stamp = stamps.get(store_key)
         if address not in fire_addresses or not stamp or not stamp.get("verdict"):
             record_validation_failure(
@@ -118,9 +120,9 @@ def _splice_edge_substitution_args(
 ) -> tuple[dict[str, Any] | None, ValidationCheckResult | None]:
     """Splice tier-(ii) substituted values into the captured call arguments."""
 
+    from ._core import ValidationCheckResult  # deferred: cycle validation
+    from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
     from ._replay_grad_fidelity import replay_copy_for_slot
-    from .core import ValidationCheckResult
-    from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
     args = list(input_args["args"])
     kwargs = dict(input_args["kwargs"])
@@ -136,7 +138,7 @@ def _splice_edge_substitution_args(
             # edge rows it cannot apply faithfully).
             value = payload.get("value")
             if isinstance(value, torch.Tensor):
-                from ..intervention.regions import _splice_occurrence
+                from ..intervention._regions import _splice_occurrence
 
                 value = replay_copy_for_slot(
                     trace,
@@ -204,13 +206,13 @@ def _reexecute_edge_boundary(
     """Re-execute the child from the spliced tier-(ii) values and compare outputs."""
 
     from .._utils.tensor_utils import tensor_nanequal
-    from .core import (
+    from ._core import (  # deferred: cycle validation
         ValidationCheckResult,
         _execute_func_with_restored_state,
         _prepare_input_args_for_validating_layer,
         _saved_out_payload,
     )
-    from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
+    from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
     input_args, unverified_reason = _prepare_input_args_for_validating_layer(trace, target_op, [])
     if input_args is None:
@@ -265,7 +267,7 @@ def _parent_arg_evidence(
     never validated.
     """
 
-    from .core import ValidationCheckResult, _saved_out_payload
+    from ._core import ValidationCheckResult, _saved_out_payload  # deferred: cycle validation
 
     target_op_label = getattr(target_layer, "label", target_layer.layer_label)
     versions = parent_layer.out_versions_by_child
@@ -284,7 +286,7 @@ def _parent_arg_evidence(
 def _tensor_content_digest(value: torch.Tensor) -> str:
     """Return the replay engine's content digest of one tensor (shared spelling)."""
 
-    from ..intervention.edge_substitution import tensor_content_digest
+    from ..intervention._edge_substitution import tensor_content_digest
 
     return tensor_content_digest(value)
 
@@ -324,7 +326,7 @@ def _capture_payload_equal(trace: Trace, candidate: Op, target_layer: Op, value:
     """
 
     from .._utils.tensor_utils import tensor_nanequal
-    from .core import _saved_out_payload
+    from ._core import _saved_out_payload  # deferred: cycle validation
 
     if not isinstance(value, torch.Tensor):
         return False

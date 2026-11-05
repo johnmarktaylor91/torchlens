@@ -45,7 +45,9 @@ from typing import TYPE_CHECKING, Any
 
 from .._constants import OP_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from ..errors import TorchLensWarning
+from ._cost_perf_traffic import ROOFLINE_TRAFFIC_FIELDS, _op_ideal_traffic
 from ._cost_tiers import COST_REPORT_TIERS, COST_REPORT_UNSHIPPED_TIERS, _validate_cost_tiers
 
 if TYPE_CHECKING:
@@ -522,17 +524,6 @@ class RooflineReport:
         )
 
 
-#: The Op record fields the roofline traffic model reads (read-once /
-#: write-once ideal traffic = parent outputs + own output + parameters
-#: consumed). Pinned against the Op field vocabulary at import by
-#: :func:`_pin_traffic_fields`, so a field rename can never silently zero a
-#: traffic term (a ``params_memory`` misspelling would read
-#: ``None`` through ``getattr`` and drop ALL parameter traffic, reporting a
-#: Linear(256, 512) at 85 FLOP/B instead of 1.96 FLOP/B).
-ROOFLINE_TRAFFIC_FIELDS: tuple[str, ...] = ("activation_memory", "param_memory")
-_TRAFFIC_OUTPUT_FIELD, _TRAFFIC_PARAM_FIELD = ROOFLINE_TRAFFIC_FIELDS
-
-
 def _pin_traffic_fields() -> None:
     """Refuse to import over a traffic field the Op vocabulary does not carry."""
 
@@ -546,27 +537,6 @@ def _pin_traffic_fields() -> None:
 
 
 _pin_traffic_fields()
-
-
-def _op_ideal_traffic(op: Any, trace: Any) -> int | None:
-    """Read-once/write-once logical traffic for one op, if derivable."""
-
-    output_bytes = getattr(op, _TRAFFIC_OUTPUT_FIELD, None)
-    if output_bytes is None:
-        return None
-    total = int(output_bytes)
-    for parent_label in getattr(op, "parents", ()) or ():
-        try:
-            parent = trace.ops[str(parent_label)]
-        except (KeyError, ValueError):
-            return None
-        parent_bytes = getattr(parent, _TRAFFIC_OUTPUT_FIELD, None)
-        if parent_bytes is not None:
-            total += int(parent_bytes)
-    param_bytes = getattr(op, _TRAFFIC_PARAM_FIELD, None)
-    if param_bytes is not None:
-        total += int(param_bytes)
-    return total
 
 
 def roofline(
@@ -597,7 +567,7 @@ def roofline(
     True
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[RooflineRow] = []
     coverage = dict.fromkeys(ROOFLINE_REASONS, 0)
@@ -625,7 +595,7 @@ def roofline(
                 )
             )
             continue
-        flops = int(getattr(op, "flops_forward", 0) or 0)
+        flops = int(record_member(op, "flops_forward", 0) or 0)
         traffic = _op_ideal_traffic(op, trace)
         if traffic is None:
             coverage["missing_shape_dtype"] += 1
@@ -814,7 +784,7 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
     the join remedy.
     """
 
-    from ._compute_truth import classify_row
+    from ._compute_truth import classify_row  # deferred: cycle report
 
     rows: list[InstrumentedRateRow] = []
     any_applicable = False
@@ -823,8 +793,8 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
         if classify_row(op) not in ("known", "zero_by_rule"):
             continue
         label = str(getattr(op, "layer_label", "?"))
-        flops = getattr(op, "flops_forward", None)
-        seconds = getattr(op, "func_duration", None)
+        flops = record_member(op, "flops_forward", None)
+        seconds = record_member(op, "func_duration", None)
         device = getattr(op, "device_ref", None)
         device_name = str(device) if device is not None else None
         on_cuda = device_name is not None and device_name.startswith("cuda")
@@ -958,7 +928,7 @@ def overhead(
 
     import torch
 
-    from .._user_funcs import trace as _trace
+    from .._user_public_impls import trace as _trace
 
     _validate_cost_tiers(tiers)
     kwargs = input_kwargs or {}

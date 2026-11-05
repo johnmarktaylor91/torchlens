@@ -58,7 +58,7 @@ def test_crash_at_the_legacy_tag_seam_never_leaves_a_torn_entry(tmp_path, monkey
     first = tl.trace(model, x, capture=_cache_capture(tmp_path))
     assert first.provenance.cache_hit is False
     entry = _single_entry(tmp_path)
-    secret = prepare_cache._capture_cache_secret(entry.parent)
+    secret = prepare_cache._capture_cache_secret()
 
     # A distinct trace object for the SAME key, guaranteed to pickle to
     # different bytes than generation 1.
@@ -98,7 +98,7 @@ def test_crash_at_the_single_commit_preserves_the_old_generation(tmp_path, monke
     x = torch.randn(1, 4)
     tl.trace(model, x, capture=_cache_capture(tmp_path))
     entry = _single_entry(tmp_path)
-    secret = prepare_cache._capture_cache_secret(entry.parent)
+    secret = prepare_cache._capture_cache_secret()
     before = entry.read_bytes()
 
     fresh = tl.trace(model, x)
@@ -178,8 +178,9 @@ def test_hard_crash_temp_debris_is_swept_age_gated(tmp_path) -> None:
     # touches the secret file.
     stale.write_bytes(b"debris-again")
     os.utime(stale, (two_hours_ago, two_hours_ago))
+    secret_before = prepare_cache._capture_cache_secret()
     removed = tl.clear_cache(tmp_path / "cache")
     assert removed >= 1
     assert not stale.exists()
     assert fresh.exists()
-    assert (cache_root / ".capture_cache_secret").exists()
+    assert prepare_cache._capture_cache_secret() == secret_before

@@ -13,13 +13,20 @@ from weakref import ref
 
 from .. import _state
 from .._data_classes._trace_grad_sites import gradient_rule_sites
-from .._ir.events import OpEvent
+from .._ir import OpEvent, selector_eval as _selector_eval
+from .._ir.selector_eval import module_address_matches
 from .._record_type import record_type
+from .._trace_selection_shape import _selector_requires_unwindowed_escrow
 from .._utils.tensor_utils import safe_copy
+from ..backends.torch.tensor_tracking import (
+    _add_live_gradient_reference_hook,
+    _add_tensor_backward_hook,
+)
 from ._cooked_inventory import capture_identity_facts, recording_projection_inventory
 from ._retention import _negative_selector_windows, _selector_needs_backward_context
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
+from .preflight import _escrow_remedy
 
 TerminalState = Literal["complete", "halted", "failed"]
 """First-transition log vocabulary. The settlement authority passes
@@ -379,7 +386,6 @@ class CaptureSession:
         addresses = profile.activation_module_exit_addresses
         if addresses is None or profile.activation_kind is not RetentionKind.ACTIVATION:
             return False
-        from .._ir.selector_eval import module_address_matches
 
         return any(module_address_matches(module_call_label, address) for address in addresses)
 
@@ -542,7 +548,7 @@ class CaptureSession:
             self._activation_escrow_spill_index += 1
             import torch
 
-            from ..backends.torch._tl import clear_meta
+            from .._utils._tensor_label import clear_meta
 
             with _state.pause_logging():
                 # Spill the payload WITHOUT its TorchLens sidecar: a captured
@@ -591,10 +597,6 @@ class CaptureSession:
     def resolve_deferred_retention(self, trace: Any, output_tensors: list[Any]) -> None:
         """Resolve final selectors, project activation winners, and install grad hooks."""
 
-        from ..backends.torch.tensor_tracking import (
-            _add_live_gradient_reference_hook,
-            _add_tensor_backward_hook,
-        )
         from ._input_records import _get_op_nums_from_user_labels
 
         activation_selector = getattr(trace, "_deferred_retention_selector", None)
@@ -1021,7 +1023,6 @@ def compile_legacy_capture_plan(
     deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
     graph_connected = bool(trace._options_backward_ready)
-    from .._trace_selection_shape import _selector_requires_unwindowed_escrow
 
     negative_windows = _negative_selector_windows(layers_to_save)
     grad_negative_windows = _negative_selector_windows(grad_layers_to_save)
@@ -1035,13 +1036,11 @@ def compile_legacy_capture_plan(
         activation_window = None
     if _selector_requires_unwindowed_escrow(grad_layers_to_save):
         gradient_window = None
-    from .._ir.selector_eval import module_exit_bound_addresses
-    from .preflight import _escrow_remedy
 
     # A selector whose matches all lie among module-pass outputs (``tl.module``
     # terms joined by ``|``, or intersected with anything by ``&``) resolves
     # only to such ops, so the session escrows only inside matching passes.
-    module_exit_addresses = module_exit_bound_addresses(deferred_selector)
+    module_exit_addresses = _selector_eval.module_exit_bound_addresses(deferred_selector)
     retention_profile = RetentionProfile(
         activation_kind=(
             RetentionKind.ACTIVATION

@@ -33,15 +33,18 @@ import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import Any
 
 import torch
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
+from ..._errors import TorchLensWarning
 from ..._utils import _torch_compat
+from ..._utils._tensor_label import clear_tensor_label, get_tensor_label, set_tensor_label
+from ..._utils.introspection import get_vars_of_type_from_obj
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ._boundary_types import BoundaryMarks, BoundarySpec, _BoundaryCall
 from ._foreign_data import (
     FOREIGN_DATA_EXPORT_WRAPPER_NAME,
     FOREIGN_DATA_FUNC_NAME,
@@ -49,6 +52,8 @@ from ._foreign_data import (
     known_foreign_kernel_exits,
     note_plain_export,
 )
+from ._function_input_views import log_native_input_views, own_view_dispatch
+from .escape_detection import ExpectedOriginalToken
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -125,6 +130,12 @@ def unlogged_wrapper_name(func_name: str) -> str:
     if func_name in EXPORT_FUNC_NAMES:
         return FOREIGN_DATA_EXPORT_WRAPPER_NAME
     return f"torch_func:{func_name}:not_logged"
+
+
+def inside_function_apply() -> bool:
+    """Return whether a ``Function.apply`` forward is running under capture."""
+
+    return bool(_FRAMES)
 
 
 def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
@@ -370,10 +381,9 @@ def _active_witness_state(trace: Any) -> Any | None:
     carries the state of every armed census, runnable or not.
     """
 
-    from ..._utils._torch_compat import get_current_dispatch_mode_stack
     from . import completeness_witness
 
-    for mode in reversed(get_current_dispatch_mode_stack() or []):
+    for mode in reversed(_torch_compat.get_current_dispatch_mode_stack() or []):
         state = getattr(mode, "state", None)
         if isinstance(mode, completeness_witness._CompletenessDispatchMode) and (
             getattr(state, "trace", None) is trace
@@ -386,18 +396,16 @@ def _active_witness_state(trace: Any) -> Any | None:
 
 
 def _event_label(event: Any) -> str | None:
-    """Return a journal op's raw label (``OpRecord.core`` or a flat ``OpEvent``)."""
+    """Return a journal op's raw label (every journal shape answers ``label_raw``)."""
 
-    core = getattr(event, "core", None)
-    label = getattr(core if core is not None else event, "label_raw", None)
+    label = getattr(event, "label_raw", None)
     return label if isinstance(label, str) else None
 
 
 def _event_parents(event: Any) -> tuple[Any, ...]:
-    """Return a journal op's parent edges (``OpRecord.core`` or a flat ``OpEvent``)."""
+    """Return a journal op's parent edges (every journal shape answers ``parents``)."""
 
-    core = getattr(event, "core", None)
-    return tuple(getattr(core if core is not None else event, "parents", ()) or ())
+    return tuple(getattr(event, "parents", ()) or ())
 
 
 def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple[str, ...]:
@@ -459,42 +467,6 @@ def _make_replay_callable(
     return autogradfunction
 
 
-@dataclass(frozen=True)
-class BoundarySpec:
-    """What a boundary op is: its callable, op type, census owner token and source."""
-
-    replay: Callable[..., Any]
-    func_name: str
-    wrapper_name: str
-    original: Any
-
-
-@dataclass(frozen=True)
-class _BoundaryCall:
-    """One collapsed call, ready to be logged as its boundary op."""
-
-    spec: BoundarySpec
-    args: tuple[Any, ...]
-    kwargs: dict[str, Any]
-    out: Any
-    exec_ctx: FuncExecutionContext
-    func_call_id: int
-
-
-@dataclass(frozen=True)
-class BoundaryMarks:
-    """Journal, census and context marks taken just before a boundary call runs."""
-
-    op_events: list[Any] | None
-    journal_mark: int
-    witness_state: Any | None
-    witness_mark: int
-    capture_start_time: float
-    rng_states: dict[str, Any]
-    autocast_state: Any
-    arg_labels: list[tuple[Any, str | None]]
-
-
 def _reown_witness_events(
     state: Any,
     start: int,
@@ -515,8 +487,6 @@ def _accounted_boundary_token(
 ) -> Any:
     """Return the capture-accounted ``expected_opaque`` owner token of one boundary."""
 
-    from .escape_detection import ExpectedOriginalToken
-
     return ExpectedOriginalToken(
         raw_id=id(original),
         original=original,
@@ -536,9 +506,6 @@ def _snapshot_arg_labels(
 ) -> list[tuple[Any, str | None]]:
     """Record each tensor argument's live label before the forward runs."""
 
-    from ..._utils.introspection import get_vars_of_type_from_obj
-    from ._tl import get_tensor_label
-
     tensors = get_vars_of_type_from_obj(
         (args, kwargs), torch.Tensor, subclass_exceptions=[torch.nn.Parameter], search_depth=4
     )
@@ -554,8 +521,6 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
     for that argument must come from the label the object carried before the forward.
     """
 
-    from ._tl import clear_tensor_label, get_tensor_label, set_tensor_label
-
     for tensor, label in snapshot:
         current = get_tensor_label(tensor)
         if current == label or current not in interior_labels:
@@ -569,7 +534,7 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the call's one boundary op."""
 
-    from ._ops_emission import log_function_output_tensors
+    from ._ops_emission import log_function_output_tensors  # deferred: cycle _aten_capture
 
     def emit() -> None:
         """Record the boundary op through the ordinary output logger."""
@@ -599,8 +564,6 @@ def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
 
 def _warn_foreign_boundary(trace: Any, cls: type[Any], exits: tuple[str, ...]) -> None:
     """Disclose one collapsed Function class per capture."""
-
-    from ..._errors import TorchLensWarning
 
     function_name = f"{cls.__module__}.{cls.__qualname__}"
     warned = trace.__dict__.setdefault("_foreign_kernel_warned", set())
@@ -710,6 +673,21 @@ def close_boundary_call(
     return True
 
 
+def _log_input_view(
+    trace: Any, view_as: Any, source: Any, output: Any, marks: BoundaryMarks
+) -> None:
+    """Log one view torch made in C++ as ``view_as``; that op owns its ``aten.view`` dispatch."""
+
+    spec = BoundarySpec(
+        replay=view_as, func_name="view_as", wrapper_name="view_as", original=view_as
+    )
+    ctx = FuncExecutionContext(time_elapsed=0.0, rng_states={}, autocast_state=marks.autocast_state)
+    call = _BoundaryCall(spec, (source, source), {}, output, ctx, _state.next_func_call_id())
+    _log_boundary_op(trace, call)
+    token = _accounted_boundary_token(view_as, "view_as", "view_as", call.func_call_id)
+    own_view_dispatch(marks.witness_state, marks.witness_mark, token)
+
+
 def record_function_apply(
     trace: Any,
     cls: type[Any],
@@ -753,13 +731,13 @@ def record_function_apply(
             _FRAMES.pop()
         elif frame_exports in _FRAMES:
             _FRAMES.remove(frame_exports)
-
-    if marks.op_events is None:
-        return out
-    collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
-    host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
-    exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
+    exits: tuple[str, ...] = ()
+    if marks.op_events is not None:
+        collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
+        host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
+        exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
+        log_native_input_views(trace, args, out, marks, _log_input_view)
         return out
     spec = BoundarySpec(
         replay=_make_replay_callable(cls, original_function, exits),

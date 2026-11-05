@@ -706,8 +706,8 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "b",
                 "FlowReshape",
-                call="lens",
-                kwargs={"lens": "overview", "display_filter": "@exclude_reshapes"},
+                call="view",
+                kwargs={"view": "overview", "display_filter": "@exclude_reshapes"},
                 label="a lens with a display filter",
             ),
         ),
@@ -722,7 +722,8 @@ SLIDES: tuple[Slide, ...] = (
         title="Interventions: the edit and what it changed",
         rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
         "show_cone=True a translucent purple underlay runs under the arrows and outlines "
-        'it changed; "as_node" draws the hook as a purple delta diamond.',
+        'it changed (keyed "downstream of the edit" when the interventions view also outlines '
+        'changed values); "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
@@ -756,7 +757,7 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="surgery",
-        title="What an edit did: surgery lens",
+        title="What an edit did: interventions lens",
         rule="Solid magenta cites a recorded fire; dashed marks a declared target that did not "
         "fire here.",
         panels=(
@@ -764,7 +765,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                kwargs={"highlight": "interventions"},
+                kwargs={"view": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -773,14 +774,15 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The edit: zero_ablate, replay engine", "node(text~edited)", at="edited"),
+            Key("The edit: zero_ablate", 'node(text~"Δ zero_ablate")', at="edited"),
             Key(
                 "The target's site cohort: no fire recorded at this instance",
                 'node(text~"no fire")',
                 at="cohort",
             ),
         ),
-        footnote="Up to {surgery_cap} citation rows per node; a caption census names the "
+        footnote="Up to {surgery_cap} citation rows per node; a light purple outline marks "
+        "each op whose saved value the edit changed; the .census.txt record names the "
         "replacement lane that ran.",
         rows=("VN19", "VC02", "VC05"),
     ),
@@ -817,17 +819,19 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"color_by": "flops", "show_legend": None},
                 label="its legend",
-                crop=("text:color_by",),
+                crop=("text:flops:",),
             ),
         ),
         keys=(
             Key("Most FLOPs: the darkest fill", "node(text~linear_1_1)"),
-            Key("The encoding legend appears by itself", "graph(label~color_by)", panel="b"),
             Key(
-                "Unencoded nodes stay white and are counted",
-                "graph(label~encoded)",
+                "The key names the field that drives the color", 'graph(label~"flops:")', panel="b"
+            ),
+            Key(
+                "The color bar spans the field's range, in its units",
+                'graph(label~"144 FLOPs")',
                 panel="b",
-                at="encoded",
+                at="144 FLOPs",
             ),
         ),
         rows=("VK01", "VK03", "VK06", "VI02"),
@@ -871,12 +875,16 @@ SLIDES: tuple[Slide, ...] = (
                 "Sizes",
                 kwargs={"size_by": "dims", "size_scale": "sqrt", "show_legend": None},
                 label="its legend",
-                crop=("text:size_by",),
+                crop=("text:size:",),
             ),
         ),
         keys=(
             Key("Bigger tensor, bigger node", "node(text~linear_1)"),
-            Key("The legend states the size rule", "graph(label~size_by)", panel="b"),
+            Key(
+                "The key names the field that drives the size",
+                'graph(label~"size: output elements")',
+                panel="b",
+            ),
             Key('scale="sqrt" by default; "linear" grows faster', None),
         ),
         rows=("VK04", "VK06"),
@@ -898,12 +906,16 @@ SLIDES: tuple[Slide, ...] = (
                 "Loop2",
                 kwargs={"rolled": False, "stack_by": True, "show_legend": None},
                 label="its legend",
-                crop=("text:stack_by",),
+                crop=("text:aligned:",),
             ),
         ),
         keys=(
             Key("Each pass shares a rank", "node(name=linear_1_1pass2)"),
-            Key("The legend explains the rank rule", "graph(label~stack_by)", panel="b"),
+            Key(
+                "The key names the field that sets the rank",
+                'graph(label~"aligned: same pass")',
+                panel="b",
+            ),
             Key("Sibling ordering is off while stacking", None),
         ),
         footnote="The caption adds the line stacked by pass_index.",
@@ -966,9 +978,9 @@ SLIDES: tuple[Slide, ...] = (
         "refuse when evidence is missing.",
         layout="grid",
         panels=(
-            Panel("a", "Flow", call="lens", kwargs={"lens": "overview"}, label="overview"),
-            Panel("b", "Flow", call="lens", kwargs={"lens": "speed"}, label="speed"),
-            Panel("c", "Flow", call="lens", kwargs={"lens": "dims"}, label="dims"),
+            Panel("a", "Flow", call="view", kwargs={"view": "overview"}, label="overview"),
+            Panel("b", "Flow", call="view", kwargs={"view": "speed"}, label="speed"),
+            Panel("c", "Flow", call="view", kwargs={"view": "dims"}, label="dims"),
         ),
         cells=(
             Cell("a", "node(text~tanh)", "overview"),
@@ -988,9 +1000,9 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Nonfinite",
-                call="lens",
+                call="view",
                 capture={"save": "@unsaved_abs"},
-                kwargs={"lens": "debug", "node_label_fields": ["label"]},
+                kwargs={"view": "debug", "node_label_fields": ["label"]},
             ),
         ),
         cells=(
@@ -1279,7 +1291,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The input images as a montage", "node(shape=none)"),
+            Key("The input images as a montage", "node(name=input_1pass1, shape=box)"),
             Key(
                 "preprocess names the transform, UNVERIFIED here",
                 "node(text~preprocess)",
@@ -1362,8 +1374,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Edits",
-        "intervention_mode, highlight",
-        ("intervention_mode", "show_cone", "highlight"),
+        "intervention_mode, view='interventions'",
+        ("intervention_mode", "show_cone", "view"),
     ),
     (
         "Measurements",
@@ -1426,7 +1438,7 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 #: Unencoded reasons: the exact legend line and when TorchLens writes it.
 UNENCODED: tuple[tuple[str, str], ...] = (
-    ("n/a = unencoded", "a node has no value for the source; the legend counts them"),
+    ("n/a = unencoded", "a node has no value for the source; it stays white"),
     ("rank mapping (ordinal, not ratio)", 'transform="rank": the fill shows order only'),
     ("log scale (scale-invariant; values <= 0 unencoded)", 'transform="log"'),
     ("values <= 0 -- unencoded under the log transform", "a value at or below zero under log"),
@@ -1505,7 +1517,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
             ("hook node", "interventions", "b", "node(shape=diamond)"),
-            ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
+            ("recorded edit (surgery)", "surgery", "a", 'node(text~"Δ zero_ablate")'),
         ),
         "alphabet-lines": (
             ("data flows here", "start-here", "a", "edge(style=solid)"),

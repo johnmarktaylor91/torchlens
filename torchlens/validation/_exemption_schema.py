@@ -4,7 +4,7 @@
 validation tripwire admits as an :class:`ExemptionRow`. This module holds the
 row type, the compact builders the table is written with, and the views that
 derive the run-time registries (``SKIP_VALIDATION_ENTIRELY`` and friends in
-:mod:`torchlens.validation.exemptions`) from the table. It imports nothing
+:mod:`torchlens.validation._exemptions`) from the table. It imports nothing
 from the validation pipeline, so the table can be read without torch.
 """
 

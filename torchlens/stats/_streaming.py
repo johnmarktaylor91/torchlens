@@ -773,7 +773,7 @@ class PCA:
             ``sha256:`` content digest of the fitted arrays).
         """
 
-        from ._fitted import fitted_digest
+        from ._fitted import fitted_digest  # deferred: cycle stats
 
         components, explained = self._solve()
         mean = self._covariance._mean
@@ -810,7 +810,7 @@ class PCA:
             be a silent wrong number.
         """
 
-        from ._fitted import FittedArtifactError, FittedPCA, fitted_digest
+        from ._fitted import FittedArtifactError, FittedPCA, fitted_digest  # deferred: cycle stats
 
         if self._covariance._count < 2:
             raise FittedArtifactError(

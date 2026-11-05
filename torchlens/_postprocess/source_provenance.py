@@ -11,6 +11,13 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import (
+    ADVISORY_MODULE_BOUNDARY_ADOPTION,
+    ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
+    ADVISORY_UNRECORDED_OPERATOR_MUTATION,
+    append_capture_advisory,
+)
+from .._utils._record_group_table import record_member
 from .ast_branches import resolve_var_names
 
 if TYPE_CHECKING:
@@ -24,7 +31,7 @@ def _unattributed_op_offenders(ops: Any) -> list[str]:
     for op in ops:
         if getattr(op, "type", None) == "output":
             continue
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
+        positions = tuple(record_member(op, "unattributed_tensor_args", ()) or ())
         if not positions:
             continue
         label = getattr(op, "label", None) or getattr(op, "layer_label", None) or op._label_raw
@@ -54,13 +61,6 @@ def _warn_unattributed_tensor_args(self: Trace) -> None:
     None
         Emits at most one aggregate warning.
     """
-
-    from .._capture_honesty import (
-        ADVISORY_MODULE_BOUNDARY_ADOPTION,
-        ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
-        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
-        append_capture_advisory,
-    )
 
     offenders = _unattributed_op_offenders(self._layer_list or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
@@ -150,9 +150,9 @@ def _populate_var_names(self: Trace) -> None:
         return
     for op in self._layer_list:
         if getattr(op, "type", None) == "output":
-            op.var_names = []
+            op._source_var_names = []
             continue
-        op.var_names = resolve_var_names(
-            getattr(op, "code_context", []) or [],
+        op._source_var_names = resolve_var_names(
+            record_member(op, "code_context", []) or [],
             getattr(op, "func_name", None),
         )

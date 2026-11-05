@@ -34,6 +34,7 @@ from typing import Any, Literal
 import torch
 
 from .._semantic.tolerances import within_reconstruction_tolerance
+from .._utils._record_group_table import record_member
 from ._anchors import resolve_lm_head
 from ._edge_sources import LeafWriter, classify_leaf, pre_norm_input, writer_leaves
 from ._errors import refuse
@@ -196,7 +197,7 @@ class ComponentEdge:
         :func:`patch_edges` builds the matching value.
         """
 
-        from ._edge_patch import receiver_selection
+        from ._edge_patch import receiver_selection  # deferred: cycle mechinterp
 
         return receiver_selection(self.receiver._trace, self.receiver)
 
@@ -541,8 +542,8 @@ class _Builder:
             "logits",
             None,
             None,
-            str(getattr(self.anchor.head, "address", "")),
-            str(getattr(self.anchor.norm, "address", "")),
+            str(record_member(self.anchor.head, "address", "")),
+            str(record_member(self.anchor.norm, "address", "")),
             label,
             value,
             self.senders_of(target),

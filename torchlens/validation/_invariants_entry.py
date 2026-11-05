@@ -6,7 +6,9 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from .status import has_importer_region_provenance, is_region_replay_annotation
+from torchlens.backends.registry import UnknownBackendError
+
+from ._status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -72,8 +74,8 @@ def _check_receptive_field_metadata_invariants(trace: Trace) -> None:
         If receptive-field metadata violates a geometric contract.
     """
 
-    from ..receptive_field._errors import ReceptiveFieldError
-    from ..receptive_field._validation import check_geometric_metadata_invariants
+    from ..receptive_field._errors import ReceptiveFieldError  # deferred: cycle receptive_field
+    from ..receptive_field._validation import check_geometric_metadata_invariants  # deferred: cycle
 
     try:
         check_geometric_metadata_invariants(trace)
@@ -279,7 +281,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
     return [
         layer
         for layer in trace._layer_list
-        if not (layer.is_input or layer.is_output or layer.is_buffer)
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer)
     ]
 
 
@@ -307,7 +309,7 @@ def _module_claims(layer: Op) -> list[str]:
         "output_of_module_calls",
         "atomic_module_call",
     ):
-        value = getattr(layer, attr_name, None)
+        value = record_member(layer, attr_name, None)
         if isinstance(value, str):
             if value:
                 claims.append(value)
@@ -357,7 +359,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         If backend identity fields are invalid or unsupported by the registry.
     """
 
-    from ..backends.registry import UnknownBackendError, get_backend_spec
+    from ..backends.registry import get_backend_spec
 
     name = "backend_identity_invariants"
     backend = trace._provenance_backend
@@ -456,7 +458,9 @@ def _check_backend_neutral_accessor_refs(trace: Trace) -> None:
     for record in records:
         if not _record_has_backend_neutral_accessor_metadata(record):
             continue
-        label = getattr(record, "layer_label", getattr(record, "address", type(record).__name__))
+        label = getattr(
+            record, "layer_label", record_member(record, "address", type(record).__name__)
+        )
         resolver_status = getattr(record, "resolver_status", None)
         if resolver_status is not None and resolver_status not in valid_statuses:
             raise MetadataInvariantError(
@@ -527,7 +531,7 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
     for layer in trace._layer_list:
         if _is_func_call_id_exempt(layer):
             continue
-        func_call_id = getattr(layer, "func_call_id", None)
+        func_call_id = record_member(layer, "func_call_id", None)
         if func_call_id is None:
             raise MetadataInvariantError(
                 name,
@@ -563,6 +567,11 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import (  # noqa: E402
+    InvariantResult,
+    MetadataInvariantError,
+)
 from ._invariants_backward_flow import (  # noqa: E402
     _is_func_call_id_exempt,
     _plain_func_call_group_signature,
@@ -577,8 +586,4 @@ from ._invariants_connectivity import (  # noqa: E402
 )
 from ._invariants_modules_params import (  # noqa: E402
     _check_param_xrefs,
-)
-from .invariants import (  # noqa: E402
-    InvariantResult,
-    MetadataInvariantError,
 )

@@ -48,6 +48,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from .._utils.tensor_leaves import tensor_payload_bytes
+from ..errors._episode import EpisodeJoinError
 from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:
@@ -212,8 +214,6 @@ def closed_violation_teaching(step: int, *, settled: bool = False) -> str:
 def _join_error(message: str, *, code: str, **payload: Any) -> Exception:
     """Build the typed join refusal (import-local to keep the leaf light)."""
 
-    from ..errors.episode import EpisodeJoinError
-
     return EpisodeJoinError(message, code=code, **payload)
 
 
@@ -233,8 +233,7 @@ def _tensor_digest(value: Any) -> str:
     hasher = hashlib.sha256()
     hasher.update(str(value.dtype).encode("utf-8"))
     hasher.update(str(tuple(value.shape)).encode("utf-8"))
-    if flat.numel():
-        hasher.update(flat.view(torch.uint8).numpy().tobytes())
+    hasher.update(tensor_payload_bytes(flat))  # an empty tensor adds no bytes
     return f"sha256:{hasher.hexdigest()}"
 
 

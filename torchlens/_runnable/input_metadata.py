@@ -7,6 +7,7 @@ from typing import Any
 
 import torch
 
+from torchlens._input_walk import classify_scalar
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
 from .. import _state
@@ -94,9 +95,7 @@ def _literal_leaf_equal(recorded: Any, runtime: Any) -> bool:
     ``+0.0`` and a ``nan`` equal to a ``nan`` with the same bits.
     """
 
-    from torchlens._input_walk import classify_scalar
-
-    # A ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
+    # r71 B: a ``slice`` is a COMPOSITE literal leaf. ``slice.__eq__`` compares
     # component VALUES only, so ``slice(5) == slice(MyIntEnum.FAST)`` is True and a
     # type-steered branch would falsely VERIFY. Compare component-by-component through
     # the SAME scalar type/value rules (never ``slice.__eq__`` as authority).

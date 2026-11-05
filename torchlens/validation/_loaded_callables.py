@@ -2,13 +2,16 @@
 
 A saved bundle never carries callables (``Op.func`` is dropped at every level;
 executable callables are not portable). It does carry each op's
-``func_id``, the portable :class:`~torchlens.intervention.types.FunctionRegistryKey`
+``func_id``, the portable :class:`~torchlens.intervention._types.FunctionRegistryKey`
 a capture that saves arguments records. Replay validation is an execution
 boundary, so it resolves those keys there through the same purity-gated
 resolver intervention replay uses: only pure torch, ``torch.Tensor``,
 ``torch.nn.functional`` and ``operator`` callables resolve. A ``custom`` key
 (foreign code) is never imported here, so its op stays unresolved and the
-entry check refuses the bundle by name exactly as before.
+entry check refuses the bundle by name exactly as before. An op whose saved
+keyword names a raw pointer (``Tensor.new(cdata=...)``) is never resolved, and
+``_raw_pointer_denial.refuse_pointer_keywords`` refuses the same call again at
+every replay re-execution.
 """
 
 from __future__ import annotations
@@ -17,6 +20,9 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 from .._utils._callable_safety import _unwrap_capture_wrapper
+from .._utils._raw_pointer_denial import raw_pointer_keyword_name
+from .._utils._record_group_table import record_member
+from .._utils._sparse_invariant_guard import mapping_disables_invariants
 
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
 RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
@@ -41,7 +47,7 @@ def _is_resolution_exempt(layer: Any) -> bool:
     if (
         getattr(layer, "is_input", False)
         or getattr(layer, "is_output", False)
-        or getattr(layer, "is_buffer", False)
+        or record_member(layer, "is_buffer", False)
     ):
         return True
     return str(getattr(layer, "func_name", "none")) in STRUCTURAL_FUNC_NAMES
@@ -50,12 +56,18 @@ def _is_resolution_exempt(layer: Any) -> bool:
 def _resolution_candidate(layer: Any) -> Any:
     """The op's resolvable key, or ``None`` when the op must not be resolved."""
 
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
-    if _is_resolution_exempt(layer):
+    # A bundle-supplied pointer keyword leaves the op unresolved, so the entry
+    # check refuses the bundle by name: the call is never armed.
+    # So does a sparse ``check_invariants`` keyword that turns index validation off.
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
+    pointer = raw_pointer_keyword_name(saved_kwargs)
+    switch_off = isinstance(saved_kwargs, dict) and mapping_disables_invariants(saved_kwargs)
+    if _is_resolution_exempt(layer) or pointer is not None or switch_off:
         return None
     func_name = str(getattr(layer, "func_name", "none"))
-    key = getattr(layer, "func_id", None)
+    key = record_member(layer, "func_id", None)
     if not isinstance(key, FunctionRegistryKey):
         return None
     if key.namespace == "custom":
@@ -92,7 +104,7 @@ def _public_key_for_torch_c_function(key: Any) -> Any:
 
     import torch
 
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
     module_name, _, name = str(key.import_path or "").partition(":")
     public_name = _TORCH_C_PUBLIC_NAMESPACES.get(module_name)

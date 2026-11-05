@@ -24,8 +24,8 @@ from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning, TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_BACKWARD
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._diagnostics import CHECK_BACKWARD
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _ParamMutator(nn.Module):
@@ -467,7 +467,7 @@ def test_frozen_parameter_mutation_op_records_its_gradient(spelling: str) -> Non
     assert torch.allclose(mutation.grad, eager_temp.grad)
 
 
-# Kept by the shrink-r4 coverage proof: sole branch coverage of validation/_backward_state.py, validation/backward.py and a sole campaign mutation kill.
+# Kept by the shrink-r4 coverage proof: sole branch coverage of validation/_backward_state.py, validation/_backward.py and a sole campaign mutation kill.
 def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
     """Narrowness: a Parameter that is a non-leaf BEFORE validation is not compared.
 
@@ -553,14 +553,14 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     op1 = _ops_by_type(trace1, "add")[0]
     grad1 = op1.grad.clone()
     operand1 = _ops_by_type(trace1, "sum")[0]
-    assert len(operand1.grads) == 1
+    assert len(operand1.autograd.grads) == 1
     events_after_own_backward = len(trace1.backward_events)
 
     trace2 = tl.trace(model, x, capture=capture)
     _backward_through_own_output(trace2)
     op2 = _ops_by_type(trace2, "add")[0]
     assert op2.grad is not None
-    assert len(op2.grads) == 1
+    assert len(op2.autograd.grads) == 1
     assert len(trace1.backward_events) == events_after_own_backward
     trace2_events = len(trace2.backward_events)
 
@@ -574,11 +574,11 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
             model(x).sum().backward()
             optimizer.step()
     assert [str(w.message) for w in caught] == []
-    assert len(op1.grads) == 1
+    assert len(op1.autograd.grads) == 1
     assert torch.equal(op1.grad, grad1)
-    assert len(operand1.grads) == 1
+    assert len(operand1.autograd.grads) == 1
     assert len(trace1.backward_events) == events_after_own_backward
-    assert len(op2.grads) == 1
+    assert len(op2.autograd.grads) == 1
     assert len(trace2.backward_events) == trace2_events
 
 

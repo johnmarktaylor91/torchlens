@@ -48,7 +48,7 @@ steered = tl.trace(
     save=tl.module("encoder"),
     intervene=tl.when(tl.module("encoder"), tl.steer(direction, strength=4, dim=1)),
 )
-steered.run(model, torch.randn(1, 3, 20, 20))  # larger input, same graph structure
+steered = steered.run(model, torch.randn(1, 3, 20, 20))  # a new Trace; larger input, same graph
 steered.last_run["engine"]  # "guarded_fast", or "rerun" after a fallback
 steered.last_run["fast_refused"]  # None, or "<code>:<stage>" naming the guard
 steered.last_run["shape_varied"]  # True when the input size differed from capture
@@ -113,7 +113,7 @@ ablated = tl.trace(
 # recipe (intervention.json); a loaded copy reruns it when every edit is built in,
 # and refuses run_intervention_spec_not_persisted when a custom callable was saved
 # as a placeholder.
-ablated.run(model, x)
+ablated = ablated.run(model, x)  # run returns a new Trace; ablated before it is unchanged
 
 disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
@@ -417,7 +417,7 @@ to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 `trace.draw(color_by=graph)` paints the graph onto its trace: each site holding feature or
 error nodes gets the total influence of its nodes (a mapping of site to value paints anything
 else, feature activations included).
-`tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
+`tl.attribution.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
 `direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and

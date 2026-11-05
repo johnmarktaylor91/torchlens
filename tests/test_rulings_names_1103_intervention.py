@@ -40,7 +40,7 @@ def _first_internal_label(log: Any) -> str:
     """Return the first layer label that is neither input, output nor buffer."""
 
     for layer in log._layer_list:
-        if not (layer.is_input or layer.is_output or layer.is_buffer):
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer):
             return layer.layer_label
     raise AssertionError("expected at least one internal layer")
 
@@ -117,7 +117,9 @@ def test_run_model_and_x_are_positional_only() -> None:
         log.run(model=ReluAdd(), x=x)
     with pytest.raises(TypeError):
         log.run(ReluAdd(), x=x)
-    assert log.run(ReluAdd(), x) is log
+    result = log.run(ReluAdd(), x)
+    assert isinstance(result, tl.Trace)
+    assert result is not log
 
 
 def test_run_inputs_transaction_returns_run_result() -> None:

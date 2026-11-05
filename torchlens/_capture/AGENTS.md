@@ -20,10 +20,11 @@ partial diagnostics, and fastlog's lightweight `RecordContext` construction.
 | `config.py` | Session configuration dataclasses used by backend capture |
 | `arg_positions.py` | 3-tier tensor/parameter extraction: static table, dynamic cache, BFS fallback |
 | `salient_args.py` | Human-readable function configuration metadata |
+| `_arg_snapshot.py` | Op-time copy of caller-owned mutable argument containers (lists, dicts, sets, nested) so a later mutation cannot rewrite a stored record (`non_tensor_pos_args`, `non_tensor_kwargs`, `func_non_tensor_args`, `transform_config`) |
 | `flops.py` | Forward and backward FLOPs estimates with registry hooks |
 | `outcome.py` | SINGLE authority for terminal capture truth: `CaptureOutcome`/`CaptureStatus`/`CapturePhase`/`FailureOrigin` plus the N1-N5 capability chokepoint |
 | `session.py` | Capture-session lifecycle state |
-| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `_capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `recording/types.py`), not helper callables for `projections.py` |
+| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `_capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `recording/_types.py`), not helper callables for `projections.py` |
 | `plan.py` | Capture planning helpers |
 | `__init__.py` | Empty package marker |
 
@@ -135,7 +136,7 @@ storage routing.
 
 - `followed_by` must stay correct-or-loud for unsupported predicate shapes.
 - Halt and nonfinite directives must return partials only through the explicit StopDirective policy.
-- Validation for backward lives in `validation/backward.py`.
+- Validation for backward lives in `validation/_backward.py`.
 
 ## Known Risks
 

@@ -11,10 +11,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._tensor_label import get_tensor_label, set_tensor_label
 from torchlens._utils.arg_handling import copy_arg_tree
 from torchlens._utils.tensor_utils import _clone_tensor_payload, copy_tensor_payload
 from torchlens.backends.torch._ops_shared_fields import _get_parent_output_version_snapshot
-from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 
 
 class PartialConvRelu(nn.Module):
@@ -307,7 +307,7 @@ def test_nested_container_inplace_arg_snapshot_preserves_pre_call_value() -> Non
     )
 
     foreach = log["foreachadd_1_2"]
-    assert torch.equal(foreach.saved_args[0][0], torch.full((2,), 2.0))
+    assert torch.equal(foreach.call.saved_args[0][0], torch.full((2,), 2.0))
     assert torch.equal(foreach.out, torch.full((2,), 5.0))
 
 

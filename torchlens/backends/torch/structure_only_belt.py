@@ -52,12 +52,13 @@ from typing import Any, Final
 import torch
 
 from ... import _state
+from ..._capture.structure_only import ValueDependentBranchError
 from ..._utils._exception_notes import defer_failure_note
+from ..._utils._tensor_label import DescriptorCompatProperty, get_tensor_label
 from ..._utils._torch_symbols import torch_attr
-from ...errors._base import TorchLensError
+from ...errors._base import TorchLensError, transparent_contextmanager
 from ._completeness_cross_thread import _internal_read_active
 from ._consumer_kind import _classify_consumer_kind
-from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
     HOST_VALUE_ESCAPE_METHODS,
@@ -169,8 +170,6 @@ def _raise_teaching_refusal(
     line: int,
 ) -> None:
     """Raise the sec-2.3 typed teaching refusal for one user-frame escape."""
-
-    from ..._capture.structure_only import ValueDependentBranchError
 
     consumer_kind = _classify_consumer_kind(filename, line)
     substrate = _tensor_substrate(tensor)
@@ -330,7 +329,7 @@ def _install_property_belt(
         property_restores[name] = (shadowed, descriptor)
 
 
-@contextmanager
+@transparent_contextmanager
 def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     """LAYER 1: install the escalated escape belt for one capture.
 

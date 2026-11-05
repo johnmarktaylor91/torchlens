@@ -14,19 +14,21 @@ from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._entry_refusals import refuse_if_foreign_workspace
 from ..._ir import BufferWriteEvent
-from ..._utils._torch_compat import tensor_version_or_none
-from ..._utils.tensor_utils import safe_copy
-from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
-from ._identity_cache import IdentityCache, identity_cached
-from ._state_bytes import _whole_storage_uint8
-from ._storage_overlap import _ranges_overlap, _storage_range
-from ._tl import (
+from ..._utils._tensor_label import (
     clear_tensor_label,
     get_buffer_address,
     get_module_meta,
     get_tensor_label,
     set_buffer_address,
 )
+from ..._utils._torch_compat import tensor_version_or_none
+from ..._utils._torch_symbols import tensor_read
+from ..._utils.tensor_utils import safe_copy
+from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
+from ._held_late_index import late_index_model_owned_tensor
+from ._identity_cache import IdentityCache, identity_cached
+from ._state_bytes import _whole_storage_uint8
+from ._storage_overlap import _ranges_overlap, _storage_range
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -1437,7 +1439,7 @@ def storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
 
     try:
         with _state.pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             if tensor.is_meta:
                 from ..._capture._weightsfree_admission import meta_storage_key
 
@@ -1687,10 +1689,7 @@ def _witness_marker_state() -> Any:
     return _WITNESS_MARKER_STATE
 
 
-def _resolve_buffer_address(
-    tracker: BufferWriteTracker,
-    tensor: torch.Tensor,
-) -> str | None:
+def _resolve_buffer_address(tracker: BufferWriteTracker, tensor: torch.Tensor) -> str | None:
     """Resolve a tensor/view/data tensor to a registered-buffer address."""
 
     direct = get_buffer_address(tensor)
@@ -1734,13 +1733,11 @@ def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:
 def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> str | None:
     """Resolve a wrapped-call tensor arg to a buffer address, late-indexing lazies.
 
-    The first-encounter registration ladder used by the wrapper hot path
-    (hoisted out of ``wrappers.py``): the
-    session-validated stamp first (never trust a raw static stamp),
-    the storage-anchored tracker resolution second, and the lazy-buffer
-    late-index third (a no-op unless the pre-forward scan recorded pending
-    lazy buffers). Pending (still storage-less) tensors resolve to ``None``
-    without any geometry read.
+    The first-encounter registration ladder of the wrapper hot path: the
+    session-validated stamp first (r81 -- never trust a raw static stamp), the
+    storage-anchored tracker resolution second, the F20 lazy-buffer late-index
+    third (a no-op unless pending lazy buffers were recorded), and last an
+    unstamped pre-forward model-owned tensor (``_held_late_index``), stamped here.
 
     Parameters
     ----------
@@ -1756,15 +1753,15 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     """
 
     if _is_uninitialized_param(tensor):
-        # A pending lazy buffer can reach a wrapped call during torch's OWN
-        # lazy pre-hook (the ``.data`` device read inside
-        # ``UninitializedBuffer.materialize``); it has no storage to read.
+        # A pending lazy buffer can reach a wrapped call during torch's OWN lazy pre-hook
+        # (the ``.data`` read inside ``UninitializedBuffer.materialize``): no storage.
         return None
     address = session_validated_buffer_address(trace, tensor)
     if address is None:
         address = resolve_registered_buffer_address(trace, tensor)
-    if address is None:
-        tracker = peek_buffer_write_tracker(trace)
-        if tracker is not None:
-            address = tracker.index_materialized_buffer(tensor)
+    tracker = peek_buffer_write_tracker(trace) if address is None else None
+    if tracker is not None:
+        address = tracker.index_materialized_buffer(tensor)
+    if address is None and (address := late_index_model_owned_tensor(trace, tensor)) is not None:
+        register_session_buffer_stamp(trace, tensor, address)
     return address

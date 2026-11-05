@@ -27,8 +27,9 @@ from .._ir.container_registry import (
 from ._container_labels import (
     _display_key,
     _leaf_reference,
-    _path_component_text,
+    _opaque_member_text,
     _same_container_spec,
+    _unrebuildable_output_refusal,
 )
 
 if TYPE_CHECKING:
@@ -510,7 +511,7 @@ def input_containers_from_op(op: Op) -> tuple[Container, ...]:
     trace = op._source_trace_or_none()
     if trace is None or not hasattr(trace, "_containers"):
         return ()
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = getattr(op.call, "call_id", None)
     if func_call_id is None:
         return ()
     ordinals = _input_registry_index(trace).get(func_call_id, ())
@@ -869,54 +870,27 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
         if opaque_member is None:
             opaque_member = _opaque_member_text(container.spec)
     if len(output_labels) == 1:
-        return trace.ops[output_labels[0]].out
-    problem = "No reconstructable final-output container was captured"
-    remedy = "trace with capture_container_structure=True to persist container structure"
-    if opaque_member is not None:
-        # The structure is recorded and holds an opaque node: the capture option cannot help.
-        problem = (
-            f"The final-output container cannot be rebuilt: {opaque_member} is or holds "
-            "an object TorchLens cannot represent (container kind 'opaque', for example a "
-            "Hugging Face DynamicCache)"
-        )
-        remedy = (
-            "read the output leaves one by one through trace.output_layers, register "
-            "the type with tl.types.register_container, or have the model return only "
-            "supported containers (for a Hugging Face model, use_cache=False leaves "
-            "the cache out)"
-        )
-    raise PayloadUnavailableError(problem, code="container_not_reconstructable", remedy=remedy)
+        op = trace.ops[output_labels[0]]
+        value = op.out
+        # An eager load reads an unsaved op's out as None (the live trace already
+        # refuses that read): refuse it here too rather than answer a silent None.
+        if value is not None or getattr(op, "has_saved_activation", False):
+            return value
+        problem, code, remedy = _unsaved_output_refusal(op)
+    else:
+        problem, code, remedy = _unrebuildable_output_refusal(opaque_member)
+    raise PayloadUnavailableError(problem, code=code, remedy=remedy)
 
 
-def _opaque_member_text(spec: ContainerSpec | None) -> str | None:
-    """Name the first opaque node of a final-output spec, or ``None`` when there is none.
+def _unsaved_output_refusal(op: Any) -> tuple[str, str, str]:
+    """Return the ``activation_not_saved`` refusal for a lone output op that was never saved."""
 
-    Parameters
-    ----------
-    spec:
-        Final-output container spec, ``None`` for a path-only view.
-
-    Returns
-    -------
-    str | None
-        ``"the model output"`` for an opaque root, ``"its member 'a.b'"`` for a
-        nested opaque node, ``None`` when no node is opaque.
-    """
-
-    if spec is None:
-        return None
-    pending: list[tuple[tuple[str, ...], ContainerSpec]] = [((), spec)]
-    while pending:
-        path, node = pending.pop(0)
-        if node.kind == "opaque":
-            if not path:
-                return "the model output"
-            return f"its member {'.'.join(path)!r}"
-        pending.extend(
-            ((*path, _path_component_text(component)), child)
-            for component, child in node.child_specs
-        )
-    return None
+    label = getattr(op, "layer_label", None) or getattr(op, "label", "the output op")
+    return (
+        f"op {label} was not saved; no saved payload is available",
+        "activation_not_saved",
+        "re-run with save=... covering the output op to retain the model output",
+    )
 
 
 def reconstruct_container(
@@ -988,7 +962,7 @@ def _root_identity(op: Op) -> tuple[ContainerRootKind, tuple[str, Any]]:
 
     if _op_is_final_output(op):
         return "final_output", ("final_output", 0)
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = getattr(op.call, "call_id", None)
     if func_call_id is not None:
         return "call", ("call", func_call_id)
     return "path", ("path", tuple(getattr(op, "container_path", ()) or ()))
@@ -1028,7 +1002,7 @@ def _sibling_leaves(
             if _same_container_spec(getattr(sibling, "container_spec", None), spec):
                 leaves.append(sibling)
             continue
-        if getattr(sibling, "func_call_id", None) == getattr(op, "func_call_id", None) and (
+        if getattr(sibling.call, "call_id", None) == getattr(op.call, "call_id", None) and (
             spec is None or _same_container_spec(getattr(sibling, "container_spec", None), spec)
         ):
             leaves.append(sibling)
@@ -1082,7 +1056,7 @@ def _value_for_op(op: Op, source: str) -> Any:
     if source == "out":
         return getattr(op, "out", None)
     if source == "transformed":
-        return getattr(op, "transformed_out", None)
+        return getattr(op.payload, "transformed_out", None)
     raise InvalidArgumentError(
         f"Unsupported container value source {source!r}",
         code="container_value_source_invalid",

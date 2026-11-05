@@ -46,6 +46,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar, cast
 
 from .._errors import FacadeTeachingError, MissingDependencyError
+from .._private_submodules import refuse_private_submodule
 from ._display_errors import lookup_message
 
 __all__ = [
@@ -280,12 +281,12 @@ def resolve_facade_attr(
         the message and ``fields``) per the module contract.
     """
 
-    # Step 1: underscore short-circuit -- no table lookup, no dependency
-    # check. Dunder probes from IPython, copyreg, and inspect must fail fast.
+    # Step 1: underscore names (dunder probes) fail fast: no table lookup, no dependency check.
     if name.startswith("_"):
         raise _plain_missing(owner, name)
 
-    # Step 2: redirect table -> typed teaching AttributeError, no dep check.
+    # Step 2: redirect tables (3.0-private submodules first) -> typed teaching error, no dep check.
+    refuse_private_submodule(owner, name)
     if redirects and name in redirects:
         raise FacadeTeachingError(
             f"{owner}.{name} is not an active name",

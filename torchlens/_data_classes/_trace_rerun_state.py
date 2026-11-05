@@ -1,4 +1,4 @@
-"""Trace rerun-state family: the saved inputs and options a rerun replays."""
+"""Trace rerun-state family: the saved inputs and options a rerun replays, and ``append``."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes
+from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils.fail_open import fail_open
+from . import _doors
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
@@ -34,6 +36,7 @@ def mark_stateful_run_warning_emitted(trace: Trace) -> None:
 
 
 __all__ = [
+    "TraceAppendMixin",
     "mark_stateful_run_warning_emitted",
     "stateful_run_warning_was_emitted",
     "replace_state_from",
@@ -253,7 +256,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
         "kwargs_template",
         "_edge_uses",
     ):
-        if hasattr(new_layer, field_name):
+        if hasattr(new_layer, op_attr(field_name)):
             if field_name not in copies:
                 copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
             value = copies[field_name]
@@ -295,7 +298,7 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
                     copied_value,
                     preserved_user_annotations,
                 )
-            setattr(layer_log, field_name, copied_value)
+            setattr(layer_log, layer_attr(field_name), copied_value)
         layer_log.source_trace = trace
 
 
@@ -435,7 +438,7 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
             copy_rerun_value(trace, key): copy_rerun_value(trace, item)
             for key, item in value.items()
         }
-    from ..intervention.types import REPLAY_TEMPLATE_TYPES
+    from ..intervention._types import REPLAY_TEMPLATE_TYPES
 
     if type(value) in REPLAY_TEMPLATE_TYPES:
         # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
@@ -464,7 +467,7 @@ def append_state_from(target: Trace, trace: Trace) -> None:
     # By position, not raw label: a reused module repeats its raw label across passes.
     for layer, new_layer in zip(target._layer_list, trace._layer_list, strict=True):
         if not (
-            getattr(layer, "is_buffer", False)
+            record_member(layer, "is_buffer", False)
             or is_append_buffer_side_effect_layer(target, layer, old_by_label)
         ):
             layer._append_tensor_from(new_layer, "out")
@@ -510,7 +513,7 @@ def is_append_buffer_side_effect_layer(
         if child_layer is None:
             return False
         if not (
-            getattr(child_layer, "is_buffer", False)
+            record_member(child_layer, "is_buffer", False)
             and getattr(child_layer, "buffer_write_kind", None) is not None
         ):
             return False
@@ -550,9 +553,10 @@ def copy_append_last_chunk_fields(trace: Trace, layer: Any, new_layer: Any) -> N
         "edits",
         "annotations",
     ):
-        if hasattr(new_layer, field_name):
+        attr = op_attr(field_name)
+        if hasattr(new_layer, attr):
             layer._internal_set(
-                field_name, copy_append_metadata_value(trace, getattr(new_layer, field_name))
+                field_name, copy_append_metadata_value(trace, getattr(new_layer, attr))
             )
 
 
@@ -618,7 +622,7 @@ def refresh_appended_tensor_metadata(trace: Trace, layer: Any) -> None:
             "transformed_gradient_memory",
         ),
     ):
-        value = getattr(layer, tensor_field, None)
+        value = record_member(layer, tensor_field, None)
         if isinstance(value, torch.Tensor):
             from .._utils.tensor_utils import get_memory_amount
 
@@ -648,3 +652,56 @@ def discharge_against(trace: Trace, real_trace: Trace) -> Any:
     from .._capture.structure_only import discharge_against as _discharge
 
     return _discharge(trace, real_trace)
+
+
+class TraceAppendMixin:
+    """Add a compatible batch to a live Trace in place (``trace.append``)."""
+
+    def append(self: Any, inputs: Any, *, model: torch.nn.Module | None = None) -> None:
+        """Run ``inputs`` through the captured model and stack the batch onto this Trace.
+
+        The one in-place mutator of the run family. The new batch is captured
+        with this Trace's staged intervention spec, checked against the
+        captured graph, and stacked onto every saved tensor along batch
+        dimension 0. Op counts, pass indexes and labels are unchanged (the
+        graph must be identical); ``provenance.is_appended`` becomes ``True``,
+        ``last_run`` describes the append (``engine="append"``) and
+        ``state_history`` gains an ``"append"`` record. The stored input
+        transform applies as it does for ``run``.
+
+        Parameters
+        ----------
+        inputs:
+            Forward input tree for the new batch, in every form ``run`` takes.
+        model:
+            The captured model. When omitted, the live model this Trace holds
+            (weakly, as for ``run``) is reused.
+
+        Raises
+        ------
+        AppendMismatchError
+            When the new batch's graph, site labels or saved shapes do not
+            match this Trace.
+        AppendStreamingUnsupportedError
+            When this Trace is still streaming activations to disk.
+        RunCapabilityUnavailableError
+            For a loaded Trace when ``model`` is omitted (pass the model).
+        RecordBindingError
+            ``run_source_model_collected`` when ``model`` is omitted and the
+            captured model was garbage-collected.
+        KeywordConflictError
+            ``run_legacy_arguments_conflict`` when ``model`` is not an ``nn.Module``.
+
+        Examples
+        --------
+        >>> import torch
+        >>> import torchlens as tl
+        >>> model = torch.nn.Linear(3, 2)
+        >>> opts = tl.options.CaptureOptions(replayable=True)
+        >>> trace = tl.trace(model, torch.randn(2, 3), capture=opts)
+        >>> trace.append(torch.randn(1, 3), model=model)
+        >>> trace.provenance.is_appended
+        True
+        """
+
+        _doors.intervention()._trace_run.append(self, inputs, model=model)

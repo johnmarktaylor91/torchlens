@@ -134,6 +134,18 @@ def test_render_raw_output_batch_topk_branch() -> None:
     assert "batch_topk" in attrs["tooltip"]
 
 
+def test_render_raw_output_single_item_has_no_item_heading() -> None:
+    """A one-image batch lists its top categories without an "item 0" heading."""
+
+    logits = torch.tensor([[0.0, 5.0, 2.0, 1.0]])
+    trace = tl.trace(_Classifier(logits, _labels(4)).eval(), torch.ones(1, 3))
+    attrs = _render_raw_output(trace._decoded_output)
+
+    assert attrs is not None
+    assert "item 0" not in attrs["label"]
+    assert "class-1 93%" in attrs["label"]
+
+
 def test_default_to_pandas_has_no_decoded_output_column_and_gated_column_is_output_only() -> None:
     """Decoded output summary does not leak into default per-op pandas export."""
 
@@ -153,7 +165,7 @@ def test_provenance_surfaces_output_postprocessing_and_output_table() -> None:
     """provenance() carries output decode provenance; output_table() the labels."""
 
     trace = _trace_batch_classifier()
-    summary = trace.provenance._summary()
+    summary = trace.provenance.summary()
 
     assert "Output postprocessing:" in summary
     assert "style=classification" in summary
@@ -169,7 +181,7 @@ def test_summary_surfaces_undetected_decode_hint() -> None:
     assert trace._decoded_output is None
     assert (
         "undetected; call trace.decode_output(style=..., head=...) to decode."
-        in trace.provenance._summary()
+        in trace.provenance.summary()
     )
 
 

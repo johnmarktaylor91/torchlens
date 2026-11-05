@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, render_line
 
@@ -40,7 +41,7 @@ def _op_row(op: Any, ordinal: int, depth: int) -> NarrationEvent:
         pass_index=int(getattr(op, "pass_number", 1) or 1),
         layer_type=record_type(op, None),
         func_name=getattr(op, "func_name", None),
-        address=getattr(op, "address", None) or None,
+        address=record_member(op, "address", None) or None,
         module_depth=depth,
         shape=tuple(shape) if shape is not None else None,
         dtype=compact_dtype(getattr(op, "dtype_ref", None) or getattr(op, "dtype", None)),
@@ -52,7 +53,7 @@ def _op_row(op: Any, ordinal: int, depth: int) -> NarrationEvent:
 def _module_depth(op: Any) -> int:
     """Module nesting depth for indentation, tolerant of raw entries."""
 
-    stack = getattr(op, "module_call_stack", None) or getattr(op, "modules", None) or ()
+    stack = record_member(op, "module_call_stack", None) or getattr(op, "modules", None) or ()
     try:
         return len(stack)
     except TypeError:
@@ -195,7 +196,7 @@ def narrate_recording(
                 step_index=getattr(ctx, "step_index", None),
                 layer_type=getattr(ctx, "layer_type", None),
                 func_name=getattr(ctx, "func_name", None),
-                address=getattr(ctx, "address", None),
+                address=record_member(ctx, "address", None),
                 module_depth=len(getattr(ctx, "module_stack", ()) or ()),
                 shape=getattr(ctx, "shape", None),
                 dtype=compact_dtype(getattr(ctx, "dtype", None)),

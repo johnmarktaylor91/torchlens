@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._errors import InvalidArgumentError
+from .._postprocess._site_join import SiteProfile, join_site_profiles, site_profile
+from .node_universe import build_node_universe
 from .request import RenderContext
 
 if TYPE_CHECKING:
@@ -395,8 +397,6 @@ def collapse_plan_for_source_graph(
         Renderer-faithful structural plan.
     """
 
-    from .node_universe import build_node_universe
-
     universe = build_node_universe(source_graph, collapse_fn, repeat_folds)
     return collapse_plan_from_universe(universe, node_pool=node_pool)
 
@@ -494,8 +494,7 @@ def export_collapse_plan(
     JSON file the caller owns, never the tlspec.
     """
 
-    from .._postprocess._site_join import site_profile
-    from ._trace_collapse import collapse_plan as _collapse_plan
+    from ._trace_collapse import collapse_plan as _collapse_plan  # deferred: cycle _visualization
 
     plan = _collapse_plan(trace, mode)
     profile = site_profile(trace)
@@ -538,8 +537,6 @@ def export_collapse_plan(
 
 def _profile_from_payload(payload: dict[str, Any]) -> Any:
     """Rebuild the persisted source SiteProfile, fail-closed."""
-
-    from .._postprocess._site_join import SiteProfile
 
     try:
         profile = payload["profile"]
@@ -589,7 +586,6 @@ def reapply_collapse_plan(
             code="collapse_plan_payload_invalid",
             remedy="pass the dict returned by export_collapse_plan(trace)",
         )
-    from .._postprocess._site_join import join_site_profiles, site_profile
 
     source_profile = _profile_from_payload(payload)
     target_profile = site_profile(trace)

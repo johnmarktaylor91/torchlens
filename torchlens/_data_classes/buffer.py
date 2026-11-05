@@ -10,6 +10,7 @@ from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
 from .._utils._display_errors import short_name_message
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._lookup_kinds import buffer_for_key, converted
 from ._runtime_handles import runtime_handle_from_trace
@@ -268,7 +269,7 @@ class Buffer:
     def activation_memory(self) -> Any:
         """Return final observed buffer activation memory."""
 
-        return None if not self.versions else self.versions[-1].activation_memory
+        return None if not self.versions else self.versions[-1].cost.activation_memory
 
     @property
     def has_saved_activation(self) -> bool:
@@ -286,13 +287,13 @@ class Buffer:
     def grad_shape(self) -> Any:
         """Return final observed gradient shape."""
 
-        return None if not self.versions else self.versions[-1].grad_shape
+        return None if not self.versions else self.versions[-1].autograd.grad_shape
 
     @property
     def grad_dtype(self) -> Any:
         """Return final observed gradient dtype."""
 
-        return None if not self.versions else self.versions[-1].grad_dtype
+        return None if not self.versions else self.versions[-1].autograd.grad_dtype
 
     @property
     def grad_memory(self) -> Any:
@@ -305,8 +306,8 @@ class Buffer:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):
-            if version.buffer_source is not None:
-                return cast(str, version.buffer_source)
+            if version.graph.buffer_source is not None:
+                return cast(str, version.graph.buffer_source)
         return None
 
     @property
@@ -366,7 +367,7 @@ class Buffer:
 
         return fail_open(
             lambda: buffer_repr_line(self),
-            lambda _error: f"<Buffer {getattr(self, 'address', '<unbound>')}: repr degraded>",
+            lambda _error: f"<Buffer {record_member(self, 'address', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:

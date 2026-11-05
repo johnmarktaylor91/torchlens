@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._errors import refuse
 from ._mpl import (
     ATTENTION_CMAP,
@@ -80,9 +81,9 @@ def _panel_mesh(ax: Any, view: AttentionView, head_row: int, vmin: float, vmax: 
     """Draw one head's pattern as a rect mesh with masked-cell fill."""
 
     matplotlib = require_matplotlib()
-    data = view.pattern[head_row].detach().to("cpu", dtype=torch.float32).numpy()
+    data = tensor_to_numpy(view.pattern[head_row].detach().to("cpu", dtype=torch.float32))
     if view.mask is not None:
-        data = np.ma.masked_array(data, mask=view.mask.mask.cpu().numpy())
+        data = np.ma.masked_array(data, mask=tensor_to_numpy(view.mask.mask))
     cmap = matplotlib.colormaps[ATTENTION_CMAP].copy()
     cmap.set_bad(MASKED_CELL_COLOR)
     mesh = ax.pcolormesh(data, cmap=cmap, vmin=vmin, vmax=vmax, rasterized=False)

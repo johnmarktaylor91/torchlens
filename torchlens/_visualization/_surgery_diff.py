@@ -34,9 +34,10 @@ from typing import TYPE_CHECKING, Any
 import graphviz
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
 from ._render_utils import html_escape, render_dot_to_file, strip_known_extension
-from .surgery_visuals import SurgeryFacts, surgery_facts
+from .surgery_visuals import CREDIT_ROWS, SurgeryFacts, splice_box_lines, surgery_facts
 from .themes import resolve_theme, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
@@ -174,8 +175,6 @@ def surgery_census_text_for_diff(diff: SurgeryDiff) -> str:
 def _subject_census_text(diff: SurgeryDiff) -> str:
     """Rebuild the subject-side census block from the derived facts."""
 
-    from .surgery_visuals import CREDIT_ROWS, splice_box_lines
-
     lines = ["subject surgery census:"]
     lines.extend(splice_box_lines(diff.subject_facts))
     lines.extend(CREDIT_ROWS)
@@ -191,7 +190,7 @@ def _op_rows(trace: Any) -> list[tuple[str, Any]]:
 def _site_key_of(op: Any) -> str | None:
     """The op's structural site key, if the capture minted one."""
 
-    raw_key = getattr(op, "site_key", None)
+    raw_key = record_member(op, "site_key", None)
     return str(raw_key) if raw_key else None
 
 

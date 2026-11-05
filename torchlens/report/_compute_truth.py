@@ -31,6 +31,7 @@ from .._record_type import record_type
 from .._utils._display_card import render_card
 from .._utils._display_constructor import clipped, display_guard
 from .._utils._display_numbers import plural
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -78,9 +79,9 @@ def classify_row(op: object) -> str:
 
     if getattr(op, "is_input", False) or getattr(op, "is_output", False):
         return "not_applicable"
-    if getattr(op, "is_buffer", False):
+    if record_member(op, "is_buffer", False):
         return "not_applicable"
-    flops = getattr(op, "flops_forward", None)
+    flops = record_member(op, "flops_forward", None)
     if flops is None:
         return "unknown"
     func_name = getattr(op, "func_name", None)
@@ -107,8 +108,8 @@ def aggregate_forward_compute(trace: Trace) -> ComputeTotals:
             continue
         if row_class == "not_applicable":
             continue
-        flops_total += int(op.flops_forward or 0)
-        macs = op.macs_forward
+        flops_total += int(op.cost.flops_forward or 0)
+        macs = op.cost.macs_forward
         if macs is not None:
             macs_total += int(macs)
         elif row_class == "known":
@@ -331,15 +332,15 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     _join = _joined_result_or_none(trace)
     for index, op in enumerate(trace._layer_list):
         row_class = classify_row(op)
-        if getattr(op, "is_buffer", False):
+        if record_member(op, "is_buffer", False):
             kind = "buffer"
         elif getattr(op, "is_input", False) or getattr(op, "is_output", False):
             kind = "boundary"
         else:
             kind = "op"
         label = str(getattr(op, "layer_label", index))
-        flops = getattr(op, "flops_forward", None) if kind == "op" else None
-        record = getattr(op, "compute_record", None) if kind == "op" else None
+        flops = record_member(op, "flops_forward", None) if kind == "op" else None
+        record = record_member(op, "compute_record", None) if kind == "op" else None
         fma_macs = None if record is None else getattr(record, "fma_macs", None)
         other_flops = None if record is None else getattr(record, "other_flops", None)
         if kind != "op":
@@ -374,7 +375,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
             ComputeRow(
                 row_id=f"op:{label}",
                 label=label,
-                site_key=getattr(op, "site_key", None),
+                site_key=record_member(op, "site_key", None),
                 kind=kind,
                 phase="forward",
                 func_name=getattr(op, "func_name", None),
@@ -412,6 +413,7 @@ def _joined_result_or_none(trace: Trace) -> Any | None:
     """Return the trace's session-time join result iff it reached joined."""
 
     try:
+        # deferred: optional dependency
         from .._observability._native_profile import join_result_for
     except ImportError:  # pragma: no cover - torn install without the substrate
         return None
@@ -487,7 +489,7 @@ def forward_flops_total(trace: Trace, *, fma: int = 2) -> Flops:
     for op in trace._layer_list:
         if classify_row(op) in ("not_applicable", "unknown"):
             continue
-        record = op.compute_record
+        record = op.cost.compute_record
         converted = None if record is None else record.flops(fma=1)
         if converted is None:
             unconvertible.append(str(op.layer_label))

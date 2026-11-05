@@ -146,7 +146,7 @@ class Cell:
 
         leaves = [_detached(leaf) for leaf in flatten_leaves(trace.reconstruct_output())]
         if self.changes("payloads") and any(leaf is None for leaf in leaves):
-            leaves = [_detached(op.materialize_out()) for op in trace.output_ops]
+            leaves = [_detached(op.payload.materialize_out()) for op in trace.output_ops]
         return leaves
 
     def expect_same_leaves(self, want: Sequence[Any], got: Sequence[Any], what: str) -> None:
@@ -452,7 +452,7 @@ def _forward_match(cell: Cell) -> None:
     if cell.changes("forward_match"):
         before = cell.output_leaves(trace)
         torch.manual_seed(SEED)
-        trace.run(cell.model, cell.fresh_inputs())
+        trace = trace.run(cell.model, cell.fresh_inputs())
         diff = first_leaf_difference(before, cell.output_leaves(trace))
         if diff is not None and first_leaf_difference(cell.plain_output, _plain_forward(cell)):
             # A forward that rewrites its own state (a counter buffer, an

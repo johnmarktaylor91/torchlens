@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
-from torchlens.intervention.audit import (
+from torchlens.intervention._audit import (
     append_event_audit_row,
     event_audit_rows,
     record_intervention_event,

@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 109, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 109: "
+    assert len(rows) == 111, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 111: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -79,7 +79,13 @@ def test_root_budget_is_frozen() -> None:
         "the options restructure (C2, glossary row for tl.quickstart.render) adds "
         "tl.draw, the one-call picture (108), and late.9 adds "
         "tl.all_sites, the named universal selector (L4 core, beside "
-        "tl.label_matches; in __all__), so the root holds 109 rows. "
+        "tl.label_matches; in __all__), so the root held 109 rows; the "
+        "facade gains the lazy namespaces tl.postprocessing and "
+        "tl.preprocessing (the detector registries, documented in the "
+        "glossary and docs but unreachable from the facade without a "
+        "submodule import; docs review 4 Nov 2026; not in __all__, same "
+        "class as tl.io), "
+        "so the root holds 111 rows. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )

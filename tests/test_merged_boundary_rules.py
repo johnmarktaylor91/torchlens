@@ -18,9 +18,9 @@ from typing import Any
 
 import pytest
 
+from torchlens._distributed._ledger import membership_digest_for_ranks
 from torchlens._merged._errors import MergeInputError
 from torchlens._merged._evidence import _validate_boundary, extract_rank_evidence
-from torchlens.distributed._ledger import membership_digest_for_ranks
 
 INDEX = 3
 SOURCE = "live[0]"

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ..._capture._arg_snapshot import snapshot_mutable_arg
 from ..._capture.projections import (
     get_active_recording_state,
 )
@@ -30,7 +31,7 @@ from ..._ir.semantics import BackendSemantics
 from ..._utils.tensor_utils import (
     safe_copy,
 )
-from ...recording.types import (
+from ...recording._types import (
     ActivationRecord,
     CaptureSpec,
 )
@@ -320,7 +321,9 @@ def _predicate_function_ref(
         num_kwargs=len(kwargs),
         non_tensor_pos_args=(),
         non_tensor_kwargs=tuple(
-            (key, value) for key, value in kwargs.items() if not isinstance(value, torch.Tensor)
+            (key, snapshot_mutable_arg(value))
+            for key, value in kwargs.items()
+            if not isinstance(value, torch.Tensor)
         ),
         func_non_tensor_args=(),
         is_inplace=False,

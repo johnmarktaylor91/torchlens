@@ -22,6 +22,9 @@ classes (`Trace`, `Op`, ...) present rows from here as facades. The architecture
   results as `StepAuditResult`).
 - `mark_op_row_released()`, `row_clone_scope()`, and `cow_copy_value()` support removal scrub
   and fork copying.
+- `eviction_walk.py`: the payload eviction walk `OpRowStore._evict_tensor_payloads` runs when
+  the last owning core dies (tensors in builtin containers become `None`; one `_EvictTypes`
+  set per sweep learns the types it may skip without a call).
 
 ## Relations and views
 - `relations.py`: `EdgeTable` is the canonical dataflow edge-occurrence table (`Edge` rows,

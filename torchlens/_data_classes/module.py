@@ -48,6 +48,7 @@ from .._io import (
 )
 from .._quantities import Bytes, Duration, Flops, Macs
 from .._utils._display_errors import module_output_message
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._call_tree import (
     _bound_call_trace,
@@ -59,6 +60,7 @@ from ._call_tree import (
 )
 from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
+from ._module_call_rows import _module_call_log_to_row
 from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
 from ._moe_views import _ModuleRouting
 from ._runtime_handles import runtime_handle_from_trace
@@ -254,29 +256,6 @@ class HookInfo:
     name: str = ""
     qualname: str = ""
     source_location: "FuncCallLocation | None" = None
-
-
-def _module_call_log_to_row(module_call_log: "ModuleCall") -> dict[str, Any]:
-    """Convert a ModuleCall into one DataFrame row.
-
-    Parameters
-    ----------
-    module_call_log:
-        Module-pass metadata entry to export.
-
-    Returns
-    -------
-    Dict[str, Any]
-        Mapping from canonical field name to exported value.
-    """
-    row = {field: getattr(module_call_log, field) for field in MODULE_PASS_LOG_FIELD_ORDER}
-    row["output_ops"] = list(module_call_log.output_ops)
-    row["output_structure"] = (
-        repr(module_call_log.output_structure)
-        if module_call_log.output_structure is not None
-        else None
-    )
-    return row
 
 
 # Typed container defaults for every non-Optional container field ModuleCall
@@ -656,7 +635,7 @@ class ModuleCall:
             return Duration(0)
         return Duration(
             sum(
-                getattr(op, "func_duration", 0.0) or 0.0
+                getattr(op.cost, "duration", 0.0) or 0.0
                 for label in self.ops
                 for op in _resolve_call_ops(trace, label)
             )
@@ -711,7 +690,7 @@ class ModuleCall:
 
         return Bytes(
             sum(
-                int(getattr(op, field_name, 0) or 0)
+                int(record_member(op, field_name, 0) or 0)
                 for op in self._ops_by_output_role(output=output)
             )
         )
@@ -749,7 +728,7 @@ class ModuleCall:
             return Bytes(0)
         return Bytes(
             sum(
-                int(getattr(op, "autograd_memory", 0) or 0)
+                int(getattr(op.cost, "autograd_memory", 0) or 0)
                 for label in self.ops
                 for op in _resolve_call_ops(trace, label)
             )

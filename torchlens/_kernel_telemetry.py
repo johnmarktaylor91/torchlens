@@ -1,11 +1,11 @@
 """Detachable CUDA kernel telemetry for the gated ATen execution profile.
 
 This module is intentionally not imported by the TorchLens package or capture
-core. ``Op.gpu_kernels`` and ``AtenOp.gpu_kernels`` are declared on their
-classes and resolve this module by name only when read (``_op_gpu_kernels`` and
-``_aten_gpu_kernels`` below), so the documented-unstable views exist whatever
-was imported first, while the private profiling adapter instruments the
-existing ATen observer only for its own scope. Removing this module therefore
+core. The private profiling adapter instruments the existing ATen observer only
+for its own scope and stores its rows in the private kernel annotation that
+artifacts persist. No public read surface exists in this release (``Op`` and
+``AtenOp`` refuse ``gpu_kernels`` typed); ``_aten_gpu_kernels`` and
+``_op_gpu_kernels`` are the private readers. Removing this module therefore
 leaves the ATen profile and every non-telemetry capture path untouched.
 """
 
@@ -122,7 +122,7 @@ def _payload_from_events(
             _relations=tuple((sequence, 0) for sequence in sorted(set(marker_sequences.values()))),
         )
 
-    from ._observability._join import MarkerSpan, _innermost_owner_by_runtime
+    from ._observability._join import MarkerSpan, _innermost_owner_by_runtime  # deferred: cycle
 
     markers = tuple(
         MarkerSpan(
@@ -457,8 +457,8 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
         The factory's Trace with a gated telemetry annotation.
     """
 
-    from ._observability._kineto import extract_events
-    from ._observability._session import session
+    from ._observability._kineto import extract_events  # deferred: cycle _observability
+    from ._observability._session import session  # deferred: cycle _observability
 
     cuda_available = bool(torch.cuda.is_available())
     if not cuda_available:

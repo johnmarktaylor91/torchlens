@@ -34,12 +34,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._data_classes.param import Param, ParamAccessor
 from ..._quantities import Bytes
-from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
-from ..._utils.hashing import make_random_barcode
-from ..._utils.tensor_leaves import iter_tensors
-from ..._utils.tensor_utils import get_memory_amount, safe_copy
-from ._completeness_origins import internal_scalar_read
-from ._tl import (
+from ..._utils._tensor_label import (
     get_param_meta,
     get_tensor_label,
     mutated_parameter_label,
@@ -47,7 +42,12 @@ from ._tl import (
     set_tensor_label,
     storage_alias_index_key,
 )
-from ._user_grad_fn import stamp_user_grad_fn
+from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.hashing import make_random_barcode
+from ..._utils.tensor_leaves import iter_tensors
+from ..._utils.tensor_utils import get_memory_amount, safe_copy
+from ._completeness_origins import internal_scalar_read
+from ._user_grad_fn import rebind_rebased_view_producers, stamp_user_grad_fn
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 
@@ -153,7 +153,7 @@ def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
     return not lazy_at_prep
 
 
-def same_object_logging_copy(out_orig: Any) -> Any:
+def same_object_logging_copy(out_orig: Any, trace: Any = None, was_inplace: bool = False) -> Any:
     """Return the distinct tensor a same-object return is logged against.
 
     Logging against the live receiver would clobber its label with the op's. The
@@ -165,11 +165,33 @@ def same_object_logging_copy(out_orig: Any) -> Any:
     phantom handle. The ``grad_fn`` read is marked as TorchLens bookkeeping: for
     a same-object in-place return the output IS the user's receiver (a registered
     buffer for BN's ``num_batches_tracked.add_(1)``), and an unmarked read would
-    record a phantom declared-state fact.
+    record a phantom declared-state fact. An in-place write through a view first
+    records the base's new ``CopySlices`` as the op's node and moves the ops whose
+    node autograd discarded onto it (``rebind_rebased_view_producers``).
+
+    Parameters
+    ----------
+    out_orig:
+        The live object the op returned.
+    trace:
+        Active capture trace, or ``None`` outside a capture (no rebind).
+    was_inplace:
+        Whether the op wrote its receiver in place (the view-write rebind runs
+        only then).
+
+    Returns
+    -------
+    Any
+        The safe copy, carrying the user op's node stamp when it is a tensor.
     """
 
+    writer_node = None
+    if was_inplace and trace is not None:
+        writer_node = rebind_rebased_view_producers(trace, out_orig)
     with internal_scalar_read():
         live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
+    if writer_node is not None:
+        live_user_grad_fn = writer_node
     logged = safe_copy(out_orig)
     if isinstance(logged, torch.Tensor):
         stamp_user_grad_fn(logged, live_user_grad_fn)
@@ -275,8 +297,6 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from ._completeness_origins import internal_scalar_read
-
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
     try:
@@ -333,7 +353,6 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf

@@ -74,6 +74,12 @@ class RunnableTraceState:
     #: state unknown. Deliberately NOT the poison bit -- the trace's recorded
     #: path facts are not a lie; only live/fast re-execution is refused.
     state_compromised: Mapping[str, Any] | None = None
+    #: Taken once at load, before any session edit: whether the artifact's recorded
+    #: values were intervened (an op replaced or fired, or a fired do() audit row).
+    #: The legacy rerun guard reads this instead of the live trace, so an edit staged
+    #: in this session (a set_only edit on a loaded fork) cannot make a pristine
+    #: artifact look intervened. ``None`` for live traces.
+    loaded_values_intervened: bool | None = None
 
     def pickle_safe_copy(self) -> RunnableTraceState:
         """Return a shallow copy with mapping-proxy bindings made picklable.
@@ -195,3 +201,57 @@ __all__ = [
     "normalize_runnable_trace_state",
     "runnable_trace_state",
 ]
+
+
+# Audit rows that record an edit which changed no recorded value (an armed
+# gradient edit changes no forward value; its settle row says what fired).
+_VALUE_NEUTRAL_AUDIT_STATUSES = frozenset({"no_fire", "error", "armed"})
+
+
+def carries_intervened_values(trace: Any) -> bool:
+    """Return whether persisted evidence says recorded values were intervened.
+
+    Parameters
+    ----------
+    trace:
+        Trace to inspect.
+
+    Returns
+    -------
+    bool
+        True when an op was replaced or fired, or a ``do()`` audit row records
+        a fired edit (attempts that failed or fired nowhere changed nothing).
+    """
+
+    for layer in trace._layer_list or ():
+        if getattr(layer, "is_edited", False) or getattr(layer, "edits", None):
+            return True
+    return any(
+        isinstance(row, dict) and _audit_row_records_fired_edit(row)
+        for row in getattr(trace, "intervention_audit", None) or ()
+    )
+
+
+def _audit_row_records_fired_edit(row: dict[str, Any]) -> bool:
+    """Return whether one persisted audit row records an edit that changed values.
+
+    Parameters
+    ----------
+    row:
+        One ``intervention_audit`` row.
+
+    Returns
+    -------
+    bool
+        EVENT rows carry a status: fired means changed values. Resolve-bearing
+        rows carry none: an ACT row lists the site keys its edit fired on (a
+        ``do()`` that only staged its hooks lists none), and EDGE and PARAM rows
+        exist only after a substitution replayed. An unknown shape fails closed.
+    """
+
+    status = row.get("status")
+    if status is not None:
+        return status not in _VALUE_NEUTRAL_AUDIT_STATUSES
+    if row.get("kind") == "ACT":
+        return bool(row.get("sites"))
+    return True

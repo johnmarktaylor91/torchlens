@@ -18,6 +18,7 @@ from torchlens import trace as trace_fn
 from torchlens._constants import (
     LAYER_PASS_LOG_FIELD_ORDER,
 )
+from torchlens._utils._tensor_label import get_tensor_label, set_tensor_label
 from torchlens._utils.arg_handling import _safe_copy_arg
 from torchlens._utils.tensor_utils import (
     get_memory_amount,
@@ -26,7 +27,6 @@ from torchlens._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
-from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 
 
 class TestFieldOrderSync:
@@ -50,13 +50,14 @@ class TestFieldOrderSync:
     def test_op_log_field_order_covers_init(self):
         """LAYER_PASS_LOG_FIELD_ORDER should cover all self.X assignments in Op.__init__."""
         from torchlens._data_classes.op import Op
+        from torchlens._utils._record_group_table import op_attr
 
         init_attrs = self._init_assigned_attrs(Op)
         # Private fields (prefixed _) are intentionally excluded from some FIELD_ORDERs,
         # but some _ fields ARE in FIELD_ORDER (e.g. _tracing_finished). Check both directions:
         # 1. Every FIELD_ORDER entry should be an init attr or a property
         for field in LAYER_PASS_LOG_FIELD_ORDER:
-            assert field in init_attrs or hasattr(Op, field), (
+            assert field in init_attrs or hasattr(Op, op_attr(field)), (
                 f"{field!r} in LAYER_PASS_LOG_FIELD_ORDER but not in Op"
             )
 
@@ -360,7 +361,7 @@ class TestStorageAliasBucketLayout:
 
         from torch.utils.weak import WeakIdKeyDictionary
 
-        from torchlens.backends.torch import _tl
+        from torchlens._utils import _tensor_label as _tl
 
         session = _tl._LabelSession(token=1)
         t1 = torch.randn(4)

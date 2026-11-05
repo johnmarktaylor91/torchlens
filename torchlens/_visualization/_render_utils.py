@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from ._fonts import graphviz_font_env
 from ._frame_penwidth import (  # noqa: F401  (spellings kept for importers)
     MAX_MODULE_PENWIDTH,
     MIN_MODULE_PENWIDTH,
@@ -198,8 +199,6 @@ def run_bounded_subprocess(
     font (:func:`torchlens._visualization._fonts.graphviz_font_env`).
     """
 
-    from ._fonts import graphviz_font_env
-
     try:
         return _run_bounded_subprocess_shared(
             cmd,
@@ -218,7 +217,7 @@ def run_bounded_subprocess(
         # The single most common cold-user viz failure: the Graphviz BINARY
         # is not installed (the python 'graphviz' package alone does not
         # ship it); the class carries the install remedy.
-        from ..errors import GraphvizUnavailableError
+        from ..errors import GraphvizUnavailableError  # deferred: cycle _visualization
 
         raise GraphvizUnavailableError(
             f"TorchLens could not render this graph: the Graphviz executable "

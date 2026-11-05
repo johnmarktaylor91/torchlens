@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import os
 import shutil
 import warnings
 from collections.abc import Callable, Mapping
@@ -175,8 +176,8 @@ def draw_kwargs(panel: Panel) -> dict[str, Any]:
         merged.pop("collapse", None)
         merged.pop("node_label_fields", None)
         merged["direction"] = "leftright"
-    if panel.call == "lens":
-        # A lens chooses its own rows; the deck's two-row convention would override it.
+    if panel.call == "view":
+        # A view chooses its own rows; the deck's two-row convention would override it.
         merged.pop("node_label_fields", None)
     if panel.call in ("surgery_diff",):
         merged = {}
@@ -191,11 +192,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
     kwargs["path"] = str(outpath)
     if panel.call == "draw":
         return str(trace.draw(**kwargs))
-    if panel.call == "lens":
-        lens = kwargs.pop("lens")
+    if panel.call == "view":
+        lens = kwargs.pop("view")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
     if panel.call == "surgery":
-        # The panel's kwargs carry highlight="interventions"; the edit is made here.
+        # The panel's kwargs carry view="interventions"; the edit is made here.
         fork = _fork_edit(trace)
         graph = fork.draw(**kwargs)
         return str(getattr(graph, "source", graph))
@@ -233,11 +234,13 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
     caught = io.StringIO()
     with warnings.catch_warnings(record=True) as seen, contextlib.redirect_stdout(caught):
         warnings.simplefilter("always")
+        image_root = None
         if panel.call in ("quickstart_render", "summary"):
             dot_source = _facade(panel, outpath)
         else:
             trace, _inputs = capture(panel)
             dot_source = draw(panel, trace, outpath)
+            image_root = getattr(trace, "_visualizer_dir", None)
     record["warnings"] = sorted({f"{w.category.__name__}: {w.message}"[:300] for w in seen})
     (out / f"{stem}.dot").write_text(dot_source)
     fmt = str(draw_kwargs(panel).get("file_format", "svg"))
@@ -246,7 +249,7 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
         png = png or Path(f"{outpath}.png")
         record["png_bytes"] = png.stat().st_size if png.exists() else 0
         record["png_size"] = _png_size(png) if png.exists() else None
-        svg_text = graphviz.Source(dot_source).pipe(format="svg").decode()
+        svg_text = _pipe(dot_source, "svg", image_root).decode()
         (out / f"{stem}.svg").write_text(svg_text)
     elif panel.call == "summary":
         (out / f"{stem}.svg").write_bytes(graphviz.Source(dot_source).pipe(format="svg"))
@@ -254,9 +257,25 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
         svg = _svg_path(outpath)
         if svg != out / f"{stem}.svg":
             shutil.move(str(svg), out / f"{stem}.svg")
-    json_text = graphviz.Source(dot_source).pipe(format="json").decode()
+    json_text = _pipe(dot_source, "json", image_root).decode()
     (out / f"{stem}.json").write_text(json_text)
     return record
+
+
+def _pipe(dot_source: str, fmt: str, image_root: str | None) -> bytes:
+    """Pipe DOT through Graphviz from the trace's image root, as ``draw`` renders it.
+
+    Node pictures are written relative to that root (R19-6), so Graphviz must run
+    there; a picture in an HTML ``<IMG>`` cell is a hard error when it is missing.
+    """
+
+    previous = Path.cwd()
+    if image_root:
+        os.chdir(image_root)
+    try:
+        return bytes(graphviz.Source(dot_source).pipe(format=fmt))
+    finally:
+        os.chdir(previous)
 
 
 def _facade(panel: Panel, outpath: Path) -> str:

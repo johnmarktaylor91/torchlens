@@ -19,6 +19,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from . import _refusals
 
 _MAX_CANDIDATES_NAMED = 12
@@ -62,7 +63,7 @@ def module_output_ops(trace: Any) -> list[Any]:
         Ops (one per pass) in execution order carrying ``output_of_modules``.
     """
 
-    return [op for op in trace._layer_list if getattr(op, "output_of_modules", ())]
+    return [op for op in trace._layer_list if record_member(op, "output_of_modules", ())]
 
 
 def _ops_for_address(trace: Any, address: str) -> list[Any]:
@@ -81,7 +82,7 @@ def _ops_for_address(trace: Any, address: str) -> list[Any]:
         Matching ops, one entry per pass.
     """
 
-    return [op for op in module_output_ops(trace) if address in op.output_of_modules]
+    return [op for op in module_output_ops(trace) if address in op.module_context.output_of_modules]
 
 
 def _module_addresses(trace: Any) -> tuple[str, ...]:
@@ -100,7 +101,7 @@ def _module_addresses(trace: Any) -> tuple[str, ...]:
 
     seen: list[str] = []
     for op in module_output_ops(trace):
-        for address in op.output_of_modules:
+        for address in op.module_context.output_of_modules:
             if address not in seen:
                 seen.append(address)
     return tuple(seen[:_MAX_CANDIDATES_NAMED])
@@ -227,7 +228,7 @@ def pin_blocks(trace: Any) -> list[SiteSpec]:
             SiteSpec(
                 field_name=f"tl_block_{index}",
                 module_address=address,
-                site_key=str(last.site_key),
+                site_key=str(last.graph.site_key),
                 pass_index=int(last.pass_number),
             )
         )
@@ -272,7 +273,7 @@ def pin_explicit(trace: Any, sites: tuple[str, ...]) -> list[SiteSpec]:
             SiteSpec(
                 field_name="tl_" + address.replace(".", "_") + suffix,
                 module_address=address,
-                site_key=str(chosen.site_key),
+                site_key=str(chosen.graph.site_key),
                 pass_index=int(chosen.pass_number),
             )
         )
@@ -359,7 +360,7 @@ def resolve_pinned(trace: Any, specs: list[SiteSpec]) -> dict[str, Any]:
 
     index: dict[tuple[str, int], list[Any]] = {}
     for op in trace._layer_list:
-        key = (str(op.site_key), int(op.pass_number))
+        key = (str(op.graph.site_key), int(op.pass_number))
         index.setdefault(key, []).append(op)
 
     resolved: dict[str, Any] = {}

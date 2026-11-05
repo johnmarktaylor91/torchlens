@@ -1,19 +1,20 @@
 """Site-level replay decisions: source records, stochastic draws, buffer threading.
 
-Split from :mod:`torchlens.intervention.replay`. Each helper classifies one site or
+Split from :mod:`torchlens.intervention._replay`. Each helper classifies one site or
 answers one pure question about it (is it a source record, does a random draw keep
 its captured value, what value threads through a buffer version record); the replay
-loop in :mod:`~torchlens.intervention.replay` acts on the answers and raises the
+loop in :mod:`~torchlens.intervention._replay` acts on the answers and raises the
 typed refusals.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._replay_cone import _disclosure_label
@@ -43,9 +44,58 @@ def _is_source_record(site: Op) -> bool:
         True for buffer records and input leaves.
     """
 
-    if getattr(site, "is_buffer", False):
+    if record_member(site, "is_buffer", False):
         return True
     return bool(getattr(site, "is_input", False)) and site.func is None and not site.parents
+
+
+def _is_passthrough_replacement(site: Op) -> bool:
+    """Whether a site is a module-edit replacement op: no callable, one parent.
+
+    A ``tl.module(...)`` edit is recorded as an ``interventionreplacement``
+    op between the module's last op and its consumers (at capture, or by a
+    post-capture ``do``). It executed nothing: its replay value is its
+    parent's current value, on which the hooks aimed at it fire.
+
+    Parameters
+    ----------
+    site:
+        Site to classify.
+
+    Returns
+    -------
+    bool
+        True for a single-parent functionless replacement op.
+    """
+
+    return (
+        site.func is None
+        and getattr(site, "func_name", None) == "intervention_replacement"
+        and len(tuple(getattr(site, "parents", ()) or ())) == 1
+    )
+
+
+def _thread_passthrough_site(site: Op, state: Any, commit: Any) -> None:
+    """Stage a replacement op's replay value: its parent's value, hooks applied.
+
+    Parameters
+    ----------
+    site:
+        Replacement op in the replay cone.
+    state:
+        The replay pass (overlay, hook targets, pending updates).
+    commit:
+        ``replay._commit_member``, which fires the site's hooks and stages it.
+    """
+
+    parent_label = tuple(site.parents)[0]
+    keys = state.label_keys.get(parent_label) or (parent_label,)
+    value = state.overlay.get(keys[0])
+    if value is None:
+        parent = state.log._layer_dict_all_keys.get(keys[0])
+        value = getattr(parent, "out", None)
+    if isinstance(value, torch.Tensor):
+        commit(site, value, state)
 
 
 def _no_func_message(site: Op, *, loaded: bool) -> str:
@@ -186,7 +236,7 @@ def _keeps_captured_draw(
 
     if not _is_unseeded_single_draw(representative, replay_group):
         return False
-    if getattr(representative, "edge_substitutions", None):
+    if record_member(representative, "edge_substitutions", None):
         return False
     if _edited_at_capture(representative):
         # The captured out already carries the capture-time edit, and the
@@ -235,7 +285,7 @@ def _is_unseeded_single_draw(representative: Op, replay_group: Sequence[Op]) -> 
     func_name = str(getattr(representative, "func_name", "") or "").rstrip("_")
     if func_name not in _STOCHASTIC_FUNC_NAMES:
         return False
-    if getattr(representative, "func_rng_states", None):
+    if record_member(representative, "func_rng_states", None):
         return False
     if len(replay_group) != 1 or tuple(representative.container_path or ()):
         return False

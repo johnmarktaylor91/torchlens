@@ -14,6 +14,8 @@ from typing import Any, Literal, TypeAlias, TypedDict
 import numpy as np
 import torch
 
+from .._utils._numpy_bridge import tensor_to_numpy
+
 __tl_layer__ = "L5"
 
 DistanceMetric: TypeAlias = Literal["euclidean", "manhattan", "cosine", "correlation", "gaussian"]
@@ -112,7 +114,7 @@ def _as_numpy_array(value: Any) -> np.ndarray:
     """
 
     if isinstance(value, torch.Tensor):
-        return value.detach().cpu().numpy().astype(np.float64, copy=False)
+        return tensor_to_numpy(value.detach()).astype(np.float64, copy=False)
     return np.asarray(value, dtype=np.float64)
 
 
@@ -372,7 +374,7 @@ def activation_distance_matrix(
     features = array.reshape(array.shape[0], -1)
     if metric == "euclidean":
         feature_tensor = torch.as_tensor(features, dtype=torch.float64)
-        distances = torch.cdist(feature_tensor, feature_tensor, p=2).cpu().numpy()
+        distances = tensor_to_numpy(torch.cdist(feature_tensor, feature_tensor, p=2))
     elif metric == "cosine":
         distances = _angular_dissimilarity(features, center_rows=False)
     elif metric == "correlation":
@@ -381,8 +383,8 @@ def activation_distance_matrix(
         distances = _gaussian_dissimilarity(features)
     elif metric in _TORCH_METRIC_KERNELS:
         feature_tensor = torch.as_tensor(features, dtype=torch.float64)
-        distances = (
-            _TORCH_METRIC_KERNELS[metric](feature_tensor, feature_tensor, None).cpu().numpy()
+        distances = tensor_to_numpy(
+            _TORCH_METRIC_KERNELS[metric](feature_tensor, feature_tensor, None)
         )
     else:
         raise ValueError(f"Unsupported activation distance metric: {metric!r}.")
@@ -496,7 +498,7 @@ def _rdm_torch_path(  # noqa: PLR0913 -- mirrors the public rdm() keyword set on
     elif output != "square":
         raise ValueError(f"Unsupported RDM output form: {output!r} (use 'square'/'condensed').")
     if out_device.type == "cpu":
-        return result.numpy()
+        return tensor_to_numpy(result)
     return result
 
 
@@ -602,9 +604,7 @@ def rdm(  # noqa: PLR0913 -- public signature; each keyword is a documented GPU-
             f"Unsupported input_kind: {input_kind!r} (use 'activations' or 'batched')."
         )
     array = torch.as_tensor(_as_numpy_array(activations))
-    _validate_finite(
-        array.numpy() if array.device.type == "cpu" else array.cpu().numpy(), "activations"
-    )
+    _validate_finite(tensor_to_numpy(array), "activations")
     resolved_dtype = dtype if dtype is not None else torch.float64
     if input_kind == "batched":
         if array.ndim < 3:
@@ -806,7 +806,7 @@ def _gaussian_dissimilarity(features: np.ndarray) -> np.ndarray:
     """
 
     feature_tensor = torch.as_tensor(features, dtype=torch.float64)
-    squared = torch.cdist(feature_tensor, feature_tensor, p=2).cpu().numpy() ** 2
+    squared = tensor_to_numpy(torch.cdist(feature_tensor, feature_tensor, p=2)) ** 2
     bandwidth = float(squared.mean())
     if bandwidth <= 0.0:
         raise ValueError(

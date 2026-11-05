@@ -15,6 +15,7 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
+from .._utils._record_group_table import record_member
 from . import ArtifactError
 from ._forgery_identity_facts import _validate_identity_facts
 from ._injected_row_cells import check_injection_provenance_row
@@ -233,7 +234,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
 
 
 def _validate_site_keys(trace: Trace) -> None:
-    """Validate ``Op.site_key`` by parsing and byte-exact recomputation.
+    """Validate ``Op.graph.site_key`` by parsing and byte-exact recomputation.
 
     Parameters
     ----------
@@ -245,7 +246,7 @@ def _validate_site_keys(trace: Trace) -> None:
     from ..backends.registry import JAX_BACKEND_NAME
 
     ops = _trace_ops(trace)
-    keys = tuple(getattr(op, "site_key", None) for op in ops)
+    keys = tuple(record_member(op, "site_key", None) for op in ops)
     if not any(key is not None for key in keys):
         return
     if any(key is None for key in keys):
@@ -302,7 +303,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
         else:
             expected = minter.mint(
-                tuple(getattr(op, "module_call_stack", ()) or ()),
+                tuple(record_member(op, "module_call_stack", ()) or ()),
                 str(getattr(op, "type", "") or ""),
                 (
                     getattr(op, "multi_output_index", None)
@@ -423,9 +424,7 @@ def _validate_checkpoint_witness(trace: Trace) -> None:
         )
     _validate_checkpoint_verdict(token_count, witness["degrade_flags"], witness["verdict"])
 
-    site_keys = {
-        key for op in _trace_ops(trace) if isinstance((key := getattr(op, "site_key", None)), str)
-    }
+    site_keys = {key for op in _trace_ops(trace) if isinstance((key := op.graph.site_key), str)}
     for token, record in tokens.items():
         _validate_checkpoint_token_record(token, record, site_keys)
 
@@ -1333,7 +1332,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
         )
     for op in _trace_ops(trace):
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
-            if getattr(op, field_name, None) is not None:
+            if record_member(op, field_name, None) is not None:
                 _structure_only_invalid(
                     f"op {getattr(op, 'label', '<unknown>')!r} retains a value "
                     f"payload in {field_name!r} under the structure-only marker",
@@ -1691,7 +1690,7 @@ def _validate_injection_provenance(trace: Trace) -> None:
     """
 
     for op in _trace_ops(trace):
-        record = getattr(op, "injection_provenance", None)
+        record = record_member(op, "injection_provenance", None)
         if record is None:
             continue
         check_injection_provenance_row(record, getattr(op, "label", "<unknown>"))

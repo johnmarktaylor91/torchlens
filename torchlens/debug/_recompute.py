@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import attach_dataframe_honesty
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from .._debug_report import Report, table_report, trace_subject
+from .._utils._record_group_table import record_member
 from ._common import _compute_ops, _op_label, _require_pandas, _source_line
 
 
@@ -33,8 +36,8 @@ def _candidate_rows(trace: Trace) -> tuple[list[dict[str, Any]], dict[str, int]]
         "nonpositive_flops_forward": 0,
     }
     for op in _compute_ops(trace):
-        activation_memory = getattr(op, "activation_memory", None)
-        flops_forward = getattr(op, "flops_forward", None)
+        activation_memory = record_member(op, "activation_memory", None)
+        flops_forward = record_member(op, "flops_forward", None)
         if activation_memory is None:
             excluded["missing_activation_memory"] += 1
             continue
@@ -113,7 +116,6 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
     frame.attrs["budget_gb"] = budget_gb
     for key, value in excluded.items():
         frame.attrs[f"excluded_{key}_count"] = value
-    from .._capture_honesty import attach_dataframe_honesty
 
     return table_report(
         "recompute_candidates",

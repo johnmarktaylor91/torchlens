@@ -30,7 +30,6 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from .._utils._display_bounded import RecordTuple
 from ._content_fingerprint import _cell_content_fingerprint, _value_fingerprint
 from ._fork_copy import (
     _COW_ATOMIC,
@@ -39,6 +38,7 @@ from ._fork_copy import (
     _needs_eager_isolation,
     cow_copy_value,
 )
+from .eviction_walk import _evict_payloads_in_list, _evict_payloads_in_mapping, _EvictTypes
 from .groups import GroupRef, MembershipGroups
 
 #: Unset-cell sentinel; distinct from None (a real storable value).
@@ -65,182 +65,6 @@ _NO_OVERLAY = object()
 #: packing win, so small sealed stores keep their row-major cells (write and
 #: delete semantics are identical either way; ``new_row`` refuses once sealed).
 _TRANSPOSE_MIN_ROWS = 512
-
-# Depth ceiling for the nested-container payload eviction walk.
-_EVICT_WALK_DEPTH_CEILING = 8
-
-#: Exact builtin types the eviction walk always returns unchanged: no instance
-#: is a tensor or a container the walk descends, and none can override
-#: ``__class__``, so an exact-type membership test answers what the walk's
-#: ``isinstance`` chain would. Callers skip these values without a call (most
-#: cells of a capture hold one: ``None``, labels, counts, the store sentinels).
-#: Subclasses (``Bytes``, ``Flops``, ...) keep the full path.
-_EVICT_INERT_TYPES = frozenset({type(None), bool, int, float, complex, str, bytes, object})
-
-#: Every container family the walk descends; anything else that is not a
-#: tensor is returned unchanged.
-_EVICT_CONTAINER_TYPES = (list, tuple, dict, set, frozenset)
-
-
-def _evict_payloads_in_cell(
-    value: Any,
-    tensor_cls: type,
-    depth: int = 0,
-    seen: set[int] | None = None,
-) -> Any:
-    """Return ``value`` with every reachable tensor replaced by ``None``.
-
-    Bounded to builtin containers (list/tuple/dict/set/frozenset): a direct
-    tensor becomes ``None`` (the payload-absent spelling), mutable containers
-    evict in place, tuples/frozensets rebuild only when a member changed
-    (named tuples reconstruct through their own type, falling back to the
-    unchanged original -- keeping a pin -- rather than corrupting the
-    container type). Tensors inside non-builtin custom objects remain the
-    disclosed residual; cyclic containers terminate through the seen set.
-
-    Dispatch is by exact type first: inert scalars return at once and exact
-    ``list``/``tuple``/``dict`` (never tensors) skip the tensor check; any
-    other type takes the ``isinstance`` path, so subclasses evict as before.
-    """
-
-    cls = type(value)
-    if cls in _EVICT_INERT_TYPES:
-        return value
-    if cls is tuple:
-        if depth >= _EVICT_WALK_DEPTH_CEILING:
-            return value
-        return _evict_payloads_in_tuple(value, tensor_cls, depth + 1, seen)
-    if cls is list or cls is dict:
-        if depth >= _EVICT_WALK_DEPTH_CEILING:
-            return value
-        if seen is None:
-            seen = set()
-        key = id(value)
-        if key in seen:
-            return value
-        seen.add(key)
-        if cls is list:
-            _evict_payloads_in_list(value, tensor_cls, depth + 1, seen)
-        else:
-            _evict_payloads_in_mapping(value, tensor_cls, depth + 1, seen)
-        return value
-    if isinstance(value, tensor_cls):
-        return None
-    if depth >= _EVICT_WALK_DEPTH_CEILING or not isinstance(value, _EVICT_CONTAINER_TYPES):
-        return value
-    # Container subclasses (named tuples, ``torch.Size``, ``defaultdict``, ...):
-    # list and dict subclasses keep every read and write-back through their
-    # own item methods.
-    if isinstance(value, list):
-        if seen is None:
-            seen = set()
-        key = id(value)
-        if key in seen:
-            return value
-        seen.add(key)
-        for index, item in enumerate(value):
-            value[index] = _evict_payloads_in_cell(item, tensor_cls, depth + 1, seen)
-        return value
-    if isinstance(value, tuple):
-        return _evict_payloads_in_tuple(value, tensor_cls, depth + 1, seen)
-    if isinstance(value, dict):
-        if seen is None:
-            seen = set()
-        key = id(value)
-        if key in seen:
-            return value
-        seen.add(key)
-        for item_key in list(value):
-            value[item_key] = _evict_payloads_in_cell(value[item_key], tensor_cls, depth + 1, seen)
-        return value
-    return _evict_payloads_in_set(value, tensor_cls)
-
-
-def _evict_payloads_in_list(
-    values: list[Any], tensor_cls: type, depth: int = 0, seen: set[int] | None = None
-) -> None:
-    """Evict every member of ``values`` in place, writing back only changes.
-
-    Used for list containers inside the walk and for the store's own cell
-    lists (rows, object columns), where ``depth`` 0 and ``seen`` ``None``
-    give each cell its own walk.
-    """
-
-    inert = _EVICT_INERT_TYPES
-    for index, item in enumerate(values):
-        if type(item) in inert:
-            continue
-        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
-        if evicted is not item:
-            values[index] = evicted
-
-
-def _evict_payloads_in_mapping(
-    values: dict[Any, Any], tensor_cls: type, depth: int = 0, seen: set[int] | None = None
-) -> None:
-    """Evict every value of an exact ``dict`` in place, writing back only changes.
-
-    Used for dict containers inside the walk and for the store overlays,
-    where ``depth`` 0 and ``seen`` ``None`` give each cell its own walk.
-    Assigning an existing key does not resize the dict, so iterating its
-    items meanwhile is safe.
-    """
-
-    inert = _EVICT_INERT_TYPES
-    for key, item in values.items():
-        if type(item) in inert:
-            continue
-        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
-        if evicted is not item:
-            values[key] = evicted
-
-
-def _evict_payloads_in_tuple(
-    value: tuple[Any, ...], tensor_cls: type, depth: int, seen: set[int] | None
-) -> Any:
-    """Return ``value`` evicted; rebuild only when a member changed."""
-
-    rebuilt: list[Any] | None = None
-    inert = _EVICT_INERT_TYPES
-    for index, item in enumerate(value):
-        if type(item) in inert:
-            continue
-        evicted = _evict_payloads_in_cell(item, tensor_cls, depth, seen)
-        if evicted is not item:
-            if rebuilt is None:
-                rebuilt = list(value)
-            rebuilt[index] = evicted
-    if rebuilt is None:
-        return value
-    if type(value) is tuple:
-        return tuple(rebuilt)
-    if type(value) is RecordTuple:
-        return RecordTuple(rebuilt, value.title, value.noun, value.singular)
-    try:
-        # Named tuples and tuple subclasses reconstruct through their own
-        # type; an unreconstructable subclass keeps the original (a
-        # retained pin beats a corrupted container).
-        return type(value)(*rebuilt)
-    except Exception:
-        try:
-            return type(value)(rebuilt)
-        except Exception:
-            return value
-
-
-def _evict_payloads_in_set(value: Any, tensor_cls: type) -> Any:
-    """Return a set or frozenset with tensor members replaced by one ``None``."""
-
-    if isinstance(value, (set, frozenset)):
-        if not any(isinstance(item, tensor_cls) for item in value):
-            return value
-        survivors = {item for item in value if not isinstance(item, tensor_cls)}
-        survivors.add(None)
-        try:
-            return type(value)(survivors)
-        except Exception:
-            return value
-    return value
 
 
 class OpStoreLayout:
@@ -481,17 +305,20 @@ class OpRowStore:
         tensor_cls = torch.Tensor
         evict_cells = _evict_payloads_in_list
         evict_overlay = _evict_payloads_in_mapping
+        # One learned-opaque-type set for the whole sweep: each record type
+        # pays one per-value call, then every later instance is skipped.
+        inert = _EvictTypes()
         rows = self._rows
         if rows is not None:
             for row_cells in rows:
-                evict_cells(row_cells, tensor_cls)
+                evict_cells(row_cells, tensor_cls, 0, None, inert)
         columns = self._columns
         if columns is not None:
             for column in columns:
                 if column.packed:
                     continue
-                evict_cells(column.values, tensor_cls)
-        evict_overlay(self._overlay, tensor_cls)
+                evict_cells(column.values, tensor_cls, 0, None, inert)
+        evict_overlay(self._overlay, tensor_cls, 0, None, inert)
         # Surviving views (reachable only through retained fork Ops now that
         # every owning core is dead) read their own snapshot surfaces, so
         # they are swept too. Shared snapshot lists (fork chains) evict
@@ -503,9 +330,9 @@ class OpRowStore:
             snapshot_rows = view._base_rows
             if snapshot_rows is not None:
                 for row_cells in snapshot_rows:
-                    evict_cells(row_cells, tensor_cls)
-            evict_overlay(view._base_overlay, tensor_cls)
-            evict_overlay(view._overlay, tensor_cls)
+                    evict_cells(row_cells, tensor_cls, 0, None, inert)
+            evict_overlay(view._base_overlay, tensor_cls, 0, None, inert)
+            evict_overlay(view._overlay, tensor_cls, 0, None, inert)
 
     def __len__(self) -> int:
         """Return the number of rows ever appended (removed rows included)."""

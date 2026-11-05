@@ -17,8 +17,8 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._utils._tensor_label import get_module_meta
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
-from torchlens.backends.torch._tl import get_module_meta
 
 #: Stage a sticky hook on the trace without propagating it.
 _STAGE = tl.options.InterventionOptions(engine="set_only")
@@ -139,7 +139,7 @@ def _assert_same_payloads(full: Any, fast: Any) -> None:
         }
 
     want, have = saved(full), saved(fast)
-    buffers = {op.label for op in full._layer_list if op.is_buffer}
+    buffers = {op.label for op in full._layer_list if op.graph.is_buffer}
     assert want and have.keys() <= want.keys()
     assert want.keys() - have.keys() <= buffers
     for label, value in have.items():
@@ -207,10 +207,10 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
     trace.do(
         {tl.module("parent.inner"): tl.steer(direction, strength=3.0, dim=-1)}, intervention=_STAGE
     )
-    trace.run(model, x)
+    trace = trace.run(model, x)
     assert trace.last_run["engine"] == "rerun"
     full = [op.out.clone() for op in trace.output_ops]
-    trace.run(model, x)
+    trace = trace.run(model, x)
     assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
     assert not trace.last_run.get("hooks_unfired")
     fast = [op.out for op in trace.output_ops]

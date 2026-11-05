@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 
 from torch import nn
 
+from .._errors import CaptureNotActiveError
+
 __all__ = [
     "PendingLazyState",
     "has_uninitialized_lazy_state",
@@ -151,7 +153,6 @@ def raise_if_pending_state_slots(state: Mapping[str, object]) -> None:
     ]
     if not pending_slots:
         return
-    from .._errors import CaptureNotActiveError
 
     raise CaptureNotActiveError(
         "The capture-boundary state baseline cannot be taken: "

@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from . import ArtifactError
 
 #: Writer-owned bare ``bundle.json`` section keys. ``_tlspec_prerelease`` is

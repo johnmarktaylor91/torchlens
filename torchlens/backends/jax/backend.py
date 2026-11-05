@@ -56,6 +56,16 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._utils._record_group_table import record_member
+from ..._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationReplaySource,
+    ValidationStatus,
+    count_importer_region_annotations,
+)
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -68,18 +78,11 @@ from ...backends._finalize import (
 )
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
-from ...recording.types import CaptureSpec
-from ...validation.status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplaySource,
-    ValidationStatus,
-    count_importer_region_annotations,
-)
+from ...recording._types import CaptureSpec
 from .._entry_refusals import refuse_if_bad_jax_control_flow, refuse_if_bad_max_intermediate_grads
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
+from .._finalize import _attach_param_usage
+from .._invariants import run_metadata_invariants
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -91,6 +94,12 @@ from .._options import (
 )
 from .._validation_shared import float_replay_tolerances
 from ._closure_consts import _readable_closure_consts
+from ._perturbation_probes import _perturb_candidates
+from ._raw_relabel import (
+    _is_jax_recurrence_source,
+    _jax_equivalent_labels_by_key,
+    _relabel_jax_lineage_fields,
+)
 from ._site_dialect import jax_site_keys
 from ._trace_graph_helpers import (
     _control_parent_labels,
@@ -101,12 +110,11 @@ from ._trace_graph_helpers import (
     _parent_perturbations_change_output,
     _path_to_components,
     _path_to_string,
-    _perturb_candidates,
     _relabel_jax_edge_use,
     _relabel_jax_parent_arg_positions,
     _saved_op_outputs,
+    _saved_parent_input,
     _saved_region_boundary_outputs,
-    _saved_single_output,
     _values_close,
 )
 from ._validation_log import (
@@ -822,9 +830,7 @@ class JAXBackend:
         log = _JaxValidationLog()
         try:
             if validate_metadata:
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace, log)
             _record_jax_constant_leaves(trace, log)
             if passed and not self._validate_jax_regions(trace):
@@ -2170,7 +2176,7 @@ class JAXBackend:
                     recurrent_labels=(label,),
                     pass_index=1,
                     num_passes=1,
-                    equivalence_key=op_log.equivalence_class or label,
+                    equivalence_key=op_log.graph.equivalence_class or label,
                 ),
             )
             layer_label = strip_raw_label_suffix(assignment.layer_label)
@@ -2183,8 +2189,8 @@ class JAXBackend:
             op_log.short_layer_label = layer_label
             op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
-            op_log.equivalence_class = assignment.equivalence_key
-            op_log.site_key = assignment.site_key
+            op_log._graph_equivalence_class = assignment.equivalence_key
+            op_log._graph_site_key = assignment.site_key
             op_log.dtype_ref = DtypeRef.from_value(op_log.dtype)
             op_log.device_ref = DeviceRef.from_value(getattr(op_log.out, "device", None))
             op_log.backend_address = f"jaxpr:{label}"
@@ -2201,20 +2207,19 @@ class JAXBackend:
             for capture_index, raw_label in raw_by_capture_index.items()
             if raw_label in raw_to_final_op_label
         }
-        equivalent_labels_by_key: dict[str, set[str]] = {}
-        for label in raw_labels:
-            op_log = trace._raw_graph_ws.raw_layer_dict[label]
-            equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
+        equivalent_labels_by_key = _jax_equivalent_labels_by_key(trace, raw_labels)
 
         for raw_index, label in enumerate(raw_labels):
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
             assignment = assignments[label]
-            op_log.recurrent_ops = [
+            op_log._graph_recurrent_ops = [
                 raw_to_final_op_label[member]
                 for member in assignment.recurrent_labels
                 if member in raw_to_final_op_label
             ]
-            op_log.equivalent_ops = equivalent_labels_by_key.get(op_log.equivalence_class, set())
+            op_log._graph_equivalent_ops = equivalent_labels_by_key.get(
+                op_log.graph.equivalence_class, set()
+            )
             # Torch parity (see the identical fix in
             # ``backends/_finalize.py::_finalize_single_op``): always
             # register the bare layer label, not just for multi-pass groups.
@@ -2262,7 +2267,7 @@ class JAXBackend:
         trace._num_ops = sum(
             1
             for op_log in trace._layer_list
-            if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
+            if not (op_log.is_input or op_log.is_output or op_log.graph.is_buffer)
         )
         if module_tree is None:
             # ``jax_container_path`` is only set on the input-SOURCE event
@@ -2323,7 +2328,7 @@ class JAXBackend:
                         param.num_params for param in consumed_params if param.is_trainable
                     )
                     op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-                    op_log.param_memory = Bytes(
+                    op_log._cost_param_memory = Bytes(
                         sum(int(param.param_memory) for param in consumed_params)
                     )
                     # Set-memoized usage cross-links (the bare list scans were
@@ -2410,7 +2415,7 @@ class JAXBackend:
         # are present on the ops the index collects.
         trace._options_mark_layer_depths = bool(trace._options_mark_layer_depths)
         if trace._options_mark_layer_depths:
-            from .._finalize import compute_preview_input_output_distances
+            from .._finalize_distances import compute_preview_input_output_distances
 
             compute_preview_input_output_distances(trace)
 
@@ -2437,8 +2442,6 @@ class JAXBackend:
             Op parameter fields and reverse parameter usage lists are updated.
         """
 
-        from .._finalize import _attach_param_usage
-
         equation_labels = [
             label
             for label in trace._raw_graph_ws.raw_layer_labels_list
@@ -2463,7 +2466,7 @@ class JAXBackend:
                 param.num_params for param in params if param.is_trainable
             )
             op_log.num_params_frozen = op_log.num_params - op_log.num_params_trainable
-            op_log.param_memory = sum(int(param.param_memory) for param in params)
+            op_log._cost_param_memory = sum(int(param.param_memory) for param in params)
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
@@ -2562,8 +2565,8 @@ class JAXBackend:
             # invariant's claim collection) stringified them as literal
             # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
             # address, so a JAX compute op's attribution never resolved.
-            module_call_stack_calls = normalize_op_module_calls(op_log.module_call_stack)
-            op_log.module_call_stack = [
+            module_call_stack_calls = normalize_op_module_calls(op_log.module_context.call_stack)
+            op_log._module_context_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
             parent_call_label = "self:1" if "self" in seen_addresses else None
@@ -2684,18 +2687,18 @@ class JAXBackend:
         source_labels: list[str] = []
         for label in raw_labels:
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
-            pruned = bool(getattr(op_log, "is_orphan", False))
+            pruned = bool(record_member(op_log, "is_orphan", False))
             retain = not pruned
             if retain:
                 eligible_labels.append(label)
-            if op_log.is_input or op_log.is_internal_source or not data_parents_by_label[label]:
+            if _is_jax_recurrence_source(op_log, data_parents_by_label[label]):
                 source_labels.append(label)
             nodes[label] = RecurrenceNode(
                 label=label,
                 raw_order=op_log.raw_index,
-                equivalence_key=op_log.equivalence_class,
+                equivalence_key=op_log.graph.equivalence_class,
                 equivalent_labels=tuple(
-                    member for member in op_log.equivalent_ops if member in raw_label_set
+                    member for member in op_log.graph.equivalent_ops if member in raw_label_set
                 ),
                 data_parents=data_parents_by_label[label],
                 data_children=tuple(data_children_by_label[label]),
@@ -2746,7 +2749,7 @@ class JAXBackend:
             recurrent_labels=(label,),
             pass_index=1,
             num_passes=1,
-            equivalence_key=op_log.equivalence_class or label,
+            equivalence_key=op_log.graph.equivalence_class or label,
             site_key=site_key,
         )
 
@@ -2791,22 +2794,9 @@ class JAXBackend:
                 raw_to_final.get(child, child) if isinstance(child, str) else child
                 for child in op_log.children
             ]
-            for lineage_field in (
-                "input_ancestors",
-                "output_descendants",
-                "root_ancestors",
-                "internal_source_ancestors",
-                "internal_source_parents",
-            ):
-                lineage = getattr(op_log, lineage_field, None)
-                if lineage:
-                    relabeled = (
-                        raw_to_final.get(item, item) if isinstance(item, str) else item
-                        for item in lineage
-                    )
-                    setattr(op_log, lineage_field, type(lineage)(relabeled))
-            op_log.parent_arg_positions = _relabel_jax_parent_arg_positions(
-                op_log.parent_arg_positions,
+            _relabel_jax_lineage_fields(op_log, raw_to_final)
+            op_log._call_parent_arg_positions = _relabel_jax_parent_arg_positions(
+                op_log.call.parent_arg_positions,
                 raw_to_final,
             )
             op_log._internal_set(
@@ -4140,7 +4130,7 @@ def _validate_region_boundary(
             return False
         if not _projection_has_boundary_parent(projection_op, boundary_op):
             return False
-        saved_output = _saved_single_output(projection_op, hidden_outputs_by_label)
+        saved_output = _saved_parent_input(projection_op, hidden_outputs_by_label)
         expected_output = replayed_outputs[projection.output_index]
         if not _values_close(saved_output, expected_output):
             return False
@@ -4209,7 +4199,7 @@ def _inputs_from_region_trace_graph(
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX region parent arg position {position!r} is invalid.")
         parent_op = ops_by_label[parent_label]
-        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
+        inputs[position] = _saved_parent_input(parent_op, hidden_outputs_by_label, inputs[position])
     return tuple(inputs)
 
 
@@ -4355,5 +4345,5 @@ def _inputs_from_trace_graph(
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
         parent_op = ops_by_label[parent_label]
-        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
+        inputs[position] = _saved_parent_input(parent_op, hidden_outputs_by_label, inputs[position])
     return tuple(inputs)

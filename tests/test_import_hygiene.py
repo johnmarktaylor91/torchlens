@@ -344,18 +344,8 @@ for facade_name, module_path in facades.items():
         and pkgutil.iter_modules(eager_module.__path__, eager_module.__name__ + ".")
     }
     collisions[facade_name] = sorted(set(public_names) & child_modules)
-    expected_exports = {}
-    if facade_name == "recording":
-        for public_name in collisions[facade_name]:
-            child_module = importlib.import_module(f"{module_path}.{public_name}")
-            assert vars(eager_module)[public_name] is child_module
-            source_module, source_name = eager_module._LAZY_ATTRS[public_name]
-            expected_exports[public_name] = getattr(
-                importlib.import_module(source_module), source_name
-            )
     for public_name in public_names:
-        expected = expected_exports.get(public_name, getattr(eager_module, public_name))
-        assert getattr(facade_module, public_name) is expected
+        assert getattr(facade_module, public_name) is getattr(eager_module, public_name)
 
 # P00-fallout refresh (oracles wave 0, 2026-08-26): the shim-removal fallout
 # added four root facades (accessors, backends, types, visualization) whose
@@ -367,7 +357,7 @@ assert collisions == {
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],
-    # The visuals rename removed the tl.attribution.onebackward export; the
+    # The visuals rename removed the tl.attribution._onebackward export; the
     # child module stays importable by its full path.
     "attribution": [],
     "backends": [],
@@ -391,23 +381,23 @@ assert collisions == {
     "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
     "experimental": ["node_styles"], "export": [],
-    # T48 reconcile: intervention's __all__ gained the compose child module
-    # (F02 stochastic-edit family). The 2.x rename removed sites and renamed
-    # reference to population, the name of its defining child module (the
-    # function is bound over the submodule attribute at package import, as
-    # compose is).
-    "recording": ["dry_run", "recover"], "intervention": ["compose", "population"],
+    # Surface ruling surface.6: the child modules that shared a public export's
+    # name (recording dry_run/recover, intervention compose/population,
+    # receptive_field rules, viz feature_maps) are underscore-private now.
+    "recording": [], "intervention": [],
     "fingerprint": [], "io": [], "observers": [], "options": [],
+    # The detector registries the glossary spells as tl.<name>.*; every
+    # preprocessing child module is underscore-private.
+    "postprocessing": [], "preprocessing": [],
     "report": [], "repgeom": [],
-    "receptive_field": ["rules"], "stats": [],
+    "receptive_field": [], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
     "transforms": [],
     "types": [],
     "validation": [],
     # Visuals rename: tl.viz exports its nodes child module (the node-visual
-    # factories namespace), and the feature_maps function shares its module's
-    # name; the package imports the function eagerly, so the root keeps it.
-    "viz": ["feature_maps", "nodes"],
+    # factories namespace).
+    "viz": ["nodes"],
 }
 
 """
@@ -638,6 +628,30 @@ def test_lazified_module_direct_import_patterns(module_name: str, member_name: s
     )
 
 
+def test_glossary_detector_registries_resolve_through_the_root_facade() -> None:
+    """``tl.postprocessing.register`` and ``tl.preprocessing.resolve`` need no submodule import.
+
+    The glossary and guides spell both namespaces through the root; a fresh
+    interpreter proves the bare import leaves them unimported and the first
+    attribute touch resolves the same objects a direct import would.
+    """
+
+    _run_import_script_capturing(
+        "import sys\n"
+        "import torchlens as tl\n"
+        "for name in ('torchlens.postprocessing', 'torchlens.preprocessing'):\n"
+        "    assert name not in sys.modules, name\n"
+        "register = tl.postprocessing.register\n"
+        "resolve = tl.preprocessing.resolve\n"
+        "from torchlens.postprocessing import register as direct_register\n"
+        "from torchlens.preprocessing import resolve as direct_resolve\n"
+        "assert register is direct_register\n"
+        "assert resolve is direct_resolve\n"
+        "assert tl.postprocessing is sys.modules['torchlens.postprocessing']\n"
+        "assert tl.preprocessing is sys.modules['torchlens.preprocessing']\n"
+    )
+
+
 def test_bare_import_defers_lazified_feature_modules() -> None:
     """Bare imports must not eagerly initialize the deferred feature islands."""
 
@@ -657,7 +671,7 @@ def test_bare_import_leaves_torch_functions_undecorated() -> None:
         "import torch; "
         "import torchlens; "
         "from torchlens import _state; "
-        "from torchlens.backends.torch._tl import is_decorated_function; "
+        "from torchlens._utils._tensor_label import is_decorated_function; "
         "assert _state._is_decorated is False; "
         "assert not is_decorated_function(torch.cos)"
     )
@@ -670,7 +684,7 @@ def test_first_trace_lazily_wraps_torch_functions() -> None:
         "import torch; "
         "import torchlens as tl; "
         "from torchlens import _state; "
-        "from torchlens.backends.torch._tl import is_decorated_function; "
+        "from torchlens._utils._tensor_label import is_decorated_function; "
         "model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()); "
         "tl.trace(model, torch.ones(1, 2)); "
         "assert _state._is_decorated is True; "

@@ -35,6 +35,19 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
+from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
+from ..._utils._tensor_label import (
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    DescriptorCompatProperty,
+    get_tensor_label,
+    has_detached_saved_activations,
+    is_decorated_function,
+    is_tensor_data_alias,
+    mark_decorated_function,
+    mark_tensor_data_alias,
+    propagate_detached_saved_activation,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
@@ -42,17 +55,18 @@ from ..._utils._torch_compat import (
     get_current_function_mode_stack,
     get_device_constructors,
     get_device_context_type,
-    get_functorch_maybe_current_level,
+    get_functorch_transform_probe,
     get_jit_boolean_dispatch_table,
     get_jit_builtin_table,
     get_optional_torch_namespace,
     get_torch_function_mode_stack_length,
     mark_torch_capability_missing,
 )
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.display import identity
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import get_vars_of_type_from_obj
-from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._utils.rng import log_current_autocast_state, log_op_rng_states
 from ..._utils.tensor_utils import (
     _DEFER_ENABLED as _COW_ENABLED,
     _DEFER_PENDING as _COW_PENDING,
@@ -61,6 +75,7 @@ from ..._utils.tensor_utils import (
     materialize_deferred_for_call,
     print_override,
 )
+from . import _storage_exports, _tracing_pass
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -77,12 +92,13 @@ from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     BOUNDARY_NOTE_FUNC_NAMES,
     funcs_not_to_log,
+    inside_function_apply,
     note_function_boundary,
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._logged_arguments import logged_args
-from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
+from ._fused_norm_writes import fused_call_writes
+from ._logged_arguments import logged_args, logged_receiver_output
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
@@ -94,18 +110,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
-from ._tl import (
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
-    DescriptorCompatProperty,
-    get_tensor_label,
-    has_detached_saved_activations,
-    is_decorated_function,
-    is_tensor_data_alias,
-    mark_decorated_function,
-    mark_tensor_data_alias,
-    propagate_detached_saved_activation,
-    set_tensor_label,
-)
+from ._torch_ops_calls import install_torch_ops_call_recorders, uninstall_torch_ops_call_recorders
 from ._tracing_pass import call_inside_tracing_pass, inside_tracing_tensor_pass
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
@@ -122,10 +127,16 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     transform_builder_decorator,
 )
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
+from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
-from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
+from ._wrappers_refusals import (
+    _constructs_strict_subclass,
+    _pauses_for_subclass_conversion,
+    _raise_if_subclass_ctor_under_dispatch_mode,
+)
 from .aliasing import _tensors_alias
 from .arg_names import get_arg_names
+from .belt import restore_belt_references, sweep_stale_belt_references
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_or_late_index_buffer_address,
@@ -152,6 +163,7 @@ from .param_mutation import (
     same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
+from .tensor_tracking import _add_tensor_backward_hook
 
 if TYPE_CHECKING:
     pass
@@ -182,10 +194,10 @@ def _fix_tensor_sequence_slot() -> None:
 
 def _is_inside_functorch_transform() -> bool:
     """Return True if inside a vmap/grad/etc. functorch transform."""
-    maybe_current_level = get_functorch_maybe_current_level()
-    if maybe_current_level is None:
+    transform_probe = get_functorch_transform_probe()
+    if transform_probe is None:
         return False
-    return maybe_current_level() is not None
+    return transform_probe() is not None
 
 
 def _is_inside_dynamo_compilation() -> bool:
@@ -567,9 +579,9 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
                 with _state.pause_logging(), internal_scalar_read():
                     collected: set[int] = set()
                     for p in model.parameters():
-                        collected.add(p.untyped_storage().data_ptr())
+                        collected.add(tensor_read(p, "untyped_storage")(p).data_ptr())
                     for b in model.buffers():
-                        collected.add(b.untyped_storage().data_ptr())
+                        collected.add(tensor_read(b, "untyped_storage")(b).data_ptr())
                 ptrs = frozenset(collected)
             except Exception:
                 ptrs = None
@@ -703,7 +715,6 @@ def _register_inplace_live_grad_hook(
 
     if not isinstance(tensor, torch.Tensor):
         return
-    from .tensor_tracking import _add_tensor_backward_hook
 
     # The live tensor is what downstream ops consume, so it takes gradient
     # ownership of the label; the logged copy's hook (if any) stops emitting.
@@ -790,35 +801,7 @@ def _propagate_mutation_label_to_storage_aliases(
 # corrupted interpreter state when exercised across several capture paths in
 # one process (segfault on torch 2.1.2) -- see
 # ``TensorSubclassUnsupportedError``.
-_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {
-    "__new__": 0,
-    "_make_subclass": 0,
-    "as_subclass": 1,
-}
-
-
-def _constructs_strict_subclass(args: tuple[Any, ...], idx: int | None) -> bool:
-    """Return whether ``args[idx]`` is a strict (non-``torch.Tensor``) subclass cls.
-
-    Parameters
-    ----------
-    args:
-        Positional call arguments.
-    idx:
-        Index of the candidate subclass ``cls`` argument, or ``None`` when the
-        caller has none (always ``False``; lets callers pass their own
-        ``... | None`` index constant without narrowing it themselves first).
-
-    Returns
-    -------
-    bool
-        ``True`` when ``args[idx]`` is a type strictly below ``torch.Tensor``.
-    """
-
-    if idx is None or len(args) <= idx:
-        return False
-    cls = args[idx]
-    return isinstance(cls, type) and cls is not torch.Tensor and issubclass(cls, torch.Tensor)
+_SUBCLASS_CLS_ARG_INDEX: dict[str, int] = {"__new__": 0, "_make_subclass": 0, "as_subclass": 1}
 
 
 _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
@@ -1148,6 +1131,8 @@ def torch_func_decorator(
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
+    writes_args = mutates_receiver or reconstructs_receiver_output or is_mutating_property_setter
+    exports_storage = func_name in _storage_exports.STORAGE_EXPORT_FUNC_NAMES
     has_inplace_signature = (
         mutates_first_arg
         or func_name.endswith("_")
@@ -1208,21 +1193,17 @@ def torch_func_decorator(
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
+        # Dynamo tracing a lifted operator entry compile sees data-free values (_tracing_pass).
+        if _tracing_pass.hop_compile_depth and _tracing_pass.inside_hop_internal_compile():
+            return func(*args, **kwargs)
         # Ordered call fingerprint, counted identically with and without capture
         # (unpaused owner-thread calls only; see ``_state.CallFingerprint``).
         fingerprint = _state._call_fingerprint
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
-        # ---- Fast path ----
-        # When logging is off, pass through with minimal overhead.
-        # DeviceContext injection is still needed even when not logging,
-        # because the user's model may rely on torch.device('meta') context.
-        # Op-logging is OWNER-thread-scoped. A NON-owner thread running torch ops
-        # during a capture (a worker formatting ``str(tensor)``, a DataLoader thread) must NOT
-        # be logged into the owner's Trace -- doing so tags its temporaries with capture labels
-        # (a false cross-thread ceiling) and corrupts owner-op attribution (an observed crash).
-        # Cross-thread tensor->host escapes are still observed by the mode-independent belt
-        # (tensor-method patches), which is independent of this wrapper.
+        # ---- Fast path ---- (logging off: pass through; DeviceContext injection still runs for
+        # torch.device('meta') contexts). r43 hon2_4: op-logging is OWNER-thread-scoped, so a
+        # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
             # so the fast path carries the SAME pre-execution interception as the logging path:
@@ -1230,11 +1211,10 @@ def torch_func_decorator(
             # aliases sharing those storages. Disarmed cost is one dict-truthiness check; with
             # pending aliases, only mutation-signature calls pay the storage lookups.
             if _COW_PENDING and (
-                mutates_receiver
-                or is_mutating_property_setter
-                or reconstructs_receiver_output
+                writes_args
                 or "out" in kwargs
                 or _call_requests_inplace(inplace_param_index, args, kwargs)
+                or fused_call_writes(func_name, args, kwargs)
             ):
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
@@ -1272,14 +1252,15 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
+        if exports_storage and _COW_PENDING and not inside_function_apply():
+            _storage_exports.materialize_deferred_for_export(args)
         if has_inplace_signature and not args:
             # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
             args, kwargs = _receiver_kwarg_as_positional(args, kwargs)
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
-        # A higher-order op's Autograd kernel fake-traces its branches before the
-        # eager run that is recorded; that pass is not the model's (_tracing_pass).
+        # A HOP Autograd kernel's fake-tensor pass over its branches is not the model's.
         if inside_tracing_tensor_pass(args, kwargs):
             return call_inside_tracing_pass(func, args, kwargs)
         # Skip logging inside vmap/functorch transforms — internal TorchLens
@@ -1365,7 +1346,7 @@ def torch_func_decorator(
         # Snapshot args before the call in case in-place ops mutate them.
         receiver_label_before = _receiver_mutation_label(args)
         if trace._options_save_args:
-            from ._ops_arguments import _copy_saved_call_args
+            from ._ops_saved_arg_copies import _copy_saved_call_args
 
             arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
@@ -1400,11 +1381,10 @@ def torch_func_decorator(
         # via its property-setter signature — a spurious materialization is merely a wasted clone,
         # never a correctness risk.
         if _COW_PENDING and (
-            mutates_receiver
-            or is_mutating_property_setter
-            or reconstructs_receiver_output
+            writes_args
             or "out" in kwargs
             or _call_requests_inplace(inplace_param_index, args, kwargs)
+            or fused_call_writes(func_name, args, kwargs)
         ):
             materialize_deferred_for_call(arg_tensorlike)
 
@@ -1414,7 +1394,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
+        rng_states = log_op_rng_states(args, kwargs) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(
@@ -1424,7 +1404,7 @@ def torch_func_decorator(
             func_call_id=func_call_id,
             event_index=func_call_id,
         )
-        from ...intervention.runtime import snapshot_call_inputs_for_inplace_intervention_site
+        from ...intervention._runtime import snapshot_call_inputs_for_inplace_intervention_site
 
         call_input_snapshots = snapshot_call_inputs_for_inplace_intervention_site(
             func_name=func_name,
@@ -1434,8 +1414,8 @@ def torch_func_decorator(
             func_call_id=func_call_id,
         )
         expected_token = None
-        pauses_owned_modes = constructs_tensor_subclass and _constructs_strict_subclass(
-            args, _logged_subclass_cls_index
+        pauses_owned_modes = constructs_tensor_subclass and _pauses_for_subclass_conversion(
+            func_name, args, _logged_subclass_cls_index
         )
         # per-op duration must measure the USER op, not TorchLens
         # bookkeeping. The clock starts here -- after RNG/autocast snapshots
@@ -1453,7 +1433,7 @@ def torch_func_decorator(
         func_exec_start = time.time()
         device_memory_before = None
         if getattr(trace, "track_device_memory", False):
-            # Observe item 15 (deferred import per the spine layer lint).
+            # Observe item 15; deferred: cycle _observe.
             from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
@@ -1490,7 +1470,7 @@ def torch_func_decorator(
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
-            if getattr(trace, "track_device_memory", False):
+            if getattr(trace, "track_device_memory", False):  # deferred import: cycle _observe
                 from ..._observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
@@ -1516,7 +1496,7 @@ def torch_func_decorator(
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
-            from ..._observe._device_memory import settle_op_bracket
+            from ..._observe._device_memory import settle_op_bracket  # deferred: cycle _observe
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
         if _echo is not None:
@@ -1534,17 +1514,11 @@ def torch_func_decorator(
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)
 
-        # __setitem__, zero_, __delitem__ modify in-place and return None;
-        # treat the first arg (the modified tensor) as the output. Mutating
-        # property setters (``t.real = rhs`` and friends) have the
-        # exact same shape: real dataflow, ``None`` return, mutated receiver.
-        if reconstructs_receiver_output or (
-            is_mutating_property_setter
-            and out_orig is None
-            and len(args) > 0
-            and isinstance(args[0], torch.Tensor)
-        ):
-            out_orig = args[0]
+        # A receiver-mutating call that returns ``None`` (or always, for __setitem__,
+        # zero_, __delitem__) logs its mutated receiver(s) as the output.
+        out_orig = logged_receiver_output(
+            out_orig, args, func_name, reconstructs_receiver_output, is_mutating_property_setter
+        )
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
@@ -1585,7 +1559,7 @@ def torch_func_decorator(
         # otherwise the module exit re-reads the input's label and the boundary
         # node (e.g. identity_1_2) never attaches to the module's output_ops.
         if same_object_returned:
-            out_orig = _same_object_logging_copy(out_orig)
+            out_orig = _same_object_logging_copy(out_orig, trace, was_inplace)
             # A nested bottom-level write already recorded this Parameter
             # mutation; the enclosing initializer keeps its Parameter return
             # and logs nothing (``nested_write_relabeled_receiver``).
@@ -2004,10 +1978,9 @@ def decorate_all_once() -> None:
     """
     if _state._is_decorated:
         return  # already fully decorated
-    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty here.
-    # A prior partial failure may have populated the dict without completing
-    # decoration. Using _is_decorated (set at end of this function) ensures
-    # retry after partial failure (#138).
+    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty: a prior partial
+    # failure may have populated it without completing decoration; guarding on
+    # _is_decorated (set at the end) lets that retry run (#138).
 
     _warm_derived_identity_caches()
 
@@ -2089,14 +2062,14 @@ def _install_fork_capture_hygiene() -> None:
 _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_method")
 
 
+@originals_exposed(_setattr_ignoring_advisories, TRANSFORM_BUILDER_SITES + DIRECT_TRANSFORM_SITES)
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
-    Invariant: no torchlens path may FIRST-call a cached torch
-    introspection table while wrappers are installed. Called by BOTH install
-    paths -- full decoration (``decorate_all_once``) and re-install after a
-    prior ``unwrap_torch()`` -- BEFORE any wrapper setattr, so every covered
-    table stays keyed by originals for the whole wrapped epoch. Covered:
+    B8-4 invariant: no torchlens path may FIRST-call a cached torch
+    introspection table while wrappers are installed. Both install paths call
+    this before their setattr loop; ``originals_exposed`` also shows originals
+    on slots a failed decoration pass left wrapped (the #138 retry). Covered:
 
     - the two ``torch.overrides`` tables;
     - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__``
@@ -2462,7 +2435,6 @@ def _unwrap_torch_locked() -> None:
     reset_detector_tables()
     _state._escape_detector_mode = "off"
     _state._completeness_witness_mode = "off"
-    from .belt import restore_belt_references
 
     restore_belt_references()
     from .backward import uninstall_autograd_wrappers
@@ -2472,7 +2444,6 @@ def _unwrap_torch_locked() -> None:
     from .legacy_ctors import uninstall_legacy_constructor_wrappers
 
     uninstall_legacy_constructor_wrappers()
-    from ._torch_ops_calls import uninstall_torch_ops_call_recorders
 
     uninstall_torch_ops_call_recorders()
 
@@ -2728,8 +2699,6 @@ def _wrap_torch_locked(
     # that landed after the first wrap gets its custom ops decorated here.
     _ensure_torchvision_ops_decorated()
 
-    from ._torch_ops_calls import install_torch_ops_call_recorders
-    from .belt import sweep_stale_belt_references
     from .legacy_ctors import install_legacy_constructor_wrappers
 
     # Legacy ``torch.<dtype>Tensor`` / ``Variable`` classes are patched in place

@@ -112,6 +112,17 @@ Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; inst
   If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
   `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
 
+- **surface**: untaught submodules are private (surface ruling surface.6). Every submodule that its
+  parent does not list in `__all__`, other than the taught `torchlens.backends.torch`,
+  `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`,
+  `torchlens.intervention.stochastic` and the per-framework backend namespaces
+  (`torchlens.backends.jax`, `mlx`, `paddle`, `tf`, `tinygrad`), now has a leading underscore (50
+  modules, for example `torchlens.intervention.types`, `torchlens.recording.options` and
+  `torchlens.validation.core`). Import public names from the parent namespace. The old attribute
+  spelling refuses with the typed `facade_redirect` error; `docs/reference/deprecations.md` (Module
+  Paths) lists every one.
+- **records**: `Op.gpu_kernels` and `AtenOp.gpu_kernels` are removed; they refuse with the
+  typed `facade_redirect` error. Saved artifacts keep their kernel annotation.
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
   written; the default never does) in place of `vis_save_only=`.
 - **viz**: The experimental Dagua renderer is removed from TorchLens: `torchlens.experimental.dagua`, `Trace.to_dagua_graph` and `renderer="dagua"` are gone.
@@ -337,6 +348,17 @@ Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; inst
   starts from the pristine model and reports `retrace_mismatch` for its one-time first forward. Run
   one plain forward first, or trace with `CaptureOptions(carry_state=True)`, to validate the
   steady-state model.
+- **names**: one public word for the one-based pass counter, `pass_number` (walk names.1). The
+  keyword of `for_pass` on `trace.autograd.backward_passes`, `grad_fn.calls` and `op.grads` is
+  `pass_number` (was `pass_index`); the value it takes is unchanged. `GenerationStep.pass_index`
+  is `GenerationStep.pass_number`, with the same value.
+  `BackwardFlopsRow.pass_index` and `BackwardFlopsAttribution.pass_index` are `pass_number`, same
+  value.
+  The `TraceLike` lookups take `activations_by_pass(pass_number)` and
+  `activation_by_raw_label(raw_label, pass_number=)`.
+- **trace**: `trace.provenance.summary()` is public (walk names.3); it was the interim private
+  `trace.provenance._summary()`, which is gone. It returns the same capture-provenance text block,
+  the Trace twin of `Bundle.provenance.summary()`.
 
 ### Features
 
@@ -21846,8 +21868,6 @@ Quality gates: ruff PASS, mypy PASS (153 src clean), Tier-1 smoke 143/143, Tier-
 
 Phase 9 — launch-blocking hero demo. Side-by-side comparison of two ModelLogs in a Bundle with
   delta-colored aligned pairs.
-
-UX brief: examples/demos/bundle_diff_UX_brief.md (acceptance contract).
 
 Renderer: torchlens/visualization/bundle_diff.py. - bundle.show_diff(metric, layout) via
   Bundle.__getattr__ (preserves 25-method budget). - tl.viz.bundle_diff(bundle, ...) static helper.

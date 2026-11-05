@@ -14,12 +14,13 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils._callable_safety import private_c_forward_op_module_names
-from ._completeness_types import _WitnessState
-from ._tl import (
+from ..._utils._record_group_table import record_member
+from ..._utils._tensor_label import (
     get_buffer_address,
     get_tensor_meta,
     session_meta_is_anchored,
 )
+from ._completeness_types import _WitnessState
 
 __all__ = (
     "_nonowner_ptr_is_captured",
@@ -85,7 +86,7 @@ def _nonowner_touch_is_captured(state: _WitnessState, tensor: Any) -> bool:
     # ceiling, while a stale label from an earlier capture remains rejected.
     if meta is not None and isinstance(meta.label_raw, str) and session_meta_is_anchored(meta):
         return True
-    if meta is not None and getattr(meta, "address", None) is not None:
+    if meta is not None and record_member(meta, "address", None) is not None:
         return True
     if get_buffer_address(tensor) is not None:
         return True

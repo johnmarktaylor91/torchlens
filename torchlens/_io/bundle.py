@@ -17,7 +17,6 @@ import os
 import pickle
 import platform
 import shutil
-import subprocess
 import sys
 import uuid
 import warnings
@@ -45,6 +44,7 @@ from .._runnable.state import (
     bind_embedded_trace_state,
     runnable_tensor_byte_digest,
 )
+from .._utils._record_group_table import record_member, record_storage_attr
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from .._vocab._package_version import __version__ as TORCHLENS_VERSION
@@ -74,6 +74,7 @@ from ._durability import (
 from ._extra_files import _warn_extra_files
 from ._load_validators import MODEL_FREE_TLSPEC_KINDS, load_model_free_tlspec
 from ._pickle_prescan import OpcodeCeilingExceeded
+from ._provenance_git import _git_commit_hash
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
@@ -143,8 +144,8 @@ from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
-    from ..intervention.spec import Recipe
-    from ..intervention.types import InterventionSpec
+    from ..intervention._spec import Recipe
+    from ..intervention._types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
@@ -494,10 +495,10 @@ def save(
     # computation. Appended after (5); owners disjoint, nothing reordered.
     # The records-presence guard keeps level coercion at its historical
     # raise site for every unlogged trace (refusal order unchanged there).
-    from ..intervention.injection import peek_injection_state, refuse_injection_logged_runnable_save
+    from ..intervention import _injection
 
-    if (peek_injection_state(trace) or {}).get("records"):
-        refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
+    if (_injection.peek_injection_state(trace) or {}).get("records"):
+        _injection.refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
     # product (its _FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
@@ -934,7 +935,7 @@ def _load_216_intervention_spec(
 ) -> Any:
     """Load (or refuse typed) a directory the detector classifies as a 2.16 intervention spec."""
 
-    from ..intervention.save import load_intervention_spec
+    from ..intervention._save import load_intervention_spec
 
     # Typed boundary: a trace manifest whose ``tlspec_version``
     # key was lost still carries ``kind``, so format detection
@@ -1028,7 +1029,7 @@ def _finish_format3_trace(
     if manifest.get("disclosures") is not None:
         format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
-        trace._intervention_spec = _finish_format3_recipe(root)
+        trace._intervention_spec = _finish_format3_recipe(root, trace)
     return trace
 
 
@@ -1055,14 +1056,14 @@ def _finish_format3_bundle(
     return bundle
 
 
-def _finish_format3_recipe(root: Path) -> InterventionSpec:
+def _finish_format3_recipe(root: Path, trace: Trace | None = None) -> InterventionSpec:
     """Stage the recipe ``intervention.json`` describes (design section 8): the intervention
-    package rebuilds built-in edits through the helper registry; a callable placeholder becomes
-    an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
+    package rebuilds built-in edits (facet writes rebound on ``trace``); a callable placeholder
+    becomes an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
-    from ..intervention.save import _load_trace_recipe_spec
+    from ..intervention._save import _load_trace_recipe_spec
 
-    return _load_trace_recipe_spec(root)
+    return _load_trace_recipe_spec(root, trace)
 
 
 format3_reader.install_load_hooks(
@@ -1266,7 +1267,7 @@ def load(
             )
 
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
-        from ..intervention.save import load_intervention_spec
+        from ..intervention._save import load_intervention_spec
 
         return load_intervention_spec(
             bundle_path,
@@ -2630,7 +2631,7 @@ def _maybe_make_fast_copy_spec(
         otherwise ``None``.
     """
 
-    if not bool(getattr(live_layer, has_field, False)):
+    if not bool(record_member(live_layer, has_field, False)):
         return None
     scrubbed_state = dict(state_items(scrubbed_layer))
     if scrubbed_state.get(tensor_field) is not None:
@@ -2639,12 +2640,13 @@ def _maybe_make_fast_copy_spec(
     if live_field_value is not None:
         return None
 
-    source_ref = getattr(live_layer, ref_field, None)
+    source_ref = record_member(live_layer, ref_field, None)
     if not isinstance(source_ref, LazyActivationRef):
         return None
 
     blob_id = _next_bundle_blob_id(used_blob_ids)
-    setattr(scrubbed_layer, tensor_field, BlobRef(blob_id=blob_id, kind=kind))
+    blob_ref = BlobRef(blob_id=blob_id, kind=kind)
+    setattr(scrubbed_layer, record_storage_attr(scrubbed_layer, tensor_field), blob_ref)
     return _FastCopySpec(
         blob_id=blob_id,
         kind=kind,
@@ -2735,9 +2737,8 @@ def _fast_copy_tensor_blob(
 ) -> TensorEntry:
     """Carry one lazily-backed tensor from its source artifact into the new one.
 
-    The source blob is digest-checked, read by key and queued into the new
-    artifact's chunk files (3.0 chunks hold many tensors, so a whole-file copy
-    no longer applies).
+    The source blob is digest-checked, read by key and queued into the new artifact's chunk
+    files as an entry of its own (its reference takes the source device after the store answers).
 
     Parameters
     ----------
@@ -2752,7 +2753,7 @@ def _fast_copy_tensor_blob(
         Destination manifest entry for the copied blob.
     """
 
-    source_entry = manifest_index.get(fast_copy_spec.source_ref.blob_id)
+    store, source_entry = store.unshared(), manifest_index.get(fast_copy_spec.source_ref.blob_id)
     if source_entry is None:
         raise ArtifactError(f"Manifest is missing blob_id={fast_copy_spec.source_ref.blob_id}.")
 
@@ -3105,7 +3106,7 @@ def _collect_provenance(trace: Trace, *, include_source: bool = True) -> Provena
     autocast_facts: list[dict[str, Any]] = []
     seen_autocast: set[str] = set()
     for op in trace._layer_list:
-        state = getattr(op, "func_autocast_state", None)
+        state = record_member(op, "func_autocast_state", None)
         if not isinstance(state, Mapping) or not state:
             continue
         normalized = _json_ready_provenance_value(state)
@@ -3193,52 +3194,6 @@ def _torchlens_package_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _git_commit_hash(cwd: Path) -> str | None:
-    """Return the Git commit for ``cwd`` with a short best-effort timeout.
-
-    the provenance git commit is resolved from the TORCHLENS package
-    directory, not ``Path.cwd()``. Stamping the working directory's repository
-    recorded the USER's unrelated repo commit (a privacy leak) and made the same
-    capture saved from two directories differ (an ambient-environment dependence in a
-    supposedly portable artifact). Resolving from the package dir yields torchlens's
-    own commit for a dev/editable install and ``None`` for a released wheel (whose
-    ``torchlens_version`` already identifies it) -- deterministic either way.
-
-    Parameters
-    ----------
-    cwd:
-        Directory whose repository HEAD is probed (the torchlens package dir).
-
-    Returns
-    -------
-    str | None
-        Full commit hash, or ``None`` on any failure or timeout.
-    """
-
-    try:
-        # R40: routed through the ONE bounded spawn seam so the timeout path
-        # tears down the whole process group instead of orphaning a wedged
-        # git helper's grandchildren.
-        from .._utils._subprocess import run_bounded_subprocess
-
-        completed = run_bounded_subprocess(
-            ["git", "rev-parse", "HEAD"],
-            cwd=cwd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=0.25,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    commit = completed.stdout.strip()
-    if completed.returncode != 0 or not 7 <= len(commit) <= 64:
-        return None
-    if any(character not in "0123456789abcdef" for character in commit.lower()):
-        return None
-    return commit
-
-
 def _validate_activation_transform_outputs(
     trace: Trace,
     *,
@@ -3266,7 +3221,7 @@ def _validate_activation_transform_outputs(
     for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):
             continue
-        transformed_out = getattr(layer, "transformed_out", None)
+        transformed_out = record_member(layer, "transformed_out", None)
         if transformed_out is None:
             continue
         if not isinstance(transformed_out, torch.Tensor):

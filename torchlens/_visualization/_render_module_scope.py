@@ -11,9 +11,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from .._data_classes.layer import Layer
 from ._render_leaf import _base_node_for_metadata
+from ._segment_descriptors import _is_recorded_module_key
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
     from ._render_common import GraphNode
 
 #: One rendered edge's endpoints: (parent node, tail name), (child node, head name).
@@ -60,7 +62,7 @@ def _get_lowest_module_for_two_nodes(
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
-    if node1.is_atomic_module:
+    if node1.module_context.is_atomic_module:
         node1_nested_modules = node1_modules[:-1]
     else:
         node1_nested_modules = node1_modules[:]
@@ -73,9 +75,9 @@ def _get_lowest_module_for_two_nodes(
         return -1  # no submodule contains them both.
 
     if node1 == node2:
-        if node1.is_atomic_module and (len(node1_modules) == 1):
+        if node1.module_context.is_atomic_module and (len(node1_modules) == 1):
             return -1
-        elif node1.is_atomic_module and (len(node1_modules) > 1):
+        elif node1.module_context.is_atomic_module and (len(node1_modules) > 1):
             module = node1_modules[-2]
         else:
             module = node1_modules[-1]
@@ -180,8 +182,88 @@ def _place_rolled_endpoints_in_pass_scope(
                 queued_names.add(name)
 
 
+def _lowest_common_rendered_owner_key(
+    trace: Trace,
+    owner1: str | None,
+    owner2: str | None,
+    vis_mode: str,
+) -> str | int:
+    """Return the lowest common cluster for two rendered endpoint owners.
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy; decides which address prefixes
+        have a module record and so render as a cluster.
+    owner1:
+        Owning cluster of the first rendered endpoint.
+    owner2:
+        Owning cluster of the second rendered endpoint.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"`` visualization mode.
+
+    Returns
+    -------
+    str | int
+        Lowest common cluster key, or ``-1`` for top-level emission.
+    """
+
+    if owner1 is None or owner2 is None:
+        return -1
+    address1, separator1, call1 = owner1.rpartition(":")
+    address2, separator2, call2 = owner2.rpartition(":")
+    if not separator1:
+        address1 = owner1
+    if not separator2:
+        address2 = owner2
+    common_address = _recorded_common_address(trace, address1, address2)
+    if common_address is None:
+        return -1
+    if vis_mode == "rolled":
+        return common_address
+    if call1 != call2:
+        return -1
+    return f"{common_address}:{call1}" if separator1 and separator2 else common_address
+
+
+def _recorded_common_address(trace: Trace, address1: str, address2: str) -> str | None:
+    """Return the deepest shared address prefix that has a module record.
+
+    The shared dotted prefix of two cluster addresses can end at a container
+    that is never called (``encoder.layers`` for ``encoder.layers.0`` and
+    ``encoder.layers.1.self_attn``); it has no record and no cluster, so the
+    prefix is shortened to the nearest recorded ancestor (``encoder``).
+
+    Parameters
+    ----------
+    trace:
+        Trace owning the module hierarchy.
+    address1:
+        Pass-free address of the first cluster.
+    address2:
+        Pass-free address of the second cluster.
+
+    Returns
+    -------
+    str | None
+        Deepest recorded common ancestor address, or ``None`` when there is none.
+    """
+
+    common_parts: list[str] = []
+    for part1, part2 in zip(address1.split("."), address2.split("."), strict=False):
+        if part1 != part2:
+            break
+        common_parts.append(part1)
+    for length in range(len(common_parts), 0, -1):
+        candidate = ".".join(common_parts[:length])
+        if _is_recorded_module_key(trace, candidate):
+            return candidate
+    return None
+
+
 __all__ = [
     "_RolledEdgeEndpoints",
     "_get_lowest_module_for_two_nodes",
+    "_lowest_common_rendered_owner_key",
     "_place_rolled_endpoints_in_pass_scope",
 ]

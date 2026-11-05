@@ -23,8 +23,9 @@ from typing import Any
 
 import torch
 
+from .. import fingerprint as _fingerprint
 from .._state import pause_logging
-from .types import Edit
+from ._types import Edit
 
 #: HookSpec metadata key holding the staged helper's tensor digests.
 DIGEST_KEY = "helper_tensor_digests"
@@ -93,12 +94,11 @@ def helper_digests(helper: Edit | None) -> tuple[str, ...] | None:
     _collect(helper.kwargs, tensors)
     if not tensors:
         return None
-    from ..fingerprint import content
 
     # Staging can happen mid-capture (the predicate door stages at fire time);
     # the digest's copy ops are TorchLens-internal and must not be logged.
     with pause_logging():
-        return tuple(content(tensor) for tensor in tensors)
+        return tuple(_fingerprint.content(tensor) for tensor in tensors)
 
 
 def helper_versions(helper: Edit | None) -> tuple[int, ...] | None:
@@ -190,6 +190,23 @@ def staged_changed_helpers(spec: Any) -> list[str]:
         )
         for hook_spec in getattr(spec, "hook_specs", None) or ()
     )
+
+
+def alias_staged_helpers(source_spec: Any, copy_spec: Any) -> None:
+    """Point each staged helper in ``copy_spec`` back at the caller's tensors.
+
+    A run's result fork deep-copies the staged spec; re-pointing each copied
+    helper's args at the source's keeps it aliasing the caller's tensor, so a
+    later change still refuses ``helper_tensor_changed_since_capture``.
+    """
+
+    copies = getattr(copy_spec, "hook_specs", None) or ()
+    for source, copied in zip(getattr(source_spec, "hook_specs", None) or (), copies, strict=True):
+        helper = helper_of(source.hook, source.helper)
+        twin = helper_of(copied.hook, copied.helper)
+        if helper is not None and twin is not None:
+            object.__setattr__(twin, "args", helper.args)
+            object.__setattr__(twin, "kwargs", helper.kwargs)
 
 
 def changed_message(door: str, changed: list[str]) -> str:

@@ -6,7 +6,7 @@ alignment or relations (the flexibility invariant). The table is DATA,
 not derivation: loads never recompute it, but its invariants (R1/R2/R3) are
 re-checked on every load and every mutation.
 
-Pattern-of-record: :mod:`torchlens.distributed._ledger` — closed
+Pattern-of-record: :mod:`torchlens._distributed._ledger` — closed
 vocabularies, frozen payload key sets, fail-closed ``from_payload``,
 immutable identity-stable finalized views. Parse boundaries raise
 ``ValueError``; the public Bundle wiring converts into the typed
@@ -76,7 +76,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._fed_by import FED_BY_KIND, check_fed_by_params, validate_fed_by_param
 from ._relation_evidence import (
     validate_carry_mode,

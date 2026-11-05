@@ -13,6 +13,14 @@ shared pair still leaves colliding, astray or ambiguous moves on its own by blan
 padding on one side of its HTML table.  The choices are written onto the edge
 statements of the text the image is rendered from only: they depend on the installed
 Graphviz build, so the DOT a drawing returns or saves never carries them.
+
+An argument label (``arg 1``, the head label that names which input of a multi-input
+op an edge feeds) gets the same treatment only when Graphviz's own spot for it lands
+on something: dot puts a head label a fixed distance below its arrowhead, and when the
+edge leaves a module box from the rank below, that spot is the box's title line (a
+ResNet block's residual add over its ``downsample`` box).  Module titles count as
+obstacles here; an argument label whose default spot is clear keeps it, so drawings
+without that collision render exactly as before.
 """
 
 from __future__ import annotations
@@ -26,22 +34,42 @@ from typing import Any, NamedTuple
 from .._io._json import loads_bounded
 from ..errors import GraphvizUnavailableError
 from . import _render_utils
+from ._label_geometry import (
+    Point,
+    Rect,
+    _bb,
+    _beziers,
+    _bounds,
+    _grow,
+    _label_lines,
+    _outlines,
+    _overlaps,
+    _point,
+    _point_rect_distance,
+    _port_tangent,
+    _rect_line_gap,
+    _rect_poly_gap,
+    _rect_rect_gap,
+    _ring,
+    _sample_bezier,
+    _shifted,
+    _union,
+)
 from ._loop_edges import reports_route_failure, without_compass_ports
-
-Rect = tuple[float, float, float, float]
-Point = tuple[float, float]
 
 #: a head or tail label that carries a rolled pass range (``In 2-3``, ``Out 1``)
 _PASS_TEXT = re.compile(r"(?<![a-z])(?:headlabel|taillabel)=<<TABLE[^\n]*?>(?:In|Out) [0-9]")
+#: an argument-position head label (``arg 1``, ``arg (0, 2)``); placed only when its
+#: default spot collides, and only in drawings with a titled module box to collide with
+_ARG_TEXT = re.compile(r"(?<![a-z])headlabel=<<TABLE[^\n]*?>arg [0-9(]")
+_CLUSTER_LINE = re.compile(r"^\s*subgraph\s+\"?cluster_")
 _EDGE_LINE = re.compile(r'^\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)\s*->\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)')
-_ASCENT, _DESCENT = 0.78, 0.22  # glyph box model of tests/support/label_geometry.py
 _MIN_GAP = 0.5  # (pt) a label nearer than this to anything collides (the gate allows 0.25 overlap)
 #: (pt) extra room text keeps from other text: two labels each nudged by padding can
 #: land a point or so off their predicted spots on older Graphviz
 _TEXT_MARGIN = 1.5
 _CLEAR_TARGET = 3.0  # clearance (pt) after which closeness to the node wins
 _PORT_LABEL_DISTANCE = 10.0  # Graphviz's PORT_LABEL_DISTANCE
-_REACH = 90.0  # (pt) the gap reported when there is nothing to measure against
 _NEAR_END = 12.0  # (pt) a label farther than this from its own edge's end no longer touches it
 _ATTACH_REACH = 30.0  # (pt) the stretch of a label's own edge, from its end, it reads against
 _OTHER_REACH = 60.0  # (pt) other edges at the same node within this of the end compete for it
@@ -55,7 +83,6 @@ _SIDES: dict[str, Point] = {
 }
 _ON_SIDE = 2.0  # (pt) an end this close to a side of its node's box is on that side
 _AT_NODE = 16.0  # (pt) an edge end (arrowhead base included) this close to a node box is at it
-_SAMPLE_STEP = 1.5  # (pt) spacing of outline and spline samples
 _CHUNK = 12  # samples per indexed piece of a line, so a distant stretch is skipped whole
 #: (labeldistance, labelangle) pairs tried, nearest first; angles near 0 sit on the line
 _CANDIDATES: tuple[tuple[float, float], ...] = tuple(
@@ -98,8 +125,12 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
     scene.add_fixed_labels(set(targets))
     new_body = list(body)
     for edge in scene.edges:
-        line_index = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
-        if line_index is None or not edge["labels"]:
+        target = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
+        if target is None or not edge["labels"]:
+            continue
+        line_index, kind = target
+        if kind == "arg" and not scene.default_collides(edge):
+            scene.keep_default(edge)  # an argument label moves only off a module title
             continue
         choice, shifts = scene.choose(edge)
         line = _with_placement(new_body[line_index], choice)
@@ -215,17 +246,35 @@ def _stdout_text(completed: subprocess.CompletedProcess[Any]) -> str:
 
 
 def has_pass_labels(body: Iterable[str]) -> bool:
-    """Return whether any statement line carries a rolled ``In``/``Out`` head or tail label."""
+    """Return whether the statements carry a label the placement pass may move.
 
-    return any(_PASS_TEXT.search(line) for line in body)
+    A rolled ``In``/``Out`` head or tail label anywhere, or an ``arg`` head label in a
+    drawing that also has a module box (``subgraph cluster_...``) whose title it could
+    land on.  A drawing with argument labels and no module box keeps Graphviz's own
+    spots without the extra layout.
+    """
+
+    lines = list(body)
+    if any(_PASS_TEXT.search(line) for line in lines):
+        return True
+    return any(_CLUSTER_LINE.match(line) for line in lines) and any(
+        _ARG_TEXT.search(line) for line in lines
+    )
 
 
-def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], int]:
-    """Map ``(tail, head, occurrence)`` of each pass-labelled edge line to its index."""
+def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], tuple[int, str]]:
+    """Map ``(tail, head, occurrence)`` of each labelled edge line to its index and kind.
 
+    The kind is ``"pass"`` for a rolled ``In``/``Out`` label (always placed) and
+    ``"arg"`` for an argument label (placed only when its default spot collides);
+    argument labels are collected only when the body has a module box.
+    """
+
+    lines = list(body)
+    with_clusters = any(_CLUSTER_LINE.match(line) for line in lines)
     seen: dict[tuple[str, str], int] = {}
-    targets: dict[tuple[str, str, int], int] = {}
-    for index, line in enumerate(body):
+    targets: dict[tuple[str, str, int], tuple[int, str]] = {}
+    for index, line in enumerate(lines):
         match = _EDGE_LINE.match(line)
         if match is None:
             continue
@@ -233,7 +282,9 @@ def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], int]:
         occurrence = seen.get(pair, 0)
         seen[pair] = occurrence + 1
         if _PASS_TEXT.search(line):
-            targets[(*pair, occurrence)] = index
+            targets[(*pair, occurrence)] = (index, "pass")
+        elif with_clusters and _ARG_TEXT.search(line):
+            targets[(*pair, occurrence)] = (index, "arg")
     return targets
 
 
@@ -299,7 +350,11 @@ class _Scene:
         self.borders = [_ring(_bb(obj["bb"])) for obj in objects[:sub_count] if obj.get("bb")]
         self.splines: list[list[Point]] = []
         self.polygons: list[list[Point]] = [o for outs in self.nodes.values() for o in outs]
-        self.rects: list[Rect] = []
+        # a module box's title line is text a label must not cover
+        self.titles: list[Rect] = [
+            r for obj in objects[:sub_count] for r in _label_lines(obj.get("_ldraw_"))
+        ]
+        self.rects: list[Rect] = list(self.titles)
         self.edges: list[dict[str, Any]] = []
         seen: dict[tuple[str, str], int] = {}
         for edge in layout.get("edges", []):
@@ -492,6 +547,25 @@ class _Scene:
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
         return (round(depth, 3), ambiguous, end_gap > _NEAR_END, shortfall, round(end_gap, 3))
 
+    def default_collides(self, edge: dict[str, Any]) -> bool:
+        """Return whether Graphviz's own spot for one of the edge's labels covers a module title.
+
+        Only the title collision moves an argument label: the trigger stays narrow so
+        every drawing without it keeps Graphviz's own label spots.
+        """
+
+        return any(
+            _overlaps(_grow(rect, _MIN_GAP), title)
+            for label in edge["labels"]
+            for rect in label["default"]
+            for title in self.titles
+        )
+
+    def keep_default(self, edge: dict[str, Any]) -> None:
+        """Record the edge's labels at Graphviz's own spots as obstacles for later edges."""
+
+        self.rects.extend(r for label in edge["labels"] for r in label["default"])
+
     def add_fixed_labels(self, targeted: set[tuple[str, str, int]]) -> None:
         """Count the head/tail labels of edges that are not being placed as obstacles."""
 
@@ -573,204 +647,3 @@ def _wrong_side(label: dict[str, Any], lines: list[Rect]) -> bool:
         "top": y1 > ny1 + _MIN_GAP,
     }
     return any(beyond[side] for side in label["taken"])
-
-
-def _shifted(lines: list[Rect], shift: Point) -> list[Rect]:
-    """Return ``lines`` moved by ``shift``."""
-    dx, dy = shift
-    return [(r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy) for r in lines]
-
-
-def _union(rects: Sequence[Rect]) -> Rect:
-    """Return the smallest rectangle that covers every rectangle in ``rects``."""
-    return (
-        min(r[0] for r in rects),
-        min(r[1] for r in rects),
-        max(r[2] for r in rects),
-        max(r[3] for r in rects),
-    )
-
-
-def _bb(text: str) -> Rect:
-    """Parse a Graphviz bounding box string (left, bottom, right, top)."""
-    x0, y0, x1, y1 = (float(v) for v in text.split(","))
-    return (x0, y0, x1, y1)
-
-
-def _point(text: str) -> Point:
-    """Parse a Graphviz ``x,y`` point, ignoring any trailing fields."""
-    x, y = (float(v) for v in text.split(",")[:2])
-    return (x, y)
-
-
-def _outlines(ops: Any) -> list[list[Point]]:
-    """Return closed outlines for the ellipses, polygons and curves in Graphviz draw ops."""
-    outlines: list[list[Point]] = []
-    for op in ops or []:
-        if op["op"] in ("e", "E"):
-            cx, cy, rx, ry = (float(v) for v in op["rect"])
-            ellipse = [
-                (cx + rx * math.cos(k * math.pi / 32), cy + ry * math.sin(k * math.pi / 32))
-                for k in range(64)
-            ]
-            outlines.append(_densify([*ellipse, ellipse[0]]))
-        elif op["op"] in ("p", "P"):
-            corners = [(float(x), float(y)) for x, y in op["points"]]
-            outlines.append(_densify([*corners, corners[0]]))
-        elif op["op"] in ("b", "B"):  # curved shapes (cylinder, rounded box)
-            outlines.append(_sample_bezier([(float(x), float(y)) for x, y in op["points"]]))
-    return outlines
-
-
-def _ring(rect: Rect) -> list[Point]:
-    """Return the densified outline of ``rect``."""
-    x0, y0, x1, y1 = rect
-    return _densify([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
-
-
-def _densify(points: Sequence[Point]) -> list[Point]:
-    """Resample a polyline so consecutive samples are at most ``_SAMPLE_STEP`` apart."""
-
-    dense = [points[0]]
-    for (x0, y0), (x1, y1) in zip(points, points[1:], strict=False):
-        steps = max(1, math.ceil(math.hypot(x1 - x0, y1 - y0) / _SAMPLE_STEP))
-        dense += [
-            (x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps) for k in range(1, steps + 1)
-        ]
-    return dense
-
-
-def _beziers(ops: Any) -> list[list[Point]]:
-    """Return the control points of every Bezier draw op."""
-    return [
-        [(float(x), float(y)) for x, y in op["points"]]
-        for op in ops or []
-        if op["op"] in ("b", "B")
-    ]
-
-
-def _label_lines(ops: Any) -> list[Rect]:
-    """Glyph boxes of a label's text lines (the geometry gate's box model)."""
-
-    size, rects = 14.0, []
-    for op in ops or []:
-        if op["op"] == "F":
-            size = float(op["size"])
-        elif op["op"] == "T":
-            x, y = (float(v) for v in op["pt"])
-            width = float(op["width"])
-            x0 = (
-                x - width
-                if op.get("align") == "r"
-                else x - width / 2
-                if op.get("align") == "c"
-                else x
-            )
-            rects.append((x0, y - _DESCENT * size, x0 + width, y + _ASCENT * size))
-    return rects
-
-
-def _port_tangent(pos: str, *, head: bool) -> tuple[Point, Point]:
-    """Return Graphviz's ``place_portlabel`` end point and inner point for one end."""
-
-    pieces = pos.split(";")
-    tokens = (pieces[-1] if head else pieces[0]).split()
-    flag = "e," if head else "s,"
-    tip = next((_point(t[2:]) for t in tokens if t.startswith(flag)), None)
-    ctrl = [_point(t) for t in tokens if not t.startswith(("e,", "s,"))]
-    if head:
-        if tip is not None:
-            return tip, ctrl[-1]
-        return ctrl[-1], _bezier_at(ctrl[-4:], 0.9)
-    if tip is not None:
-        return tip, ctrl[0]
-    return ctrl[0], _bezier_at(ctrl[:4], 0.1)
-
-
-def _bezier_at(ctrl: Sequence[Point], t: float) -> Point:
-    """Evaluate a cubic Bezier segment at parameter ``t``."""
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = ctrl
-    m = 1.0 - t
-    return (
-        m**3 * x0 + 3 * m * m * t * x1 + 3 * m * t * t * x2 + t**3 * x3,
-        m**3 * y0 + 3 * m * m * t * y1 + 3 * m * t * t * y2 + t**3 * y3,
-    )
-
-
-def _sample_bezier(ctrl: Sequence[Point]) -> list[Point]:
-    """Sample a piecewise cubic Bezier into a densified polyline."""
-    points = [ctrl[0]]
-    for start in range(0, len(ctrl) - 3, 3):
-        points += [_bezier_at(ctrl[start : start + 4], k / 16) for k in range(1, 17)]
-    return _densify(points)
-
-
-def _bounds(points: Sequence[Point]) -> Rect:
-    """Return the bounding rectangle of ``points``."""
-    xs, ys = [p[0] for p in points], [p[1] for p in points]
-    return (min(xs), min(ys), max(xs), max(ys))
-
-
-def _grow(rect: Rect, margin: float) -> Rect:
-    """Return ``rect`` enlarged by ``margin`` on every side."""
-    return (rect[0] - margin, rect[1] - margin, rect[2] + margin, rect[3] + margin)
-
-
-def _overlaps(a: Rect, b: Rect) -> bool:
-    """Whether rectangles ``a`` and ``b`` touch or overlap."""
-    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
-
-
-def _depth(point: Point, rect: Rect) -> float:
-    """How far ``point`` lies inside ``rect`` (negative outside)."""
-
-    return min(point[0] - rect[0], rect[2] - point[0], point[1] - rect[1], rect[3] - point[1])
-
-
-def _point_rect_distance(point: Point, rect: Rect) -> float:
-    """Distance from ``point`` to ``rect`` (zero inside)."""
-    dx = max(rect[0] - point[0], 0.0, point[0] - rect[2])
-    dy = max(rect[1] - point[1], 0.0, point[1] - rect[3])
-    return math.hypot(dx, dy)
-
-
-def _rect_rect_gap(a: Rect, b: Rect) -> float:
-    """Gap between rectangles ``a`` and ``b`` (negative when they overlap)."""
-    dx = max(b[0] - a[2], a[0] - b[2])
-    dy = max(b[1] - a[3], a[1] - b[3])
-    if dx > 0 or dy > 0:
-        return math.hypot(max(dx, 0.0), max(dy, 0.0))
-    return max(dx, dy)
-
-
-def _rect_line_gap(rect: Rect, points: Sequence[Point]) -> float:
-    """Gap from ``rect`` to densely sampled points; negative is the deepest sample inside."""
-
-    inside = max((_depth(p, rect) for p in points), default=-math.inf)
-    if inside >= 0.0:
-        return -inside
-    return min((_point_rect_distance(p, rect) for p in points), default=_REACH)
-
-
-def _rect_poly_gap(rect: Rect, ring: Sequence[Point]) -> float:
-    """Gap from ``rect`` to a closed, densely sampled outline; negative when they overlap."""
-
-    gap = _rect_line_gap(rect, ring)
-    corners = ((rect[0], rect[1]), (rect[2], rect[1]), (rect[2], rect[3]), (rect[0], rect[3]))
-    inner = [c for c in corners if _inside(c, ring)]
-    if not inner:
-        return gap
-    # A corner inside the shape: the penetration is how far that corner lies from
-    # the outline, which can exceed how far the outline reaches into the box.
-    depth = max(min(math.hypot(c[0] - p[0], c[1] - p[1]) for p in ring) for c in inner)
-    return -max(depth, -gap)
-
-
-def _inside(point: Point, poly: Sequence[Point]) -> bool:
-    """Whether ``point`` lies inside polygon ``poly`` (even-odd rule)."""
-    x, y = point
-    hit = False
-    for (x1, y1), (x2, y2) in zip(poly, [*poly[1:], poly[0]], strict=True):
-        if (y1 > y) != (y2 > y) and x < x1 + (y - y1) * (x2 - x1) / (y2 - y1):
-            hit = not hit
-    return hit

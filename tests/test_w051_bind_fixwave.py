@@ -24,8 +24,8 @@ import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
 from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.values import ValueEncoder
+from torchlens.intervention._injection import attest_injected_ops, injected_ops
 from torchlens.intervention.errors import BindingPreflightError, OpaqueCallableError
-from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 _READY = tl.options.CaptureOptions(replayable=True)
@@ -233,7 +233,7 @@ def test_nan_output_injected_op_attests_and_value_mismatch_still_diverges() -> N
     assert report.passed, [(row.label, row.status, row.reason) for row in report.rows]
 
     # tripwire intact: a finite value edit on the recorded out diverges
-    from torchlens.intervention.injection import injection_state
+    from torchlens.intervention._injection import injection_state
 
     state = injection_state(logged)
     tampered = []
@@ -361,7 +361,7 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     trace = tl.trace(model, x)
     capture_keys: dict[str, list[str]] = {}
     for op in trace.ops:
-        capture_keys.setdefault(op.type, []).append(op.site_key)
+        capture_keys.setdefault(op.type, []).append(op.graph.site_key)
     for func_name in ("linear", "relu"):
         bound = tl.when(tl.func(func_name), tl.scale(1.0)).bind(model, on_zero_fire="disclose")
         bound(x)
@@ -529,10 +529,10 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     records = injected_ops(logged)
     assert records
     host = next(op for op in logged.ops if getattr(op, "is_edited", False))
-    assert "fc1:1" in host.output_of_module_calls
+    assert "fc1:1" in host.module_context.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
-        assert record.provenance.host_site_key == host.site_key
+        assert record.provenance.host_site_key == host.graph.site_key
         assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
     logged.save(str(path), level="audit")

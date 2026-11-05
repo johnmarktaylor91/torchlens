@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 from ... import _state
+from ..._capture._arg_snapshot import split_non_tensor_args
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
@@ -41,10 +42,10 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import ValidationReplaySource, ValidationStatus
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
@@ -59,6 +60,7 @@ from .._finalize import (
     stable_callable_name as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._invariants import run_metadata_invariants
 from .._options import (
     PADDLE_EXTRA_KWARG_POLICY,
     PADDLE_PREVIEW_TRACE_OPTION_POLICY,
@@ -880,7 +882,7 @@ class PaddleBackend:
         source = _validation_source(trace)
         payload_load_status = getattr(trace, "payload_load_status", None)
         try:
-            from ...validation.status import count_importer_region_annotations
+            from ..._validation_status import count_importer_region_annotations
 
             outcome = self._paddle_replay_outcome(
                 trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
@@ -942,10 +944,8 @@ class PaddleBackend:
                 (validation_decision(label, OUTCOME_FAILED, reason, detail),)
             )
         if validate_metadata:
-            from ...validation.invariants import check_metadata_invariants
-
             try:
-                invariants_ok = check_metadata_invariants(trace)
+                invariants_ok = run_metadata_invariants(trace)
             except Exception as exc:  # noqa: BLE001 - the invariant error names the problem
                 invariants_ok = False
                 detail = f"{type(exc).__name__}: {exc}"
@@ -1553,6 +1553,9 @@ class PaddleBackend:
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
+        pos_args, kw_args = split_non_tensor_args(
+            func_event_input.args, func_event_input.kwargs, self.is_tensor
+        )
         return OpEvent(
             kind=kind,
             label_raw=reserved.label_raw,
@@ -1580,17 +1583,9 @@ class PaddleBackend:
                 num_args_total=len(func_event_input.args) + len(func_event_input.kwargs),
                 num_pos_args=len(func_event_input.args),
                 num_kwargs=len(func_event_input.kwargs),
-                non_tensor_pos_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
-                non_tensor_kwargs=tuple(
-                    (key, value)
-                    for key, value in func_event_input.kwargs.items()
-                    if not self.is_tensor(value)
-                ),
-                func_non_tensor_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
+                non_tensor_pos_args=tuple(pos_args),
+                non_tensor_kwargs=tuple(kw_args.items()),
+                func_non_tensor_args=tuple(pos_args),
                 is_inplace=False,
                 func_config=(),
             ),
@@ -1701,7 +1696,7 @@ class PaddleBackend:
                     position = (key, *path)
                     kwarg_positions[position] = label
                     _add(label, position, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _build_op_capture(
         self,
@@ -2546,7 +2541,7 @@ def _paddle_trace_intermediate_signatures(
         if require_float and not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = PaddleIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(getattr(op.call, "call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())

@@ -1,7 +1,7 @@
 """r7 R74 F1 (opus b9 MED-HIGH, PROVEN): pin the forward-replay tolerance band.
 
 The band behind every per-op replay verdict (`_tolerances_for_dtype`,
-consumed by ``validation/core.py`` with ``allow_tolerance=True``) appeared in
+consumed by ``validation/_core.py`` with ``allow_tolerance=True``) appeared in
 ZERO test files, while the sibling GRAD band is pinned hard
 (``tests/test_grad_tolerance_dtype_tripwire.py``). The comparator's own entry
 self-test is a PRESENCE check, not a TIGHTNESS check: opus binary-searched the
@@ -175,7 +175,7 @@ def test_comparator_self_test_bounds_the_effective_band(
     """
 
     from torchlens._utils import tensor_utils as tensor_utils_mod
-    from torchlens.validation.core import _comparator_self_test
+    from torchlens.validation._core import _comparator_self_test
 
     _comparator_self_test()  # healthy band passes
 
@@ -237,12 +237,12 @@ def test_deep_numeric_replay_constants_are_pinned_literals() -> None:
     """R13 fix (e): pin the band-C ceiling/derivation constants literally.
 
     These are absolute verdict ceilings for the deep-numeric replay lane
-    (``validation/core.py``); a silent bump is a tolerance walk-out of the
+    (``validation/_core.py``); a silent bump is a tolerance walk-out of the
     same class as the headroom walk pinned above. Includes the R13
     dynamic-range guard constant introduced with the atol-amplification fix.
     """
 
-    from torchlens.validation import core as validation_core
+    from torchlens.validation import _core as validation_core
 
     assert validation_core.DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH == 64
     assert validation_core.DEEP_NUMERIC_REPLAY_RTOL == 1e-3

@@ -25,14 +25,17 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._tl import get_tensor_label, set_tensor_label
+from .._state import pause_logging
+from ._internal_read import internal_scalar_read
 from ._sparse_parts import sparse_component_tensors
+from ._tensor_label import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
+    get_tracing_tensor_types,
 )
-from ._torch_symbols import torch_attr
+from ._torch_symbols import tensor_read, tensor_reads, torch_attr
 from .env_flags import closed_bool_env
 
 
@@ -115,7 +118,7 @@ _DTYPE_FLOAT_TOLERANCES: dict[torch.dtype, tuple[float, float]] = {
 REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE = _DTYPE_FLOAT_TOLERANCES[torch.float32]
 
 # Gradient-validation tolerance pairs, spelled ONCE here (formerly bare
-# literals repeated across validation/backward.py, validation/consolidated.py,
+# literals repeated across validation/_backward.py, validation/_consolidated.py,
 # validation/_layer_grad_report.py, and receptive_field/__init__.py, where two
 # backward checks of the same capture disagreed 10x with no error model).
 #
@@ -431,10 +434,7 @@ def _quantized_tensor_equal(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> b
     return (
         tensor_a.q_per_channel_axis() == tensor_b.q_per_channel_axis()
         and torch.equal(tensor_a.q_per_channel_scales(), tensor_b.q_per_channel_scales())
-        and torch.equal(
-            tensor_a.q_per_channel_zero_points(),
-            tensor_b.q_per_channel_zero_points(),
-        )
+        and torch.equal(tensor_a.q_per_channel_zero_points(), tensor_b.q_per_channel_zero_points())
     )
 
 
@@ -538,7 +538,9 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
-    with _state_module().pause_logging():
+    # A comparison on a strict subclass reconstructs it like clone() does: same bracket.
+    subclass_side = tensor_b if type(tensor_a) in (torch.Tensor, torch.nn.Parameter) else tensor_a
+    with _state_module().pause_logging(), _pause_dispatch_modes_for_subclass_clone(subclass_side):
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
             # saved payloads off the op's device, so compare exact host copies.
@@ -546,11 +548,10 @@ def tensor_nanequal(
         if tensor_a.is_quantized or tensor_b.is_quantized:
             return _quantized_tensor_equal(tensor_a, tensor_b)
 
-        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every
-        # comparison below used to escape tl.trace() as a raw torch-internal
-        # NotImplementedError naming the SparseCPU dispatcher (R65; the layout
-        # sibling of the fp8 class documented below). Compare the canonical
-        # structure exactly and recurse on the strided values tensor so
+        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every comparison
+        # below used to escape tl.trace() as a raw torch-internal NotImplementedError naming
+        # the SparseCPU dispatcher (R65; the layout sibling of the fp8 class documented below).
+        # Compare the canonical structure exactly and recurse on the strided values tensor so
         # NaN/Inf/tolerance semantics match the dense path.
         if tensor_a.layout != tensor_b.layout:
             return False
@@ -585,10 +586,9 @@ def tensor_nanequal(
                 tensor_a.values(), tensor_b.values(), allow_tolerance=allow_tolerance
             )
 
-        # Validation overwhelmingly compares identical ordinary floating-point
-        # payloads. Avoid constructing the Inf/NaN masks and substituted tensors
-        # in that common case; non-exact comparisons and non-floating dtypes
-        # retain the full comparison below.
+        # Validation overwhelmingly compares identical ordinary floating-point payloads. Avoid
+        # constructing the Inf/NaN masks and substituted tensors in that common case;
+        # non-exact comparisons and non-floating dtypes retain the full comparison below.
         # IEEE equality hides -0.0 vs +0.0; only certify EXACT when zero sign
         # bits agree too (fp8 widens first: no signbit kernel). A flip falls
         # through -- the tolerance band below may still legitimately accept it.
@@ -818,7 +818,7 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         Tensor containing ``left`` followed by ``right`` on dimension 0.
     """
 
-    with _state_module().pause_logging():
+    with pause_logging():
         return torch.cat([left, right], dim=0)
 
 
@@ -856,9 +856,10 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
         or type(x) is torch.nn.Parameter
     ):
         return nullcontext()
-    # Deferred: backends.torch is upward of utils in the layer map; this branch is the floor-only (torch 2.1/2.2)
-    # fallback, so a plain `import torchlens` never pays for it.
-    from ..backends.torch._modes import pause_own_dispatch_modes
+    # Deferred: backends.torch is upward of utils in the layer map (C01 item
+    # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
+    # `import torchlens` never pays for it.
+    from ._dispatch_modes import pause_own_dispatch_modes
 
     return pause_own_dispatch_modes()
 
@@ -904,12 +905,12 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 #      moved without interception, so an unforeseen torch-side mutation path
 #      becomes a hard error instead of a silently corrupted saved activation.
 #
-# Known residual (documented; the same class as untraced ops): a host-level
-# write that bypasses torch dispatch entirely (raw ``data_ptr()``/numpy buffer
-# writes, ctypes) neither triggers interception nor bumps the version counter.
-# Eager cloning was immune to that case; deferral is therefore gated to plain
-# captures where none of the honesty machinery (runnable witnesses, backward
-# capture, transforms) is armed.
+# Host-level writes bypass torch dispatch (raw ``data_ptr()``/numpy/DLPack buffer
+# writes, ctypes, foreign kernels) and bump no version, so the wrapper of every
+# zero-copy export made by the logged forward copies out the receiver's pending
+# aliases first (``backends/torch/_storage_exports.py``, residuals listed there).
+# Deferral stays gated to plain captures (no
+# runnable witnesses, backward capture or transforms armed).
 #
 # GRAPH-CONNECTED PAYLOADS (the default ``tl.trace(model, x)`` regime)
 # --------------------------------------------------------------------
@@ -1009,7 +1010,6 @@ def _paused_internal_reads() -> Iterator[None]:
     must run under ``pause_logging`` plus ``internal_scalar_read`` or they
     would register as user raw-pointer escapes on witness-armed captures.
     """
-    from ..backends.torch._internal_read import internal_scalar_read
 
     with _state_module().pause_logging(), internal_scalar_read():
         yield
@@ -1026,13 +1026,12 @@ def _deferred_storage_key(x: torch.Tensor) -> tuple[int, int, str] | None:
     fires, and the entry guard's own contract is that FakeTensors never reach
     pointer-reading metadata (order-dependent repro).
     """
-    from ._torch_compat import get_tracing_tensor_types
 
     tracing_types = get_tracing_tensor_types()
     if tracing_types and isinstance(x, tracing_types):
         return None
     try:
-        storage = x.untyped_storage()
+        storage = tensor_read(x, "untyped_storage")(x)
         ptr = storage.data_ptr()
         nbytes = storage.nbytes()
     except Exception:
@@ -1107,17 +1106,17 @@ def _try_defer_payload_alias(
         return None
     if x.layout is not torch.strided or x.is_quantized:
         return None
-    if x.device.type == "meta" or x.numel() == 0:
+    numel, conj, neg, inference = tensor_reads(x, "numel", "is_conj", "is_neg", "is_inference")
+    if x.device.type == "meta" or numel(x) == 0:
         return None
     try:
-        if x.is_conj() or x.is_neg() or x.is_inference():
+        if conj(x) or neg(x) or inference(x):
             return None
     except Exception:
         return None
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)
@@ -1236,8 +1235,9 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
 
 def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> bool:
     """Return whether ``alias`` spans its storage end to end (offset 0)."""
+    storage_offset, element_size = tensor_reads(alias, "storage_offset", "element_size")
     try:
-        if alias.storage_offset() != 0:
+        if storage_offset(alias) != 0:
             return False
         span_elems = 1
         # len(shape) == len(stride) is a torch invariant (both are the rank).
@@ -1245,7 +1245,7 @@ def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> boo
             if size == 0:
                 return False
             span_elems += (size - 1) * abs(stride)
-        return span_elems * alias.element_size() == storage_nbytes
+        return span_elems * element_size(alias) == storage_nbytes
     except Exception:
         return False
 
@@ -1271,8 +1271,8 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
     _defer_dead_alias_count += 1
     entries = _DEFER_PENDING.get(key)
     if entries is not None:
-        live = [e for e in entries if e.ref() is not None]
-        if not live:
+        live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
+        if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live
@@ -1662,7 +1662,7 @@ def _clone_tensor_payload(
         Tensor payload with TorchLens raw label preserved, or a rewrapped
         parameter payload for parameter inputs.
     """
-    with _state_module().pause_logging():
+    with pause_logging():
         if save_mode not in SAVE_MODES:
             raise ValueError(
                 "save_mode must be one of " + ", ".join(repr(m) for m in sorted(SAVE_MODES))

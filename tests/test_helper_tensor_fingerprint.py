@@ -93,7 +93,7 @@ def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> N
 
     model, x, direction = setup
     trace = _staged_trace(model, x, direction, door)
-    trace.run(model, x)
+    trace = trace.run(model, x)
     readout = trace.output_ops[0].out.clone()
     staged = trace._intervention_spec.freeze().hook_specs
     version = direction._version
@@ -107,7 +107,7 @@ def test_rerun_refuses_a_changed_helper_tensor(setup, door: str, edit: str) -> N
     assert torch.equal(trace.output_ops[0].out, readout)
     assert trace._intervention_spec.freeze().hook_specs == staged
     with pytest.raises(SpecMutationError):
-        trace.run(model, x, replay=tl.options.ReplayOptions(append=True))
+        trace.append(x, model=model)
 
 
 def test_func_predicate_rerun_refuses_a_changed_helper_tensor(setup) -> None:
@@ -132,7 +132,7 @@ def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
         direction.add_(0.25)
         trace.clear_edits(handle=handle)
         handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
-        trace.run(model, x)
+        trace = trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 
 
@@ -208,3 +208,41 @@ def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) ->
         rerun()
     assert excinfo.value.fields["code"] == _CODE
     assert torch.equal(product.find_sites(tl.module("fc2")).first().out, readout)
+
+
+def _run_door(trace: Any, model: nn.Module, x: torch.Tensor, door: str) -> Any:
+    """Run ``trace`` through ``door`` and return the Trace that run wrote."""
+
+    if door == "fast":
+        return trace.run_transaction(inputs=x, fast=True).trace
+    if door == "transaction":
+        return trace.run_transaction(inputs=x).trace
+    return trace.run(model, x)
+
+
+@pytest.mark.parametrize(
+    ("door", "save"),
+    [
+        ("positional_capture", None),
+        ("positional_guarded_fast", "fc2"),
+        ("fast", "fc2"),
+        ("transaction", None),
+    ],
+)
+def test_run_result_refuses_a_changed_helper_tensor(setup, door: str, save: Any) -> None:
+    """Each run door's result keeps the caller's steer tensor, so its next run refuses a change.
+
+    Every door writes its result into a fork of the source. A fork that copied
+    the staged helper would rerun the stale copy silently on the result's next
+    run; the fork keeps the caller's tensor instead, so that run refuses typed.
+    """
+
+    model, x, direction = setup
+    options: dict[str, Any] = {} if save is None else {"save": tl.module(save)}
+    trace = tl.trace(model, x, intervene=tl.when(tl.module("fc1"), _steer(direction)), **options)
+    product = _run_door(trace, model, x, door)
+    assert product is not trace
+    direction.add_(0.5)
+    with pytest.raises(SpecMutationError) as excinfo:
+        _run_door(product, model, x, door)
+    assert excinfo.value.fields["code"] == _CODE

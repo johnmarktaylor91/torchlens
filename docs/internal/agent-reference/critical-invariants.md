@@ -38,8 +38,8 @@
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
-    annotation families; entry-dark declared slots `Op.injection_provenance` (log-injection writes),
-    `Trace.source.snapshots`, `Trace.graph.structure_evidence` validate fail-closed.
+    annotation families; entry-dark declared slots `Op.call.injection_provenance` (F01 writes),
+    `Trace.source.snapshots` (F30), `Trace.graph.structure_evidence` (F33) validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
 9c. The amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
@@ -60,7 +60,7 @@
     `step_output`; `cache_len` DELETED for the channel-keyed
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
     versions quarantine), and entry-dark slots `Trace.provenance.root_entry_point` (written unconditionally),
-    `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
+    `Op.episode_step`, `Op.call.tl_authored_root` with fail-closed validation.
 9d. tlspec v10 (batch-2 coordinated schema write): one bump for every new saved
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
@@ -75,7 +75,7 @@
     record `torchlens/schemas/writer_contract_v11.json`; the v10 contract stays frozen beside it
     (`tests/test_schema_v10_contract_and_goldens.py::V10_CONTRACT_SHA256`).
 9f. tlspec v12 (3.0 columnar records; current): `Op.is_constant` (stamped by the shared
-    constants rule) and `Op.arg_expressions` persist on the op record, admitted by
+    constants rule) and `Op.source.arg_expressions` persist on the op record, admitted by
     `tests/test_schema_v12_contract.py::V12_FIELD_ADMISSIONS`; the reader floor moves to 12 with
     the contract. Contract of record `torchlens/schemas/writer_contract_v12.json`; the v11
     contract stays frozen beside it.
@@ -126,7 +126,13 @@
     recorded as sibling ops with no boundary (FlashAttention 2's
     `flash_attn::_flash_attn_forward`, keyed on the operator its replay callable calls plus
     its `func_name`: the log-sum-exp and dropout mask read q and k, the rng state none of q,
-    k, v; the attention output has no row). An ordinary custom Function
+    k, v; the attention output has no row). A `vmap` boundary over a known transformers mask
+    builder is checked against a declared mask-builder table (ruling
+    d-aad71aaad45648ba93beaf7e05f2a1bb): `head_idx`, position 1, is excused only when the
+    mapped callable is `and_mask`, `causal_mask_function` or the packed-sequence, padding or
+    sliding-window inner mask of `transformers.masking_utils` by identity, an `and_mask`
+    composes only table builders, and no leaf's code references `head_idx`; everything else
+    stays strict (`validation/_mask_builder_dependence.py`). An ordinary custom Function
     (interior in torch) is captured op by op exactly as before. A round trip outside any
     Function is never collapsed into a boundary that hides ops: the export is journaled as a
     departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited

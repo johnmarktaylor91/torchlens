@@ -24,13 +24,16 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._capture.predicates import _evaluate_intervene_op
 from .._ir.intervention import FireResult
-from .._state import pause_logging
-from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+from .._ir.live_index import LiveIndexWindowError
+from .._ir.selector_eval import selector_contains_kind
+from .._selection.selectors import BaseSelector
+from .._utils._tensor_label import clear_tensor_label, get_tensor_label
 from ._rule_match import _match_rules, _rule_decision
+from ._spec import Recipe
 from ._zero_fire import note_capture_rule_fired
-from .hooks import make_live_site_proxy
-from .spec import Recipe
+from .hooks import make_live_site_proxy, normalize_hook_plan
 
 #: ``backends.torch._ops_interventions``, bound on first use: the backend module
 #: imports this package at module level, so a module-level import here would
@@ -95,9 +98,6 @@ class _BoundaryPredicate:
 def _addresses_module(selector: Any) -> bool:
     """Return whether ``selector`` is a ``BaseSelector`` with a ``module`` term."""
 
-    from .._ir.selector_eval import selector_contains_kind
-    from .._selection.selectors import BaseSelector
-
     return isinstance(selector, BaseSelector) and selector_contains_kind(selector, "module")
 
 
@@ -142,7 +142,6 @@ def _boundary_decision(predicate: _BoundaryPredicate, site: Any) -> tuple[Any, A
             return None
         decision = _rule_decision(rule)
         return None if decision is None else (decision, rule.target)
-    from .._capture.predicates import _evaluate_intervene_op
 
     decision = _evaluate_intervene_op(site, predicate.options)
     return None if decision is None else (decision, predicate.selector)
@@ -176,7 +175,6 @@ def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str,
     label = get_tensor_label(out)
     if label is None:
         return False
-    from .._ir.live_index import LiveIndexWindowError
 
     try:
         event = trace.capture_events.live_index.require_event(label)
@@ -229,8 +227,7 @@ def _fire_boundary_predicate_hooks(
     """
 
     from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
-    from .hooks import normalize_hook_plan
-    from .runtime import (
+    from ._runtime import (
         _apply_live_hooks,
         _armed_injection_state,
         _current_injection_rule,
@@ -325,7 +322,7 @@ def _apply_module_boundary_live_hooks(
         Module output with any tensor replacements applied.
     """
 
-    from .runtime import _apply_live_hooks
+    from ._runtime import _apply_live_hooks
 
     trace, _ = _state.active_capture()
     boundary = _BoundaryCall(
@@ -409,8 +406,8 @@ def _record_tensor_live_fire_results(
 def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ...]:
     """Return (without consuming) live fire results attached to ``tensor``.
 
-    Checks the plain attribute first, then the storage-owned side table the
-    robust setter falls back to for attr-rejecting replacement tensors. The
+    Checks the plain attribute first, then the weakly owned out-of-band table
+    the robust setter falls back to for attr-rejecting replacement tensors. The
     module-exit consumer gates its replacement-vs-internal-source
     classification on this peek, so it must see both channels.
 
@@ -426,19 +423,7 @@ def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
         fire_results = ()
     if fire_results:
         return fire_results
-    intervention_state = _ops_interventions()
-    try:
-        with pause_logging():
-            storage = tensor.untyped_storage()
-        records = getattr(storage, intervention_state._LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
-    except Exception:
-        return ()
-    if not isinstance(records, dict):
-        return ()
-    entry = records.get(id(tensor))
-    if entry is not None and entry[0]() is tensor:
-        return tuple(entry[1])
-    return ()
+    return tuple(_ops_interventions()._peek_out_of_band_fire_results(tensor))
 
 
 def _record_module_intervention_parent_labels(

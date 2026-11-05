@@ -24,8 +24,8 @@ from torchlens.errors import (
     BackendUnsupportedError,
     UnknownBackendError,
 )
+from torchlens.intervention._types import InterventionDecision
 from torchlens.intervention.errors import SiteResolutionError
-from torchlens.intervention.types import InterventionDecision
 from torchlens.options import (
     CaptureOptions,
     VisualizationOptions,
@@ -66,21 +66,21 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     (
-        "torchlens.recording.exceptions",
+        "torchlens.recording._exceptions",
         "RecordingConfigError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.recording.exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
-    ("torchlens.recording.exceptions", "RecoveryError", errors.CaptureError, "subclass"),
-    ("torchlens.recording.exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
+    ("torchlens.recording._exceptions", "RecorderStateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording._exceptions", "RecoveryError", errors.CaptureError, "subclass"),
+    ("torchlens.recording._exceptions", "BundleNotFinalizedError", errors.CaptureError, "subclass"),
     (
-        "torchlens.recording.exceptions",
+        "torchlens.recording._exceptions",
         "RecordContextFieldError",
         errors.ConfigurationError,
         "subclass",
     ),
-    ("torchlens.recording.exceptions", "PredicateError", errors.CaptureError, "subclass"),
+    ("torchlens.recording._exceptions", "PredicateError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "TorchLensInterventionError",
@@ -295,7 +295,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ("torchlens.intervention.errors", "NoParentError", errors.ConfigurationError, "subclass"),
     ("torchlens.intervention.errors", "DeadParentError", errors.ConfigurationError, "subclass"),
     (
-        "torchlens.validation.invariants",
+        "torchlens.validation._invariants",
         "MetadataInvariantError",
         errors.ValidationError,
         "subclass",
@@ -546,7 +546,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "UnknownPersistedFieldError": ("RuntimeError",),
     # Taxonomy closure (the last pre-release reds): rows for the two
     # already-registered episode classes that never received one, and for
-    # BundleExperimentError, defined beside them in errors/episode.py but
+    # BundleExperimentError, defined beside them in errors/_episode.py but
     # never imported into the registry.
     "BundleExperimentError": ("RuntimeError",),
     "ParamEvidenceMissingError": ("RuntimeError",),
@@ -903,7 +903,7 @@ def _multiarg_refusal_cases() -> tuple[tuple[BaseException, dict[str, object]], 
     )
     from torchlens._io.state_keys import PortableStateKeyError
     from torchlens._runnable import RunnableErrorCode
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     return (
         (
@@ -1223,11 +1223,6 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "torchlens.intervention.errors; defined in the L0 error module so the "
         "format 3 recipe encoder can raise it; this row records the defining file"
     ),
-    "torchlens.bundle._labels.AmbiguousLabelError": (
-        "registered in torchlens.errors under the preserved runtime home "
-        "torchlens.bundle; this row records the defining file (moved into the "
-        "label leaf so the leaf stops importing the package)"
-    ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "
         "domain-door errors, never caught by kernel class in user code — "
@@ -1323,7 +1318,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
         "the taxonomy — flagged for future taxonomy adoption"
     ),
-    "torchlens.backends.torch._tl.TorchLensTLCollisionError": (
+    "torchlens._utils._tensor_label.TorchLensTLCollisionError": (
         "capture-entry _tl attribute-collision guard; plain AttributeError outside the "
         "taxonomy — flagged for future taxonomy adoption"
     ),

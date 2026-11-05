@@ -44,7 +44,7 @@ import torch
 from ... import _state
 from ..._utils import _torch_compat
 from ..._utils._foreign_data_replay import foreigndata
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 
 MetadataSetter = Callable[..., None]
 """The transform-metadata setter (``_transform_wrappers._set_transform_metadata``)."""
@@ -722,6 +722,11 @@ def known_native_custom_op_output_dependence(
             if row.output_index == output_index:
                 return row
     return None
+
+
+CALL_OPERATOR_ATTR = "_tl_call_operator"
+"""Attribute a wrapping replay callable (a receiver-mutating operator's) carries to name the
+operator ``functools.partial`` it calls, so validation can still identify the operator."""
 
 
 def recorded_custom_op_name(func: Any) -> str | None:

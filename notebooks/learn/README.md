@@ -1,8 +1,9 @@
 # Learn TorchLens
 
-Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes); each later notebook
-is one rung up and stands on its own. Every notebook runs on a laptop CPU in seconds and
-downloads nothing: the models come from `learn_models.py` beside the notebooks.
+Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes). Each later notebook
+adds one idea and names the earlier ones it uses. After setup, each runs on a laptop CPU in about
+a minute on tiny local models from `learn_models.py` beside the notebooks; no model weights are
+downloaded.
 
 ## How to run
 
@@ -19,6 +20,9 @@ jupyter lab notebooks/learn/00_quickstart.ipynb
 Each notebook imports `learn_models.py` from its own folder, so open the notebooks from
 `notebooks/learn/` (JupyterLab does this when launched as above). Rendered pictures go to a
 temporary directory, nothing is written beside the notebooks.
+
+Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
+4 objects for scale and record; 5 extend.
 
 | # | Notebook | Rung | Trigger |
 |---|---|---|---|
@@ -54,6 +58,5 @@ The script executes each notebook top to bottom and writes the outputs back with
 paths scrubbed. `python scripts/run_notebooks.py notebooks/learn/*.ipynb` runs them without
 writing, which is what the nightly job does.
 
-Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
-4 objects for scale and record; 5 extend. The three-line recipe cards live in `examples/quick/`,
+The three-line recipe cards live in `examples/quick/`,
 the longer workflows in `examples/workflows/`, and the API spec in `docs/reference/glossary.md`.

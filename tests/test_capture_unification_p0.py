@@ -12,6 +12,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._postprocess._materialize as materialize_mod
 from torchlens._ir import DeviceRef, DtypeRef
+from torchlens._utils._record_group_table import record_member
 
 
 @dataclass(slots=True)
@@ -135,7 +136,7 @@ def test_phase0_op_event_fields_are_populated(monkeypatch: pytest.MonkeyPatch) -
     if isinstance(add_event, _OpEvent):
         assert add_event.grad_fn_handle is index_handle
     else:
-        assert getattr(add_event, "grad_fn_handle", None) is None
+        assert record_member(add_event, "grad_fn_handle", None) is None
     assert add_event.parent_params == ()
     assert add_event.equivalence_class
     assert add_event.is_output_parent is True
@@ -212,7 +213,7 @@ def test_phase0_dtype_device_refs_round_trip(monkeypatch: pytest.MonkeyPatch) ->
     assert isinstance(DeviceRef.from_value(output_op.out.device), DeviceRef)
     assert output_op.dtype_ref == DtypeRef.from_value(output_op.dtype)
     assert output_op.device_ref == DeviceRef.from_value(output_op.out.device)
-    assert output_op.backend_address == output_op.address
+    assert output_op.backend_address == output_op.buffer_address
     assert output_op.resolver_status == "resolved"
     assert trace.layers[output_op.layer_label].dtype_ref == output_op.dtype_ref
     assert trace.layers[output_op.layer_label].device_ref == output_op.device_ref

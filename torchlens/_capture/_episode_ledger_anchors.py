@@ -15,6 +15,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from ..errors import TorchLensWarning
+from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
+
 __all__ = [
     "_anchor_loaded_ledger",
     "quarantine_loaded_ledger",
@@ -78,8 +81,6 @@ def _anchor_loaded_ledger(trace: Any, payload: Mapping[str, Any]) -> str | None:
        output (skipped, never failed, when the payload is not retained).
     """
 
-    from ._episode_derivation import recompute_capture_digests, rederived_evidence_matches
-
     header = payload.get("header") or {}
     rows = [row for row in (payload.get("rows") or []) if isinstance(row, Mapping)]
     address = str(header.get("stepped_module"))
@@ -139,8 +140,6 @@ def quarantine_loaded_ledger(annotations: dict[str, Any], detail: str, *, stackl
 
     import warnings
 
-    from ..errors import TorchLensWarning
-
     warnings.warn(
         "episode ledger failed load validation and was quarantined "
         f"(episode_ledger_incoherent): {detail}. The product's episode "
@@ -178,7 +177,6 @@ def reanchor_loaded_episode_evidence(trace: Any) -> None:
     payload = annotations.get("episode")
     if not isinstance(payload, Mapping) or set(payload) != {"header", "rows"}:
         return  # absent, declaration-only, or already quarantined
-    from ._episode_derivation import rederived_evidence_matches
 
     try:
         matches = rederived_evidence_matches(trace, payload)

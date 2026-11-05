@@ -25,6 +25,7 @@ from typing import Any, Final
 
 from ..._data_classes._state_adapter import state_restore
 from ..._data_classes.field_policy import StorageKind
+from ..._utils._record_group_table import record_storage_attr
 from . import contract
 from .decode import CELL_CODE, cell_error
 from .schema import record_schema
@@ -101,14 +102,15 @@ def true_up_record(obj: Any, row: Mapping[str, Any], kind: str) -> None:
         return
     cls = type(obj)
     for name in _stored_columns(kind):
-        if not _writable_field(cls, name):
+        attr = record_storage_attr(obj, name)
+        if not _writable_field(cls, attr):
             continue
-        current = getattr(obj, name, _UNSET)
+        current = getattr(obj, attr, _UNSET)
         if name in row:
             if row[name] is None and current is not None and current is not _UNSET:
-                setattr(obj, name, None)
+                setattr(obj, attr, None)
         elif current is _UNSET:
-            setattr(obj, name, None)
+            setattr(obj, attr, None)
 
 
 def settle_tuple(value: tuple[Any, ...], items: list[Any], at: str) -> tuple[Any, ...]:

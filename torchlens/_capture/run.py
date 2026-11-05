@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 from torch import get_default_dtype, nn
 
 from torchlens import _state
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import CompiledCapturePrep
@@ -187,7 +188,7 @@ def _begin_capture(
         # identified during output extraction. The exhaustive door sets this
         # before calling in; predicate/recorder callers do not, so set it here
         # once, idempotently, for every capture path.
-        from .._visualization.code_panel import make_weak_model_ref
+        from ._run_setup import make_weak_model_ref
 
         self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
     return backend, seed
@@ -330,8 +331,6 @@ def _attach_sessions(
     grad_layers_to_save: str | list[str | int] | None,
 ) -> None:
     """Open the event stream, fix the stop directive and attach the capture sessions."""
-
-    from torchlens._ir.capture_events import CaptureEvents
 
     self.capture_events = CaptureEvents()
     run.capture_events = self.capture_events
@@ -624,7 +623,18 @@ def _release_instrumentation(run: _RunState) -> None:
 
     instrumentation, run.instrumentation = run.instrumentation, None
     if instrumentation is not None:
-        instrumentation.__exit__(*run.exc_info)
+        _exc_type, exc, traceback = run.exc_info
+        try:
+            instrumentation.__exit__(*run.exc_info)
+        finally:
+            if exc is not None:
+                # Before Python 3.12, contextlib throws ``exc`` into each
+                # generator context manager and leaves those teardown frames
+                # appended to its traceback; they hold ``exc`` again, so a
+                # failed capture's partial trace waited for the cyclic collector.
+                # ``with_traceback`` puts back the forward's own traceback without
+                # going through the exception's ``__setattr__``.
+                exc.with_traceback(traceback)
 
 
 def _teardown_ladder(self: "Trace", run: _RunState) -> None:
@@ -683,6 +693,10 @@ def _finish_run(self: "Trace", run: _RunState) -> None:
     try:
         _teardown_ladder(self, run)
     finally:
+        # The teardown was the forward exception's last reader. Its traceback's
+        # frames hold ``run``, so keeping it here made every failed capture a
+        # reference cycle that pinned the partial trace and its payloads.
+        run.exc_info = (None, None, None)
         # Outermost: a teardown double-fault must not leak the capture
         # reservation, or every later admission refuses forever. The RNG
         # restore runs first but can never displace the release.

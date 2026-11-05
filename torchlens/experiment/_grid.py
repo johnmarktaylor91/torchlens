@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._utils._display_bounded import short_dataclass_repr
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 from ._effects import EffectsView
 from ._engine import (
     _Candidate,
@@ -277,7 +277,7 @@ def _value_kind(value: Any) -> str | None:
 
     from .._selection.selection import Selection, Selector
     from .._selection.selector_base import BaseSelector
-    from ..intervention.types import Edit
+    from ..intervention._types import Edit
 
     if isinstance(value, Edit):
         return _EDIT_KIND
@@ -496,7 +496,7 @@ def _with_edit(candidate: _Candidate, edit: Any) -> _Candidate:
 def _check_positions(baseline: Trace, resolved: list[_Candidate]) -> None:
     """Refuse integer token positions a cell's site cannot hold (recorded shapes)."""
 
-    from ..intervention.types import Edit
+    from ..intervention._types import Edit
 
     for candidate in resolved:
         edit = candidate.edit

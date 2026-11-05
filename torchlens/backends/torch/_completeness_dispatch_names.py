@@ -13,13 +13,14 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
-from ._consumer_kind import _classify_consumer_kind
-from ._tl import (
+from ..._utils._record_group_table import record_member
+from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
 )
+from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
+from ._consumer_kind import _classify_consumer_kind, _source_unreadable
 from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -40,6 +41,7 @@ __all__ = (
     "_is_buffer_state_view_dispatch",
     "_dispatch_callsite",
     "_first_scalar_escape_source",
+    "_scalar_escape_advisory_texts",
     "_external_warning_stacklevel",
     "_iter_dispatch_tensors",
 )
@@ -233,8 +235,8 @@ def _record_escape_source_tensor(
     # even when the state ALSO feeds a traced graph op -- bound-ness never exempts the
     # escape witness).
     meta = get_tensor_meta(source)
-    address = getattr(meta, "address", None) if meta is not None else None
-    # A PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
+    address = record_member(meta, "address", None) if meta is not None else None
+    # r18 + r19-C: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
     # keeps a graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses
     # by its kept op; a parameter carries NO source node, so a param-rooted read op is orphan-pruned
     # and its raw label resolves to no final op -> the escape would fail closed (INCOMPLETE_SCALAR_
@@ -470,7 +472,13 @@ def _first_scalar_escape_source() -> tuple[str | None, int | None]:
     try:
         frame = frame.f_back if frame is not None else None
         while frame is not None:
-            filename = Path(frame.f_code.co_filename).resolve()
+            raw = frame.f_code.co_filename
+            if raw.startswith("<") and raw.endswith(">"):
+                # A pseudo-filename (``<stdin>``, ``<string>``, a cell name) is
+                # never TorchLens and names no file: resolving it would invent
+                # a path under the working directory.
+                return raw, frame.f_lineno
+            filename = Path(raw).resolve()
             try:
                 filename.relative_to(_TORCHLENS_ROOT)
             except ValueError:
@@ -494,6 +502,10 @@ def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> N
     ``Conditional`` (same receiver rule, ``is_scalar_bool``, and the same AST
     lookup). Every other read counts, including ``if x.sum():`` truthiness,
     ``while`` and ``assert`` tests, and reads the lookup cannot tie to one test.
+    Such a bool read in code with no readable source (a string passed to
+    ``exec`` and not registered in ``linecache``, stdin, a cell name reused for
+    different text) counts AND is tallied apart: step 5 cannot
+    record its branch either, and the advisory names that cause.
 
     Parameters
     ----------
@@ -511,9 +523,58 @@ def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> N
             kind = _classify_consumer_kind(filename, line)
             if kind in _RECORDED_CONDITIONAL_TEST_KINDS:
                 return
+            if _source_unreadable(filename):
+                state.unreadable_source_count += 1
     state.count += 1
     if state.first_file is None:
         state.first_file, state.first_line = _first_scalar_escape_source()
+
+
+def _scalar_escape_advisory_texts(state: Any, location: str) -> tuple[str, str]:
+    """Return the persisted row message and the warning text for one capture.
+
+    Both say what is missing: the trace keeps the ops that produced the value,
+    but whatever Python then computed or decided with it has no edge back to
+    the tensor, and a branch it decided is not a recorded conditional. When
+    some reads were bool tests in code whose source cannot be read, the text
+    names that cause: without the source TorchLens cannot tell an ``if`` test
+    (whose branch it records from a ``.py`` file) from a ``while`` or ``assert``.
+
+    Parameters
+    ----------
+    state:
+        Per-capture ``_PlainScalarEscapeState`` aggregate (``count`` >= 1).
+    location:
+        Display form of the first escape site.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(row_message, warning_text)``.
+    """
+
+    missing = (
+        "what Python computed or decided with the value has no edge back to the "
+        "tensor, and a branch it decided is not in trace.graph.conditionals"
+    )
+    unreadable = ""
+    if state.unreadable_source_count:
+        unreadable = (
+            f"; {state.unreadable_source_count} of these reads are bool tests in code with no "
+            "readable source file (exec of a string not registered in linecache, stdin, "
+            "or a cell name reused for different text), so TorchLens could not tell "
+            "whether they are if tests, whose branches it records; run the code from a "
+            ".py file to record those branches"
+        )
+    row_message = (
+        f"tensor-to-Python scalar escape(s) observed during capture; {missing}{unreadable}"
+    )
+    warning_text = (
+        f"TorchLens observed {state.count} tensor-to-Python scalar escape(s) during "
+        f"capture; first at {location}. In the trace, {missing}{unreadable}. Keep the "
+        "value as a tensor or pass it as an explicit input."
+    )
+    return row_message, warning_text
 
 
 def _external_warning_stacklevel() -> int:

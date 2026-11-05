@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -21,10 +22,22 @@ from ._edit_highlighter import (
     highlight_svg,
     render_highlighted,
 )
+from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
+from ._endpoint_rings import color_scale_active
+from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
 from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
 from ._graph_shell import build_graphviz_shell
-from ._header_block import graph_caption_html
+from ._header_block import (
+    caption_from_label,
+    graph_caption_html,
+    header_block_label,
+    key_swatches,
+    render_module_marks,
+)
+from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
+from ._mutated_params import add_mutated_parameter_nodes
+from ._orphan_islands import _orphan_island_logs, _warn_render_omission
 from ._pass_label_placement import forward_sources
 from ._render_common import *
 from ._render_edges import *
@@ -52,7 +65,11 @@ from ._render_regions import (
     _setup_subgraphs,
     _setup_subgraphs_recurse,
 )
-from ._render_utils import announce_written_graph, resolve_draw_outpath
+from ._render_utils import (
+    announce_written_graph,
+    resolve_draw_outpath,
+    strip_known_extension,
+)
 from ._stacking import resolve_stack_by
 from ._svg_compose import (
     _inline_svg_file_local_images,
@@ -62,6 +79,8 @@ from ._svg_compose import (
     _write_composed_code_panel,
 )
 from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
+from .collapse_patterns import resolve_pattern_request
+from .node_universe import build_node_universe
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -69,6 +88,7 @@ from .render_execution import (
     surface_layout_stderr,
     warn_oversize_vector,
 )
+from .renderer_registry import renderer_info, renderer_names
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderTarget, ResolvedRenderRequest
 from .source_graph import _resolve_focus_module, build_source_graph
@@ -147,8 +167,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
     str
         Path without a recognized render extension.
     """
-
-    from ._render_utils import strip_known_extension
 
     return strip_known_extension(vis_outpath)
 
@@ -402,7 +420,6 @@ def _resolve_fold_patterns(fold_patterns: object) -> tuple:
 
     if not fold_patterns:
         return ()
-    from .collapse_patterns import resolve_pattern_request
 
     return resolve_pattern_request(fold_patterns)
 
@@ -426,7 +443,6 @@ def _resolve_forward_context(
     """
 
     source_graph = build_source_graph(trace, request)
-    from .node_universe import build_node_universe
 
     node_universe = build_node_universe(
         source_graph,
@@ -622,7 +638,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 show_saved_for_backward=request.show_saved_for_backward,
             )
     draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
-    container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes = (
+    (container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes) = (
         _container_overlay_parts(
             trace,
             request,
@@ -633,7 +649,6 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
-    from ._mutated_params import add_mutated_parameter_nodes
 
     mutated_parameter_nodes = add_mutated_parameter_nodes(
         trace, context, forward_ir_builder, module_cluster_dict
@@ -776,21 +791,10 @@ def _forward_header_label(
     """Return the graph label with the key under the header, or ``None`` for no key.
 
     ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
-    channel disclosure when a channel is active and, on a ``module=`` focused
-    draw, the swatches; ``True`` adds the reading key (the notes explaining
-    the picture's notation); ``False`` is honoured (the docs state the
-    encoding is then undisclosed). The key sits inside the header label so
-    both stay top left on every engine. A ``vis_graph_overrides``
-    label (or a lens caption) stays the header.
+    channel key when a channel is active and, on a ``module=`` focused draw,
+    the swatches; ``True`` adds the reading key; ``False`` draws no key. The key sits in
+    the header label (top left on every engine); a label override stays the header.
     """
-
-    from ._header_block import (
-        caption_from_label,
-        header_block_label,
-        key_swatches,
-        render_module_marks,
-    )
-    from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 
     request = context.request
     swatches: tuple[Any, ...] = ()
@@ -804,12 +808,13 @@ def _forward_header_label(
             has_module=False,
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
+            endpoint_rings=color_scale_active(request.encoding),
         )
         if request.show_legend is True:
             notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
-    if request.encoding is not None and request.show_legend is not False:
-        sections = encoding_sections(request.encoding)
+    if request.encoding is not None:
+        sections = encoding_sections(request.encoding) if request.show_legend is not False else ()
     if not swatches and not sections and not notes:
         return None
     caption = context.graph_caption
@@ -1292,7 +1297,6 @@ def draw(
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
     )
-    from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
 
     # Refuse unknown encoding sources and scale without size_by before rendering.
     encoding_channel_spec = resolve_color_by(color_by)
@@ -1361,8 +1365,6 @@ def draw(
         # schedule of the returned Drawing are computed against.
         request_sink["request"] = request
 
-    from .renderer_registry import renderer_info, renderer_names
-
     if vis_renderer not in renderer_names():
         raise InvalidArgumentError(
             f"vis_renderer must be one of {sorted(renderer_names())}; received "
@@ -1429,7 +1431,6 @@ def _write_overview_expansion_manifest(
         Render target (the manifest rides beside ``target.outpath``).
     """
 
-    from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
     from .auto_collapse import _readable_band_high
     from .collapse_plan import collapse_plan_for_trace, count
 
@@ -1460,49 +1461,6 @@ def _write_overview_expansion_manifest(
         ),
         stacklevel=user_stacklevel(),
     )
-
-
-def _warn_render_omission(message: str) -> None:
-    """Disclose that a requested render element is not in the output.
-
-    Parameters
-    ----------
-    message:
-        What was left out and how to get it back.
-    """
-
-    warnings.warn(message, TorchLensWarning, stacklevel=user_stacklevel())
-
-
-def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
-    """Return the orphan ops a ``show_orphans=True`` render draws.
-
-    Warns when the capture kept only dropped orphan husks, which have nothing to
-    draw (re-trace with ``keep_orphans=True``).
-
-    Parameters
-    ----------
-    self:
-        Trace whose ``_orphan_logs`` are inspected.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Labelled orphan ops, in capture order.
-    """
-
-    orphan_husks = getattr(self, "_orphan_logs", ())
-    orphan_logs = tuple(
-        op
-        for op in orphan_husks
-        if bool(getattr(op, "is_orphan", False))
-        and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
-    )
-    if not orphan_logs and (orphan_husks or self._orphan_labels):  # dropped: labels, no husks
-        _warn_render_omission(
-            "orphans were dropped from this capture; re-trace with keep_orphans=True"
-        )
-    return orphan_logs
 
 
 def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderContext) -> None:
@@ -1774,7 +1732,7 @@ def _is_collapsed_module(
     # Bottom-level submodule outputs are rendered at the parent nesting level,
     # not their own. Top-level atomic leaves have no module parent to bubble
     # up to, so they remain eligible for top-level collapse.
-    if getattr(node, "is_atomic_module", False) and node_call_depth > 1:
+    if record_member(node, "is_atomic_module", False) and node_call_depth > 1:
         node_call_depth -= 1
 
     return node_call_depth >= vis_call_depth

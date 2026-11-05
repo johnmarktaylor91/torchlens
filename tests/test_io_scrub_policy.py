@@ -223,8 +223,8 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
         FuncCallLocation: next(
             frame
             for layer in live_log._layer_list
-            for frame in layer.code_context
-            if layer.code_context
+            for frame in layer.source.frames
+            if layer.source.frames
         ),
     }
 
@@ -371,7 +371,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
@@ -451,9 +450,9 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     return {
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
-        "grad_for": lambda o: o.grad_for(bwd=0),
-        "materialize_grad": lambda o: o.materialize_grad(),
-        "materialize_out": lambda o: o.materialize_out(),
+        "autograd.grad_for": lambda o: o.autograd.grad_for(bwd=0),
+        "payload.materialize_grad": lambda o: o.payload.materialize_grad(),
+        "payload.materialize_out": lambda o: o.payload.materialize_out(),
         "show": lambda o: o.show(),
         "to_pandas": lambda o: o.to_pandas(),
     }
@@ -653,7 +652,9 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     name the user never touched.
     """
 
-    from torchlens._data_classes._trace_components import TRACE_EXTERNAL_WRITE_EXEMPTIONS
+    from torchlens._data_classes._trace_components import (
+        TRACE_EXTERNAL_WRITE_EXEMPTIONS,
+    )
     from torchlens._io import ArtifactError
     from torchlens._io.scrub import _is_runtime_only_trace_field
 

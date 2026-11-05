@@ -24,8 +24,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._regions import RegionTarget, region
 from torchlens.intervention.errors import RegionError
-from torchlens.intervention.regions import RegionTarget, region
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
@@ -207,7 +207,7 @@ def test_region_construction_refusals(chain_fork) -> None:
 def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
     """Validation gives the corroborated boundary verdict, never a skip."""
 
-    from torchlens.validation.core import _check_edge_intervention_boundary
+    from torchlens.validation._core import _check_edge_intervention_boundary
 
     _model, _x, fork = chain_fork
     fork.do(fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region(), tl.zero_ablate())
@@ -551,7 +551,7 @@ def test_region_exit_address_underivable_refuses(chain_fork) -> None:
 
     import dataclasses
 
-    from torchlens.intervention.regions import RegionBoundary
+    from torchlens.intervention._regions import RegionBoundary
 
     _model, _x, fork = chain_fork
     target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
@@ -572,7 +572,7 @@ def test_region_exit_address_underivable_refuses(chain_fork) -> None:
 def test_region_exit_container_unsupported_refuses() -> None:
     """The nested splice refuses container kinds it cannot rebuild."""
 
-    from torchlens.intervention.regions import _replace_at_path
+    from torchlens.intervention._regions import _replace_at_path
 
     with pytest.raises(RegionError) as excinfo:
         _replace_at_path(frozenset({1}), (0,), torch.zeros(1))

@@ -20,6 +20,8 @@ from typing import Any
 
 import numpy as np
 
+from ..repgeom._geometry import activation_distance_matrix
+from ..repgeom._similarity_ids import rdm_id
 from ._handoff import (
     PRESENTATION_INDEX_KEY,
     NeuroHandoffError,
@@ -31,6 +33,8 @@ from ._handoff import (
     enumerate_extraction_sites,
     enumerate_trace_sites,
     require_rsatoolbox,
+    rsatoolbox_version,
+    validate_obs,
     widen_for_handoff,
 )
 
@@ -301,8 +305,6 @@ def _source_mode(  # noqa: PLR0913 -- mirrors the rdms() door's knob set verbati
         ``tl.repgeom``).
     """
 
-    from ..repgeom._geometry import activation_distance_matrix
-
     if dissimilarity_measure is not None:
         raise NeuroHandoffError(
             f"dissimilarity_measure={dissimilarity_measure!r} is invalid in "
@@ -407,8 +409,6 @@ def _source_stack_descriptors(
         identifier when the catalogue has an exact match.
     """
 
-    from ..repgeom._similarity_ids import rdm_id
-
     descriptors: dict[str, Any] = {
         "source": "torchlens",
         "source_kind": source_kind,
@@ -460,8 +460,6 @@ def _source_pattern_descriptors(
     tuple[dict[str, np.ndarray], str]
         The pattern-descriptor mapping and the identity provenance token.
     """
-
-    from ._handoff import validate_obs
 
     id_sets = {tuple(payload.row_ids) for payload in computed if payload.row_ids is not None}
     if len(id_sets) == 1 and all(payload.row_ids is not None for payload in computed):
@@ -746,9 +744,7 @@ def _build_matrix_rdms(
     if not patterns:
         patterns = {"tl_pattern_index": np.arange(n_patterns)}
 
-    import torchlens
-
-    from ._handoff import rsatoolbox_version
+    from .._vocab._package_version import __version__
 
     result = rsatoolbox.rdm.RDMs(
         dissimilarities=np.stack([_condensed(array) for array in arrays]),
@@ -762,7 +758,7 @@ def _build_matrix_rdms(
                 "torchlens did not compute these values"
             ),
             "pattern_identity": pattern_identity,
-            "tl_version": str(getattr(torchlens, "__version__", "unknown")),
+            "tl_version": __version__,
             "rsatoolbox_version": rsatoolbox_version(),
         },
         rdm_descriptors={"site": np.asarray(keys)},

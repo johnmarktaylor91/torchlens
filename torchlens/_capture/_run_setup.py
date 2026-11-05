@@ -36,12 +36,12 @@ from .._selection.selectors import BaseSelector
 from .._trace_state import TraceState
 from .._utils.introspection import _get_code_context
 from ..backends.torch.bound_root import TLBoundMethodRoot
-from ..intervention import injection as _injection
+from ..intervention import _injection as _injection
+from ..intervention._types import InterventionDecision
 from ..intervention.hooks import normalize_hook_plan, site_universe as _site_universe
-from ..intervention.types import InterventionDecision
 from ..options import StorageOptions
-from ..recording.options import _RecordingConfig
-from ..recording.types import CaptureSpec
+from ..recording._options import _RecordingConfig
+from ..recording._types import CaptureSpec
 from ._episode_ledger import attach_episode_header
 from .prepare.resolve import (
     _backward_intervention_spec_from_predicate,

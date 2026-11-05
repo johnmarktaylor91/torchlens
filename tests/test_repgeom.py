@@ -309,7 +309,8 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
         node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
         assert len(node_images) == 1
         assert node_images[0].startswith("data:image/png;base64,")
-        assert "<polygon" in node_block
+        # A picture node is a rounded box: a filled, stroked path rather than a polygon.
+        assert re.search(r'<path fill="[^"]+" stroke="[^"]+"', node_block)
         assert f">{layer.layer_label}</text>" in node_block
 
 
@@ -349,7 +350,8 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
         node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
         assert len(node_images) == 1
         assert node_images[0].startswith("data:image/png;base64,")
-        assert "<polygon" in node_block
+        # A picture node is a rounded box: a filled, stroked path rather than a polygon.
+        assert re.search(r'<path fill="[^"]+" stroke="[^"]+"', node_block)
         assert f">{layer.layer_label}</text>" in node_block
 
 
@@ -510,3 +512,14 @@ def test_mds_evolution_min_n_gate_is_honored() -> None:
 
     with pytest.raises(ValueError, match="too few stimuli"):
         repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=9)
+
+
+def test_matching_pil_image_batch_takes_one_image_as_a_batch_of_one() -> None:
+    """One PIL image (an image-path capture's ``trace.input``) is a batch of one; lists still match."""
+
+    image = _pil_stimuli(1)[0]
+    assert tuple(repgeom._matching_pil_image_batch(image, 1) or ()) == (image,)
+    assert repgeom._matching_pil_image_batch(image, 2) is None
+    images = _pil_stimuli(2)
+    assert list(repgeom._matching_pil_image_batch(images, 2) or ()) == images
+    assert repgeom._matching_pil_image_batch(images, 3) is None

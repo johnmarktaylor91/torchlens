@@ -46,6 +46,11 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._json import loads_bounded, read_bytes_bounded
+from .._selection.selection import units
+from .._selection.subspace import subspace
+from .._utils._weights_only_policy import weights_only_load_is_safe
+from .._utils.tensor_leaves import tensor_payload_bytes
+from ..intervention._affine_source import set_affine_coordinates
 
 __all__ = ["LoreftArtifact", "read"]
 
@@ -82,7 +87,7 @@ def _float64_sha256(tensor: torch.Tensor) -> str:
     """Return the sha256 of a tensor's float64 bytes (row-major, no header)."""
 
     data = tensor.detach().to(torch.float64).cpu().contiguous()
-    return hashlib.sha256(data.numpy().tobytes()).hexdigest()
+    return hashlib.sha256(tensor_payload_bytes(data)).hexdigest()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -169,9 +174,6 @@ class LoreftArtifact:
             over the site's label.
         """
 
-        from .._selection.selection import units
-        from .._selection.subspace import subspace
-
         width = int(self.rotation.shape[0])
         label = site if isinstance(site, str) else _checked_site(site, width, positions)
         within: Any = label
@@ -195,8 +197,6 @@ class LoreftArtifact:
     @property
     def edit(self) -> Any:
         """Return ``tl.intervention.set_affine_coordinates(W, bias=b)`` in float64."""
-
-        from ..intervention._affine_source import set_affine_coordinates
 
         return set_affine_coordinates(
             self.weight.to(torch.float64), bias=self.bias.to(torch.float64)
@@ -352,7 +352,7 @@ def _weight_file(directory: Path, key: str) -> Path:
             file="config.json",
         )
     for name in names:
-        if (directory / name).is_file():
+        if (directory / name).is_file() and not (directory / name).is_symlink():
             return directory / name
     raise _refusal(
         f"no weight file for intervention {key!r} (looked for {names[0]!r} and {names[1]!r})",
@@ -364,6 +364,13 @@ def _weight_file(directory: Path, key: str) -> Path:
 def _tensors(path: Path, data: bytes, rank: int, dimension: int) -> dict[str, torch.Tensor]:
     """Return ``weight``, ``bias`` and ``rotate_layer`` from ``data``, refusing a malformed file."""
 
+    if not weights_only_load_is_safe():  # CVE-2025-32434: weights_only bypassable <= 2.5.1
+        raise _refusal(
+            f"{path.name!r} needs torch 2.6+: this torch's weights_only loader is not safe "
+            "against crafted files (CVE-2025-32434)",
+            code="pyreft_artifact_invalid",
+            file=path.name,
+        )
     try:
         state = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
     except Exception as exc:  # torch raises several unrelated types for a bad file

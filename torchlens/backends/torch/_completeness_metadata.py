@@ -9,10 +9,10 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ._completeness_types import _WitnessState
-from ._tl import (
+from ..._utils._tensor_label import (
     get_tensor_label,
 )
+from ._completeness_types import _WitnessState
 from .buffer_writes import session_validated_buffer_address
 
 __all__ = (
@@ -261,7 +261,7 @@ def _layout_ancestry_tainted(trace: Any, by_raw_label: Mapping[str, Any], label:
         event = by_raw_label.get(current)
         if event is None:
             return True
-        if getattr(event, "unattributed_tensor_args", None):
+        if record_member(event, "unattributed_tensor_args", None):
             return True
         # A storage-SWAPPING ``.data=`` rebind op is an ancestry
         # barrier -- the belt posture never attributes verdict-steering
@@ -734,6 +734,7 @@ def _record_input_storage_nbytes(trace: Any, site: Any, storage: Any) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ..._utils._record_group_table import record_member  # noqa: E402
 from ._completeness_boundaries import (  # noqa: E402
     _classify_input_storage_alias,
     _input_base_tensor,

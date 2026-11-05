@@ -61,7 +61,7 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     saved_before = _saved_op_labels(log)
     num_ops_before = len(log._layer_list)
 
-    log.run(ThreeOpModel(), x + 1)
+    log = log.run(ThreeOpModel(), x + 1)
 
     assert saved_before
     assert _saved_op_labels(log) == saved_before
@@ -81,7 +81,7 @@ def test_rerun_save_scope_reads_lookback_payload_policy_directly() -> None:
 
     import pytest
 
-    from torchlens.intervention.rerun import _rerun_save_scope
+    from torchlens.intervention._rerun import _rerun_save_scope
 
     drifted_options = SimpleNamespace(keep_op=lambda ctx: True, lookback=2)
     drifted_log = SimpleNamespace(_predicate_save_options=drifted_options)

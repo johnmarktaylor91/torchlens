@@ -17,8 +17,8 @@ _VALIDATION = "tests/test_validation.py::"
 _VHARD = "tests/test_validation_hardening.py::"
 _GAP = "tests/test_replay_gap_value_proofs.py::"
 _RUNG = "tests/test_validation_rung1_class3.py::"
-_EX = "torchlens.validation.exemptions:"
-_CORE = "torchlens.validation.core:"
+_EX = "torchlens.validation._exemptions:"
+_CORE = "torchlens.validation._core:"
 _PRE_REPLAY = "torchlens.validation._pre_replay:"
 _C1 = "replay determinism (contract clause 1): the output is not a deterministic function of the saved inputs"
 _C2 = "perturbation sensitivity (contract clause 2): the parent value provably cannot reach the output"
@@ -56,6 +56,7 @@ _OPERAND = "torchlens.validation._operand_value_proofs:"
 _SDPA = "torchlens.validation._sdpa_value_proofs:"
 _SAVED = "torchlens.validation._saved_value_proofs:"
 _SAVED_TESTS = "tests/test_validation_saved_value_proofs.py::"
+_ZERO_SOURCE = "tests/test_validation_zero_source_add.py::"
 _SINGLE_KEY = _GAP + "test_sdpa_single_key_edge_is_exempted"
 _NON_FINITE = _VHARD + "test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output"
 
@@ -543,6 +544,17 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         (
             _SAVED_TESTS + "test_index_into_size_one_dim_is_exempt",
             _SAVED_TESTS + "test_index_into_wider_dim_still_fails_when_frozen",
+        ),
+    ),
+    _decision(
+        "zero_source_index_irrelevant",
+        ("posthoc", _C2),
+        _SAVED + "_zero_source_add_decision",
+        "the index of a scatter_add or index_add whose saved source is exactly zero "
+        "everywhere and whose saved output equals the saved destination",
+        (
+            _ZERO_SOURCE + "test_zero_source_scatter_add_index_is_exempt",
+            _ZERO_SOURCE + "test_zero_source_proof_refuses_live_and_frozen_edges",
         ),
     ),
 )

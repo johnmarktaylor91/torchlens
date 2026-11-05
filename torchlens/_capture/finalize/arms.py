@@ -25,6 +25,7 @@ from ..._output_slot import returned
 from ..._quantities import Duration
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.display import _vprint, user_stacklevel
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from .._trace_capture_error import failed_forward_error
 from ..outcome import (
     CapturePhase,
@@ -99,7 +100,6 @@ def _fence_device_work(trace: Trace) -> None:
     """
     # (the fence) and the deferred-flag drain, in that order.
     from ..._data_classes._nonfinite import drain_pending_nonfinite
-    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     synchronize_pending_cpu_async_copies()
     drain_pending_nonfinite(trace)
@@ -378,9 +378,15 @@ def finalize_failed(result: ForwardResult) -> NoReturn:
         # or the payload-bearing event stream).
         settle_failed(trace, result.session, e, num_committed_ops=committed_ops)
         _scrub_failed_capture_transients(trace)
-    if escaping is e:
-        raise e
-    raise escaping from e
+    try:
+        if escaping is e:
+            raise e
+        raise escaping from e
+    finally:
+        # This frame sits on the raised error's traceback: locals reaching the
+        # error would make it, and the partial trace it carries, a reference
+        # cycle that only the cyclic collector frees.
+        del escaping, e, result, trace
 
 
 def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:

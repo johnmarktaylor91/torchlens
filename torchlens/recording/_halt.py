@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, NoReturn
 
 if TYPE_CHECKING:
-    from .types import Recording
+    from ._types import Recording
 
 
 class StopSignal(BaseException):

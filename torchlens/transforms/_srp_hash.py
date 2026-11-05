@@ -27,6 +27,7 @@ from dataclasses import dataclass
 
 import torch
 
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ._errors import TransformContractError
 
 __tl_layer__ = "L4"
@@ -469,6 +470,6 @@ def digest_fixed_matrix(positions: torch.Tensor, signs: torch.Tensor, header: Ma
     ).encode("ascii")
     hasher = hashlib.sha256()
     hasher.update(header_bytes)
-    hasher.update(positions.to("cpu", torch.int64).contiguous().numpy().tobytes())
-    hasher.update(signs.to("cpu", torch.int8).contiguous().numpy().tobytes())
+    hasher.update(tensor_payload_bytes(positions.to("cpu", torch.int64).contiguous()))
+    hasher.update(tensor_payload_bytes(signs.to("cpu", torch.int8).contiguous()))
     return "sha256:" + hasher.hexdigest()

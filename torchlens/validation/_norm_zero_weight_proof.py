@@ -12,7 +12,7 @@ bias, eps)``, ``F.layer_norm(input, normalized_shape, weight, bias, eps)``,
 ``zero_init_last`` zero-initializes the last GroupNorm of every residual block
 (``resnet50_gn``, ``regnety_040_sgn``, ``vit_small_r26_s32_224``), so an
 untrained instance hits this at validation time. Split from
-``validation/exemptions.py`` (R43 file-size ratchet).
+``validation/_exemptions.py`` (R43 file-size ratchet).
 
 Narrow by construction: only a perturbed parent that occupies the input slot
 (``args[0]``) and no other slot is ever exempted; perturbing ``weight`` or
@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ def _norm_weight_operand(layer: Any, args: tuple[Any, ...]) -> Any:
 
     if len(args) > _WEIGHT_POSITION:
         return args[_WEIGHT_POSITION]
-    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    kwargs = record_member(layer, "saved_kwargs", None) or {}
     return kwargs.get("weight")
 
 
@@ -83,7 +84,7 @@ def _perturbed_parent_is_only_the_input(layer: Any, layers_to_perturb: list[str]
     # The first requires exactly one perturbed label at positional slot 0 and
     # nowhere else among the args; the second (no keyword spellings allowed)
     # rejects any keyword occurrence.
-    from .exemptions import (
+    from ._exemptions import (  # deferred: cycle validation
         _perturbed_parent_arg_positions,
         _perturbed_parents_only_occupy_template_slot,
     )
@@ -140,7 +141,7 @@ def _batch_norm_weight_operand(layer: Op) -> Any:
     from positions 3/4, not 1/2.
     """
 
-    args = layer.saved_args
+    args = layer.call.saved_args
     if args is None or len(args) <= 1:
         return None
     return args[1]

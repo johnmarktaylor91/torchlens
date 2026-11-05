@@ -33,6 +33,7 @@ from typing import Any
 import torch
 
 from .._semantic.tolerances import within_reconstruction_tolerance
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._heads import _facet_keys_or_none, _shape_row_value
 from ._params import _math_weight, _orientation, _projection_for, _weight_params
@@ -85,7 +86,7 @@ def _select_mlps(modules: list[Any], layers: Any) -> list[Any]:
                 )
             selected.append(modules[entry])
             continue
-        match = [m for m in modules if str(getattr(m, "address", "")) == str(entry)]
+        match = [m for m in modules if str(record_member(m, "address", "")) == str(entry)]
         if not match:
             refuse(
                 code="mi_neuron_geometry_unavailable",
@@ -134,7 +135,7 @@ def _literal_hidden(trace: Any, use_label: str, d_mlp: int, lead: tuple[int, ...
 def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
     """Resolve one MLP's hidden operand, output weight, bias and output."""
 
-    address = str(getattr(module, "address", ""))
+    address = str(record_member(module, "address", ""))
     output = _facet_tensor(module, "output")
     if output is None:
         refuse(
@@ -185,7 +186,7 @@ def _neuron_operands(trace: Any, module: Any) -> _NeuronOperands:
         weight=weight,
         bias=bias_param.value if bias_param is not None else None,
         output=output,
-        projection_address=str(getattr(proj_module, "address", "")),
+        projection_address=str(record_member(proj_module, "address", "")),
         hidden_source=source,
     )
 
@@ -254,7 +255,7 @@ def _layer_neuron_rows(
 ) -> tuple[list[ComponentRow], torch.Tensor, dict[str, Any]]:
     """Build one MLP's neuron rows (+ folded rest, + constant) and its receipt."""
 
-    address = str(getattr(module, "address", ""))
+    address = str(record_member(module, "address", ""))
     ops = _neuron_operands(trace, module)
     status, remainder = _check_remainder(ops)
     d_mlp = int(ops.weight.shape[0])

@@ -28,6 +28,10 @@ from typing import Any
 import torch
 
 from .._data_classes._trace_intervention_records import _edit_identity
+from .._utils._record_group_table import record_member
+from ..intervention._masked_edit import _derive_masked_edit
+from ..intervention._subspace_projection import subspace_projection_of
+from ..intervention._types import Edit
 from ._site_record import bind_entries
 from .errors import SelectionError
 from .resolver import _label_index_scope
@@ -52,7 +56,6 @@ def _build_selection_do_plan(
             "do(selection, edit) requires an edit: pass an Edit/Edit "
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
-    from ..intervention._subspace_projection import subspace_projection_of
 
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
@@ -63,9 +66,6 @@ def _build_selection_do_plan(
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
         raise needs_subspace(repr(selection_like), code="affine_source_needs_subspace")
     resolved = _resolve_do_target(trace, selection_like)
-
-    from ..intervention.masked_edit import _derive_masked_edit
-    from ..intervention.types import Edit
 
     if not isinstance(edit, Edit) and not callable(edit):
         # Raw replacement TENSORS route through the shipped replace_with helper and
@@ -80,7 +80,7 @@ def _build_selection_do_plan(
                 "(e.g. torch.full_like(site_out, c)), or use an edit helper such as "
                 "tl.zero_ablate() or tl.scale()."
             )
-        from ..intervention.predicates import replace_with
+        from ..intervention._predicates import replace_with
 
         edit = replace_with(edit)
 
@@ -176,7 +176,7 @@ def build_selection_do_plan(
 
     Returns ``(resolved, [{"op", "entry", "is_leaf", "edit"}, ...], audit_record)``.
     ACT selections only: PARAM edits route through parameter substitution
-    (``intervention/param_substitution.py`` — the value each consumer sees is
+    (``intervention/_param_substitution.py`` — the value each consumer sees is
     substituted on the replay engine, the live parameter is never written);
     EDGE selections are stage-3 edge-substitution territory.
     """
@@ -206,8 +206,8 @@ def _site_drift(entry: Site, record: Any) -> str | None:
     if entry.kind != "ACT":
         return None
     expected_key = entry.structural_site_key
-    if expected_key is not None and getattr(record, "site_key", None) != expected_key:
-        return f"its structural site key is {getattr(record, 'site_key', None)!r}, not {expected_key!r}"
+    if expected_key is not None and record_member(record, "site_key", None) != expected_key:
+        return f"its structural site key is {record_member(record, 'site_key', None)!r}, not {expected_key!r}"
     shape = _site_shape(record)
     if shape != entry.shape:
         return f"its output index space is {shape!r}, not {entry.shape!r}"

@@ -158,9 +158,9 @@ The tlspec 12 bump that ships with the format adds, so that a loaded trace equal
 - `op.is_constant` (boolean, required at every level, fact): set by the shared constants rule for
   closure constants and literal producers, following `is_buffer`; the Paddle and tinygrad
   constant rules set it the same way.
-- `op.arg_expressions` (value): the computed argument expressions, written at save time.
+- `op.source.arg_expressions` (value): the computed argument expressions, written at save time.
 - Values settled on the live side before writing, so the loaded value equals the live one:
-  `op.equivalence_class`, `op.func_duration`, `op.edge_substitutions`,
+  `op.graph.equivalence_class`, `op.cost.duration`, `op.graph.edge_substitutions`,
   `op.edge_replacement_stamps` (an absent map is written as an empty object, never null), and
   `trace._options_grouping_policy` (the grouping stamp the loader used to settle after loading is
   settled by the writer; the reader verifies it instead of rewriting it).
@@ -300,6 +300,21 @@ writes the same file in its own directory: one grammar, two homes.
   `level="executable_with_callables"` the recipe is written with `executable` false and the
   callable placeholder, and the save keeps outs and argument snapshots; at `level="audit"` it
   is written payload-free.
+- A facet write (a `tl.head(i, facet).in_module(m)` or `tl.facet(...)` selector with a built-in
+  edit) fires through a scatter wrapper bound to the captured trace, so its rule saves the
+  request instead: the built-in edit, the selector narrowed to one resolved facet as the rule's
+  `selector` (`selector_kind` `"facet"`, `selector_value`
+  `{"name": "v", "head_index": 0, "module_address": "transformer.h.1.attn"}`), and in the rule
+  `metadata` the resolved `facet_home_label`, `facet_name`, the `facet_write_mask` (a tensor
+  reference) and its `facet_write_mask_sha256`. A recipe holding such a rule is written at
+  `format_version` 4; every other recipe stays at 3, and this reader takes both, so a reader of
+  format 3 alone refuses the facet recipe (`bundle_load_failed`) instead of installing the edit
+  on the whole home tensor. Loading a trace re-resolves each stored selector on the loaded trace
+  and rebuilds the wrapper only when the home label, facet name and mask digest match the stored
+  ones; otherwise the load raises `ArtifactError`. A spec loaded without a trace
+  keeps the request unbound: re-applied as `(site, edit)` it re-resolves the facet on the target
+  trace, and a sticky rule that lost its wrapper refuses to fire. A facet write whose edit holds
+  a user callable keeps a placeholder of the wrapper.
 - `capture_rules` is an optional array (absent means empty) preserving original built-in
   capture predicates alongside the canonical staged `rules`. Each entry has exactly `index`
   (its zero-based array position), `selector` (the same closed TargetSpec object as a rule),

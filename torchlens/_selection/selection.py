@@ -46,9 +46,10 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
-from .._utils.fail_open import fail_open
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError
 from ._display import selection_card, selection_repr, site_card, site_repr
+from ._entry_order import _graph_entry_order
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
@@ -71,6 +72,7 @@ from .provenance import (
     _flip_provenance,
     _join_relation,
 )
+from .selectors import _grad_selection_refusal
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -151,49 +153,6 @@ class Site:
 
     __repr__ = site_repr
     __str__ = site_card
-
-
-def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in canonical deterministic order (sorted by site key)."""
-
-    return tuple(sorted(entries, key=lambda entry: (entry.kind, tuple(map(str, entry.key)))))
-
-
-def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in GRAPH ORDER (lovely matrix row, bug 14).
-
-    ACT entries order by the trace's execution order of their
-    ``(layer_label, pass_index)`` address — a resolved selection reads in
-    the order the network ran, not in lexicographic site-key order
-    (``relu_1_10`` no longer sorts before ``relu_1_2``). PARAM/EDGE
-    entries (and any address the trace cannot place) keep the canonical
-    site-key sort, appended after placed entries deterministically.
-    """
-
-    placed = _canonical_entry_order(entries)
-
-    def _execution_order() -> dict[tuple[Any, ...], int]:
-        """Map each ``(layer_label, pass_index)`` address to its graph step."""
-
-        return {
-            (op.layer_label, op.pass_number): step
-            for step, op in enumerate(trace._layer_list or ())
-        }
-
-    order = fail_open(_execution_order, lambda _error: {})
-    if not order:
-        return placed
-
-    def sort_key(indexed: tuple[int, Site]) -> tuple[int, int, int]:
-        """Graph step first; unplaced entries keep canonical order after."""
-
-        position, entry = indexed
-        step = order.get(tuple(entry.key)) if entry.kind == "ACT" else None
-        if step is None:
-            return (1, position, 0)
-        return (0, step, position)
-
-    return tuple(entry for _, entry in sorted(enumerate(placed), key=sort_key))
 
 
 def _entry_label(trace: Any, entry: Site) -> str:
@@ -1015,7 +974,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
         # The L1 structural-position identity lives on Op as ``site_key``
         # (site_key_v1 strings); Site's field keeps the qualified name
         # because Site.key is already the (label, pass) address.
-        structural_site_key=getattr(op, "site_key", None),
+        structural_site_key=record_member(op, "site_key", None),
     )
 
 
@@ -1034,7 +993,7 @@ def _find_act_ops(trace: Any, site: str) -> tuple[Any, ...]:
         if (
             op.label == site
             or getattr(op, "layer_label", None) == site
-            or getattr(op, "io_role", None) == site
+            or record_member(op, "io_role", None) == site
         ):
             matches.append(op)
     return tuple(matches)
@@ -1066,7 +1025,6 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
     from .resolver import _normalize_query, _resolve_branch_sites, split_site_branches
-    from .selectors import _grad_selection_refusal
 
     matched: list[Any] = []
     for branch in split_site_branches(node.selector):
@@ -1510,7 +1468,6 @@ def random_like(
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
     from .resolver import split_site_branches
-    from .selectors import _grad_selection_refusal
 
     branches = split_site_branches(selector)
     if any(branch.universe == "gradient" for branch in branches):
@@ -1582,7 +1539,7 @@ def _apply_invalid(
 
 
 # _validate_edited / _masked_factory / _derive_masked_edit live in
-# torchlens/intervention/masked_edit.py; the plan builder itself
+# torchlens/intervention/_masked_edit.py; the plan builder itself
 # (_build_selection_do_plan, _resolve_do_target) lives in
 # torchlens/_selection/do_plan.py and is imported lazily below.
 

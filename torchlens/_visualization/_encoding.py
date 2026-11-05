@@ -4,15 +4,16 @@ v1 ships the COLOR channel (``color_by``): a value source (Layer/Op field
 name, scalar node-overlay builtin, or callable ``node -> value``) compiled
 down to the existing NodeSpec chain as a fillcolor transform in the
 precedence slot (after the node-style preset and intervention styling, before
-the user ``node_spec_fn``), plus an auto-legend that disclosures the
-transform.
+the user ``node_spec_fn``), plus a plain drawn key (a labelled colour bar)
+and a non-drawn method record (``_encoding_key``). "Legend note" and
+"legend line" below mean a line of that method record.
 
 Wave 1 adds the SIZE channel (``size_by`` + ``scale=``): a scalar field,
 callable, or the closed ``"dims"`` shape token mapped to node width/height
 minimums (Graphviz ``fixedsize=false`` -- a label can never be truncated by
 an encoding, and the max clamp bounds encoded area at
-:data:`SIZE_BY_MAX_AREA_MULT` times the default node area). The shipped
-multi-dim -> geometry mapping is the DEFAULT (AREA-ONLY:
+:data:`SIZE_BY_MAX_AREA_MULT` times the typical node area). The shipped
+multi-dim -> geometry mapping is the D4 DEFAULT (memo 3.2 C2, AREA-ONLY:
 one scalar = numel of the non-batch shape, box area ~ value, default aspect
 preserved) with the default ``scale="sqrt"`` -- no rule was
 set for this, so the default applies and is marked as default-applied.
@@ -47,12 +48,18 @@ bound.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.layer import Layer
 from .._errors import InvalidArgumentError
+from .._observability._native_profile import require_join_result
+from .._utils._multipass_access import get_multipass_attr
+from .._utils._record_group_table import record_member
 from ._encoding_aggregate import AggregateTargets, collect_aggregate, encoding_aggregate_targets
 from ._encoding_request import EncodingChannelRequest
+from ._encoding_rolled_marks import _mirror_backed_op_field, _varying_marker
 from ._encoding_size_layout import (
     DEFAULT_NODE_HEIGHT_IN,
     DEFAULT_NODE_WIDTH_IN,
@@ -60,6 +67,11 @@ from ._encoding_size_layout import (
     SIZE_SCALE_VOCABULARY,
     non_batch_numel,
 )
+from ._oklab import hex_to_oklab, oklab_to_hex, stop_positions
+from ._ramps import DARK_SEQUENTIAL_RAMP, LIGHT_SEQUENTIAL_RAMP
+from ._render_nodes import _annotation_image_path_for_node
+from .overlays import builtin_overlay_value
+from .themes import fill_with_ink
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -330,6 +342,10 @@ _NON_NUMERIC_FIELDS = frozenset(
         "projective_field",
         "source_trace",
         "trace",
+        # Concern-group views (``layer.cost``, ``layer.call``, ...): their members
+        # classify under their former flat names.
+        *("call", "cost", "control_flow", "source", "autograd", "module_context"),
+        *("payload", "graph"),
         # Private stored state.
         "_source_trace_ref",
         "_is_in_conditional_body",
@@ -405,9 +421,9 @@ NOTE_LOG_NONPOSITIVE = "values <= 0 -- unencoded under the log transform"
 #: fields; unit-dependent behavior).
 COLOR_TRANSFORM_VOCABULARY = ("linear", "rank", "log")
 
-#: Fallback sequential anchors: the skins' warm YlOrBr low/high (no blue).
-LIGHT_RAMP = ("#FFF7BC", "#993404")
-DARK_RAMP = ("#3A2E22", "#FED98E")
+#: Fallback stop lists when a theme carries no ramp: the default family's.
+LIGHT_RAMP = LIGHT_SEQUENTIAL_RAMP
+DARK_RAMP = DARK_SEQUENTIAL_RAMP
 
 # ---------------------------------------------------------------------------
 # SIZE channel constants (DEFAULT-APPLIED).
@@ -418,42 +434,45 @@ DARK_RAMP = ("#3A2E22", "#FED98E")
 SIZE_DIMS_TOKEN = "dims"
 
 
-def _hex_to_rgb(color: str) -> tuple[int, int, int]:
-    """Parse ``#RRGGBB`` into an RGB tuple."""
+def interpolate_hex(stops: Sequence[str], fraction: float) -> str:
+    """Return the colour at ``fraction`` along a multi-stop ramp, blended in OKLab.
 
-    stripped = color.lstrip("#")
-    return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
-
-
-def interpolate_hex(start: str, end: str, fraction: float) -> str:
-    """Linearly interpolate between two ``#RRGGBB`` colors.
-
-    The ONE colormap interpolation home (generalized from
-    ``bundle_diff._interpolate``, which now consumes this helper).
+    The ONE colormap interpolation home (``bundle_diff`` consumes it too).
+    Stops sit at their share of the path's OKLab length
+    (:func:`~torchlens._visualization._oklab.stop_positions`), so equal
+    fraction steps are equal perceptual steps; a fraction landing on a stop
+    returns that stop exactly.
 
     Parameters
     ----------
-    start:
-        Start color.
-    end:
-        End color.
+    stops:
+        Two or more ``#RRGGBB`` colours, low value first.
     fraction:
-        Interpolation fraction in ``[0, 1]``.
+        Position in ``[0, 1]`` (clamped).
 
     Returns
     -------
     str
-        Interpolated hex color.
+        Upper-case hex colour.
+
+    Examples
+    --------
+    >>> from torchlens._visualization._encoding import interpolate_hex
+    >>> interpolate_hex(("#FFFFFF", "#C93F3F"), 1.0)
+    '#C93F3F'
     """
 
+    stops = tuple(stops)
     fraction = max(0.0, min(1.0, fraction))
-    start_rgb = _hex_to_rgb(start)
-    end_rgb = _hex_to_rgb(end)
-    values = [
-        round(start_value + (end_value - start_value) * fraction)
-        for start_value, end_value in zip(start_rgb, end_rgb, strict=True)
-    ]
-    return "#{:02X}{:02X}{:02X}".format(*values)
+    positions = stop_positions(stops)
+    upper = next(index for index, position in enumerate(positions) if position >= fraction)
+    if positions[upper] == fraction or upper == 0:
+        return stops[upper].upper()
+    low, high = positions[upper - 1], positions[upper]
+    weight = (fraction - low) / (high - low)
+    start, end = hex_to_oklab(stops[upper - 1]), hex_to_oklab(stops[upper])
+    mixed = [a + (b - a) * weight for a, b in zip(start, end, strict=True)]
+    return oklab_to_hex((mixed[0], mixed[1], mixed[2]))
 
 
 @dataclass(frozen=True)
@@ -525,9 +544,9 @@ class EncodingState:
     stack_spec: EncodingChannelSpec | None = None
     stack_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
     stack_notes: list[str] = field(default_factory=list)
-    # Skin-supplied 3-anchor ramp: low/mid/high. None keeps the
-    # historical 2-anchor module ramps.
-    ramp_anchors: tuple[str, str, str] | None = None
+    # Skin-supplied ramp stop list, low value first (N4). None keeps the
+    # module fallback stops.
+    ramp_stops: tuple[str, ...] | None = None
 
     def note(self, text: str) -> None:
         """Record a color-channel legend note once."""
@@ -570,27 +589,17 @@ class EncodingState:
         return tuple(channels)
 
     @property
-    def ramp(self) -> tuple[str, str]:
-        """Return the theme-aware sequential ramp endpoints."""
+    def ramp(self) -> tuple[str, ...]:
+        """Return the theme-aware sequential ramp stops, low value first."""
 
-        if self.ramp_anchors is not None:
-            return (self.ramp_anchors[0], self.ramp_anchors[2])
+        if self.ramp_stops is not None:
+            return self.ramp_stops
         return DARK_RAMP if self.dark_theme else LIGHT_RAMP
 
     def ramp_color(self, fraction: float) -> str:
-        """Map a [0, 1] fraction through the (possibly 3-anchor) ramp.
+        """Map a [0, 1] fraction through the ramp's stops (OKLab blend)."""
 
-        With skin anchors the mapping is piecewise low->mid->high, so a
-        future diverging map is a mapping change, not a schema change.
-        """
-
-        if self.ramp_anchors is not None:
-            low, mid, high = self.ramp_anchors
-            if fraction <= 0.5:
-                return interpolate_hex(low, mid, fraction * 2.0)
-            return interpolate_hex(mid, high, (fraction - 0.5) * 2.0)
-        start, end = self.ramp
-        return interpolate_hex(start, end, fraction)
+        return interpolate_hex(self.ramp, fraction)
 
 
 def _require_channel_spec(state: EncodingState) -> EncodingChannelSpec:
@@ -836,13 +845,10 @@ def _node_key(node: Any) -> str:
     record object, so the keying is consistent within one draw.
     """
 
-    from .._data_classes.layer import Layer
-
     if isinstance(node, Layer):
         layer_label = getattr(node, "layer_label", None)
         if isinstance(layer_label, str):
             return layer_label
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(node, "label", None, multipass=None)
     if isinstance(label, str):
@@ -853,8 +859,6 @@ def _node_key(node: Any) -> str:
 
 def _is_rolled_multipass(node: Any) -> bool:
     """Return whether ``node`` is a rolled multi-pass aggregate Layer."""
-
-    from .._data_classes.layer import Layer
 
     return isinstance(node, Layer) and len(node.ops) > 1
 
@@ -874,7 +878,6 @@ def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
         return True
-    from ._render_nodes import _annotation_image_path_for_node
 
     if _annotation_image_path_for_node(trace, node) is not None:
         return True
@@ -962,39 +965,19 @@ def _is_shape_valued(value: Any) -> bool:
     return all(isinstance(entry, int) and not isinstance(entry, bool) for entry in value)
 
 
-def _varying_marker(node: Any) -> dict[str, Any]:
-    """Return the reconciler's variation marker for a rolled Layer."""
-
-    annotations = getattr(node, "annotations", None)
-    if isinstance(annotations, dict):
-        marker = annotations.get("varying_across_passes")
-        if isinstance(marker, dict):
-            return marker
-    return {}
-
-
-def _mirror_backed_op_field(field_name: str) -> str | None:
-    """Return the Op field backing a mirrored Layer name, if any."""
-
-    from .._data_classes._layer_spec import _LAYER_MIRROR_SPEC
-
-    entry = _LAYER_MIRROR_SPEC.get(field_name)
-    return entry[0] if entry is not None else None
-
-
 def _rolled_reconciled(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Reconciled family: marker-varying -> unencode; unmarked -> exact encode."""
 
     if field_name in _varying_marker(node):
         state.note(NOTE_VARIES)
         return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_summed(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Summed family: exact aggregate, mandatory aggregation legend line."""
 
-    value = _coerce_scalar(state, node, getattr(node, field_name, None))
+    value = _coerce_scalar(state, node, record_member(node, field_name, None))
     if value is not None:
         wording = _AGGREGATE_LEGEND_WORDING.get(field_name, "total across passes")
         line = f"{field_name}: {wording} on rolled nodes"
@@ -1022,7 +1005,7 @@ def _rolled_derived(state: EncodingState, node: Any, field_name: str) -> float |
         if input_name in marker:
             state.note(NOTE_VARIES)
             return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1035,11 +1018,11 @@ def _rolled_structural(state: EncodingState, node: Any, field_name: str) -> floa
 
     op_field = _mirror_backed_op_field(field_name)
     if op_field is not None:
-        per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
+        per_pass = [record_member(op, op_field, None) for op in node.ops.values()]
         if len({repr(value) for value in per_pass}) > 1:
             state.note(NOTE_VARIES)
             return None
-    return _coerce_scalar(state, node, getattr(node, field_name, None))
+    return _coerce_scalar(state, node, record_member(node, field_name, None))
 
 
 def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1059,8 +1042,6 @@ def _rolled_per_pass(state: EncodingState, node: Any, field_name: str) -> float 
 
 def _rolled_wrong_type_read(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Shape / non-numeric rows: read and let the wrong-type rule speak."""
-
-    from .._utils._multipass_access import get_multipass_attr
 
     return _coerce_scalar(state, node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1115,8 +1096,6 @@ def _resolve_device_time(
     the join attributed no kernels to reads honest n/a, never zero.
     """
 
-    from .._observability._native_profile import require_join_result
-
     result = require_join_result(trace, argument)
     total, found = _sum_node_device_ns(result, node)
     if not found:
@@ -1146,7 +1125,7 @@ def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1159,8 +1138,6 @@ def _resolve_payload_builtin(
     state: EncodingState, node: Any, token: str, argument: str = "color_by"
 ) -> float | None:
     """Resolve one payload-builtin (magnitude/grad_norm) channel value."""
-
-    from .overlays import builtin_overlay_value
 
     value = builtin_overlay_value(node, token)
     if value is None:
@@ -1204,7 +1181,6 @@ def _resolve_source_value(state: EncodingState, trace: Trace, node: Any) -> floa
 
     if _is_rolled_multipass(node):
         return _resolve_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1236,7 +1212,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
         f"rolled multi-pass node {_node_key(node)!r}: {why}{detail}",
         code="size_by_rolled_varying",
         remedy=(
-            "unroll the graph (vis_mode='unrolled') to size each pass by its "
+            "unroll the graph (rolled=False) to size each pass by its "
             "own value, choose a cross-pass total (total_*), or pass a "
             "callable asserting your own aggregate semantics"
         ),
@@ -1255,7 +1231,7 @@ def _require_size_rolled_row(node: Any, field_name: str) -> str:
             f"{_node_key(node)!r}",
             code="encoding_source_invalid",
             remedy=(
-                "unroll the graph (vis_mode='unrolled'), use a callable that "
+                "unroll the graph (rolled=False), use a callable that "
                 "asserts its own aggregate semantics, or classify the field in "
                 "the rolled-aggregate allowlist"
             ),
@@ -1280,9 +1256,9 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
             raise _size_rolled_refusal(
                 node, field_name, "the stored aggregate is a per-pass maximum (upper bound)"
             )
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_SUMMED:
-        value = coerce(node, getattr(node, field_name, None))
+        value = coerce(node, record_member(node, field_name, None))
         if value is not None:
             wording = _AGGREGATE_LEGEND_WORDING.get(field_name, "total across passes")
             line = f"{field_name}: {wording} on rolled nodes"
@@ -1295,17 +1271,16 @@ def _resolve_size_field_on_rolled(state: EncodingState, node: Any, field_name: s
         )
     if row == ROW_DERIVED:
         _validate_derived_size_inputs(node, field_name, marker)
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_STRUCTURAL:
         _validate_structural_size_value(node, field_name)
-        return coerce(node, getattr(node, field_name, None))
+        return coerce(node, record_member(node, field_name, None))
     if row == ROW_PER_PASS:
         raise _size_rolled_refusal(
             node, field_name, "the field is per-pass with no aggregate meaning"
         )
     # ROW_SHAPE / ROW_NON_NUMERIC: read and let the wrong-type rule speak
     # (a shape field names its own remedy: size_by="dims").
-    from .._utils._multipass_access import get_multipass_attr
 
     return coerce(node, get_multipass_attr(node, field_name, None, multipass=None))
 
@@ -1330,7 +1305,7 @@ def _validate_structural_size_value(node: Any, field_name: str) -> None:
     op_field = _mirror_backed_op_field(field_name)
     if op_field is None:
         return
-    per_pass = [getattr(op, op_field, None) for op in node.ops.values()]
+    per_pass = [record_member(op, op_field, None) for op in node.ops.values()]
     if len({repr(value) for value in per_pass}) > 1:
         raise _size_rolled_refusal(node, field_name, "per-pass values disagree (defensive check)")
 
@@ -1422,7 +1397,6 @@ def _resolve_size_source_value(state: EncodingState, trace: Trace, node: Any) ->
         field_name = _BUILTIN_FIELD_SOURCES[spec.source]
     if _is_rolled_multipass(node):
         return _resolve_size_field_on_rolled(state, node, field_name)
-    from .._utils._multipass_access import get_multipass_attr
 
     value = get_multipass_attr(node, field_name, None, multipass=None)
     if value is None:
@@ -1606,95 +1580,13 @@ def populate_encoding_state(
         _compute_size_geometry(state)
 
     if state.stack_spec is not None:
-        from ._stacking import compute_stack_groups
+        from ._stacking import compute_stack_groups  # deferred: cycle _visualization
 
         compute_stack_groups(state, trace, universe)
 
     if state.spec is None:
         return
     _normalize_color_values(state, raw_values)
-
-
-def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
-    """Format a domain endpoint for the legend (builtin-aware, with units)."""
-
-    if spec is not None and spec.source_kind == "builtin":
-        from .overlays import format_overlay_value
-
-        formatted = format_overlay_value(spec.source, value)
-        return formatted.split(": ", 1)[-1]
-    if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
-    return f"{value:.4g}"
-
-
-def _color_legend_rows(state: EncodingState) -> list[Any]:
-    """Return color-channel title and ramp rows for the disclosure legend."""
-
-    from .node_spec import NodeSpec
-
-    if state.spec is None:
-        return []
-    transform_wording = {
-        "linear": "linear min-max",
-        "rank": "rank mapping (ordinal, not ratio)",
-        "log": "log scale (scale-invariant; values <= 0 unencoded)",
-    }[state.spec.transform]
-    title_lines = [
-        f"color_by: {state.spec.display_name}",
-        transform_wording,
-        # The coverage line falls out of the same computation (N13 slice):
-        # a legend may never advertise a scale over zero encoded nodes.
-        f"encoded {len(state.colors)} of {state.eligible_count} eligible nodes",
-        *state.aggregation_lines,
-        *state.notes,
-    ]
-    rows = [NodeSpec(lines=title_lines, shape="box", style="filled,rounded")]
-    if state.domain is None or not state.colors:
-        return rows
-    low, high = state.domain
-    # The 0.5 swatch encodes the geometric mean under log and the midpoint
-    # under linear; under rank it encodes the middle rank, not this midpoint.
-    mid = math.sqrt(low * high) if state.spec.transform == "log" else (low + high) / 2.0
-    for tag, fraction, value in (("min", 0.0, low), ("mid", 0.5, mid), ("max", 1.0, high)):
-        rows.append(
-            NodeSpec(
-                lines=[f"{tag}: {_format_domain_value(state.spec, value)}"],
-                shape="box",
-                fillcolor=state.ramp_color(fraction),
-            )
-        )
-    return rows
-
-
-def _non_color_legend_rows(state: EncodingState) -> list[Any]:
-    """Return active size and stack disclosure rows."""
-
-    from .node_spec import NodeSpec
-
-    rows: list[NodeSpec] = []
-    if state.size_spec is not None:
-        size_lines = [
-            f"size_by: {state.size_spec.display_name}",
-            f"size ~ {state.size_scale}({state.size_spec.display_name}), min-max, clamped",
-            *state.size_aggregation_lines,
-            *state.size_notes,
-        ]
-        if state.size_domain is not None:
-            low, high = state.size_domain
-            size_lines.append(
-                f"min {_format_domain_value(state.size_spec, low)} .. "
-                f"max {_format_domain_value(state.size_spec, high)}"
-            )
-        rows.append(NodeSpec(lines=size_lines, shape="box", style="filled,rounded"))
-    if state.stack_spec is not None:
-        stack_lines = [
-            f"stack_by: {state.stack_spec.display_name}",
-            "same rank = same annotation value",
-            *state.stack_notes,
-        ]
-        rows.append(NodeSpec(lines=stack_lines, shape="box", style="filled,rounded"))
-    return rows
 
 
 #: Notice emitted when an active channel forces the dot engine where AUTO
@@ -1733,10 +1625,10 @@ def attach_encoding_state(
             size_spec=size_spec,
             size_scale=size_scale,
             stack_spec=stack_spec,
-            # The skin's 3-anchor ramp. The low anchor is off-ground by
+            # The skin's ramp stops (N4). The low stop is off-ground by
             # construction: an encoded-lowest node is never invisible (the
             # measured white-on-white absence defect).
-            ramp_anchors=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
+            ramp_stops=tuple(theme.ramp) if getattr(theme, "ramp", None) else None,
         ),
     )
 
@@ -1804,7 +1696,7 @@ def channel_wrapped_node_spec_fn(
         """Apply the channel fill/size, then let the user callback override them."""
 
         if channel_fill is not None:
-            spec = spec.replace(fillcolor=channel_fill)
+            spec = fill_with_ink(spec, channel_fill)
         if channel_size is not None:
             # Minimums only: fixedsize=false means the box can only GROW
             # from the label's natural size (a label can never be truncated

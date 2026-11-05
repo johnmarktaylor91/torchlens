@@ -1,4 +1,5 @@
 # TorchLens Removed-Spellings Ledger
+<!-- # record-groups: keep-flat (this page lists the former flat spellings) -->
 
 Every warning-producing compatibility shim listed below was REMOVED outright in
 the 2026-08 shim-removal pass (interim-phase ruling: deprecation shims are not
@@ -96,6 +97,8 @@ unaffected.
 | Old name | New name | Status |
 | --- | --- | --- |
 | `capture_output_structure` | `capture_container_structure` | removed |
+| `show_containers="auto"` | `show_containers="collapsed"` | removed |
+| `show_containers="cluster"` | `show_containers="nodes"` | removed |
 | `layers_to_save` | `save=...` | removed |
 | `random_seed` | grouped capture options | removed |
 | `save_grads` | backward capture options | removed |
@@ -160,7 +163,304 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)`; the scoped form stays as `with trace.fork() as scoped: scoped.do(...)`, which detaches the last `do` hooks on exit | removed |
 | `ReplayOptions(hooks=)` | a mapping of sites to edits on `Trace.do` | removed |
 | `ReplayOptions(differentiable=)` | `InterventionOptions(differentiable=True)` on `Trace.do` | removed |
+| `ReplayOptions(append=)` | `Trace.append(inputs, model=model)` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |
+
+## Record Members
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+| `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+| `Op.activation_memory` | `Op.cost.activation_memory` | removed |
+| `Op.arg_expressions` | `Op.source.arg_expressions` | removed |
+| `Op.arg_names` | `Op.call.arg_names` | removed |
+| `Op.args_template` | `Op.call.args_template` | removed |
+| `Op.arithmetic_intensity` | `Op.cost.arithmetic_intensity` | removed |
+| `Op.atomic_module` | `Op.module_context.atomic_module` | removed |
+| `Op.atomic_module_address` | `Op.module_context.atomic_module_address` | removed |
+| `Op.atomic_module_call` | `Op.module_context.atomic_module_call` | removed |
+| `Op.autograd_memory` | `Op.cost.autograd_memory` | removed |
+| `Op.bool_value` | `Op.control_flow.bool_value` | removed |
+| `Op.buffer_sink_ops` | `Op.graph.buffer_sink_ops` | removed |
+| `Op.buffer_source` | `Op.graph.buffer_source` | removed |
+| `Op.buffer_source_func_name` | `Op.graph.buffer_source_func_name` | removed |
+| `Op.buffer_source_ops` | `Op.graph.buffer_source_ops` | removed |
+| `Op.bytes_delta_at_call` | `Op.cost.bytes_delta_at_call` | removed |
+| `Op.bytes_peak_at_call` | `Op.cost.bytes_peak_at_call` | removed |
+| `Op.bytes_read` | `Op.cost.bytes_read` | removed |
+| `Op.bytes_written` | `Op.cost.bytes_written` | removed |
+| `Op.co_parents` | `Op.graph.co_parents` | removed |
+| `Op.code_context` | `Op.source.frames` | removed |
+| `Op.compute_record` | `Op.cost.compute_record` | removed |
+| `Op.conditional_arm_children` | `Op.control_flow.arm_children` | removed |
+| `Op.conditional_branch_depth` | `Op.control_flow.branch_depth` | removed |
+| `Op.conditional_branch_stack` | `Op.control_flow.branch_stack` | removed |
+| `Op.conditional_context_kind` | `Op.control_flow.context_kind` | removed |
+| `Op.conditional_depth` | `Op.control_flow.depth` | removed |
+| `Op.conditional_elif_children` | `Op.control_flow.elif_children` | removed |
+| `Op.conditional_else_children` | `Op.control_flow.else_children` | removed |
+| `Op.conditional_entry_children` | `Op.control_flow.entry_children` | removed |
+| `Op.conditional_then_children` | `Op.control_flow.then_children` | removed |
+| `Op.conditional_wrapper_kind` | `Op.control_flow.wrapper_kind` | removed |
+| `Op.derived_grad` | `Op.autograd.derived_grad` | removed |
+| `Op.dropped_edge_tensor_args` | `Op.call.dropped_edge_tensor_args` | removed |
+| `Op.edge_substitutions` | `Op.graph.edge_substitutions` | removed |
+| `Op.equivalence_class` | `Op.graph.equivalence_class` | removed |
+| `Op.equivalent_ops` | `Op.graph.equivalent_ops` | removed |
+| `Op.flops_backward` | `Op.cost.flops_backward` | removed |
+| `Op.flops_forward` | `Op.cost.flops_forward` | removed |
+| `Op.flops_total` | `Op.cost.flops_total` | removed |
+| `Op.func_autocast_state` | `Op.call.autocast_state` | removed |
+| `Op.func_call_id` | `Op.call.call_id` | removed |
+| `Op.func_config` | `Op.call.config` | removed |
+| `Op.func_duration` | `Op.cost.duration` | removed |
+| `Op.func_id` | `Op.call.func_id` | removed |
+| `Op.func_non_tensor_args` | `Op.call.non_tensor_args` | removed |
+| `Op.func_qualname` | `Op.source.func_qualname` | removed |
+| `Op.func_rng_states` | `Op.call.rng_states` | removed |
+| `Op.fx_call_index` | `Op.source.fx_call_index` | removed |
+| `Op.fx_qualpath` | `Op.source.fx_path` | removed |
+| `Op.grad_dtype` | `Op.autograd.grad_dtype` | removed |
+| `Op.grad_fn` | `Op.autograd.grad_fn` | removed |
+| `Op.grad_fn_class_name` | `Op.autograd.grad_fn_class_name` | removed |
+| `Op.grad_fn_class_qualname` | `Op.autograd.grad_fn_class_qualname` | removed |
+| `Op.grad_fn_handle` | `Op.autograd.grad_fn_handle` | removed |
+| `Op.grad_for` | `Op.autograd.grad_for` | removed |
+| `Op.grad_shape` | `Op.autograd.grad_shape` | removed |
+| `Op.grads` | `Op.autograd.grads` | removed |
+| `Op.has_children` | `Op.graph.has_children` | removed |
+| `Op.has_co_parents` | `Op.graph.has_co_parents` | removed |
+| `Op.has_input_ancestor` | `Op.graph.has_input_ancestor` | removed |
+| `Op.has_internal_source_ancestor` | `Op.graph.has_internal_source_ancestor` | removed |
+| `Op.has_output_descendant` | `Op.graph.has_output_descendant` | removed |
+| `Op.has_parents` | `Op.graph.has_parents` | removed |
+| `Op.has_saved_args` | `Op.call.has_saved_args` | removed |
+| `Op.has_siblings` | `Op.graph.has_siblings` | removed |
+| `Op.in_conditionals` | `Op.control_flow.in_conditionals` | removed |
+| `Op.injection_provenance` | `Op.call.injection_provenance` | removed |
+| `Op.input_memory` | `Op.cost.input_memory` | removed |
+| `Op.input_to_module_calls` | `Op.module_context.input_to_module_calls` | removed |
+| `Op.input_to_modules` | `Op.module_context.input_to_modules` | removed |
+| `Op.internal_source_ancestors` | `Op.graph.internal_source_ancestors` | removed |
+| `Op.internal_source_parents` | `Op.graph.internal_source_parents` | removed |
+| `Op.io_role` | `Op.graph.io_role` | removed |
+| `Op.is_atomic_module` | `Op.module_context.is_atomic_module` | removed |
+| `Op.is_buffer` | `Op.graph.is_buffer` | removed |
+| `Op.is_compute_op` | `Op.graph.is_compute` | removed |
+| `Op.is_final_output` | `Op.graph.is_final_output` | removed |
+| `Op.is_in_conditional` | `Op.control_flow.is_in_conditional` | removed |
+| `Op.is_in_conditional_body` | `Op.control_flow.is_in_conditional_body` | removed |
+| `Op.is_in_conditional_evaluation` | `Op.control_flow.is_in_conditional_evaluation` | removed |
+| `Op.is_internal_source` | `Op.graph.is_internal_source` | removed |
+| `Op.is_internally_initialized` | `Op.call.is_internally_initialized` | removed |
+| `Op.is_module_input` | `Op.module_context.is_module_input` | removed |
+| `Op.is_module_output` | `Op.module_context.is_module_output` | removed |
+| `Op.is_orphan` | `Op.graph.is_orphan` | removed |
+| `Op.is_output_parent` | `Op.graph.is_output_parent` | removed |
+| `Op.is_scalar_bool` | `Op.control_flow.is_scalar_bool` | removed |
+| `Op.is_terminal_bool` | `Op.control_flow.is_terminal_bool` | removed |
+| `Op.is_terminal_conditional_bool` | `Op.control_flow.is_terminal_conditional_bool` | removed |
+| `Op.is_transform` | `Op.call.is_func_transform` | removed |
+| `Op.kwargs_template` | `Op.call.kwargs_template` | removed |
+| `Op.macs_forward` | `Op.cost.macs_forward` | removed |
+| `Op.materialize_grad` | `Op.payload.materialize_grad` | removed |
+| `Op.materialize_out` | `Op.payload.materialize_out` | removed |
+| `Op.max_distance_from_input` | `Op.graph.max_distance_from_input` | removed |
+| `Op.max_distance_to_output` | `Op.graph.max_distance_to_output` | removed |
+| `Op.min_distance_from_input` | `Op.graph.min_distance_from_input` | removed |
+| `Op.min_distance_to_output` | `Op.graph.min_distance_to_output` | removed |
+| `Op.module_call_depth` | `Op.module_context.call_depth` | removed |
+| `Op.module_call_stack` | `Op.module_context.call_stack` | removed |
+| `Op.module_entry_arg_keys` | `Op.module_context.entry_arg_keys` | removed |
+| `Op.non_tensor_kwargs` | `Op.call.non_tensor_kwargs` | removed |
+| `Op.non_tensor_pos_args` | `Op.call.non_tensor_pos_args` | removed |
+| `Op.num_args_total` | `Op.call.num_args_total` | removed |
+| `Op.num_autograd_tensors` | `Op.autograd.num_autograd_tensors` | removed |
+| `Op.num_inputs` | `Op.graph.num_inputs` | removed |
+| `Op.num_kwargs` | `Op.call.num_kwargs` | removed |
+| `Op.num_pos_args` | `Op.call.num_pos_args` | removed |
+| `Op.output_of_module_calls` | `Op.module_context.output_of_module_calls` | removed |
+| `Op.output_of_modules` | `Op.module_context.output_of_modules` | removed |
+| `Op.param_memory` | `Op.cost.param_memory` | removed |
+| `Op.parent_arg_positions` | `Op.call.parent_arg_positions` | removed |
+| `Op.parent_param_ops` | `Op.graph.parent_param_ops` | removed |
+| `Op.parent_params` | `Op.graph.parent_params` | removed |
+| `Op.recurrent_ops` | `Op.graph.recurrent_ops` | removed |
+| `Op.root_ancestors` | `Op.graph.root_ancestors` | removed |
+| `Op.saved_args` | `Op.call.saved_args` | removed |
+| `Op.saved_kwargs` | `Op.call.saved_kwargs` | removed |
+| `Op.siblings` | `Op.graph.siblings` | removed |
+| `Op.terminal_bool_for` | `Op.control_flow.terminal_bool_for` | removed |
+| `Op.tl_authored_root` | `Op.call.tl_authored_root` | removed |
+| `Op.transform_chain` | `Op.call.func_transform_chain` | removed |
+| `Op.transform_config` | `Op.call.func_transform_config` | removed |
+| `Op.transform_fn_name` | `Op.call.func_transform_fn_name` | removed |
+| `Op.transform_fn_qualname` | `Op.call.func_transform_fn_qualname` | removed |
+| `Op.transform_fn_source` | `Op.call.func_transform_fn_source` | removed |
+| `Op.transform_kind` | `Op.call.func_transform_kind` | removed |
+| `Op.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
+| `Op.transformed_grad` | `Op.payload.transformed_grad` | removed |
+| `Op.transformed_grad_dtype` | `Op.payload.transformed_grad_dtype` | removed |
+| `Op.transformed_grad_shape` | `Op.payload.transformed_grad_shape` | removed |
+| `Op.transformed_out` | `Op.payload.transformed_out` | removed |
+| `Op.transformed_out_dtype` | `Op.payload.transformed_out_dtype` | removed |
+| `Op.transformed_out_shape` | `Op.payload.transformed_out_shape` | removed |
+| `Op.unattributed_tensor_args` | `Op.call.unattributed_tensor_args` | removed |
+| `Op.var_names` | `Op.source.var_names` | removed |
+| `Layer.activation_memory` | `Layer.cost.activation_memory` | removed |
+| `Layer.arg_names` | `Layer.call.arg_names` | removed |
+| `Layer.autograd_memory` | `Layer.cost.autograd_memory` | removed |
+| `Layer.bool_value` | `Layer.control_flow.bool_value` | removed |
+| `Layer.buffer_pass` | `Layer.graph.buffer_pass` | removed |
+| `Layer.buffer_source` | `Layer.graph.buffer_source` | removed |
+| `Layer.buffer_source_func_name` | `Layer.graph.buffer_source_func_name` | removed |
+| `Layer.child_ops_per_layer` | `Layer.graph.child_ops_per_layer` | removed |
+| `Layer.children_per_pass` | `Layer.graph.children_per_pass` | removed |
+| `Layer.code_context` | `Layer.source.frames` | removed |
+| `Layer.conditional_arm_children` | `Layer.control_flow.arm_children` | removed |
+| `Layer.conditional_branch_stack_ops` | `Layer.control_flow.branch_stack_ops` | removed |
+| `Layer.conditional_depth` | `Layer.control_flow.depth` | removed |
+| `Layer.conditional_elif_children` | `Layer.control_flow.elif_children` | removed |
+| `Layer.conditional_else_children` | `Layer.control_flow.else_children` | removed |
+| `Layer.conditional_entry_children` | `Layer.control_flow.entry_children` | removed |
+| `Layer.conditional_role_stacks` | `Layer.control_flow.role_stacks` | removed |
+| `Layer.conditional_then_children` | `Layer.control_flow.then_children` | removed |
+| `Layer.equivalence_class` | `Layer.graph.equivalence_class` | removed |
+| `Layer.equivalent_ops` | `Layer.graph.equivalent_ops` | removed |
+| `Layer.flops_backward` | `Layer.cost.flops_backward` | removed |
+| `Layer.flops_forward` | `Layer.cost.flops_forward` | removed |
+| `Layer.flops_total` | `Layer.cost.flops_total` | removed |
+| `Layer.func_config` | `Layer.call.config` | removed |
+| `Layer.func_duration` | `Layer.cost.duration` | removed |
+| `Layer.func_rng_states` | `Layer.call.rng_states` | removed |
+| `Layer.fx_call_index` | `Layer.source.fx_call_index` | removed |
+| `Layer.fx_qualpath` | `Layer.source.fx_path` | removed |
+| `Layer.grad_fn` | `Layer.autograd.grad_fn` | removed |
+| `Layer.grad_fn_class_name` | `Layer.autograd.grad_fn_class_name` | removed |
+| `Layer.grad_fn_class_qualname` | `Layer.autograd.grad_fn_class_qualname` | removed |
+| `Layer.grad_fn_handle` | `Layer.autograd.grad_fn_handle` | removed |
+| `Layer.has_children` | `Layer.graph.has_children` | removed |
+| `Layer.has_co_parents` | `Layer.graph.has_co_parents` | removed |
+| `Layer.has_input_ancestor` | `Layer.graph.has_input_ancestor` | removed |
+| `Layer.has_parents` | `Layer.graph.has_parents` | removed |
+| `Layer.has_siblings` | `Layer.graph.has_siblings` | removed |
+| `Layer.in_conditionals` | `Layer.control_flow.in_conditionals` | removed |
+| `Layer.io_role` | `Layer.graph.io_role` | removed |
+| `Layer.is_atomic_module` | `Layer.module_context.is_atomic_module` | removed |
+| `Layer.is_buffer` | `Layer.graph.is_buffer` | removed |
+| `Layer.is_compute_layer` | `Layer.graph.is_compute` | removed |
+| `Layer.is_final_output` | `Layer.graph.is_final_output` | removed |
+| `Layer.is_in_conditional` | `Layer.control_flow.is_in_conditional` | removed |
+| `Layer.is_in_conditional_body` | `Layer.control_flow.is_in_conditional_body` | removed |
+| `Layer.is_in_conditional_evaluation` | `Layer.control_flow.is_in_conditional_evaluation` | removed |
+| `Layer.is_internal_sink` | `Layer.graph.is_internal_sink` | removed |
+| `Layer.is_internal_source` | `Layer.graph.is_internal_source` | removed |
+| `Layer.is_module_input` | `Layer.module_context.is_module_input` | removed |
+| `Layer.is_orphan` | `Layer.graph.is_orphan` | removed |
+| `Layer.is_scalar_bool` | `Layer.control_flow.is_scalar_bool` | removed |
+| `Layer.is_terminal_bool` | `Layer.control_flow.is_terminal_bool` | removed |
+| `Layer.macs_forward` | `Layer.cost.macs_forward` | removed |
+| `Layer.module_call_depth` | `Layer.module_context.call_depth` | removed |
+| `Layer.num_args_total` | `Layer.call.num_args_total` | removed |
+| `Layer.num_autograd_tensors` | `Layer.autograd.num_autograd_tensors` | removed |
+| `Layer.num_kwargs` | `Layer.call.num_kwargs` | removed |
+| `Layer.num_pos_args` | `Layer.call.num_pos_args` | removed |
+| `Layer.output_of_module_calls` | `Layer.module_context.output_of_module_calls` | removed |
+| `Layer.output_of_modules` | `Layer.module_context.output_of_modules` | removed |
+| `Layer.parent_arg_positions` | `Layer.call.parent_arg_positions` | removed |
+| `Layer.parent_ops_per_layer` | `Layer.graph.parent_ops_per_layer` | removed |
+| `Layer.parents_per_pass` | `Layer.graph.parents_per_pass` | removed |
+| `Layer.saved_args` | `Layer.call.saved_args` | removed |
+| `Layer.saved_kwargs` | `Layer.call.saved_kwargs` | removed |
+| `Layer.site_peers` | `Layer.graph.site_peers` | removed |
+| `Layer.terminal_bool_for` | `Layer.control_flow.terminal_bool_for` | removed |
+| `Layer.total_activation_memory` | `Layer.cost.total_activation_memory` | removed |
+| `Layer.total_autograd_memory` | `Layer.cost.total_autograd_memory` | removed |
+| `Layer.total_flops_backward` | `Layer.cost.total_flops_backward` | removed |
+| `Layer.total_flops_forward` | `Layer.cost.total_flops_forward` | removed |
+| `Layer.total_flops_total` | `Layer.cost.total_flops` | removed |
+| `Layer.total_func_duration` | `Layer.cost.total_func_duration` | removed |
+| `Layer.total_macs_forward` | `Layer.cost.total_macs_forward` | removed |
+| `Layer.total_macs_total` | `Layer.cost.total_macs` | removed |
+| `Layer.total_param_memory` | `Layer.cost.total_param_memory` | removed |
+| `Layer.transformed_activation_memory` | `Layer.cost.transformed_activation_memory` | removed |
+| `Layer.transformed_grad` | `Layer.payload.transformed_grad` | removed |
+| `Layer.transformed_grad_dtype` | `Layer.payload.transformed_grad_dtype` | removed |
+| `Layer.transformed_grad_shape` | `Layer.payload.transformed_grad_shape` | removed |
+| `Layer.transformed_out` | `Layer.payload.transformed_out` | removed |
+| `Layer.transformed_out_dtype` | `Layer.payload.transformed_out_dtype` | removed |
+| `Layer.transformed_out_shape` | `Layer.payload.transformed_out_shape` | removed |
+| `Op.address` | `Op.buffer_address` | removed |
+| `Op.activation_transform` | `trace.options.activation_transform` (a capture setting) | removed |
+| `Op.detach_saved_activations` | `trace.options.detach_saved_activations` (a capture setting) | removed |
+| `Op.output_device` | `trace.options.output_device` (a capture setting) | removed |
+| `Op.grad_fn_object_id` | `Op.autograd.grad_fn` | removed |
+| `Layer.address` | `Layer.buffer_address` | removed |
+| `Layer.activation_transform` | `trace.options.activation_transform` (a capture setting) | removed |
+| `Layer.detach_saved_activations` | `trace.options.detach_saved_activations` (a capture setting) | removed |
+| `Layer.output_device` | `trace.options.output_device` (a capture setting) | removed |
+| `Layer.grad_fn_object_id` | `Layer.autograd.grad_fn` | removed |
+| `Op.out_ref` | `Op.out` / `Op.payload.materialize_out()` | removed |
+| `Op.grad_ref` | `Op.grad` / `Op.payload.materialize_grad()` | removed |
+| `Op.grad_fn_cls` | `Op.autograd.grad_fn_class_name` | removed |
+
+## Module Paths
+
+Surface ruling surface.6 (31 Oct 2026): a submodule is a public import path only when its parent lists it in `__all__` or it is taught (`torchlens.backends.torch`, `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`, `torchlens.intervention.stochastic` and the per-framework backend namespaces `torchlens.backends.jax`, `mlx`, `paddle`, `tf` and `tinygrad`). Reading an old spelling as an attribute of its parent (`tl.intervention.types`) raises the typed `facade_redirect` error; an `import` statement of an old path fails with `ModuleNotFoundError`.
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `torchlens.agent.cli` | none public; import its names from `torchlens.agent` (private home `torchlens.agent._cli`) | private |
+| `torchlens.attribution.graph` | none public; import its names from `torchlens.attribution` (private home `torchlens.attribution._graph`) | private |
+| `torchlens.attribution.onebackward` | none public; import its names from `torchlens.attribution` (private home `torchlens.attribution._onebackward`) | private |
+| `torchlens.backends.default_specs` | none public; import its names from `torchlens.backends` (private home `torchlens.backends._default_specs`) | private |
+| `torchlens.bridge.hf_attention` | none public; import its names from `torchlens.bridge` (private home `torchlens.bridge._hf_attention`) | private |
+| `torchlens.errors.episode` | none public; import its names from `torchlens.errors` (private home `torchlens.errors._episode`) | private |
+| `torchlens.errors.runnable` | none public; import its names from `torchlens.errors` (private home `torchlens.errors._runnable`) | private |
+| `torchlens.intervention.audit` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._audit`) | private |
+| `torchlens.intervention.binding` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._binding`) | private |
+| `torchlens.intervention.bundle` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._bundle`) | private |
+| `torchlens.intervention.edge_semantics` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._edge_semantics`) | private |
+| `torchlens.intervention.edge_substitution` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._edge_substitution`) | private |
+| `torchlens.intervention.handles` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._handles`) | private |
+| `torchlens.intervention.helpers` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._helpers`) | private |
+| `torchlens.intervention.injection` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._injection`) | private |
+| `torchlens.intervention.masked_edit` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._masked_edit`) | private |
+| `torchlens.intervention.model_door` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._model_door`) | private |
+| `torchlens.intervention.param_substitution` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._param_substitution`) | private |
+| `torchlens.intervention.predicates` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._predicates`) | private |
+| `torchlens.intervention.regions` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._regions`) | private |
+| `torchlens.intervention.replay` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._replay`) | private |
+| `torchlens.intervention.rerun` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._rerun`) | private |
+| `torchlens.intervention.runtime` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._runtime`) | private |
+| `torchlens.intervention.save` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._save`) | private |
+| `torchlens.intervention.site_keys` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._site_keys`) | private |
+| `torchlens.intervention.spec` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._spec`) | private |
+| `torchlens.intervention.spec_compat` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._spec_compat`) | private |
+| `torchlens.intervention.sweep` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._sweep`) | private |
+| `torchlens.intervention.types` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._types`) | private |
+| `torchlens.recording.cleanup` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._cleanup`) | private |
+| `torchlens.recording.exceptions` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._exceptions`) | private |
+| `torchlens.recording.options` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._options`) | private |
+| `torchlens.recording.storage_disk` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._storage_disk`) | private |
+| `torchlens.recording.storage_ram` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._storage_ram`) | private |
+| `torchlens.recording.types` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._types`) | private |
+| `torchlens.validation.backward` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._backward`) | private |
+| `torchlens.validation.consolidated` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._consolidated`) | private |
+| `torchlens.validation.core` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._core`) | private |
+| `torchlens.validation.diagnostics` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._diagnostics`) | private |
+| `torchlens.validation.exemptions` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._exemptions`) | private |
+| `torchlens.validation.invariants` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._invariants`) | private |
+| `torchlens.validation.status` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._status`) | private |
+| `torchlens.viz.batch_summary` | none public; import its names from `torchlens.viz` (private home `torchlens.viz._batch_summary`) | private |
+| `torchlens.viz.node_plots` | none public; import its names from `torchlens.viz` (private home `torchlens.viz._node_plots`) | private |
+| `torchlens.intervention.compose` (the module) | `torchlens.intervention.compose` is the public function or object; the module is `torchlens.intervention._compose` | private |
+| `torchlens.intervention.population` (the module) | `torchlens.intervention.population` is the public function or object; the module is `torchlens.intervention._population` | private |
+| `torchlens.receptive_field.rules` (the module) | `torchlens.receptive_field.rules` is the public function or object; the module is `torchlens.receptive_field._builtin_rules` | private |
+| `torchlens.recording.dry_run` (the module) | `torchlens.recording.dry_run` is the public function or object; the module is `torchlens.recording._dry_run_door` | private |
+| `torchlens.recording.recover` (the module) | `torchlens.recording.recover` is the public function or object; the module is `torchlens.recording._recover` | private |
+| `torchlens.viz.feature_maps` (the module) | `torchlens.viz.feature_maps` is the public function or object; the module is `torchlens.viz._feature_maps` | private |
 
 ## Intervention, Sweep, And Observer Aliases
 
@@ -171,6 +471,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `rerun()` | `run()` | removed |
 | `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |
+| `torchlens.bundle.AmbiguousLabelError` | `torchlens.errors.AmbiguousLabelError` | removed |
 | `Bundle.measure_members(metric=, order=)` | `Bundle.map(fn)`: live members by name, released candidates read `"unmeasured"` | removed |
 | `intervening()` | `without_op()` | removed |
 | `sweep(param=...)` | `sweep(at=...)` | removed |

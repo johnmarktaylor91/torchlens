@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ...errors._base import TorchLensError
 from ._attrs import (
     AttrContext,
@@ -439,7 +440,7 @@ def _rolled_edges(
 def _parent_refs(entry: Any) -> list[str]:
     """Return every recorded parent reference for one entry, ports intact."""
 
-    positions = getattr(entry, "parent_arg_positions", None) or {}
+    positions = record_member(entry, "parent_arg_positions", None) or {}
     refs = [str(ref) for ref in (positions.get("args") or {}).values()]
     refs.extend(str(ref) for ref in (positions.get("kwargs") or {}).values())
     if refs:

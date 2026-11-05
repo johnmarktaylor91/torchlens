@@ -34,8 +34,12 @@ from typing import Any
 import torch
 
 from .._io._json import loads_bounded
-from .._utils.tensor_leaves import flat_byte_view
+from .._observability._kernels import Histogram, HistogramDescriptor, RunningStats
+from .._utils.tensor_leaves import copy_host_bytes, flat_byte_view
+from ._aggregate import Aggregator
 from ._fitted import FittedArtifactError
+from ._per_unit import Quantile, TopK, _UnitLayout
+from ._streaming import CKA, PCA, Covariance, CrossCovariance, Mean, Norm
 
 __tl_layer__ = "L5"
 
@@ -84,11 +88,6 @@ _FLOAT_LIST_TENSOR_MIN = 16
 
 def _classes() -> dict[str, type]:
     """Return the allow-list of classes a state file may rebuild, by name."""
-
-    from .._observability._kernels import Histogram, HistogramDescriptor, RunningStats
-    from ._aggregate import Aggregator
-    from ._per_unit import Quantile, TopK, _UnitLayout
-    from ._streaming import CKA, PCA, Covariance, CrossCovariance, Mean, Norm
 
     allowed: tuple[type, ...] = (
         Aggregator,
@@ -304,7 +303,7 @@ def state_digest(state_json: str, tensors: Mapping[str, torch.Tensor]) -> str:
     for key in sorted(tensors):
         tensor = tensors[key].detach().to("cpu").contiguous()
         hasher.update(repr((key, str(tensor.dtype), tuple(tensor.shape))).encode("utf-8"))
-        hasher.update(flat_byte_view(tensor).numpy().tobytes())
+        hasher.update(copy_host_bytes(flat_byte_view(tensor)))
     return "sha256:" + hasher.hexdigest()
 
 
@@ -340,14 +339,14 @@ def write_state(root: Any, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
-    import torchlens
+    from .._vocab._package_version import __version__
 
     state_json, tensors, _paths = encode_state(root)
     metadata = {
         "schema": STATE_SCHEMA,
         "state": state_json,
         "digest": state_digest(state_json, tensors),
-        "torchlens": str(torchlens.__version__),
+        "torchlens": __version__,
     }
     destination = Path(path)
     handle, scratch = tempfile.mkstemp(
@@ -464,8 +463,6 @@ def refuse_encoder_mismatch(
 def can_merge_state(target: Any, loaded: Any) -> bool:
     """Return whether ``loaded`` has ``target``'s class and child structure."""
 
-    from ._aggregate import Aggregator
-
     if type(target) is not type(loaded):
         return False
     if isinstance(target, Aggregator):
@@ -481,8 +478,6 @@ def merge_state_into(target: Any, loaded: Any) -> None:
 
     Callers check :func:`can_merge_state` first.
     """
-
-    from ._aggregate import Aggregator
 
     if isinstance(target, Aggregator):
         for child, loaded_child in zip(target.stats, loaded.stats, strict=True):

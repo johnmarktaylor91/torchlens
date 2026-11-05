@@ -11,20 +11,23 @@ from ..._ir.container import (
 )
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
-from ..._storage_bindings import (
-    VIEW_CONTEXT_RECEIVER_FUNCS,
-    copy_with_storage_context,
-    copy_with_view_context,
-    storage_context_arg_index,
+from ..._utils._internal_read import internal_scalar_read
+from ..._utils._tensor_label import (
+    get_live_tensor_label,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    mutated_parameter_label,
+    session_label_storage_intact,
+    session_meta_is_anchored,
 )
 from ..._utils._tensor_layout import CaptureLayout, layout_of
-from ..._utils._torch_compat import get_force_original_view_tracking
-from ..._utils.arg_handling import copy_arg_tree
+from ..._utils._tl_collective import _async_collective_elem
 from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ..._validation_argument_references import active_argument_references
-from ...intervention.types import (
+from ...intervention._types import (
     ArgComponent,
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -34,22 +37,17 @@ from ...intervention.types import (
     ParentRef,
     Unsupported,
 )
-from ._internal_read import internal_scalar_read
-from ._param_fingerprint import param_fingerprint
-from ._tl import (
-    get_live_tensor_label,
-    get_param_meta,
-    get_tensor_label,
-    get_tensor_meta,
-    mutated_parameter_label,
-    session_label_storage_intact,
-    session_meta_is_anchored,
+from ._ops_arg_slots import _peek_raw_graph_workspace, arg_slot_labels
+from ._ops_saved_arg_copies import (
+    _copy_saved_arg_tree,
+    _copy_saved_call_args,
+    _is_flat_sequence,
 )
+from ._param_fingerprint import param_fingerprint
 from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-    from ..._ir.workspaces import RawGraphWorkspace
 
 
 __all__ = (
@@ -61,25 +59,10 @@ __all__ = (
     "_build_edge_use_records",
     "_session_validated_parameter",
     "_tensor_has_known_provenance",
+    # Re-exported from their home module for existing importers.
+    "_copy_saved_arg_tree",
+    "_copy_saved_call_args",
 )
-
-
-def _peek_raw_graph_workspace(trace: "Trace | None") -> "RawGraphWorkspace | None":
-    """Read the trace's raw-graph workspace, if this capture still holds one.
-
-    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
-    lives for one capture: postprocess pops it at its terminal consume and a
-    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
-    direct private read guarded by ``AttributeError`` rather than a
-    string-literal ``getattr`` default, so a rename breaks loudly.
-    """
-
-    if trace is None:
-        return None
-    try:
-        return trace._raw_graph_ws
-    except AttributeError:
-        return None
 
 
 def _function_registry_key(
@@ -196,8 +179,34 @@ def _capture_layout(value: Any) -> CaptureLayout | None:
         return layout_of(value)
 
 
+#: Exact builtin types whose instances take no attributes, so carry no TorchLens stamp:
+#: their label read is always ``None`` and the template walk skips it.
+_UNSTAMPABLE_TYPES = frozenset(
+    {int, float, bool, complex, str, bytes, type(None), list, tuple, dict, slice, type(...)}
+)
+
+
+def _label_free(value: Any) -> bool:
+    """Return whether ``value`` is a non-tensor the label gate would answer ``None`` for.
+
+    Tensors go through the snapshot or a live read. Any other value has a label only
+    through a stamped meta, so one meta read (which raises on a foreign stamp exactly
+    as the gate does) replaces the gated label read.
+    """
+
+    if type(value) in _UNSTAMPABLE_TYPES:
+        return True
+    if isinstance(value, torch.Tensor):
+        return False
+    meta = get_tensor_meta(value)
+    return meta is None or meta.label_raw is None
+
+
 def _classify_arg_component(
-    value: Any, notes: list[str], trace: "Trace | None" = None
+    value: Any,
+    notes: list[str],
+    trace: "Trace | None" = None,
+    known: dict[int, str | None] | None = None,
 ) -> ArgComponent:
     """Classify a function argument value for replay templating.
 
@@ -207,6 +216,9 @@ def _classify_arg_component(
         Argument value to classify.
     notes
         Accumulator for unsupported-value notes.
+    known
+        The op's snapshot labels by tensor id (read once per op); tensors not in it
+        are read live, and non-tensor values without a stamped label are not read.
 
     Returns
     -------
@@ -215,8 +227,10 @@ def _classify_arg_component(
     """
 
     label = None
+    if known is not None and (id(value) in known or _label_free(value)):
+        label = known.get(id(value))
     # A Parameter mutated in place earlier in the pass replays from its mutation op.
-    if not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
+    elif not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
         if trace is None:
             label = get_tensor_label(value)
         else:
@@ -224,29 +238,40 @@ def _classify_arg_component(
     if isinstance(label, str):
         return ParentRef(label, _capture_layout=_capture_layout(value))
     if isinstance(value, torch.Tensor):
-        if isinstance(value, torch.nn.Parameter):
-            # snapshot the model-prep barcode NOW (model provably alive) --
-            # session cleanup strips the weak registry meta before a deferred save,
-            # so the template itself must carry the capture-time identity.
-            param_meta = get_param_meta(value)
-            param_barcode = getattr(param_meta, "param_barcode", None)
-            return LiteralTensor(
-                value,
-                param_barcode=str(param_barcode) if param_barcode is not None else None,
-                _capture_param_fingerprint=param_fingerprint(
-                    value, getattr(param_meta, "param_address", None)
-                ),
-            )
-        with pause_logging():
-            return LiteralTensor(safe_copy(value))
+        return _unlabeled_tensor_literal(value)
     if _literal_value_supported(value):
         return LiteralValue(value)
     if isinstance(value, (list, tuple)):
-        return tuple(_classify_arg_component(item, notes, trace) for item in value)
+        return tuple(_classify_arg_component(item, notes, trace, known) for item in value)
     if isinstance(value, dict):
         return tuple(
-            (key, _classify_arg_component(item, notes, trace)) for key, item in value.items()
+            (key, _classify_arg_component(item, notes, trace, known)) for key, item in value.items()
         )
+    return _unsupported_component(value, notes)
+
+
+def _unlabeled_tensor_literal(value: torch.Tensor) -> LiteralTensor:
+    """Template a tensor argument that has no live parent label as a literal."""
+
+    if isinstance(value, torch.nn.Parameter):
+        # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
+        # session cleanup strips the weak registry meta before a deferred save,
+        # so the template itself must carry the capture-time identity.
+        param_meta = get_param_meta(value)
+        param_barcode = getattr(param_meta, "param_barcode", None)
+        return LiteralTensor(
+            value,
+            param_barcode=str(param_barcode) if param_barcode is not None else None,
+            _capture_param_fingerprint=param_fingerprint(
+                value, getattr(param_meta, "param_address", None)
+            ),
+        )
+    with pause_logging():
+        return LiteralTensor(safe_copy(value))
+
+
+def _unsupported_component(value: Any, notes: list[str]) -> Unsupported:
+    """Template an argument value replay cannot store, noting why."""
 
     reason = f"unsupported argument type {type(value).__module__}.{type(value).__qualname__}"
     notes.append(reason)
@@ -283,9 +308,11 @@ def _build_args_template(
     """
 
     notes: list[str] = []
-    arg_components = tuple(_classify_arg_component(arg, notes, trace) for arg in args)
+    known = arg_slot_labels(trace, args, kwargs)
+    arg_components = tuple(_classify_arg_component(arg, notes, trace, known) for arg in args)
     kwarg_components = tuple(
-        (str(key), _classify_arg_component(value, notes, trace)) for key, value in kwargs.items()
+        (str(key), _classify_arg_component(value, notes, trace, known))
+        for key, value in kwargs.items()
     )
     return CapturedArgTemplate(
         args=arg_components,
@@ -347,7 +374,7 @@ def _build_edge_use_records(
         Edge provenance records.
     """
 
-    from ...intervention.edge_semantics import classify_view_or_copy
+    from ...intervention._edge_semantics import classify_view_or_copy
 
     _edge_uses: list[EdgeUseRecord] = []
     for location, parent_label in parent_arg_positions["args"].items():
@@ -500,7 +527,6 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 
     if isinstance(value, torch.nn.Parameter) and _session_validated_parameter(trace, value):
         return True
-    from ._tl_collective import _async_collective_elem
 
     act_inner = _async_collective_elem(value)
     if act_inner is not None:
@@ -538,127 +564,6 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
         and meta.buffer_source is not None
         and meta.buffer_source in live_labels
     )
-
-
-def _copy_saved_call_args(
-    func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], retained: bool = False
-) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Copy one call's arguments for ``save_arg_values``, storage and view context included.
-
-    The positional argument named by
-    :func:`~torchlens._storage_bindings.storage_context_arg_index` keeps its whole
-    storage, and the receiver (positional argument 0) of a
-    :data:`~torchlens._storage_bindings.VIEW_CONTEXT_RECEIVER_FUNCS` call keeps its
-    view relation; every other argument is copied as :func:`_copy_saved_arg_tree` does.
-    """
-
-    copiers = _context_copiers(func_name)
-    arg_copies = tuple(
-        _copy_saved_arg_tree(arg, retained, receiver_copy=copiers.get(index))
-        for index, arg in enumerate(args)
-    )
-    kwarg_copies = {key: _copy_saved_arg_tree(value, retained) for key, value in kwargs.items()}
-    return arg_copies, kwarg_copies
-
-
-def _context_copiers(func_name: str) -> dict[int, Callable[[torch.Tensor], torch.Tensor]]:
-    """Map each positional argument of ``func_name`` saved with context to its copier."""
-
-    copiers: dict[int, Callable[[torch.Tensor], torch.Tensor]] = {}
-    if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
-        copiers[0] = _copy_receiver_with_view_context
-    index = storage_context_arg_index(func_name)
-    if index is not None:
-        copiers[index] = copy_with_storage_context
-    return copiers
-
-
-def _copy_receiver_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
-    """Copy a view-function receiver with its view context, under original-view tracking."""
-    return copy_with_view_context(tensor, get_force_original_view_tracking())
-
-
-def _copy_saved_arg_tree(
-    arg: Any,
-    retained: bool = False,
-    *,
-    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
-) -> Any:
-    """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
-
-    Outside forward validation's own capture this is exactly
-    :func:`~torchlens._utils.arg_handling.copy_arg_tree`. Inside it, a plain
-    parameter argument (or a tensor on a parameter's storage), bare or in a
-    flat list or tuple, is replaced by an alias of the same storage and version
-    counter instead of a copy; see :mod:`torchlens._validation_argument_references`
-    for the guard that reruns validation on this copy path if such a value changes.
-    For the ``retained`` snapshot (``saved_args``/``saved_kwargs``), a validation
-    ``output_device`` other than ``"same"`` also keeps every other such tensor's
-    copy on that device, tagged with the device the op consumed it on.
-    """
-
-    references = active_argument_references()
-    if references is None:
-        if receiver_copy is not None and isinstance(arg, torch.Tensor):
-            return _copy_receiver_with_context(receiver_copy, arg)
-        return copy_arg_tree(arg)
-    if isinstance(arg, torch.Tensor) and receiver_copy is _copy_receiver_with_view_context:
-        # A parameter alias is not a view, so a view-function receiver is always copied.
-        return _copy_receiver_with_context(receiver_copy, arg)
-    if isinstance(arg, torch.Tensor):
-        return _parameter_alias(references, arg, retained, receiver_copy=receiver_copy)
-    if _is_flat_sequence(arg):
-        return type(arg)(
-            _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
-            for item in arg
-        )
-    return copy_arg_tree(arg)
-
-
-def _is_flat_sequence(arg: Any) -> bool:
-    """Whether ``arg`` is a plain list or tuple holding no nested container."""
-
-    return type(arg) in (list, tuple) and not any(
-        isinstance(item, (list, tuple, dict)) for item in arg
-    )
-
-
-def _parameter_alias(
-    references: Any,
-    tensor: torch.Tensor,
-    retained: bool = False,
-    *,
-    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
-) -> torch.Tensor:
-    """Alias a parameter-storage tensor (recording its version), else copy it as before.
-
-    The guard decides and builds the alias (see
-    ``ParameterArgumentReferences.alias``) and, for a ``retained`` snapshot,
-    the offloaded copy (``ParameterArgumentReferences.offload``); anything it
-    declines is copied exactly as on the copy path (through ``receiver_copy``
-    when it is set; an alias already shares the storage).
-    """
-
-    # Paused: the guard's storage and version reads, its alias and its copy are
-    # TorchLens's own calls, never captured ops (and never re-enter this copy).
-    with pause_logging():
-        alias = references.alias(tensor)
-        if alias is None and retained and references.offloads:
-            alias = references.offload(tensor)
-    if alias is not None:
-        return alias
-    if receiver_copy is not None:
-        return _copy_receiver_with_context(receiver_copy, tensor)
-    return cast(torch.Tensor, copy_arg_tree(tensor))
-
-
-def _copy_receiver_with_context(
-    receiver_copy: Callable[[torch.Tensor], torch.Tensor], tensor: torch.Tensor
-) -> torch.Tensor:
-    """Copy a receiver with its storage or view context, as TorchLens's own work."""
-
-    with pause_logging():
-        return receiver_copy(tensor)
 
 
 def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.device]:
@@ -700,7 +605,7 @@ def _uncharged_parameter_aliases(*roots: Any) -> set[int]:
         return {
             id(tensor)
             for tensor in _iter_tree_tensors(*roots)
-            if references.shares_parameter_storage(tensor)
+            if references.shares_parameter_storage(tensor) or references.is_value_alias(tensor)
         }
 
 

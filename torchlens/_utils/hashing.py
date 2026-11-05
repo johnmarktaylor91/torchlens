@@ -37,9 +37,10 @@ capture structure. They are not security hashes and are not guaranteed stable
 across intentional schema/policy changes.
 
 The content-hash family is the one home for plain digests: ``sha256_hex`` over
-bytes, ``update_hasher_from_file`` and ``sha256_file`` over a file (streamed in
-``HASH_CHUNK_BYTES`` blocks), and ``sha256_canonical_json`` over a sorted,
-compact JSON encoding of a structure. The module imports only the standard
+bytes, ``update_hasher_from_file`` and ``sha256_file`` over a file path,
+``sha256_handle`` over an already opened file (all streamed in ``HASH_CHUNK_BYTES``
+blocks), and ``sha256_canonical_json`` over a sorted, compact JSON encoding of a
+structure. The module imports only the standard
 library, so callers on torch-free paths can still reach it once the package is
 imported.
 """
@@ -51,7 +52,7 @@ import re
 import string
 from collections.abc import Callable
 from os import PathLike
-from typing import Any, Final, Protocol
+from typing import IO, Any, Final, Protocol
 
 
 def _record_type(record: Any) -> Any:
@@ -134,6 +135,29 @@ def sha256_file(path: "str | PathLike[str]") -> str:
 
     digest = hashlib.sha256()
     update_hasher_from_file(digest, path)
+    return digest.hexdigest()
+
+
+def sha256_handle(handle: IO[bytes]) -> str:
+    """Return the lowercase hex SHA-256 of an open binary handle's remaining bytes, streamed.
+
+    For callers that must hash the exact file they opened (after checking its type on
+    the descriptor) rather than reopen a path that may have been swapped meanwhile.
+
+    Parameters
+    ----------
+    handle:
+        Binary read handle positioned where hashing should start.
+
+    Returns
+    -------
+    str
+        Lowercase hexadecimal digest.
+    """
+
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: handle.read(HASH_CHUNK_BYTES), b""):
+        digest.update(chunk)
     return digest.hexdigest()
 
 
@@ -337,6 +361,16 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
+def _record_is_buffer(record: Any) -> bool:
+    """Return a record's buffer flag: ``graph.is_buffer`` on an Op or Layer, else flat.
+
+    Reads the group without importing the record table, so this module still loads
+    standalone (``test_short_barcode_deterministic_across_processes``).
+    """
+
+    return bool(getattr(record, "_graph_is_buffer", None) or getattr(record, "is_buffer", False))
+
+
 def compute_graph_shape_hash(
     trace: Any,
     *,
@@ -432,7 +466,7 @@ def compute_graph_shape_hash(
                 ),
                 "is_input": bool(getattr(layer, "is_input", False)),
                 "is_output": bool(getattr(layer, "is_output", False)),
-                "is_buffer": bool(getattr(layer, "is_buffer", False)),
+                "is_buffer": _record_is_buffer(layer),
             }
         )
         if rerun_signature:

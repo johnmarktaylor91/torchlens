@@ -88,7 +88,7 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
         trace[label] for call in trace.modules["features"].calls.values() for label in call.ops
     ]
     assert features_row["op_count"] == len(features_ops)
-    assert features_row["flops"] == sum(int(op.flops_forward or 0) for op in features_ops)
+    assert features_row["flops"] == sum(int(op.cost.flops_forward or 0) for op in features_ops)
     assert "ProfileReport(" not in repr(trace.profile())
 
 

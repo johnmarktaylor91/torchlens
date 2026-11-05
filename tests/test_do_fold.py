@@ -37,7 +37,11 @@ from torchlens.options import (
     merge_intervention_options,
 )
 
-replay_module = importlib.import_module("torchlens.intervention.replay")
+replay_module = importlib.import_module("torchlens.intervention._replay")
+# ``_trace_selection_edits`` binds ``replay_from_op`` by name when it is first
+# imported. Load it here, before any test wraps that name: a worker whose first
+# edge-door call happened inside the patched test kept the wrapper for good.
+importlib.import_module("torchlens.intervention._trace_selection_edits")
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 _GRAD_CAPTURE = tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True)
@@ -271,13 +275,14 @@ def test_set_only_engine_ignores_differentiable(monkeypatch: pytest.MonkeyPatch)
 
 
 # ---------------------------------------------------------------------------
-# 4. ReplayOptions lost hooks= and differentiable=; InterventionOptions gained it
+# 4. ReplayOptions lost hooks=, differentiable= and append=; InterventionOptions gained
+#    differentiable=, and trace.append(inputs) is the append door
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("removed", ["hooks", "differentiable"])
+@pytest.mark.parametrize("removed", ["hooks", "differentiable", "append"])
 def test_replay_options_refuse_the_removed_fields(removed: str) -> None:
-    """``ReplayOptions(hooks=...)`` / ``(differentiable=...)`` refuse, naming the field."""
+    """``ReplayOptions(hooks=...)`` / ``(differentiable=...)`` / ``(append=...)`` refuse, naming the field."""
 
     assert removed not in _REPLAY_FIELDS
     assert removed not in ReplayOptions().as_dict()

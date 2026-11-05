@@ -352,3 +352,56 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad9bbbedfec4801a390aa1d203dfed7f81a46ef9 (dirty)
 recorded: 2026-11-04T14:50:07.852730+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: C-263 fixq2: the oracle test gained an import line; call-site line numbers move by one
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f7a9d60209b7e8bdeeaa0e64dc6f96c50dc52f7a (dirty)
+recorded: 2026-11-05T08:09:45.303471+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: lens-styles-1104: node_style=profiling drops rows on inputs and outputs and the single-pass out= row; text ink rechecked on channel fills
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a442b337cae3a36f16d62ea292f0334a8d55492b (clean)
+recorded: 2026-11-05T04:18:47.881298+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:56.984838+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: input-photo-1104: input photo and picture boxes, sizes drop .0, compact counts, viridis key, header trim and network count, gentle size_by
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4181fa4e0590d0ef8d370a688d097ddb77c1a84b (clean)
+recorded: 2026-11-05T07:04:59.137347+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: render-units-1105: drawn sizes divide by 1000 to match KB and MB; full counts carry thousands separators
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 55bb34dbffbe437c703fec4a8c8afce8aef3306a (clean)
+recorded: 2026-11-05T10:28:20.434298+00:00
+reason: C-263 fixq6: fixq5 90b883b32c + train c05f143f33 (pattern-facet-default), moved-member port; render identity oracle regenerated after merging both sides' changes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e076e514aca85202fd8b72816a0ac03c941eefad (dirty)
+recorded: 2026-11-05T10:58:46.782156+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: conductor run 6: B18R render-units merged with train 7034e0aea4 (C-263 concern groups); render identity oracle regenerated after merging both sides
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 967139bab3acb82896ae951e5dd851ba2495c713 (dirty)
+recorded: 2026-11-05T12:35:45.329835+00:00

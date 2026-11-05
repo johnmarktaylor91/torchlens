@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._focus_relabel import shape_size_row
 from ._focus_scope import focus_parent_prefix, module_at, relative_address
 
@@ -91,6 +92,22 @@ class BoundaryNode:
         self.is_output = self.boundary_kind == "output"
         self.layer_type = self.boundary_kind
         self.io_role = self.boundary_kind
+
+    @property
+    def graph(self) -> BoundaryNode:
+        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
+
+        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
+        answers through its graph group, a boundary stub through its flat fields.
+        """
+
+        return self
+
+    @property
+    def module_context(self) -> BoundaryNode:
+        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
+
+        return self
 
 
 def _get_or_create_boundary_node(
@@ -205,7 +222,7 @@ def _boundary_address(trace: Trace, external_node: GraphNode, vis_mode: str) -> 
     """
 
     if external_node.is_input or external_node.is_output:
-        role = getattr(external_node, "io_role", None)
+        role = record_member(external_node, "io_role", None)
         if not role:
             return None
         kind, _, name = str(role).partition(".")

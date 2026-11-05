@@ -14,7 +14,8 @@ its identity, ``isinstance`` and ``x.type(torch.FloatTensor)`` are unchanged,
 and any alias bound before the first capture reaches the same patched class.
 The new ``__new__`` routes the call through ``torch_func_decorator``, so a
 constructor call during a capture is one logged op (func name = class name,
-``cuda_`` prefixed for ``torch.cuda`` classes) that owns its dispatches, and
+prefixed ``cuda_``, ``sparse_`` or ``cuda_sparse_`` for the ``torch.cuda``,
+``torch.sparse`` and ``torch.cuda.sparse`` classes) that owns its dispatches, and
 outside a capture the decorator's fast path runs the original C constructor.
 Installed with the other wrappers by ``wrap_torch``; ``unwrap_torch`` restores
 the original ``tp_new`` slot and class ``__dict__`` exactly.
@@ -27,6 +28,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..._errors import TorchLensWarning
 from ..._legacy_ctor_sites import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ..._utils import _torch_compat
 from ..._utils._type_new_slot import (
@@ -41,6 +43,7 @@ from ..._utils._type_new_slot import (
     reinstate_original_new,
     restore_new_override,
 )
+from . import wrappers as _wrappers
 
 __all__ = [
     "install_legacy_constructor_wrappers",
@@ -72,11 +75,19 @@ _WARNED_FOREIGN_NEW: set[str] = set()
 
 
 def _legacy_func_name(namespace_name: str, class_name: str) -> str:
-    """Return the recorded op name for one roster row."""
+    """Return the recorded op name for one roster row.
 
-    if namespace_name == "torch.cuda":
-        return f"cuda_{class_name}"
-    return class_name
+    ``torch`` and ``torch.autograd`` rows record the bare class name. The
+    prefixed names keep a sparse constructor, whose indices and values are
+    tensor parents, apart from the dense one in name-keyed argument tables.
+    """
+
+    prefixes = {
+        "torch.cuda": "cuda_",
+        "torch.sparse": "sparse_",
+        "torch.cuda.sparse": "cuda_sparse_",
+    }
+    return prefixes.get(namespace_name, "") + class_name
 
 
 def _resolve_class(namespace_name: str, class_name: str) -> type | None:
@@ -110,8 +121,6 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
         them) calls the original constructor unchanged.
     """
 
-    from .wrappers import torch_func_decorator
-
     call_original = original_new_caller(cls, c_tp_new)
 
     def original(*args: Any, **kwargs: Any) -> Any:
@@ -122,7 +131,7 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
     original.__name__ = cls.__name__
     original.__qualname__ = cls.__qualname__
     original.__module__ = cls.__module__
-    logged = torch_func_decorator(original, func_name)
+    logged = _wrappers.torch_func_decorator(original, func_name)
 
     def legacy_new(subtype: type, *args: Any, **kwargs: Any) -> Any:
         """Dispatch a legacy constructor call through the TorchLens logging gate."""
@@ -168,7 +177,6 @@ def _skip_class(func_name: str, cls: type, reason: str) -> None:
     if func_name in _WARNED_FOREIGN_NEW:
         return
     _WARNED_FOREIGN_NEW.add(func_name)
-    from ..._errors import TorchLensWarning
 
     warnings.warn(
         TorchLensWarning(

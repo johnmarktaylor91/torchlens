@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
 from .._data_classes.module import ModuleAccessor
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module, ModuleCall
@@ -95,8 +96,8 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     for entry in trace._layer_list:
         for grad_record in getattr(entry, "_grad_records", ()):
             grad_record.owner = entry
-        if getattr(entry, "is_buffer", False) and entry.address is not None:
-            buffer_versions.setdefault(entry.address, []).append(entry)
+        if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
+            buffer_versions.setdefault(entry.buffer_address, []).append(entry)
     buffer_dict = {
         address: Buffer(
             address,

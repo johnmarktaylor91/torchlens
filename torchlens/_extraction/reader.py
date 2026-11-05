@@ -29,8 +29,15 @@ from typing import Any
 
 import torch
 
-from .._data_substrate import ExtractionArtifactError, read_trusted_rows
+from .._data_substrate import (
+    STIMULUS_IDS_FILENAME,
+    ExtractionArtifactError,
+    read_trusted_rows,
+    value_reduction,
+)
 from .._errors import InvalidArgumentError
+from .._extraction_provenance import input_preprocessing_of
+from .._io import _json
 from .._utils._torch_symbols import torch_attr
 from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
@@ -263,9 +270,6 @@ class ExtractionReader:
             Ordered identifiers, or ``None``.
         """
 
-        from .._data_substrate import STIMULUS_IDS_FILENAME
-        from .._io import _json
-
         sidecar = self._container / STIMULUS_IDS_FILENAME
         if not sidecar.exists():
             return None
@@ -434,8 +438,6 @@ class ExtractionReader:
             ``extraction_shard_integrity_mismatch`` on the first mismatch
             of either labeled integrity fact.
         """
-
-        from .._data_substrate import value_reduction
 
         crc_checked = 0
         values_checked = 0
@@ -1041,7 +1043,7 @@ class ExtractionReader:
             Iterator of batch dicts.
         """
 
-        from .views import shuffled_batches
+        from .views import shuffled_batches  # deferred: cycle _extraction
 
         return shuffled_batches(
             self,
@@ -1068,7 +1070,7 @@ class ExtractionReader:
             The flattened feature matrix.
         """
 
-        from .views import feature_matrix
+        from .views import feature_matrix  # deferred: cycle _extraction
 
         return feature_matrix(self, key, max_bytes=max_bytes)
 
@@ -1086,7 +1088,7 @@ class ExtractionReader:
             A map-style dataset.
         """
 
-        from .views import as_torch_dataset
+        from .views import as_torch_dataset  # deferred: cycle _extraction
 
         return as_torch_dataset(self, keys)
 
@@ -1099,8 +1101,6 @@ class ExtractionReader:
         dict[str, Any]
             The input-preprocessing block.
         """
-
-        from .._extraction_provenance import input_preprocessing_of
 
         return input_preprocessing_of(self.manifest)
 
@@ -1207,7 +1207,7 @@ def _raise_mixed_layout(problem: str, **fields: Any) -> None:
         ``extraction_manifest_invalid``, always.
     """
 
-    from torchlens._extraction.resume import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError  # deferred: cycle
 
     raise DatasetExtractionResumeError(
         problem,
@@ -1350,9 +1350,9 @@ def open_extraction(
             remedy="pass verify='structural' or verify='first_access'",
             value=repr(verify),
         )
-    from torchlens._extraction.resume import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError  # deferred: cycle
 
-    from ..dataset_extraction import (
+    from ..dataset_extraction import (  # deferred: cycle dataset_extraction
         MANIFEST_FILENAME,
         _load_manifest,
     )

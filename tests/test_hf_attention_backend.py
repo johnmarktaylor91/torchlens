@@ -28,10 +28,11 @@ from transformers import AttentionInterface  # noqa: E402
 AttentionMaskInterface = pytest.importorskip("transformers.masking_utils").AttentionMaskInterface
 
 from tests.real_model.r0.families import FAMILY_BY_NAME, VOCAB  # noqa: E402
+from tests.support.hf_capabilities import bert_switches_attention_dynamically  # noqa: E402
 from torchlens._errors import InvalidArgumentError, MissingDependencyError  # noqa: E402
 from torchlens._semantic.tolerances import within_reconstruction_tolerance  # noqa: E402
 from torchlens.bridge import transformers as tl_hf  # noqa: E402
-from torchlens.bridge.hf_attention import (  # noqa: E402
+from torchlens.bridge._hf_attention import (  # noqa: E402
     BACKEND_KEY,
     _CallFacts,
     _check_against_sdpa,
@@ -159,6 +160,16 @@ def _check_output_matches_sdpa(family: str, mask_case: str) -> None:
     with torch.no_grad():
         sdpa_out = model(**batch)[0]
         tl_hf.register_attention(model)
+        if family == "bert" and not bert_switches_attention_dynamically():
+            # 4.x BERT keeps its own attention classes and refuses a runtime backend
+            # switch, so it stays on sdpa and a recording refuses instead of staying empty.
+            with (
+                pytest.raises(InvalidArgumentError) as excinfo,
+                tl_hf.record_attention(model, check_sdpa=True),
+            ):
+                pass
+            assert excinfo.value.fields["code"] == "hf_attention_backend_not_selected"
+            return
         with tl_hf.record_attention(model, check_sdpa=True) as recording:
             tl_out = model(**batch)[0]
     assert recording.calls and all(call.sdpa_checked for call in recording.calls)

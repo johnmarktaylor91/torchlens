@@ -40,6 +40,7 @@ from .._semantic.patching import (
     _facet_tensor,
     _run_patch,
 )
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._params import head_weight_views
 
@@ -99,7 +100,7 @@ class PatchedRun:
     def logits(self) -> torch.Tensor:
         """Return the patched run's output logits."""
 
-        from ._anchors import resolve_lm_head
+        from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
         return resolve_lm_head(self._patched_trace).facets()["logits"].value
 
@@ -227,7 +228,7 @@ def patch_head(  # noqa: PLR0913 -- the public signature
             trace_kwargs=dict(trace_kwargs or {}),
             guard=guard,
         )
-        from ._heads import _attention_modules, _select_layers
+        from ._heads import _attention_modules, _select_layers  # deferred: cycle mechinterp
 
         module = _select_layers(_attention_modules(corrupted_log), layer)[0]
         address = str(module.address)
@@ -277,7 +278,7 @@ def patch_head(  # noqa: PLR0913 -- the public signature
             },
             "lowered_at_real_site": {
                 "op_label": str(real_op.label),
-                "site_key": getattr(real_op, "site_key", None),
+                "site_key": record_member(real_op, "site_key", None),
                 "module_address": views.sources["o"].module_address,
             },
             "source_sites": {

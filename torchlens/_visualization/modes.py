@@ -14,7 +14,7 @@ from .._literals import VisNodeModeLiteral
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ._label_format import binary_size, format_shape
+from ._label_format import decimal_size, format_shape
 from .node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -110,7 +110,10 @@ def default_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
 
 
 def profiling_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
-    """Append runtime, output storage, and source-call details when available.
+    """Append runtime and source-call rows (rolled nodes add output totals).
+
+    Model inputs and outputs get no rows (they run no function), and a
+    single pass's output size stays on the shape row instead of repeating.
 
     Parameters
     ----------
@@ -130,6 +133,10 @@ def profiling_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
         (a varying source is disclosed, never projected from one pass).
     """
 
+    if _get_optional_attr(layer_log, "is_input") or _get_optional_attr(layer_log, "is_output"):
+        # Model inputs and outputs run no function: a t=0 row and fn=none
+        # would only be noise.
+        return spec
     if is_multipass_layer(layer_log):
         multipass_layer = cast("Layer", layer_log)
         return spec.replace(lines=_multipass_profiling_lines(multipass_layer, list(spec.lines)))
@@ -138,10 +145,8 @@ def profiling_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     runtime = _get_optional_attr(layer_log, "func_duration")
     if isinstance(runtime, int | float):
         lines.append(f"t={Duration(float(runtime)):.2f}")
-
-    memory = _get_optional_attr(layer_log, "activation_memory")
-    if isinstance(memory, int | float):
-        lines.append(f"out={_compact_size(float(memory))}")
+    # A single pass's output size is already on the shape row; only the
+    # rolled cross-pass total adds a separate out= row.
 
     call_location = _first_call_location(layer_log)
     if call_location is not None:
@@ -396,7 +401,7 @@ def _get_optional_attr(obj: object, attr_name: str) -> Any:
 def _compact_size(size: float) -> str:
     """Format bytes for a drawing without the space (``"60.0KB"``)."""
 
-    return binary_size(size).replace(" ", "")
+    return decimal_size(size).replace(" ", "")
 
 
 def _first_call_location(layer_log: Op | Layer) -> Any | None:

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 #: Result schema id.
 COMPARE_SCHEMA = "torchlens.agent.compare.v1"
 
@@ -43,7 +45,7 @@ def _site_index(log: Any) -> tuple[dict[str, Any], str]:
     """
 
     ops = list(log._layer_list or [])
-    keys = [getattr(op, "site_key", None) for op in ops]
+    keys = [record_member(op, "site_key", None) for op in ops]
     if ops and all(key is not None for key in keys):
         index: dict[str, Any] = {}
         for op, key in zip(ops, keys, strict=True):
@@ -79,7 +81,7 @@ def _value_tier(ref_op: Any, sub_op: Any, rtol: float, atol: float) -> dict[str,
         Value metrics, or a ``payload_unavailable`` state row.
     """
 
-    from .._io.payload_reader import read_op_payload
+    from .._io.payload_reader import read_op_payload  # deferred: startup cost
 
     try:
         reference = read_op_payload(ref_op)
@@ -114,7 +116,7 @@ def _payload_readable(op: Any) -> bool:
     slot = getattr(op, "_slot", None)
     if callable(slot):
         return slot("out") is not None or slot("out_ref") is not None
-    return getattr(op, "out_ref", None) is not None or getattr(op, "out", None) is not None
+    return record_member(op, "out_ref", None) is not None or getattr(op, "out", None) is not None
 
 
 def _matched_pair_row(ref_op: Any, sub_op: Any, rtol: float, atol: float) -> dict[str, Any]:

@@ -33,7 +33,7 @@ from ..._utils.tensor_utils import (
     fp8_widen_for_numeric_ops,
     safe_copy,
 )
-from ...recording.types import (
+from ...recording._types import (
     CaptureSpec,
     RecordContext,
 )
@@ -241,7 +241,7 @@ def _make_layer_log_entry(
     # stamped at CAPTURE, so an edge dropped DOWNSTREAM of it -- anywhere in the
     # 20-step postprocess pipeline or later -- was invisible whenever the
     # payload was trivial. The post-pipeline metadata invariant
-    # (``validation/invariants.py::_check_capture_edges_survive_postprocess``)
+    # (``validation/_invariants.py::_check_capture_edges_survive_postprocess``)
     # reconciles the final graph against this sealed truth. Runtime-only
     # bookkeeping (same class as ``_validation_orphan_candidate_index``): never
     # persisted, absent on loaded traces.
@@ -478,7 +478,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     # the frontier. Popped by the finalizer or, on paths that never finalize,
     # by the failed-capture scrub.
     if isinstance(raw_label, str) and raw_label:
-        from ._tl import set_tensor_label
+        from ..._utils._tensor_label import set_tensor_label
 
         set_tensor_label(tensor, raw_label)
     self.__dict__["_nonfinite_frontier_out"] = tensor

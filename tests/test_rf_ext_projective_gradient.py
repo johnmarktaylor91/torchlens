@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._tl import is_decorated_function
+from torchlens._utils._tensor_label import is_decorated_function
 from torchlens.backends.torch.wrappers import (
     DIRECT_TRANSFORM_SITES,
     TRANSFORM_BUILDER_SITES,
@@ -105,7 +105,7 @@ def _probe_snapshot(trace: object, model: nn.Module) -> tuple[object, ...]:
         len(trace.autograd.backward_passes),  # type: ignore[attr-defined]
         trace.autograd.has_grads,  # type: ignore[attr-defined]
         tuple(trace.event_stream.backward_events),  # type: ignore[attr-defined]
-        tuple(tuple(op.grads) for op in trace._layer_list),  # type: ignore[attr-defined]
+        tuple(tuple(op.autograd.grads) for op in trace._layer_list),  # type: ignore[attr-defined]
         (
             "_active_backward_pass_number" in trace.__dict__,
             trace.__dict__.get("_active_backward_pass_number"),

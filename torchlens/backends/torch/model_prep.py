@@ -20,77 +20,24 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from ... import _state
-from ..._capture.projections import active_recording_state_or_none
+from ..._capture.projections import LiveOpView, active_recording_state_or_none
+from ..._capture.session import capture_session_for
 from ..._capture_honesty import warn_held_scan_truncated
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.module import HookInfo
 from ..._data_classes.param import Param, ParamAccessor
 from ..._errors import CaptureNotActiveError
 from ..._ir import ModuleEnterEvent, ModuleExitEvent, ModuleFrame, ModulePrepEvent
+from ..._ir.events import InterventionAppliedEvent
 from ..._ir.op_record import (
     amend_module_exit_intervention,
     amend_raw_hook_intervention,
 )
 from ..._ir.refs import ParamRef
 from ..._quantities import Bytes
-from ..._utils.hashing import make_random_barcode
-from ..._utils.introspection import (
-    _get_code_context,
-    get_arg_tensors_for_resolution,
-    get_vars_of_type_from_obj,
-)
-from ..._utils.tensor_utils import (
-    get_memory_amount,
-    get_memory_amount_from_metadata,
-    is_functorch_wrapped_tensor,
-)
-from . import module_stack as _mstack
-from ._held_refs import normalize_held_torch_function_refs, register_released_model
-from ._held_tensor_scan import iter_module_held_plain_tensors
-from ._model_prep_containers import (
-    _register_module_input_container_snapshots,
-    _register_module_output_container_snapshot,
-)
-from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
-from ._module_arg_stubs import stub_module_arg_payloads
-from ._module_boundary_adoption import (
-    collect_pre_forward_tensor_ids,
-    record_module_boundary_adoption,
-)
-from ._module_class_metadata import (
-    _NN_MODULE_ATTRS,
-    _PYTORCH_INTERNAL,
-    _get_class_metadata,
-    _module_class_metadata_cache,
-    _source_start_line,
-)
-from ._predicate_forward import _predicate_module_forward
-from ._quantized_flops import estimate_quantized_module_forward_flops
-from ._replacement_op_fields import (
-    _copy_field_value_for_replacement,
-    _next_untagged_tensor_label,
-)
-from ._root_prep import (
-    prepare_bound_owner_once,
-    record_model_identity,
-    register_bound_owner_calls,
-    register_session_module_calls,
-)
-from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
-    _clear_callable_session_tensor_metadata,
-    _clear_container_tree_tensor_metadata,
-    _clear_module_attribute_tensor_metadata,
-    _clear_session_tensor_metadata,
-)
-from ._session_forwards import (
-    install_session_forward_wrappers as _install_session_forward_wrappers,
-    restore_session_forward_wrappers as _restore_session_forward_wrappers,
-    restore_undecorated_forward as _restore_undecorated_forward,
-)
-from ._tl import (
+from ..._utils._tensor_label import (
     begin_label_session,
     clear_meta,
     clear_param_meta,
@@ -107,15 +54,74 @@ from ._tl import (
     set_param_meta,
     set_tensor_label,
 )
+from ..._utils.hashing import make_random_barcode
+from ..._utils.introspection import (
+    _get_code_context,
+    get_arg_tensors_for_resolution,
+    get_vars_of_type_from_obj,
+)
+from ..._utils.tensor_utils import (
+    get_memory_amount,
+    get_memory_amount_from_metadata,
+    is_functorch_wrapped_tensor,
+)
+from . import buffer_writes as _buffer_writes, module_stack as _mstack
+from ._held_refs import normalize_held_torch_function_refs, register_released_model
+from ._held_tensor_scan import iter_module_held_plain_tensors
+from ._model_prep_containers import (
+    _register_module_input_container_snapshots,
+    _register_module_output_container_snapshot,
+)
+from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
+from ._module_arg_stubs import stub_module_arg_payloads
+from ._module_boundary_adoption import (
+    pre_forward_snapshot_build_data,
+    record_module_boundary_adoption,
+)
+from ._module_class_metadata import (
+    _NN_MODULE_ATTRS,
+    _PYTORCH_INTERNAL,
+    _get_class_metadata,
+    _module_class_metadata_cache,
+    _source_start_line,
+)
+from ._ops_containers import _walk_output_tensors_with_paths
+from ._ops_finalize import _make_layer_log_entry
+from ._ops_interventions import _pop_tensor_live_fire_results
+from ._predicate_forward import _predicate_module_forward
+from ._quantized_flops import estimate_quantized_module_forward_flops
+from ._replacement_op_fields import _next_untagged_tensor_label
+from ._replacement_template import _replacement_template_fields
+from ._root_prep import (
+    prepare_bound_owner_once,
+    record_model_identity,
+    register_bound_owner_calls,
+    register_session_module_calls,
+)
+from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
+    _clear_container_tree_tensor_metadata,
+    _clear_module_attribute_tensor_metadata,
+    _clear_module_callables_tensor_metadata,
+    _clear_session_tensor_metadata,
+)
+from ._session_forwards import (
+    install_session_forward_wrappers as _install_session_forward_wrappers,
+    restore_session_forward_wrappers as _restore_session_forward_wrappers,
+    restore_undecorated_forward as _restore_undecorated_forward,
+)
 from .bound_root import capture_root_module
+from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
+from .offload_hooks import uninstall_offload_hook_shims
+from .ops import _add_tensor_backward_hook
 from .prehook_provenance import bind_invocation
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
+from .wrappers import wrap_torch
 
 # Cache class-level module metadata (inspect.getsourcelines, inspect.signature, etc.)
 # shared across instances during one capture. Cleanup releases it at the end of
@@ -504,12 +510,9 @@ def _prepare_model_session(
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
     # disclosure: tensors reachable NOW (nested caches, forward globals) are
-    # model-owned known sources; anything first seen mid-forward is not.
-    owned_at_entry, forward_outside_ids = collect_pre_forward_tensor_ids(model)
-    trace._module_capture_ws.module_build_data["model_owned_tensor_ids_at_entry"] = owned_at_entry
-    trace._module_capture_ws.module_build_data["forward_outside_tensor_ids_at_entry"] = (
-        forward_outside_ids
-    )
+    # model-owned known sources; anything first seen mid-forward is not. An
+    # unstamped one is late-indexed as a buffer at first use (_held_late_index).
+    trace._module_capture_ws.module_build_data.update(pre_forward_snapshot_build_data(model))
     if trace._options_mode == "exhaustive":
         from .buffer_writes import install_buffer_write_tracker
 
@@ -906,7 +909,6 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     registry (``trace._session_buffer_identity``) consulted by the buffer-rung
     storage-identity belt; the registry is reset here at session start.
     """
-    from .buffer_writes import register_session_buffer_stamp
 
     _state._tagged_buffer_ids.clear()
     trace._session_buffer_inventory = []
@@ -920,7 +922,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
         # internal sources instead of buffer versions -- so it is collected
         # and disclosed once below instead of silently swallowed.
         try:
-            register_session_buffer_stamp(trace, tensor, address)
+            _buffer_writes.register_session_buffer_stamp(trace, tensor, address)
             _state._tagged_buffer_ids.add(id(tensor))
         except Exception as exc:
             unstampable.append(f"{address} ({type(exc).__name__}: {exc})")
@@ -976,7 +978,6 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
     ``register_session_buffer_stamp`` so it also joins the session identity
     registry consulted by the buffer-rung storage-identity belt.
     """
-    from .buffer_writes import register_session_buffer_stamp
 
     for buffer_name, buffer_tensor in module.named_buffers():
         if get_buffer_address(buffer_tensor) is not None:
@@ -986,7 +987,7 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
             address = buffer_name
         else:
             address = f"{module_addr}.{buffer_name}"
-        register_session_buffer_stamp(trace, buffer_tensor, address)
+        _buffer_writes.register_session_buffer_stamp(trace, buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
         # previous label as parent and reset so it gets a proper buffer source entry.
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)
@@ -1050,7 +1051,6 @@ def _record_module_entry_metadata(
         needed by ``_record_module_exit_metadata`` for pass-through detection and
         replacement-output recovery.
     """
-    from .buffer_writes import session_validated_buffer_address
 
     module_address = _module_address(module)
     mod_id = id(module)
@@ -1077,7 +1077,6 @@ def _record_module_entry_metadata(
         kwargs,
     )
     module_call_label_str = f"{module_address}:{module_call_index}"
-    from ..._capture.session import capture_session_for
 
     capture_session = capture_session_for(trace)
     if capture_session is not None:
@@ -1228,7 +1227,6 @@ def _note_replacement_event(
     events = getattr(trace, "capture_events", None)
     if events is None:
         return
-    from ..._ir.events import InterventionAppliedEvent
 
     # Causal binding stamped at the observation site: the edited op's event
     # already exists in this journal (the boundary/replacement op was logged
@@ -1272,14 +1270,10 @@ def _attach_live_fire_results(
 ) -> None:
     """Fold an untagged tensor's pending live-fire results into its boundary op fields."""
 
-    from ._ops_interventions import _pop_tensor_live_fire_results
-
     fire_results = _pop_tensor_live_fire_results(tensor)
     if fire_results:
+        # The record's ``edits`` derive from ``fire_results`` at scatter.
         fields_dict["fire_results"] = fire_results
-        fields_dict["edits"] = [
-            result.fire_record for result in fire_results if result.fire_record is not None
-        ]
         fields_dict["is_edited"] = any(result.replaced for result in fire_results)
         # Fire results only mint replacement-event evidence when the live-fire
         # machinery is actually armed for THIS capture; a stale
@@ -1336,15 +1330,12 @@ def _ensure_module_output_tensor_logged(
         module-exit and op logging can continue.
     """
 
-    from ._ops_finalize import _make_layer_log_entry
-
     is_internal_source = kind == "internal_source"
     if is_internal_source:
         # An internal source has no real dataflow parents -- the construction
         # ops are untraceable, so attaching the previous op as a "parent" would
         # be a fabricated edge. Register it as a clean graph source.
         parent_labels = []
-    from ..._capture.projections import LiveOpView
 
     parent_entries = [
         LiveOpView(trace, trace.capture_events.live_index.require_event(label))
@@ -1353,12 +1344,7 @@ def _ensure_module_output_tensor_logged(
     template_entry = parent_entries[0] if parent_entries else None
     layer_type = "internalsource" if is_internal_source else "interventionreplacement"
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
-    fields_dict = {
-        field_name: _copy_field_value_for_replacement(
-            getattr(template_entry, field_name, None) if template_entry is not None else None
-        )
-        for field_name in LAYER_PASS_LOG_FIELD_ORDER
-    }
+    fields_dict = _replacement_template_fields(template_entry)
     address = _module_address(module)
     # The TOP-LEVEL model is never registered in `_mod_call_index` -- its
     # `forward` is deliberately left undecorated ("Root module is handled
@@ -1412,9 +1398,9 @@ def _ensure_module_output_tensor_logged(
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
     for parent_entry in parent_entries:
-        root_ancestors.update(parent_entry.root_ancestors or set())
+        root_ancestors.update(parent_entry._graph_root_ancestors or set())
         input_ancestors.update(parent_entry.input_ancestors or set())
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors or set())
+        internal_source_ancestors.update(parent_entry._graph_internal_source_ancestors or set())
     if is_internal_source:
         # A self-rooted internal source: it is its own root and internal-source
         # ancestor, with no input ancestry (mirrors buffer source tagging).
@@ -1539,7 +1525,7 @@ def _ensure_module_output_tensor_logged(
             "children": [],
             "has_children": False,
             "is_input": False,
-            "has_input_ancestor": any(entry.has_input_ancestor for entry in parent_entries),
+            "has_input_ancestor": any(entry._graph_has_input_ancestor for entry in parent_entries),
             "input_ancestors": input_ancestors,
             "min_distance_from_input": None,
             "max_distance_from_input": None,
@@ -1561,7 +1547,7 @@ def _ensure_module_output_tensor_logged(
             "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
-            or any(entry.has_internal_source_ancestor for entry in parent_entries),
+            or any(entry._graph_has_internal_source_ancestor for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,
@@ -1609,7 +1595,6 @@ def _ensure_module_output_tensor_logged(
         # is_internal_source set must appear in trace.internal_source_ops.
         trace.internal_source_ops.append(new_entry._label_raw)
     set_tensor_label(tensor, new_entry._label_raw)
-    from .ops import _add_tensor_backward_hook
 
     _add_tensor_backward_hook(trace, tensor, new_entry._label_raw)
     return new_entry._label_raw
@@ -1756,13 +1741,12 @@ def _record_module_exit_metadata(
     mod_id = id(module)
     module_call_index = trace._module_capture_ws.mod_call_index[mod_id]
     trace._module_capture_ws.mod_call_labels[mod_id].pop()
-    from ...intervention.runtime import (
+    from ...intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
         _record_module_intervention_parent_labels,
         _record_tensor_live_fire_results,
     )
-    from ._ops_containers import _walk_output_tensors_with_paths
 
     output_entries = list(_walk_output_tensors_with_paths(out))
     output_tensors = [entry[0] for entry in output_entries]
@@ -1905,7 +1889,6 @@ def _record_module_exit_metadata(
             output_tensor_leaf_count=len(output_entries),
         )
     )
-    from ..._capture.session import capture_session_for
 
     capture_session = capture_session_for(trace)
     if capture_session is not None:
@@ -1989,7 +1972,7 @@ def module_forward_decorator(
                         out = orig_forward(*args, **kwargs)
                 else:
                     out = orig_forward(*args, **kwargs)
-                from ...intervention.runtime import _apply_module_boundary_live_hooks
+                from ...intervention._runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
                     out,
@@ -2151,12 +2134,12 @@ def _cleanup_model_session(
     **Does NOT** remove the permanent module metadata, which lives in
     TorchLens's identity-keyed registry, never on the module object.
     """
-    from .offload_hooks import uninstall_offload_hook_shims
-    from .prehook_provenance import rollback_prehook_provenance
 
     _restore_session_forward_wrappers(trace)
     try:
         uninstall_offload_hook_shims(trace)
+        from .prehook_provenance import rollback_prehook_provenance
+
         rollback_prehook_provenance(trace)
     finally:
         # Restore requires_grad and remove session-scoped param attributes
@@ -2227,7 +2210,7 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
     seen: set[int] = set()
     for submodule in model.modules():
         _clear_module_attribute_tensor_metadata(submodule, seen)
-        _clear_callable_session_tensor_metadata(getattr(submodule, "forward", None), seen)
+        _clear_module_callables_tensor_metadata(submodule, seen)
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():
         for buf_tensor in submodule._buffers.values():
@@ -2252,7 +2235,6 @@ def _ensure_model_prepared(model: nn.Module) -> None:
     ``wrap_torch()`` performs the incremental stale-reference belt sweep as part
     of wrapper installation/revalidation, so this chokepoint does not repeat it.
     """
-    from .wrappers import wrap_torch
 
     wrap_torch()  # idempotent — no-op if already wrapped; auto-rewraps after unwrap
     _prepare_model_once(model)  # idempotent — cached in _state._prepared_models

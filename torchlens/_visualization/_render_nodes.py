@@ -4,8 +4,13 @@
 
 import re as _re
 
+from .._data_classes._annotation_image import drawable_annotation_image
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from .._utils._display_numbers import format_percent
+from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils._record_group_table import record_member
+from ..viz import _batch_summary as batch_summary
 from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
@@ -13,19 +18,27 @@ from ._encoding_aggregate import (
     collapsed_box_scope,
     segment_encoding_attrs,
 )
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._endpoint_rings import color_scale_active, endpoint_ring_spec
+from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
+from ._label_format import (
+    collapsed_param_detail,
+    compute_selected_node_lines as _compute_selected_node_lines,
+    shape_rows,
+)
+from ._node_boxes import image_box_args, list_box_attrs
 from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._render_names import call_collapsed_spec_fn
+from ._render_node_parts import _buffer_node_address, _module_output_summary
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec to keep this
-# file under its ratchet ceiling; re-exported here for existing importers.
-# The spec-slot context lives there too, so the intervention callback reads it
-# without importing this module.
+# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
+# ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
+# too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
-from .themes import _edge_and_label_inks
+from .themes import THEME_PRESETS, _edge_and_label_inks, collapse_tokens
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
 #: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
@@ -115,7 +128,7 @@ def _get_hidden_parent_buffer_addresses(
         Hidden buffer addresses in parent order, de-duplicated.
     """
 
-    if show_buffer_layers == "always" or node.is_buffer:
+    if show_buffer_layers == "always" or node.graph.is_buffer:
         return []
 
     hidden_addresses: list[str] = []
@@ -129,9 +142,9 @@ def _get_hidden_parent_buffer_addresses(
             parent_node = trace.ops[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
-        if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
+        if not parent_node.graph.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
-        address = parent_node.address
+        address = parent_node.buffer_address
         if address is None or address in seen_addresses:
             continue
         hidden_addresses.append(address)
@@ -566,6 +579,8 @@ def _build_layer_node(
             style="filled,solid",
             extra_attrs={"ordering": "out"},
         )
+        if color_scale_active(encoding):
+            spec = endpoint_ring_spec(spec, node.boundary_kind, theme)
         if theme is not None:
             spec = apply_theme_to_spec(spec, theme)
         if resolved_specs is not None:
@@ -582,7 +597,7 @@ def _build_layer_node(
     )
     node_bg_color = _get_node_bg_color(self, node)
 
-    if node.has_input_ancestor:
+    if node.graph.has_input_ancestor:
         line_style = "solid"
     else:
         line_style = "dashed"
@@ -604,42 +619,23 @@ def _build_layer_node(
         color=node_color,
         extra_attrs={"ordering": "out"},
     )
+    # A picture keeps the node's fill; image_box_args (below) draws it in its own top cell.
     visualizer_path = getattr(node, "visualizer_path", None)
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
-        default_spec = default_spec.replace(
-            image=visualizer_path,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=visualizer_path)
     annotation_image = _annotation_image_path_for_node(self, node)
+    if annotation_image is not None:  # Graphviz gets a PNG whatever the source format
+        annotation_image = drawable_annotation_image(self, annotation_image)
     if annotation_image is not None:
-        default_spec = default_spec.replace(
-            image=annotation_image,
-            shape="none",
-            style="",
-            fillcolor=None,
-            color=None,
-            fontcolor=node_color,
-            extra_attrs={
-                **default_spec.extra_attrs,
-                "imagescale": "true",
-                "labelloc": "b",
-                "fixedsize": "false",
-            },
-        )
+        default_spec = default_spec.replace(image=annotation_image)
+    if color_scale_active(encoding) and (node.is_input or node.is_output):
+        # The scale owns the fill; the endpoint role rides on a ring.
+        role = "input" if node.is_input else "output"
+        default_spec = endpoint_ring_spec(default_spec, role, theme)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
-        from ._encoding import channel_wrapped_node_spec_fn
+        from ._encoding import channel_wrapped_node_spec_fn  # deferred: cycle _visualization
 
         node_spec_fn = channel_wrapped_node_spec_fn(encoding, node, node_spec_fn)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)
@@ -648,7 +644,7 @@ def _build_layer_node(
 
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
-        raw_input_attrs = _render_raw_input(
+        raw_input_attrs = input_photo_attrs(self, node_args) or _render_raw_input(
             self, getattr(self, "input", None), batch_render=getattr(self, "batch_render", "auto")
         )
         if raw_input_attrs is not None:
@@ -660,7 +656,7 @@ def _build_layer_node(
         if raw_output_attrs is None:
             raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
-            node_args.update(raw_output_attrs)
+            node_args.update({**raw_output_attrs, **list_box_attrs(node_args)})
     node_args["name"] = _render_node_name(node, vis_mode)
     # Map membership is the ONE collapse predicate (the map builder owns the
     # mode decision); the edge pass reroutes mapped leaves' edges to the
@@ -668,7 +664,7 @@ def _build_layer_node(
     if collapsed_container_nodes is not None and node_args["name"] in collapsed_container_nodes:
         return node_color
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
-    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
+    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.graph.is_buffer):
         node_args["peripheries"] = "2"
         hidden_tooltip = f"Hidden buffers: {', '.join(hidden_buffer_addresses)}"
         if "tooltip" in node_args:
@@ -682,9 +678,9 @@ def _build_layer_node(
         node_args["gradangle"] = "0"
     node_args.update(overlay_border_attrs(node, node_overlay))
 
-    graphviz_graph.node(**node_args)
+    graphviz_graph.node(**image_box_args(self, node_args))
 
-    if node.is_final_output:
+    if node.graph.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
             s.node(_render_node_name(node, vis_mode))
@@ -731,9 +727,8 @@ def _queue_segment_node(
     # One ``presentation`` arg (PLR0913); a bare string is vis_mode only.
     pres = presentation if isinstance(presentation, tuple) else (presentation,)
     vis_mode, theme, encoding = (*pres, None, None)[:3]
-    # Capsule colors derive from the active theme (the
-    # hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
-    from .themes import THEME_PRESETS, collapse_tokens
+    # K4 capsule colors derive from the active theme (F11 memo item 10:
+    # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
 
     tokens = collapse_tokens(theme if theme is not None else THEME_PRESETS["torchlens"])
     node_args = {
@@ -746,7 +741,7 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
-    node_args.update(segment_encoding_attrs(encoding, segment.name))
+    node_args.update(segment_encoding_attrs(encoding, segment.name, tokens.segment_font))
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)
@@ -795,18 +790,18 @@ def _render_raw_input(
             max_items=max_items,
             include_more=include_more,
         )
-    sequence = _raw_input_sequence(value)
+    sequence = [value] if isinstance(value, Image.Image) else _raw_input_sequence(value)
     if sequence is None:
         return None
-    if len(sequence) == 1:
+    if len(sequence) == 1 and not isinstance(sequence[0], Image.Image):  # one photo: batch of one
         return _render_raw_input(trace, sequence[0], batch_render="first")
     if all(isinstance(item, str) for item in sequence):
         strings = cast(Sequence[str], sequence)
         if not include_more:
             strings = strings[:max_items]
         # Lazy: ..viz top-imports this package, so an import-time edge back
-        # into ..viz would mint a bidirectional package cycle.
-        from ..viz import batch_summary
+        # into ..viz would mint a bidirectional package cycle (b5 R51).
+        from ..viz import _batch_summary as batch_summary
 
         return {
             "label": batch_summary.text_table(strings, max_items),
@@ -1002,7 +997,6 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     # Lazy for the same package-cycle reason as the text-table branch above.
-    from ..viz import batch_summary
 
     try:
         montage = batch_summary.montage(images, max_items)
@@ -1030,27 +1024,6 @@ def _render_raw_input_image_batch(
     }
 
 
-def _raw_input_visualizer_dir(trace: "Trace") -> Path:
-    """Return a directory for raw-input visualization artifacts.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the rendered input node.
-
-    Returns
-    -------
-    Path
-        Directory where image artifacts can be written.
-    """
-
-    from .._utils.display import ensure_trace_visualizer_dir
-
-    input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
-    input_dir.mkdir(parents=True, exist_ok=True)
-    return input_dir
-
-
 def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Image.Image] | None:
     """Convert a 4D image tensor batch into PIL images.
 
@@ -1073,12 +1046,9 @@ def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Ima
     images = []
     for item in shown:
         item = _normalize_image_tensor(item)
-        if item.shape[0] == 1:
-            array = (item.squeeze(0).numpy() * 255).astype("uint8")
-            images.append(Image.fromarray(array, mode="L").convert("RGB"))
-        else:
-            array = (item.permute(1, 2, 0).numpy() * 255).astype("uint8")
-            images.append(Image.fromarray(array, mode="RGB"))
+        item = item.expand(3, -1, -1) if item.shape[0] == 1 else item  # grey to RGB, like convert
+        array = (tensor_to_numpy(item.permute(1, 2, 0)) * 255).astype("uint8")
+        images.append(Image.fromarray(array, mode="RGB"))
     return images
 
 
@@ -1139,10 +1109,7 @@ def _render_raw_output(value: Any) -> dict[str, str] | None:
         }
     if _is_label_score_sequence(value):
         lines = ["output", *[_format_label_score_row(label, score) for label, score in value]]
-        return {
-            "label": render_lines_to_html(lines),
-            "tooltip": _tooltip_repr(value),
-        }
+        return {"label": render_lines_to_html(lines), "tooltip": _tooltip_repr(value)}
     if _is_batch_topk_output(value):
         lines = _format_batch_topk_output_lines(value)
         return {
@@ -1203,16 +1170,16 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         if isinstance(row, Mapping) and {"batch_item", "rank", "label", "prob"} <= set(row)
     ]
     lines = ["output"]
-    for batch_item in sorted({int(row.get("batch_item", 0)) for row in rows})[:3]:
+    batch_items = sorted({int(row.get("batch_item", 0)) for row in rows})[:3]
+    for batch_item in batch_items:
         item_rows = [row for row in rows if int(row.get("batch_item", -1)) == batch_item][:5]
-        lines.append(f"item {batch_item}")
+        if len(batch_items) > 1:  # one input needs no "item 0" heading
+            lines.append(f"item {batch_item}")
         lines.extend(
-            [
-                f"{int(row.get('rank', 0))}. "
-                f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
-                f"{float(row.get('prob', 0.0)):.0%}"
-                for row in item_rows
-            ]
+            f"{int(row.get('rank', 0))}. "
+            f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
+            f"{format_percent(float(row.get('prob', 0.0)))}"
+            for row in item_rows
         )
     if not rows:
         lines.append("no decoded rows")
@@ -1259,10 +1226,8 @@ def _format_label_score_row(label: Any, score: int | float) -> str:
     """
 
     label_text = _truncate_raw_input_text(str(label), limit=48)
-    if 0 <= float(score) <= 1:
-        score_text = f"{float(score):.0%}"
-    else:
-        score_text = f"{float(score):.3g}"
+    value = float(score)
+    score_text = format_percent(value) if 0 <= value <= 1 else f"{value:.3g}"
     return f"{label_text} {score_text}"
 
 
@@ -1376,18 +1341,7 @@ def _build_collapsed_module_node(
     )
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = address_w_pass.rsplit(":", 1)
-    try:
-        module_call = self.module_calls[address_w_pass]
-        module_output_layer: GraphNode = self.ops[module_call.output_ops[-1]]
-    except (KeyError, IndexError):
-        module_output_layer = node
-    module_output_shape = getattr(module_output_layer, "shape", None)
-    if module_output_shape is None:
-        module_output_shape = getattr(module_output_layer, "out_shape", None)
-    module_output_shape = module_output_shape or ()
-    module_output_fsize = getattr(module_output_layer, "activation_memory", None)
-    if module_output_fsize is None:
-        module_output_fsize = "0 B"
+    module_output_shape, module_output_fsize = _module_output_summary(self, address_w_pass, node)
     address, call_index = module_tuple
     fold = _run_fold_for_address(address, repeat_folds)
     if fold is not None:
@@ -1408,8 +1362,10 @@ def _build_collapsed_module_node(
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self.layers[o].is_buffer for o in module_call.ops)
-        module_has_input_ancestor = any(self.layers[o].has_input_ancestor for o in module_call.ops)
+        module_num_buffers = sum(self.layers[o].graph.is_buffer for o in module_call.ops)
+        module_has_input_ancestor = any(
+            self.layers[o].graph.has_input_ancestor for o in module_call.ops
+        )
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1428,15 +1384,15 @@ def _build_collapsed_module_node(
             # remainder (num_layers over all passes) overstated every
             # multi-call box.
             module_num_tensors = max(0, module_num_tensors - len(surfaced_call_ops))
-            module_num_buffers -= sum(layer.is_buffer for layer in surfaced_call_ops)
+            module_num_buffers -= sum(layer.graph.is_buffer for layer in surfaced_call_ops)
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
     else:
         graph_node_label = module_tuple[0]
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(layer.is_buffer for layer in ml)
-        module_has_input_ancestor = any(layer.has_input_ancestor for layer in ml)
+        module_num_buffers = sum(layer.graph.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.graph.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
@@ -1492,18 +1448,7 @@ def _build_collapsed_module_node(
     else:
         line_style = "dashed"
 
-    # Build param detail string for collapsed module
-    if module_nparams == 0:
-        param_detail = "0 parameters"
-    elif module_nparams_frozen == 0:
-        param_detail = f"{module_nparams} params (all trainable)"
-    elif module_nparams_trainable == 0:
-        param_detail = f"{module_nparams} params (all frozen)"
-    else:
-        param_detail = (
-            f"{module_nparams} params ({module_nparams_trainable} trainable, "
-            f"{module_nparams_frozen} frozen)"
-        )
+    param_detail = collapsed_param_detail(module_nparams, module_nparams_frozen)
 
     lines = [
         node_title.replace("<b>", "").replace("</b>", ""),
@@ -1530,6 +1475,7 @@ def _build_collapsed_module_node(
         fontcolor="black",
         color="black",
         style=f"filled,{line_style}",
+        tooltip=f"{module_nparams:,} params ({module_nparams_frozen:,} frozen)",
         extra_attrs={"ordering": "out"},
     )
     if theme is not None:
@@ -1549,7 +1495,7 @@ def _build_collapsed_module_node(
     # Encoding channels: exact member-op aggregate, user may override.
     mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, mode_spec)
+        result = call_collapsed_spec_fn(collapsed_node_spec_fn, ml, mode_spec, scope.op_labels)
         spec = mode_spec if result is None else result
     else:
         spec = mode_spec
@@ -1587,7 +1533,11 @@ def _atomic_module_sibling_counts(trace: "Trace") -> dict[str, int]:
 
     counts: dict[str, int] = {}
     for other in trace._layer_logs.values():
-        if isinstance(other, Layer) and getattr(other, "is_atomic_module", False) and other.modules:
+        if (
+            isinstance(other, Layer)
+            and record_member(other, "is_atomic_module", False)
+            and other.modules
+        ):
             other_address = other.modules[-1].rsplit(":", 1)[0]
             counts[other_address] = counts.get(other_address, 0) + 1
     return counts
@@ -1656,9 +1606,9 @@ def _buffer_versions_for_layer(layer_log: "Layer") -> tuple[int, ...]:
     """
 
     versions = {
-        int(op.buffer_pass)
+        int(record_member(op, "buffer_pass"))
         for op in layer_log.ops.values()
-        if getattr(op, "buffer_pass", None) is not None
+        if record_member(op, "buffer_pass", None) is not None
     }
     return tuple(sorted(versions))
 
@@ -1684,7 +1634,7 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         return None
 
     call_groups = _call_groups_for_layer(layer_log)
-    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.is_buffer else ()
+    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.graph.is_buffer else ()
     if not call_groups and not buffer_versions:
         return None
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
@@ -1741,7 +1691,7 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
+    if (node.module_context.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
         if isinstance(source_node, Op):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
@@ -1758,21 +1708,15 @@ def _get_node_address_shape_color(
         node_address = "<br/>@" + node_address
         node_shape = "box"
         node_color = "black"
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         annotation = (
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
-        if annotation is not None and annotation.buffer_versions:
-            address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
-        elif self._buffer_num_calls[source_node.address] == 1:
-            address = source_node.address
-        else:
-            address = f"{source_node.address}:{source_node.buffer_pass}"
-        node_address = "<br/>@" + address
+        node_address = "<br/>@" + _buffer_node_address(self, source_node, annotation)
         node_shape = "cylinder"
         node_color = "black"
     elif node.is_output or node.is_input:
-        node_address = "<br/>@" + node.io_role
+        node_address = "<br/>@" + node.graph.io_role
         node_shape = "oval"
         node_color = "black"
     else:
@@ -1798,9 +1742,9 @@ def _is_only_non_buffer_in_module(
     """
     # Check whether it leaves its module:
     if not (
-        (len(node.output_of_modules) > 0)
+        (len(node.module_context.output_of_modules) > 0)
         and (len(node.modules) > 0)
-        and (node.modules[-1].split(":")[0] in node.output_of_modules)
+        and (node.modules[-1].split(":")[0] in node.module_context.output_of_modules)
     ):
         return False
 
@@ -1821,7 +1765,8 @@ def _is_only_non_buffer_in_module(
         else:
             parent_layer = self._layer_logs[parent_layer_label]
         if (
-            (not parent_layer.is_buffer) or _is_buffer_visible(parent_layer, show_buffer_layers)
+            (not parent_layer.graph.is_buffer)
+            or _is_buffer_visible(parent_layer, show_buffer_layers)
         ) and ((len(parent_layer.modules) > 0) and parent_layer.modules[-1] == node.modules[-1]):
             return False
 
@@ -1844,9 +1789,9 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = INPUT_COLOR
     elif node.is_output:
         bg_color = OUTPUT_COLOR
-    elif node.is_terminal_bool:
+    elif record_member(node, "is_terminal_bool", False):
         bg_color = bool_node_fill(node, BOOL_NODE_COLOR)
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
         source = node.original if isinstance(node, FocusNode) else node
@@ -1990,7 +1935,7 @@ def compute_default_node_lines(
         return list(layer_log.lines) or [layer_log.display_label]
 
     # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
-    lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
+    lines = [bool_value_line(layer_log)] if layer_log.control_flow.is_terminal_bool else []
     # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; the "label" token keeps it too.
     module_row = node_label_fields is None or "module" in node_label_fields
     call_label = pass_mark_suffix(

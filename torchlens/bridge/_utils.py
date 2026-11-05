@@ -10,6 +10,14 @@ from torch import nn
 
 from .._data_classes._lookup_kinds import op_at
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
+from ..intervention.errors import SiteResolutionError
+from ..repgeom._annotation_gate import (
+    _expected_stimulus_counts,
+    _raise_ineligible_site,
+    _site_ineligibility,
+    _warn_skipped_sites,
+)
 
 
 def source_model(log: Any) -> nn.Module:
@@ -62,8 +70,6 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     Any
         Layer-pass-like object with an ``out`` attribute.
     """
-
-    from ..intervention.errors import SiteResolutionError
 
     if hasattr(site, "out") and hasattr(site, "layer_label"):
         return site
@@ -167,7 +173,7 @@ def _owning_addresses(layer: Any, modules: dict[str, nn.Module]) -> list[str]:
         Distinct module addresses, in the record's order.
     """
 
-    calls = getattr(layer, "output_of_module_calls", ()) or ()
+    calls = record_member(layer, "output_of_module_calls", ()) or ()
     return [
         address
         for address in dict.fromkeys(_module_call_address(call) for call in calls)
@@ -197,7 +203,7 @@ def _pass_output_owner(log: Any, modules: dict[str, nn.Module], site: str) -> st
 
     owners: set[str] = set()
     for layer in log._layer_list:
-        calls = getattr(layer, "output_of_module_calls", ()) or ()
+        calls = record_member(layer, "output_of_module_calls", ()) or ()
         if not any(_module_call_label(call) == site for call in calls):
             continue
         addresses = _owning_addresses(layer, modules)
@@ -337,7 +343,7 @@ def _module_num_calls(log: Any, address: str) -> int:
     # Duck-typed logs without a module record: count the distinct calls instead.
     seen: set[Any] = set()
     for layer in log._layer_list:
-        for call in getattr(layer, "output_of_module_calls", ()) or ():
+        for call in record_member(layer, "output_of_module_calls", ()) or ():
             if _module_call_address(call) == address:
                 seen.add(call if isinstance(call, tuple) else str(call))
     return max(len(seen), 1)
@@ -434,12 +440,6 @@ def tensor_layers(
         or is not stimulus-indexed.
     """
 
-    from ..repgeom._annotation_gate import (
-        _expected_stimulus_counts,
-        _raise_ineligible_site,
-        _site_ineligibility,
-    )
-
     expected_counts = _expected_stimulus_counts(log)
     if sites is not None:
         resolved: list[Any] = []
@@ -481,8 +481,6 @@ def _default_tensor_layer_sweep(
     """
 
     from collections import OrderedDict
-
-    from ..repgeom._annotation_gate import _site_ineligibility, _warn_skipped_sites
 
     selected: list[Any] = []
     skipped: OrderedDict[str, str] = OrderedDict()

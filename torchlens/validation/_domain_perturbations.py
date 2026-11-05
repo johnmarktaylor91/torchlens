@@ -5,8 +5,10 @@ child op's output cannot move (a saturated activation, the flat side of a
 rounding step, a zero base under a positive exponent, a Bernoulli probability
 already at its draw). ``_perturb_domain_sensitive_parent_values`` returns a
 valid alternate parent value for those ops so the perturbation check keeps
-its meaning; the helpers below build each family's values. Split from
-``validation/core.py`` (file-cap row), which calls the entry point from its
+its meaning; the helpers below build each family's values. A fully saturated
+``sigmoid``/``tanh``/``erf`` gets a zero input, and a tensor ``clamp`` bound
+that never binds is moved past the value it bounds (``_crossing_perturbations``). Split from
+``validation/_core.py`` (file-cap row), which calls the entry point from its
 parent perturbation.
 """
 
@@ -17,11 +19,16 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._crossing_perturbations import (
+    clamp_bound_crossing_values,
     integer_clamp_crossing_values,
     integer_extrema_crossing_values,
     isclose_tolerance_crossing_values,
+    sdpa_mask_crossing_values,
 )
+from ._ctc_lengths_perturbation import CTC_LOSS_FUNCS, ctc_length_rotation_values
+from ._masked_scatter_perturbation import MASKED_SCATTER_FUNCS, masked_scatter_mask_values
 from ._membership_perturbation import isin_membership_toggle_values
 
 if TYPE_CHECKING:
@@ -51,8 +58,8 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    if layer.func_name in _SET_TEST_CROSSING_VALUES:
-        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
+    if (early := _early_crossing_values(layer, parent_label, parent_values)) is not None:
+        return early
     if not parent_values.is_floating_point():
         return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
@@ -93,8 +100,76 @@ def _perturb_domain_sensitive_parent_values(
 _SET_TEST_CROSSING_VALUES = {
     "isin": isin_membership_toggle_values,
     "isclose": isclose_tolerance_crossing_values,
+    **dict.fromkeys(MASKED_SCATTER_FUNCS, masked_scatter_mask_values),
+    **dict.fromkeys(CTC_LOSS_FUNCS, ctc_length_rotation_values),
 }
-"""Set and tolerance tests whose operands get values that flip each element's result."""
+"""Ops whose operands get purpose-built values: set and tolerance tests get values that
+flip each element's result; ``masked_scatter`` gets a mask with the same true count and
+``ctc_loss`` length vectors rotated across the batch (same sum, same values)."""
+
+
+#: Smooth activations that round to a constant far from zero -> their two saturation levels.
+_SATURATION_LEVELS: dict[str, tuple[float, float]] = {
+    **dict.fromkeys(("sigmoid", "sigmoid_", "expit", "special_expit"), (0.0, 1.0)),
+    **dict.fromkeys(("tanh", "tanh_", "erf", "erf_", "special_erf"), (-1.0, 1.0)),
+}
+
+
+def _early_crossing_values(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> torch.Tensor | None:
+    """Return set-test values, a moved clamp bound or sdpa mask, or a saturated activation's input.
+
+    The set and tolerance tests (``_SET_TEST_CROSSING_VALUES``) answer for their ops
+    outright; no later rule names those ops, so a ``None`` from them ends the same way.
+
+    A ``sigmoid`` input above about 17 (``tanh`` above about 9, ``erf`` above about 4)
+    rounds to exactly the saturation level in float32, so when every saved output element
+    sits at a level, the range draw and the step ladder all stay saturated and a live edge
+    looks dead. Zero is inside every responsive region (``sigmoid(0) = 0.5``,
+    ``tanh(0) = erf(0) = 0``), so a zero input moves every saturated element. Outputs with
+    any unsaturated element keep the generic draw.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The crossing values, or ``None`` when neither rule applies.
+    """
+
+    if layer.func_name in _SET_TEST_CROSSING_VALUES:
+        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
+    for crossing in (clamp_bound_crossing_values, sdpa_mask_crossing_values):
+        if (values := crossing(layer, parent_label, parent_values)) is not None:
+            return values
+    levels = _SATURATION_LEVELS.get(layer.func_name)
+    if levels is None or not parent_values.is_floating_point():
+        return None
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return None
+    if not _output_fully_saturated(getattr(layer, "out", None), levels):
+        return None
+    return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
+
+
+def _output_fully_saturated(output: Any, levels: tuple[float, float]) -> bool:
+    """Return whether every finite element of ``output`` sits at a saturation level (one at least)."""
+
+    if not isinstance(output, torch.Tensor) or output.numel() == 0:
+        return False
+    if not output.is_floating_point():
+        return False
+    finite = torch.isfinite(output)
+    at_level = (output == levels[0]) | (output == levels[1])
+    return bool(finite.any()) and bool((at_level | ~finite).all())
 
 
 def _integer_saturation_crossing_values(
@@ -135,9 +210,9 @@ def _bernoulli_has_explicit_probability(layer: Op) -> bool:
         True when an explicit probability argument is present.
     """
 
-    if len(getattr(layer, "saved_args", None) or ()) > 1:
+    if len(record_member(layer, "saved_args", None) or ()) > 1:
         return True
-    return "p" in (getattr(layer, "saved_kwargs", None) or {})
+    return "p" in (record_member(layer, "saved_kwargs", None) or {})
 
 
 def _bernoulli_probability_slot_hit(layer: Op, parent_label: str) -> bool:
@@ -165,7 +240,9 @@ def _bernoulli_probability_slot_hit(layer: Op, parent_label: str) -> bool:
     if layer.func_name == "bernoulli_":
         if not _bernoulli_has_explicit_probability(layer):
             return False
-        kwarg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("kwargs", {})
+        kwarg_positions = (record_member(layer, "parent_arg_positions", None) or {}).get(
+            "kwargs", {}
+        )
         return _parent_label_occupies_arg_position(layer, parent_label, 1) or (
             kwarg_positions.get("p") == parent_label
         )
@@ -471,8 +548,8 @@ def _clamp_scalar_bounds(layer: Op) -> tuple[float | None, float | None]:
         Lower and upper scalar bounds when available.
     """
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
-    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
+    saved_kwargs = record_member(layer, "saved_kwargs", {}) or {}
     lower = saved_kwargs.get("min", saved_kwargs.get("min_val"))
     upper = saved_kwargs.get("max", saved_kwargs.get("max_val"))
     if lower is None and len(saved_args) > 1:
@@ -560,7 +637,7 @@ def _finite_fill_distinct_from(
 def _pow_zero_base_exponent_parent(layer: Op, parent_label: str) -> bool:
     """Return whether ``parent_label`` is only the exponent of a power whose saved base is zero."""
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
     if len(saved_args) < 2 or _parent_label_occupies_arg_position(layer, parent_label, 0):
         return False
     if not _parent_label_occupies_arg_position(layer, parent_label, 1):
@@ -585,10 +662,10 @@ def _pow_exponent(layer: Op) -> Any:
         Positional or keyword exponent value, if captured.
     """
 
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    saved_args = cast(Sequence[Any], record_member(layer, "saved_args", ()) or ())
     if len(saved_args) > 1:
         return saved_args[1]
-    return (getattr(layer, "saved_kwargs", {}) or {}).get("exponent")
+    return (record_member(layer, "saved_kwargs", {}) or {}).get("exponent")
 
 
 def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: int) -> bool:
@@ -609,6 +686,6 @@ def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: 
         True when ``parent_label`` is registered at ``args[position]``.
     """
 
-    return (getattr(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
+    return (record_member(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
         position
     ) == parent_label

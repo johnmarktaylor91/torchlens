@@ -21,7 +21,9 @@ from typing import Any
 
 import torch
 
+from .._semantic import _hops
 from .._semantic._hops import VALUE_GRAMMAR, HopRefusal, walk_upstream
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._records import ComponentRow, ComponentStack, Coordinate, StackGrading
 from ._walk import SpineNode, SpineWalk, walk_spine
@@ -78,8 +80,6 @@ def _deepest_value_ancestor(trace: Any, op: Any) -> tuple[Any, str]:
     def _grammar_stop(candidate: Any) -> bool:
         """Anchor at the first op the grammar does not propose across."""
 
-        from .._semantic import _hops
-
         return _hops._propose(candidate, VALUE_GRAMMAR) is None
 
     walk = walk_upstream(trace, op, _grammar_stop, grammar=VALUE_GRAMMAR)
@@ -97,7 +97,7 @@ def _resolve_target_op(trace: Any, target: Any) -> Any:
     """
 
     if target is None or target == "final":
-        from ._anchors import resolve_lm_head
+        from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
         return resolve_lm_head(trace).target_op
     if isinstance(target, str):
@@ -133,7 +133,7 @@ def _require_payloads(trace: Any, labels: list[str], *, analysis: str) -> dict[s
             continue
         value = _saved_out(op)
         if value is None:
-            missing.append({"op_label": label, "site_key": getattr(op, "site_key", None)})
+            missing.append({"op_label": label, "site_key": record_member(op, "site_key", None)})
         else:
             payloads[str(getattr(op, "label", label))] = value
     if missing:
@@ -236,7 +236,7 @@ def residual_accumulation(
                 coordinate=Coordinate(
                     label=_innermost_module(op) or label,
                     op_label=label,
-                    site_key=getattr(op, "site_key", None),
+                    site_key=record_member(op, "site_key", None),
                     pass_index=getattr(op, "pass_number", None),
                     kind="residual",
                     module_address=_innermost_module(op),
@@ -252,7 +252,7 @@ def residual_accumulation(
         target_coordinate=Coordinate(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
-            site_key=getattr(target_op, "site_key", None),
+            site_key=record_member(target_op, "site_key", None),
             pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),
@@ -284,7 +284,7 @@ def _writer_row(
         coordinate=Coordinate(
             label=label,
             op_label=str(getattr(writer_op, "label", writer_label)),
-            site_key=getattr(writer_op, "site_key", None),
+            site_key=record_member(writer_op, "site_key", None),
             pass_index=getattr(writer_op, "pass_number", None),
             kind=_writer_kind(trace, ancestor),
             expert=getattr(ancestor, "expert", None),
@@ -431,7 +431,7 @@ def residual_decomposition(
         target_coordinate=Coordinate(
             label=str(getattr(target_op, "label", "target")),
             op_label=str(getattr(target_op, "label", "")),
-            site_key=getattr(target_op, "site_key", None),
+            site_key=record_member(target_op, "site_key", None),
             pass_index=getattr(target_op, "pass_number", None),
             kind="residual",
         ),

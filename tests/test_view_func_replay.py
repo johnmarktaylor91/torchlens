@@ -11,6 +11,7 @@ base stays a value input under the perturbation check.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 
 import pytest
@@ -18,15 +19,24 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens import _state
 from torchlens._constants import get_orig_torch_funcs
+from torchlens._utils._torch_compat import HAS_REV_VIEW_FUNC_UNSAFE
+from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 _VIEW_FUNCS = tuple(
     name
     for name in ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe")
     if hasattr(torch.Tensor, name)
+)
+
+
+_REQUIRES_REV_VIEW_FUNC = pytest.mark.skipif(
+    not HAS_REV_VIEW_FUNC_UNSAFE,
+    reason="Tensor._rev_view_func_unsafe postdates the torch 2.1 floor (2.3+)",
 )
 
 
@@ -148,7 +158,7 @@ def test_view_func_method_validates_and_replays(method: str, chain: str) -> None
     trace = tl.trace(model, x)
     try:
         op = _view_func_op(trace, method)
-        positions = op.parent_arg_positions["args"]
+        positions = op.call.parent_arg_positions["args"]
         assert 0 in positions and 1 in positions and op.children, (positions, op.children)
     finally:
         trace.cleanup()
@@ -167,7 +177,7 @@ def test_view_func_on_view_made_outside_forward_validates(method: str) -> None:
     trace, ground_truth = _traced_with_args(_OutsideViewModel(method), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        assert op.saved_args[0]._is_view()
+        assert op.call.saved_args[0]._is_view()
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
         assert status.state == "passed", get_validation_failure(trace)
     finally:
@@ -207,7 +217,7 @@ def test_planted_new_base_blind_replay_fails_perturbation(method: str) -> None:
     trace, ground_truth = _traced_with_args(_ViewFuncModel(method, "transpose"), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        new_base_label = op.parent_arg_positions["args"][1]
+        new_base_label = op.call.parent_arg_positions["args"][1]
         frozen = op.out.detach().clone()
 
         def new_base_blind(*args: object, **kwargs: object) -> torch.Tensor:
@@ -258,8 +268,8 @@ def test_compact_receiver_is_a_replay_error(method: str) -> None:
     trace, ground_truth = _traced_with_args(_ViewFuncModel(method, "transpose"), _input_4x4())
     try:
         op = _view_func_op(trace, method)
-        assert op.saved_args[0]._is_view()
-        op.saved_args = (op.saved_args[0].detach().clone(), *op.saved_args[1:])
+        assert op.call.saved_args[0]._is_view()
+        op._call_saved_args = (op.call.saved_args[0].detach().clone(), *op.call.saved_args[1:])
         with pytest.warns(UserWarning, match="Validation replay raised an exception"):
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
@@ -278,12 +288,13 @@ def _rev_view_func_two_step_trace() -> tuple[tl.Trace, torch.Tensor, object]:
     return trace, ground_truth, _view_func_op(trace, "_rev_view_func_unsafe")
 
 
+@_REQUIRES_REV_VIEW_FUNC
 def test_rev_view_func_new_view_keeps_its_storage() -> None:
     """The reverse of ``select`` reads the new view's whole storage, so capture keeps it."""
 
     trace, ground_truth, op = _rev_view_func_two_step_trace()
     try:
-        new_view = op.saved_args[1]
+        new_view = op.call.saved_args[1]
         assert new_view.numel() == 4
         assert new_view.untyped_storage().nbytes() == 16 * new_view.element_size()
         status = validate_saved_outs(trace, [ground_truth], validate_metadata=True)
@@ -292,12 +303,17 @@ def test_rev_view_func_new_view_keeps_its_storage() -> None:
         trace.cleanup()
 
 
+@_REQUIRES_REV_VIEW_FUNC
 def test_compact_new_view_is_a_replay_error() -> None:
     """A new view saved without its storage cannot be mapped back to the base: replay fails."""
 
     trace, ground_truth, op = _rev_view_func_two_step_trace()
     try:
-        op.saved_args = (op.saved_args[0], op.saved_args[1].detach().clone(), *op.saved_args[2:])
+        op._call_saved_args = (
+            op.call.saved_args[0],
+            op.call.saved_args[1].detach().clone(),
+            *op.call.saved_args[2:],
+        )
         with pytest.warns(UserWarning, match="Validation replay raised an exception"):
             status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
         assert status.state == "failed"
@@ -306,3 +322,58 @@ def test_compact_new_view_is_a_replay_error() -> None:
         assert "raised an exception" in failure.message
     finally:
         trace.cleanup()
+
+
+def test_reverse_view_func_is_decorated_exactly_where_torch_has_it() -> None:
+    """Graceful floor test for ``HAS_REV_VIEW_FUNC_UNSAFE``: decoration follows torch.
+
+    Torch before 2.3 has no ``Tensor._rev_view_func_unsafe``; TorchLens decorates the
+    view-function methods this torch has and leaves the missing one out, so ``_view_func``
+    still decorates and replays (``test_view_func_method_validates_and_replays``).
+    """
+
+    decorated = set(get_orig_torch_funcs())
+    assert (("torch.Tensor", "_rev_view_func_unsafe") in decorated) is HAS_REV_VIEW_FUNC_UNSAFE
+    assert ("torch.Tensor", "_view_func") in decorated
+
+
+def _wrapped_view_and_base() -> tuple[torch.Tensor, torch.Tensor]:
+    """Return a transposed view and its base after a capture installed the wrappers."""
+
+    tl.trace(nn.Identity(), torch.ones(2))
+    base = torch.arange(6.0).reshape(2, 3)
+    return _tracked_view(_transpose, base), base
+
+
+@pytest.mark.parametrize("method", _VIEW_FUNCS)
+def test_bound_view_func_repr_never_renders_the_receiver(method: str) -> None:
+    """A wrapped view-function method bound to a view reprs like torch's builtin method.
+
+    Torch's fake-tensor describer stores ``t._view_func_unsafe`` and reprs it when
+    structured-trace logging is on (pytest's log capture turns it on). A plain bound
+    method's repr renders the receiver's values, which runs tensor ops inside scan's
+    backward ``make_fx`` and hits torch's PythonFallbackKernel internal assert.
+    """
+
+    view, _ = _wrapped_view_and_base()
+    assert is_decorated_function(getattr(torch.Tensor, method))
+    text = repr(getattr(view, method))
+    assert "tensor(" not in text
+    assert text == f"<built-in method {method} of Tensor object at {id(view):#x}>"
+
+
+@pytest.mark.parametrize("method", _VIEW_FUNCS)
+def test_bound_view_func_keeps_the_bound_method_contract(method: str) -> None:
+    """The quiet bound form compares, hashes, copies and calls like a bound method."""
+
+    view, base = _wrapped_view_and_base()
+    first, second = getattr(view, method), getattr(view, method)
+    assert first == second and hash(first) == hash(second)
+    assert first != getattr(_tracked_view(_transpose, base), method)
+    assert first.__self__ is view and first.__func__ is getattr(torch.Tensor, method)
+    assert copy.copy(first) == first
+    assert copy.deepcopy(first).__func__ is first.__func__
+    stock = _state._decorated_to_orig[id(first.__func__)]
+    new_base = base * 2
+    argument = _transpose(new_base) if method == "_rev_view_func_unsafe" else new_base
+    torch.testing.assert_close(first(argument), stock(view, argument))

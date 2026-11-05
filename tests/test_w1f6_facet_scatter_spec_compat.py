@@ -23,14 +23,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._save import check_spec_compat, load_intervention_spec
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     GraphShapeMismatchError,
-    OpaqueCallableError,
     ReplayPreconditionError,
 )
 from torchlens.intervention.hooks import normalize_hooks_from_spec
-from torchlens.intervention.save import check_spec_compat, load_intervention_spec
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 #: Stage a sticky hook on the trace without propagating it.
@@ -119,7 +118,7 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
 
     zeroed = clean.fork("zero_q_head")
     zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
-    zeroed.run(model, x)
+    zeroed = zeroed.run(model, x)
 
     h0 = zeroed.modules["attn"].facets.head(0).q
     h1 = zeroed.modules["attn"].facets.head(1).q
@@ -176,39 +175,38 @@ def test_facet_write_spec_without_wrapper_refuses_typed() -> None:
 
 
 @pytest.mark.parametrize("level", ["executable_with_callables", "portable"])
-def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str) -> None:
+def test_save_facet_hook_persists_the_request_not_the_wrapper(tmp_path: Any, level: str) -> None:
     """Executable-level saves of facet-slice hooks never persist a spec whose
     replay would write the whole home tensor.
 
-    Format 3 (docs/maintainers/saved_format_3.md section 5) keeps a facet write as a
-    callable placeholder of its capture-bound scatter wrapper, never the raw helper:
-    the portable level refuses ``intervention_spec_not_portable`` and publishes
-    nothing; ``executable_with_callables`` writes a non-executable recipe whose facet
-    rules hold no built-in edit, so no loaded rerun can apply the helper to the whole
-    home tensor (every rerun door refuses a placeholder recipe).
+    Format 3 (docs/maintainers/saved_format_3.md section 5) keeps a facet write as
+    its request, never the capture-bound scatter wrapper: the built-in edit, the
+    narrowed facet selector as the rule's site, the home label, the facet name and
+    the write mask with its digest. A spec loaded without a trace keeps the request
+    unbound, so the lost-wrapper check refuses to fire it instead of applying the
+    helper to the whole home tensor; a loaded trace rebinds it
+    (tests/test_facet_write_portable.py).
     """
 
     _, _, clean = _traced_attention()
-    edited = clean.fork("facet_save_refusal")
+    edited = clean.fork("facet_save_request")
     edited._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
     path = tmp_path / f"facet_{level}.tlspec"
-
-    if level == "portable":
-        with pytest.raises(OpaqueCallableError) as caught:
-            edited.save_intervention(path, level=level)
-        assert getattr(caught.value, "fields", {}).get("code") == "intervention_spec_not_portable"
-        assert not path.exists(), "a refused facet save published an artifact"
-        return
     edited.save_intervention(path, level=level)
     intervention = json.loads((path / "manifest.json").read_text())["intervention"]
-    assert intervention["executable"] is False
     recipe = json.loads((path / intervention["file"]).read_text())
-    assert recipe["executable"] is False
+    assert intervention["executable"] is True and recipe["executable"] is True
+    assert recipe["format_version"] == 4
     facet_rules = [rule for rule in recipe["rules"] if rule["metadata"].get("facet_write")]
     assert facet_rules, "the facet write left no rule in the saved recipe"
     for rule in facet_rules:
-        assert rule["edit"]["portability"] == "callable_placeholder", rule["edit"]
-        assert rule["edit"]["callable"]["$tl"] == "callable_placeholder"
+        assert rule["edit"]["portability"] == "builtin", rule["edit"]
+        assert rule["selector"]["selector_kind"] == "facet"
+        assert rule["selector"]["selector_value"]["head_index"] == 0
+        assert rule["selector"]["selector_value"]["name"] == "q"
+    loaded = load_intervention_spec(path)
+    with pytest.raises(ReplayPreconditionError, match="facet-slice hook lost its scatter wrapper"):
+        normalize_hooks_from_spec(loaded)
 
 
 # ---------------------------------------------------------------------------

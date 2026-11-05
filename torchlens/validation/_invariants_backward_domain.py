@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._ir.events import BackwardPassStart, OpGradObserved
+from .._utils._autograd_view_nodes import is_view_backward_class
+from ..backends.registry import TORCH_BACKEND_NAME
+from ..backends.torch.backward import _resolve_op_grad_event_label as _impl
+
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.op import Op
@@ -13,6 +18,7 @@ if TYPE_CHECKING:
 __all__ = (
     "_check_backward_pass_domain_invariants",
     "_layer_feeds_recorded_backward_roots",
+    "_view_write_gradient_runs_through_copy_slices",
     "_layer_postdates_all_backward_triggers",
     "_backward_trigger_forward_positions",
     "_backward_pass_root_forward_position",
@@ -158,6 +164,44 @@ def _layer_postdates_all_backward_triggers(trace: Trace, layer: Layer | Op) -> b
     return bool(trigger_positions) and layer_step_index > max(trigger_positions)
 
 
+def _backward_op_index(trace: Trace) -> tuple[dict[str, list[Any]], set[str]]:
+    """Index a trace's op records by every label spelling and collect the visited labels.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward projections.
+
+    Returns
+    -------
+    tuple[dict[str, list[Any]], set[str]]
+        ``label spelling -> op records`` and the spellings of ops autograd
+        visited (those retaining a live ``grad_fn`` backpointer).
+    """
+
+    # Children reference bare layer labels while op records carry
+    # pass-qualified labels, so index every spelling. A bare label shared by
+    # several passes maps to the UNION of their records: traversing any extra
+    # pass only widens reachability, which widens the no-exemption (True)
+    # side — the fail-closed direction.
+    ops_by_label: dict[str, list[Any]] = {}
+    visited_labels: set[str] = set()
+    for trace_layer in trace._layer_list or ():
+        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
+            spellings = [
+                spelling
+                for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
+                if isinstance(spelling, str)
+            ]
+            if not spellings:
+                continue
+            for spelling in spellings:
+                ops_by_label.setdefault(spelling, []).append(op)
+            if record_member(op, "grad_fn", None) is not None:
+                visited_labels.update(spellings)
+    return ops_by_label, visited_labels
+
+
 def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> bool:
     """Return whether a layer's output can transmit gradient to the backward walk.
 
@@ -195,26 +239,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
         through ops that carry a ``grad_fn_object_id``.
     """
 
-    # Children reference bare layer labels while op records carry
-    # pass-qualified labels, so index every spelling. A bare label shared by
-    # several passes maps to the UNION of their records: traversing any extra
-    # pass only widens reachability, which widens the no-exemption (True)
-    # side — the fail-closed direction.
-    ops_by_label: dict[str, list[Any]] = {}
-    visited_labels: set[str] = set()
-    for trace_layer in trace._layer_list or ():
-        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
-            spellings = [
-                spelling
-                for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
-                if isinstance(spelling, str)
-            ]
-            if not spellings:
-                continue
-            for spelling in spellings:
-                ops_by_label.setdefault(spelling, []).append(op)
-            if getattr(op, "grad_fn", None) is not None:
-                visited_labels.update(spellings)
+    ops_by_label, visited_labels = _backward_op_index(trace)
     if not visited_labels:
         return True
 
@@ -245,9 +270,50 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
                 # node for it; a grad-severed child (detach, no-grad
                 # interior) ends this path without reaching the walked
                 # region.
-                if any(getattr(child, "grad_fn_object_id", None) is not None for child in children):
+                if any(
+                    record_member(child, "grad_fn_object_id", None) is not None
+                    for child in children
+                ):
                     frontier.append(child_label)
     return False
+
+
+def _view_write_gradient_runs_through_copy_slices(trace: Trace, layer: Layer | Op) -> bool:
+    """Return whether a layer is a view write whose gradient may run through a ``CopySlices``.
+
+    An in-place op that writes through a view records the view's regenerated
+    node (a view backward class), while autograd carries the write's gradient on
+    the base's ``CopySlices``. A capture that keeps the historical topology (a
+    reader of the written base bound to the base's pre-write producer) gives the
+    op no forward children, so the dead-branch reachability walk cannot see that
+    the written base is read. While the backward walk visited a ``CopySlices`` no
+    op owns, the op is therefore NOT provably outside the walk, and the
+    dead-branch carve-out must not excuse its missing backpointer.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward projections.
+    layer:
+        Layer record whose missing backpointer is being judged.
+
+    Returns
+    -------
+    bool
+        True when the layer is an in-place op recording a view backward node and
+        backward visited an unowned ``CopySlices``.
+    """
+
+    if not record_member(layer, "is_inplace", False):
+        return False
+    class_name = record_member(layer, "grad_fn_class_name", None)
+    if not isinstance(class_name, str) or not is_view_backward_class(class_name):
+        return False
+    return any(
+        getattr(grad_fn, "class_name", None) == "CopySlices"
+        and not getattr(grad_fn, "has_op", True)
+        for grad_fn in trace._grad_fn_logs.values()
+    )
 
 
 def _backward_trigger_forward_positions(trace: Trace) -> list[int]:
@@ -265,8 +331,6 @@ def _backward_trigger_forward_positions(trace: Trace) -> list[int]:
         GradFn pairings refine active mid-forward markers because the root's
         forward op is the last layer guaranteed to exist when graph walking ran.
     """
-
-    from .._ir.events import BackwardPassStart
 
     event_positions = {
         event.pass_index: event.forward_op_count_at_trigger
@@ -343,8 +407,6 @@ def _backward_pass_observed_forward_position(trace: Trace, pass_index: int) -> i
         Highest observed forward ``step_index`` for the pass, when available.
     """
 
-    from .._ir.events import OpGradObserved
-
     layer_lookup = trace._layer_dict_all_keys
     observed_steps = []
     for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ()):
@@ -364,8 +426,6 @@ def _resolve_op_grad_event_label(trace: Trace, op_label: str) -> str:
     Delegates to the single implementation next to the event emitter so the
     validation-side resolution can never drift from the projection-side one.
     """
-
-    from ..backends.torch.backward import _resolve_op_grad_event_label as _impl
 
     return _impl(trace, op_label)
 
@@ -422,7 +482,6 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # which surfaced as a call-time NameError. Importing at call time -- when
     # backends is fully initialized -- avoids the cycle and still routes through
     # the canonical registry constant (satisfies the backend-literal gate).
-    from ..backends.registry import TORCH_BACKEND_NAME
 
     if trace._provenance_backend != TORCH_BACKEND_NAME:
         return
@@ -534,6 +593,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from .invariants import (  # noqa: E402
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import (  # noqa: E402
     MetadataInvariantError,
 )

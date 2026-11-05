@@ -23,8 +23,15 @@ from __future__ import annotations
 from typing import Any
 
 from .._errors import InvalidArgumentError
-from ..agent import call_tool_envelope, list_tools, tool_specs
+from ..agent import (
+    call_tool as _registry_call,
+    call_tool_envelope,
+    canonical_dumps as _canonical_dumps,
+    list_tools,
+    tool_specs,
+)
 from ..agent._guide_text import AGENT_GUIDE
+from ..agent._schemas import load_schema as _load_schema, schema_index as _schema_index
 
 #: Server-level instructions shown to MCP hosts (the trust boundary is
 #: STATED here -- never a per-payload field).
@@ -78,7 +85,6 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
             code="agent_tool_unknown",
             remedy=f"served tools: {', '.join(spec['name'] for spec in TOOL_SPECS)}",
         )
-    from ..agent import call_tool as _registry_call
 
     return _registry_call(name, arguments)
 
@@ -176,8 +182,6 @@ def _register_resources(server: Any) -> None:
         ``MCPServer`` instance.
     """
 
-    from ..agent._schemas import load_schema, schema_index
-
     try:
         register = server.resource
     except AttributeError:  # pragma: no cover - older mcp surface
@@ -193,11 +197,9 @@ def _register_resources(server: Any) -> None:
     def _schema_index_resource() -> str:
         """The served schema-id index."""
 
-        from ..agent import canonical_dumps
+        return _canonical_dumps({"index": _schema_index()})
 
-        return canonical_dumps({"index": schema_index()})
-
-    for schema_id in schema_index():
+    for schema_id in _schema_index():
 
         def _make(schema_ref: str) -> Any:
             """Bind one schema id into a resource closure."""
@@ -206,9 +208,7 @@ def _register_resources(server: Any) -> None:
             def _schema_resource() -> str:
                 """Serve one shipped schema document as an MCP resource."""
 
-                from ..agent import canonical_dumps
-
-                return canonical_dumps(load_schema(schema_ref))
+                return _canonical_dumps(_load_schema(schema_ref))
 
             return _schema_resource
 

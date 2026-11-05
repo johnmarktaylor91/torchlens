@@ -42,6 +42,8 @@ import time
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
+from .._utils.env_flags import closed_bool_env
+
 #: Version tag stamped on estimator diagnostics so field refits are
 #: attributable to the formula that produced each record (memo item 14).
 ESTIMATOR_FORMULA_VERSION = "uw_power_v1"
@@ -112,8 +114,6 @@ def watchdog_enabled() -> bool:
     contract, so both ``CI`` and ``TORCHLENS_DETERMINISTIC`` disable it, as
     does ``TORCHLENS_COLLAPSE_WATCHDOG=0``.
     """
-
-    from .._utils.env_flags import closed_bool_env
 
     if os.environ.get("CI"):
         return False

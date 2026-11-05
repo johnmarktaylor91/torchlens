@@ -1,6 +1,6 @@
 # TorchLens for teaching how networks work
 
-Teaching needs a picture of the whole computation, not a module list: every operation the forward pass actually ran, in order, with the shapes flowing between them, so a student can follow a residual connection, an attention head or a recurrent loop from input to output. TorchLens draws that picture from one call on any PyTorch model, lets a student click into any single operation to see its inputs, outputs and source line, and does the same for a 1958 perceptron and a modern transformer alike.
+Teaching needs a picture of the whole computation, not a module list: every operation the forward pass actually ran, in order, with the shapes flowing between them, so a student can follow a residual connection, an attention head or a recurrent loop from input to output. TorchLens draws that picture from one call on any PyTorch model, lets a student click into any single operation to see its inputs, outputs and source line, and does the same for a 1943 threshold-neuron network and a modern transformer alike.
 
 The lists below start with drawing and inspecting, then move to the tutorial notebooks and the Model Menagerie. Every link is to a file in this repository or to the Menagerie site.
 
@@ -8,14 +8,14 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 - [See the graph and inspect any operation](../field-guide/see_and_inspect.md): one call draws every operation the forward ran, including ones no module returns; one lookup gives any operation's output, module and arguments.
 - [Visualize notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/quick/visualize.ipynb): render a model graph and learn to read the layer labels.
-- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models, each one rung up from the last. Notebook 01 is "capture and look", 02 reads one activation like a dict, 03 draws the graph when the summary is too long to read. They run on a laptop CPU in seconds each, or in the browser on Colab, so they work as lab exercises.
+- [Tutorial notebooks](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/learn/): eleven short notebooks on laptop-sized models, each one rung up from the last. Notebook 01 is "capture and look", 02 reads one activation like a dict, 03 draws the graph when the summary is too long to read. They run on a laptop CPU in about a minute each, or in the browser on Colab, so they work as lab exercises.
 - [TorchLens in 10 minutes](https://github.com/johnmarktaylor91/torchlens/blob/main/notebooks/torchlens_in_10_minutes.ipynb): trace, intervene, run a backward pass, see control flow drawn as IF, THEN and ELSE, and compare two traces.
 
 ## Drawing the graph
 
 - [How TorchLens groups operations into layers](../guides/grouping.md): why `linear_1` with passes `linear_1:1` and `linear_1:2` is the same layer run twice, the thing students most often need explained about recurrent and weight-tied models.
 - [Smart-collapse visual reference](../reference/collapse.md): how a large graph folds into readable blocks, with rendered examples at each level.
-- [Semantic lenses](../reference/lenses.md): drawing themes that colour the graph by what each part does.
+- [Premade views](../reference/lenses.md): `trace.draw(view=...)` views that each answer one question about the model.
 - [Transformer pictures](../reference/tviz.md): token-labelled attention heatmaps and grids and the attention atlas, for the attention lecture.
 - [Notebook cards and the treescope bridge](../guides/treescope_cards.md): interactive cards for a notebook walkthrough.
 - [The Netron export](../reference/netron_export.md) and [Google Model Explorer export](../reference/model_explorer.md): open the captured graph in a viewer students may already know.
@@ -40,7 +40,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 ## The Model Menagerie
 
-- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,000 neural network architectures, from Rosenblatt's 1958 perceptron to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across seven decades of designs.
+- [The Model Menagerie](https://modelmenagerie.ai): a browsable gallery of over 6,400 neural network architectures, from McCulloch and Pitts's 1943 network of threshold neurons to current models, each with its full computational graph drawn by TorchLens. For a course it is a ready-made source of worked drawings: show the same operation vocabulary across eight decades of designs.
 - [The same three lines on any architecture](../gallery/any_architecture.md): the trace, draw and edit calls on six architecture families from the Menagerie, the shortest proof that the tool works on whatever a student brings.
 - [Model summaries](../reference/summary.md): a one-call table of every layer with shapes and parameter counts, for the first lecture before the graph.
 

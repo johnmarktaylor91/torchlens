@@ -17,7 +17,7 @@ from torchlens._io.format3.decode import Decoder
 from torchlens._io.format3.schema import FAMILIES
 from torchlens._io.format3.values import ValueEncoder
 from torchlens._io.format_errors import ArtifactError
-from torchlens.intervention.types import Edit, FireRecord
+from torchlens.intervention._types import Edit, FireRecord
 
 
 @pytest.fixture(scope="module")

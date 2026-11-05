@@ -28,6 +28,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._records import AttentionView, EpisodeCoordinates, MaskInfo, TokenAxis
 
@@ -66,7 +67,7 @@ def _pattern_layers(generation: Any) -> list[str]:
 
     layers: list[str] = []
     for record in generation.records_at(0):
-        address = getattr(record.ctx, "address", None)
+        address = record_member(record.ctx, "address", None)
         if _is_pattern(record) and address is not None and str(address) not in layers:
             layers.append(str(address))
     return layers

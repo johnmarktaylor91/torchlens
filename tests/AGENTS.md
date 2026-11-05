@@ -95,24 +95,24 @@ set `TORCHLENS_TEST_THREADS=N` to override. Tests in `tests/test_thread_pinning.
 
 ## The smoke tier
 
-The smoke tier is a coverage-chosen subset (re-selected 2026-10-02 from about 9,900 tests):
-fastest tests that keep line coverage of `torchlens/` close to the old tier, every package
-file and public `tl.*` name smoke reaches, the Critical Invariant and validation-integrity
-tests, the classics smoke entries, enough tests to hold every package the nightly smoke-coverage
-job floors (`scripts/check_package_coverage_floors.py`) well above its floor, and every
-env-fingerprinted golden family (those enforce
-only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
+The smoke tier is a coverage-chosen subset of 250-400 cases (re-selected 2026-11-03 from the
+former tier of about 1,477 tests), measured on the pinned environment: the governance pins, the
+classics smoke entries, the cheap behaviour cells (`SMOKE_CELLS`), a validation and toy-model
+safety net, merged and intervention keepers, one public-surface test per root name no cell
+reaches, then tests chosen greedily by coverage gain until every package the nightly
+smoke-coverage job floors (`scripts/check_package_coverage_floors.py`) holds its floor. It keeps
+every env-fingerprinted golden family (those enforce only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
 `heavy` and still runs in the backstops and the nightly and weekly CI tiers. A new test stays
 unmarked unless it covers a critical path nothing in smoke reaches; the size ceiling keeps the
 tier from regrowing. The tier holds 381 tests (`tests/tiers/collection.json`, collected
-2026-11-03; per-tier counts, wall estimates and the collect commands are there).
+2026-11-04 and re-counted 2026-11-05 in the pinned environment; per-tier counts, wall estimates and the collect commands are there).
 
 Smoke runs collect only the smoke file list, the test files whose source spells `mark.smoke`
 or `mark.smoke_cells`: under `-m smoke` `tests/_tiers_plugin.py` skips every other test module
 before import (`TORCHLENS_SMOKE_PREFILTER=0` turns the skip off). `python
 scripts/tier_durations.py files --tier smoke` prints the list, recomputed from the tree on every
-call, so nothing needs regenerating. Measured 2026-11-02 on a 4-core Linux worker: smoke
-collection took about 40-45 s against about 60-65 s for the whole tree. Spell smoke marks in the
+call, so nothing needs regenerating. Measured 2026-11-05 on an 8-core Linux worker: smoke
+collection took about 32 s against about 70 s for the whole tree. Spell smoke marks in the
 test file itself, never through an imported alias or a hook: the tiers plugin fails any session
 that collects a smoke item from a file off the list, and the `tier-durations` check of
 `scripts/checks/run_all.py` fails a helper module under `tests/` that applies the mark.
@@ -123,8 +123,8 @@ commit-level gate is `python scripts/smoke_ci_parity.py [-n N]`, not a plain
 their goldens were recorded under and fail closed on any other non-CI interpreter by design,
 so a smoke run in your own venv reports those few golden tests as failures. The script builds a
 venv pinned to CI's enforcing smoke row (once, in `.venv-ci-smoke/`) and runs the workflow's
-smoke-step commands there; `tests/test_ci_packaging_gates.py` keeps its pins in lockstep with
-`tests.yml` and these docs. A smoke run off that environment ends with a `torchlens CI parity:`
+smoke-step commands there; `tests/test_ci_packaging_gates.py` keeps its pins and its pytest
+commands in lockstep with the smoke job of `.github/workflows/pr.yml` and these docs. A smoke run off that environment ends with a `torchlens CI parity:`
 line naming the differences. The `test` extra includes `tabular`, because CI installs it on
 every row and the tabular surfaces are smoke-tier paths.
 
@@ -169,6 +169,12 @@ exported as `TORCHLENS_TEST_OUTPUTS_DIR`):
 - New model class: add to `tests/example_models.py` unless the test needs a one-off local class.
 - New fields: test metadata, FIELD_ORDER consistency, pandas/export behavior when user-facing.
 - Visualization changes: run targeted render tests and inspect generated artifacts when needed.
+- Patching a name in `_render_common`, `_render_dot`, `_render_edges`, `_render_flow`,
+  `_render_leaf` or `_render_nodes`: first load `torchlens._visualization._render_entrypoints`
+  at the test module's top. These modules star-import each other; one loaded for the first time
+  while a name is patched copies the patch, `monkeypatch` never restores that copy, and the patch
+  tripwire in `tests/_leak_guards.py` fails only on xdist orderings where no earlier test on the
+  worker drew.
 - Portable I/O changes: include save/load, lazy, corruption/security, and backcompat coverage.
 - Intervention changes: test selector resolution, hook behavior, save-level behavior, and bundle
   comparisons where relevant.

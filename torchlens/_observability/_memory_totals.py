@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -32,10 +33,10 @@ def total_transformed_activation_memory(trace: Trace) -> Bytes:
 
     return Bytes(
         sum(
-            int(entry.transformed_activation_memory or 0)
+            int(entry.cost.transformed_activation_memory or 0)
             for entry in trace._layer_list
             if entry.type != "output"
-            and getattr(entry, "transformed_activation_memory", None) is not None
+            and record_member(entry, "transformed_activation_memory", None) is not None
         )
     )
 

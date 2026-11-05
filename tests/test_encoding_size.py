@@ -16,7 +16,10 @@ render pass.
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +33,7 @@ from torchlens._visualization._encoding import (
     resolve_size_by,
     resolve_size_scale,
 )
+from torchlens._visualization._encoding_size_layout import SIZE_BY_MAX_AREA_MULT
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -377,6 +381,66 @@ def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> 
         log.cleanup()
 
 
+def _laid_out_nodes(dot: str) -> dict[str, tuple[float, float, str]]:
+    """Lay ``dot`` out with Graphviz; return name -> (width, height, label) in inches."""
+
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input=dot, capture_output=True, text=True, check=True
+    ).stdout
+    return {
+        obj["name"]: (float(obj["width"]), float(obj["height"]), obj.get("label", ""))
+        for obj in json.loads(layout).get("objects", [])
+        if "width" in obj
+    }
+
+
+def _longest_row(label: str) -> int:
+    """Return the character count of the longest visible row in an HTML table label."""
+
+    return max(len(re.sub(r"<[^>]*>", "", row)) for row in label.split("</TR>"))
+
+
+def _bounding_area(dot: str) -> float:
+    """Lay ``dot`` out with Graphviz; return its bounding-box area in square points."""
+
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input=dot, capture_output=True, text=True, check=True
+    ).stdout
+    x0, y0, x1, y1 = (float(part) for part in json.loads(layout)["bb"].split(","))
+    return (x1 - x0) * (y1 - y0)
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="needs the Graphviz dot binary")
+def test_sized_drawing_stays_near_its_plain_size(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    """size_by grows a node to at most twice the typical node's area, so the drawing
+    stays near its plain size and its labels stay readable at page width.
+
+    A short-label relu and a long-label linear (its params row) share the smallest
+    value: the relu draws at its encoded size and the linear at what its text
+    needs, and the long label never widens the relu.
+    """
+
+    labels = [op.label.split(":")[0] for op in mlp_log.ops]
+    short = next(label for label in labels if label.startswith("relu"))
+    long = next(label for label in labels if label.startswith(("linear", "addmm")))
+
+    def value(node: Any) -> float:
+        return 1.0 if node.label.split(":")[0] in (short, long) else 3.0
+
+    plain = _draw(mlp_log, tmp_path / "plain")
+    sized = _draw(mlp_log, tmp_path / "sized", size_by=value)
+    assert _bounding_area(sized) <= SIZE_BY_MAX_AREA_MULT * 1.25 * _bounding_area(plain)
+    nodes = _laid_out_nodes(sized)
+    short_node = next(v for name, v in nodes.items() if name.startswith(short))
+    long_node = next(v for name, v in nodes.items() if name.startswith(long))
+    assert _longest_row(long_node[2]) >= 2 * _longest_row(short_node[2])
+    finals = {key.split(":")[0]: size for key, size in _state(mlp_log).final_sizes.items()}
+    # Graphviz lays a node out at its encoded size rounded up to whole points.
+    assert short_node[:2] == pytest.approx(finals[short], abs=1.0 / 72.0)
+    assert long_node[:2] == pytest.approx(finals[long], abs=1.0 / 72.0)
+    assert finals[long][0] > finals[short][0]
+
+
 # ---------------------------------------------------------------------------
 # C2(b) writer discipline: width/height/fixedsize node-arg emission sites
 # ---------------------------------------------------------------------------
@@ -409,9 +473,10 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
             if count:
                 found[str(path.relative_to(package_root))] = count
     expected = {
-        # Record-derived image branches (2x fixedsize) + input-batch montage
-        # (fixedsize/width/height) — non-encodable node classes.
-        "_visualization/_render_nodes.py": 5,
+        # Input-batch montage (fixedsize/width/height) — a non-encodable node
+        # class. The record-derived image branches draw a picture cell in a
+        # rounded box (``_node_boxes``) and no longer write fixedsize.
+        "_visualization/_render_nodes.py": 3,
         # Intervention-hook diamond helper (width/height in extra_attrs).
         "_visualization/_render_edges.py": 2,
         # Collapsed container-record node (fixedsize).
@@ -425,7 +490,7 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         # width/height (user overrides differ and are kept).
         "_visualization/_encoding_size_layout.py": 2,
         # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
-        "viz/feature_maps.py": 1,
+        "viz/_feature_maps.py": 1,
         # C01 architecture move: the three node-visual writer sites left
         # __init__.py for the dedicated submodule; same sites, same count.
         "repgeom/_node_visuals.py": 3,

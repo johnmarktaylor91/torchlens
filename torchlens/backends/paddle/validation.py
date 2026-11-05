@@ -9,8 +9,10 @@ from typing import Any
 import numpy as np
 
 from ... import _state
+from ..._utils._record_group_table import record_member
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from ._param_writes import PARAMETER_WRITE_MARKER
+from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
 
 _FACTORY_OR_SOURCE_OPS = {
     "arange",
@@ -155,11 +157,11 @@ def _rebuild_inputs(capture: Any, ops_by_label: Mapping[str, Any]) -> RebuiltPad
     try:
         args = tuple(
             _rebuild(item, ("args", index))
-            for index, item in enumerate(getattr(capture, "args_template", ()))
+            for index, item in enumerate(record_member(capture, "args_template", ()))
         )
         kwargs = {
             str(key): _rebuild(item, ("kwargs", str(key)))
-            for key, item in getattr(capture, "kwargs_template", {}).items()
+            for key, item in record_member(capture, "kwargs_template", {}).items()
         }
     except (AttributeError, TypeError, ValueError) as exc:
         return RebuiltPaddleInputs(False, (), {}, str(exc), {}, {})
@@ -405,8 +407,8 @@ def _perturb_parent(
     for candidate in _perturb_candidates(parent_value):
         attempted = True
         args, kwargs = _replace_template_paths(
-            tuple(getattr(capture, "args_template", ())),
-            dict(getattr(capture, "kwargs_template", {})),
+            tuple(record_member(capture, "args_template", ())),
+            dict(record_member(capture, "kwargs_template", {})),
             dict.fromkeys(paths, candidate),
             rebuilt,
         )
@@ -472,8 +474,6 @@ def _coverage_first_gap(trace: Any) -> tuple[str | None, str, str] | None:
         ``None`` when capture records conserve tensor inputs and graph parents.
     """
 
-    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
-
     # A parameter the forward wrote in place outside any wrapped op is an
     # untraced effect even when nothing reads it afterwards: fail closed.
     for marker in _capture_gap_markers(trace):
@@ -501,8 +501,6 @@ def _coverage_first_gap(trace: Any) -> tuple[str | None, str, str] | None:
 
 def _capture_input_gap(capture: Any) -> tuple[str, str] | None:
     """Return ``(reason, detail)`` for an untraced input or capture-gap marker."""
-
-    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
 
     if _is_factory_or_source_capture(capture):
         return None

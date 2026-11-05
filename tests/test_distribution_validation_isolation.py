@@ -18,17 +18,31 @@ import torch
 from _state_isolation import distribution_validation_restored
 from torch.distributions import Distribution
 
+from torchlens._utils._torch_compat import HAS_SET_STANCE
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_importing_the_compile_stance_module_keeps_distribution_validation() -> None:
-    """Collecting the compile-stance tests leaves distribution validation as found."""
+    """Collecting the compile-stance tests leaves distribution validation as found.
+
+    On a torch without ``torch.compiler.set_stance`` the module refuses at import
+    with pytest's module-level skip, before its import-time compile; the probe
+    records that outcome and still checks validation, so both torches assert the
+    isolation property.
+    """
 
     probe = (
         "import importlib\n"
+        "from _pytest.outcomes import Skipped\n"
         "from torch.distributions import Distribution\n"
         "before = Distribution._validate_args\n"
-        "importlib.import_module('tests.test_compile_set_stance')\n"
+        "try:\n"
+        "    importlib.import_module('tests.test_compile_set_stance')\n"
+        "except Skipped:\n"
+        "    print('skipped-at-import')\n"
+        "else:\n"
+        "    print('imported')\n"
         "print(before, Distribution._validate_args)\n"
     )
     result = subprocess.run(
@@ -40,7 +54,8 @@ def test_importing_the_compile_stance_module_keeps_distribution_validation() -> 
         check=False,
     )
     assert result.returncode == 0, result.stderr[-2000:]
-    before, after = result.stdout.split()[-2:]
+    outcome, before, after = result.stdout.split()[-3:]
+    assert outcome == ("imported" if HAS_SET_STANCE else "skipped-at-import"), outcome
     assert after == before, f"importing the module changed validation from {before} to {after}"
 
 

@@ -2,7 +2,7 @@
 
 Also the capture decisions a predicate returns and the records a capture
 retains (``CaptureSpec``, ``ActivationRecord``, ``GradRecord`` and kin),
-published from ``torchlens.recording.types``.
+published from ``torchlens.recording._types``.
 """
 
 from __future__ import annotations
@@ -296,7 +296,7 @@ class RecordContext:
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
 
-        from ..recording.exceptions import RecordContextFieldError
+        from ..recording._exceptions import RecordContextFieldError  # deferred: vocabulary closure
 
         raise RecordContextFieldError(name)
 
@@ -382,7 +382,7 @@ class CaptureSpec:
     def __post_init__(self) -> None:
         """Normalize and validate capture save-mode settings."""
 
-        from .._utils.tensor_utils import SAVE_MODES
+        from .._utils.tensor_utils import SAVE_MODES  # deferred: vocabulary closure
 
         if self.save_mode not in SAVE_MODES:
             raise InvalidArgumentError(
@@ -578,9 +578,9 @@ class PredicateFailure:
 
 
 # Preserve public type identity and pickle paths through the host's re-exports.
-CaptureSpec.__module__ = "torchlens.recording.types"
-StorageIntent.__module__ = "torchlens.recording.types"
-ActivationRecord.__module__ = "torchlens.recording.types"
-GradRecordContext.__module__ = "torchlens.recording.types"
-GradRecord.__module__ = "torchlens.recording.types"
-PredicateFailure.__module__ = "torchlens.recording.types"
+CaptureSpec.__module__ = "torchlens.recording._types"
+StorageIntent.__module__ = "torchlens.recording._types"
+ActivationRecord.__module__ = "torchlens.recording._types"
+GradRecordContext.__module__ = "torchlens.recording._types"
+GradRecord.__module__ = "torchlens.recording._types"
+PredicateFailure.__module__ = "torchlens.recording._types"

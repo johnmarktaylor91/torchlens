@@ -285,7 +285,7 @@ class Report:
             The rendered card.
         """
 
-        from .report._report_protocol import ReportLead, render_report_card
+        from .report._report_protocol import ReportLead, render_report_card  # deferred: cycle
 
         lead = ReportLead(
             report_type=self.report_type,
@@ -383,12 +383,17 @@ class _TableReport(Report):
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
 
-        columns = [column for column in self.finding_columns if column in self.frame.columns]
+        frame = self.frame[[c for c in self.finding_columns if c in self.frame.columns]]
+        # pandas 3 infers a text dtype and stores a missing cell (None) as NaN;
+        # the card shows it as None on every pandas, as pandas 2's object columns do.
+        text_missing = {c: frame[c].isna().tolist() for c in frame if _is_text_dtype(frame[c])}
         findings = []
-        for record in self.frame[columns].to_dict(orient="records"):
-            findings.append(
-                ", ".join(f"{key}={_cell(value, key)}" for key, value in record.items())
+        for row, record in enumerate(frame.to_dict(orient="records")):
+            cells = (
+                (key, None if key in text_missing and text_missing[key][row] else value)
+                for key, value in record.items()
             )
+            findings.append(", ".join(f"{key}={_cell(value, key)}" for key, value in cells))
         return findings
 
     def to_pandas(self) -> Any:
@@ -416,6 +421,12 @@ class _TableReport(Report):
         """One-line lead."""
 
         return f"{self.report_type}({self.subject}) status={self.status}"
+
+
+def _is_text_dtype(column: Any) -> bool:
+    """Whether a frame column has a pandas text dtype (``str`` or ``string``)."""
+
+    return str(getattr(column.dtype, "name", "")) in {"str", "string"}
 
 
 def _cell(value: Any, column: str = "") -> str:

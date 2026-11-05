@@ -62,8 +62,12 @@ from ._condensed_flow import (  # noqa: F401
     _op_func_name,
     _output_junctions,
 )
-from ._render_common import strict_collapse_checks_enabled
+from ._render_common import BoundaryNode, strict_collapse_checks_enabled
+from ._render_edges import _is_buffer_visible
+from ._render_flow import _entries_to_plot_for_context
+from ._render_nodes import _normalize_buffer_visibility
 from .collapse_plan import RenderContext, collapse_plan_for_trace, count
+from .node_universe import build_node_universe
 
 if TYPE_CHECKING:
     from .._data_classes.module import Module
@@ -293,7 +297,7 @@ def _compute_collapse_graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(str(module) for module in (op.modules or ())),
             op.func_name,
             tuple(op.shape),
-            op.io_role,
+            op.graph.io_role,
         )
         for op in trace._layer_list
     )
@@ -498,7 +502,7 @@ def collapse_order(
             remedy="pass mode='auto' or 'max'",
             argument="mode",
         )
-    from .collapse_optimizer import select_collapse_plan
+    from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
     result = select_collapse_plan(trace, RenderContext(), mode=mode)
     if result.declined:
@@ -534,7 +538,7 @@ def _v2_selected_module_scores(
 ) -> dict[str, float]:
     """Return same-shape scores derived from the v2 selected module set."""
 
-    from .collapse_optimizer import select_collapse_plan
+    from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
     if result is None:
         result = select_collapse_plan(trace, RenderContext(), mode=mode)
@@ -592,7 +596,7 @@ def resolve_collapse_fn(
             )
         if collapse == 0.0:
             return None
-        from .collapse_optimizer import select_collapse_level
+        from .collapse_optimizer import select_collapse_level  # deferred: cycle _visualization
 
         result = select_collapse_level(trace, resolved_context, collapse)
         if not result.declined:
@@ -619,7 +623,7 @@ def resolve_collapse_fn(
             argument="collapse",
         )
     if collapse in {"auto", "max"}:
-        from .collapse_optimizer import select_collapse_plan
+        from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
@@ -627,7 +631,7 @@ def resolve_collapse_fn(
             # bounded top-level overview plus an expansion manifest, never an
             # uncollapsed wall (a flat trace with no child modules has no
             # coarser legal plan and stays as it is, disclosed by the skip).
-            from .collapse_fallback import pathological_overview_fn
+            from .collapse_fallback import pathological_overview_fn  # deferred: cycle
 
             return pathological_overview_fn(trace, result.reason)
         if not result.declined:
@@ -687,7 +691,7 @@ def resolve_repeat_folds(
         return {}
     if collapse_fn is None and fold_repeats is not True:
         return {}
-    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS  # deferred: cycle _visualization
 
     if len(trace._layer_list) > COLLAPSE_OPTIMIZER_MAX_OPS:
         # Compute-ceiling parity: ``draw(fold_repeats=True)`` with
@@ -1980,21 +1984,16 @@ def _rendered_module_hidden_counts(trace: Trace, context: RenderContext) -> dict
         rendered nodes with one box contributes ``n - 1``.
     """
 
-    from ._render_common import BoundaryNode
-    from ._render_edges import _is_buffer_visible
-    from ._render_flow import _entries_to_plot_for_context
-    from ._render_nodes import _normalize_buffer_visibility
-
     absorbed_counts: dict[str, int] = defaultdict(int)
     show_buffer_layers = _normalize_buffer_visibility(context.show_buffer_layers)
     entries_to_plot = _entries_to_plot_for_context(trace, context.vis_mode)
     for node in entries_to_plot.values():
         if isinstance(node, BoundaryNode):
             continue
-        if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
+        if node.graph.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         modules = list(getattr(node, "modules", ()) or ())
-        if getattr(node, "is_atomic_module", False) and modules:
+        if getattr(getattr(node, "module_context", None), "is_atomic_module", False) and modules:
             modules = modules[:-1]
         addresses = tuple(dict.fromkeys(str(module).rsplit(":", 1)[0] for module in modules))
         for address in addresses:
@@ -2089,7 +2088,6 @@ def _run_fold_hidden_member_contributions(
         module address. Boundary nodes with no module ancestry are excluded.
     """
 
-    from .node_universe import build_node_universe
     from .source_graph import build_source_graph
 
     contributions: dict[str, int] = defaultdict(int)

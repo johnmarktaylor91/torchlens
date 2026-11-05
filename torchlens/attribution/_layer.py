@@ -11,7 +11,10 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens._plots import node_plots
 from torchlens._utils._display_errors import lookup_message
+from torchlens._utils._numpy_bridge import tensor_to_numpy
+from torchlens.attribution._cam_grid import _layer_tensor
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -43,7 +46,6 @@ from torchlens.attribution._steps import (
     _validate_step_batch_size,
 )
 from torchlens.receptive_field._viz import _blend_heatmap
-from torchlens.viz import node_plots
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 
@@ -64,12 +66,11 @@ class _LayerCapture:
     Attributes
     ----------
     activations
-        Distinct forward activations emitted by the target layer, one entry per
-        distinct output tensor object, in firing order. A module that returns
-        the very tensor object it received (``nn.Identity``) contributes one
-        entry no matter how often it fires: autograd already accumulates every
-        use of that node into one gradient, so a second entry would
-        double-count its contribution.
+        Distinct forward activations emitted by the target layer, one entry per distinct output
+        tensor object, in firing order. A module that returns the very tensor object it received
+        (``nn.Identity``) contributes one entry no matter how often it fires: autograd already
+        accumulates every use of that node into one gradient, so a second entry would double-count
+        its contribution.
     """
 
     activations: list[Tensor] = field(default_factory=list)
@@ -80,7 +81,7 @@ class _LayerCapture:
         Parameters
         ----------
         output
-            Value returned by the target layer for this firing.
+            Target layer output for this firing; a one-element tuple or list records its element.
 
         Raises
         ------
@@ -88,6 +89,7 @@ class _LayerCapture:
             If the layer emitted a non-tensor output.
         """
 
+        output = _layer_tensor(output)
         if not isinstance(output, Tensor):
             raise AttributionError("target layer must return a tensor activation")
         if not any(output is existing for existing in self.activations):
@@ -472,9 +474,8 @@ def _capture_layer_activation_for_leaves(
     Returns
     -------
     tuple[tuple[Tensor, ...], tuple[Tensor, ...] | None, Tensor]
-        Detached per-firing activations, optional aligned per-firing gradients
-        with respect to them, and the detached scalarized target value at this
-        path point.
+        Detached per-firing activations, optional aligned per-firing gradients with respect to
+        them, and the detached scalarized target value at this path point.
 
     Raises
     ------
@@ -867,13 +868,12 @@ def _cam_base_image(spatial_reference: Tensor, image: Image.Image | None) -> Ima
         channels = data[:3]
         if channels.shape[0] == 1:
             channels = channels.expand(3, -1, -1)
-        low = channels.amin()
-        high = channels.amax()
+        low, high = channels.amin(), channels.amax()
         normalized = torch.zeros_like(channels) if high == low else (channels - low) / (high - low)
-        array = (normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8).numpy()
+        array = tensor_to_numpy((normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8))
         return Image.fromarray(array, mode="RGB")
     reduced = data.abs().mean(dim=0) if data.ndim == 3 else data.abs()
-    return node_plots.heatmap(reduced.numpy(), width=width, height=height, cmap="gray")
+    return node_plots.heatmap(tensor_to_numpy(reduced), width=width, height=height, cmap="gray")
 
 
 def _cam_overlay(
@@ -908,8 +908,8 @@ def _cam_overlay(
     if not 0.0 <= alpha <= 1.0:
         raise AttributionError("alpha must be between 0 and 1")
     base = _cam_base_image(spatial_reference, image)
-    data = native_cam.detach().float().cpu().mean(dim=(0, 1))
-    heatmap = node_plots.heatmap(data.numpy(), width=base.width, height=base.height, cmap=cmap)
+    data = tensor_to_numpy(native_cam.detach().float().cpu().mean(dim=(0, 1)))
+    heatmap = node_plots.heatmap(data, width=base.width, height=base.height, cmap=cmap)
     native_height, native_width = (int(value) for value in native_cam.shape[-2:])
     disclosure = f"CAM native map: {native_height}x{native_width}; display interpolated"
     return _blend_heatmap(base, heatmap, alpha=alpha, disclosure=disclosure)

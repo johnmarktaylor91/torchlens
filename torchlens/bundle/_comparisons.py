@@ -14,11 +14,13 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._data_classes._module_edit_sites import edited_stand_in, is_mapped_replacement
 from .._errors import InvalidArgumentError
 from .._io.payload_codec import get_payload_codec
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
-from ..intervention.types import Relationship
+from .._utils._record_group_table import record_member
+from ..intervention._types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
 from ._deltas import _distance_value, _tensor_field as _read_tensor_field
 
@@ -174,7 +176,7 @@ def rank_changes(
     )
     baseline_log = self._members[baseline_name]
     scored: list[tuple[str, float]] = []
-    baseline_sites = list(baseline_log._layer_list)
+    baseline_sites = _scored_sites(baseline_log)
     if baseline_sites:  # the at() model-floor gate, once instead of per site
         names = list(self._members)
         pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
@@ -207,6 +209,12 @@ def rank_changes(
     return scored[:k]
 
 
+def _scored_sites(log: Trace) -> list[Any]:
+    """A member's ops that get a row: a module edit's replacement op is scored at the site it replaced."""
+
+    return [site for site in log._layer_list if not is_mapped_replacement(site, log)]
+
+
 def _check_rank_by(by: str) -> None:
     """Refuse a ``rank_changes(by=)`` value outside the two row kinds."""
 
@@ -222,7 +230,7 @@ def _check_rank_by(by: str) -> None:
 def _module_row_key(site: Any, site_key: str) -> str:
     """Return the module address a site belongs to, or its own key when it has none."""
 
-    address = getattr(site, "atomic_module_address", None)
+    address = record_member(site, "atomic_module_address", None)
     return address if address else site_key
 
 
@@ -266,7 +274,7 @@ def diff_members(
     # 0.0, different shapes refuse (typed) naming the site.
     rows: list[tuple[str, float]] = []
     aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
-    for left_site in left_log._layer_list:
+    for left_site in _scored_sites(left_log):
         layer_label = str(left_site.layer_label)
         label = site_row_key(left_site)
         suffix = label[len(layer_label) :]
@@ -275,8 +283,8 @@ def diff_members(
             right_sites = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             continue
-        right_site = right_sites.first()
-        left_out = _tensor_field(left_site, on)
+        right_site = edited_stand_in(right_sites.first(), right_log)
+        left_out = _tensor_field(edited_stand_in(left_site, left_log), on)
         right_out = _tensor_field(right_site, on)
         if not isinstance(left_out, torch.Tensor) or not isinstance(
             right_out,

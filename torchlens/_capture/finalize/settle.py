@@ -13,6 +13,7 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ..._output_slot import stopped
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...backends.registry import (
     CaptureBackend,
     get_backend_spec,
@@ -25,6 +26,7 @@ from ..outcome import (
     set_capture_phase,
     settle_failed,
 )
+from ..projectors import RefreshProjector
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -114,7 +116,7 @@ def _refresh_under_backward_ready(
     model_detach_saved_activations = self._options_detach_saved_activations
     model_train_mode = self._options_backward_ready
     layer_detach_saved_activations = {
-        layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
+        layer_log_entry: layer_log_entry._detach_saved_activations for layer_log_entry in self
     }
     target_detach_saved_activations = (
         False if backward_ready else self._options_detach_saved_activations
@@ -123,7 +125,7 @@ def _refresh_under_backward_ready(
         self._options_detach_saved_activations = target_detach_saved_activations
         self._options_backward_ready = backward_ready
         for layer_log_entry in layer_detach_saved_activations:
-            layer_log_entry.detach_saved_activations = target_detach_saved_activations
+            layer_log_entry._detach_saved_activations = target_detach_saved_activations
         save_new_outs(
             self,
             model=request.model,
@@ -140,7 +142,7 @@ def _refresh_under_backward_ready(
         self._options_detach_saved_activations = model_detach_saved_activations
         self._options_backward_ready = model_train_mode
         for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
-            layer_log_entry.detach_saved_activations = detach_saved_activations
+            layer_log_entry._detach_saved_activations = detach_saved_activations
 
 
 def _refresh_and_project(self: "Trace", request: _RefreshRequest) -> None:
@@ -202,7 +204,7 @@ def _run_refresh_forward(
 ) -> Any:
     """Run the internal refresh capture over the new inputs and return its trace."""
 
-    from ..._user_funcs import _run_model_and_save_specified_outs
+    from ..run_entry import _run_model_and_save_specified_outs
 
     _run_until_plan = request.run_until_plan
     staged_plan = request.staged_plan
@@ -258,8 +260,6 @@ def _project_refreshed(
     _run_until_plan: Any | None,
 ) -> None:
     """Project the refreshed capture onto ``self`` (prefix-scoped when a latch fired)."""
-
-    from ..projectors import RefreshProjector
 
     projected_layer_nums = (
         "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
@@ -398,8 +398,6 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     -------
     None. Mutates ``self.__dict__``.
     """
-
-    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     # A failed forward may leave in-flight cpu_async D2H copies whose
     # pinned host buffers escape on ``exc.partial_trace``: fence them

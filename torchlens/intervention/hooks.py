@@ -10,6 +10,7 @@ from typing import Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError
+from .._io.format_errors import ArtifactError
 from .._selection.selectors import (
     BackwardPassSelector,
     BaseSelector,
@@ -25,6 +26,8 @@ from ._facet_writes import (
     _check_facet_write_conflicts,
     _facet_fire_scope,
     _facet_home_label,
+    _facet_write_mask,
+    _fused_attention_write_remedy,
     _iter_facet_records,
     _scoped_facet_view,
 )
@@ -40,20 +43,21 @@ from ._hooks_support import (
     gradient_inner,
     make_live_site_proxy,
 )
-from .errors import (
-    HelperMountError,
-    HookSignatureError,
-    HookSiteCoverageError,
-    LiveModeLabelError,
-    SiteResolutionError,
-)
-from .types import (
+from ._masked_edit import _mask_digest
+from ._types import (
     Edit,
     FrozenTargetSpec,
     HookSpec,
     InterventionSpec,
     TargetSpec,
     TargetValueSpec,
+)
+from .errors import (
+    HelperMountError,
+    HookSignatureError,
+    HookSiteCoverageError,
+    LiveModeLabelError,
+    SiteResolutionError,
 )
 
 HookTiming: TypeAlias = Literal["pre", "post"]
@@ -819,67 +823,6 @@ def is_facet_target(site_target: Any) -> bool:
     return _facet_selector_from_target(site_target) is not None
 
 
-def _fused_attention_write_remedy(facet_name: str, *, reconstructed: bool = True) -> str:
-    """Explain why an attention-interior facet cannot be written, and what can.
-
-    Parameters
-    ----------
-    facet_name:
-        The requested facet (``pattern``, ``scores``, ``z`` or ``result``).
-    reconstructed:
-        Whether the facet is rebuilt from a fused kernel's saved arguments
-        (fused attention). ``False`` means a facet computed from captured
-        values (``result``, ``z_h @ W_O_h``), read-only on eager attention too.
-
-    Returns
-    -------
-    str
-        The cause and the remedies, for the refusal message.
-    """
-
-    if not reconstructed:
-        return (
-            f"The {facet_name!r} facet is computed from other captured values (for "
-            "'result', each head's 'z' times its slice of the output projection), so no "
-            "captured op holds it and it is read-only under every attention "
-            "implementation. Write the facet it is computed from instead: replacing a "
-            "head's 'z' replaces exactly its 'result'."
-        )
-    return (
-        f"Under fused attention (torch scaled_dot_product_attention, the transformers "
-        f"default attn_implementation='sdpa') the {facet_name!r} facet is reconstructed "
-        "read-only from the kernel's saved arguments: the kernel computes it internally, "
-        "so there is no captured tensor op to write. To write it, load the model with "
-        "attn_implementation='eager' (on a transformers model, "
-        "model.set_attn_implementation('eager')) and capture again. On the fused model "
-        "the 'q'/'k'/'v' facets (the projection outputs feeding the kernel) stay "
-        "writable, and tl.mechinterp.patch_head lowers a single head or pattern patch "
-        "exactly to the real output projection."
-    )
-
-
-def _facet_write_mask(selector: FacetSelector, spec: Any) -> torch.Tensor:
-    """Return a detached copy of ``spec``'s write mask.
-
-    A read-only attention facet (fused attention, or a reconstructed facet)
-    raises ``RuntimeError`` from ``write_mask``; that becomes a
-    ``SiteResolutionError`` naming the eager-attention remedy.
-    """
-
-    try:
-        return spec.write_mask().detach().clone()
-    except RuntimeError as exc:
-        if selector.name in {"pattern", "scores", "z", "result"}:
-            raise SiteResolutionError(
-                f"facet selector {selector!r} resolved only read-only "
-                "attention facets. "
-                + _fused_attention_write_remedy(
-                    selector.name, reconstructed=spec.capability_flags.reconstructed
-                )
-            ) from exc
-        raise
-
-
 def expand_facet_hook_entries(
     log: Any, entries: Sequence[NormalizedHookEntry]
 ) -> list[NormalizedHookEntry]:
@@ -909,13 +852,12 @@ def expand_facet_hook_entries(
             continue
         specs = _resolve_facet_specs(log, selector)
         if not specs:
-            if selector.name in {"pattern", "scores", "z", "result"}:
-                raise SiteResolutionError(
-                    f"facet selector {selector!r} matched no write-capable real tensor facets. "
-                    + _fused_attention_write_remedy(selector.name)
-                )
+            attention = selector.name in {"pattern", "scores", "z", "result"}
             raise SiteResolutionError(
-                f"facet selector {selector!r} matched 0 write-capable facets."
+                f"facet selector {selector!r} matched no write-capable real tensor facets. "
+                + _fused_attention_write_remedy(selector.name or "")
+                if attention
+                else f"facet selector {selector!r} matched 0 write-capable facets."
             )
         written: list[tuple[str, str]] = []
         for facet_name, spec in specs:
@@ -930,6 +872,9 @@ def expand_facet_hook_entries(
                 "facet_name": facet_name,
                 "facet_home_label": home_label,
                 "facet_write_mask": mask,
+                # The request a portable save persists; loading rebinds it (save.py).
+                "facet_selector": _facet_request(facet_name, selector),
+                "facet_write_mask_sha256": _mask_digest(mask),
             }
             expanded.append(
                 NormalizedHookEntry(
@@ -938,11 +883,7 @@ def expand_facet_hook_entries(
                         entry.normalized_callable,
                         spec,
                         facet_name=facet_name,
-                        selector=FacetSelector(
-                            facet_name,
-                            head_index=selector.head_index,
-                            module_address=selector.module_address,
-                        ),
+                        selector=_facet_selector_from_payload(_facet_request(facet_name, selector)),
                     ),
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
@@ -1473,6 +1414,62 @@ def _facet_selector_from_payload(payload: Any) -> FacetSelector:
     raise SiteResolutionError(f"Unsupported facet selector payload {payload!r}.")
 
 
+def _facet_request(facet_name: str, selector: FacetSelector) -> dict[str, Any]:
+    """Return the selector narrowed to one resolved facet, as a target payload."""
+
+    return {
+        "name": facet_name,
+        "head_index": selector.head_index,
+        "module_address": selector.module_address,
+    }
+
+
+def _rebound_facet_request(log: Any, hook_spec: HookSpec, where: object) -> HookSpec:
+    """Return a loaded rule; a saved facet write is rebuilt on ``log`` or refused typed."""
+
+    metadata = hook_spec.metadata
+    if not (metadata.get("facet_write") and isinstance(hook_spec.helper, Edit)):
+        return hook_spec
+    if not is_facet_target(hook_spec.site_target):
+        return hook_spec
+    entry, problem = _reproduced_facet_entry(log, hook_spec)
+    if entry is None:
+        raise ArtifactError(
+            f"The facet write on {metadata.get('facet_home_label')!r} (facet "
+            f"{metadata.get('facet_name')!r}) saved in {where} does not reproduce on the "
+            f"loaded trace: {problem}.",
+            code="facet_write_not_reproducible",
+            remedy="re-attach the facet intervention on a live trace and save again; "
+            "do not hand-edit the recipe",
+        )
+    home = TargetSpec("label", entry.metadata["facet_home_label"])
+    return HookSpec(
+        home, entry.normalized_callable, hook_spec.helper, hook_spec.handle, dict(metadata)
+    )
+
+
+def _reproduced_facet_entry(log: Any, rule: HookSpec) -> tuple[NormalizedHookEntry | None, str]:
+    """Return the re-expanded entry matching the stored facet write, or the problem."""
+
+    metadata, digest = rule.metadata, rule.metadata.get("facet_write_mask_sha256")
+    mask = metadata.get("facet_write_mask")
+    if not isinstance(mask, torch.Tensor) or _mask_digest(mask) != digest:
+        return None, "the stored write mask is missing or does not match its sha256"
+    try:
+        site = _facet_selector_from_target(rule.site_target)
+        plan = normalize_hook_plan(site, rule.helper, allow_replay_only_site_targets=True)
+        entries = expand_facet_hook_entries(log, plan)
+    except SiteResolutionError as exc:
+        return None, f"the facet selector no longer resolves ({exc})"
+    wanted = (metadata.get("facet_home_label"), metadata.get("facet_name"))
+    for entry in entries:
+        if (entry.metadata["facet_home_label"], entry.metadata["facet_name"]) == wanted:
+            if entry.metadata["facet_write_mask_sha256"] == digest:
+                return entry, ""
+            return None, "the re-resolved write mask differs from the stored one"
+    return None, "the facet selector resolves to another home op or facet"
+
+
 def _resolve_facet_specs(log: Any, selector: FacetSelector) -> list[tuple[str, Any]]:
     """Resolve a semantic facet selector against captured module facet views.
 
@@ -1571,7 +1568,7 @@ def _facet_scatter_hook(
             Full edited home-op output tensor.
         """
 
-        from .runtime import validate_hook_output
+        from ._runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
         with _facet_fire_scope(spec, selector):

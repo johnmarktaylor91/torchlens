@@ -50,30 +50,34 @@ from ._errors import (
     CaptureNotActiveError as CaptureNotActiveError,
     UserTransformError as UserTransformError,
 )
-from ._input_coerce import (
-    _reject_extra_positional_input,
-    _reject_non_mapping_input_kwargs,
-    _reject_unrouted_forward_kwargs,
-)
+from ._input_coerce import _reject_extra_positional_input, _reject_non_mapping_input_kwargs
 from ._registry._facet_snapshot import register_facet_snapshot_provider
 from ._selection.selectors import BaseSelector
 from ._trace_selector_helpers import _is_save_label_selection, _route_save_label_selection
+from ._unrouted_keywords import reject_unrouted_forward_kwargs
 from .backends.registry import (
     BackendName,
 )
 from .backends.torch.bound_root import (
     _reject_non_module_ladder_root,
 )
-from .intervention import model_door as _model_door
+from .intervention import _model_door as _model_door
+from .intervention._predicates import InterventionPredicate
 from .intervention._zero_fire import zero_fire_policy_scope
-from .intervention.predicates import InterventionPredicate
 from .options import (
     CaptureOptions,
     EpisodeOptions,
     StorageOptions,
     merge_capture_options,
 )
-from .recording.options import PredicateFn
+from .recording._options import PredicateFn
+
+#: ``trace()`` parameters that take an options object; unrouted-keyword remedies name them.
+_TRACE_OPTION_CLASSES: dict[str, type] = {
+    "capture": CaptureOptions,
+    "storage": StorageOptions,
+    "episode": EpisodeOptions,
+}
 
 
 def _facet_snapshot_provider(extra_recipes: Any) -> Any:
@@ -89,11 +93,11 @@ def _facet_snapshot_provider(extra_recipes: Any) -> Any:
     return _facets.snapshot(extra_recipes)
 
 
-register_facet_snapshot_provider(_facet_snapshot_provider)
+register_facet_snapshot_provider(_facet_snapshot_provider, replace=False)
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:
-    """Delete authenticated capture-cache entries while preserving the secret.
+    """Delete capture-cache entries; the per-user secret lives elsewhere and is kept.
 
     Parameters
     ----------
@@ -362,7 +366,7 @@ def trace(
     """
     with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
         _reject_extra_positional_input(extra_positional)
-        _reject_unrouted_forward_kwargs(forward_kwargs)
+        reject_unrouted_forward_kwargs(forward_kwargs, _TRACE_OPTION_CLASSES)
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)

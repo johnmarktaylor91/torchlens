@@ -7,7 +7,7 @@ from the op's saved operands for every reduction category (convolution,
 matmul-family, scatter-reduce fan-in, dimension reductions, scaled dot-product
 attention); depth 0 means it could not be determined and the op stays
 ineligible (fail-toward-strict). ``core`` consumes ``_op_reduction_depth`` and
-re-exports it under its original name (split out of ``validation/core.py``
+re-exports it under its original name (split out of ``validation/_core.py``
 under the file-size ratchet).
 """
 
@@ -17,6 +17,7 @@ from typing import Any
 import torch
 
 from .._data_classes.op import Op
+from .._utils._record_group_table import record_member
 
 # Reduction-category func-name groups, used only to compute the per-output
 # accumulation depth (NOT to gate eligibility -- a shallow op in any category
@@ -155,8 +156,8 @@ def _op_reduction_depth(layer: Op) -> int:
         A return of ``0`` conservatively withholds band C (fail-toward-strict).
     """
 
-    saved_args: Sequence[Any] = getattr(layer, "saved_args", None) or ()
-    saved_kwargs: dict[str, Any] = getattr(layer, "saved_kwargs", None) or {}
+    saved_args: Sequence[Any] = record_member(layer, "saved_args", None) or ()
+    saved_kwargs: dict[str, Any] = record_member(layer, "saved_kwargs", None) or {}
     func_name = layer.func_name
 
     # conv_transpose* (checked FIRST -- "conv_transpose" also startswith "conv").

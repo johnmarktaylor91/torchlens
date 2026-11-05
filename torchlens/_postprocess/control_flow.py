@@ -17,13 +17,15 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-import torch
-
 from .._data_classes.op import Op
-from .._utils.display import identity
-from .._utils.tensor_utils import safe_copy, tensor_nanequal
+from .._data_classes.trace import ConditionalEvent
+from ..backends.torch._completeness_escape_state import (
+    host_escape_bool_consumer_locations,
+    host_escape_bool_source_labels,
+)
 from . import _column_passes_graph, ast_branches
 from ._branch_attribution import _translate_conditional_stack
+from ._buffer_source_wiring import _buffer_values_identical, _wire_buffer_to_source
 
 if TYPE_CHECKING:
     from .._data_classes.trace import ConditionalEvent, Trace
@@ -111,8 +113,6 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
     predicate witness family.
     """
 
-    from ..backends.torch._completeness_escape_state import host_escape_bool_source_labels
-
     proven_labels = host_escape_bool_source_labels(self)
     # Shadow set over the list[str] ledger: the per-label list scan was
     # O(k^2) in terminated-bool count.
@@ -121,12 +121,12 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
         if label not in proven_labels:
             continue
         layer = self[label]
-        if not layer.is_scalar_bool or getattr(layer, "is_orphan", False):
+        if not layer._control_flow_is_scalar_bool or getattr(layer, "_graph_is_orphan", False):
             continue
         if label not in seen_terminated_bool_labels:
             seen_terminated_bool_labels.add(label)
             self.internally_terminated_bool_ops.append(label)
-        layer.is_terminal_bool = True
+        layer._control_flow_is_terminal_bool = True
 
 
 def _can_fast_skip_step5(self: Trace) -> bool:
@@ -176,8 +176,6 @@ def _build_file_indexes(
         file could not be parsed or loaded.
     """
 
-    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
-
     file_indexes: dict[str, ast_branches.FileIndex | None] = {}
     consumer_locations = host_escape_bool_consumer_locations(self)
     for bool_label in _iter_terminal_scalar_bool_labels(self):
@@ -185,7 +183,7 @@ def _build_file_indexes(
         for filename, _line_number in consumer_locations.get(bool_label, ()):
             if filename not in file_indexes:
                 file_indexes[filename] = ast_branches.get_file_index(filename)
-        for frame in bool_layer.code_context:
+        for frame in bool_layer._source_frames:
             if frame.file in file_indexes:
                 continue
             file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
@@ -218,8 +216,6 @@ def _classify_bool_layers(
         the bool participates in no conditional).
     """
 
-    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
-
     bool_classifications: dict[str, list[ast_branches.BoolClassification]] = {}
     ordered_conditional_keys: dict[ast_branches.ConditionalKey, None] = {}
     consumer_locations = host_escape_bool_consumer_locations(self)
@@ -235,7 +231,7 @@ def _classify_bool_layers(
         branch_classifications = _dedup_branch_classifications(observed)
 
         frame_classification: ast_branches.BoolClassification | None = None
-        for frame in reversed(bool_layer.code_context):
+        for frame in reversed(bool_layer._source_frames):
             frame_candidate = ast_branches.classify_bool(
                 frame.file,
                 frame.line_number,
@@ -276,9 +272,9 @@ def _classify_bool_layers(
         else:
             primary = ast_branches.BoolClassification("unknown", None, None, None)
 
-        bool_layer.conditional_context_kind = primary.kind
-        bool_layer.conditional_wrapper_kind = primary.wrapper_kind
-        bool_layer.is_terminal_conditional_bool = bool(branch_classifications)
+        bool_layer._control_flow_context_kind = primary.kind
+        bool_layer._control_flow_wrapper_kind = primary.wrapper_kind
+        bool_layer._control_flow_is_terminal_conditional_bool = bool(branch_classifications)
         bool_layer.terminal_conditional_id = None
         bool_classifications[bool_label] = branch_classifications
 
@@ -361,8 +357,6 @@ def _materialize_conditional_records(
     Dict[ast_branches.ConditionalKey, ConditionalEvent]
         Mapping from structural conditional key to the dense event object.
     """
-
-    from .._data_classes.trace import ConditionalEvent
 
     record_lookup = _build_conditional_record_lookup(file_indexes)
     self._graph_conditional_records = []
@@ -482,7 +476,8 @@ def _mark_conditional_branches_if_backward_flood(
     branch_bool_labels = [
         bool_label
         for bool_label in _iter_terminal_scalar_bool_labels(self)
-        if bool_classifications[bool_label] and self[bool_label].is_terminal_conditional_bool
+        if bool_classifications[bool_label]
+        and self[bool_label]._control_flow_is_terminal_conditional_bool
     ]
     # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
     _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels)
@@ -561,8 +556,8 @@ def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
         layer_label
         for layer_label in self._raw_graph_ws.raw_layer_labels_list
         if layer_label in terminal_bool_labels
-        and self[layer_label].is_scalar_bool
-        and not getattr(self[layer_label], "is_orphan", False)
+        and self[layer_label]._control_flow_is_scalar_bool
+        and not getattr(self[layer_label], "_graph_is_orphan", False)
     ]
 
 
@@ -665,37 +660,6 @@ def _merge_same_version_buffers(
         rewired_buffers.append(survivor._label_raw)
 
 
-def _buffer_values_identical(left: torch.Tensor, right: torch.Tensor) -> bool:
-    """Return whether two buffer payloads hold exactly the same values.
-
-    Buffer provenance (whether a buffer version replays as ``identity`` of its
-    source op, and whether two reads of one buffer version merge) is decided by
-    this comparison, so it must not depend on the values the forward happens to
-    reach. IEEE ``torch.equal`` reads a NaN-bearing tensor as unequal to an exact
-    copy of itself, so a model whose buffer reaches NaN from one entry state but
-    not another recorded two different graphs. This is the exact (no tolerance)
-    ``tensor_nanequal`` that validation replay checks the ``identity`` op against:
-    identical NaN and Inf positions, identical finite values, identical zero signs.
-    Meta payloads carry no values, so they never compare identical.
-
-    Parameters
-    ----------
-    left:
-        First captured buffer-side payload.
-    right:
-        Second captured buffer-side payload.
-
-    Returns
-    -------
-    bool
-        True when the payloads are exactly equal under NaN-equal semantics.
-    """
-
-    if left.is_meta or right.is_meta:
-        return False
-    return tensor_nanequal(left, right)
-
-
 def _fix_buffer_layers(self: Trace) -> None:
     """Step 6: Connect buffer sources, merge duplicates, and assign pass numbers.
 
@@ -718,42 +682,19 @@ def _fix_buffer_layers(self: Trace) -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        if layer.buffer_source is not None:
+        if layer._graph_buffer_source is not None:
             rewired_buffers.append(layer._label_raw)
-            if layer.buffer_source not in layer.parents:
-                layer.parents.append(layer.buffer_source)
-            if layer_label not in self[layer.buffer_source].children:
-                self[layer.buffer_source].children.append(layer_label)
-            self[layer.buffer_source].has_children = True
-            source_matches_buffer = _buffer_source_value_matches(
-                self[layer.buffer_source],
-                layer,
-                structure_only=bool(self._options_structure_only),
-            )
-            if source_matches_buffer:
-                layer.func = identity
-                layer.func_name = "identity"
-            else:
-                layer.buffer_replay_validated = False
-            layer.has_input_ancestor = bool(self[layer.buffer_source].has_input_ancestor)
-            layer.input_ancestors.update(self[layer.buffer_source].input_ancestors)
-            layer.root_ancestors.discard(layer._label_raw)
-            layer.root_ancestors.update(self[layer.buffer_source].root_ancestors)
-            layer.parent_arg_positions["args"][0] = layer.buffer_source
-            if (self[layer.buffer_source].out is not None) and (layer.saved_args is not None):
-                layer.saved_args.append(
-                    safe_copy(self[layer.buffer_source].out, detach_tensor=True)
-                )
+            _wire_buffer_to_source(self, layer, layer_label)
 
-        if layer.address is None:
-            equivalence_class = str(getattr(layer, "equivalence_class", ""))
+        if layer.buffer_address is None:
+            equivalence_class = str(getattr(layer, "_graph_equivalence_class", ""))
             if equivalence_class.startswith("buffer_"):
                 recovered_address = equivalence_class.removeprefix("buffer_")
                 if recovered_address and recovered_address != "None":
-                    layer.address = recovered_address
-        if layer.address is None:
-            layer.address = f"anonymous_buffer_{layer._label_raw}"
-        buffer_hash = str(layer.modules) + str(layer.buffer_source) + layer.address
+                    layer.buffer_address = recovered_address
+        if layer.buffer_address is None:
+            layer.buffer_address = f"anonymous_buffer_{layer._label_raw}"
+        buffer_hash = str(layer.modules) + str(layer._graph_buffer_source) + layer.buffer_address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
@@ -774,8 +715,8 @@ def _fix_buffer_layers(self: Trace) -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        address = layer.address
-        layer.buffer_pass = buffer_counter[address]
+        address = layer.buffer_address
+        layer._internal_set("buffer_pass", buffer_counter[address])
         self._buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1
 
@@ -829,21 +770,21 @@ def _repropagate_ancestry_after_buffer_wiring(self: Trace, rewired: list[str]) -
         input_ancestors: set[str] = {raw_label} if layer.is_input else set()
         for parent in parents:
             input_ancestors.update(parent.input_ancestors)
-        if layer.is_internal_source:
+        if layer._graph_is_internal_source:
             internal_source_ancestors = {raw_label}
         else:
             internal_source_ancestors = set()
             for parent in parents:
-                internal_source_ancestors.update(parent.internal_source_ancestors)
+                internal_source_ancestors.update(parent.graph.internal_source_ancestors)
         layer.input_ancestors = input_ancestors
-        layer.has_input_ancestor = bool(input_ancestors)
-        layer.internal_source_ancestors = internal_source_ancestors
-        layer.has_internal_source_ancestor = bool(internal_source_ancestors)
-        if not layer.is_internal_source:
-            layer.internal_source_parents = [
-                parent._label_raw for parent in parents if parent.has_internal_source_ancestor
+        layer._graph_has_input_ancestor = bool(input_ancestors)
+        layer._graph_internal_source_ancestors = internal_source_ancestors
+        layer._graph_has_internal_source_ancestor = bool(internal_source_ancestors)
+        if not layer._graph_is_internal_source:
+            layer._graph_internal_source_parents = [
+                parent._label_raw for parent in parents if parent.graph.has_internal_source_ancestor
             ]
-            layer.root_ancestors = input_ancestors | internal_source_ancestors
+            layer._graph_root_ancestors = input_ancestors | internal_source_ancestors
 
 
 def _repropagate_descendants_after_buffer_wiring(self: Trace, rewired: list[str]) -> None:
@@ -898,42 +839,7 @@ def _repropagate_descendants_after_buffer_wiring(self: Trace, rewired: list[str]
         for child in children:
             output_descendants.update(child.output_descendants)
         layer.output_descendants = output_descendants
-        layer.has_output_descendant = bool(output_descendants)
-
-
-def _buffer_source_value_matches(
-    source: Op, buffer_layer: Op, *, structure_only: bool = False
-) -> bool:
-    """Return whether a buffer-version source op output equals the full buffer value.
-
-    Structure-only captures retain no payloads, so the value comparison
-    cannot run; the verdict falls back to the DECLARED geometry (shape +
-    dtype agreement between the producer op and the buffer's write record) —
-    a hypothesis claim exactly like the shapes it rides on, corroborated or
-    refuted by discharge against a real capture (the
-    parity gate is the acceptance authority, the graph must not diverge from
-    the real capture's purely because values were unavailable).
-    """
-
-    if structure_only and (source.out is None or buffer_layer.out is None):
-        source_shape = getattr(source, "shape", None)
-        buffer_shape = getattr(buffer_layer, "shape", None)
-        return (
-            source_shape is not None
-            and buffer_shape is not None
-            and tuple(source_shape) == tuple(buffer_shape)
-            and str(getattr(source, "dtype", None)) == str(getattr(buffer_layer, "dtype", None))
-        )
-    if source.out is None or buffer_layer.out is None:
-        return False
-    if not isinstance(source.out, torch.Tensor) or not isinstance(buffer_layer.out, torch.Tensor):
-        return False
-    if tuple(source.out.shape) != tuple(buffer_layer.out.shape):
-        return False
-    try:
-        return _buffer_values_identical(source.out, buffer_layer.out)
-    except Exception:
-        return False
+        layer._graph_has_output_descendant = bool(output_descendants)
 
 
 def _merge_buffer_entries(
@@ -965,8 +871,8 @@ def _merge_buffer_entries(
         shadow = {
             "children": set(source_buffer.children),
             "parents": set(source_buffer.parents),
-            "internal_source_parents": set(source_buffer.internal_source_parents),
-            "conditional_entry_children": set(source_buffer.conditional_entry_children),
+            "internal_source_parents": set(source_buffer.graph.internal_source_parents),
+            "conditional_entry_children": set(source_buffer.control_flow.entry_children),
         }
         survivor_edge_shadows[source_buffer._label_raw] = shadow
     # The removed duplicate can never be a survivor again.
@@ -992,25 +898,24 @@ def _merge_buffer_entries(
             child_parents.remove(buffer_to_remove._label_raw)
             repointed += 1
         child_parents.extend([source_buffer._label_raw] * max(1, repointed))
-        if buffer_to_remove._label_raw in self[child_layer].internal_source_parents:
-            self[child_layer].internal_source_parents.remove(buffer_to_remove._label_raw)
-            self[child_layer].internal_source_parents.append(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in self[child_layer]._graph_internal_source_parents:
+            self[child_layer]._graph_internal_source_parents.remove(buffer_to_remove._label_raw)
+            self[child_layer]._graph_internal_source_parents.append(source_buffer._label_raw)
 
+        child_positions = self[child_layer]._call_parent_arg_positions
         for arg_type in ["args", "kwargs"]:
-            for arg_label, arg_val in self[child_layer].parent_arg_positions[arg_type].items():
+            for arg_label, arg_val in child_positions[arg_type].items():
                 if arg_val == buffer_to_remove._label_raw:
-                    self[child_layer].parent_arg_positions[arg_type][arg_label] = (
-                        source_buffer._label_raw
-                    )
+                    child_positions[arg_type][arg_label] = source_buffer._label_raw
 
     # The survivor now owns the removed duplicate's child edges, so it reaches
     # every output the duplicate reached: merge the child-direction ancestry
     # WITH the edges (symmetric with the parent-direction ancestry handling).
     # The survivor's own ANCESTORS are reconciled afterwards by
     # _repropagate_descendants_after_buffer_wiring's cone re-derivation.
-    if buffer_to_remove.has_output_descendant:
+    if buffer_to_remove.graph.has_output_descendant:
         source_buffer.output_descendants.update(buffer_to_remove.output_descendants)
-        source_buffer.has_output_descendant = True
+        source_buffer._graph_has_output_descendant = True
 
     for parent_layer in buffer_to_remove.parents:
         if parent_layer not in shadow["parents"]:
@@ -1032,23 +937,23 @@ def _merge_buffer_entries(
         if source_buffer._label_raw not in parent_children:
             parent_children.append(source_buffer._label_raw)
 
-    for parent_layer in buffer_to_remove.internal_source_parents:
+    for parent_layer in buffer_to_remove.graph.internal_source_parents:
         if parent_layer not in shadow["internal_source_parents"]:
             shadow["internal_source_parents"].add(parent_layer)
-            source_buffer.internal_source_parents.append(parent_layer)
+            source_buffer.graph.internal_source_parents.append(parent_layer)
 
     # Step 5 ran BEFORE this merge: transfer the removed duplicate's
     # conditional-parent annotations so the survivor keeps parenting the
     # branch bools / arm-entry children the duplicate parented. The matching
     # trace-level edges (conditional_branch_edges, conditional_arm_entry_edges,
     # conditional_edge_call_indices) repoint via ``replacement_labels`` in the
-    # closing reference scrub.
-    for entry_child in buffer_to_remove.conditional_entry_children:
+    # closing reference scrub (deep-hunt C3).
+    for entry_child in buffer_to_remove.control_flow.entry_children:
         if entry_child not in shadow["conditional_entry_children"]:
             shadow["conditional_entry_children"].add(entry_child)
-            source_buffer.conditional_entry_children.append(entry_child)
-    for cond_id, branch_children in buffer_to_remove.conditional_arm_children.items():
-        survivor_branches = source_buffer.conditional_arm_children.setdefault(cond_id, {})
+            source_buffer.control_flow.entry_children.append(entry_child)
+    for cond_id, branch_children in buffer_to_remove.control_flow.arm_children.items():
+        survivor_branches = source_buffer.control_flow.arm_children.setdefault(cond_id, {})
         for branch_kind, child_labels in branch_children.items():
             survivor_children = survivor_branches.setdefault(branch_kind, [])
             for child_label in child_labels:
@@ -1063,12 +968,12 @@ def _merge_buffer_entries(
     self._raw_graph_ws.raw_layer_dict.pop(buffer_to_remove._label_raw)
 
     for layer in self:
-        if buffer_to_remove._label_raw in layer.root_ancestors:
-            layer.root_ancestors.remove(buffer_to_remove._label_raw)
-            layer.root_ancestors.add(source_buffer._label_raw)
-        if buffer_to_remove._label_raw in layer.internal_source_ancestors:
-            layer.internal_source_ancestors.remove(buffer_to_remove._label_raw)
-            layer.internal_source_ancestors.add(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in layer._graph_root_ancestors:
+            layer._graph_root_ancestors.remove(buffer_to_remove._label_raw)
+            layer._graph_root_ancestors.add(source_buffer._label_raw)
+        if buffer_to_remove._label_raw in layer._graph_internal_source_ancestors:
+            layer._graph_internal_source_ancestors.remove(buffer_to_remove._label_raw)
+            layer._graph_internal_source_ancestors.add(source_buffer._label_raw)
         # Repoint any op whose scalar ``buffer_source`` still names the removed
         # buffer to the value-identical survivor. Unlike parents/children, the
         # ``buffer_source`` field (and its arg-0 mirror in ``parent_arg_positions``)
@@ -1076,9 +981,9 @@ def _merge_buffer_entries(
         # lists, so without this it dangles -- the buffer-merge analogue of the
         # campaign's "scrub removed buffer graph references" fix (e.g. speechbrain
         # CRDNN LiGRU per-forward ``drop_mask_te.to(device)`` reassign buffers).
-        if layer.buffer_source == buffer_to_remove._label_raw:
-            layer.buffer_source = source_buffer._label_raw
-            arg_positions = layer.parent_arg_positions.get("args")
+        if layer._graph_buffer_source == buffer_to_remove._label_raw:
+            layer._graph_buffer_source = source_buffer._label_raw
+            arg_positions = layer._call_parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == buffer_to_remove._label_raw:
                 arg_positions[0] = source_buffer._label_raw
 
@@ -1110,21 +1015,21 @@ def _finish_deferred_buffer_removals(
     }
     removed_labels = set(removals)
     for layer in self:
-        root_hits = layer.root_ancestors & removed_labels
+        root_hits = layer._graph_root_ancestors & removed_labels
         if root_hits:
-            layer.root_ancestors.difference_update(root_hits)
-            layer.root_ancestors.update(replacement_labels[label] for label in root_hits)
-        source_hits = layer.internal_source_ancestors & removed_labels
+            layer._graph_root_ancestors.difference_update(root_hits)
+            layer._graph_root_ancestors.update(replacement_labels[label] for label in root_hits)
+        source_hits = layer._graph_internal_source_ancestors & removed_labels
         if source_hits:
-            layer.internal_source_ancestors.difference_update(source_hits)
-            layer.internal_source_ancestors.update(
+            layer._graph_internal_source_ancestors.difference_update(source_hits)
+            layer._graph_internal_source_ancestors.update(
                 replacement_labels[label] for label in source_hits
             )
-        replacement = replacement_labels.get(layer.buffer_source)
+        replacement = replacement_labels.get(layer._graph_buffer_source)
         if replacement is not None:
-            old_source = layer.buffer_source
-            layer.buffer_source = replacement
-            arg_positions = layer.parent_arg_positions.get("args")
+            old_source = layer._graph_buffer_source
+            layer._graph_buffer_source = replacement
+            arg_positions = layer._call_parent_arg_positions.get("args")
             if arg_positions is not None and arg_positions.get(0) == old_source:
                 arg_positions[0] = replacement
 

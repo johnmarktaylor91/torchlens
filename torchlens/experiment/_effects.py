@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
@@ -74,7 +74,7 @@ class EffectsView:
             ``grid_result_shape_mismatch`` when rows and axes disagree.
         """
 
-        from ._grid import grid_from_effects
+        from ._grid import grid_from_effects  # deferred: cycle experiment
 
         return grid_from_effects(self)
 

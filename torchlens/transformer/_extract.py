@@ -25,6 +25,7 @@ from typing import Any
 import torch
 
 from .._semantic.recipes._helpers import relays_wrapped_core
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError
 from ._errors import refuse
 from ._generation_attention import generation_attention_view
@@ -58,7 +59,7 @@ def _modules_with_pattern(trace: Any) -> list[str]:
     return [
         str(module.address)
         for module in getattr(trace, "modules", ())
-        if getattr(module, "address", None) != "self"
+        if record_member(module, "address", None) != "self"
         and _has_facet(module, "pattern")
         and not relays_wrapped_core(module, "pattern")
     ]
@@ -77,7 +78,8 @@ def _pattern_tensor(trace: Any, address: str, batch_index: int) -> tuple[torch.T
             message=f"The pattern facet at {address!r} did not resolve to a tensor "
             f"({type(value).__name__}); its payload was not captured.",
             remedy="recapture with the attention ops saved (the default exhaustive save "
-            "suffices; for fused kernels trace with capture=tl.options.CaptureOptions(reconstruction_ready=True))",
+            "suffices, fused kernels included; a selective save that skips the fused "
+            "kernel's inputs needs capture=tl.options.CaptureOptions(reconstruction_ready=True))",
             address=address,
         )
     if value.ndim != 4:
@@ -97,14 +99,14 @@ def _mask_from_sdpa(module: Any, n_dst: int, n_src: int, batch_index: int) -> Ma
     """Mask source 1: recorded SDPA call arguments."""
 
     try:
-        from .._semantic.reconstruction import find_sdpa_op
+        from .._semantic.reconstruction import find_sdpa_op  # deferred: optional dependency
     except ImportError:
         return None
     op = find_sdpa_op(module)
     if op is None:
         return None
-    kwargs = dict(getattr(op, "saved_kwargs", {}) or {})
-    args = list(getattr(op, "saved_args", ()) or ())
+    kwargs = dict(record_member(op, "saved_kwargs", {}) or {})
+    args = list(record_member(op, "saved_args", ()) or ())
     attn_mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
     if isinstance(attn_mask, torch.Tensor):
         masked = _masked_positions(attn_mask, n_dst, n_src, batch_index)
@@ -456,8 +458,8 @@ def attention_views(  # noqa: PLR0913 -- same record-shaped surface, list form
         refuse(
             code="tv_facet_missing",
             message="No module in this trace exposes an attention pattern facet.",
-            remedy="capture a transformer forward (eager attention captures directly; "
-            "fused kernels need tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))), or check "
+            remedy="capture a transformer forward (eager attention captures directly and "
+            "fused SDPA attention is reconstructed on a default capture), or check "
             "tl.report.doctor(model, x)",
         )
     return [

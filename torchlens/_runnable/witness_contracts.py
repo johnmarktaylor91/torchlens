@@ -8,6 +8,8 @@ from typing import Any
 
 import torch
 
+from torchlens._input_walk import _instance_fields, declares_namedtuple_fields
+
 from .._ir.container import (
     ContainerSpec,
     get_registered_container,
@@ -17,6 +19,7 @@ from .._ir.distribution_container import (
     distribution_children,
     is_distribution,
 )
+from .._utils._torch_compat import torch_structseq_field_names
 from . import (
     ControlWitness,
     ControlWitnessKind,
@@ -62,6 +65,7 @@ def _hybrid_registered_flatten_children(value: Any) -> list[Any] | None:
 
     if not isinstance(value, (Mapping, list, tuple)):
         return None
+
     registration = get_registered_container(type(value))
     if registration is None:
         return None
@@ -388,8 +392,6 @@ def _container_field_names(value: Any) -> tuple[str, ...]:
         not a field-addressable container.
     """
 
-    from torchlens._input_walk import _instance_fields, declares_namedtuple_fields
-
     if not isinstance(value, tuple):
         return ()
     if declares_namedtuple_fields(value):
@@ -417,8 +419,6 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         Public structseq field names, or an empty tuple when ``value`` is not
         a fully named ``torch.return_types`` value.
     """
-
-    from .._utils._torch_compat import torch_structseq_field_names
 
     return torch_structseq_field_names(value)
 

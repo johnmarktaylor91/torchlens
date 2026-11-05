@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
+from .._io import ArtifactError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -59,7 +60,7 @@ def _check_op_ref(ref: Any, ops: list[Any], *, row_label: str) -> None:
         )
     op = ops[ref.op_row_index]
     actual_label = getattr(op, "layer_label", None)
-    actual_func_call_id = getattr(op, "func_call_id", None)
+    actual_func_call_id = record_member(op, "func_call_id", None)
     if actual_label != ref.op_label or actual_func_call_id != ref.func_call_id:
         _primitive_failure(
             f"{row_label} parent OpRef witnesses disagree with dense row {ref.op_row_index}"
@@ -422,7 +423,7 @@ def _check_partition_values(owner_rows: list[Any], ops: list[Any]) -> None:
         return
     for op in _owning_compute_ops(owner_rows[0].parent_op_refs, ops):
         target = getattr(op, "out", None)
-        if getattr(op, "is_buffer", False) or not getattr(op, "has_saved_activation", False):
+        if record_member(op, "is_buffer", False) or not getattr(op, "has_saved_activation", False):
             continue
         if not isinstance(target, torch.Tensor):
             continue
@@ -487,8 +488,6 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
         With ``primitive_op_schema_invalid`` or ``primitive_op_fk_invalid``.
     """
 
-    from .._io import ArtifactError
-
     profile = getattr(trace, "_primitive_op_profile", None)
     if profile is None:
         return
@@ -518,7 +517,8 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
 
 # Bottom import: the hub defines this error before it imports its split modules.
-from .invariants import MetadataInvariantError  # noqa: E402
+from .._utils._record_group_table import record_member  # noqa: E402
+from ._invariants import MetadataInvariantError  # noqa: E402
 
 __all__ = [
     "_check_aten_values_consistent",

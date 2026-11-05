@@ -20,6 +20,7 @@ from .._pass_tokens import split_pass_token
 from .._utils._display_collections import collection_repr
 from .._utils._display_errors import lookup_message
 from .._utils._display_keys import display_key
+from .._utils._record_group_table import record_member
 from .._utils.fail_open import fail_open
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
@@ -233,7 +234,7 @@ class LayerAccessor(Accessor["Layer"]):
         for layer in self._list:
             kind = "op"
             for candidate in ("input", "output", "buffer"):
-                if getattr(layer, f"is_{candidate}", False):
+                if record_member(layer, f"is_{candidate}", False):
                     kind = candidate
                     break
             counts[kind] += 1

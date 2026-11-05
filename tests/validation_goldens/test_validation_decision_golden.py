@@ -11,8 +11,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.options import CaptureOptions
-from torchlens.validation.status import ValidationStatus
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
@@ -534,7 +534,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         torch.zeros_like(relu_pass.out),
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    edited.run(intervention, x_intervention)
+    edited = edited.run(intervention, x_intervention)
 
     torch.manual_seed(15)
     empty_like = TinyEmptyLike().eval()

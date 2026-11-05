@@ -8,6 +8,7 @@ from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ._backward_inventory import (
     BackwardStyleInventory,
     _backward_dot_call_node_name,
@@ -21,7 +22,9 @@ from ._branch_label_text import (
     _format_branch_edge_label_html,
     _format_branch_kind_text,
 )
+from ._forward_op_module import _module_key_for_forward_op
 from ._render_common import *
+from ._render_node_parts import _compact_int_ranges
 from ._typography import DEFAULT_TYPOGRAPHY, edge_annotation_pt
 
 # the opt-in backward rows of the ``draw_backward`` call being rendered
@@ -436,66 +439,6 @@ def _module_key_for_grad_fn(
     )
 
 
-def _forward_op_is_module_output(op: "Layer") -> bool:
-    """Resolve ``is_module_output`` for a forward op, aggregate-safe on recurrent Layers.
-
-    ``is_module_output`` is a per-pass field whose access raises the multi-pass
-    ``ValueError`` tripwire on a recurrent aggregate ``Layer`` (this is what
-    detonated ``draw_combined`` on any recurrent model). Module-output status is a
-    static containment property, so -- matching how the sibling module fields
-    ``output_of_modules`` / ``modules`` are already stored aggregate-as-first-pass
-    on the Layer -- resolve it explicitly from the first captured pass instead of
-    leaking the tripwire out of the public combined renderer.
-
-    Parameters
-    ----------
-    op:
-        Forward ``Op`` or aggregate ``Layer`` paired with a grad_fn.
-
-    Returns
-    -------
-    bool
-        Whether the forward op is a module output.
-    """
-
-    if is_multipass_layer(op):
-        ops = getattr(op, "ops", None)
-        if ops is not None:
-            first_pass = next(iter(ops.values()), None)
-            if first_pass is not None:
-                return bool(getattr(first_pass, "is_module_output", False))
-        return False
-    return bool(get_multipass_attr(op, "is_module_output", False, multipass=False))
-
-
-def _module_key_for_forward_op(op: "Layer") -> str | None:
-    """Return the unrolled module cluster key for a forward op.
-
-    Parameters
-    ----------
-    op:
-        Forward operation or layer log associated with a grad_fn_handle.
-
-    Returns
-    -------
-    str | None
-        Module-call key or None for top-level ops.
-    """
-
-    output_modules = list(getattr(op, "output_of_modules", []) or [])
-    if _forward_op_is_module_output(op) and output_modules:
-        output_module = str(output_modules[0])
-        output_calls = list(getattr(op, "output_of_module_calls", []) or [])
-        for output_call in output_calls:
-            if str(output_call).split(":", 1)[0] == output_module:
-                return str(output_call)
-        return f"{output_module}:1"
-    modules = list(getattr(op, "modules", []) or [])
-    if not modules:
-        return None
-    return str(modules[-1])
-
-
 def _param_module_for_accumulate_grad(trace: "Trace", grad_fn_handle: "GradFn") -> str | None:
     """Return an unambiguous owning module for an AccumulateGrad node.
 
@@ -679,7 +622,7 @@ def _compute_backward_node_lines(
         lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
     rows = _BACKWARD_ROWS.get()
     if rows is not None:
-        from ._backward_rows import backward_opt_in_rows
+        from ._backward_rows import backward_opt_in_rows  # deferred: cycle _visualization
 
         lines.extend(backward_opt_in_rows(grad_fn_handle, call, rows))
     return lines
@@ -815,7 +758,7 @@ def _add_collapsed_container_node(
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
-    label_lines = [f"{kind} x{len(leaves)}", shape]
+    label_lines = [f"{kind} x{len(leaves):,}", shape]
     if label_lines_sink is not None:
         label_lines_sink[node_name] = label_lines
     pending_nodes.append(
@@ -955,7 +898,7 @@ def _collapse_address_for_node(
     # account, even at the top level or when reused across split call sites. Drop
     # its innermost (own) module address so only genuinely-collapsible ancestor
     # modules remain eligible to absorb it.
-    if getattr(node, "is_atomic_module", False) and modules:
+    if record_member(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return None
@@ -1093,36 +1036,6 @@ def _run_fold_representative_names(
         )
         for fold in _unique_repeat_folds(repeat_folds)
     }
-
-
-def _compact_int_ranges(values: Sequence[int]) -> str:
-    """Return sorted integers in compact range notation.
-
-    Parameters
-    ----------
-    values:
-        Integer values to format.
-
-    Returns
-    -------
-    str
-        Comma-separated values and ranges, for example ``"1,2-4"``.
-    """
-
-    if not values:
-        return ""
-    sorted_values = sorted(set(values))
-    ranges: list[str] = []
-    start = sorted_values[0]
-    previous = sorted_values[0]
-    for value in sorted_values[1:]:
-        if value == previous + 1:
-            previous = value
-            continue
-        ranges.append(str(start) if start == previous else f"{start}-{previous}")
-        start = previous = value
-    ranges.append(str(start) if start == previous else f"{start}-{previous}")
-    return ",".join(ranges)
 
 
 def _module_address_and_call(module_call: str) -> tuple[str, int] | None:
@@ -2094,7 +2007,7 @@ def _node_gradient_passes(layer: Any) -> set[int]:
         for pass_log in ops.values():
             pass_indices.update(_node_gradient_passes(pass_log))
         return pass_indices
-    grads = getattr(layer, "grads", None)
+    grads = record_member(layer, "grads", None)
     if grads is None:
         return set()
     return {

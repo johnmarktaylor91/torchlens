@@ -24,6 +24,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._selection.selection import Selector
+from .._selection.selectors import BaseSelector
 
 __tl_layer__ = "L5"
 
@@ -95,8 +97,6 @@ def _is_selector(value: Any) -> bool:
         instances.
     """
 
-    from .._selection.selectors import BaseSelector
-
     return isinstance(value, BaseSelector)
 
 
@@ -151,8 +151,6 @@ def is_selector_request(layers: Any) -> bool:
         string lookups and selectors (one request resolves through one
         door).
     """
-
-    from .._selection.selection import Selector
 
     if isinstance(layers, Selector):
         _refuse_partial_units(layers)
@@ -229,9 +227,11 @@ def _resolve_one_selector(
         Ordered ``(pass_qualified_label, site_key, out)`` saved-site rows.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
-    trace = tl.trace(model, envelope_args, input_kwargs=envelope_kwargs or None, save=selector)
+    trace = _capture_trace(
+        model, envelope_args, input_kwargs=envelope_kwargs or None, save=selector
+    )
     return _saved_sites(trace)
 
 
@@ -265,7 +265,7 @@ def _saved_sites(trace: Any, selector: Any = None) -> list[tuple[str, str | None
             continue
         site_key: str | None
         try:
-            site_key = str(op.site_key)
+            site_key = str(op.graph.site_key)
         except Exception:  # noqa: BLE001 - keyless legacy grouping stays plan-comparable by label
             site_key = None
         sites.append((str(op.label), site_key, op.out))
@@ -360,7 +360,7 @@ def _resolve_mapping_sites(
         Per-key ordered site rows.
     """
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     selectors = {str(key): value for key, value in layers.items()}
     if len(selectors) == 1:
@@ -373,7 +373,9 @@ def _resolve_mapping_sites(
     except Exception:  # noqa: BLE001 - OR-refusing selectors fall back to per-key captures
         union = None
     if union is not None:
-        trace = tl.trace(model, envelope_args, input_kwargs=envelope_kwargs or None, save=union)
+        trace = _capture_trace(
+            model, envelope_args, input_kwargs=envelope_kwargs or None, save=union
+        )
         return {key: _saved_sites(trace, selector) for key, selector in selectors.items()}
     return {
         key: _resolve_one_selector(model, envelope_args, envelope_kwargs, selector)

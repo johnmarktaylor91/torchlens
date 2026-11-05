@@ -8,12 +8,14 @@ pre-forward closure/forward-global tensor (disclosed and persisted as a
 :func:`collect_pre_forward_tensor_ids` takes before the forward runs.
 """
 
-from typing import TYPE_CHECKING
+import weakref
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
 
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
+from ._held_late_index import ROOT_MODEL_KEY
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -46,8 +48,8 @@ def collect_pre_forward_tensor_ids(
     """
 
     from .model_prep import (
-        _clear_callable_session_tensor_metadata,
         _clear_module_attribute_tensor_metadata,
+        _clear_module_callables_tensor_metadata,
     )
 
     owned: dict[int, torch.Tensor] = {}
@@ -70,10 +72,33 @@ def collect_pre_forward_tensor_ids(
     for submodule in submodules:
         _clear_module_attribute_tensor_metadata(submodule, seen, visit=_note)
     for submodule in submodules:
-        _clear_callable_session_tensor_metadata(
-            getattr(submodule, "forward", None), seen, visit=_note_callable
-        )
+        _clear_module_callables_tensor_metadata(submodule, seen, visit=_note_callable)
     return owned, frozenset(callable_only)
+
+
+def pre_forward_snapshot_build_data(model: nn.Module) -> dict[str, Any]:
+    """Return the ``module_build_data`` entries of the pre-forward ownership snapshot.
+
+    Parameters
+    ----------
+    model
+        The prepared root model.
+
+    Returns
+    -------
+    dict[str, Any]
+        The pinned ``id -> tensor`` snapshot, the forward-callable-only id subset,
+        and a weak reference to ``model`` from which
+        ``_held_late_index`` derives held addresses for snapshot tensors the
+        preparation scan did not stamp.
+    """
+
+    owned, callable_only = collect_pre_forward_tensor_ids(model)
+    return {
+        "model_owned_tensor_ids_at_entry": owned,
+        "forward_outside_tensor_ids_at_entry": callable_only,
+        ROOT_MODEL_KEY: weakref.ref(model),
+    }
 
 
 def is_forward_closure_constant(trace: "Trace", t: torch.Tensor) -> bool:

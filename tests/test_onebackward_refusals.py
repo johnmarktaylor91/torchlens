@@ -15,7 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -299,7 +299,7 @@ class TestPopulationContract:
         # A site absent from the trace is normally refused by the selection
         # algebra before the read sees it, so the read-level guard is pinned
         # directly through a hand-built population:
-        from torchlens.attribution.onebackward._read import (
+        from torchlens.attribution._onebackward._read import (
             _explicit_preflight,
             _SitePayloads,
         )
@@ -433,7 +433,7 @@ class TestTorchBandGate:
     """The capability gate refuses typed when GradientEdge is absent."""
 
     def test_refusal_when_flag_is_off(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _accessor
+        from torchlens.attribution._onebackward import _accessor
 
         monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
@@ -441,6 +441,105 @@ class TestTorchBandGate:
             lambda: ob.read_edge_index(trace),
             "onebackward_torch_unsupported",
         )
+
+
+class TestDocRunnerRoute:
+    """The doc runners' route: only the named refusal, only without the capability."""
+
+    def test_product_refusal_is_recorded_without_gradient_edge(self, monkeypatch) -> None:
+        """The product's own refusal is what the route records when the flag is off."""
+
+        from tests.support import capability_routes as routes
+        from torchlens.attribution._onebackward import _accessor
+
+        monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: False)
+        trace = _trace()
+        with routes.capability_route("HAS_GRADIENT_EDGE") as outcome:
+            ob.read_edge_index(trace)
+        assert outcome.route is routes.ROUTES["HAS_GRADIENT_EDGE"]
+        assert isinstance(outcome.refusal, ob.ReadError)
+        assert outcome.refusal.fields["code"] == "onebackward_torch_unsupported"
+
+    def test_clean_body_runs_to_the_end(self, monkeypatch) -> None:
+        """A body that raises nothing completes and records no refusal."""
+
+        from tests.support import capability_routes as routes
+
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: False)
+        ran = []
+        with routes.capability_route() as outcome:
+            ran.append(True)
+        assert ran == [True] and outcome.refusal is None and outcome.route is None
+
+    def test_other_codes_and_errors_still_raise(self, monkeypatch) -> None:
+        """Another ReadError code, or any other exception, propagates."""
+
+        from tests.support import capability_routes as routes
+
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: False)
+        with pytest.raises(ob.ReadError) as excinfo:
+            with routes.capability_route():
+                raise ob.ReadError("probe", code="read_option_invalid")
+        assert excinfo.value.fields["code"] == "read_option_invalid"
+        with pytest.raises(RuntimeError, match="unrelated"):
+            with routes.capability_route():
+                raise RuntimeError("unrelated")
+        with pytest.raises(KeyError, match="HAS_NOT_A_FLAG"):
+            with routes.capability_route("HAS_NOT_A_FLAG"):
+                pass
+
+    def test_nothing_is_accepted_with_gradient_edge(self, monkeypatch) -> None:
+        """With GradientEdge present even the refusal propagates."""
+
+        from tests.support import capability_routes as routes
+
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: True)
+        refusal = ob.ReadError("probe", code="onebackward_torch_unsupported")
+        assert not routes.accepts_capability_refusal(refusal)
+        with pytest.raises(ob.ReadError) as excinfo:
+            with routes.capability_route():
+                raise refusal
+        assert excinfo.value.fields["code"] == "onebackward_torch_unsupported"
+
+    def test_only_the_routed_type_and_code_are_accepted_without_the_flag(self, monkeypatch) -> None:
+        """With the flag off, acceptance needs the ROUTES type AND code, nothing looser."""
+
+        from tests.support import capability_routes as routes
+
+        class _Lookalike(Exception):
+            """Carries the routed code but is not the routed error type."""
+
+            fields = {"code": "onebackward_torch_unsupported"}
+
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: False)
+        assert routes.accepts_capability_refusal(
+            ob.ReadError("probe", code="onebackward_torch_unsupported")
+        )
+        assert not routes.accepts_capability_refusal(
+            ob.ReadError("probe", code="read_option_invalid")
+        )
+        assert not routes.accepts_capability_refusal(_Lookalike("probe"))
+        assert not routes.accepts_capability_refusal(RuntimeError("onebackward_torch_unsupported"))
+
+    def test_another_missing_flag_does_not_admit_this_refusal(self, monkeypatch) -> None:
+        """A refusal is accepted only through its own flag: another absent flag cannot."""
+
+        from tests.support import capability_routes as routes
+
+        absent = routes.CapabilityRoute(
+            flag="HAS_PROBE_ONLY",
+            present=lambda: False,
+            refusal=routes.typed_refusal(ob.ReadError, "read_option_invalid"),
+        )
+        monkeypatch.setitem(routes.ROUTES, "HAS_PROBE_ONLY", absent)
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: True)
+        gradient_edge_refusal = ob.ReadError("probe", code="onebackward_torch_unsupported")
+        assert not routes.accepts_capability_refusal(gradient_edge_refusal)
+        with pytest.raises(ob.ReadError):
+            with routes.capability_route("HAS_PROBE_ONLY"):
+                raise gradient_edge_refusal
+        assert routes.accepts_capability_refusal(ob.ReadError("probe", code="read_option_invalid"))
 
 
 class TestTypedDoorProvocations:
@@ -452,7 +551,7 @@ class TestTypedDoorProvocations:
     """
 
     def test_onebackward_torch_unsupported(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _accessor
+        from torchlens.attribution._onebackward import _accessor
 
         monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
@@ -603,7 +702,7 @@ class TestTypedDoorProvocations:
 
     @_requires_gradient_edge
     def test_read_engine_call_drift(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _engine
+        from torchlens.attribution._onebackward import _engine
 
         monkeypatch.setattr(_engine.math, "ceil", lambda value: 2)
         trace = _trace()
@@ -612,7 +711,7 @@ class TestTypedDoorProvocations:
         assert excinfo.value.fields["code"] == "read_engine_call_drift"
 
     def test_batched_attribution_unsupported(self) -> None:
-        from torchlens.attribution.onebackward._engine import _translate_engine_error
+        from torchlens.attribution._onebackward._engine import _translate_engine_error
 
         translated = _translate_engine_error(
             RuntimeError("Batching rule not implemented for aten::special_op"),

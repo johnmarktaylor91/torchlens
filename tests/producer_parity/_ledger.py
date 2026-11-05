@@ -166,10 +166,10 @@ def step0_trace_read_recorder() -> Iterator[set[str]]:
             observed.add(name)
         return original_getattribute(self, name)
 
-    def observing(trace: Any, events: Any) -> None:
+    def observing(trace: Any, events: Any, *rest: Any) -> None:
         recording_active[0] = True
         try:
-            original_direct(trace, events)
+            original_direct(trace, events, *rest)
         finally:
             recording_active[0] = False
 

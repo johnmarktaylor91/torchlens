@@ -58,7 +58,6 @@ from ._resolve import (
     resolve_lens,
 )
 from ._roster import (
-    COMPOSITIONS,
     CORE_LENSES,
     EXTENDED_LENSES,
     LENS_SUBJECTS,
@@ -71,7 +70,6 @@ __all__ = [
     "BAND_FLOOR",
     "BAND_TARGET",
     "BRIDGED_EDGE_LEGEND_LINE",
-    "COMPOSITIONS",
     "CORE_LENSES",
     "COVERAGE_FLOOR",
     "EXTENDED_LENSES",

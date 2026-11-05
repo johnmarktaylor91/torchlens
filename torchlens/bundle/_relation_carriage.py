@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._compare_gate import _ORDERING_RELATION_KINDS
 from ._fed_by import FED_BY_KIND, settle_fed_by_params
 from ._relations import (

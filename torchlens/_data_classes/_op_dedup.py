@@ -30,6 +30,32 @@ if TYPE_CHECKING:
 IdentityCacheEntry = tuple[weakref.ref[torch.Tensor], str, torch.Tensor, int | None, int]
 
 
+class _IdentityDedupCache(dict[int, IdentityCacheEntry]):
+    """Per-pass identity dedup cache that also issues the dense source ordinals.
+
+    The cache is keyed by ``id()``, and a new tensor at a dead source's
+    address replaces that slot without growing the cache. Ordinals therefore
+    come from ``issued``, the count handed out since the cache was created or
+    last cleared, never from the cache size: each source gets a fresh ordinal
+    in capture order, whatever the heap reuses.
+    """
+
+    def __init__(self, entries: dict[int, IdentityCacheEntry] | None = None) -> None:
+        """Adopt ``entries``, issuing after the highest ordinal they hold."""
+        super().__init__(entries or {})
+        self.issued = max((entry[4] for entry in self.values()), default=0)
+
+    def clear(self) -> None:
+        """Drop every slot and restart the ordinals (a new pass)."""
+        super().clear()
+        self.issued = 0
+
+    def next_ordinal(self) -> int:
+        """Return the next unused dense ordinal."""
+        self.issued += 1
+        return self.issued
+
+
 def _tensor_content_hash(value: torch.Tensor) -> str:
     """Return a CPU content hash for a tensor.
 
@@ -146,6 +172,30 @@ def _dedup_cached_identity_out(
     return None
 
 
+def _ordinal_identity_cache(trace: "Trace") -> _IdentityDedupCache:
+    """Return ``trace``'s identity dedup cache, adopting a plain dict on first use.
+
+    Parameters
+    ----------
+    trace:
+        Trace that owns the per-pass dedup caches.
+
+    Returns
+    -------
+    _IdentityDedupCache
+        The trace's cache, now able to issue ordinals.
+    """
+
+    try:
+        identity_cache = trace._out_identity_cache
+    except AttributeError:
+        identity_cache = None
+    if not isinstance(identity_cache, _IdentityDedupCache):
+        identity_cache = _IdentityDedupCache(identity_cache)
+        trace._out_identity_cache = identity_cache
+    return identity_cache
+
+
 def _dedup_saved_activation_out(
     trace: "Trace | None",
     source_tensor: torch.Tensor,
@@ -211,14 +261,7 @@ def _dedup_saved_activation_out(
         hash_cache[out_hash] = (label, raw_out)
         return raw_out
 
-    try:
-        identity_cache = trace._out_identity_cache
-    except AttributeError:
-        identity_cache = None
-    if identity_cache is None:
-        identity_cache = {}
-        trace._out_identity_cache = identity_cache
-
+    identity_cache = _ordinal_identity_cache(trace)
     source_key = id(source_tensor)
     # TorchLens's OWN dedup-bookkeeping ``_version`` read runs under the explicit
     # internal-read marker so the state-metadata property observer never mistakes it
@@ -231,22 +274,23 @@ def _dedup_saved_activation_out(
     with internal_scalar_read():
         source_version = tensor_version_or_none(source_tensor)
     cached = identity_cache.get(source_key)
+    if cached is not None and cached[0]() is not source_tensor:
+        # F20 W1a: weak source slot (see _dedup_cached_identity_out). A dead
+        # referent means a new tensor reused the address: a new source.
+        cached = None
     if cached is not None:
-        cached_source_ref, cached_label, cached_out, cached_version, cached_ordinal = cached
-        # W1a: weak source slot -- see _dedup_cached_identity_out.
-        cached_source = cached_source_ref()
-        if cached_source is source_tensor and cached_version == source_version:
-            # dense trace-local ordinal, never the raw ``id()``.
+        _, cached_label, cached_out, cached_version, cached_ordinal = cached
+        if cached_version == source_version:
+            # B3R4-R21-1: dense trace-local ordinal, never the raw ``id()``.
             annotations["dedup_source_id"] = cached_ordinal
             annotations["dedup_source_version"] = source_version
             annotations["dedup_reference_label"] = cached_label
             return cached_out
 
-    # Dense ordinal in cache-insertion (execution) order: deterministic across
-    # processes for the same captured program, unlike the ``id()`` slot key. A
-    # replaced slot (id reuse after a mismatch) keeps its original ordinal so
-    # ordinals stay unique within the cache.
-    ordinal = cached[4] if cached is not None else len(identity_cache) + 1
+    # Dense ordinal in first-save order from the cache's own counter, so it is
+    # the same in any process and heap state; the same live source at a new
+    # ``_version`` keeps its ordinal (the version tells the saves apart).
+    ordinal = cached[4] if cached is not None else identity_cache.next_ordinal()
     identity_cache[source_key] = (
         weakref.ref(source_tensor),
         label,

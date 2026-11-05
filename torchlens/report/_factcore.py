@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from ._compute_truth import ComputeAggregation, compute_aggregation
 
 if TYPE_CHECKING:
@@ -302,10 +303,10 @@ def _counts(trace: Any) -> CountsRecord:
         for op in ops
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
     compute_ops = len(ops) - alias_rows
-    site_keys = {site for op in ops if (site := getattr(op, "site_key", None)) is not None}
+    site_keys = {site for op in ops if (site := record_member(op, "site_key", None)) is not None}
     return CountsRecord(
         compute_ops=compute_ops,
         tracked_tensor_rows=len(ops),
@@ -323,7 +324,7 @@ def _identity(trace: Any) -> IdentityIndex:
     ops = list((trace._layer_list if is_live_trace(trace) else None) or ())
     op_labels = tuple(str(getattr(op, "label", getattr(op, "layer_label", "?"))) for op in ops)
     op_layers = tuple(str(getattr(op, "layer_label", "?")) for op in ops)
-    op_sites = tuple(getattr(op, "site_key", None) for op in ops)
+    op_sites = tuple(record_member(op, "site_key", None) for op in ops)
     modules = getattr(trace, "modules", {}) or {}
     module_calls = getattr(trace, "module_calls", {}) or {}
     return IdentityIndex(
@@ -375,7 +376,7 @@ def _param_bytes(trace: Any) -> int | None:
         return None if getattr(trace, "num_params", None) is None else 0
     total = 0
     for param in params:
-        memory = getattr(param, "param_memory", None)
+        memory = record_member(param, "param_memory", None)
         if memory is None:
             return None
         total += int(memory)
@@ -403,12 +404,12 @@ def _pruned_params(trace: Any) -> PrunedParamFacts | None:
 
     buffers: dict[str, Any] = {}
     for buffer in getattr(trace, "buffers", ()) or ():
-        buffers[str(getattr(buffer, "address", ""))] = buffer
+        buffers[str(record_member(buffer, "address", ""))] = buffer
     paths: list[str] = []
     raw = 0
     masked: int | None = 0
     for param in getattr(trace, "params", ()) or ():
-        address = str(getattr(param, "address", ""))
+        address = str(record_member(param, "address", ""))
         if not address.endswith("_orig"):
             continue
         mask = buffers.get(address[: -len("_orig")] + "_mask")
@@ -426,7 +427,7 @@ def _pruned_params(trace: Any) -> PrunedParamFacts | None:
 def _memory(trace: Any) -> MemoryFacts:
     """Derive the payload-scope figures."""
 
-    from ._agent_json import _payload_state
+    from ._agent_json import _payload_state  # deferred: cycle report
 
     at_capture_bytes = 0
     at_capture_saved = 0
@@ -436,7 +437,7 @@ def _memory(trace: Any) -> MemoryFacts:
     for op in (trace._layer_list if is_live_trace(trace) else None) or ():
         if not getattr(op, "has_saved_activation", False):
             continue
-        memory = getattr(op, "activation_memory", None)
+        memory = record_member(op, "activation_memory", None)
         size = 0 if memory is None else int(memory)
         at_capture_saved += 1
         at_capture_bytes += size

@@ -69,6 +69,12 @@ class StateSnapshot:
         The device each entry was read from, which is where a restore puts it.
     metadata:
         The ``state_dict``'s private ``_metadata`` (module versions), or None.
+    extras:
+        Deep copies of the non-tensor entries by ``state_dict`` key: the
+        payloads modules return from ``get_extra_state`` (any picklable
+        object, often a dict). Their equality has no bit-exact definition, so
+        a snapshot holding any of them never reports a match and always takes
+        the full restore, which hands each module a fresh copy.
     bindings:
         Each rebindable parameter or buffer object of the snapshotted model,
         paired with a detached alias that holds its storage, offset, size and
@@ -79,6 +85,7 @@ class StateSnapshot:
     source_devices: dict[str, torch.device]
     metadata: Any
     bindings: tuple[tuple[torch.Tensor, torch.Tensor], ...] = ()
+    extras: OrderedDict[str, Any] = dataclasses.field(default_factory=OrderedDict)
 
 
 def _holds_on_host(tensor: torch.Tensor) -> bool:
@@ -180,14 +187,19 @@ def snapshot_state_for_restore(model: nn.Module) -> StateSnapshot:
     Returns
     -------
     StateSnapshot
-        Detached copies of every entry: host copies for plain dense
-        accelerator tensors, same-device clones for everything else.
+        Detached copies of every tensor entry: host copies for plain dense
+        accelerator tensors, same-device clones for everything else. Non-tensor
+        entries (``get_extra_state`` payloads) are deep-copied into ``extras``.
     """
 
     original_state = model.state_dict()
     tensors: OrderedDict[str, torch.Tensor] = OrderedDict()
+    extras: OrderedDict[str, Any] = OrderedDict()
     source_devices: dict[str, torch.device] = {}
     for name, tensor in original_state.items():
+        if not isinstance(tensor, torch.Tensor):
+            extras[name] = copy.deepcopy(tensor)
+            continue
         detached = tensor.detach()
         source_devices[name] = detached.device
         if _holds_on_host(detached):
@@ -200,6 +212,7 @@ def snapshot_state_for_restore(model: nn.Module) -> StateSnapshot:
         source_devices=source_devices,
         metadata=metadata,
         bindings=storage_bindings(model),
+        extras=extras,
     )
 
 
@@ -228,11 +241,14 @@ def state_matches_snapshot(model: nn.Module, snapshot: StateSnapshot) -> bool:
     Returns
     -------
     bool
-        ``True`` only when nothing changed.
+        ``True`` only when nothing changed. A snapshot with non-tensor entries
+        never matches, so those entries always take the full restore.
     """
 
     from .validation._live_model_state import _tensor_bits_equal
 
+    if snapshot.extras:
+        return False
     live_state = model.state_dict(keep_vars=True)
     if set(live_state) != set(snapshot.tensors):
         return False
@@ -245,18 +261,20 @@ def state_matches_snapshot(model: nn.Module, snapshot: StateSnapshot) -> bool:
     return True
 
 
-def _restore_entries(model: nn.Module, snapshot: StateSnapshot) -> OrderedDict[str, torch.Tensor]:
+def _restore_entries(model: nn.Module, snapshot: StateSnapshot) -> OrderedDict[str, Any]:
     """Build the ``state_dict`` a restore loads, staging only changed entries.
 
     An entry whose live tensor already holds the snapshot's bytes is passed as
     a detached alias of that live tensor (loading it is a no-op copy); every
-    other entry is the snapshot moved back to its source device.
+    other entry is the snapshot moved back to its source device. Each
+    non-tensor entry is a fresh deep copy, so a module's ``set_extra_state``
+    never holds the snapshot's own object.
     """
 
     from .validation._live_model_state import _tensor_bits_equal
 
     live_state = model.state_dict(keep_vars=True)
-    entries: OrderedDict[str, torch.Tensor] = OrderedDict()
+    entries: OrderedDict[str, Any] = OrderedDict()
     for name in snapshot.tensors:
         staged = _on_source_device(snapshot, name)
         live = live_state.get(name)
@@ -266,6 +284,8 @@ def _restore_entries(model: nn.Module, snapshot: StateSnapshot) -> OrderedDict[s
             # Never hand out the snapshot's own tensor: a module whose
             # ``_load_from_state_dict`` assigns would alias the snapshot.
             entries[name] = staged.clone() if staged is snapshot.tensors[name] else staged
+    for name, value in snapshot.extras.items():
+        entries[name] = copy.deepcopy(value)
     if snapshot.metadata is not None:
         entries._metadata = copy.deepcopy(snapshot.metadata)  # type: ignore[attr-defined]
     return entries

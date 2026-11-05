@@ -18,6 +18,7 @@ from typing import Any
 
 import torch
 
+from .._utils.fail_open import fail_open
 from ._stats_kernel import KernelResult, run_kernel
 
 #: TensorStats record schema version (bump on any field change).
@@ -118,8 +119,7 @@ class TensorStats:
         exists to serve. Never raises (the line renderer is pure).
         """
 
-        from .._utils.fail_open import fail_open
-        from ._stats_render import render_core_line
+        from ._stats_render import render_core_line  # deferred: cycle stats
 
         return fail_open(
             lambda: f"TensorStats({render_core_line(self)})",

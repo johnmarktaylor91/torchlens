@@ -12,6 +12,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._utils._record_group_table import op_attr
 
 
 class _TiedReprKey:
@@ -154,8 +155,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]
-    assert [op.equivalence_class for op in first_param_ops] == [
-        op.equivalence_class for op in second_param_ops
+    assert [op.graph.equivalence_class for op in first_param_ops] == [
+        op.graph.equivalence_class for op in second_param_ops
     ]
     assert first.provenance.model_object_id == second.provenance.model_object_id == 1
     assert first.provenance.input_object_id == second.provenance.input_object_id == 1
@@ -197,12 +198,12 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
         save="all",
     )
-    expected = trace.output_ops[0].transformed_out.clone()
+    expected = trace.output_ops[0].payload.transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"
     trace.save(path)
 
     loaded = tl.load(path)
-    assert torch.equal(loaded.output_ops[0].transformed_out, expected)
+    assert torch.equal(loaded.output_ops[0].payload.transformed_out, expected)
 
 
 def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
@@ -210,12 +211,12 @@ def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
 
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     target = trace.output_ops[0]
-    target.func_config = {"frozen": frozenset({torch.tensor(3)})}
+    target._call_config = {"frozen": frozenset({torch.tensor(3)})}
     path = tmp_path / "frozenset.tlspec"
     trace.save(path)
 
     loaded = tl.load(path)
-    frozen = loaded.output_ops[0].func_config["frozen"]
+    frozen = loaded.output_ops[0].call.config["frozen"]
     assert isinstance(frozen, frozenset)
     assert len(frozen) == 1
     assert torch.equal(next(iter(frozen)), torch.tensor(3))
@@ -227,12 +228,12 @@ def test_tuple_subclasses_preserve_type_across_bundle_round_trip(tmp_path: Path)
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     target = trace.output_ops[0]
     maximum = torch.max(torch.tensor([1, 3]), dim=0)
-    target.func_config = {"size": torch.Size([2, 3]), "maximum": maximum}
+    target._call_config = {"size": torch.Size([2, 3]), "maximum": maximum}
     path = tmp_path / "tuple-subclasses.tlspec"
     trace.save(path)
 
     loaded = tl.load(path)
-    config = loaded.output_ops[0].func_config
+    config = loaded.output_ops[0].call.config
     assert isinstance(config["size"], torch.Size)
     assert type(config["maximum"]) is type(maximum)
     assert torch.equal(config["maximum"].values, maximum.values)
@@ -285,7 +286,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
             raise OSError("simulated intervention swap refusal")
         original_rename(source, target)
 
-    monkeypatch.setattr("torchlens.intervention.save.os.rename", fail_replacement)
+    monkeypatch.setattr("torchlens.intervention._save.os.rename", fail_replacement)
     with pytest.raises(OSError, match="swap refusal"):
         trace.save_intervention(path, level="audit", overwrite=True)
 
@@ -529,7 +530,9 @@ def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_pa
         raise AssertionError("a serialized factory must never execute")
 
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    trace.output_ops[0].func_config = {"lookup": defaultdict(factory, {"seen": [3]})}
+    setattr(
+        trace.output_ops[0], op_attr("func_config"), {"lookup": defaultdict(factory, {"seen": [3]})}
+    )
     path = tmp_path / "factory-disclosure.tlspec"
     trace.save(path)
     loaded = tl.load(path)
@@ -537,7 +540,7 @@ def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_pa
         row["kind"] == "unencodable_values_stringified"
         for row in loaded.annotations["capture_advisories"]
     )
-    mapping = loaded.output_ops[0].func_config["lookup"]
+    mapping = loaded.output_ops[0].call.config["lookup"]
     assert type(mapping) is dict
     assert mapping == {"seen": [3]}
     manifest = json.loads((path / "manifest.json").read_text())

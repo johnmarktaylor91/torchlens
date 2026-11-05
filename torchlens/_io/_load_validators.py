@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, NoReturn
 
+from .._utils._record_group_table import record_member
 from .forgery_validation import _is_digest, _is_int, _is_sequence, _refuse, _trace_ops
 
 if TYPE_CHECKING:
@@ -202,7 +203,7 @@ def _validate_edge_carriers(trace: Trace) -> None:
     carriers = [
         (
             op,
-            getattr(op, "edge_substitutions", None),
+            record_member(op, "edge_substitutions", None),
             getattr(op, "edge_replacement_stamps", None),
         )
         for op in _trace_ops(trace)
@@ -233,7 +234,7 @@ def _validate_edge_entry(op: Any, key: Any, entry: Any, stamp: Any, anchors: _Ed
     """Corroborate ONE carrier entry of ``op`` (address shape, digest, occurrence) and its stamp."""
 
     label = str(getattr(op, "label", "<unknown>"))
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = record_member(op, "func_call_id", None)
     if not (
         isinstance(key, tuple)
         and len(key) == 2
@@ -500,7 +501,7 @@ def _validate_executed_flops_records(trace: Trace) -> None:
 # maps to the module and loader that rebuilds it; the module is imported on demand
 # so this loader stays a leaf of the intervention package.
 MODEL_FREE_TLSPEC_KINDS: Mapping[str, tuple[str, str]] = {
-    "intervention": ("torchlens.intervention.save", "load_intervention_spec"),
+    "intervention": ("torchlens.intervention._save", "load_intervention_spec"),
     "recipe": ("torchlens.intervention._recipe_io", "load_recipe"),
 }
 

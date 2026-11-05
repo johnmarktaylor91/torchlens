@@ -44,6 +44,7 @@ from ._executor import StepContext
 from ._materialize import materialize_from_events
 from ._pipeline import run_pipeline
 from ._primitive_profile import _finalize_forward_primitive_profile
+from ._row_ingest import hand_off_capture_rows
 from .finalization import (
     _set_tracing_finished,
 )
@@ -221,15 +222,13 @@ def _postprocess_body(
         # ``projected_op_events`` also filters the carried amendment lane to
         # seq > the seal watermark, so seal-folded knowledge cannot apply
         # twice while genuinely-new pre-0 amendments keep riding the copy.
-        sealed_op_events = (
-            [_clone_op_event_for_replay(event) for event in capture_session.seal().events]
-            if capture_session is not None
-            else list(capture_events.amended_op_records())
+        sealed_op_events, capture_rows = hand_off_capture_rows(
+            capture_session, capture_events, _clone_op_event_for_replay
         )
         working_events = capture_events._copy_for_replay(projected_op_events=sealed_op_events)
         self._capture_events = working_events
         with _vtimed(self, "  Step 0: Materialize capture events"):
-            materialize_from_events(self, working_events)
+            materialize_from_events(self, working_events, capture_rows)
         working_events.release_working_projection()
         delattr(self, "capture_events")
 

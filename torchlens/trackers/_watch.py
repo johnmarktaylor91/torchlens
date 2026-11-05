@@ -52,6 +52,7 @@ from .._observability._artifact import CommittedBlock
 from .._observability._collector import StepTruth
 from .._observability._kernels import spine_result_from_vector, spine_vector
 from .._observability._schema import validate_step_order
+from .._utils._optimizer_hooks import hook_around
 from .._utils.env_flags import closed_bool_env
 from ._amp import correct_running_stats, corrected_grad_block, observed_grad_scale, unscale_stage
 from ._errors import SinkProtocolError, TrackersError, WatchConfigError, WatchRuntimeError
@@ -275,8 +276,7 @@ class WatchSession:
         self._current_scaler: Any = None
         self._step_open = False
         self._named_skips: list[str] = []
-        self._own_optimizer_handle: Any = None
-        self._post_handles: list[Any] = []
+        self._optimizer_handles: list[Any] = []
         self._manifest_emitted = False
         self._forward_handle: Any = None
         self._deferred_attach: list[ScalarPoint | TextPoint] = []
@@ -897,10 +897,7 @@ class WatchSession:
         self._closed = True
         _deregister_session(self)
         if self.collector is not None:
-            if self._own_optimizer_handle is not None:
-                self._own_optimizer_handle.remove()
-                self._own_optimizer_handle = None
-            for handle in list(getattr(self, "_post_handles", ())):
+            for handle in self._optimizer_handles:
                 handle.remove()
             if self._forward_handle is not None:
                 self._forward_handle.remove()
@@ -1256,13 +1253,12 @@ def watch(
     _preflight_tags(grammar, collector, requested)
     _refuse_sparse_gradients(collector, requested)
     session = WatchSession(model, sinks, collector, grammar, config)
-    if optimizer is not None:
-        session._own_optimizer_handle = optimizer.register_step_pre_hook(session._boundary_pre_hook)
-    collector.attach(optimizer=optimizer)
-    if optimizer is not None:
-        session._post_handles = [optimizer.register_step_post_hook(session._boundary_post_hook)]
-    else:
-        session._post_handles = []
+    session._optimizer_handles = hook_around(
+        optimizer,
+        session._boundary_pre_hook,
+        lambda: collector.attach(optimizer=optimizer),
+        session._boundary_post_hook,
+    )
     _arm_forward_scheduling(session, model, step, requested)
     session._stage_attach_rows()
     _register_session(model, grammar, session)

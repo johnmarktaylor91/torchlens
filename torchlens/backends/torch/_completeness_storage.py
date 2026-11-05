@@ -7,20 +7,22 @@ import sys
 import threading
 import warnings
 from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
+from torchlens._utils import _torch_compat
+
 from ... import _state
 from ..._utils import _exception_notes
-from ...errors import ScalarEscapeWarning
-from ._tl import (
+from ..._utils._tensor_label import (
     DescriptorCompatProperty,
     get_tensor_label,
 )
+from ...errors import ScalarEscapeWarning
+from ...errors._base import transparent_contextmanager
 
 __all__ = (
     "_nonowner_storage_observe",
@@ -295,9 +297,7 @@ def _completeness_census_active() -> bool:
     converting a belt-witnessed escape into an unwitnessed one (false VERIFIED).
     """
 
-    from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
-
-    stack = get_current_dispatch_mode_stack()
+    stack = _torch_compat.get_current_dispatch_mode_stack()
     if stack is None:
         return False
     return any(isinstance(mode, _CompletenessDispatchMode) for mode in stack)
@@ -512,7 +512,7 @@ def _make_plain_scalar_escape_method(
     return wrapper
 
 
-@contextmanager
+@transparent_contextmanager
 def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
     """Warn once when a plain capture reads captured tensor data as Python scalars.
 
@@ -608,24 +608,19 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
             if isinstance(annotations, dict)
             else None
         )
+        row_message, warning_text = _scalar_escape_advisory_texts(state, location)
         if isinstance(rows, list):
             rows.append(
                 {
                     "kind": "scalar_escape",
                     "count": int(state.count),
                     "first_location": (location if state.first_file is not None else None),
-                    "message": (
-                        "tensor-to-Python scalar escape(s) observed during "
-                        "capture; the dependence is not captured"
-                    ),
+                    "message": row_message,
                 }
             )
         warnings.warn(
             ScalarEscapeWarning(
-                "TorchLens observed "
-                f"{state.count} tensor-to-Python scalar escape(s) during capture; "
-                f"first at {location}. Keep it as a tensor or pass the value as an "
-                "explicit input; the dependence is not captured.",
+                warning_text,
                 file_path=state.first_file,
                 line_no=state.first_line,
                 count=state.count,
@@ -829,6 +824,7 @@ from ._completeness_dispatch_names import (  # noqa: E402
     _external_warning_stacklevel,
     _first_scalar_escape_source,
     _record_escape_source_tensor,
+    _scalar_escape_advisory_texts,
     _tally_plain_scalar_escape,
 )
 from ._completeness_metadata import (  # noqa: E402

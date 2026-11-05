@@ -22,13 +22,15 @@ from torch import nn
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
+from torchlens._utils._record_group_table import record_member
 from torchlens.attribution._viz import attribution_color_by
 
 TOL = 1e-12
 DOC = Path(__file__).resolve().parents[1] / "docs" / "reference" / "attribution.md"
 
 
-def _build(name: str) -> tuple[object, tl.attribution.graph.AttributionGraph]:
+def _build(name: str) -> tuple[object, tl.attribution._graph.AttributionGraph]:
     n_layers = 3 if name == "F3" else 2
     model = fx.build_model(n_layers)
     transcoders = {"F1": fx.exact_transcoders, "F3": fx.cross_layer_transcoders}[name](model)
@@ -45,7 +47,7 @@ def _build(name: str) -> tuple[object, tl.attribution.graph.AttributionGraph]:
 
 
 @pytest.fixture(scope="module")
-def built() -> Iterator[dict[str, tuple[object, tl.attribution.graph.AttributionGraph]]]:
+def built() -> Iterator[dict[str, tuple[object, tl.attribution._graph.AttributionGraph]]]:
     pairs = {name: _build(name) for name in ("F1", "F3")}
     try:
         yield pairs
@@ -71,7 +73,7 @@ def _site_of(node, sites) -> str | None:
         return None
     if node.layer_label in sites:
         return node.layer_label
-    return next((m for m in getattr(node, "output_of_modules", ()) or () if m in sites), None)
+    return next((m for m in record_member(node, "output_of_modules", ()) or () if m in sites), None)
 
 
 def _check_painting(trace, color_by, expected: dict[str, float]) -> int:
@@ -88,6 +90,7 @@ def _check_painting(trace, color_by, expected: dict[str, float]) -> int:
     return painted
 
 
+@requires_gradient_edge
 def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     _trace, graph = built["F1"]
     other = tl.trace(nn.Sequential(nn.Linear(2, 2)), torch.ones(1, 2))
@@ -97,6 +100,7 @@ def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     assert "Remedy:" in str(excinfo.value)
 
 
+@requires_gradient_edge
 def test_docs_graph_example_overlay_lines_run(tmp_path) -> None:
     fences = re.findall(r"```python\n(.*?)\n```", DOC.read_text(encoding="utf-8"), re.DOTALL)
     (fence,) = [f for f in fences if "color_by(trace, graph" in f]

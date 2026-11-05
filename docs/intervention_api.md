@@ -132,7 +132,7 @@ There are no gradient-only helpers. The ordinary edits apply to whichever tensor
 | A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
 
 Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
-`torchlens.intervention.helpers.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+`torchlens.intervention._helpers.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
 
 `trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
 `result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
@@ -188,6 +188,22 @@ op's `.out`, and it is what `tl.module("block")` reads as the module's output.
 Every later op is renumbered (a label's last number is its position), so compare
 traces through `Bundle` site reads, which pair ops by structure, not by label.
 
+A post-capture module edit (`fork.do(tl.module("block"), edit)`) is recorded in the
+same shape: after the push the edited value sits in a new `interventionreplacement_*`
+op spliced after the module's last op, the last op keeps the value it computed, the
+edited module and the calls enclosing it report the replacement as their output, and a
+submodule whose output is that same last op keeps reporting the pre-edit value, as a
+plain forward hook on the outer module would leave it. Nothing is renumbered after
+capture: the replacement takes the next unused position number and every other op keeps
+its label. A later push upstream passes the parent's new value through the replacement
+and fires the module's hooks there again.
+
+Comparison reads report a module edit (either kind) at the edited module's last op:
+`tl.debug.compare` and `tl.debug.first_divergence`, `Bundle.compare`,
+`Bundle.rank_changes` and the bundle diff read the replacement's value at that op's
+row, and the replacement op has no row of its own, so the unedited trace (which has no
+replacement op) is compared against the edited value at the site the edit named.
+
 ## Capture-Time Recording
 
 `tl.record(..., save=...)` is the sparse capture sibling of `tl.trace(..., save=...)`.
@@ -231,7 +247,8 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | `log.do(site, edit, intervention=InterventionOptions(differentiable=True))` | Replay onto a new fork whose outputs stay differentiable and return it (replay engine only). |
 | `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`); `do` returns the trace, not a handle. Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
-| `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
+| `log.run(model, x)` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
+| `log.append(x, model=model)` | Run one more compatible batch and add its rows to `log` in place. |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
 | `recipe.save(path, level=...)` | Write an authored `tl.Recipe` on its own (`kind: "recipe"`); `tl.load(path)` returns the Recipe. |
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ._errors import ModelExplorerExportError
 
 __tl_layer__ = "L8"
@@ -75,7 +76,7 @@ def incoming_edges(
     # Essential complexity (CC>10 named): the ported and structural edge
     # regimes are ONE decision table over the same recorded relation; two
     # functions would duplicate the resolve/skip/count discipline.
-    positions = getattr(entry, "parent_arg_positions", None) or {}
+    positions = record_member(entry, "parent_arg_positions", None) or {}
     argument_rows = list((positions.get("args") or {}).items())
     keyword_rows = list((positions.get("kwargs") or {}).items())
     edges: list[dict[str, str]] = []

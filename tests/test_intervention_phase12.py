@@ -161,7 +161,7 @@ def test_append_topology_mismatch_raises() -> None:
     log = _capture(_BranchModel(), torch.ones(2, 3))
 
     with pytest.raises(AppendMismatchError):
-        log.run(_BranchModel(), -torch.ones(2, 3), replay=tl.options.ReplayOptions(append=True))
+        log.append(-torch.ones(2, 3), model=_BranchModel())
 
 
 def test_append_shape_mismatch_raises() -> None:
@@ -171,7 +171,7 @@ def test_append_shape_mismatch_raises() -> None:
     log = _capture(model, torch.ones(2, 3))
 
     with pytest.raises(AppendMismatchError):
-        log.run(model, torch.ones(2, 4), replay=tl.options.ReplayOptions(append=True))
+        log.append(torch.ones(2, 4), model=model)
 
 
 def test_append_dtype_mismatch_raises() -> None:
@@ -181,11 +181,7 @@ def test_append_dtype_mismatch_raises() -> None:
     log = _capture(model, torch.ones(2, 3, dtype=torch.float32))
 
     with pytest.raises(AppendMismatchError):
-        log.run(
-            model,
-            torch.ones(2, 3, dtype=torch.float64),
-            replay=tl.options.ReplayOptions(append=True),
-        )
+        log.append(torch.ones(2, 3, dtype=torch.float64), model=model)
 
 
 def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
@@ -198,10 +194,10 @@ def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
     log._attach_hooks(
         tl.func("relu"), tl.intervention.scramble_elements(source=torch.zeros(2, 3), seed=1)
     )
-    log.run(model, x)
+    log = log.run(model, x)
 
     with pytest.raises(AppendBatchDependenceError):
-        log.run(model, torch.randn(2, 3), replay=tl.options.ReplayOptions(append=True))
+        log.append(torch.randn(2, 3), model=model)
 
 
 def test_append_batchnorm_train_mode_warns() -> None:
@@ -212,7 +208,7 @@ def test_append_batchnorm_train_mode_warns() -> None:
     log = _capture(model, torch.randn(2, 3))
 
     with pytest.warns(BatchNormTrainModeWarning):
-        log.run(model, torch.randn(2, 3), replay=tl.options.ReplayOptions(append=True))
+        log.append(torch.randn(2, 3), model=model)
 
 
 def test_append_recipe_stale_rejected_before_capture() -> None:
@@ -224,7 +220,7 @@ def test_append_recipe_stale_rejected_before_capture() -> None:
     log._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with pytest.raises(AppendMismatchError, match="recipe is stale"):
-        log.run(model, torch.randn(2, 3), replay=tl.options.ReplayOptions(append=True))
+        log.append(torch.randn(2, 3), model=model)
 
 
 def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
@@ -234,8 +230,8 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     model.eval()
     log = _capture(model, torch.randn(2, 3))
     log._attach_hooks(tl.func("relu"), tl.zero_ablate())
-    log.run(model, torch.randn(2, 3))
-    log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
+    log = log.run(model, torch.randn(2, 3))
+    log.append(torch.randn(1, 3), model=model)
 
     bundle_path = tmp_path / "append_bundle"
     log.save(bundle_path)

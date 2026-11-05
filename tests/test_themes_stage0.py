@@ -70,7 +70,7 @@ def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
         checks=audit.Stage0Checks(
             # Cardinality = the DISTINCT values the channel can express here
             # (timings may tie run-to-run on a tiny toy).
-            cardinality=len({float(op.func_duration) for op in log.ops}),
+            cardinality=len({float(op.cost.duration) for op in log.ops}),
             baseline_headlabels=headlabel_baseline,
             baseline_xlabels=xlabel_baseline,
         ),
@@ -105,7 +105,7 @@ def test_fill_spread_gates_apply_only_with_a_channel(speed_render: Any) -> None:
     """A channel-free artifact carries no encoded-fill findings."""
 
     log, resolution, graph, svg_path = speed_render
-    bare = lenses.resolve_lens(log, "blueprint")
+    bare = lenses.resolve_lens(log, "overview")
     bare_graph = log.draw(
         **bare.draw_kwargs,
         path=svg_path.replace(".svg", "-bare"),

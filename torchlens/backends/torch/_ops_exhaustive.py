@@ -15,6 +15,10 @@ from ..._ir.events import (
     FunctionCallRef,
 )
 from ..._ir.intervention import FunctionEventInput
+from ..._utils._tensor_label import (
+    get_tensor_label,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
 )
@@ -24,10 +28,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_tensor_label,
-    set_tensor_label,
-)
+from ._ops_freeze_refs import _module_frames_from_fields
 from ._user_grad_fn import stamp_user_grad_fn
 from .aliasing import (
     detect_torch_alias_contract,
@@ -245,7 +246,7 @@ def _emit_exhaustive_operation_events(
             samples_store = self.__dict__.get("_device_memory_samples")
             if isinstance(samples_store, dict):
                 call_samples = samples_store.pop(f"call:{func_call_id}", None)
-                if call_samples is not None:
+                if call_samples is not None:  # deferred import: cycle _observe
                     from ..._observe._device_memory import flat_field_projection
 
                     samples_store[fields_dict_onetensor["_label_raw"]] = call_samples
@@ -273,10 +274,8 @@ def _emit_exhaustive_operation_events(
             )
         fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
+            # The record's ``edits`` derive from ``fire_results`` at scatter.
             fields_dict_onetensor["fire_results"] = fire_results
-            fields_dict_onetensor["edits"] = [
-                result.fire_record for result in fire_results if result.fire_record is not None
-            ]
             fields_dict_onetensor["is_edited"] = any(result.replaced for result in fire_results)
         if getattr(self, "is_replayable", False):
             fields_dict_onetensor["_edge_uses"] = _build_edge_use_records(
@@ -589,7 +588,6 @@ from ._ops_autograd import (  # noqa: E402
     _register_call_output_container_snapshot,
 )
 from ._ops_capture_records import (  # noqa: E402
-    _module_frames_from_fields,
     _should_keep_alias_mutation_contract,
 )
 from ._ops_finalize import (  # noqa: E402

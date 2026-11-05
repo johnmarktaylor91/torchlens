@@ -341,16 +341,16 @@ def _leaf_condition(op: str, value: Any) -> str:
         "in_module": (
             f"any(e.rsplit(':', 1)[0] == {value!r} or "
             f"e.rsplit(':', 1)[0].startswith({value!r} + '.') "
-            "for e in op.module_call_stack)"
+            "for e in op.module_context.call_stack)"
         ),
         "dtype": f"str(op.dtype) == {value!r}",
         "pass_index": f"int(op.pass_number or 1) == {value!r}",
         "saved": f"bool(op.has_saved_activation) is {value!r}",
         "payload_state": {
-            "present": ("getattr(op, 'out_ref', None) is None and bool(op.has_saved_activation)"),
-            "lazy": "getattr(op, 'out_ref', None) is not None",
+            "present": ("getattr(op, '_out_ref', None) is None and bool(op.has_saved_activation)"),
+            "lazy": "getattr(op, '_out_ref', None) is not None",
             "unsaved": (
-                "getattr(op, 'out_ref', None) is None and not bool(op.has_saved_activation)"
+                "getattr(op, '_out_ref', None) is None and not bool(op.has_saved_activation)"
             ),
         }.get(str(value), "False"),
         "is_output": (f"(str(op.label) in {{str(o.label) for o in log.output_ops}}) is {value!r}"),
@@ -442,7 +442,7 @@ def _python_handoff(node: dict[str, Any]) -> str:
 def op_row(op: Any, is_input: bool, is_output: bool) -> dict[str, Any]:
     """Project one op record into the query row shape (persisted facts)."""
 
-    from ..report._agent_json import _op_entry
+    from ..report._agent_json import _op_entry  # deferred: startup cost
 
     entry = _op_entry(op)
     entry["is_input"] = is_input

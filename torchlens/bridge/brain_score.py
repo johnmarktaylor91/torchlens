@@ -50,6 +50,8 @@ import torch
 from torch import nn
 
 from .._entry_refusals import refuse_brain_score_benchmark, refuse_brain_score_not_scalar
+from .._extraction._front_door import extract
+from .._utils._numpy_bridge import tensor_from_numpy, tensor_to_numpy
 from ._utils import tensor_layers
 
 #: TorchLens lookup used for Brain-Score's special ``"logits"`` layer name.
@@ -303,14 +305,14 @@ def _stack_images(
 
     if isinstance(images, (list, tuple)):
         tensors = [
-            image if isinstance(image, torch.Tensor) else torch.from_numpy(image)
+            image if isinstance(image, torch.Tensor) else tensor_from_numpy(image)
             for image in images
         ]
         batch = torch.stack(tensors)
     elif isinstance(images, torch.Tensor):
         batch = images
     else:
-        batch = torch.from_numpy(images)
+        batch = tensor_from_numpy(images)
     batch = batch.to(device)
     if dtype is not None and batch.is_floating_point() and batch.dtype != dtype:
         batch = batch.to(dtype)
@@ -386,8 +388,6 @@ def get_activations_fn(
             Requested layer names to CPU numpy activations, batch axis first.
         """
 
-        import torchlens as tl
-
         names = [str(name) for name in layer_names]
         plan = {
             name: mapping.get(name, logits_lookup if name == "logits" else name) for name in names
@@ -395,8 +395,8 @@ def get_activations_fn(
         batch = _stack_images(images, resolved_device, model_dtype)
         model.eval()
         with torch.no_grad():
-            outputs = tl.extract(model, batch, plan)
-        return OrderedDict((name, outputs[name].detach().cpu().numpy()) for name in names)
+            outputs = extract(model, batch, plan)
+        return OrderedDict((name, tensor_to_numpy(outputs[name].detach())) for name in names)
 
     return get_activations
 

@@ -12,6 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import Trace, trace as trace_fn
+from torchlens._utils._record_group_table import record_member
 
 
 class _PlainPickleModel(nn.Module):
@@ -112,21 +113,21 @@ def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path:
     cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
     label = cached_op.layer_label
     # The Op property follows arm membership, not the cache: a test op stays outside.
-    op_body = cached_op.is_in_conditional_body
+    op_body = cached_op.control_flow.is_in_conditional_body
     trace.layers[label]._is_in_conditional_body = True
-    assert trace.layers[label].is_in_conditional_body is True
+    assert trace.layers[label].control_flow.is_in_conditional_body is True
 
     pickle_restored = pickle.loads(pickle.dumps(trace))
     assert pickle_restored.layers[label].ops[0]._is_in_conditional_body is True
-    assert pickle_restored.layers[label].ops[0].is_in_conditional_body is op_body
+    assert pickle_restored.layers[label].ops[0].control_flow.is_in_conditional_body is op_body
 
     bundle_path = tmp_path / "conditional_cache.tlspec"
     trace.save(bundle_path)
     tlspec_restored = tl.load(bundle_path)
     assert tlspec_restored.layers[label].ops[0]._is_in_conditional_body is True
-    assert tlspec_restored.layers[label].ops[0].is_in_conditional_body is op_body
+    assert tlspec_restored.layers[label].ops[0].control_flow.is_in_conditional_body is op_body
     assert tlspec_restored.layers[label]._is_in_conditional_body is True
-    assert tlspec_restored.layers[label].is_in_conditional_body is True
+    assert tlspec_restored.layers[label].control_flow.is_in_conditional_body is True
 
 
 class _TrainableModel(nn.Module):
@@ -280,7 +281,7 @@ def test_all_field_order_container_defaults_are_typed() -> None:
             partial.pop(field_name)
             restored = factory()
             restored.__setstate__(partial)
-            value = getattr(restored, field_name, None)
+            value = record_member(restored, field_name, None)
             assert isinstance(value, (list, dict, tuple, set)), (
                 f"{type(instance).__name__}.{field_name} restored as "
                 f"{type(value).__name__} (expected a container) when absent"
@@ -308,4 +309,4 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored.options.activation_transform is None
-    assert restored._layer_list[0].activation_transform is None
+    assert restored._layer_list[0]._activation_transform is None

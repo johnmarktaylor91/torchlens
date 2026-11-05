@@ -46,6 +46,37 @@ _SPAN = re.compile(r"`([^`]+)`")
 _OWNER_RUN = re.compile(r"keyword of ((?:`[^`]+`(?:,? and |, |,)?)+)")
 
 
+def _member_owner(row: dict[str, Any]) -> object:
+    """Return the class a member row's ``owner`` names (None when it does not resolve)."""
+
+    owner: object = importlib.import_module(row["module"])
+    for part in row["owner"].split(":", 1)[1].split("."):
+        owner = getattr(owner, part, None)
+    return owner
+
+
+def _group_access_paths() -> dict[int, str]:
+    """Return ``id(group class) -> access path`` for every Op concern group.
+
+    Users reach a concern-group method through its record (``op.autograd.grad_for``), so
+    the glossary spells it ``Op.autograd.grad_for``, not ``OpAutograd.grad_for``. The map
+    is read from ``OP_GROUP_VIEWS``, the table each Op group registers in as it loads, so
+    it follows the code and holds exact class entries only.
+    """
+
+    importlib.import_module(inventory.PACKAGE)  # each group registers as its module loads
+    from torchlens._utils._record_group_table import OP_GROUP_VIEWS
+
+    return {id(cls): f"Op.{group}" for group, cls in OP_GROUP_VIEWS.items()}
+
+
+def _group_spellings(row: dict[str, Any], paths: dict[int, str]) -> list[str]:
+    """Return the access-path spelling of a member a concern-group class defines, if any."""
+
+    path = paths.get(id(_member_owner(row)))
+    return [f"{path}.{row['name']}"] if path is not None else []
+
+
 def _member_target(row: dict[str, Any]) -> object | None:
     """Return the function a method member row names.
 
@@ -60,9 +91,7 @@ def _member_target(row: dict[str, Any]) -> object | None:
         The plain function (``classmethod`` / ``staticmethod`` unwrapped), or None.
     """
 
-    owner: object = importlib.import_module(row["module"])
-    for part in row["owner"].split(":", 1)[1].split("."):
-        owner = getattr(owner, part, None)
+    owner = _member_owner(row)
     raw = vars(owner).get(row["name"]) if isinstance(owner, type) else None
     return raw.__func__ if isinstance(raw, (classmethod, staticmethod)) else raw
 
@@ -106,6 +135,7 @@ def public_callables(package: str = inventory.PACKAGE) -> list[tuple[list[str], 
         for _, value in objects
         if inspect.isclass(value) and inventory._in_package(value.__module__, package)
     }
+    groups = _group_access_paths() if package == inventory.PACKAGE else {}
     found: dict[int, tuple[list[str], object]] = {}
     for row, value in objects:
         if row["subkind"] in ("function", "class"):
@@ -115,7 +145,8 @@ def public_callables(package: str = inventory.PACKAGE) -> list[tuple[list[str], 
             continue
         target = _member_target(row)
         if target is not None:
-            found.setdefault(id(target), ([], target))[0].extend(_member_spellings(row))
+            spellings = _member_spellings(row) + _group_spellings(row, groups)
+            found.setdefault(id(target), ([], target))[0].extend(spellings)
     return [(_ordered(paths), value) for paths, value in found.values()]
 
 

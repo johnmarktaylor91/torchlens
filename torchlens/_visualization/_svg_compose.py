@@ -60,7 +60,8 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
     renderer its notebook display and ``save`` to another format use: the
     same bounded Graphviz child as ``draw``, with the bundled font, so the
     key's table, sized to its words in that face, fits them; relative node
-    images resolved against ``image_root`` while it exists; Graphviz stderr
+    images resolved against ``image_root`` while it exists, and dropped with
+    one warning once their trace is collected; Graphviz stderr
     surfaced as the usual layout warning; and an SVG's local image references
     embedded as data URIs, so the picture never links a file under the temp
     folder. Failures propagate; ``Drawing`` maps them to its typed refusal.
@@ -80,17 +81,67 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
             cwd=str(root) if root else None,
         )
 
-    completed = run(dot)
-    if reports_route_failure(completed.stderr) and (portless := without_compass_ports(dot)) != dot:
+    drawn, missing = _without_missing_pictures(dot, root)
+    completed = run(drawn)
+    if reports_route_failure(completed.stderr) and (
+        (portless := without_compass_ports(drawn)) != drawn
+    ):
         # Graphviz could not route the loop's corner ports (2.43, :mod:`._loop_edges`):
         # keep the portless layout only when it routes cleanly.
         retry = run(portless)
         completed = completed if reports_route_failure(retry.stderr) else retry
-    surface_layout_stderr(completed.stderr, engine="dot")
+    stderr = completed.stderr
+    if missing:
+        # Graphviz itself reported a missing node image as a stderr warning before the
+        # pictures moved into HTML labels; report the dropped ones through that same warning.
+        reported = stderr.decode("utf-8", "replace") if isinstance(stderr, bytes) else stderr or ""
+        stderr = f"{_missing_pictures_note(missing)}\n{reported}"
+    surface_layout_stderr(stderr, engine="dot")
     payload = bytes(completed.stdout)
     if fileformat != "svg":
         return payload
     return _inline_svg_local_images(payload.decode("utf-8"), root).encode("utf-8")
+
+
+# A node picture's row in its HTML label (:mod:`._node_boxes`): one cell holding one image.
+_PICTURE_ROW = re.compile(r'<TR><TD[^>]*><IMG SRC="([^"]*)"[^>]*/></TD></TR>')
+
+
+def _without_missing_pictures(dot: str, root: Path | None) -> tuple[str, tuple[str, ...]]:
+    """Drop node picture rows whose file is gone; return the source and the missing names.
+
+    A drawing's pictures live in its trace's scratch folder, which goes when
+    the trace is collected; Graphviz refuses an HTML label whose image file is
+    missing, so the drawing renders without those pictures instead. Relative
+    sources resolve where the Graphviz child runs: ``root`` when it exists,
+    else the caller's working directory.
+    """
+
+    missing: list[str] = []
+
+    def keep_present(match: re.Match[str]) -> str:
+        """Return the row unchanged when its picture exists, else drop it."""
+
+        source = html.unescape(match.group(1))
+        path = Path(source)
+        if not path.is_absolute():
+            path = (root if root is not None else Path.cwd()) / path
+        if path.is_file():
+            return match.group(0)
+        missing.append(source)
+        return ""
+
+    return _PICTURE_ROW.sub(keep_present, dot), tuple(missing)
+
+
+def _missing_pictures_note(missing: tuple[str, ...]) -> str:
+    """Name the dropped pictures and why they are gone, for the layout warning."""
+
+    return (
+        f"drawing pictures {list(missing)!r} are missing because the trace that held "
+        "them was collected, taking its scratch folder with it; the drawing renders "
+        "without them (keep the trace alive while you display or save its drawing)."
+    )
 
 
 def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None) -> None:

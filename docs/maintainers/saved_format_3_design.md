@@ -59,6 +59,7 @@ the current components; `__init__` provides their thin package entry.
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
+| `recipe_shape.py` | the structural checks of a recipe document (section 8), run before any value is decoded: closed top-level keys, save level, rule objects and the closed capture-rule shape (built-in edits only), refused `manifest_schema_invalid` or `artifact_save_level_invalid`; the callable-placeholder finder; split from `recipe.py` for its budget | 150 | reader |
 | `reader.py` | `read_manifest`, `validate_artifact`, `load_trace`, `load_bundle`, `load_intervention_recipe`: manifest first, digests, record tables through the decoder, record construction, accessor rebuild, grouping settlement | 750 | reader |
 | `route.py` | the `bundle.load` switch into the 3.0 format: the root test and the door dispatch, kept outside `bundle.py` and its import cycle | 100 | reader |
 | `validate.py` | cross-record invariants after decode (section 9): site keys, structure-only coherence, checkpoint windows, edge carriers, graph structure, kernel relations, identity facts, injection provenance, evidence facts | 600 | reader |
@@ -207,7 +208,7 @@ CNN trace. The unpickler is deleted by this design (section 10). Filed as an ame
 (section 15).
 
 The `ref` tag: a live field that holds a record object rather than its label (the trace's op
-list and lookup dicts, `Layer.ops`, `Module.params`, `Op.code_context`, `GradFn.calls`,
+list and lookup dicts, `Layer.ops`, `Module.params`, `Op.source.frames`, `GradFn.calls`,
 `BackwardPass.grad_fn_calls`) writes `{"$tl": "ref", "record": kind, "row": index}`. The
 schema cannot type these cells from annotations (most are unannotated), so the reference is
 tagged; the index points into the record table, whose rows are in live container order.

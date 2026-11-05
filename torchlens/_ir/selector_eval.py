@@ -61,6 +61,7 @@ from .._selection.selectors import (
     PrecededBySelector,
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._record_group_table import record_member
 from ._selector_nodes import (
     _compile_backward_pass_capture,
     _compile_contains,
@@ -96,6 +97,7 @@ from ._selector_universe import (
     sanitize_transform_kind as sanitize_transform_kind,
 )
 from .container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .container_registry import Role
 
 Lifecycle = Literal["capture", "site", "live"]
 
@@ -686,10 +688,9 @@ def _match_not(subject: Any, *, matcher: _Matcher) -> bool:
 def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
     """Compile ``site`` (structural position; address law: valid in every lane).
 
-    Post hoc it reads the persisted ``op.site_key``; on the capture lane it
-    reads the streaming live minter armed by the ``tl.trace`` entry; the live
-    hook-proxy lane refuses (mid-attach proxies carry no structural key, see
-    :data:`_UPFRONT_UNSUPPORTED_KINDS`).
+    Post hoc it reads the persisted ``op.graph.site_key``; on the capture lane it reads the
+    streaming live minter armed by the ``tl.trace`` entry; the live hook-proxy lane refuses
+    (mid-attach proxies carry no structural key, see :data:`_UPFRONT_UNSUPPORTED_KINDS`).
     """
 
     if lane == "site":
@@ -702,13 +703,13 @@ def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
 def _match_site_key(subject: Any, *, selector: BaseSelector) -> bool:
     """Match the persisted ``site_key`` of a finalized site."""
 
-    return _site_key_matches(selector, getattr(subject, "site_key", None))
+    return _site_key_matches(selector, record_member(subject, "site_key", None))
 
 
 def _match_site_capture(subject: Any, *, selector: BaseSelector) -> bool:
     """Match the live site key the armed minter renders for a capture context."""
 
-    from torchlens.intervention.site_keys import active_live_minter
+    from torchlens.intervention._site_keys import active_live_minter
 
     minter = active_live_minter()
     if minter is None:
@@ -1024,7 +1025,7 @@ def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> Non
 def _is_grad_fn(subject: Any) -> bool:
     """Return whether a site subject is a backward ``GradFn`` log."""
 
-    from torchlens._data_classes.grad_fn import GradFn
+    from torchlens._data_classes.grad_fn import GradFn  # deferred: cycle
 
     return isinstance(subject, GradFn)
 
@@ -1119,8 +1120,6 @@ def _input_path_subject_matches(
 
 def _site_input_path_matches(subject: Any, requested_path: tuple[Any, ...]) -> bool:
     """Return whether a finalized site produced a model-input leaf at ``requested_path``."""
-
-    from .container_registry import Role
 
     trace = getattr(subject, "trace", None)
     site_labels = _site_label_spellings(subject)

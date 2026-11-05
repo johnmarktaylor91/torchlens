@@ -29,6 +29,7 @@ from __future__ import annotations
 import io as _io_module
 import json
 import os
+import re
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -36,8 +37,8 @@ from typing import Any
 
 import numpy as np
 
-from .._io._json import read_bounded
-from .._utils.hashing import sha256_file
+from .._io._json import open_regular, read_bounded
+from .._utils.hashing import sha256_file, sha256_handle
 from ._errors import HistoryArtifactError
 from ._kernels import HistogramDescriptor, HistogramResult, RunningStatsResult
 from ._schema import (
@@ -56,6 +57,10 @@ DEFAULT_RING_CAPACITY = 256
 
 #: Closed RAM-only retention policies.
 RAM_POLICIES = ("refuse", "drop_oldest", "coarsen")
+
+#: The only chunk file name ``HistoryWriter`` writes (``chunk-{ordinal:06d}.npz``); the
+#: reader refuses any other index ``file`` value.
+_CHUNK_FILE_NAME = re.compile(r"chunk-[0-9]{6,}\.npz")
 
 _SPINE_FLOAT_FIELDS = (
     "finite_min",
@@ -498,25 +503,50 @@ class HistoryReader:
         return tuple(StepBlockRecord(**entry["block"]) for entry in self._index)
 
     def _verified_chunk_path(self, entry: dict[str, Any]) -> Path:
-        """Return one committed chunk's path after existence + sha256 checks."""
+        """Return one committed chunk's path after name, type, existence + sha256 checks.
 
-        chunk_path = self.path / entry["file"]
-        if not chunk_path.exists():
+        The index is untrusted: its ``file`` must be a bare ``chunk-NNNNNN.npz`` name
+        (the only name :class:`HistoryWriter` writes), so an absolute path, ``..`` or a
+        subdirectory can never point the reader outside the artifact, and the chunk
+        must be a regular file, not a symlink or FIFO, before it is hashed.
+        """
+
+        name = entry["file"]
+        if not isinstance(name, str) or _CHUNK_FILE_NAME.fullmatch(name) is None:
             raise HistoryArtifactError(
-                f"Committed chunk {entry['file']} is missing from "
+                f"Index entry names chunk file {name!r}, which is not a chunk this "
+                "artifact format writes; refusing to read outside the artifact.",
+                code="history_artifact_corrupt",
+                chunk=str(name),
+                remedy="Restore the artifact from backup or drop it.",
+            )
+        chunk_path = self.path / name
+        if not chunk_path.exists() and not chunk_path.is_symlink():
+            raise HistoryArtifactError(
+                f"Committed chunk {name} is missing from "
                 f"{self.path}; the index says it was committed, so this is "
                 "corruption, not an interrupted write.",
                 code="history_artifact_corrupt",
-                chunk=entry["file"],
+                chunk=name,
                 remedy="Restore the artifact from backup; committed chunks are never optional.",
             )
-        digest = sha256_file(chunk_path)
+        try:
+            with open_regular(chunk_path, follow_symlinks=False) as handle:
+                digest = sha256_handle(handle)
+        except OSError as exc:
+            raise HistoryArtifactError(
+                f"Committed chunk {name} is a symlink or not a regular file; refusing "
+                "to follow it out of the artifact.",
+                code="history_artifact_corrupt",
+                chunk=name,
+                remedy="Copy the artifact with its chunks as plain files.",
+            ) from exc
         if digest != entry["sha256"]:
             raise HistoryArtifactError(
-                f"Chunk {entry['file']} fails its recorded sha256; refusing "
+                f"Chunk {name} fails its recorded sha256; refusing "
                 "to serve silently corrupted history.",
                 code="history_artifact_corrupt",
-                chunk=entry["file"],
+                chunk=name,
                 expected=entry["sha256"],
                 actual=digest,
                 remedy="Restore the chunk from backup or drop the artifact.",

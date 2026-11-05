@@ -103,7 +103,7 @@ class _AuditPlan:
         not complete is measured by its own fork.
         """
 
-        from torchlens.attribution._audit_sites import _swept_scores
+        from torchlens.attribution._audit_sites import _swept_scores  # deferred: cycle attribution
 
         swept = _swept_scores(
             self.trace,
@@ -220,12 +220,12 @@ def _validate_settings(request: _AuditRequest) -> None:
 def _trace_once(request: _AuditRequest) -> Any:
     """Trace the model once, eval mode, no grad."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
     inputs = request.inputs
     positional = [inputs] if isinstance(inputs, Tensor) else list(inputs)
     with _temporarily_eval(request.model), torch.no_grad():
-        return tl.trace(
+        return _capture_trace(
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
@@ -333,8 +333,8 @@ def _target_scorer(request: _AuditRequest, trace: Any, layer: str) -> Callable[[
 def _edit_factory(request: _AuditRequest, site: Tensor) -> tuple[str, Callable[[], Any]]:
     """Return the ablation's name and a factory of its edit for ``Trace.do``."""
 
-    from torchlens.intervention.helpers import zero_ablate
-    from torchlens.intervention.predicates import replace_with
+    from torchlens.intervention._helpers import zero_ablate
+    from torchlens.intervention._predicates import replace_with
 
     ablation = request.ablation
     if isinstance(ablation, str) and ablation == "zero":

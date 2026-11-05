@@ -1,6 +1,6 @@
 # TorchLens workflows
 
-These notebooks are longer workflow recipes for users who want the full shape of an analysis rather than a minimal snippet. They are deterministic, CPU-friendly, checked in without outputs (run them to see the results), and intended to run end-to-end with `papermill` without network access. The one exception is `multi_call_bundle.ipynb`: it downloads two small pretrained models and is checked in with its outputs.
+Longer recipes that show the full shape of an analysis; the short single-task notebooks are in [`examples/quick/`](../quick/). These are deterministic, run on a CPU without network access, and are checked in without outputs (run them to see the results). The two exceptions are `paired_prompt_patching.ipynb`, which downloads GPT-2 small, and `multi_call_bundle.ipynb`, which downloads two small pretrained models; both are checked in with their outputs.
 
 | Notebook | Workflow |
 | --- | --- |

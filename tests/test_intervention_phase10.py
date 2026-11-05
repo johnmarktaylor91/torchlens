@@ -21,22 +21,24 @@ from torchlens._ir.container import TupleIndex
 from torchlens._ir.selector_eval import selector_from_spec
 from torchlens._selection.selectors import output_at
 from torchlens.intervention import check_spec_compat
-from torchlens.intervention._resolver_registry import function_registry_key_from_callable
-from torchlens.intervention.errors import (
-    MultiMatchWarning,
-    OpaqueCallableError,
-    UntrustedCallableError,
+from torchlens.intervention._resolver_registry import (
+    function_registry_key_from_callable,
 )
-from torchlens.intervention.save import (
+from torchlens.intervention._save import (
     _sync_spec_records_from_log,
     resolve_function_registry_key,
     save_intervention,
 )
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     Edit,
     FireRecord,
     FunctionRegistryKey,
     InterventionSpec,
+)
+from torchlens.intervention.errors import (
+    MultiMatchWarning,
+    OpaqueCallableError,
+    UntrustedCallableError,
 )
 from torchlens.io import load_intervention_spec
 
@@ -584,13 +586,13 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     assert not (path / "spec.json").exists()
 
     # A recipe stamped with a format this TorchLens does not read refuses typed.
-    recipe_json["format_version"] = 4
+    recipe_json["format_version"] = 5
     recipe_path.write_text(json.dumps(recipe_json), encoding="utf-8")
     redigest(path, "intervention.json")
     with pytest.raises(ArtifactError) as excinfo:
         load_intervention_spec(path)
     assert excinfo.value.fields["code"] == "bundle_load_failed"
-    assert "recipe format_version 4" in str(excinfo.value)
+    assert "recipe format_version 5" in str(excinfo.value)
 
 
 def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
@@ -877,7 +879,7 @@ def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
         namespace="custom",
         qualname="clamp",
         dispatch_kind="function",
-        import_path="torchlens.intervention.helpers:clamp",
+        import_path="torchlens.intervention._helpers:clamp",
     )
 
     resolved = resolve_function_registry_key(key)

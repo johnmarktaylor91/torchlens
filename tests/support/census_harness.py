@@ -58,6 +58,8 @@ from typing import Any
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
+from tests.support.scoped_library import release_library
+
 # --------------------------------------------------------------------------
 # Typed harness failure strings (harness-internal vocabulary, NOT public API;
 # plan rule 1.1(1): floor and ZI misses land in ``failures`` so no green path
@@ -612,7 +614,7 @@ def dispatcher_interposition_counters(
     try:
         yield counters
     finally:
-        library._destroy()
+        release_library(library)
         if verify_teardown:
             import torch.distributed as dist
 
@@ -964,7 +966,7 @@ _COMPLETION_OP_BASES: frozenset[str] = frozenset(
 def _seq_counter_snapshot() -> dict[tuple[str, int, str], int]:
     """Copy the armed state's issue-time seq counters (empty when unarmed)."""
 
-    from torchlens.distributed._lifecycle import armed_state
+    from torchlens._distributed._lifecycle import armed_state
 
     state = armed_state()
     return dict(state.seq_counters) if state is not None else {}

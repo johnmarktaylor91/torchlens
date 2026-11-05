@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from .._output_slot import OutputSlot
     from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
-    from ..intervention.types import FrozenInterventionSpec, TargetSpec
+    from ..intervention._types import FrozenInterventionSpec, TargetSpec
     from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
@@ -76,7 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    DrawHighlightLiteral,
+    DrawViewLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -93,7 +93,7 @@ from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
-from ..intervention.types import (
+from ..intervention._types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
@@ -168,11 +168,12 @@ from .param import ParamAccessor
 
 if TYPE_CHECKING:
     import pandas as pd
+    from PIL import Image
 
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
-    from ..intervention.types import FireRecord
+    from ..intervention._types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
         ReceptiveFieldProfile,
@@ -181,7 +182,7 @@ if TYPE_CHECKING:
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
     from ..report._trace_facts import _CallableDict
-    from ..validation.status import ValidationStatus
+    from ..validation._status import ValidationStatus
     from ..viz._drawing import Drawing
     from .aten_op import AtenOp, _ModePausedInteriorGap
     from .buffer import BufferAccessor
@@ -532,7 +533,7 @@ class ConditionalAccessor:
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace(TraceOutputMixin, TraceLike):
+class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -805,6 +806,7 @@ class Trace(TraceOutputMixin, TraceLike):
     _receptive_field_solution: Any
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
+    _cooked_from: str | None = None  # "recording" on a Trace that Recording.to_trace cooked
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = TRACE_PORTABLE_STATE_SPEC
     _FIELD_POLICY = build_record_field_policy_table(
@@ -919,9 +921,7 @@ class Trace(TraceOutputMixin, TraceLike):
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """
-        # Callables are effectively immutable - deepcopy is unnecessary.
-
-        # General info
+        # General info. Callables are effectively immutable - deepcopy is unnecessary.
         self.name: str | None = None
         self._source_class_name = model_class_name
         self.model_name = model_class_name
@@ -1339,7 +1339,7 @@ class Trace(TraceOutputMixin, TraceLike):
         selector: Any,
         *,
         data: Any = None,
-        image: str | Path | None = None,
+        image: "str | Path | Image.Image | None" = None,
         max_fanout: int = 1_000_000,
         copy: bool = False,
     ) -> "Trace":
@@ -1354,8 +1354,7 @@ class Trace(TraceOutputMixin, TraceLike):
             payloads are persisted under ``_annotation_blobs`` and are supported
             only for torch traces.
         image:
-            Optional local image path used by the existing ``NodeSpec.image``
-            render hook.
+            Optional picture for the selected nodes: an image file path or a PIL image.
         max_fanout:
             Explicit maximum number of selected sites. The default is
             intentionally large so annotation can fan out across many layers.
@@ -2018,7 +2017,7 @@ class Trace(TraceOutputMixin, TraceLike):
     @property
     def _graph_has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.is_in_conditional_body for entry in self._layer_list)
+        return any(entry.control_flow.is_in_conditional_body for entry in self._layer_list)
 
     @property
     def _graph_has_conditionals(self) -> bool:
@@ -2120,9 +2119,9 @@ class Trace(TraceOutputMixin, TraceLike):
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
-                entry.flops_backward
+                entry.cost.flops_backward
                 for entry in self._layer_list
-                if entry.flops_backward is not None
+                if entry.cost.flops_backward is not None
             )
         )
 
@@ -2334,12 +2333,12 @@ class Trace(TraceOutputMixin, TraceLike):
         return _trace_views.suggest_layer_labels(self, selector, limit=limit)
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
-        """Yield single-call Modules whose semantic facet view has a facet available now."""
+        """Yield Modules with facet ``name`` available now, reused ones included."""
 
         return _trace_views.modules_with_facet(self, name)
 
     def attention_blocks(self) -> Iterator[Any]:
-        """Yield Modules with an available query-projection facet."""
+        """Yield Modules with an available query-projection facet, reused ones included."""
 
         return self.modules_with_facet("q")
 
@@ -3070,7 +3069,7 @@ class Trace(TraceOutputMixin, TraceLike):
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace":
-        """Rerun the live model on new input and refresh this Trace."""
+        """Rerun the live model on new input and return a new Trace; this Trace is unchanged."""
         options = {k: v for k, v in locals().items() if k not in ("self", "model", "x")}
         result = _doors.intervention()._trace_run.run(self, model, x, **options, transaction=False)
         return cast("Trace", result)
@@ -3299,7 +3298,7 @@ class Trace(TraceOutputMixin, TraceLike):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         file_format: str | None = None,
         open_viewer: bool = False,
-        highlight: DrawHighlightLiteral | None = None,
+        view: DrawViewLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 

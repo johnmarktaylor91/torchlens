@@ -16,6 +16,7 @@ import numpy as np
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ... import _state
+from ..._capture._arg_snapshot import split_non_tensor_args
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
 from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
@@ -44,14 +45,15 @@ from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
     require_capability_implementation,
 )
+from ...errors import TorchLensWarning
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from ...recording._types import CaptureSpec
 from .._entry_refusals import refuse_if_bad_max_intermediate_grads
 from .._finalize import (
     attach_function_root_module,
@@ -67,6 +69,7 @@ from .._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
@@ -1460,17 +1463,16 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
-            from ...validation.invariants import check_metadata_invariants
-            from ...validation.status import count_importer_region_annotations
+            from ..._validation_status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}
             unverified_reasons: dict[str, int] = {}
-            if kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
+            if kwargs.get("validate_metadata", True) and not run_metadata_invariants(trace):
                 failed_count = 1
                 decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:
-                replayed_count, failed_count, decisions, exempted, unverified_reasons = (
+                (replayed_count, failed_count, decisions, exempted, unverified_reasons) = (
                     _mlx_detailed_counts(trace, validate_mlx_captures_detailed)
                 )
             if failed_count == 0 and replayed_count < 1:
@@ -1989,6 +1991,9 @@ class MLXBackend:
         input_ancestors = frozenset(
             edge.parent_label_raw for edge in parents if edge.parent_label_raw.startswith("input.")
         )
+        pos_args, kw_args = split_non_tensor_args(
+            func_event_input.args, func_event_input.kwargs, self.is_tensor
+        )
         return OpEvent(
             kind=kind,
             label_raw=reserved.label_raw,
@@ -2016,17 +2021,9 @@ class MLXBackend:
                 num_args_total=len(func_event_input.args) + len(func_event_input.kwargs),
                 num_pos_args=len(func_event_input.args),
                 num_kwargs=len(func_event_input.kwargs),
-                non_tensor_pos_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
-                non_tensor_kwargs=tuple(
-                    (key, value)
-                    for key, value in func_event_input.kwargs.items()
-                    if not self.is_tensor(value)
-                ),
-                func_non_tensor_args=tuple(
-                    arg for arg in func_event_input.args if not self.is_tensor(arg)
-                ),
+                non_tensor_pos_args=tuple(pos_args),
+                non_tensor_kwargs=tuple(kw_args.items()),
+                func_non_tensor_args=tuple(pos_args),
                 is_inplace=False,
                 func_config=(),
             ),
@@ -2130,7 +2127,7 @@ class MLXBackend:
                 if label is not None:
                     kwarg_positions[key] = label
                     _add(label, key, "kwarg")
-        return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
+        return (tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses))
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
         """Mark final output-parent operations and settle the unwrapped-op gap."""
@@ -2178,7 +2175,6 @@ class MLXBackend:
                 "policy to keep the trace marked capture_verified=False instead",
                 code=UNWRAPPED_OP_REASON,
             )
-        from ...errors import TorchLensWarning
 
         warnings.warn(
             TorchLensWarning(

@@ -7,6 +7,8 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from ..._data_classes._module_role_hints import multi_output_role_from_path
+from ..._utils._record_group_table import record_member
 from .._call_subject import CallBoundModule, bound_child
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
@@ -20,7 +22,7 @@ def child_module(module: Any, child_name: str) -> Any | None:
     module:
         Parent TorchLens Module record.
     child_name:
-        Child attribute name.
+        Child attribute name, or a dotted path to a deeper descendant.
     """
 
     trace = getattr(module, "_source_trace", None)
@@ -33,8 +35,25 @@ def child_module(module: Any, child_name: str) -> Any | None:
         return None
     if isinstance(module, CallBoundModule):
         # One call of a reused module: read the child's call made inside it.
-        return bound_child(module, child)
+        return _bound_path(module, child_name)
     return child
+
+
+def _bound_path(subject: CallBoundModule, child_name: str) -> Any | None:
+    """Return the descendant at ``child_name`` bound call by call under ``subject``.
+
+    A call records only its direct child calls, so a dotted path (an HF
+    wrapper's ``self.query``) is bound one level at a time. ``None`` when a
+    level ran no call inside its parent's call.
+    """
+
+    node: Any = subject
+    for part in child_name.split("."):
+        child = child_module(node._module, part)
+        node = None if child is None else bound_child(node, child)
+        if node is None:
+            return None
+    return node
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
@@ -209,21 +228,38 @@ def relays_wrapped_core(module: Any, facet_name: str) -> bool:
         return False
 
 
+#: Remedy for a whole-module listing that meets a module called more than once.
+_PER_CALL_PATCH_REMEDY = (
+    "patching sweeps patch whole modules; patch one call's facet home op "
+    "(module.calls[N].facets) as an explicit op site via fork.do()"
+)
+
+
 def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
     """Return module addresses with a facet available, one per attention layer.
 
-    Modules come from ``trace.modules_with_facet``, which skips a reused module
-    without the facet and refuses a shared layer that has it. The root
-    (``self``) is excluded, and so is a wrapper whose core serves the
-    same facet (:func:`relays_wrapped_core`).
+    Modules come from ``trace.modules_with_facet``. The root (``self``) is
+    excluded, and so is a wrapper whose core serves the same facet
+    (:func:`relays_wrapped_core`). The callers patch or read whole modules, so
+    a module called more than once is refused here (code
+    ``module_call_ambiguous``), before any patched forward runs and before the
+    wrapper dedup, which cannot read a reused core's view.
+
+    Raises
+    ------
+    InvalidArgumentError
+        Code ``module_call_ambiguous``: a module carrying the facet was called
+        more than once.
     """
 
-    return [
-        str(module.address)
-        for module in trace.modules_with_facet(facet_name)
-        if getattr(module, "address", None) != "self"
-        and not relays_wrapped_core(module, facet_name)
-    ]
+    addresses: list[str] = []
+    for module in trace.modules_with_facet(facet_name):
+        if record_member(module, "address", None) == "self":
+            continue
+        module._single_call_or_error(remedy=_PER_CALL_PATCH_REMEDY)
+        if not relays_wrapped_core(module, facet_name):
+            addresses.append(str(module.address))
+    return addresses
 
 
 def output_projection_child(module: Any) -> Any | None:
@@ -238,7 +274,7 @@ def output_projection_child(module: Any) -> Any | None:
         child = child_module(module, name)
         if child is not None:
             return child
-    address = getattr(module, "address", None)
+    address = record_member(module, "address", None)
     if not isinstance(address, str) or "." not in address:
         return None
     parent_address, own_name = address.rsplit(".", 1)
@@ -314,7 +350,6 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
     paths = tuple(getattr(call, "output_paths", ()) or ())
     if not paths:
         return None
-    from ..._data_classes._module_role_hints import multi_output_role_from_path
 
     primary_role = multi_output_role_from_path(paths[0], 0)
     if primary_role is None:
@@ -567,14 +602,15 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
 def fused_sdpa_pattern(module: Any) -> Any:
     """Return a reconstructed fused attention pattern or an absence reason."""
 
-    label = getattr(module.calls[0], "label", getattr(module, "address", "<unknown>"))
+    label = getattr(module.calls[0], "label", record_member(module, "address", "<unknown>"))
     value = fused_sdpa_facet(module, "pattern", "attention_reconstruction")
     if not isinstance(value, AbsenceReason):
         return value
     return needs_capture(
         f"attention pattern not captured: model uses a fused attention kernel "
-        f"(SDPA/FlashAttention) at {label}. "
-        f"{value.detail} To READ pattern/scores/z, re-run as "
+        f"(SDPA/FlashAttention) at {label}, and this capture did not record every input "
+        f"the exact reconstruction needs. {value.detail} A default capture (save every op) "
+        "records them; to READ pattern/scores/z under a selective save=, re-run as "
         "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) (or "
         "capture=tl.options.CaptureOptions(save_args=True)). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "
@@ -602,5 +638,5 @@ def op_output_readable(op: Any) -> bool:
     """Return whether an op-backed facet can read its home output now."""
 
     return bool(
-        getattr(op, "has_saved_activation", False) or getattr(op, "out_ref", None) is not None
+        getattr(op, "has_saved_activation", False) or record_member(op, "out_ref", None) is not None
     )

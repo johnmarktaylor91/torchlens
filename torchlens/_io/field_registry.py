@@ -86,14 +86,24 @@ COMPONENT_SPEC_MODULES: tuple[str, ...] = (
     "torchlens._data_classes.prehook",
     "torchlens._data_classes._trace_field_spec",
     "torchlens._data_classes.trace",
-    "torchlens.intervention.types",
+    "torchlens.intervention._types",
     "torchlens._ir.container",
     "torchlens._ir.container_registry",
     "torchlens._ir.events",
     "torchlens._kernel_telemetry",
 )
 
-#: Tier overrides for persisted fields with census evidence. Everything not listed is FACT by conservative default:
+#: Persisted name of a module that 3.0 made private: the writer contract and the
+#: format's class paths keep the module path artifacts were written under, so a
+#: private-submodule rename changes neither the contract digest nor saved files.
+_PERSISTED_MODULE_NAMES: dict[str, str] = {
+    "torchlens.intervention._types": "torchlens.intervention.types",
+}
+#: The reverse map: persisted module path to the module that now holds the classes.
+_RUNTIME_MODULE_NAMES: dict[str, str] = {v: k for k, v in _PERSISTED_MODULE_NAMES.items()}
+
+#: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
+#: r2-corrected). Everything not listed is FACT by conservative default:
 #: treating a derived field as fact never loses truth, while the reverse
 #: launders evidence into "recomputable". RATIFIED at the v9 write
 #: (2026-08-27) with ZERO persistence-policy flips: every enrichment-tier
@@ -198,7 +208,8 @@ def component_spec_tables() -> dict[str, dict[str, str]]:
             spec = obj.__dict__.get("_PORTABLE_STATE_SPEC")
             if not isinstance(spec, dict) or not spec:
                 continue
-            qualname = f"{obj.__module__}.{obj.__qualname__}"
+            module_path = _PERSISTED_MODULE_NAMES.get(obj.__module__, obj.__module__)
+            qualname = f"{module_path}.{obj.__qualname__}"
             tables[qualname] = {name: policy.value for name, policy in sorted(spec.items())}
     return tables
 

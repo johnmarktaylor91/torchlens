@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .._capture.outcome import outcome_for
 from ._display import _ambiguous_rank_message
 from ._engine import JoinKey, JoinRecord, MergeDerivation, derive_merge
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
@@ -336,8 +337,6 @@ class MergedTrace:
         lazy member load. Members whose object carries no settled outcome
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
-
-        from .._capture.outcome import outcome_for
 
         statuses: dict[int, str] = {}
         for rank, handle in sorted(handles.items()):
@@ -829,7 +828,7 @@ class MergedTrace:
         """Save the merged artifact as a ``merged-directory`` bundle."""
 
         self._require_members("save()")
-        from ._artifact import save_merged
+        from ._artifact import save_merged  # deferred: cycle _merged
 
         save_merged(self, path, overwrite=overwrite)
         self._source_path = str(path)

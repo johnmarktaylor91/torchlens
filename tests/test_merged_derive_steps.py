@@ -34,15 +34,15 @@ from test_merged_engine import (
     seeded_ledger,
 )
 
-from torchlens._merged import derive_merge
-from torchlens._merged._engine import MergeDerivation
-from torchlens._merged._errors import MergedTraceError
-from torchlens._merged._evidence import RankEvidence
-from torchlens.distributed._ledger import (
+from torchlens._distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
+from torchlens._merged import derive_merge
+from torchlens._merged._engine import MergeDerivation
+from torchlens._merged._errors import MergedTraceError
+from torchlens._merged._evidence import RankEvidence
 
 WORLD3 = membership_digest_for_ranks([0, 1, 2])
 

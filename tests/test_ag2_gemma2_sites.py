@@ -29,6 +29,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 
 transformers = pytest.importorskip("transformers")
 
@@ -222,6 +223,7 @@ def _key(model, transcoders, graph, monkeypatch) -> torch.Tensor:
 class TestGemma2Sites:
     """Gemma-2's pattern and norm-scale ops, pre-softcap logits and scaled embedding."""
 
+    @requires_gradient_edge
     def test_edges_match_detach_linearisation_key(self, monkeypatch) -> None:
         model = _model()
         transcoders = _transcoders()
@@ -235,6 +237,7 @@ class TestGemma2Sites:
         gap = (graph.adjacency_matrix.double() - key).abs().max().item()
         assert gap <= EDGE_FRAC * scale, (gap, scale)
 
+    @requires_gradient_edge
     def test_unfrozen_norm_scales_miss_the_key(self, monkeypatch) -> None:
         model = _model()
         transcoders = _transcoders()

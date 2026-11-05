@@ -1,4 +1,4 @@
-"""Capability probes that run one real tensor op each (a torch-only leaf).
+"""Capability probes that run one real tensor op (or one non-importing lookup) each (a torch-only leaf).
 
 The ``HAS_*`` flags these answer, their lazy latches and their capability-snapshot
 rows stay in ``torchlens._utils._torch_compat``, which imports this module at probe
@@ -9,7 +9,12 @@ missing, so any other failure still surfaces.
 
 from __future__ import annotations
 
+import importlib.util
+import inspect
+import sys
+import types
 from collections.abc import Callable
+from typing import Any
 
 import torch
 
@@ -50,6 +55,27 @@ def probe_cached_untyped_storage_wrapper() -> bool:
     return first is second
 
 
+def probe_node_sequence_nr() -> bool:
+    """Return whether autograd nodes expose their creation order (``Node._sequence_nr()``).
+
+    The in-place view-write rebind proves that a ``CopySlices`` node belongs to the
+    write that just ran by comparing creation order with every recorded node.
+
+    Returns
+    -------
+    bool
+        ``True`` when a fresh node answers ``_sequence_nr()`` with an ``int``.
+    """
+
+    try:
+        with torch.enable_grad():
+            node = (torch.ones(1, requires_grad=True) * 2.0).grad_fn
+        read = getattr(node, "_sequence_nr", None)
+        return callable(read) and isinstance(read(), int)
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
+
 def probe_cpu_half_kernels() -> bool:
     """Return whether common CPU kernels accept Half-dtype operands.
 
@@ -63,8 +89,8 @@ def probe_cpu_half_kernels() -> bool:
         for 'Half'"``); later torch ships them. Absence is a genuine torch CPU
         limitation on the floor, not a TorchLens degradation: tests that exercise
         a half-precision CPU forward, TorchLens's own ULP-step validation
-        machinery (``torch.nextafter`` in ``validation/core.py`` and
-        ``validation/exemptions.py``) or its dense tensor-stats kernel
+        machinery (``torch.nextafter`` in ``validation/_core.py`` and
+        ``validation/_exemptions.py``) or its dense tensor-stats kernel
         (``torch.aminmax`` in ``stats/_stats_kernel.py``) on a Half output skip
         on it.
     """
@@ -159,6 +185,78 @@ def probe_sparse_spsolve_cuda() -> bool:
     return _solves_identity_system(spsolve, "cuda")
 
 
+def probe_reduce_tuple_dim() -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
+        of axes directly (added torch 2.2; torch 2.1 only accepts a single
+        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
+        falls back to sequential single-axis reduction.
+    """
+
+    probe = torch.zeros((2, 2), dtype=torch.bool)
+    try:
+        probe.any(dim=(0, 1))
+    except TypeError:
+        return False
+    return True
+
+
+def probe_torch_cpp_extension() -> bool:
+    """Return whether ``torch.utils.cpp_extension`` imports cleanly.
+
+    Torch 2.1's extension builder imports ``pkg_resources`` when it loads, and current
+    setuptools no longer ships that module, so on such an install inductor's CPU backend and
+    ``torch.utils.benchmark`` fail at import. Later torch dropped the import (torch 2.2
+    through 2.9 still need setuptools itself to be installed).
+
+    Returns
+    -------
+    bool
+        ``True`` when the import succeeds.
+    """
+
+    try:
+        import torch.utils.cpp_extension  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def probe_meta_item_guard() -> bool:
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+
+    Returns
+    -------
+    bool
+        ``True`` when calling ``.item()`` (or any other scalar extraction,
+        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
+        carrying torch's own "Tensor.item() cannot be called on meta
+        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
+        falls all the way through to the aten dispatcher's generic
+        ``NotImplementedError`` ("... not implemented for this backend").
+        TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught
+        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
+        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
+        raising-frame PROVENANCE, never message text -- correctly, since
+        the two exception FAMILIES genuinely differ here. Absence is a
+        healthy old install surfacing the honest alternate typed refusal,
+        not a TorchLens degradation.
+    """
+
+    try:
+        torch.ones((), device="meta").item()
+    except NotImplementedError:
+        return False
+    except RuntimeError:
+        return True
+    return False
+
+
 def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -> bool:
     """Solve a tiny CSR identity system; ``False`` only on torch's no-cuDSS refusal.
 
@@ -185,3 +283,374 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
             return False
         raise
     return True
+
+
+def probe_numpy_bridge() -> bool:
+    """Return whether torch's C-level NumPy bridge works in this process.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.from_numpy`` and ``Tensor.numpy()`` both round-trip
+        a one-element array. torch wheels compiled against NumPy 1.x (torch 2.1
+        and 2.2) import under NumPy 2 with a "Failed to initialize NumPy"
+        warning, after which every bridge call raises ``RuntimeError: Numpy is
+        not available``. Measured 2026-10-31: torch 2.1.2 + NumPy 2.2.6 fails;
+        torch 2.3.1 and 2.4.1 + NumPy 2.2.6 pass. Feature-detected, never parsed
+        from version strings.
+    """
+
+    try:
+        import numpy as np
+
+        torch.from_numpy(np.zeros(1, dtype=np.float32))
+        torch.zeros(1).numpy()
+    except (ImportError, RuntimeError):
+        return False
+    return True
+
+
+def probe_gradient_edge() -> bool:
+    """Return whether torch's GradientEdge surface actually WORKS end to end.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
+        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
+        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
+        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
+        an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
+        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
+        every output -- including a bare ``GradientEdge``, which has no such
+        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
+        matching this read's long-documented "2.4+" remedy text). Absent on
+        older torch or broken on this intermediate band is a healthy old
+        install either way, not a TorchLens degradation: the read refuses
+        typed.
+    """
+
+    from torch.autograd import graph
+
+    gradient_edge = getattr(graph, "GradientEdge", None)
+    if gradient_edge is None or getattr(graph, "get_gradient_edge", None) is None:
+        return False
+
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        if h.grad_fn is None:
+            # Never happens for a requires_grad leaf's product, but the
+            # static annotation is ``Node | None``; treat an impossible-in-
+            # practice None the same as any other probe failure below.
+            return False
+        torch.autograd.grad(
+            [gradient_edge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
+        )
+    except Exception:
+        return False
+    return True
+
+
+def _redispatch_probe_mode(mode_base: type[Any]) -> Any:
+    """Return a dispatch mode built on ``mode_base`` that redispatches every op unchanged.
+
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class. ``_torch_compat`` (the one module that imports
+        it) hands it in, so this leaf touches no private torch module.
+
+    Returns
+    -------
+    Any
+        A fresh mode instance, entered with ``with``.
+    """
+
+    class _RedispatchProbeMode(mode_base):
+        """Redispatch operations unchanged for the Parameter subclass capability probe."""
+
+        def __torch_dispatch__(
+            self,
+            func: Any,
+            types: tuple[type[Any], ...],
+            args: tuple[Any, ...] = (),
+            kwargs: dict[str, Any] | None = None,
+        ) -> Any:
+            """Redispatch one probe operation without changing its result.
+
+            Parameters
+            ----------
+            func:
+                Dispatcher operator invoked by the probe.
+            types:
+                Participating tensor subclass types.
+            args:
+                Positional operator arguments.
+            kwargs:
+                Keyword operator arguments.
+
+            Returns
+            -------
+            Any
+                Unmodified operator result.
+            """
+
+            del types
+            return func(*args, **(kwargs or {}))
+
+    return _RedispatchProbeMode()
+
+
+def probe_parameter_as_subclass_in_dispatch_mode(mode_base: type[Any]) -> bool:
+    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
+    :class:`TorchDispatchMode` is active because the returned raw tensor is already
+    associated with a base ``Tensor`` Python object. Newer torch releases permit the
+    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
+    behavioral probe mirrors the dynamic-parameter logging context without parsing a
+    version string.
+
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class, handed in by ``_torch_compat``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    parameter = torch.nn.Parameter(torch.empty(0))
+    try:
+        with _redispatch_probe_mode(mode_base):
+            plain_tensor = parameter.as_subclass(torch.Tensor)
+    except (RuntimeError, TypeError):
+        return False
+    return type(plain_tensor) is torch.Tensor
+
+
+class _SubclassCtorProbe(torch.Tensor):
+    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+
+
+def probe_subclass_ctor_in_dispatch_mode(mode_base: type[Any]) -> bool:
+    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+
+    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
+    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
+    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
+    subclass X but the raw Tensor object is already associated to a python
+    object of type Tensor." This reproduces on stock torch with a no-op mode
+    (TorchLens's own wrapping is not the cause); newer torch permits the
+    conversion. TorchLens's completeness witness and intervention-ready
+    captures are themselves dispatch modes, so call sites that construct or
+    convert into a strict subclass while one is active need this behavioral
+    probe rather than a parsed version string. Sibling probe (Parameter-to-
+    Tensor, the opposite direction, also version-gated but independently):
+    :func:`probe_parameter_as_subclass_in_dispatch_mode`.
+
+    Parameters
+    ----------
+    mode_base:
+        Torch's dispatch-mode base class, handed in by ``_torch_compat``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    base = torch.empty(0)
+    try:
+        with _redispatch_probe_mode(mode_base):
+            converted = base.as_subclass(_SubclassCtorProbe)
+    except (RuntimeError, TypeError):
+        return False
+    return type(converted) is _SubclassCtorProbe
+
+
+def probe_roll_tensor_shifts() -> bool:
+    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
+
+    Older torch (verified: 2.8 rejects with ``RuntimeError: shifts required``;
+    2.13 accepts) does not unpack a 0-dim tensor passed as the ``shifts``
+    argument itself; the tuple spelling ``shifts=(tensor,)`` is accepted
+    everywhere. Behavioral probe on a 1-element tensor, never a version parse.
+
+    Returns
+    -------
+    bool
+        ``True`` when the bare tensor ``shifts`` spelling executes.
+    """
+
+    try:
+        torch.roll(torch.zeros(2), shifts=torch.zeros((), dtype=torch.long))  # type: ignore[arg-type]
+    except (RuntimeError, TypeError):
+        return False
+    return True
+
+
+def probe_sdpa_gqa() -> bool:
+    """Return whether ``scaled_dot_product_attention`` accepts ``enable_gqa`` (torch 2.5+).
+
+    Older torch rejects the keyword with ``TypeError``; the probe runs one call with
+    two query heads over one key/value head.
+
+    Returns
+    -------
+    bool
+        ``True`` when the grouped-query call executes.
+    """
+
+    query, key_value = torch.ones(1, 2, 1, 1), torch.ones(1, 1, 1, 1)
+    sdpa: Any = torch.nn.functional.scaled_dot_product_attention
+    try:
+        sdpa(query, key_value, key_value, enable_gqa=True)
+    except TypeError:
+        return False
+    return True
+
+
+def probe_sdpa_empty_row_zero() -> bool:
+    """Return whether SDPA writes zero, not NaN, for a query row with no admissible key.
+
+    Torch 2.5+ softmax leaves such a row all zero, so the output row is zero; older
+    torch returns NaN. Both spellings of an empty row are probed: a fully masked row
+    and a row whose only key scores ``-inf``.
+
+    Returns
+    -------
+    bool
+        ``True`` when both empty rows come out zero over a zero value.
+    """
+
+    sdpa = torch.nn.functional.scaled_dot_product_attention
+    query, value = torch.ones(1, 1, 1, 1), torch.zeros(1, 1, 1, 1)
+    masked = sdpa(query, query, value, attn_mask=torch.zeros(1, 1, dtype=torch.bool))
+    non_finite = sdpa(query, torch.full((1, 1, 1, 1), float("-inf")), value)
+    return bool((masked == 0).all()) and bool((non_finite == 0).all())
+
+
+def probe_attention_causal_bias() -> bool:
+    """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable.
+
+    NEVER executes ``torch.nn.attention.bias`` (r45/r49 lazy-import belt): that
+    module's top level calls ``torch._dynamo.allow_in_graph(...)``, dragging the
+    whole ``_dynamo``/``_inductor`` tree into every ``import torchlens``. When
+    the USER has already imported the module, the class is inspected exactly;
+    otherwise ``find_spec`` proves existence without execution (the parent
+    ``torch.nn.attention`` package body is dynamo-free) and the exact
+    ``__torch_function__`` site check is deferred to causal-bias shim install,
+    which resolves only through ``sys.modules``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the module is already imported and the class defines its
+        own ``__torch_function__`` (the identity-dispatch site the causal-bias
+        identity shim normalizes), or when the module exists but has not been
+        imported yet (the shim installer re-reads ``sys.modules`` at each wrap).
+        Absent on torch builds predating the ``torch.nn.attention`` namespace.
+
+    Notes
+    -----
+    This probe NEVER imports ``torch.nn.attention.bias``: on torch 2.13 its
+    module body reaches ``torch._dynamo``, whose import tree also drags in
+    ``torch.distributed.fsdp`` -- breaking the W21 cold-start guarantee that a
+    plain eager capture pays neither import. ``find_spec`` imports only the
+    parent ``torch.nn.attention`` package (verified dynamo-free), and a process
+    that never imported the module cannot hold a ``CausalBias`` instance, so
+    the deferred read is exact, not heuristic.
+    """
+
+    module = sys.modules.get("torch.nn.attention.bias")
+    if module is not None:
+        causal_bias = getattr(module, "CausalBias", None)
+        return causal_bias is not None and "__torch_function__" in vars(causal_bias)
+    try:
+        return importlib.util.find_spec("torch.nn.attention.bias") is not None
+    except (ImportError, AttributeError, ValueError):
+        return False
+
+
+def probe_safe_weights_only_load(globals_in_pkl: object | None) -> bool:
+    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
+
+    CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
+    2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
+    even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
+    bypassed. TorchLens no longer hands file bytes to ``torch.load`` (the metadata
+    unpickler refuses ``torch.storage._load_from_bytes`` by name; plain metadata
+    tensors use its own inline reduction); ``.pt`` extraction shards and pyreft weight
+    files, the last artifact bytes handed to ``torch.load``, refuse when it is false.
+
+    The patched behavior is internal to the unpickler and has NO version-string-
+    free *behavioral* signature we can cheaply exercise, so -- consistent with this
+    module's feature-detect convention (never parse ``torch.__version__`` for a
+    behavioral branch) -- we probe the 2.6.0 serialization-hardening SURFACE that
+    shipped *in* the fix release: the public
+    ``torch.serialization.get_unsafe_globals_in_checkpoint`` inspection API plus the
+    rewritten ``torch._weights_only_unpickler.get_globals_in_pkl`` GLOBAL-opcode
+    handler. Both are ABSENT on every affected version (<= 2.5.1) and PRESENT on
+    2.6.0+ (verified against the v2.5.1 and v2.6.0 sources). Requiring BOTH is the
+    conservative, fail-closed direction: a false negative merely refuses an
+    embedded load on a safe torch, whereas admitting it on a vulnerable torch would
+    reopen the RCE.
+
+    Parameters
+    ----------
+    globals_in_pkl:
+        ``torch._weights_only_unpickler.get_globals_in_pkl``, or ``None`` when absent.
+        ``_torch_compat`` resolves it (the private import stays in that module) and
+        passes it in; this leaf checks only the public half.
+
+    Returns
+    -------
+    bool
+        ``True`` only when the running torch carries the CVE-2025-32434 fix.
+    """
+
+    try:
+        import torch.serialization as _serialization
+    except Exception:  # pragma: no cover - defensive; imports on supported torch.
+        return False
+    return globals_in_pkl is not None and hasattr(
+        _serialization, "get_unsafe_globals_in_checkpoint"
+    )
+
+
+def probe_saved_tensors_hooks_patchable() -> bool:
+    """Return whether the saved-tensors-hooks context class accepts an init patch.
+
+    ``torch.autograd.graph.saved_tensors_hooks`` is the public context manager that installs user
+    pack/unpack hooks (``save_on_cpu`` and the non-reentrant checkpoint hook subclass it).
+    TorchLens scopes user hook bodies as autograd-internal during an active capture by patching the
+    class ``__init__`` (construction-time scoping) AND ``__enter__`` (use-time re-scoping, covering
+    contexts constructed before the first capture) at wrap time, so the patch needs a plain-Python
+    ``__init__`` with the ``(self, pack_hook, unpack_hook)`` shape and a plain-Python ``__enter__``
+    taking only ``self``. Probe the shape behaviorally; never parse ``torch.__version__``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the class exists and both ``__init__`` and ``__enter__``
+        are patchable Python functions with the expected shapes.
+    """
+
+    hooks_cls = getattr(getattr(torch.autograd, "graph", None), "saved_tensors_hooks", None)
+    if not isinstance(hooks_cls, type):
+        return False
+    init = hooks_cls.__dict__.get("__init__")
+    enter = hooks_cls.__dict__.get("__enter__")
+    if not isinstance(init, types.FunctionType) or not isinstance(enter, types.FunctionType):
+        return False
+    try:
+        init_params = list(inspect.signature(init).parameters)
+        enter_params = list(inspect.signature(enter).parameters)
+    except (TypeError, ValueError):
+        return False
+    return init_params == ["self", "pack_hook", "unpack_hook"] and enter_params == ["self"]

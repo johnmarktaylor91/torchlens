@@ -460,7 +460,7 @@ def _tf_trace_intermediate_signatures(
         if not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = TFIntermediateSignature(
-            func_call_id=int(getattr(op, "func_call_id", 0)),
+            func_call_id=int(getattr(op.call, "call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 dict.fromkeys(

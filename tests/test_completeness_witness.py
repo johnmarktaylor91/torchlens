@@ -22,7 +22,11 @@ import torchlens.backends.torch._completeness_finalize
 import torchlens.backends.torch._completeness_patches
 from torchlens import _state
 from torchlens._errors import CaptureGapWarning
-from torchlens._utils._torch_compat import HAS_FUNCTORCH_LEVEL_API
+from torchlens._utils._torch_compat import (
+    HAS_FUNCTORCH_INTERPRETER_STACK_API,
+    HAS_FUNCTORCH_LEVEL_API,
+    get_tensorbase_class,
+)
 from torchlens._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
 from torchlens.backends.torch import completeness_witness as cw, rescue
 from torchlens.backends.torch._completeness_types import _DispatchEvent
@@ -312,6 +316,29 @@ class _DirectAtenIntermediateSubmoduleGapModel(nn.Module):
         return self.child(x).add(1)
 
 
+def _c_tensor_base() -> type:
+    """Return torch's C tensor base class through the compat accessor.
+
+    torch 2.1 spells it ``torch._C._TensorBase`` and later torches ``TensorBase``;
+    calling its ``mul_`` is the unwrapped in-place route these models need.
+
+    Returns
+    -------
+    type
+        The C tensor base class.
+
+    Raises
+    ------
+    RuntimeError
+        When this torch exposes neither spelling.
+    """
+
+    base = get_tensorbase_class()
+    if base is None:
+        raise RuntimeError("this torch exposes no C tensor base class")
+    return base
+
+
 class _MutatingDirectAtenOutputChild(nn.Module):
     """Mutate a traced value before returning a separate untraceable raw output."""
 
@@ -319,7 +346,7 @@ class _MutatingDirectAtenOutputChild(nn.Module):
         """Return raw relu output after an observable unwrapped in-place mutation."""
 
         y = x + 1
-        torch._C.TensorBase.mul_(y, 2)
+        _c_tensor_base().mul_(y, 2)
         return torch._C._VariableFunctions.relu(y)
 
 
@@ -668,7 +695,7 @@ def test_untraceable_child_output_does_not_mask_observable_mutation(
     assert len(child_owners) == 1
     assert child_owners[0]["capture_accounted"] is True
     assert len(child_owners[0]["capture_accounted_boundary_labels"]) == 1
-    assert any(op.func_name == "none" and op.is_internal_source for op in trace.ops)
+    assert any(op.func_name == "none" and op.graph.is_internal_source for op in trace.ops)
 
 
 # Kept: sole branch coverage of backends/torch/_predicate_forward.py.
@@ -727,12 +754,12 @@ def test_vmap_interior_is_expected_opaque() -> None:
 
 # Kept: sole branch coverage of backends/torch/_completeness_finalize.py, backends/torch/_outputs.py, backends/torch/wrappers.py; a sole mutation kill.
 @pytest.mark.skipif(
-    not HAS_FUNCTORCH_LEVEL_API,
+    not (HAS_FUNCTORCH_LEVEL_API or HAS_FUNCTORCH_INTERPRETER_STACK_API),
     reason=(
         "Graceful pre-wrap-vmap transform-escape handling (witness-only, "
-        "capture_verified=False) needs torch._C._functorch.maybe_current_level to detect "
-        "the escape (_is_inside_functorch_transform); absent it (the whole 2.1/2.2 floor, "
-        "not just 2.1 -- the capability postdates 2.2 too), the escape goes undetected and "
+        "capture_verified=False) needs a functorch transform probe (the level API, or the "
+        "interpreter stack on torch 2.1/2.2) to detect the escape "
+        "(_is_inside_functorch_transform); absent both, the escape goes undetected and "
         "the unattributable output honestly raises an output-attribution error instead."
     ),
 )
@@ -1052,7 +1079,9 @@ def test_dynamic_parameter_initializers_and_registered_state_writes_are_captured
 def test_is_mutating_operator_reads_schema_not_name() -> None:
     """Mutation detection uses the operator schema, covering out= overloads too."""
 
-    from torchlens.backends.torch._completeness_dispatch_names import _is_mutating_operator
+    from torchlens.backends.torch._completeness_dispatch_names import (
+        _is_mutating_operator,
+    )
 
     assert _is_mutating_operator(torch.ops.aten.mul_.Tensor) is True
     assert _is_mutating_operator(torch.ops.aten.add_.Tensor) is True
@@ -1076,7 +1105,7 @@ class _DirectMutatingAtenModel(nn.Module):
         """Mutate a tensor in place through a direct (unwrapped) aten call."""
 
         y = x + 1
-        torch._C.TensorBase.mul_(y, 2)
+        _c_tensor_base().mul_(y, 2)
         return torch.sigmoid(y)
 
 
@@ -1252,7 +1281,7 @@ def test_descriptor_compat_property_construction_never_raises_without_a_docstrin
     directly.)
     """
 
-    from torchlens.backends.torch._tl import DescriptorCompatProperty
+    from torchlens._utils._tensor_label import DescriptorCompatProperty
 
     def getter(self: object) -> int:
         return 0

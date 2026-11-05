@@ -79,6 +79,9 @@ class RawGraphWorkspace:
     #: ``(func_call_id, call-site chain)`` of the wrapped call whose outputs are
     #: being logged (written by the shared-fields builder, read per output).
     _pending_call_site: tuple[Any, Any] | None = None
+    #: The wrapped call's argument slot snapshot (``backends.torch._ops_arg_slots``),
+    #: written by the shared-fields builder and retired by its witness step.
+    _pending_arg_slots: Any = None
     #: Call-site key -> its 1-based first-appearance index in this capture; the
     #: index names the op's call-site class (``<type>@cs<N>``).
     _call_site_index: dict[Any, int] = field(default_factory=dict)

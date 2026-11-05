@@ -16,7 +16,9 @@ from typing import Any
 
 from ..._ir.container import DictKey, TupleIndex
 from ..._ir.events import is_control_edge_use
+from ..._utils._record_group_table import record_member
 from .._validation_shared import float_replay_tolerances
+from ._perturbation_probes import _all_bool_outputs, _candidate_stream
 from .jaxpr import JaxEquationCapture, replay_equation
 
 
@@ -115,6 +117,66 @@ def _saved_single_output(
     return output
 
 
+_NO_RECORDED_INPUT: Any = object()
+
+
+def _saved_parent_input(
+    parent_op: Any,
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]] | None,
+    recorded_input: Any = _NO_RECORDED_INPUT,
+) -> Any:
+    """Return the saved parent payload a child consumed at one argument position.
+
+    A multi-result equation (``split``) materializes as one op whose payload is
+    the tuple of its outputs, and capture wired each child to the one output it
+    read, by value identity. Replay must hand the child that element, never the
+    whole tuple: the element identical to the child's recorded input, else the
+    single saved element equal to it. A saved tuple with no matching element
+    (a dropped or corrupted payload) raises, so the replay fails closed.
+
+    Parameters
+    ----------
+    parent_op
+        Materialized parent operation.
+    hidden_outputs_by_label
+        Runtime-only replay outputs keyed by raw and final op labels.
+    recorded_input
+        The child's captured input value at this position; omitted for a
+        single-result op read whole (a region projection).
+
+    Returns
+    -------
+    Any
+        The saved payload (one element of a multi-result parent).
+    """
+
+    saved = _saved_single_output(parent_op, hidden_outputs_by_label)
+    if recorded_input is _NO_RECORDED_INPUT or not isinstance(saved, tuple | list):
+        return saved
+    for element in saved:
+        if element is recorded_input:
+            return element
+    for element in saved:
+        if _same_array(element, recorded_input):
+            return element
+    raise ValueError("JAX multi-output parent saved no output matching the child's input.")
+
+
+def _same_array(left: Any, right: Any) -> bool:
+    """Return whether two arrays agree exactly in shape, dtype and values (NaN-equal)."""
+
+    import jax.numpy as jnp
+
+    if getattr(left, "shape", None) != getattr(right, "shape", None):
+        return False
+    if getattr(left, "dtype", None) != getattr(right, "dtype", None):
+        return False
+    try:
+        return bool(jnp.array_equal(left, right, equal_nan=True))
+    except TypeError:  # key arrays and other non-numeric payloads have no value equality
+        return False
+
+
 def _parent_perturbations_change_output(
     capture: JaxEquationCapture,
     op: Any,
@@ -150,9 +212,9 @@ def _parent_perturbations_change_output(
     positions_by_parent: dict[str, list[int]] = {}
     for position, parent_label in graph_positions.items():
         positions_by_parent.setdefault(parent_label, []).append(position)
+    bool_child = _all_bool_outputs(saved_outputs)
     for positions in positions_by_parent.values():
-        first_position = positions[0]
-        for candidate in _perturb_candidates(inputs[first_position]):
+        for candidate in _candidate_stream(capture, inputs, positions, bool_child=bool_child):
             perturbed_inputs = list(inputs)
             for position in positions:
                 perturbed_inputs[position] = candidate
@@ -216,7 +278,7 @@ def _data_parent_arg_positions(op: Any) -> dict[int, str]:
     """
 
     data_labels = _data_parent_labels(op)
-    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    graph_positions = record_member(op, "parent_arg_positions", {}).get("args", {})
     return {
         position: parent_label
         for position, parent_label in graph_positions.items()
@@ -354,63 +416,6 @@ def _edge_parent_label(edge: Any) -> str | None:
     if isinstance(edge, tuple) and edge and isinstance(edge[0], str):
         return edge[0]
     return None
-
-
-def _perturb_candidates(value: Any) -> tuple[Any, ...]:
-    """Return deterministic perturbation candidates for a JAX value.
-
-    Parameters
-    ----------
-    value
-        Parent payload to perturb.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Perturbed values with the same shape and dtype family.
-    """
-
-    import jax
-    import jax.numpy as jnp
-
-    array = jnp.asarray(value)
-    if str(array.dtype).startswith("key<"):
-        if not array.shape:
-            return (jax.random.fold_in(value, 1),)
-        flat = jnp.reshape(array, (-1,))
-        folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
-        return (jnp.reshape(folded, array.shape),)
-    if array.dtype == jnp.bool_:
-        return (jnp.logical_not(array),)
-    if jnp.issubdtype(array.dtype, jnp.integer):
-        info = jnp.iinfo(array.dtype)
-        base_candidates = [
-            array + jnp.asarray(1, dtype=array.dtype),
-            array - jnp.asarray(1, dtype=array.dtype),
-            jnp.zeros_like(array),
-            jnp.full_like(array, info.max),
-        ]
-        if info.min < 0:
-            base_candidates.append(jnp.full_like(array, info.min))
-        return (
-            *base_candidates,
-            jnp.bitwise_xor(array, jnp.asarray(info.max, dtype=array.dtype)),
-        )
-    if jnp.issubdtype(array.dtype, jnp.complexfloating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.real.dtype)
-        return (
-            array + jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-            array - jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-        )
-    if jnp.issubdtype(array.dtype, jnp.floating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
-        candidates: tuple[Any, ...] = (array + magnitude, array - magnitude)
-        if not bool(jnp.all(jnp.isfinite(array))):
-            # A NaN or inf parent absorbs any additive perturbation; finite
-            # replacements are the only candidates that can move the child.
-            candidates = (*candidates, jnp.zeros_like(array), jnp.ones_like(array))
-        return candidates
-    return (array,)
 
 
 def _values_close(left: Any, right: Any) -> bool:

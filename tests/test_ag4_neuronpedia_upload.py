@@ -32,8 +32,9 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens._selection.subspace import BasisProvenance
-from torchlens.attribution.graph import _neuronpedia_upload as up
+from torchlens.attribution._graph import _neuronpedia_upload as up
 
 KEY = "not-a-real-key"
 BASE = "https://www.neuronpedia.org"
@@ -134,9 +135,10 @@ def _direction(dim: int = 4, site: str = "model.layers.3") -> tl.intervention.Di
 # ---------------------------------------------------------------- graph upload
 
 
+@requires_gradient_edge
 def test_graph_upload_sends_the_documented_sequence(fake, exported) -> None:
     fake.script = _graph_answers()
-    url = tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+    url = tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
     assert url == f"{BASE}/tiny/graph?slug=fixture"
     body = json.dumps(exported, allow_nan=False).encode()
     first, second, third = fake.sent
@@ -180,6 +182,7 @@ def _too_small(graph: dict) -> dict:
     return graph
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     ("change", "code"),
     [
@@ -194,18 +197,19 @@ def test_graph_upload_refuses_an_invalid_graph_before_any_request(
     fake, exported, change, code
 ) -> None:
     with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.graph.upload_to_neuronpedia(change(exported), api_key=KEY)
+        tl.attribution.upload_to_neuronpedia(change(exported), api_key=KEY)
     assert excinfo.value.fields["code"] == code
     assert "Remedy:" in str(excinfo.value)
     assert fake.sent == []
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["graph", "vector"])
 def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     for key in (None, "", "   "):
         with pytest.raises(tl.errors.AttributionError) as excinfo:
             if kind == "graph":
-                tl.attribution.graph.upload_to_neuronpedia(exported, api_key=key)
+                tl.attribution.upload_to_neuronpedia(exported, api_key=key)
             else:
                 _direction().upload_to_neuronpedia(api_key=key, model_id="tiny", name="v")
         assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"
@@ -213,6 +217,7 @@ def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     assert fake.sent == []
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     ("script", "step"),
     [
@@ -231,7 +236,7 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
         monkeypatch.setattr(up.urllib.request, "urlopen", unreachable)
         monkeypatch.setattr(up, "_make_transport", _REAL_TRANSPORT)
         with pytest.raises(tl.errors.AttributionError) as excinfo:
-            tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+            tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
         assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
         assert step in str(excinfo.value) and excinfo.value.__cause__ is None
 
@@ -244,21 +249,23 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
         return
     fake.script = list(script)
     with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+        tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
     assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
     assert step in str(excinfo.value)
     assert len(fake.sent) == len(script)
 
 
+@requires_gradient_edge
 def test_graph_upload_refuses_a_response_without_its_fields(fake, exported) -> None:
     for answer in ({"url": SIGNED}, {"putRequestId": "p", "url": "http://plain/x.json"}, b"[]"):
         fake.script, fake.sent = [(200, answer)], []
         with pytest.raises(tl.errors.AttributionError) as excinfo:
-            tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+            tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
         assert excinfo.value.fields["code"] == "neuronpedia_upload_response_invalid"
         assert len(fake.sent) == 1
 
 
+@requires_gradient_edge
 def test_api_key_and_signature_never_appear_in_errors_or_logs(fake, exported, caplog) -> None:
     caplog.set_level(logging.DEBUG)
     signature = re.search(r"X-Amz-Signature=(\w+)", SIGNED).group(1)
@@ -267,7 +274,7 @@ def test_api_key_and_signature_never_appear_in_errors_or_logs(fake, exported, ca
         (403, f"<Error>SignatureDoesNotMatch {signature} key={KEY}</Error>".encode()),
     ]
     with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+        tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
     error = excinfo.value
     texts = [str(error), repr(error), str(error.args), repr(error.fields), caplog.text]
     texts += [repr(request) for request in fake.sent]
@@ -338,6 +345,7 @@ def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction
 # ---------------------------------------------------------------- never live
 
 
+@requires_gradient_edge
 def test_default_transport_is_never_built_under_tests(exported) -> None:
     """Without a fake, the upload reaches the guarded real transport and nothing else.
 
@@ -348,11 +356,12 @@ def test_default_transport_is_never_built_under_tests(exported) -> None:
 
     assert up._make_transport.__module__ == up.__name__
     with pytest.raises(_RealTransportBuilt):
-        tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
+        tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
     with pytest.raises(_RealTransportBuilt):
         _direction().upload_to_neuronpedia(api_key=KEY, model_id="tiny", name="v")
 
 
+@requires_gradient_edge
 def test_docs_upload_example_runs_against_the_fake_transport(fake, tmp_path, monkeypatch) -> None:
     text = DOC.read_text(encoding="utf-8")
     python_fences = re.findall(r"```python\n(.*?)\n```", text, re.DOTALL)

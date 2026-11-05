@@ -52,6 +52,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from ._condensed_flow import JUNCTION_FUNC_NAMES
@@ -438,7 +439,7 @@ def _instance_honesty_refusal(
         op = labels_index.get(label)
         if op is None:
             return False
-        if bool(getattr(op, "is_buffer", False)):
+        if bool(record_member(op, "is_buffer", False)):
             return False
         return op.label not in member_set
 
@@ -481,7 +482,7 @@ def _pattern_descriptor(
     """Return the K4-family chip descriptor for one accepted instance."""
 
     base = _make_op_segment_descriptor(trace, context, match_record.op_labels)
-    label = f"PATTERN '{match_record.spec.name}' -- {len(match_record.op_labels)} ops"
+    label = f"PATTERN '{match_record.spec.name}' -- {len(match_record.op_labels):,} ops"
     spanned_note = base.label.split(" -- spans ", 1)
     if len(spanned_note) == 2:
         # Keep the spanned-modules disclosure the base builder derived.

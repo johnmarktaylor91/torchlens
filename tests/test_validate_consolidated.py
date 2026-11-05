@@ -8,9 +8,9 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
-import torchlens.validation.consolidated as consolidated_validation
-from torchlens.validation.consolidated import InterventionValidationReport
+import torchlens._user_public_impls as user_public_impls
+import torchlens.validation._consolidated as consolidated_validation
+from torchlens.validation._consolidated import InterventionValidationReport
 
 
 class TinyModel(torch.nn.Module):
@@ -63,11 +63,11 @@ def test_validate_scope_defaults_to_forward(
     model, x = model_and_input
     with (
         mock.patch(
-            "torchlens._user_funcs.validate_forward_pass",
-            wraps=user_funcs.validate_forward_pass,
+            "torchlens._user_public_impls.validate_forward_pass",
+            wraps=user_public_impls.validate_forward_pass,
         ) as forward_validator,
         mock.patch(
-            "torchlens.validation.consolidated.validate_backward_pass",
+            "torchlens.validation._consolidated.validate_backward_pass",
             wraps=consolidated_validation.validate_backward_pass,
         ) as backward_validator,
     ):
@@ -97,7 +97,7 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
                 continue
-            op.grads.for_pass(1).grad = torch.full_like(grad, 12345.0)
+            op.autograd.grads.for_pass(1).grad = torch.full_like(grad, 12345.0)
             break
         return result
 
@@ -113,7 +113,7 @@ def test_scope_backward_with_metadata_forwards_false(
 
     model, x = model_and_input
     with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
+        "torchlens.validation._consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
         assert tl.validate(model, x, scope="backward", validate_metadata=False)
@@ -197,7 +197,7 @@ def test_validate_peak_instrumentation_is_opt_in(
 
     from torch import nn
 
-    from torchlens.validation.diagnostics import last_validation_peak_memory
+    from torchlens.validation._diagnostics import last_validation_peak_memory
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
 

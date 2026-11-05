@@ -65,6 +65,20 @@ jobs:
             numpy: "numpy==1.26.4"
             constraints: .github/workflows/numpy1-constraints.txt
             scope: smoke
+          # NumPy 2 boundary (walk late.6): torch 2.3 is the first torch built
+          # against NumPy 2. torch 2.1 and 2.2 import under NumPy 2, but every
+          # torch<->NumPy exchange inside torch raises "Numpy is not
+          # available", which is why the floor rows above pin NumPy 1.26.4.
+          # This row runs the smoke tier on the lowest torch whose bridge works
+          # with the latest NumPy 2 (python 3.11, so the resolver can pick the
+          # newest NumPy release; transformers 5.x needs torch>=2.4, so no R0
+          # sweep here). Every other NumPy 2 row runs torch 2.6 or later.
+          - track: numpy2-boundary
+            python: "3.11"
+            torch: "2.3.1+cpu"
+            torchvision: "0.18.1+cpu"
+            numpy: numpy
+            scope: smoke
           - track: floor
             python: "3.13"
             torch: "2.6.0+cpu"
@@ -72,6 +86,19 @@ jobs:
             transformers: "5.18.0"
             numpy: numpy
             scope: smoke
+          # NumPy 2 bridge fallback (walk late.6): torch 2.1 and 2.2 import
+          # under NumPy 2, but every torch<->NumPy exchange inside torch raises
+          # "Numpy is not available", and `pip install torchlens` next to them
+          # resolves NumPy 2 by default. This row runs that broken pair and only
+          # the NumPy-bridge tests (HAS_NUMPY_BRIDGE and TorchLens's byte-copy
+          # fallbacks); the full smoke tier cannot be green there because test
+          # helpers call `.numpy()` themselves.
+          - track: numpy2-bridge-fallback
+            python: "3.10"
+            torch: "2.1.2+cpu"
+            torchvision: "0.16.2+cpu"
+            numpy: "numpy==2.2.6"
+            scope: numpy-bridge
           - track: canonical
             python: "3.10"
             torch: "2.8.0+cpu"
@@ -275,6 +302,20 @@ jobs:
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
           # The compat file's smoke tests ran in the selection above.
           pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
+
+      - name: Run the NumPy-bridge tests (torch below 2.3 with NumPy 2)
+        if: matrix.scope == 'numpy-bridge'
+        run: |
+          python - <<'PY'
+          from torchlens._utils._torch_compat import get_numpy_bridge_support
+
+          # This row exists to run the BROKEN pair; a working bridge here
+          # means the row's pins drifted and the fallbacks went unexercised.
+          assert get_numpy_bridge_support() is False, "expected a broken NumPy bridge"
+          PY
+          pytest tests/test_numpy_bridge_compat.py -p no:randomly --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/numpy-bridge.junit.xml"
+          echo "numpy-bridge.junit.xml 0 --min-passed 10" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Declare the executed-test floor (smoke suite)
         if: matrix.scope == 'smoke'

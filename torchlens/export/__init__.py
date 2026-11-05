@@ -19,16 +19,24 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from torchlens._observe import memory_timeline_v2 as _build_v2
+
 from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
-from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._capture_honesty import capture_honesty_facts
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._entry_refusals import require_xarray_presentations
+from .._errors import InvalidArgumentError
+from .._extraction.trace_safetensors import write_trace_safetensors
 from .._io._json import loads_bounded
+from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils._record_group_table import record_member
 from .._utils.display import atomic_write_text
+from ..intervention.errors import BundleComparisonError
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
+from ._honesty_comments import _bundle_member_honesty, _honesty_comment_block, _honesty_xml_comment
 from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
     describe_target,
@@ -53,7 +61,7 @@ def __getattr__(name: str) -> Any:
     """Lazily resolve re-exported Model Explorer names from the L8 bridge."""
 
     if name in _MODEL_EXPLORER_LAZY_NAMES:
-        from . import _model_explorer as _me
+        from . import _model_explorer as _me  # deferred: cycle export
 
         value = getattr(_me, name)
         globals()[name] = value
@@ -96,7 +104,7 @@ def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     True
     """
 
-    from ._model_explorer import model_explorer as _impl
+    from ._model_explorer import model_explorer as _impl  # deferred: cycle export
 
     return _impl(trace, path, **kwargs)
 
@@ -133,7 +141,7 @@ def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
     True
     """
 
-    from ._model_explorer import model_explorer_diff as _impl
+    from ._model_explorer import model_explorer_diff as _impl  # deferred: cycle export
 
     return _impl(members, path, **kwargs)
 
@@ -175,69 +183,9 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     ['me.json']
     """
 
-    from ._model_explorer import model_explorer_serve as _impl
+    from ._model_explorer import model_explorer_serve as _impl  # deferred: cycle export
 
     return _impl(source, **kwargs)
-
-
-def _honesty_comment_block(log: Any, prefix: str) -> str:
-    """Format the shared honesty preamble as comment lines.
-
-    Parameters
-    ----------
-    log:
-        Capture object being exported.
-    prefix:
-        Comment marker of the destination format (e.g. ``"# "``).
-
-    Returns
-    -------
-    str
-        Newline-terminated comment block.
-    """
-
-    return "".join(f"{prefix}{line}\n" for line in honesty_preamble_lines(log))
-
-
-def _honesty_xml_comment(log: Any) -> str:
-    """Format the shared honesty preamble as one XML/HTML comment.
-
-    Returns
-    -------
-    str
-        Single-line-per-fact comment; ``--`` is collapsed because XML
-        comments must not contain double hyphens.
-    """
-
-    body = "\n".join(line.replace("--", "-") for line in honesty_preamble_lines(log))
-    return f"<!-- {body} -->\n"
-
-
-def _bundle_member_honesty(bundle: Any) -> dict[str, Any]:
-    """Return per-member honesty facts for a Bundle export.
-
-    Parameters
-    ----------
-    bundle:
-        TorchLens ``Bundle``.
-
-    Returns
-    -------
-    dict[str, Any]
-        Member-name-keyed honesty fact blocks (best effort per member).
-    """
-
-    members: dict[str, Any] = {}
-    for member_name in getattr(bundle, "names", ()) or ():
-        # Per-member disclosure fallback: a member the bundle cannot serve (or
-        # whose facts cannot be read) gets an explicit error row, never a
-        # silent omission. The fact reader is getattr-defensive, so the
-        # realistic raise surface is the member lookup itself.
-        try:
-            members[str(member_name)] = capture_honesty_facts(bundle[member_name])
-        except (AttributeError, KeyError, TypeError):
-            members[str(member_name)] = {"error": "member honesty facts unavailable"}
-    return {"members": members}
 
 
 def svg(trace: Any, path: str | Path, *, editable: bool = True) -> Path:
@@ -321,7 +269,7 @@ def html(
     True
     """
 
-    from ._report import write_report
+    from ._report import write_report  # deferred: cycle export
 
     return write_report(trace, path, arrays=arrays, graph=graph, options=options)
 
@@ -600,7 +548,7 @@ def memory_timeline(trace: Any, path: str | Path) -> Path:
     live_bytes = 0
     events: list[dict[str, Any]] = []
     for layer in _iter_layers(trace):
-        bytes_value = int(getattr(layer, "activation_memory", 0) or 0)
+        bytes_value = int(record_member(layer, "activation_memory", 0) or 0)
         live_bytes += bytes_value
         events.append(
             {
@@ -661,8 +609,6 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
     True
     """
 
-    from torchlens._observe import memory_timeline_v2 as _build_v2
-
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     artifact = _build_v2(trace)
@@ -719,7 +665,7 @@ def _module_state_variables(xr: Any, buffers: list[tuple[Any, Any]]) -> dict[str
             attrs={
                 _XARRAY_KIND_ATTR: _XARRAY_MODULE_STATE,
                 "layer_label": label,
-                "buffer_address": str(getattr(layer, "address", None) or ""),
+                "buffer_address": str(record_member(layer, "address", None) or ""),
             },
         )
     return variables
@@ -784,7 +730,6 @@ def xarray(trace: Any) -> Any:
         raise ImportError(
             "xarray export requires xarray. Install with: pip install torchlens[neuro]"
         ) from exc
-    from .._errors import InvalidArgumentError
 
     arrays = []
     layer_coord: list[str] = []
@@ -799,14 +744,13 @@ def xarray(trace: Any) -> Any:
         if getattr(layer, "has_saved_activation", None) is False:
             skipped_unsaved.append(label)
             continue
-        out = getattr(layer, "out", None)
-        if not isinstance(out, torch.Tensor):
+        if not isinstance(out := getattr(layer, "out", None), torch.Tensor):
             continue
-        values = out.detach().cpu().numpy()
+        values = tensor_to_numpy(out.detach())
         # Batch-2 buffer ruling (option c): a buffer is module state with no
         # presentation axis; it exports as its own variable, on save-all and
         # partial traces alike.
-        if getattr(layer, "is_buffer", False):
+        if record_member(layer, "is_buffer", False):
             buffers.append((layer, values))
             continue
         flat = _presentation_by_neuroid(values)
@@ -1040,7 +984,7 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
                 "args": {
                     "layer_label": getattr(layer, "layer_label", None),
                     "op_type": getattr(layer, "func_name", None),
-                    "memory": getattr(layer, "activation_memory", None),
+                    "memory": record_member(layer, "activation_memory", None),
                     "module_path": getattr(layer, "module", None),
                 },
             }
@@ -1056,8 +1000,6 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     bypassed; a gate refusal or a ``metric_shape_mismatch`` site refuses only the
     deltas (every event's ``delta`` is ``None``; the status records code and message).
     """
-
-    from ..intervention.errors import BundleComparisonError
 
     try:
         return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
@@ -1122,7 +1064,7 @@ def _chrome_trace_diff_events(
                         "module_path": getattr(node, "module_path", None),
                         "module_type": getattr(node, "module_type", None),
                         "delta": deltas.get(graph_node_label, {}).get(member_name),
-                        "memory": getattr(layer, "activation_memory", None),
+                        "memory": record_member(layer, "activation_memory", None),
                     },
                 }
             )
@@ -1253,8 +1195,6 @@ def safetensors(trace: Any, path: str | Path) -> Path:
     >>> size > 0
     True
     """
-
-    from .._extraction.trace_safetensors import write_trace_safetensors
 
     return write_trace_safetensors(trace, path)
 

@@ -10,13 +10,14 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils._record_group_table import record_member
 from .errors import HookSignatureError, ReplayPreconditionError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from ._types import Edit, HookSpec
     from .hooks import HookCallable, HookDirection
-    from .types import Edit, HookSpec
 
 #: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
 _GRAD_SELECTOR_KIND = "grad"
@@ -161,7 +162,7 @@ def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
         return None
     if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
         return None
-    address = getattr(record, "address", "")
+    address = record_member(record, "address", "")
     return tuple(f"{address}:{index}" for index in range(1, max(int(num_calls), 1) + 1))
 
 
@@ -285,7 +286,7 @@ def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
         if isinstance(layer_log, Mapping):
             value = layer_log.get(field_name)
         else:
-            value = getattr(layer_log, field_name, None)
+            value = record_member(layer_log, field_name, None)
         snapshot[field_name] = value
     return snapshot
 
@@ -335,9 +336,14 @@ def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -
     ):
         return
     if ctx_param is None and not has_var_keyword:
-        raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
+        raise HookSignatureError(
+            "hook must accept required keyword-only argument 'ctx'; write it as "
+            "def edit(t, *, ctx): return t * 0 (ctx may go unused)"
+        )
     if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
-        raise HookSignatureError("'ctx' must be a keyword-only parameter")
+        raise HookSignatureError(
+            "'ctx' must be a keyword-only parameter; write it as def edit(t, *, ctx): ..."
+        )
 
 
 def _stored_facet_scatter_hook(hook_spec: HookSpec) -> Any:

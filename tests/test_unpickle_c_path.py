@@ -36,6 +36,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _PurePythonBundleUnpickler,
 )
+from torchlens._utils._torch_compat import get_tensorbase_class
 
 # --------------------------------------------------------------------------- #
 # Stream builders (raw opcodes, version-robust)
@@ -143,7 +144,11 @@ def _getattr_then_call(name: str, *args: bytes) -> bytes:
 
 
 def _getattr_value_and_call() -> bytes:
-    """A ``getattr`` result stored in the root list AND called: the interpreter must run it."""
+    """A ``getattr`` result stored in the root list AND called: the interpreter must run it.
+
+    The class is named as this torch spells it (``TensorBase``, or the legacy
+    ``_TensorBase`` on older torch such as the 2.1 floor), as a pickle written here would.
+    """
 
     return (
         pickle.PROTO
@@ -151,7 +156,7 @@ def _getattr_value_and_call() -> bytes:
         + pickle.EMPTY_LIST
         + _global("builtins", "getattr")
         + pickle.MARK
-        + _global("torch._C", "TensorBase")
+        + _global("torch._C", get_tensorbase_class().__name__)
         + pickle.SHORT_BINUNICODE
         + b"\x03sum"
         + pickle.TUPLE
@@ -182,7 +187,7 @@ def _honest_values() -> dict[str, Any]:
         "numpy_scalar": np.float64(1.5),
         "module_identity": nn.Identity(),
         "module_type": nn.Linear,
-        "tensor_method": getattr(torch._C.TensorBase, "sum"),  # noqa: B009 -- the pickled shape
+        "tensor_method": getattr(get_tensorbase_class(), "sum"),  # noqa: B009 -- the pickled shape
         "nested": {"layers": [{"name": f"l{i}", "shape": (i, i + 1)} for i in range(20)]},
         "shared": (lambda s: [s, s, {"again": s}])(["memo", "shared"]),
     }
@@ -235,7 +240,7 @@ def _hostile_streams() -> dict[str, bytes]:
         "storage_ctor": _reduce("torch", "UntypedStorage", _int(16)),
         "file_reader": _reduce("torch._C", "PyTorchFileReader", pickle.SHORT_BINUNICODE + b"\x01x"),
         "dotted_rebuild": _reduce("torch._utils", "_rebuild_tensor_v2.__globals__.get"),
-        "lazy_import_ref": _newobj("torchlens.intervention.save", "LazyImportRef"),
+        "lazy_import_ref": _newobj("torchlens.intervention._save", "LazyImportRef"),
         "lazy_import_ref_current": _newobj("torchlens.intervention._spec_values", "LazyImportRef"),
         "pre3_module": _global("torchlens.data_classes.trace", "Trace") + pickle.STOP,
         # allocation belt: constructor types

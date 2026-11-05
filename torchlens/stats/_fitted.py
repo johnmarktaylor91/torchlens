@@ -28,6 +28,7 @@ from typing import Any, cast
 import torch
 
 from .._errors import _actionable_message, _ActionableErrorMixin
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import ConfigurationError
 
 __tl_layer__ = "L5"
@@ -110,7 +111,7 @@ def fitted_digest(
     hasher = hashlib.sha256()
     hasher.update(header)
     for tensor in (components, mean, explained_variance):
-        hasher.update(tensor.detach().to("cpu", torch.float64).contiguous().numpy().tobytes())
+        hasher.update(tensor_payload_bytes(tensor.detach().to("cpu", torch.float64).contiguous()))
     return "sha256:" + hasher.hexdigest()
 
 
@@ -205,7 +206,7 @@ def save_fitted(fitted: Any, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
-    from ._state_io import is_saveable_state, write_state
+    from ._state_io import is_saveable_state, write_state  # deferred: cycle stats
 
     if is_saveable_state(fitted):
         return write_state(fitted, path)
@@ -301,7 +302,7 @@ def load_fitted(path: str | Path, *, encoder: Callable[[Any], Any] | None = None
             remedy="pass a sidecar written by tl.stats.save_fitted()",
             path=str(source),
         ) from exc
-    from ._state_io import _SCHEMA_PREFIX, read_state, refuse_encoder_mismatch
+    from ._state_io import _SCHEMA_PREFIX, read_state, refuse_encoder_mismatch  # deferred: cycle
 
     if str(metadata.get("schema", "")).startswith(_SCHEMA_PREFIX):
         return read_state(source, metadata, tensors, encoder=encoder)

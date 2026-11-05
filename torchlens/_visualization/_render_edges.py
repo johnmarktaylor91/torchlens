@@ -3,6 +3,7 @@
 # ruff: noqa: F403, F405
 
 from .._record_type import record_type
+from ._atomic_scope import _enclosing_module_calls
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -19,19 +20,23 @@ from ._edge_multiplicity import (
     _bump_deduped_edge_multiplicity,
     _html_argument_edge_label,
     _merge_parallel_arg_midpoint,
+    _parent_occurrence_labels,
     _register_arg_midpoint_edge,
     _register_deduped_edge,
     _set_argument_edge_label,
 )
+from ._edit_marks import DELTA, EDIT_RING_PENWIDTH, EDITED_NODE_CLASS, EditRow, edit_ink
 from ._loop_edges import loop_edge_attrs, pass_label_spacing
 from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
     _get_lowest_module_for_two_nodes,
+    _lowest_common_rendered_owner_key,
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
 from ._rolled_edges import _html_combined_recurrence_label
+from ._segment_descriptors import _is_recorded_module_key
 from .collapse_plan import OpSegment
 
 if TYPE_CHECKING:
@@ -407,8 +412,6 @@ def _add_intervention_hook_nodes(
         The graph is mutated in place.
     """
 
-    from ._edit_marks import DELTA, EDIT_RING_PENWIDTH, EDITED_NODE_CLASS, EditRow, edit_ink
-
     ink = edit_ink(theme)
     fillcolor = str(
         intervention_graph_override(
@@ -639,9 +642,9 @@ def _surfaced_own_output_ops(
                 op = trace.ops[label]
         else:
             op = trace.ops[label]
-        if getattr(op, "is_buffer", False):
+        if getattr(op.graph, "is_buffer", False):
             continue
-        if not getattr(op, "is_atomic_module", False):
+        if not getattr(op.module_context, "is_atomic_module", False):
             continue
         modules = list(getattr(op, "modules", ()) or ())
         if not modules:
@@ -680,12 +683,12 @@ def _collapsed_module_owner_key(
     if "." not in address:
         return None
     parent_address = address.rsplit(".", 1)[0]
-    if parent_address == "self" or parent_address not in trace.modules:
+    if parent_address == "self" or not _is_recorded_module_key(trace, parent_address):
         return None
     if vis_mode == "rolled":
         return parent_address
     parent_key = f"{parent_address}:{call_index}"
-    return parent_key if parent_key in trace.modules else None
+    return parent_key if _is_recorded_module_key(trace, parent_key) else None
 
 
 def _run_fold_ellipsis_owner_key(
@@ -761,9 +764,7 @@ def _raw_render_node_owner_key(node: GraphNode, vis_mode: str) -> str | None:
         Innermost owning cluster, or ``None`` for a top-level node.
     """
 
-    modules = [str(module) for module in getattr(node, "modules", ()) or ()]
-    if getattr(node, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
+    modules = [str(module) for module in _enclosing_module_calls(node)]
     if not modules:
         return None
     owner = modules[-1]
@@ -810,53 +811,6 @@ def _rendered_endpoint_owner_key(
         address, _, call_index = collapsed_address.partition(":")
         return _collapsed_module_owner_key(trace, address, call_index or "1", vis_mode)
     return _raw_render_node_owner_key(node, vis_mode)
-
-
-def _lowest_common_rendered_owner_key(
-    owner1: str | None,
-    owner2: str | None,
-    vis_mode: str,
-) -> str | int:
-    """Return the lowest common cluster for two rendered endpoint owners.
-
-    Parameters
-    ----------
-    owner1:
-        Owning cluster of the first rendered endpoint.
-    owner2:
-        Owning cluster of the second rendered endpoint.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"`` visualization mode.
-
-    Returns
-    -------
-    str | int
-        Lowest common cluster key, or ``-1`` for top-level emission.
-    """
-
-    if owner1 is None or owner2 is None:
-        return -1
-    address1, separator1, call1 = owner1.rpartition(":")
-    address2, separator2, call2 = owner2.rpartition(":")
-    if not separator1:
-        address1 = owner1
-    if not separator2:
-        address2 = owner2
-    parts1 = address1.split(".")
-    parts2 = address2.split(".")
-    common_parts: list[str] = []
-    for part1, part2 in zip(parts1, parts2, strict=False):
-        if part1 != part2:
-            break
-        common_parts.append(part1)
-    if not common_parts:
-        return -1
-    common_address = ".".join(common_parts)
-    if vis_mode == "rolled":
-        return common_address
-    if call1 != call2:
-        return -1
-    return f"{common_address}:{call1}" if separator1 and separator2 else common_address
 
 
 def _queue_run_fold_ellipsis_node(
@@ -988,7 +942,7 @@ def _add_edges_for_node(
         metadata_child = render_edge.metadata_child
         child_render_name = _render_node_name(child_node, vis_mode)
 
-        if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
+        if child_node.graph.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
         collapsed_head_name = (
             collapsed_container_nodes.get(child_render_name)
@@ -996,7 +950,7 @@ def _add_edges_for_node(
             else None
         )
 
-        if parent_node.has_input_ancestor:
+        if parent_node.graph.has_input_ancestor:
             edge_style = "solid"
         else:
             edge_style = "dashed"
@@ -1063,9 +1017,9 @@ def _add_edges_for_node(
             child_modules = child_node.modules[:]
             parent_modules = parent_node.modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_atomic_module:
+            if child_node.module_context.is_atomic_module:
                 child_modules = child_modules[:-1]
-            if parent_node.is_atomic_module:
+            if parent_node.module_context.is_atomic_module:
                 parent_modules = parent_modules[:-1]
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue
@@ -1180,7 +1134,7 @@ def _add_edges_for_node(
                 hidden_fold=child_hidden_fold,
                 vis_mode=vis_mode,
             )
-            module = _lowest_common_rendered_owner_key(parent_owner, child_owner, vis_mode)
+            module = _lowest_common_rendered_owner_key(self, parent_owner, child_owner, vis_mode)
             edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
@@ -1401,7 +1355,7 @@ def _add_edges_for_node(
         # inside had ``has_input_ancestor=True``, contradicting the rolled
         # render of the same trace.
         for endpoint_node in (parent_node, child_node):
-            if not endpoint_node.has_input_ancestor:
+            if not endpoint_node.graph.has_input_ancestor:
                 continue
             for containing_module in endpoint_node.modules:
                 containing_key = (
@@ -1485,7 +1439,7 @@ class _RolledEdgeMaps:
 
         found = self._child_ops.get(layer.layer_label)
         if found is None:
-            found = self._child_ops[layer.layer_label] = layer.child_ops_per_layer
+            found = self._child_ops[layer.layer_label] = layer.graph.child_ops_per_layer
         return found
 
     def parent_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1493,7 +1447,7 @@ class _RolledEdgeMaps:
 
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
-            found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
+            found = self._parent_ops[layer.layer_label] = layer.graph.parent_ops_per_layer
         return found
 
     def parents_per_pass(self, layer: "Layer") -> dict[int, list[str]]:
@@ -1501,7 +1455,7 @@ class _RolledEdgeMaps:
 
         found = self._parents_per_pass.get(layer.layer_label)
         if found is None:
-            found = self._parents_per_pass[layer.layer_label] = layer.parents_per_pass
+            found = self._parents_per_pass[layer.layer_label] = layer.graph.parents_per_pass
         return found
 
 
@@ -1628,7 +1582,7 @@ def _label_node_arguments_if_needed(
     else:
         arg_labels = []
         for arg_type in ["args", "kwargs"]:
-            for arg_loc, arg_label in child_node.parent_arg_positions[arg_type].items():
+            for arg_loc, arg_label in child_node.call.parent_arg_positions[arg_type].items():
                 if arg_label in (parent_node.layer_label, _relation_label(parent_node)):
                     arg_labels.append(f"{arg_type[:-1]} {str(arg_loc)}")
 
@@ -1701,20 +1655,14 @@ def _visible_parent_count_unrolled(
         child_node: The child Op node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
-    num_parents_shown = len(child_node.parents)
-
-    if show_buffer_layers != "always":
-        num_parents_shown -= sum(
-            [
-                int(
-                    self.layers[parent].is_buffer
-                    and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
-                )
-                for parent in child_node.parents
-            ]
-        )
-
-    return num_parents_shown
+    parents = _parent_occurrence_labels(child_node)  # one entry per drawn edge occurrence
+    if show_buffer_layers == "always":
+        return len(parents)
+    return len(parents) - sum(
+        bool(self.layers[parent].graph.is_buffer)
+        and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
+        for parent in parents
+    )
 
 
 def _visible_parent_count_rolled(
@@ -1738,7 +1686,7 @@ def _visible_parent_count_rolled(
             num_parents_shown -= sum(
                 [
                     int(
-                        self._layer_logs[parent].is_buffer
+                        self._layer_logs[parent].graph.is_buffer
                         and not _is_buffer_visible(self._layer_logs[parent], show_buffer_layers)
                     )
                     for parent in pass_parents

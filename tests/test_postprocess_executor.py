@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._postprocess._pipeline import PIPELINE
+from torchlens._utils._record_group_table import record_member
 from torchlens.errors import TraceCaptureError
 
 #: The pipeline in run order. Reordering steps is a reviewed semantic change.
@@ -340,11 +341,15 @@ def test_evict_streamed_outs_step_and_gate_evict_from_memory(tmp_path: Path) -> 
         storage=tl.to_disk(tmp_path / "step19.tlspec"),
     )
     try:
-        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [
+            op for op in trace._layer_list if record_member(op, "out_ref", None) is not None
+        ]
         assert streamed, (
             "no op streamed an out_ref; the axis setup is not exercising the eviction step"
         )
-        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [
+            op for op in trace._layer_list if record_member(op, "out_ref", None) is not None
+        ]
         assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
         assert all(op.out is None for op in streamed), (
             "a streamed op's out survived the eviction step"
@@ -398,10 +403,12 @@ def test_buffer_duplicate_axis_actually_merges(
         survivor = next(op for op in trace._layer_list if op._label_raw == survivor_label)
         survivor_final = survivor.layer_label if survivor.num_passes == 1 else survivor.label
         repointed = [
-            op for op in trace._layer_list if op.is_buffer and op.buffer_source == survivor_final
+            op
+            for op in trace._layer_list
+            if op.graph.is_buffer and op.graph.buffer_source == survivor_final
         ]
         assert repointed, "the scalar buffer_source repoint must have fired"
-        assert all(op.buffer_source not in (removed_label,) for op in trace._layer_list), (
+        assert all(op.graph.buffer_source not in (removed_label,) for op in trace._layer_list), (
             "no surviving op may still reference the merged-away buffer"
         )
     finally:

@@ -23,6 +23,7 @@ from ..._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
+from ..._data_classes import _doors
 from ..._data_classes.trace import (
     Trace,
 )
@@ -39,6 +40,7 @@ from ..._input_coerce import (
     _reject_non_mapping_input_kwargs,
 )
 from ..._ir.selector_eval import looks_like_finalized_label
+from ..._literals import _ActivationPostfunc, _GradientPostfunc
 from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
 from ..._runnable.state_live import capture_observer_bracket
@@ -55,23 +57,21 @@ from ..._training_validation import (
 )
 from ..._utils.display import warn_parallel
 from ..._utils.tensor_utils import SaveMode
-from ...backends.torch import rescue as _rescue
+from ...backends.torch import model_prep as _model_prep, rescue as _rescue
 from ...backends.torch._op_markers import refuse_unavailable_nvtx
 from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
-from ...errors.episode import EpisodeDeclarationError
+from ...errors._episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
     CaptureOptions,
-    ReplayOptions,
     _SaveTransforms,
     merge_capture_options,
     merge_streaming_options,
 )
-from ...recording.options import PredicateFn
-from ...types import _ActivationPostfunc, _GradientPostfunc
+from ...recording._options import PredicateFn
 from .._episode_coupling import CouplingSession, rule_identity_of
 from .._episode_join import armed_capture
 from .._episode_ledger import (
@@ -201,10 +201,8 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
         capture exception.
     """
 
-    from ...backends.torch.model_prep import release_model
-
     try:
-        release_model(model)
+        _model_prep.release_model(model)
     except CaptureNotActiveError as refusal:
         if refusal.fields.get("code") == "release_during_active_capture":
             # A NESTED capture failed while an outer capture still owns the
@@ -1021,11 +1019,11 @@ def _run_chunked_capture(state: _DoorState, request: CaptureRequest) -> Trace:
         "append_sequence_id": 0,
         "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
     }
-    append = ReplayOptions(append=True)
+    trace_run = _doors.intervention()._trace_run
     for chunk_index, chunk in enumerate(chunks[1:], start=1):
         with _typed_chunk_forward(chunk_index, normalized_chunk_size, chunk_plan) as rows:
             if state.save_predicate is None:
-                trace.run(state.model, chunk, replay=append, input_transform=False)
+                trace_run.append_chunk(trace, state.model, chunk)
                 continue
             new_trace = _trace_torch_model(
                 state.model,

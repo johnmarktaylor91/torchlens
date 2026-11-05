@@ -41,6 +41,8 @@ import torch
 from torch import nn
 
 from ._data_substrate import (
+    STIMULUS_IDS_FILENAME,
+    ArtifactWriter,
     shard_filename as _shard_filename,  # noqa: F401 - engine-internal alias
     stimulus_ids_digest,
 )
@@ -84,6 +86,8 @@ from ._extraction_provenance import (
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
+from ._io._durability import fsync_dir, fsync_file
+from ._vocab._package_version import __version__
 from .transforms import TransformPipeline
 from .transforms._coerce import coerce_transform, coerce_transform_mapping
 from .transforms._pipeline import pipeline_record as _pipeline_record
@@ -406,7 +410,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         complete-class refactor, with strict continuity — the id must
         already be recorded in the artifact's prefix.
     intervene:
-        Optional :class:`torchlens.intervention.spec.InterventionSpec`
+        Optional :class:`torchlens.intervention._spec.InterventionSpec`
         (``tl.when(selector, helper)``; DOCUMENTED-UNSTABLE): every
         batch is captured with the spec armed, so stored rows are the
         INTERVENED activations. Batch zero freezes the structural sites the
@@ -526,13 +530,13 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
         if isinstance(layers, Mapping):
             validate_output_keys(layers.keys())
     else:
-        import torchlens as _tl
+        from ._extraction._front_door import _normalize_extract_layers
 
         if isinstance(layers, Mapping):
             # RAW keys, before normalization stringifies them: a non-string
             # key must refuse, never silently coerce into a manifest entry.
             validate_output_keys(layers.keys())
-        layer_plan = _tl._normalize_extract_layers(layers)
+        layer_plan = _normalize_extract_layers(layers)
         layers_kind = "mapping" if isinstance(layers, Mapping) else "sequence"
         pipelines, transform_record = _coerce_transform_slot(output_transform, layer_plan)
 
@@ -741,10 +745,6 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
         )
     import json
     import os
-
-    from . import __version__
-    from ._data_substrate import STIMULUS_IDS_FILENAME, ArtifactWriter
-    from ._io._durability import fsync_dir, fsync_file
 
     prior_digest = (manifest.get("signature") or {}).get("stimulus_ids_digest")
     new_digest = stimulus_ids_digest(ids)

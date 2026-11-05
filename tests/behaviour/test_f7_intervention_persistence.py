@@ -152,7 +152,7 @@ def test_builtin_recipe_rerun_reproduces_live_activations(
     edited = [op.label for op in builtin_saved.live.ops if op.is_edited]
     assert edited, "the built-in edit fired at no op"
     loaded = tl.load(builtin_saved.root)
-    loaded.run(model, inputs)
+    loaded = loaded.run(model, inputs)
     rerun_outs = _saved_outs(loaded)
     assert set(rerun_outs) == set(live_outs)
     for label, want in live_outs.items():
@@ -381,7 +381,7 @@ def test_composite_selector_rule_saves_portably_and_reruns(
     edited = [op.label for op in saved.live.ops if op.is_edited]
     assert edited, "the composite rule fired at no op"
     loaded = tl.load(saved.root)
-    loaded.run(model, inputs)
+    loaded = loaded.run(model, inputs)
     assert [op.label for op in loaded.ops if op.is_edited] == edited
     for label, want in _saved_outs(saved.live).items():
         assert torch.equal(_saved_outs(loaded)[label], want), f"{label} differs after the rerun"

@@ -20,7 +20,7 @@ import pytest
 import torch
 from torch import nn
 from torch.overrides import TorchFunctionMode
-from torch.utils._pytree import tree_leaves
+from torch.utils._pytree import tree_flatten
 
 import torchlens as tl
 
@@ -58,7 +58,7 @@ class _CensusMode(TorchFunctionMode):
         out = func(*args, **kwargs)
         if isinstance(out, torch.Tensor):
             self.census.ops += 1
-            for leaf in tree_leaves((args, kwargs)):
+            for leaf in tree_flatten((args, kwargs))[0]:
                 if id(leaf) in self.buffer_names:
                     self.census.buffers_read.add(self.buffer_names[id(leaf)])
             self.census.buffer_writes += sum(
@@ -97,7 +97,7 @@ def _buffer_layers(trace: Any) -> list[Any]:
 def _compute_ops(trace: Any) -> list[Any]:
     """Ops of the forward's computation: no inputs, outputs or buffer sources."""
 
-    return [op for op in trace.ops if not (op.is_input or op.is_output or op.is_buffer)]
+    return [op for op in trace.ops if not (op.is_input or op.is_output or op.graph.is_buffer)]
 
 
 def _assert_counts_match_census(model: nn.Module, x: torch.Tensor) -> None:

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping, Sequence
+import weakref
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from typing import Any
 
 import torch
 
+from torchlens._input_walk import encode_mapping_key
+from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER, empty_container_kind
+from torchlens._ir.container import get_registered_container
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
 from .. import _state
@@ -605,13 +610,6 @@ def _value_at_path(value: Any, path: Sequence[str | int]) -> Any:
     it; a decoded-value lookup lane would reopen hash-equality conflation).
     """
 
-    from torchlens._input_walk import encode_mapping_key
-    from torchlens._io.runnable import (
-        EMPTY_CONTAINER_PATH_MARKER,
-        empty_container_kind,
-    )
-    from torchlens._ir.container import get_registered_container
-
     current = value
     for component in path:
         if component == EMPTY_CONTAINER_PATH_MARKER:
@@ -700,6 +698,66 @@ def _run_fork_name(trace: Any) -> str:
 
     base_name = trace.name or "trace"
     return f"{base_name}_fork_{next(_RUN_FORK_COUNTER)}"
+
+
+def _run_result_fork(trace: Any) -> Any:
+    """Fork ``trace`` for a run's result, its staged helpers still aliasing the caller.
+
+    The fork deep-copies the intervention spec, which would copy each helper's
+    tensor and hide a later in-place change from the
+    ``helper_tensor_changed_since_capture`` refusal on the result's next run.
+    Every run door that writes a result fork goes through here.
+    """
+
+    from ..intervention._helper_fingerprint import alias_staged_helpers  # L4 helper, kept lazy
+
+    fork = trace._fork_trace(name=_run_fork_name(trace))
+    alias_staged_helpers(trace._intervention_spec, fork._intervention_spec)
+    return fork
+
+
+_RUNNING_RESULT_KEY = "_running_result_ref"
+
+
+@contextmanager
+def run_result_fork(trace: Any, *, in_place: bool) -> Iterator[Any]:
+    """Yield the Trace a positional run writes: a fork of ``trace``, or ``trace`` itself.
+
+    The fork keeps the user's annotation blobs, as the in-place rerun did. While
+    the run is in progress ``trace`` holds a weak reference to it, so a sticky
+    hook removed through the source's handle mid-run also leaves the fork's
+    recipe (``running_result``); the reference is gone when the run ends. A run
+    that raises unregisters the fork, so no stray Trace is left behind.
+    ``in_place=True`` (internal engines rerunning their own fork) yields
+    ``trace`` unchanged.
+    """
+
+    if in_place:
+        yield trace
+        return
+    result = _run_result_fork(trace)
+    blobs = trace._user_annotation_blobs()  # user annotate(data=) blobs ride a rerun
+    if blobs is not None:
+        result._annotation_blobs = dict(blobs)
+    previous = trace.__dict__.get(_RUNNING_RESULT_KEY)
+    trace.__dict__[_RUNNING_RESULT_KEY] = weakref.ref(result)
+    try:
+        yield result
+    except BaseException:
+        _state.unregister_log(result)
+        raise
+    finally:
+        if previous is None:
+            trace.__dict__.pop(_RUNNING_RESULT_KEY, None)
+        else:
+            trace.__dict__[_RUNNING_RESULT_KEY] = previous
+
+
+def running_result(trace: Any) -> Any | None:
+    """Return the result fork a positional run of ``trace`` is writing, else ``None``."""
+
+    ref = trace.__dict__.get(_RUNNING_RESULT_KEY)
+    return None if ref is None else ref()
 
 
 # Late imports: the split modules of this package import one another (cycles), so each

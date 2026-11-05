@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import op_attr, record_member
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation._invariants_entry import check_metadata_invariants
 from torchlens.validation._invariants_equivalence import _check_graph_ordering
@@ -146,7 +147,7 @@ def test_planted_ancestry_corruption_is_named(target: str, field: str, value: An
 
     trace = _fresh_two_io()
     check_metadata_invariants(trace)  # baseline is clean
-    setattr(_entry(trace, target), field, value)
+    setattr(_entry(trace, target), op_attr(field), value)
     with pytest.raises(MetadataInvariantError) as excinfo:
         check_metadata_invariants(trace)
     assert excinfo.value.check_name == "ancestry_closure"
@@ -179,7 +180,7 @@ def test_buffer_write_descendants_keep_their_input_ancestry() -> None:
     sum_op = trace["sum_1_3"]
     assert sum_op.parents == ("buffer_2",)
     assert "input_1" in sum_op.input_ancestors
-    assert sum_op.has_input_ancestor
+    assert sum_op.graph.has_input_ancestor
     assert "input_1" in trace["output_1"].input_ancestors
 
 
@@ -204,7 +205,7 @@ def test_forged_raw_label_reddens_the_survival_tripwire() -> None:
     assert "buffer_2_raw" in str(relation_error.value)
 
     scalar_trace = tl.trace(_WriteThenRead(), torch.ones(2))
-    _entry(scalar_trace, "buffer_2").buffer_source = "copy_1_2_raw"
+    _entry(scalar_trace, "buffer_2")._graph_buffer_source = "copy_1_2_raw"
     with pytest.raises(MetadataInvariantError) as scalar_error:
         _check_graph_ordering(scalar_trace)
     assert "buffer_source" in str(scalar_error.value)
@@ -246,7 +247,7 @@ def test_seeded_generative_ancestry_corruptions_are_caught() -> None:
         kind = rng.choice(["add", "remove", "clear", "bool", "dist"])
         if kind in ("add", "remove", "clear"):
             field = rng.choice(_ANCESTRY_SET_FIELDS)
-            old = set(getattr(record, field))
+            old = set(record_member(record, field))
             if kind == "add":
                 new = old | {"phantom_9_9"}
             elif kind == "remove" and old:
@@ -256,14 +257,16 @@ def test_seeded_generative_ancestry_corruptions_are_caught() -> None:
                 new = set()
             if new == old:
                 continue
-            setattr(record, field, new)
+            setattr(record, op_attr(field), new)
             description = f"{record.layer_label}.{field}:{kind}"
         elif kind == "bool":
-            record.has_internal_source_ancestor = not record.has_internal_source_ancestor
+            record._graph_has_internal_source_ancestor = (
+                not record.graph.has_internal_source_ancestor
+            )
             description = f"{record.layer_label}.has_internal_source_ancestor:flip"
         else:
-            record.min_distance_from_input = 77
-            record.max_distance_from_input = 77
+            record._graph_min_distance_from_input = 77
+            record._graph_max_distance_from_input = 77
             description = f"{record.layer_label}.distance:77"
         try:
             check_metadata_invariants(trace)

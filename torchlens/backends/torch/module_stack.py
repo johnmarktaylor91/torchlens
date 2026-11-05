@@ -15,8 +15,8 @@ from ..._entry_refusals import (
     refuse_module_stack_underflow,
     refuse_module_unprepared,
 )
-from ...recording.types import ModuleStackFrame
-from ._tl import get_module_meta
+from ..._utils._tensor_label import get_module_meta
+from ...recording._types import ModuleStackFrame
 
 
 def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> ModuleStackFrame:

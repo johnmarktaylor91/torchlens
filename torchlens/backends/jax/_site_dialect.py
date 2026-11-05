@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from ..._data_classes._site_key import SiteKeyMinter
+from ..._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -56,7 +57,7 @@ def jax_site_keys(trace: Trace) -> dict[str, str]:
     minter = SiteKeyMinter()
     keys: dict[str, str] = {}
     for label, op_log in trace._raw_graph_ws.raw_layer_dict.items():
-        if getattr(op_log, "is_orphan", False):
+        if record_member(op_log, "is_orphan", False):
             continue
         module_site, call_instance = _jax_site_components(op_log)
         keys[label] = minter.mint_at(

@@ -53,6 +53,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._nonfinite import record_op_nonfinite
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._data_classes.op import (
+    _OP_STORE_LAYOUT,
     Op,
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
@@ -127,6 +128,23 @@ from ..._utils._mutation_names import (
     _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS as _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
     _SETTER_MUTATION_FUNC_NAMES as _SETTER_MUTATION_FUNC_NAMES,
 )
+from ..._utils._record_group_table import op_attr
+from ..._utils._tensor_label import (
+    active_label_session_token,
+    get_label_list,
+    get_live_label_list,
+    get_live_tensor_label,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    is_tensor_data_alias,
+    mark_detached_saved_activation,
+    mutated_parameter_label,
+    promote_mutated_parameters,
+    session_label_storage_intact,
+    session_meta_is_anchored,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
     tensor_version_or_none,
@@ -148,9 +166,8 @@ from ..._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import active_intervention_context
-from ...intervention.types import (
+from ...intervention._runtime import active_intervention_context
+from ...intervention._types import (
     ArgComponent,
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -162,10 +179,11 @@ from ...intervention.types import (
     TargetSpec,
     Unsupported,
 )
+from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
+from ...recording._exceptions import PredicateError
 from ...recording._halt import StopSignal
 from ...recording._storage_resolver import _resolve_storage
-from ...recording.exceptions import PredicateError
-from ...recording.types import (
+from ...recording._types import (
     ActivationRecord,
     CaptureSpec,
     ModuleStackFrame,
@@ -177,22 +195,6 @@ from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
 from ._same_object_handoff import pop_same_object_mutation, set_same_object_mutation
-from ._tl import (
-    active_label_session_token,
-    get_label_list,
-    get_live_label_list,
-    get_live_tensor_label,
-    get_param_meta,
-    get_tensor_label,
-    get_tensor_meta,
-    is_tensor_data_alias,
-    mark_detached_saved_activation,
-    mutated_parameter_label,
-    promote_mutated_parameters,
-    session_label_storage_intact,
-    session_meta_is_anchored,
-    set_tensor_label,
-)
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,
@@ -281,7 +283,7 @@ _ANCESTOR_FIELD_NAMES = (
     "output_descendants",
 )
 _ANCESTOR_SLOT_DESCRIPTORS = {
-    field_name: vars(Op)[field_name] for field_name in _ANCESTOR_FIELD_NAMES
+    field_name: vars(Op)[op_attr(field_name)] for field_name in _ANCESTOR_FIELD_NAMES
 }
 
 # The bitset is a sanctioned finished-cell encoding: reads through the
@@ -506,16 +508,6 @@ class _OutputTensorEntry:
     autograd_band: dict[str, int] | None = None
 
 
-#: FunctionCallRef fields the per-output logging path genuinely rewrites
-#: (``_log_output_tensor_info``): FLOPs derive from the output shape and
-#: ``is_inplace`` from the output tensor's version. Everything else on the
-#: ref is a call-level fact, so sibling outputs of one wrapped call share
-#: ONE frozen ref; a sibling whose per-output facts differ gets a
-#: ``dataclasses.replace`` derivative that still shares every container
-#: field by reference.
-_FUNCTION_REF_PER_OUTPUT_FIELDS = ("flops_forward", "flops_backward", "is_inplace")
-
-
 @dataclass(slots=True)
 class ExhaustiveOpDraft:
     """Exhaustive-pipeline draft (the three ``_make_layer_log_entry`` sites)."""
@@ -536,16 +528,25 @@ class ExhaustiveOpDraft:
         return self.fields_dict["grad_fn_handle"]
 
     def freeze(self) -> Any:
-        """Construct the journal record ONCE from the final draft state."""
+        """Commit the final draft ONCE as a row-backed journal handle (capture C2b).
 
-        return _op_record_from_log(
-            self.trace,
-            self.fields_dict,
-            self.tensor,
-            self.fire_results,
-            module_stack=self.module_stack,
-            call_ref_box=self.call_ref_box,
+        The op store layout and the edge-use records come from modules inside the
+        package's largest import cycle, so they are read here and passed to the
+        commit, whose module imports no cycle module.
+        """
+
+        fields_dict = self.fields_dict
+        edge_uses = tuple(
+            fields_dict["_edge_uses"]
+            or _build_edge_use_records(
+                self.trace,
+                fields_dict["parent_arg_positions"],
+                fields_dict["_label_raw"],
+                fields_dict["func_call_id"],
+                func_name=fields_dict.get("func_name"),
+            )
         )
+        return _ops_row_journal.commit_row_record(self, _OP_STORE_LAYOUT, edge_uses)
 
 
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
@@ -578,12 +579,12 @@ from ._ops_capture_records import (  # noqa: E402
 
 setattr(
     Op,
-    "root_ancestors",
+    op_attr("root_ancestors"),
     property(_get_root_ancestors, _set_root_ancestors, _delete_root_ancestors),
 )
 setattr(
     Op,
-    "internal_source_ancestors",
+    op_attr("internal_source_ancestors"),
     property(
         _get_internal_source_ancestors,
         _set_internal_source_ancestors,
@@ -595,8 +596,8 @@ setattr(
 # directly. Registration reads the live class attribute, so it runs after
 # all four overlays are installed.
 for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
-    register_row_release_property(_ancestor_field_name)
+    register_row_release_property(op_attr(_ancestor_field_name))
 del _ancestor_field_name
-from ._ops_container_base import (  # noqa: E402
-    _op_record_from_log,
-)
+# Module import (tests patch ``_ops_row_journal.commit_row_record``).
+from . import _ops_row_journal  # noqa: E402
+from ._ops_arguments import _build_edge_use_records  # noqa: E402

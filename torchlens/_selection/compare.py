@@ -63,6 +63,8 @@ from typing import Any
 
 import torch
 
+from .._data_classes.trace import Trace
+from .._postprocess._site_join import join_site_profiles, occurrence_coordinates, site_profile
 from .._record_type import record_type
 from ..errors._base import TorchLensError, TorchLensWarning
 from .selection import (
@@ -106,8 +108,6 @@ def _reference_display(reference: Any) -> str:
 
 def _validate_reference(reference: Any, producer: str) -> Any:
     """Validate the reference operand: exactly ONE Trace, refused with teaching."""
-
-    from .._data_classes.trace import Trace
 
     if isinstance(reference, Trace):
         return reference
@@ -186,12 +186,6 @@ class _JoinGuard:
     def build(cls, subject: Any, reference: Any) -> _JoinGuard | None:
         """Build the guard, or ``None`` when either side is keyless."""
 
-        from .._postprocess._site_join import (
-            join_site_profiles,
-            occurrence_coordinates,
-            site_profile,
-        )
-
         try:
             subject_profile = site_profile(subject)
             reference_profile = site_profile(reference)
@@ -268,7 +262,7 @@ def _reference_op_for_entry(node: _CompareTerm, trace: Any, entry: Site, guard: 
         return guard.reference_op(node, trace, entry)
     reference_op = _op_for_entry(node.reference, entry, sample_name="reference")
     subject_key = entry.structural_site_key
-    reference_key = getattr(reference_op, "site_key", None)
+    reference_key = reference_op.graph.site_key
     if subject_key is not None and reference_key is not None and subject_key != reference_key:
         raise _unresolvable(
             "site_not_in_trace",

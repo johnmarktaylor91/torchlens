@@ -31,7 +31,7 @@ def apply_region_target_do(  # noqa: PLR0913 - apply_do_mutation's own arguments
     # substitutes the region's derived exit values without replaying the
     # interior. Distinct from the TraceSlice lift below, which keeps its shipped
     # member-site family semantics. sys.modules gate keeps do() free of the regions import.
-    regions_module = sys.modules.get("torchlens.intervention.regions")
+    regions_module = sys.modules.get("torchlens.intervention._regions")
     if regions_module is not None and isinstance(site, regions_module.RegionTarget):
         warn_if_root_mutation(trace)
         return (

@@ -334,9 +334,9 @@ def test_axis_a_public_verbs_success_paths() -> None:
     model = _LinearRelu()
     x = torch.randn(2, 3)
     rerun_log = _capture(model, x)
-    rerun_log.run(model, x)
+    rerun_log = rerun_log.run(model, x)
     assert rerun_log.state is TraceState.RERUN_PROPAGATED
-    rerun_log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
+    rerun_log.append(torch.randn(1, 3), model=model)
     assert rerun_log.state is TraceState.APPENDED
 
 
@@ -387,9 +387,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
         ("rerun", lambda log: log.run(_ReluAdd()), ValueError),
         (
             "append",
-            lambda log: log.run(
-                _ReluAdd(), torch.ones(1, 4), replay=tl.options.ReplayOptions(append=True)
-            ),
+            lambda log: log.append(torch.ones(1, 4), model=_ReluAdd()),
             terrors.AppendMismatchError,
         ),
     ),
@@ -424,7 +422,7 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     stage = tl.options.InterventionOptions(engine="set_only")
     replay_log.do(tl.func("relu"), _zero_hook, intervention=confirm)
     rerun_log.do({tl.func("relu"): _zero_hook}, intervention=stage)
-    rerun_log.run(_ReluAdd(), x)
+    rerun_log = rerun_log.run(_ReluAdd(), x)
 
     replay_output = replay_log[replay_log.output_layers[0]].out
     rerun_output = rerun_log[rerun_log.output_layers[0]].out

@@ -13,15 +13,19 @@ reproduce the no-grad outputs bit for bit, validate True (and still fail
 validation when a capture bug is planted), keep the no-grad ops as an ordered
 subsequence, hold only real activations, and carry backward.
 
-Capture runs under the ``force_eager`` stance. A grad-requiring ``map`` then
-returns one tensor per row instead of the stacked tensor (plain torch does the
-same under that stance), so its capture keeps failing loudly rather than
-returning a different structure. ``cond`` backward under that stance fails in
-plain torch too, so backward is checked for ``while_loop`` and ``scan``.
+Capture runs under the ``force_eager`` stance, but each operator's own entry
+compile still runs (as in plain torch), so ``map`` returns its stacked tensor
+and ``cond`` carries backward. Those compiles are internal to the operator:
+they are not a user ``torch.compile`` region, record exactly the ops the
+forced-eager capture records, and leave the user's later operator calls
+compiling as before. A user ``torch.compile`` region around an operator is
+still detected and refused exactly as before.
 """
 
 from __future__ import annotations
 
+import collections
+import contextlib
 import importlib
 import importlib.util
 import warnings
@@ -34,11 +38,15 @@ from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
-from torchlens import _state
-from torchlens.backends.torch import rescue, wrappers
+from torchlens import _capture_state_helpers, _state
+from torchlens._utils import _hop_entry_compile, _torch_compat
+from torchlens.backends.torch import _tracing_pass, rescue, wrappers
+from torchlens.backends.torch.completeness_witness import _CompletenessDispatchMode
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation._diagnostics import CHECK_COMPLETENESS
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
 
@@ -259,11 +267,47 @@ _COND_CASES: dict[str, Callable[[], nn.Module]] = {
 }
 
 _LOOP_CASES: dict[str, Callable[..., nn.Module]] = {
+    "map": _MapModel,
     "while_loop": _WhileModel,
     "scan": _ScanModel,
 }
 
 _ALL_CASES = sorted([*_COND_CASES, *_LOOP_CASES])
+# ``map`` runs its body inside torch's own ``autograd.Function``, so its body ops
+# are logged below autograd and carry no grad, as in any custom Function forward.
+_DIFFERENTIABLE_BODY_CASES = [name for name in _ALL_CASES if name != "map"]
+
+
+def _cond_has_autograd() -> bool:
+    """Return whether this torch's ``cond`` carries grad through its outputs.
+
+    Torch 2.1 predates ``cond_op``: its bare ``cond`` operator's Autograd kernel
+    is ``autograd_not_implemented``, which re-wraps each output with no history,
+    so nothing TorchLens records produced the tensor the next op reads.
+
+    Returns
+    -------
+    bool
+        ``True`` when the compat layer resolves ``cond.cond_op``.
+    """
+
+    return _torch_compat.get_higher_order_operator("cond", "cond_op") is not None
+
+
+def _route_grad_case(name: str) -> None:
+    """Skip a ``cond`` grad case on a torch without autograd for ``cond``.
+
+    That torch's behaviour is pinned instead by
+    ``test_cond_grad_without_torch_autograd_names_the_gap``.
+
+    Parameters
+    ----------
+    name:
+        Case name.
+    """
+
+    if name in _COND_CASES and not _cond_has_autograd():
+        pytest.skip(f"not applicable by capability: torch {torch.__version__} has no cond_op")
 
 
 def _input(name: str) -> torch.Tensor:
@@ -365,10 +409,33 @@ def _is_ordered_subsequence(short: list[str], long: list[str]) -> bool:
 def test_cond_grad_operands_record_the_no_grad_ops(name: str) -> None:
     """A grad-requiring ``cond`` operand records exactly the no-grad taken-branch ops."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     no_grad_names = _func_names(tl.trace(model, x))
     grad_names = _func_names(tl.trace(model, x.clone().requires_grad_(True)))
     assert grad_names == no_grad_names
+
+
+@pytest.mark.parametrize("name", sorted(_COND_CASES))
+def test_cond_grad_without_torch_autograd_names_the_gap(name: str) -> None:
+    """Without torch autograd for ``cond``, a grad capture through it is never silently incomplete.
+
+    The op after ``cond`` reads an output torch re-wrapped with no history, so
+    capture warns that the argument has no provenance and ``tl.validate`` fails
+    on the completeness check (the dispatcher saw ops the trace does not hold).
+    """
+
+    if _cond_has_autograd():
+        pytest.skip(f"not applicable by capability: torch {torch.__version__} has cond_op")
+    model, x = _model(name), _input(name)
+    with pytest.warns(UserWarning, match="no graph/source provenance"):
+        tl.trace(model, x.clone().requires_grad_(True))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.clone().requires_grad_(True), scope="forward") is False
+    failure = last_validation_failure()
+    assert failure is not None
+    assert failure.check_name == CHECK_COMPLETENESS, failure.summary()
 
 
 @pytest.mark.parametrize("name", sorted(_LOOP_CASES))
@@ -406,10 +473,27 @@ def test_loop_hop_no_grad_ops_are_an_ordered_subsequence(name: str) -> None:
 def test_grad_operand_trace_validates_true(name: str) -> None:
     """``tl.validate`` holds on the grad trace, with the grad path's extra data ops."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is True
+
+
+def test_map_grad_validation_sees_the_one_stacked_output() -> None:
+    """Under grad, validating ``map`` holds with no failure recorded.
+
+    The validate capture's completeness dispatch mode steps aside for
+    Dynamo's frame evaluation of ``map``'s entry compile and is re-entered
+    for the compiled graph's run, so the capture returns the single stacked
+    tensor the untraced call returns, and the witness still censuses the body.
+    """
+
+    model, x = _model("map"), _input("map")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is True
+    assert tl.validation.last_validation_failure() is None
 
 
 @pytest.fixture
@@ -455,14 +539,17 @@ def test_while_loop_grad_trace_with_a_planted_drop_fails_validation(
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
 
 
-@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
-def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
-    name: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A tracing-pass guard that also swallows an eager body op fails validation.
+def _plant_over_broad_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant a tracing-pass guard that also passes any call scaling by ``2.0`` unlogged.
 
-    The planted guard passes the body's ``* 2.0`` through unlogged on the eager
-    run, the capture bug an over-broad fake-pass test would cause.
+    The body's ``* 2.0`` then runs on the eager run without being logged, the
+    capture bug an over-broad fake-pass test would cause. The rescue re-run is
+    disabled so the capture keeps the drop.
+
+    Parameters
+    ----------
+    monkeypatch:
+        The test's monkeypatch; both patches are undone at teardown.
     """
 
     real_guard = wrappers.inside_tracing_tensor_pass
@@ -488,31 +575,74 @@ def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     monkeypatch.setattr(wrappers, "inside_tracing_tensor_pass", over_broad_guard)
+
+
+def _plant_unpaused_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant the over-broad guard and run the calls it swallows unpaused.
+
+    A real tracing-pass call runs paused, so the witness never counts it. A
+    wrapper that skips logging a model op does not pause, so the witness sees
+    that op's aten call with nothing logged for it: the drop the census exists
+    to name.
+
+    Parameters
+    ----------
+    monkeypatch:
+        The test's monkeypatch; every patch is undone at teardown.
+    """
+
+    _plant_over_broad_guard(monkeypatch)
+    real_call = wrappers.call_inside_tracing_pass
+
+    def unpaused_call(
+        func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> Any:
+        """Run a planted call unpaused and unlogged, and any other call as before.
+
+        Parameters
+        ----------
+        func:
+            The original torch callable.
+        args:
+            Positional arguments of the call.
+        kwargs:
+            Keyword arguments of the call.
+
+        Returns
+        -------
+        Any
+            Whatever ``func`` returns.
+        """
+
+        if any(isinstance(arg, float) and arg == 2.0 for arg in args):
+            return func(*args, **kwargs)
+        return real_call(func, args, kwargs)
+
+    monkeypatch.setattr(wrappers, "call_inside_tracing_pass", unpaused_call)
+
+
+@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
+def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tracing-pass guard that also swallows an eager body op fails validation.
+
+    The planted guard passes the body's ``* 2.0`` through unlogged on the eager
+    run, the capture bug an over-broad fake-pass test would cause.
+    """
+
+    _plant_over_broad_guard(monkeypatch)
     model, x = _model(name), _input(name)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
 
 
-def test_map_grad_operand_capture_fails_loudly() -> None:
-    """A grad-requiring ``map`` fails capture instead of returning per-row outputs.
-
-    Under the capture stance torch's eager ``map`` autograd returns one tensor
-    per row; recording that would silently differ from the untraced call, so
-    the capture keeps the base failure, raised as TorchLens's capture error.
-    """
-
-    torch.manual_seed(0)
-    x = torch.randn(3, 4).requires_grad_(True)
-    model = _MapModel()
-    with pytest.raises(TraceCaptureError, match="fake_mode"):
-        tl.trace(model, x)
-
-
 @pytest.mark.parametrize("name", _ALL_CASES)
 def test_grad_operands_leave_only_real_activations(name: str) -> None:
     """Every activation recorded under grad is a real tensor, never fake or meta."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     trace = tl.trace(model, x.requires_grad_(True), save="all")
     saved = [op for op in trace if op.has_saved_activation]
@@ -523,10 +653,11 @@ def test_grad_operands_leave_only_real_activations(name: str) -> None:
         assert op.out.device.type == x.device.type, op.func_name
 
 
-@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
+@pytest.mark.parametrize("name", _DIFFERENTIABLE_BODY_CASES)
 def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     """The traced output carries the graph, and backward gives the eager grads."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     reference_input = x.clone().requires_grad_(True)
     model(reference_input).sum().backward()
@@ -540,4 +671,362 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     torch.testing.assert_close(traced_input.grad, reference_input.grad)
     producer = trace[output.parents[0]]
     assert producer.has_saved_grad
-    assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+    assert type(producer.autograd.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+
+
+def test_map_grad_operands_backward_runs_through_the_trace() -> None:
+    """``map``: the output carries the graph, backward gives eager grads, the input saves its grad.
+
+    The body ops ran inside torch's map ``autograd.Function`` forward, below
+    autograd, so the stacked producer has no graph of its own and no grad to save.
+    """
+
+    x = _input("map")
+    reference_input = x.clone().requires_grad_(True)
+    _model("map")(reference_input).sum().backward()
+    traced_input = x.clone().requires_grad_(True)
+    trace = tl.trace(_model("map"), traced_input, capture=CaptureOptions(save_grads=True))
+    assert len(trace.output_layers) == 1
+    output = trace[trace.output_layers[0]]
+    assert output.out.grad_fn is not None
+    trace.backward(output.out.sum())
+    assert traced_input.grad is not None
+    torch.testing.assert_close(traced_input.grad, reference_input.grad)
+    source = trace[trace.input_layers[0]]
+    assert source.has_saved_grad
+    torch.testing.assert_close(source.autograd.grads.for_pass(1).grad, reference_input.grad)
+    assert trace[output.parents[0]].out.grad_fn is None
+
+
+def test_map_grad_operand_capture_fails_loudly_without_the_entry_lift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Where the entry compile cannot be lifted, a grad-requiring ``map`` fails capture loudly.
+
+    Under the forced-eager stance torch's eager ``map`` autograd returns one
+    tensor per row; with no lifted entry compile (a torch whose operators do not
+    enter through ``_hop_compile_and_call``) recording that would silently
+    differ from the untraced call, so the capture keeps the base failure.
+    """
+
+    monkeypatch.setattr(_hop_entry_compile, "swap_hop_entry_compile", lambda _replacement: None)
+    torch.manual_seed(0)
+    x = torch.randn(3, 4).requires_grad_(True)
+    with pytest.raises(TraceCaptureError, match="fake_mode"):
+        tl.trace(_MapModel(), x)
+    assert _tracing_pass.hop_entry_lifted is False
+
+
+@contextlib.contextmanager
+def _forced_eager_capture() -> Iterator[None]:
+    """Capture with every operator entry compile skipped, as before the compile was lifted.
+
+    Yields
+    ------
+    None
+        Nothing; the context is entered for its side effect.
+    """
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(
+            _capture_state_helpers,
+            "lift_hop_entry_compiles",
+            lambda: contextlib.nullcontext(False),
+        )
+        yield
+
+
+@pytest.mark.parametrize(
+    ("name", "grad"),
+    [(n, False) for n in _ALL_CASES]
+    + [(n, True) for n in sorted(_COND_CASES)]
+    + [("while_loop", True)],
+)
+def test_hop_entry_compile_records_the_forced_eager_ops(name: str, grad: bool) -> None:
+    """The lifted entry compile logs exactly the op multiset the forced-eager capture logs.
+
+    A grad-requiring ``map`` has no forced-eager capture to compare (it returned
+    per-row outputs), and ``scan``'s grad path runs a different program.
+    """
+
+    if grad:
+        _route_grad_case(name)
+    model, x = _model(name), _input(name)
+    lifted = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
+    with _forced_eager_capture():
+        forced = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
+    assert collections.Counter(lifted) == collections.Counter(forced)
+
+
+@pytest.fixture
+def witness_on() -> Iterator[None]:
+    """Run the test with the completeness witness's dispatch mode on every capture.
+
+    The wrappers are re-installed with the witness on, and re-installed with
+    the session's diagnostic modes at teardown.
+
+    Yields
+    ------
+    None
+        Nothing; the fixture is used for its side effect.
+    """
+
+    saved_escape: Any = _state._escape_detector_mode
+    saved_witness: Any = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+
+
+def _map_body_census(x: torch.Tensor) -> tuple[collections.Counter[str], tl.Trace]:
+    """Capture the ``map`` model and return the witness's census of ``map``'s kernel.
+
+    The census holds the aten calls the witness mode observed while its ``map``
+    rule ran (the body rows, plus the kernel's unstacking and stacking).
+
+    Parameters
+    ----------
+    x:
+        The model input.
+
+    Returns
+    -------
+    tuple[collections.Counter[str], tl.Trace]
+        The census by aten overload name, and the trace.
+    """
+
+    map_impl = _torch_compat.get_higher_order_operator("map", "map_impl")
+    assert map_impl is not None
+    rule = map_impl.python_key_table[_CompletenessDispatchMode]
+    real_dispatch = _CompletenessDispatchMode.__torch_dispatch__
+    inside = [False]
+    census: collections.Counter[str] = collections.Counter()
+
+    def spy_rule(mode: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run the witness's ``map`` rule, marking its census window.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        *args, **kwargs:
+            The operator's arguments.
+
+        Returns
+        -------
+        Any
+            The rule's output.
+        """
+
+        inside[0] = True
+        try:
+            return rule(mode, *args, **kwargs)
+        finally:
+            inside[0] = False
+
+    def spy_dispatch(mode: Any, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
+        """Count ``func`` inside the ``map`` rule, then dispatch it as the witness does.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        func:
+            The aten overload.
+        types:
+            Tensor types of the call.
+        args, kwargs:
+            The call's arguments.
+
+        Returns
+        -------
+        Any
+            The witness's result.
+        """
+
+        if inside[0]:
+            census[str(func)] += 1
+        return real_dispatch(mode, func, types, args, kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(map_impl.python_key_table, _CompletenessDispatchMode, spy_rule)
+        patch.setattr(_CompletenessDispatchMode, "__torch_dispatch__", spy_dispatch)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            trace = tl.trace(_model("map"), x)
+    return census, trace
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_map_grad_witness_census_of_the_body_equals_the_forced_eager_capture() -> None:
+    """Under grad, the witness censuses ``map``'s body exactly as the forced-eager capture.
+
+    The lifted entry compile runs the compiled graph with the witness re-entered,
+    so the witness sees every aten call of the body rows; the capture returns the
+    one stacked output the untraced call returns, and is verified. The reference
+    is the forced-eager capture without grad: with grad and no lifted entry the
+    capture refuses (``test_map_grad_operand_capture_fails_loudly_without_the_entry_lift``).
+    """
+
+    x = _input("map")
+    expected = _model("map")(x)
+    lifted, trace = _map_body_census(x.clone().requires_grad_(True))
+    try:
+        outputs = _output_values(trace)
+        verified = trace.provenance.verified
+    finally:
+        trace.cleanup()
+    with _forced_eager_capture():
+        forced, forced_trace = _map_body_census(x.clone())
+    forced_trace.cleanup()
+    assert lifted["aten.mul.Tensor"] == 3, lifted
+    assert lifted == forced
+    assert len(outputs) == 1 and torch.equal(outputs[0], expected)
+    assert verified is True
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_map_grad_planted_drop_is_named_by_the_witness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under grad, a body op the capture leaves unlogged inside ``map`` is named by the census.
+
+    The planted wrapper passes each row's ``* 2.0`` through unlogged and
+    unpaused during the compiled graph's run; the witness, re-entered for that
+    run, reports one ``aten.mul`` per row and the capture is not verified.
+    """
+
+    _plant_unpaused_drop(monkeypatch)
+    x = _input("map").requires_grad_(True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_model("map"), x)
+    try:
+        operators = [str(row["operator"]) for row in trace.completeness_diagnostics]
+        verified = trace.provenance.verified
+        outputs = len(trace.output_layers)
+    finally:
+        trace.cleanup()
+    assert operators.count("aten.mul.Tensor") == 3, operators
+    assert verified is False
+    assert outputs == 1
+
+
+def test_map_grad_validation_with_a_planted_drop_fails_on_the_census(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under grad, ``tl.validate`` fails ``map`` on the dispatch census of its dropped body ops.
+
+    Each row's unlogged ``* 2.0`` is dispatched but not captured, so the census
+    counts exactly three more dispatched ops than captured ones.
+    """
+
+    _plant_unpaused_drop(monkeypatch)
+    model, x = _model("map"), _input("map")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert failure.check_name == "bfs_completeness", failure
+    counts = failure.extra
+    assert counts["dispatch_op_count"] - counts["captured_op_count"] == 3, counts
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_hop_entry_compile_is_not_a_user_compile_region(name: str) -> None:
+    """The operator's own compile neither raises the Dynamo-region flag nor its warning."""
+
+    model, x = _model(name), _input(name)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(model, x.requires_grad_(True))
+    assert trace._raw_dynamo_region_detected is False
+    assert not [w for w in caught if "torch.compile (Dynamo) region" in str(w.message)]
+
+
+class _UserCompiledCond(nn.Module):
+    """A user ``torch.compile`` region wrapped around a ``cond``."""
+
+    def __init__(self) -> None:
+        """Compile the region as a plain attribute, which capture cannot unwrap."""
+
+        super().__init__()
+        self.cond = _hop("cond")
+        self.region = torch.compile(self._branch, backend="eager")
+
+    def _branch(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the ``cond``.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            ``2 * x`` for a positive sum, else ``x - 1``.
+        """
+
+        return self.cond(x.sum() > 0, lambda t: t * 2, lambda t: t - 1, (x,))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Call the compiled region.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            The region's output plus one.
+        """
+
+        return self.region(x) + 1
+
+
+def test_user_compile_region_around_a_hop_is_still_detected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without the stance, a user region around a ``cond`` is detected and refused as before."""
+
+    monkeypatch.setattr(_torch_compat, "HAS_SET_STANCE", False)
+    torch.manual_seed(0)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(_UserCompiledCond(), torch.rand(3, 4) + 0.1)
+    assert trace._raw_dynamo_region_detected is True
+    assert [w for w in caught if "torch.compile (Dynamo) region" in str(w.message)]
+    assert _func_names(trace) == ["none", "__add__", "none"]
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_capture_leaves_the_users_hop_compiles_working(name: str) -> None:
+    """After grad captures and a validation, the untraced operator call still compiles and matches."""
+
+    model, x = _model(name), _input(name)
+    expected = model(x.clone().requires_grad_(True)).detach()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.clone(), validate_metadata=True) is True
+        tl.trace(model, x.clone().requires_grad_(True))
+    assert torch.equal(model(x.clone().requires_grad_(True)).detach(), expected)
+
+
+@pytest.mark.parametrize("name", _ALL_CASES)
+def test_untraced_call_after_a_capture_reuses_the_users_own_compile(name: str) -> None:
+    """A capture's operator compiles leave the user's Dynamo cache unpoisoned: no new compile."""
+
+    _route_grad_case(name)
+    model, x = _model(name), _input(name)
+    counters = _torch_compat.get_dynamo_compile_counters(force_probe=True)
+    assert counters is not None
+    for _ in range(2):
+        model(x.clone().requires_grad_(True))
+    tl.trace(model, x.clone().requires_grad_(True))
+    compiled_before = counters["frames"]["total"]
+    model(x.clone().requires_grad_(True))
+    assert counters["frames"]["total"] == compiled_before

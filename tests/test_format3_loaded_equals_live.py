@@ -50,6 +50,7 @@ from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import read_tensor
 from torchlens._io.format3.values import RowRef, object_state
 from torchlens._io.format3.writer import record_kind_of
+from torchlens._utils._record_group_table import record_member
 from torchlens.types import UnencodableValue
 
 _LEVELS = ("portable", "audit", "runnable", "executable_with_callables")
@@ -299,7 +300,7 @@ def _live_cell(record: Any, state: dict[str, Any], name: str, storage: str) -> A
         return state[name]
     if storage == "computed":
         try:
-            return getattr(record, name)
+            return record_member(record, name)
         except (AttributeError, LookupError, RuntimeError, TypeError, ValueError):
             return None
     return None
@@ -412,7 +413,7 @@ def default_capture_saves(tmp_path_factory: pytest.TempPathFactory) -> Iterator[
         capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
-        frame = trace.ops[1].code_context[-1]
+        frame = trace.ops[1].source.frames[-1]
         assert frame.call_line and frame.num_context_lines > 0, "live text reads lazily"
         for level in _LEVELS:
             trace.save(base / level, level=level)
@@ -439,7 +440,7 @@ def test_default_capture_writes_no_source_text(default_capture_saves: Path, leve
 
 def test_default_capture_loads_with_no_source_text(default_capture_saves: Path) -> None:
     loaded = tl.load(default_capture_saves / "portable")
-    frames = [frame for op in loaded.ops for frame in op.code_context or ()]
+    frames = [frame for op in loaded.ops for frame in op.source.frames or ()]
     assert frames
     for frame in frames:
         assert {name: getattr(frame, name) for name in _NO_SOURCE_TEXT} == _NO_SOURCE_TEXT

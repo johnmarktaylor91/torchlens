@@ -51,8 +51,8 @@ pass, step, and site. The fix is one stateless mechanism:
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through the ONE FireRecord builder: each realized
-draw lands as a typed :class:`~torchlens.intervention.types.SamplingRecord` that
+Every firing routes its audit through C03's ONE FireRecord builder: each realized
+draw lands as a typed :class:`~torchlens.intervention._types.SamplingRecord` that
 ``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
 ``ledger_notes`` line lifted into ``determinism_note``. No draw is session-only.
 
@@ -80,10 +80,11 @@ from typing import Any, Literal
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import TorchLensWarning
+from ._population import OneDatum, PerRowDatums, Population
+from ._types import Edit, SamplingRecord
 from .hooks import HookContext
-from .population import OneDatum, PerRowDatums, Population
-from .types import Edit, SamplingRecord
 
 __all__ = [
     "SamplingPlan",
@@ -154,10 +155,9 @@ def _feed_datum(hasher: hashlib._Hash, value: Any) -> None:
         hasher.update(b"T")
         hasher.update(str(tuple(value.shape)).encode())
         hasher.update(str(value.dtype).encode())
-        cpu = value.detach().to("cpu")
-        if cpu.dtype == torch.bfloat16:
-            cpu = cpu.to(torch.float32)
-        hasher.update(cpu.contiguous().numpy().tobytes())
+        hasher.update(
+            tensor_payload_bytes(value.float() if value.dtype == torch.bfloat16 else value)
+        )
         return
     if isinstance(value, OneDatum):
         hasher.update(b"O")
@@ -638,7 +638,7 @@ def sample_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D1/D7/D
     Parameters
     ----------
     population:
-        The prepared population noun (:func:`torchlens.intervention.population.reference`).
+        The prepared population noun (:func:`torchlens.intervention._population.reference`).
     agree_on:
         Optional datum -> key callable; donors are drawn only from the
         agreement class matching the subject's key (causal scrubbing's
@@ -713,7 +713,7 @@ def _resolve_trace_donor(member: Any, ctx: HookContext, out: torch.Tensor) -> to
     returned the LAST pass).
     """
 
-    from .helpers import _resolve_patch_donor_site
+    from ._helpers import _resolve_patch_donor_site
 
     site_label, source_site = _resolve_patch_donor_site(member, ctx.op)
     value = source_site.out
@@ -772,7 +772,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
     Identity persists, payloads never (``opaque_audit``).
     """
 
-    from .helpers import _helper_spec
+    from ._helpers import _helper_spec
 
     ref = plan.population
 
@@ -1037,7 +1037,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
 
         return _hook
 
-    from .helpers import _helper_spec
+    from ._helpers import _helper_spec
 
     return _helper_spec(
         "permute_batch",
@@ -1225,7 +1225,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature: the six dec
 
         return _hook
 
-    from .helpers import _helper_spec
+    from ._helpers import _helper_spec
 
     return _helper_spec(
         "resample_rows_from",
@@ -1401,9 +1401,9 @@ def set_direction_mean(
 
         return _hook
 
-    from .helpers import _helper_spec
+    from ._helpers import _helper_spec
 
-    direction_digest = hashlib.sha256(unit.contiguous().numpy().tobytes()).hexdigest()[:16]
+    direction_digest = hashlib.sha256(tensor_payload_bytes(unit.contiguous())).hexdigest()[:16]
     return _helper_spec(
         "set_direction_mean",
         kwargs={

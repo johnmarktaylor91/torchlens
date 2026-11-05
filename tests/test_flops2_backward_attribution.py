@@ -41,7 +41,7 @@ def _assert_conserved(trace: Any) -> Any:
     for attribution, (pass_index, pass_count) in zip(
         status.flops_attributions, status.executed_flops_per_pass, strict=True
     ):
-        assert attribution.pass_index == pass_index
+        assert attribution.pass_number == pass_index
         rows = sum(row.flops for row in attribution.rows)
         assert rows + attribution.unattributed_flops == attribution.executed_flops == pass_count
         assert all(isinstance(row.flops, int) for row in attribution.rows)
@@ -193,12 +193,12 @@ def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> No
             (row,) = [r for a in status.flops_attributions for r in a.rows if r.recompute_flops]
             assert row.op_label is None and row.recompute_flops == SEGMENT_FORWARD
         forward = {
-            str(op.layer_label): op.flops_forward
+            str(op.layer_label): op.cost.flops_forward
             for op in trace._layer_list
             if op.func_name == "linear"
         }
         twin_forward = {
-            str(op.layer_label): op.flops_forward
+            str(op.layer_label): op.cost.flops_forward
             for op in twin._layer_list
             if op.func_name == "linear"
         }

@@ -20,6 +20,17 @@ from torchlens.debug._infer_training_states import (
     training_states_restored,
 )
 
+from .._user_public_impls import trace
+from .._utils.lazy_state import has_uninitialized_lazy_state
+from .._utils.rng import _snapshot_cuda_rng_states
+from ..options import CaptureOptions
+from ._infer_op_facts import (
+    _shape_op_config_int,
+    _shape_op_label,
+    _shape_op_module,
+    _shape_op_source_line,
+    _shape_tuple,
+)
 from ._infer_report import GuessInputShapeReport
 
 if TYPE_CHECKING:
@@ -119,28 +130,6 @@ _KERNEL_RE = _EXCEPTION_PARSE_PATTERNS["kernel"]
 _SIZE_RE = _EXCEPTION_PARSE_PATTERNS["size"]
 _POSITION_RE = _EXCEPTION_PARSE_PATTERNS["position"]
 _DEVICE_RE = _EXCEPTION_PARSE_PATTERNS["device"]
-
-
-def _shape_tuple(shape: Any) -> tuple[int, ...] | None:
-    """Convert a Torch/TorchLens shape-like object to an integer tuple.
-
-    Parameters
-    ----------
-    shape:
-        Shape-like object.
-
-    Returns
-    -------
-    tuple[int, ...] | None
-        Converted shape, or ``None`` when conversion is not possible.
-    """
-
-    if shape is None:
-        return None
-    try:
-        return tuple(int(dim) for dim in shape)
-    except TypeError:
-        return None
 
 
 def _dtype_from_message(message: str) -> torch.dtype | None:
@@ -330,8 +319,6 @@ def _has_uninitialized_lazy_state(model: nn.Module) -> bool:
         Whether any module has uninitialized lazy parameters or buffers.
     """
 
-    from .._utils.lazy_state import has_uninitialized_lazy_state
-
     return has_uninitialized_lazy_state(model)
 
 
@@ -382,7 +369,7 @@ def _shape_has_executed_adaptive_pool(trace: Trace) -> bool:
     return any(
         "adaptive" in str(getattr(op, "func_name", "")).lower()
         and "pool" in str(getattr(op, "func_name", "")).lower()
-        for op in trace.layers
+        for op in trace.ops
     )
 
 
@@ -1140,9 +1127,6 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
         Completed TorchLens trace.
     """
 
-    from torchlens._user_funcs import trace
-    from torchlens.options import CaptureOptions
-
     states = _training_states(model)
     try:
         model.eval()
@@ -1151,83 +1135,8 @@ def _trace_model(model: nn.Module, example_input: Any) -> Trace:
         _restore_training_states(states)
 
 
-def _shape_op_label(op: Any) -> str | None:
-    """Return an op label from a TorchLens layer/op object.
-
-    Parameters
-    ----------
-    op:
-        TorchLens op-like object.
-
-    Returns
-    -------
-    str | None
-        Label when present.
-    """
-
-    label = getattr(op, "layer_label", None) or getattr(op, "op_label", None)
-    return str(label) if label is not None else None
-
-
-def _shape_op_module(op: Any) -> str | None:
-    """Return a module address from a TorchLens op-like object.
-
-    Parameters
-    ----------
-    op:
-        TorchLens op-like object.
-
-    Returns
-    -------
-    str | None
-        Module address when present.
-    """
-
-    module = getattr(op, "module_address", None) or getattr(op, "module", None)
-    return str(module) if module is not None else None
-
-
-def _shape_op_source_line(op: Any) -> str | None:
-    """Return an op source-line string when TorchLens exposes one.
-
-    Parameters
-    ----------
-    op:
-        TorchLens op-like object.
-
-    Returns
-    -------
-    str | None
-        Source-line string, or ``None``.
-    """
-
-    source_line = getattr(op, "source_line", None)
-    return str(source_line) if source_line is not None else None
-
-
-def _shape_op_config_int(op: Any, key: str) -> int | None:
-    """Read an integer from an op's ``func_config``.
-
-    Parameters
-    ----------
-    op:
-        TorchLens op-like object.
-    key:
-        Config key.
-
-    Returns
-    -------
-    int | None
-        Integer value when present.
-    """
-
-    config = getattr(op, "func_config", {}) or {}
-    value = config.get(key)
-    return int(value) if value is not None else None
-
-
 def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
-    """Read the first executed input-consuming constraint op from a trace.
+    """Read the first executed input-consuming constraint op, pass by pass.
 
     Parameters
     ----------
@@ -1240,7 +1149,7 @@ def _executed_constraint(trace: Trace) -> _ExecutedConstraint | None:
         Executed constraint metadata, or ``None``.
     """
 
-    for op in trace.layers:
+    for op in trace.ops:
         func_name = str(getattr(op, "func_name", "")).lower()
         input_shapes = tuple(_shape_tuple(shape) for shape in getattr(op, "input_shapes", ()) or ())
         input_dtypes = tuple(getattr(op, "input_dtypes", ()) or ())
@@ -2167,7 +2076,6 @@ def guess_input_shape(model: nn.Module, **kwargs: Any) -> GuessInputShapeReport:
     cpu_rng_state = torch.default_generator.get_state()
     # Initialized-CUDA-only, latch-guarded: the bare is_available
     # gate allocated a CUDA context per visible device on CPU-only runs.
-    from .._utils.rng import _snapshot_cuda_rng_states
 
     cuda_rng_state = _snapshot_cuda_rng_states() or None
     try:

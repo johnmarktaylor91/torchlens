@@ -41,12 +41,11 @@ from .._data_substrate import (
 )
 from .._errors import InvalidArgumentError
 from .._extraction_provenance import apply_input_transform
-from ..errors._base import TorchLensWarning
-from ..transforms import (
-    TransformContext,
-    TransformPipeline,
-)
+from .._user_public_impls import trace as _capture_trace
+from ..errors._base import TorchLensError, TorchLensWarning
+from ..transforms import TensorSpec, TransformContext, TransformPipeline
 from ._engine_batching import _iter_item_batches, _move_envelope_to_device, _snapshot
+from ._front_door import _extract_layers_with_trace, _matching_saved_layer_labels
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
 from .dtype_policy import cast_for_store
 from .envelope import (
@@ -696,8 +695,6 @@ def _capture_outputs(
         the selector path, whose plan entries carry site identity).
     """
 
-    import torchlens as _tl
-
     if plan.layers_kind == "selector":
         frozen: SelectorPlan | None = run_state.get("selector_plan")
         if frozen is None:
@@ -719,7 +716,7 @@ def _capture_outputs(
     if plan.intervention is not None:
         # the intervened capture runs the live intervention door and
         # ledgers its fire receipt; batch zero freezes the fired sites.
-        trace = _tl.trace(
+        trace = _capture_trace(
             plan.model,
             envelope.args,
             input_kwargs=dict(envelope.kwargs),
@@ -731,14 +728,14 @@ def _capture_outputs(
         run_state["current_receipt"] = receipt
         return _resolve_trace_outputs(plan, trace)
     if envelope.kwargs:
-        trace = _tl.trace(
+        trace = _capture_trace(
             plan.model,
             envelope.args,
             input_kwargs=dict(envelope.kwargs),
             save=list(plan.layer_plan.values()),
         )
         return _resolve_trace_outputs(plan, trace)
-    _trace, outputs, views = _tl._extract_layers_with_trace(
+    _trace, outputs, views = _extract_layers_with_trace(
         plan.model, envelope.first_input(), plan.layers
     )
     return outputs, views
@@ -767,8 +764,6 @@ def _resolve_trace_outputs(
         If a sequence lookup resolves to no saved layer.
     """
 
-    import torchlens as _tl
-
     outputs: dict[str, torch.Tensor] = {}
     views: dict[str, Any] = {}
     if plan.layers_kind == "mapping":
@@ -777,7 +772,7 @@ def _resolve_trace_outputs(
             outputs[label] = view.out
         return outputs, views
     for pattern in plan.layer_plan.values():
-        matches = _tl._matching_saved_layer_labels(trace, pattern)
+        matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
         for match in matches:
@@ -1018,8 +1013,6 @@ def _freeze_transform_plans(
         Per-key frozen plan rows.
     """
 
-    from ..transforms import TensorSpec
-
     plans: dict[str, Any] = {}
     for key, tensor in batch_outputs.items():
         pipeline = _pipeline_for(plan, key)
@@ -1116,17 +1109,15 @@ def _site_identity(
 ) -> tuple[str, str | None, str | None]:
     """Resolve one output key's layer label, site key and site-key-unavailable code."""
 
-    from ..errors._base import TorchLensError
-
     if layer_views is not None and key in layer_views:
         layer = layer_views[key]
         label = str(layer.layer_label)
         site_key: str | None
         site_key_unavailable: str | None
         try:
-            # A Layer view reads its single site key (typed refusal on
-            # spanning or keyless layers); an Op view carries its own key.
-            site_key = str(layer_site_key(layer) if isinstance(layer, Layer) else layer.site_key)
+            # A Layer view reads its single site key (typed refusal when spanning or keyless).
+            key = layer_site_key(layer) if isinstance(layer, Layer) else layer.graph.site_key
+            site_key = str(key)
             site_key_unavailable = None
         except TorchLensError as exc:
             site_key = None

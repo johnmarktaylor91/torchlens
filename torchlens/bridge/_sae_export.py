@@ -32,6 +32,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._numpy_bridge import tensor_to_numpy
+from ..stats._per_unit import TopK, UnitTopK
 
 #: delphi's own nonzero test when it caches latents
 #: (``delphi/latents/cache.py``, ``get_nonzeros_batch``: ``batch.abs() > 1e-5``).
@@ -53,8 +55,6 @@ _DOCS = "docs/field-guide/sae_latent_export.md"
 
 def _is_unit_topk(latents: Any) -> bool:
     """Return whether ``latents`` is a ``tl.stats`` per-unit top-k result."""
-
-    from ..stats._per_unit import UnitTopK
 
     return isinstance(latents, UnitTopK)
 
@@ -158,7 +158,7 @@ def _location_array(locations: torch.Tensor) -> Any:
 
     import numpy as np
 
-    array = locations.numpy()
+    array = tensor_to_numpy(locations)
     if array.size == 0 or int(array.max()) < 2**16:
         return array.astype(np.uint16)
     return array.astype(np.uint32)
@@ -251,8 +251,8 @@ def write_delphi(  # noqa: PLR0913 -- the two subjects plus the cache's where (s
         save_file(
             {
                 "locations": _location_array(split),
-                "activations": activations[mask].to(torch.float16).numpy(),
-                "tokens": token_ids.numpy(),
+                "activations": tensor_to_numpy(activations[mask].to(torch.float16)),
+                "tokens": tensor_to_numpy(token_ids),
             },
             str(folder / f"{start}_{stop}.safetensors"),
         )
@@ -274,8 +274,6 @@ def write_delphi(  # noqa: PLR0913 -- the two subjects plus the cache's where (s
 def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
     """Return the per-latent top-``k`` of dense latents, ranked as ``tl.stats.TopK`` ranks."""
 
-    from ..stats._per_unit import TopK
-
     tracker = TopK(k, unit_axis=-1)
     tracker.update(dense)
     return tracker.compute()
@@ -284,7 +282,7 @@ def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
 def _warn_large_dashboard(latents: int, k: int, sequence: int) -> None:
     """Warn once per session when the dashboard JSON would pass ``_DASHBOARD_WARN_BYTES``."""
 
-    from .sae import _warn_once
+    from .sae import _warn_once  # deferred: cycle bridge
 
     code = "sae_export_dashboard_large"
     estimate = latents * k * sequence * 24

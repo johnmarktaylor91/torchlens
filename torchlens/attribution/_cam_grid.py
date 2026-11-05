@@ -37,6 +37,9 @@ from torch.nn import Module
 from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
 
+from .._utils._record_group_table import record_member
+from ..options import CaptureOptions
+
 TokenReshape = Callable[[Tensor], Tensor]
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section grad_cam."
@@ -154,7 +157,7 @@ class _TraceGraph:
         return [
             label
             for label, op in self.ops.items()
-            if op.is_input and not getattr(op, "is_buffer", False)
+            if op.is_input and not record_member(op, "is_buffer", False)
         ]
 
     def output_labels(self) -> list[str]:
@@ -303,12 +306,12 @@ def _grid_candidates(graph: _TraceGraph, layer_label: str) -> set[tuple[int, int
 def _metadata_trace(model: Module, inputs: Any, input_kwargs: Any) -> Any:
     """Capture a metadata-only trace of the attributed forward call."""
 
-    import torchlens as tl
+    from .._user_public_impls import trace as _capture_trace
 
-    options = tl.options.CaptureOptions()
+    options = CaptureOptions()
     args = inputs if inputs is not None else ()
     with _temporarily_eval(model):
-        return tl.trace(model, args, input_kwargs=input_kwargs, capture=options, save=None)
+        return _capture_trace(model, args, input_kwargs=input_kwargs, capture=options, save=None)
 
 
 def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
@@ -323,9 +326,9 @@ def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
     labels: dict[str, list[str]] = {}
     calls: dict[str, set[str]] = {}
     for label, op in graph.ops.items():
-        for address in tuple(op.output_of_modules or ()):
+        for address in tuple(op.module_context.output_of_modules or ()):
             labels.setdefault(str(address), []).append(label)
-        for call in tuple(getattr(op, "output_of_module_calls", None) or ()):
+        for call in tuple(record_member(op, "output_of_module_calls", None) or ()):
             address, _, index = str(call).rpartition(":")
             calls.setdefault(address or str(call), set()).add(index)
     return {
@@ -335,6 +338,19 @@ def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
         )
         for address, found in labels.items()
     }
+
+
+def _layer_tensor(output: Any) -> Any:
+    """Return the activation a layer hook records for ``output``.
+
+    A one-element tuple or list stands for its element (transformers' older
+    ``ViTLayer`` returns ``(hidden_states,)``); any other value is returned
+    as it is, and callers refuse or skip it when it is not a tensor.
+    """
+
+    if isinstance(output, tuple | list) and len(output) == 1:
+        return output[0]
+    return output
 
 
 def _module_output_label(graph: _TraceGraph, layer: str) -> str | None:

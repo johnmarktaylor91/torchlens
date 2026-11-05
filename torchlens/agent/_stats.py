@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 from .._errors import InvalidArgumentError
 
 #: Result schema id.
@@ -99,7 +101,7 @@ def _read_payload(op: Any, target: str) -> Any:
     """
 
     if target == "out":
-        from .._io.payload_reader import read_op_payload
+        from .._io.payload_reader import read_op_payload  # deferred: startup cost
 
         try:
             return read_op_payload(op)
@@ -109,7 +111,7 @@ def _read_payload(op: Any, target: str) -> Any:
     resident = slot("grad") if callable(slot) else getattr(op, "grad", None)
     if resident is not None:
         return resident
-    ref = slot("grad_ref") if callable(slot) else getattr(op, "grad_ref", None)
+    ref = slot("grad_ref") if callable(slot) else record_member(op, "grad_ref", None)
     if ref is not None:
         return ref.materialize(map_location="cpu")
     return None
@@ -454,7 +456,7 @@ def _select_ops(log: Any, *, labels: list[str] | None, query: dict[str, Any] | N
             or str(getattr(op, "layer_label", "")) in wanted
         ]
     if query is not None:
-        from ._query import query_sites
+        from ._query import query_sites  # deferred: startup cost
 
         matched, _, _ = query_sites(log, query)
         matched_labels = {row["label"] for row in matched}

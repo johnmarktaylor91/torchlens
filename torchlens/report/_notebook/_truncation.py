@@ -37,6 +37,8 @@ from typing import Any
 
 import numpy as np
 
+from ..._utils._numpy_bridge import tensor_to_numpy
+
 __all__ = [
     "CELL_BUDGET_DEFAULT",
     "EDGE_ITEMS_DEFAULT",
@@ -238,8 +240,8 @@ def _to_numpy(tensor: Any) -> np.ndarray:
     import torch
 
     if tensor.dtype in (torch.bfloat16, torch.float16):
-        return tensor.float().numpy(force=True)
-    return tensor.numpy(force=True)
+        return tensor_to_numpy(tensor.float(), force=True)
+    return tensor_to_numpy(tensor, force=True)
 
 
 def truncate_tensor_with_mask(

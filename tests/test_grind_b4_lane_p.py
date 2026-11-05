@@ -25,7 +25,10 @@ from torchlens._io.state_keys import (
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
+from torchlens._utils.display import (
+    cleanup_trace_visualizer_dir,
+    ensure_trace_visualizer_dir,
+)
 
 
 class _NonPersistentBufferModel(nn.Module):
@@ -143,9 +146,10 @@ def test_capture_cache_lru_and_clear(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     cache_root = tmp_path / "capture"
     assert len(list(cache_root.glob("*.pkl"))) == 2
+    secret_before = prepare_cache._capture_cache_secret()
     assert user_funcs.clear_cache(tmp_path) == 2
     assert list(cache_root.glob("*.pkl")) == []
-    assert (cache_root / ".capture_cache_secret").is_file()
+    assert prepare_cache._capture_cache_secret() == secret_before
 
 
 def test_scrub_preserves_shared_and_cyclic_mutable_containers() -> None:

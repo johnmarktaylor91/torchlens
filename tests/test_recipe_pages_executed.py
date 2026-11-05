@@ -9,7 +9,10 @@ tool skips when that tool is not installed, except in the peer-recipe leg: there
 ``TORCHLENS_RECIPE_PEERS=1`` is set, the pinned peers are installed, and a missing
 tool fails instead of skipping. A fence without a header fails the lint below, so
 no example on these pages goes unexecuted. Notebook recipes run the same way, cell
-by cell, with the header on each code cell.
+by cell, with the header on each code cell. A page that needs a torch surface the
+running build lacks (one-backward reads without GradientEdge) stops at that capability's
+named refusal (``tests/support/capability_routes.py``); where the surface exists the
+same refusal fails the page.
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ from typing import Any
 
 import pytest
 import torch
+
+from tests.support.capability_routes import capability_route
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -62,6 +67,11 @@ PAGES: dict[str, str] = {
     "docs/neuroai/task_rnn_circuits.md": "torchlens",
     "docs/neuroai/protein_language_model.md": "esm",
     "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/causal_trace_recipe.ipynb": "matplotlib",
+    "examples/methods/contrastive_direction_recipe.ipynb": "torchlens",
+    "examples/methods/generation_step_iterator_recipe.ipynb": "torchlens",
+    "examples/methods/measure_faithfulness_recipe.ipynb": "torchlens",
+    "examples/methods/trainable_intervention_recipe.ipynb": "torchlens",
     "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
     "examples/methods/function_vectors_recipe.ipynb": "transformers",
     "examples/methods/clip_head_attention_recipe.ipynb": "clip",
@@ -77,6 +87,8 @@ PAGES: dict[str, str] = {
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
     "docs/gallery/ioi_circuit.md": "transformers",
+    "docs/gallery/bundles_harness.md": "torchlens",
+    "docs/gallery/jacobian_lens.md": "transformers",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -359,7 +371,12 @@ def test_recipe_page_runs(page: str, tmp_path: Path, monkeypatch: pytest.MonkeyP
             filename = f"{page}:python-block-{index}"
             linecache.cache[filename] = (len(code), None, code.splitlines(True), filename)
             namespace["RESULT"] = _UNSET
-            exec(compile(code, filename, "exec"), namespace)
+            with capability_route() as route:
+                exec(compile(code, filename, "exec"), namespace)
+            if route.refusal is not None:
+                # This torch lacks a surface the page needs and the fence refused
+                # typed; every later fence builds on what it would have returned.
+                return
             expected = ast.literal_eval(header.group("expected"))
             assert namespace["RESULT"] == expected, (page, index, namespace["RESULT"])
     finally:

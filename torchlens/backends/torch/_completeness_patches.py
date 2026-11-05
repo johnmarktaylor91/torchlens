@@ -16,8 +16,8 @@ from ... import _state
 # module import so the flag is read at USE time (an import-time
 # value binding never sees runtime capability flips).
 from ..._utils import _torch_compat
+from ..._utils._tensor_label import DescriptorCompatProperty
 from ..._utils._torch_symbols import torch_attr
-from ._tl import DescriptorCompatProperty
 
 __all__ = (
     "_make_input_metadata_wrapper",

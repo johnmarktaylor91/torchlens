@@ -51,8 +51,9 @@ from .._capture.outcome import stamp_forked
 from .._trace_core._fork_copy import _COW_ATOMIC, cow_copy_value
 from .._trace_core.op_store import _MISSING, DetachedOpStore, PooledCell
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
+from .._utils._record_group_table import record_member
 from .._utils.env_flags import closed_bool_env
-from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
+from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._accessor_base import Accessor
 from ._fork_flat_copy import _FLAT_COPY_DEPTH, _NO_FLAT_COPY, _flat_container_copy
 from ._state_adapter import state_items, state_new, state_restore
@@ -581,15 +582,15 @@ def _fill_layer_shells(
                     for call_index, layer_pass in parent_ops.items()
                 )
             )
-        equivalence_class = getattr(shell, "equivalence_class", None)
+        equivalence_class = record_member(shell, "equivalence_class", None)
         if equivalence_class in fork_equivalent_ops:
             view = equivalent_view_memo.get(equivalence_class)
             if view is None:
-                shell.equivalent_ops = fork_equivalent_ops[equivalence_class]
+                shell._graph_equivalent_ops = fork_equivalent_ops[equivalence_class]
                 view = shell.__dict__.get("equivalent_ops", fork_equivalent_ops[equivalence_class])
                 equivalent_view_memo[equivalence_class] = view
             else:
-                shell.equivalent_ops = view
+                shell._graph_equivalent_ops = view
         fork_layer_logs[label] = shell
     fork._layer_logs = fork_layer_logs
 

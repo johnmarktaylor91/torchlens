@@ -38,12 +38,16 @@ from typing import Any, TypeGuard
 import torch
 
 from ._errors import InvalidArgumentError
+from ._literals import SaveBudgetOption
 from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read by diagnostics)
     _available_host_bytes,
     available_device_bytes,
 )
 from ._state import pause_logging
+from ._utils._byte_format import format_bytes
 from ._utils._display_bounded import short_dataclass_repr
+from ._utils._storage_refs import payload_weakref_is_safe
+from ._utils._torch_symbols import tensor_read
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a
@@ -61,8 +65,6 @@ __all__ = [
     "resolve_save_budget",
 ]
 
-SaveBudgetOption = str | int | float | None
-"""Accepted ``save_budget`` spellings: ``"auto"``, a fraction, bytes, or ``None``."""
 
 DEFAULT_SAVE_BUDGET_FRACTION = 0.5
 """Fraction of a device's *available* memory the ``"auto"`` budget allows.
@@ -72,8 +74,6 @@ activations already occupy the difference. Half leaves headroom for the forward
 pass itself, which allocates live intermediates alongside every payload
 TorchLens retains.
 """
-
-_BYTES_UNITS = (("TB", 1024**4), ("GB", 1024**3), ("MB", 1024**2), ("KB", 1024), ("B", 1))
 
 
 class SaveBudgetExceededError(CaptureError, RuntimeError):
@@ -93,28 +93,6 @@ class SaveBudgetExceededError(CaptureError, RuntimeError):
     ...     print(type(err).__name__)
     SaveBudgetExceededError
     """
-
-
-def format_bytes(num_bytes: float) -> str:
-    """Render a byte count in the largest unit that keeps it readable.
-
-    Parameters
-    ----------
-    num_bytes:
-        Byte count.
-
-    Returns
-    -------
-    str
-        Human-readable size such as ``"1.44 GB"``.
-    """
-
-    for unit, scale in _BYTES_UNITS:
-        if abs(num_bytes) >= scale or unit == "B":
-            if unit == "B":
-                return f"{int(num_bytes)} B"
-            return f"{num_bytes / scale:.2f} {unit}"
-    return f"{int(num_bytes)} B"
 
 
 @dataclass(frozen=True)
@@ -667,8 +645,13 @@ class SaveBudget:
         The watcher holds the budget weakly so the accountant never keeps itself
         alive through its own callbacks. A payload that cannot be weak-referenced
         keeps the historical permanent charge (conservative: never a zero-commit).
+        So does a storage payload on a torch without a retained storage wrapper
+        (``HAS_CACHED_UNTYPED_STORAGE_WRAPPER`` false, torch 2.1): a weak reference
+        to such a wrapper can leave freed memory behind and crash CPython later.
         """
 
+        if not payload_weakref_is_safe(payload):
+            return
         budget_ref = self._self_ref
         if budget_ref is None:
             budget_ref = self._self_ref = weakref.ref(self)
@@ -895,13 +878,9 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
                     )
                     for component in sparse_component_tensors(tensor)
                 ]
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             num_bytes = int(storage.nbytes())
-            identity: tuple[Any, ...] = (
-                str(tensor.device),
-                int(storage.data_ptr()),
-                num_bytes,
-            )
+            identity: tuple[Any, ...] = (str(tensor.device), int(storage.data_ptr()), num_bytes)
             return [(identity, num_bytes)]
         except Exception:
             num_bytes = int(tensor.numel() * tensor.element_size())
@@ -959,10 +938,10 @@ def retained_activation_bytes(ops: Any) -> int:
     total = 0
     seen: set[tuple[Any, ...]] = set()
     for op in ops:
-        if not getattr(op, "has_saved_activation", False) or getattr(op, "is_orphan", False):
+        if not getattr(op, "has_saved_activation", False) or getattr(op, "_graph_is_orphan", False):
             continue
         counted_payload = False
-        for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None)):
+        for payload in (getattr(op, "out", None), getattr(op, "_payload_transformed_out", None)):
             if not isinstance(payload, torch.Tensor) or payload.is_meta:
                 continue
             counted_payload = True
@@ -972,9 +951,9 @@ def retained_activation_bytes(ops: Any) -> int:
                 seen.add(identity)
                 total += int(num_bytes)
         if not counted_payload:
-            transformed_bytes = getattr(op, "transformed_activation_memory", None)
+            transformed_bytes = getattr(op, "_cost_transformed_activation_memory", None)
             if getattr(op, "out", None) is None and transformed_bytes:
                 total += int(transformed_bytes)
             else:
-                total += int(getattr(op, "activation_memory", 0) or 0)
+                total += int(getattr(op, "_cost_activation_memory", 0) or 0)
     return total

@@ -17,6 +17,10 @@ import torch
 from torch import nn
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
+from .._utils.arg_handling import normalize_input_args
+from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
+from ..backends.torch.backend import _get_input_arg_names
 
 
 def _input_op_by_label(log: Any, label: str) -> Any | None:
@@ -76,7 +80,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
             "never fire at input sites, and whole-input replacement would write outside the "
             "facet."
         )
-    io_role = getattr(home_op, "io_role", None)
+    io_role = record_member(home_op, "io_role", None)
     if not io_role:
         raise ValueError(
             f"Facet {facet_name!r} on module {address!r} homes on model input "
@@ -110,10 +114,6 @@ def _resolve_input_leaf_by_role(
         If no leaf of ``x`` sits at the recorded address (fail closed: a
         silent fallback would rerun an unpatched counterfactual).
     """
-
-    from .._utils.arg_handling import normalize_input_args
-    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
-    from ..backends.torch.backend import _get_input_arg_names
 
     args = normalize_input_args(x, model)
     arg_names = _get_input_arg_names(model, args)

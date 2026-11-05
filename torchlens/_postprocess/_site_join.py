@@ -49,6 +49,7 @@ from typing import Any
 
 from .._data_classes._site_key import ROOT_CALL_INSTANCE, operation_witness, parse_site_key
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 #: Cohort identity of one structural position family: (module_site,
 #: layer_type, output_slot) -- the key minus its ordinal.
@@ -118,12 +119,12 @@ def site_profile(trace: Any) -> SiteProfile:
     witnesses: dict[str, set[_Witness | None]] = {}
     for label in trace.op_labels:
         op = trace.ops[label]
-        key = getattr(op, "site_key", None)
+        key = record_member(op, "site_key", None)
         if key is None:
             continue
         keys[label] = key
         module_site, layer_type, output_slot, _ = parse_site_key(key)
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         call_instance = stack[-1] if stack else ROOT_CALL_INSTANCE
         cohort = (module_site, layer_type, output_slot)
         instance_counts = per_call.setdefault(cohort, {})
@@ -203,7 +204,7 @@ def occurrence_coordinates(trace: Any, keys: dict[str, str]) -> dict[str, tuple[
         key = keys.get(label)
         if key is None:
             continue
-        stack = tuple(getattr(trace.ops[label], "module_call_stack", ()) or ())
+        stack = tuple(record_member(trace.ops[label], "module_call_stack", ()) or ())
         call_instance = stack[-1] if stack else ROOT_CALL_INSTANCE
         index = position.get((key, call_instance), 0)
         position[(key, call_instance)] = index + 1
@@ -227,9 +228,9 @@ def fold_rows_from_trace(trace: Any) -> list[FoldRow]:
     return [
         FoldRow(
             label=label,
-            site_key=getattr(trace.ops[label], "site_key", None),
-            equivalence_class=str(trace.ops[label].equivalence_class),
-            recurrent_labels=tuple(trace.ops[label].recurrent_ops or ()),
+            site_key=record_member(trace.ops[label], "site_key", None),
+            equivalence_class=str(trace.ops[label].graph.equivalence_class),
+            recurrent_labels=tuple(trace.ops[label].graph.recurrent_ops or ()),
         )
         for label in trace.op_labels
     ]

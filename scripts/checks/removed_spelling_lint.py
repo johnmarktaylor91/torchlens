@@ -67,7 +67,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # Removed Trace/Op/Layer/Bundle method spellings (canonical: do/run/
     # span/conditional_arm_entry_edges; push, push_from and attach_hooks
     # folded into do). ``validate_saved_outs`` is absent on
-    # purpose: the INTERNAL ``validation.core.validate_saved_outs`` keeps the
+    # purpose: the INTERNAL ``validation._core.validate_saved_outs`` keeps the
     # name (its zero-reference ``validate_trace_saved_outs`` rename re-export
     # was deleted by the F38 punch list); only the top-level spelling was
     # removed, and the ``tl_moved`` row covers it.
@@ -108,6 +108,13 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     "perturb": re.compile(r"\bperturb_saved_grads\b"),
     # Removed draw()/show() warned alias (vis_mode is the kept method param).
     "vis_opt": re.compile(r"\bvis_opt\s*="),
+    # Removed premade-view spellings (JMT 4 Nov 2026 lens lock, no alias): the
+    # interventions highlight is ``trace.draw(view="interventions")`` and the
+    # blueprint view was dropped (plain ``trace.draw()`` is the full picture).
+    "draw_highlight": re.compile(
+        r"\.draw\s*\([^)\n]*\bhighlight\s*=|\bDrawHighlightLiteral\b"
+        r"|\bview\s*=\s*['\"]blueprint['\"]"
+    ),
     # Removed legacy bool VALUES for buffer visibility (tri-state only).
     "buffers_bool": re.compile(r"\bshow_buffers\s*=\s*(?:True|False)\b"),
     # Removed 'vision'/'attention' node-style presets (canonical:
@@ -153,7 +160,7 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     "runnable_package": re.compile(r"\btorchlens[./]_runnable_[a-z]"),
     # Root doors docs kept teaching after they left (remove-and-rename, no
     # shim): ``tl.save(trace, path)`` is ``trace.save(path)``; ``swap_with``
-    # lives at ``torchlens.intervention.helpers.swap_with`` (the interventions
+    # lives at ``torchlens.intervention._helpers.swap_with`` (the interventions
     # rename took it off the root); ``CaptureOptions(intervention_ready=...)``
     # is ``replayable=``.
     "root_doors": re.compile(
@@ -258,6 +265,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
     "patch": ("patch_detached_references", "patch_policy", "patch_modules"),
     "perturb": ("perturb_saved_grads",),
     "vis_opt": ("vis_opt",),
+    "draw_highlight": ("highlight", "Highlight", "blueprint"),
     "buffers_bool": ("show_buffers",),
     "node_style_domain": ("node_style", "node_mode"),
     "inert_opts": (
@@ -535,6 +543,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "patch": "tl.wrap_torch(patch_policy='detached')\n",
         "perturb": "validate_backward_pass(model, x, perturb_saved_grads=True)\n",
         "vis_opt": "log.draw(vis_opt='rolled')\n",
+        "draw_highlight": 'trace.draw(highlight="interventions")\n',
         "buffers_bool": "log.draw(show_buffers=True)\n",
         "node_style_domain": "log.draw(node_style='vision')\n",
         "inert_opts": "opts = SaveOptions(output_dir='out')\n",
@@ -616,7 +625,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         assert any(group == "root_doors" for group, _, _ in hits), resurrected
     for canonical in (
         "trace.save(str(path))\n",
-        "from torchlens.intervention.helpers import swap_with\n",
+        "from torchlens.intervention._helpers import swap_with\n",
         "trace.save_intervention(path)\n",
         "code = 'trace_not_intervention_ready'\n",
         "cap = tl.options.CaptureOptions(replayable=True)\n",

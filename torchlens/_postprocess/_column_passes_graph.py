@@ -20,6 +20,7 @@ from collections.abc import Callable
 from itertools import chain
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._branch_attribution import _code_context_position_key
 from ._column_passes import _column_lookup, _row_or_refuse
 
@@ -161,14 +162,16 @@ def log_internally_terminated_tensor(
     """
 
     layer_entry = trace[tensor_label]
-    layer_entry.is_internal_sink = True
+    layer_entry.is_internal_sink = True  # record-groups: flat
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         trace.internal_sink_ops.append(tensor_label)
-        if layer_entry.is_scalar_bool and (tensor_label not in seen_terminated_bool_labels):
+        if layer_entry.control_flow.is_scalar_bool and (
+            tensor_label not in seen_terminated_bool_labels
+        ):
             seen_terminated_bool_labels.add(tensor_label)
             trace.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry.is_terminal_bool = True
+            layer_entry._control_flow_is_terminal_bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -255,10 +258,10 @@ def _reset_and_flood_if_edges_facade(trace: Trace, branch_bool_labels: list[str]
     """Facade body of :func:`reset_and_flood_if_edges` for non-column traces."""
 
     for layer in trace:
-        if getattr(layer, "is_orphan", False):
+        if record_member(layer, "is_orphan", False):
             continue
-        layer.conditional_entry_children = []
-        layer.is_in_conditional_body = False
+        layer._control_flow_entry_children = []
+        layer._control_flow_is_in_conditional_body = False
 
     nodes_seen: set[str] = set()
     node_stack = branch_bool_labels.copy()
@@ -269,15 +272,15 @@ def _reset_and_flood_if_edges_facade(trace: Trace, branch_bool_labels: list[str]
             continue
         for parent_label in node.parents:
             parent_layer = trace[parent_label]
-            if parent_layer.has_output_descendant:
-                parent_layer.conditional_entry_children.append(node_label)
-                parent_layer.is_in_conditional_body = False
+            if parent_layer.graph.has_output_descendant:
+                parent_layer.control_flow.entry_children.append(node_label)
+                parent_layer._control_flow_is_in_conditional_body = False
                 nodes_seen.add(parent_label)
                 trace._graph_conditional_branch_edges.append((parent_label, node_label))
             else:
                 if parent_label in nodes_seen:
                     continue
-                parent_layer.is_in_conditional_body = True
+                parent_layer._control_flow_is_in_conditional_body = True
                 node_stack.append(parent_label)
 
         nodes_seen.add(node_label)
@@ -349,17 +352,17 @@ def _assign_conditional_branch_stacks_facade(
     translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
     for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
         layer = trace[layer_label]
-        if getattr(layer, "is_orphan", False):
+        if record_member(layer, "is_orphan", False):
             continue
-        code_context = layer.code_context
+        code_context = layer.source.frames
         stack_key = _code_context_position_key(code_context)
         translated = translated_by_stack.get(stack_key)
         if translated is None:
             translated = translate(code_context, events_by_key)
             translated_by_stack[stack_key] = translated
-        layer.conditional_branch_stack = list(translated)
-        layer.conditional_branch_depth = len(layer.conditional_branch_stack)
-        layer.conditional_arm_children = {}
+        layer._control_flow_branch_stack = list(translated)
+        layer._control_flow_branch_depth = len(layer.control_flow.branch_stack)
+        layer._control_flow_arm_children = {}
 
 
 def get_gained_branch_entries(
@@ -476,18 +479,18 @@ def _attribute_forward_edges_facade(
 
     for parent_label in trace._raw_graph_ws.raw_layer_labels_list:
         parent_layer = trace[parent_label]
-        if getattr(parent_layer, "is_orphan", False):
+        if record_member(parent_layer, "is_orphan", False):
             continue
         for child_label in parent_layer.children:
             child_layer = trace[child_label]
-            if getattr(child_layer, "is_orphan", False):
+            if record_member(child_layer, "is_orphan", False):
                 continue
             gained_entries = get_gained_branch_entries(
-                parent_layer.conditional_branch_stack,
-                child_layer.conditional_branch_stack,
+                parent_layer.control_flow.branch_stack,
+                child_layer.control_flow.branch_stack,
             )
             for conditional_id, branch_kind in gained_entries:
-                parent_layer.conditional_arm_children.setdefault(conditional_id, {}).setdefault(
+                parent_layer.control_flow.arm_children.setdefault(conditional_id, {}).setdefault(
                     branch_kind, []
                 ).append(child_label)
                 entry_edges[(conditional_id, branch_kind)].append(
@@ -565,11 +568,11 @@ def materialize_derived_views(trace: Trace) -> None:
     if lookup is None:
         for layer_label in trace._raw_graph_ws.raw_layer_labels_list:
             layer = trace[layer_label]
-            if getattr(layer, "is_orphan", False):
+            if record_member(layer, "is_orphan", False):
                 continue
-            layer.conditional_then_children = _then_children(layer.conditional_arm_children)
-            layer.conditional_elif_children = _elif_children(layer.conditional_arm_children)
-            layer.conditional_else_children = _else_children(layer.conditional_arm_children)
+            layer._control_flow_then_children = _then_children(layer.control_flow.arm_children)
+            layer._control_flow_elif_children = _elif_children(layer.control_flow.arm_children)
+            layer._control_flow_else_children = _else_children(layer.control_flow.arm_children)
         return
     columns, rows = lookup
     is_orphan = columns.getter("is_orphan", False)

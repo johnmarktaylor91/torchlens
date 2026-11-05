@@ -13,6 +13,7 @@ from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ._pass_marks import pass_rows
 
 PARAM_SEPARATOR: Final[str] = " · "
@@ -229,7 +230,7 @@ def scalar_value_line(layer_log: Any) -> str | None:
 
     if layer_log.shape is None or len(_shape_tuple(layer_log.shape)) != 0:
         return None
-    if getattr(layer_log, "is_terminal_bool", False):
+    if record_member(layer_log, "is_terminal_bool", False):
         return None
     source = getattr(layer_log, "original", layer_log)  # a drawn wrapper names its record
     ops = getattr(getattr(source, "ops", None), "values", None)
@@ -261,7 +262,7 @@ def shape_rows(layer_log: Any, *, with_memory: bool = False) -> list[str]:
 
     shape_row = format_output_shape(layer_log.shape)
     if with_memory:
-        shape_row = f"{shape_row}, {format_memory(layer_log.activation_memory)}"
+        shape_row = f"{shape_row}, {format_memory(layer_log.cost.activation_memory)}"
     value_row = scalar_value_line(layer_log)
     return [shape_row] if value_row is None else [shape_row, value_row]
 
@@ -356,17 +357,17 @@ def saved_for_backward_line(layer_log: Any, vis_mode: str) -> str | None:
         Plain-text label row, or ``None`` when no retention was measured.
     """
 
-    count = getattr(layer_log, "num_autograd_tensors", None)
+    count = record_member(layer_log, "num_autograd_tensors", None)
     if count is None or count <= 0:
         return None
     suffix = ""
     if vis_mode == "rolled" and getattr(layer_log, "num_passes", 1) > 1:
         suffix = " (total across passes)"
     noun = "tensor" if count == 1 else "tensors"
-    memory = getattr(layer_log, "autograd_memory", None)
+    memory = record_member(layer_log, "autograd_memory", None)
     if memory is not None:
-        return f"saved for backward: {count} {noun}, {format_memory(memory)}{suffix}"
-    return f"saved for backward: {count} {noun}{suffix}"
+        return f"saved for backward: {count:,} {noun}, {format_memory(memory)}{suffix}"
+    return f"saved for backward: {count:,} {noun}{suffix}"
 
 
 def format_memory(bytes_or_quantity: Any) -> str:
@@ -381,39 +382,128 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156.0 KB"``: the divisor is 1024 and
-        the unit names are the released drawings' (B, KB, MB, GB, TB).
+        Human-readable memory such as ``"156 KB"``: decimal units, each 1000
+        times the one before (B, KB, MB, GB, TB), so the name matches the divisor.
     """
 
     if isinstance(bytes_or_quantity, bool) or not isinstance(bytes_or_quantity, int | float):
         return str(bytes_or_quantity)
-    return binary_size(float(bytes_or_quantity))
+    return decimal_size(float(bytes_or_quantity))
 
 
-#: Unit names for the drawing's sizes, each 1024 times the one before. The
-#: drawings keep the released look (``"60.0 KB"``), not the IEC names
-#: (``KiB``) that card and repr byte quantities use.
-_BINARY_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
+#: Unit names for the drawing's sizes, each 1000 times the one before. Drawings
+#: keep the released names (``"60 KB"``) with the decimal divisor those names
+#: mean; card and repr byte quantities print IEC units (``KiB``, divisor 1024).
+_DECIMAL_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
-def binary_size(size: float) -> str:
-    """Return a byte count for a drawing, for example ``"60.0 KB"``.
+def decimal_size(size: float) -> str:
+    """Return a byte count for a drawing, for example ``"60 KB"`` or ``"1.9 KB"``.
 
-    The divisor is 1024. Whole bytes print without a decimal (``"48 B"``);
-    larger values print one decimal under the largest unit the value reaches.
+    The divisor is 1000, the one the unit names mean. Whole bytes print without
+    a decimal (``"48 B"``); larger values print one decimal under the largest
+    unit the rounded value reaches, dropped when it is zero (``"588 KB"``, not
+    ``"588.0 KB"``), so ``999_999`` bytes is ``"1 MB"``, never ``"1000 KB"``.
     """
 
     if size < 0:
         raise ValueError("size must be non-negative.")
-    if size < 1024:
+    if size < 1000:
         return f"{int(size)} B"
     value = size
-    unit = _BINARY_UNITS[0]
-    for unit in _BINARY_UNITS[1:]:
-        value /= 1024.0
-        if value < 1024 or unit == _BINARY_UNITS[-1]:
+    unit = _DECIMAL_UNITS[0]
+    for unit in _DECIMAL_UNITS[1:]:
+        value /= 1000.0
+        if round(value, 1) < 1000 or unit == _DECIMAL_UNITS[-1]:
             break
-    return f"{value:.1f} {unit}"
+    text = f"{value:,.1f}"
+    return f"{text.removesuffix('.0')} {unit}"
+
+
+#: Counts at or above this print compact (``12.3K``); smaller ones print in full.
+COMPACT_COUNT_FROM = 10_000
+_COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
+
+
+def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
+    """Return a count for a drawing: in full below ``full_below``, else 3 significant figures.
+
+    A full count carries thousands separators: ``9999`` is ``"9,999"``; ``147968`` is ``"148K"``, ``85798656`` is
+    ``"85.8M"`` and ``1_500_000_000`` is ``"1.5B"``. The exact count stays in
+    the data and the node tooltip. The header's parameter count passes
+    ``full_below=1000`` (``1024`` is ``"1.02K"``).
+    """
+
+    if count < full_below:
+        return f"{count:,}"
+    for index, (divisor, suffix) in enumerate(_COUNT_UNITS):
+        if count >= divisor or index == len(_COUNT_UNITS) - 1:
+            text = f"{count / divisor:.3g}"
+            if float(text) >= 1000 and index > 0:  # 999.96K rounds up into the next unit
+                divisor, suffix = _COUNT_UNITS[index - 1]
+                text = f"{count / divisor:.3g}"
+            return f"{text}{suffix}"
+    return f"{count:,}"
+
+
+#: Parameter counts print compact from this size in every drawn label (the
+#: header's parameter line, collapsed module boxes, segment chips), so one
+#: drawing never shows ``3.77K params`` beside ``3,600 params``.
+PARAM_COMPACT_FROM = 1000
+
+
+def param_count(count: int) -> str:
+    """Return a drawn parameter count: in full below 1,000, else 3 significant figures.
+
+    ``999`` stays ``"999"``; ``3600`` is ``"3.6K"`` and ``85798656`` is ``"85.8M"``.
+    """
+
+    return compact_count(count, full_below=PARAM_COMPACT_FROM)
+
+
+def header_count(count: int) -> str:
+    """Return a header count: thousands separators below 10,000, compact from there."""
+
+    return f"{count:,}" if count < COMPACT_COUNT_FROM else compact_count(count)
+
+
+def collapsed_param_detail(num_params: int, num_frozen: int) -> str:
+    """Return a collapsed module box's parameter row, for example ``"85.8M params (all trainable)"``."""
+
+    if num_params == 0:
+        return "0 parameters"
+    if num_frozen == 0:
+        return f"{param_count(num_params)} params (all trainable)"
+    if num_frozen == num_params:
+        return f"{param_count(num_params)} params (all frozen)"
+    trainable = param_count(num_params - num_frozen)
+    return f"{param_count(num_params)} params ({trainable} trainable, {param_count(num_frozen)} frozen)"
+
+
+def format_collapsed_module_contents(num_layers: int, num_buffer_layers: int) -> str:
+    """Format the operation and buffer counts for a collapsed module.
+
+    Parameters
+    ----------
+    num_layers:
+        Total tensor-layer count already computed for the module.
+    num_buffer_layers:
+        Number of buffer tensor layers within ``num_layers``.
+
+    Returns
+    -------
+    str
+        An honest collapsed-module summary such as ``"2 ops + 6 buffers"``.
+    """
+
+    num_ops = max(0, num_layers - num_buffer_layers)
+    parts: list[str] = []
+    if num_ops:
+        parts.append(f"{compact_count(num_ops)} {'op' if num_ops == 1 else 'ops'}")
+    if num_buffer_layers:
+        noun = "buffer" if num_buffer_layers == 1 else "buffers"
+        parts.append(f"{compact_count(num_buffer_layers)} {noun}")
+    return " + ".join(parts)
 
 
 def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozenset()) -> str | None:
@@ -437,7 +527,7 @@ def format_module_kwargs(module: Any, suppressed_keys: frozenset[str] = frozense
         Comma-separated ``name=value`` entries, or ``None`` when none are available.
     """
 
-    config = getattr(module, "func_config", None)
+    config = record_member(module, "func_config", None)
     if not isinstance(config, Mapping) or len(config) == 0:
         return None
 
@@ -545,7 +635,7 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
-    from torchlens._visualization._render_common import BoundaryNode, FocusNode
+    from torchlens._visualization._render_common import BoundaryNode, FocusNode  # deferred: cycle
 
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:
@@ -621,7 +711,7 @@ def compute_selected_node_lines(
             if dtype_text is not None:
                 rows.append(dtype_text)
         elif field_name in {"memory", "bytes"}:
-            rows.append(str(getattr(layer_log, "activation_memory", "")))
+            rows.append(str(record_member(layer_log, "activation_memory", "")))
         elif field_name == "module":
             rows.append(format_module_path(node_address) or "@root")
         elif field_name == "params":
@@ -633,7 +723,7 @@ def compute_selected_node_lines(
             # on a single-pass node, where a "1" on every node is noise.
             rows.extend(pass_rows(layer_log, vis_mode))
         elif field_name == "flops":
-            rows.append(str(getattr(layer_log, "flops_forward", 0) or 0))
+            rows.append(str(record_member(layer_log, "flops_forward", 0) or 0))
             append_attention_note(rows, layer_log)
         elif field_name == "time":
             if is_multipass_layer(layer_log):
@@ -641,7 +731,7 @@ def compute_selected_node_lines(
                 # leak the multi-pass ValueError tripwire. Report the aggregate
                 # total across passes (same choice as the rolled summary builder's
                 # ``total_func_duration``), an honest total rather than a crash.
-                duration = float(getattr(layer_log, "total_func_duration", 0.0) or 0.0)
+                duration = float(record_member(layer_log, "total_func_duration", 0.0) or 0.0)
             else:
                 duration = float(get_multipass_attr(layer_log, "func_duration", 0.0) or 0.0)
             rows.append(str(Duration(duration)))
@@ -657,6 +747,6 @@ def compute_selected_node_lines(
     # Empty selection (every requested row skipped) falls back to the
     # default label rows; lazy import avoids a module cycle with the
     # node renderer that calls this picker.
-    from ._render_nodes import compute_default_node_lines
+    from ._render_nodes import compute_default_node_lines  # deferred: cycle _visualization
 
     return list(compute_default_node_lines(layer_log, node_address, vis_mode))

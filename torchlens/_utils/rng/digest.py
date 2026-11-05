@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._numpy_bridge import tensor_numpy_bytes
 from .inventory_types import (
     _NotADigestableRng,
 )
@@ -101,13 +102,15 @@ def _digest_rng_instance(holder: Any) -> str:
     if isinstance(holder, np.random.SeedSequence):
         return _seed_seq_state_fragment(holder)
     if isinstance(holder, torch.Generator):
-        # A model-held ``torch.Generator`` drawn on a pre-existing (non-hooked) thread advances
-        # state, so it needs a witness like the numpy analog (keeping the residual enumeration's
-        # "only an EXTERNALLY-HELD generator" claim true). Digest the exact state bytes plus device
-        # identity so the before/after sweeps witness any draw thread-independently. A state-read
-        # failure propagates to the fail-closed inventory error path, downgrading completeness
-        # rather than reading clean.
-        state_bytes = holder.get_state().cpu().numpy().tobytes()
+        # r7 b8-sol R57: a model-held ``torch.Generator`` drawn on a
+        # pre-existing (non-hooked) thread advanced state with NO witness
+        # while the numpy analog was digest-caught, so the residual
+        # enumeration's "only an EXTERNALLY-HELD generator" claim was
+        # false. Digest the exact state bytes plus device identity so the
+        # before/after sweeps witness any draw thread-independently. A
+        # state-read failure propagates to the fail-closed inventory
+        # error path, downgrading completeness rather than reading clean.
+        state_bytes = tensor_numpy_bytes(holder.get_state())
         return exact(("torch.Generator", str(holder.device), state_bytes))
     if isinstance(holder, random.Random):
         try:

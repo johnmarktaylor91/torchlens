@@ -10,20 +10,24 @@ direct-call transforms; ``wrappers.decorate_all_once`` installs them and
 
 from __future__ import annotations
 
+import operator
 import time
 import warnings
 from collections.abc import Callable
 from functools import partial, wraps
+from types import FunctionType
 from typing import Any, cast
+
+import torch
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
+from ..._utils._tensor_label import mark_decorated_function
 from ..._utils._torch_compat import get_optional_torch_namespace
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 from ._callable_location import _callable_source_location
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
-from ._tl import mark_decorated_function
 
 
 def _warn_transform_boundary_collapse(transform_kind: str) -> None:
@@ -194,6 +198,8 @@ def _set_transform_metadata(
         "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
         "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
         "__tl_transform_fn_source__": _callable_source_location(inner_fn),
+        # The callable handed to the builder, so validation can name what a vmap boundary maps.
+        "__tl_transform_inner_fn__": inner_fn,
     }
     for name, value in metadata.items():
         try:
@@ -507,4 +513,75 @@ def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
             UserWarning,
         ):
             warnings.simplefilter("ignore", category)
+        if namespace is torch.Tensor and name in _QUIET_BOUND_TENSOR_METHODS:
+            value = _QuietMethodSlot(value, name) if isinstance(value, FunctionType) else value
         setattr(namespace, name, value)
+
+
+# Tensor methods whose bound form torch keeps and reprs: the fake-tensor describer stores
+# ``t._view_func_unsafe`` and reprs it under structured-trace logging. A plain bound method's
+# repr renders the receiver's values, running tensor ops inside ``make_fx`` (scan backward),
+# where torch raises its PythonFallbackKernel internal assert; torch's builtin repr never does.
+_QUIET_BOUND_TENSOR_METHODS = frozenset(
+    {"_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"}
+)
+
+
+class _QuietBoundMethod:
+    """A wrapped Tensor method bound to one receiver, with the builtin method's repr."""
+
+    __slots__ = ("__func__", "__self__", "_name")
+
+    def __init__(self, func: Callable[..., Any], receiver: torch.Tensor, name: str) -> None:
+        """Bind ``func`` to ``receiver`` under the method name ``name``."""
+
+        self.__func__ = func
+        self.__self__ = receiver
+        self._name = name
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Call the wrapped method with the receiver first, as a bound method does."""
+
+        return self.__func__(self.__self__, *args, **kwargs)
+
+    def __repr__(self) -> str:
+        """Name the method and the receiver's address, never the receiver's values."""
+
+        owner = type(self.__self__).__name__
+        return f"<built-in method {self._name} of {owner} object at {id(self.__self__):#x}>"
+
+    def __eq__(self, other: object) -> bool:
+        """Equal when both bind the same function to the same receiver object."""
+
+        if not isinstance(other, _QuietBoundMethod):
+            return NotImplemented
+        return other.__func__ is self.__func__ and other.__self__ is self.__self__
+
+    def __hash__(self) -> int:
+        """Hash on the receiver's identity and the function, as bound methods do."""
+
+        return hash((id(self.__self__), self.__func__))
+
+    def __reduce__(self) -> tuple[Any, tuple[Any, ...]]:
+        """Copy or pickle as the same method looked up on the copied receiver."""
+
+        return operator.attrgetter(self._name), (self.__self__,)
+
+
+class _QuietMethodSlot:
+    """Class slot for a wrapped Tensor method that binds as :class:`_QuietBoundMethod`."""
+
+    __slots__ = ("__func__", "_name")
+
+    def __init__(self, func: Callable[..., Any], name: str) -> None:
+        """Hold the wrapped function ``func`` installed as ``Tensor.<name>``."""
+
+        self.__func__ = func
+        self._name = name
+
+    def __get__(self, receiver: Any, owner: type | None = None) -> Any:
+        """Return the wrapped function on the class, a quiet bound method on a tensor."""
+
+        if receiver is None:
+            return self.__func__
+        return _QuietBoundMethod(self.__func__, receiver, self._name)

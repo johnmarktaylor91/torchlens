@@ -8,13 +8,16 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
+from .._utils.introspection import get_vars_of_type_from_obj
 from ..errors import CaptureError
+from ..recording._exceptions import PredicateError
 from ..recording._halt import StopSignal
-from ..recording.exceptions import PredicateError
+from .outcome import StopRequest
 
 if TYPE_CHECKING:
-    from ..recording.options import ForwardErrorMode, _RecordingConfig
-    from ..recording.types import RecordContext
+    from ..recording._options import ForwardErrorMode, _RecordingConfig
+    from ..recording._types import RecordContext
 
 ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
 
@@ -219,7 +222,6 @@ class StopDirective:
         # swallowed abort. Set via the process-level active-trace slot because
         # this frozen directive has no back-reference by design.
         from .. import _state
-        from .outcome import StopRequest
 
         file_path, line_no = _live_user_location()
         error = CaptureError(
@@ -351,11 +353,10 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
     import torch
 
     from .. import _state
-    from .._utils.introspection import get_vars_of_type_from_obj
 
     with _state.pause_logging():
         tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)
-        return any(getattr(t, "grad_fn", None) is not None for t in tensors)
+        return any(record_member(t, "grad_fn", None) is not None for t in tensors)
 
 
 def cleared_inference_only_directive(directive: object, outputs: Any) -> StopDirective | None:

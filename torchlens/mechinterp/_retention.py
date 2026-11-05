@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._walk import walk_spine
 
@@ -111,7 +112,7 @@ class SavePlan:
         def _matches(ctx: Any) -> bool:
             """Match one capture event against the plan (superset basis)."""
 
-            address = str(getattr(ctx, "address", None) or "")
+            address = str(record_member(ctx, "address", None) or "")
             for subtree in subtrees:
                 if address == subtree or address.startswith(subtree + "."):
                     return True
@@ -168,7 +169,7 @@ def _site(trace: Any, label: str, analysis: str) -> PlanSite:
         address = base if sep and tail.isdigit() else str(modules[-1])
     return PlanSite(
         op_label=str(getattr(op, "label", label)),
-        site_key=getattr(op, "site_key", None),
+        site_key=record_member(op, "site_key", None),
         func_name=str(getattr(op, "func_name", "")),
         module_address=address,
         estimated_bytes=_estimated_bytes(op),
@@ -179,7 +180,7 @@ def _site(trace: Any, label: str, analysis: str) -> PlanSite:
 def _spine_sites(trace: Any, analysis: str) -> list[PlanSite]:
     """Sites for the residual family: spine states + writers + norm + logits."""
 
-    from ._anchors import resolve_lm_head
+    from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     anchor = resolve_lm_head(trace)
     walk = walk_spine(trace, anchor.target_op, structure_only=True)
@@ -206,13 +207,13 @@ def _attention_subtrees(trace: Any) -> list[str]:
     first forward.
     """
 
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     addresses = []
     for module in trace.modules:
         keys = _facet_keys_or_none(module)
         if keys is not None and {"n_q_heads", "d_head"} <= keys:
-            addresses.append(str(getattr(module, "address", "")))
+            addresses.append(str(record_member(module, "address", "")))
     return addresses
 
 

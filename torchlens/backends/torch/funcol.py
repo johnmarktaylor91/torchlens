@@ -58,14 +58,28 @@ import threading
 import time
 import weakref
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any
 
 import torch
 
-from ...errors._base import CompatibilityError
+from torchlens._distributed._lifecycle import (
+    armed_state,
+    capture_armed_state,
+    next_seq,
+    resolve_group_identity,
+    restore_wrapped_attr,
+)
+
+from ..._utils._torch_compat import (
+    get_async_collective_tensor_type,
+    get_funcol_group_resolvers,
+    get_funcol_module,
+    get_funcol_wait_redispatch,
+)
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ...errors._base import CompatibilityError, transparent_contextmanager
 from .collectives import (
     COLLECTIVE_BOUNDARY_FASTLOG_UNSUPPORTED,
     _BoundaryScope,
@@ -217,8 +231,6 @@ def _act_type() -> type[Any] | None:
     Routed through the compat chokepoint (lazy, ``sys.modules``-deferred);
     absence flips ``HAS_ASYNC_COLLECTIVE_TENSOR`` there.
     """
-
-    from ..._utils._torch_compat import get_async_collective_tensor_type
 
     return get_async_collective_tensor_type()
 
@@ -424,8 +436,6 @@ class _FuncolCaptureSession:
         completion disclosure.
         """
 
-        from ..._utils._torch_compat import get_funcol_wait_redispatch
-
         redispatch = get_funcol_wait_redispatch()
         if redispatch is None:
             self.interposition_status = "unavailable: HAS_FUNCOL_WAIT_INTERPOSITION is False"
@@ -569,7 +579,7 @@ def active_funcol_session() -> _FuncolCaptureSession | None:
     return _ACTIVE_FUNCOL_SESSION
 
 
-@contextmanager
+@transparent_contextmanager
 def distributed_recording_session(trace: Any) -> Iterator[None]:
     """Install the plane-W completion authority around one armed capture.
 
@@ -591,8 +601,6 @@ def distributed_recording_session(trace: Any) -> Iterator[None]:
     None
         The capture runs with the completion authority installed.
     """
-
-    from torchlens.distributed._lifecycle import capture_armed_state
 
     global _ACTIVE_FUNCOL_SESSION
     if capture_armed_state() is None:
@@ -627,8 +635,6 @@ def _resolve_funcol_process_group(group: Any, tag: str) -> Any | None:
         The live ProcessGroup, or ``None`` when resolution is impossible
         (missing capability, unknown name, malformed spelling).
     """
-
-    from ..._utils._torch_compat import get_funcol_group_resolvers
 
     resolvers = get_funcol_group_resolvers()
     if resolvers is None:
@@ -669,11 +675,11 @@ def _build_funcol_payload(
     bound:
         Bound call arguments.
     identity:
-        Resolved :class:`~torchlens.distributed._lifecycle.GroupIdentity`.
+        Resolved :class:`~torchlens._distributed._lifecycle.GroupIdentity`.
     seq:
         Issue-time seq on the ``(group_uid, "coll")`` channel.
     arming:
-        The armed state's :class:`~torchlens.distributed._lifecycle.ArmingRecord`.
+        The armed state's :class:`~torchlens._distributed._lifecycle.ArmingRecord`.
     contributions:
         This rank's contribution tensors (possibly ACTs from chained funcol).
     inner_destinations:
@@ -806,8 +812,6 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
         raise its own ``TypeError`` anyway).
         """
 
-        from torchlens.distributed._lifecycle import armed_state, next_seq, resolve_group_identity
-
         state = armed_state()
         if state is None or _inside_boundary():
             with _BoundaryScope():
@@ -889,8 +893,6 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
         contributions = _contribution_tensors(bound.get(site.tensor_arg))
         witness_policy = str(getattr(trace, "distributed_witness", "none") or "none")
 
-        from ..._utils.rng import log_current_autocast_state, log_current_rng_states
-
         save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
@@ -971,7 +973,6 @@ def install_funcol_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     if not torch.distributed.is_available():
         return
-    from ..._utils._torch_compat import get_funcol_module
 
     funcol_module = get_funcol_module()
     if funcol_module is None:
@@ -992,10 +993,6 @@ def remove_funcol_wraps(originals: dict[tuple[Any, str], Any]) -> None:
     originals:
         The armed state's original-function registry.
     """
-
-    from torchlens.distributed._lifecycle import restore_wrapped_attr
-
-    from ..._utils._torch_compat import get_funcol_module
 
     funcol_module = get_funcol_module()
     if funcol_module is None:

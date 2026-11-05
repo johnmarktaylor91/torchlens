@@ -1,7 +1,7 @@
 """Op-keyed rows of the validation exemption table.
 
 Each row here is derived into a run-time registry in
-:mod:`torchlens.validation.exemptions` (``SKIP_VALIDATION_ENTIRELY``,
+:mod:`torchlens.validation._exemptions` (``SKIP_VALIDATION_ENTIRELY``,
 ``SKIP_PERTURBATION_ENTIRELY``, ``STRUCTURAL_ARG_POSITIONS``,
 ``STRUCTURAL_ARG_KWARG_ALIASES``, ``CUSTOM_EXEMPTION_CHECKS``). The assembled
 table and its views live in :mod:`torchlens.validation._exemption_table`.
@@ -15,9 +15,10 @@ _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
 _SLOTS = "tests/test_validation_structural_slots.py::"
 _KERNEL = "tests/test_foreign_kernel_dependence.py::"
+_MASKS = "tests/test_validation_mask_builder_table.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
-_EX = "torchlens.validation.exemptions:"
-_CORE = "torchlens.validation.core:"
+_EX = "torchlens.validation._exemptions:"
+_CORE = "torchlens.validation._core:"
 
 
 def _spell(names: str | tuple[str, ...]) -> tuple[str, ...]:
@@ -319,13 +320,10 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         _COORDS,
         None,
     ),
-    _structural(
-        "deform_conv2d",
-        (frozenset({1}), ((1, frozenset({"offset"})),)),
-        "sampling offsets at arg 1 (keyword offset); input, weight, bias, mask stay tested",
-        _COORDS,
-        None,
-    ),
+    # No deform_conv2d row: the captured op is torch.ops.torchvision.deform_conv2d,
+    # whose arg 1 is the WEIGHT (the offset is arg 2), so a former "offset at arg 1"
+    # row exempted the weight. The weight now stays tested
+    # (tests/test_validation_deform_conv_slots.py).
     _structural(
         "roi_align",
         (frozenset({1}), ((1, frozenset({"boxes", "rois"})),)),
@@ -474,6 +472,17 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         "mask depend on q and k, not v; the rng state on none of q, k, v); the attention "
         "output, other operators and undeclared positions stay strict",
         _KERNEL + "test_undeclared_custom_op_unmoved_sibling_output_still_fails",
+    ),
+    _custom(
+        "vmap",
+        "check_mask_builder_unread_exempt",
+        "a perturbed parent of a vmap boundary over a known transformers mask builder, at the "
+        "position the mask-builder table declares unread (head_idx, position 1)",
+        "ruling d-aad71aaad45648ba93beaf7e05f2a1bb: declared per-argument use for known mask "
+        "builders, identified by callable identity and composition; any composed function "
+        "outside the table, a builder whose code reads head_idx and every other position stay "
+        "strict",
+        _MASKS + "test_and_mask_with_a_user_function_keeps_the_head_edge_strict",
     ),
     _custom(
         "expand",

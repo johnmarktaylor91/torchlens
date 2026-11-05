@@ -32,9 +32,9 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from .op_record import FACET_DEFAULTS, IngestExtras, OpRecord
+from .op_record import _FACET_ATTRIBUTES, FACET_DEFAULTS, IngestExtras, OpRecord
 
-#: ``_io.BlobRef`` and ``_postprocess._materialize._resolve_dtype``, bound on
+#: ``_io.BlobRef`` and ``_utils._torch_symbols._resolve_dtype``, bound on
 #: first use (both packages import the IR at module level, so module-level
 #: imports here would cycle); the per-op scatter reads them for every record.
 _PORTABLE_BLOB_REF: Any = None
@@ -302,8 +302,6 @@ EXTRA_KEY_CHANNELS: frozenset[str] = frozenset(
 def _facet(record: OpRecord, name: str) -> Any:
     """Return one facet of ``record``, materializing its checked-in default if absent."""
 
-    from .op_record import _FACET_ATTRIBUTES
-
     value = getattr(record, _FACET_ATTRIBUTES[name])
     if value is not None:
         return value
@@ -544,7 +542,94 @@ def _resolve_dtype(dtype: object) -> object:
     global _MATERIALIZE_RESOLVE_DTYPE
     materialize_resolve_dtype = _MATERIALIZE_RESOLVE_DTYPE
     if materialize_resolve_dtype is None:
-        from .._postprocess._materialize import _resolve_dtype as materialize_resolve_dtype
+        from .._utils._torch_symbols import _resolve_dtype as materialize_resolve_dtype
 
         _MATERIALIZE_RESOLVE_DTYPE = materialize_resolve_dtype
     return materialize_resolve_dtype(dtype)
+
+
+def _write_function_ref_cells(row: Any, f: Any, function: Any) -> None:
+    """Write the function-call cells of a present ``FunctionCallRef`` into ``row`` at ``f[name]``.
+
+    The row-direct writer (``backends/torch/_ops_row_cells.py``) writes these
+    cells from the shared call ref without a record; ``row`` is a layout row
+    (``f`` the layout's field ids) or a cell dict (``f`` maps each name to
+    itself). The values and container copies match
+    :func:`scatter_record_to_cells` for a record whose function facet is
+    ``function``.
+    """
+
+    row[f["func"]] = function.func
+    row[f["func_id"]] = function.func_id
+    row[f["func_call_id"]] = function.func_call_id
+    row[f["func_name"]] = function.func_name
+    row[f["func_qualname"]] = function.func_qualname
+    row[f["code_context"]] = list(function.code_context)
+    row[f["var_names"]] = []
+    row[f["func_duration"]] = function.func_duration or 0
+    row[f["flops_forward"]] = function.flops_forward
+    row[f["flops_backward"]] = function.flops_backward
+    row[f["func_rng_states"]] = function.func_rng_states
+    row[f["func_autocast_state"]] = function.func_autocast_state
+    row[f["arg_names"]] = tuple(function.arg_names)
+    row[f["num_args_total"]] = function.num_args_total
+    row[f["num_pos_args"]] = function.num_pos_args
+    row[f["num_kwargs"]] = function.num_kwargs
+    row[f["non_tensor_pos_args"]] = list(function.non_tensor_pos_args)
+    row[f["non_tensor_kwargs"]] = dict(function.non_tensor_kwargs)
+    row[f["func_non_tensor_args"]] = list(function.func_non_tensor_args)
+    row[f["is_inplace"]] = function.is_inplace
+    row[f["func_config"]] = dict(function.func_config)
+
+
+def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
+    """Rewrite the cells an output-promotion overlay feeds, from the amended ``record``.
+
+    A row-direct capture row is written before the capture-end amendments
+    (``core.output``, ``graph.is_output_parent``, ``policy.policy``) are
+    folded onto its handle; ingest takes the row after this rewrite instead
+    of scattering the whole record. ``policy.predicate_matched`` and
+    ``recording.capture_spec`` feed no store cell. Values match
+    :func:`scatter_record_to_cells` for the same record; ``row`` is a layout
+    row and ``f`` its field ids; ``record`` is a row build's, so its graph and
+    policy facets are set.
+    """
+
+    output = record.core.output
+    transformed = output.transformed_tensor
+    row[f["has_saved_activation"]] = output.has_saved_activation
+    row[f["output_device"]] = output.output_device
+    row[f["activation_transform"]] = output.activation_transform
+    row[f["detach_saved_activations"]] = output.detach_saved_activations
+    row[f["visualizer_path"]] = output.visualizer_path
+    row[f["in_multi_output"]] = output.in_multi_output
+    row[f["multi_output_index"]] = output.multi_output_index
+    row[f["container_path"]] = tuple(output.container_path)
+    row[f["container_spec"]] = output.container_spec
+    portable = _PORTABLE_BLOB_REF or _portable_blob_ref_type()
+    blob_ref = output.tensor.blob_ref
+    row[f["_pending_blob_id"]] = blob_ref.blob_id if isinstance(blob_ref, portable) else None
+    if transformed is None:
+        row[f["transformed_out_shape"]] = None
+        row[f["transformed_out_dtype"]] = None
+        row[f["transformed_activation_memory"]] = None
+        row[f["transformed_out"]] = None
+        row[f["_pending_transformed_out_blob_id"]] = None
+    else:
+        row[f["transformed_out_shape"]] = transformed.shape
+        row[f["transformed_out_dtype"]] = _resolve_dtype(transformed.dtype)
+        row[f["transformed_activation_memory"]] = transformed.memory
+        row[f["transformed_out"]] = transformed.payload
+        blob_ref = transformed.blob_ref
+        row[f["_pending_transformed_out_blob_id"]] = (
+            blob_ref.blob_id if isinstance(blob_ref, portable) else None
+        )
+    # A row build always sets the graph and policy facets; read them directly
+    # (no helper call) and leave a cell as it is when its facet is absent.
+    graph = record.graph
+    if graph is not None:
+        row[f["is_output_parent"]] = graph.is_output_parent
+    policy_facet = record.policy_facet
+    if policy_facet is not None:
+        policy = policy_facet.policy
+        row[f["save_grads"]] = None if policy is None else policy.save_grad

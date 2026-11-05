@@ -7,6 +7,7 @@ from dataclasses import replace
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from ._backward_rows import backward_rows_for
 from ._edge_shapes import _with_edge_shapes
+from ._legend import add_legend_table_to_graphviz, backward_key_sections
 from ._render_common import *
 from ._render_dot import *
 from ._render_edges import *
@@ -15,10 +16,18 @@ from ._render_leaf import *
 from ._render_nodes import *
 from ._render_utils import html_escape
 from ._typography import DEFAULT_TYPOGRAPHY
+from .node_universe import build_node_universe
 from .render_ir import build_backward_render_ir, build_combined_render_ir
 from .renderers.graphviz import GraphvizRenderer
 from .request import RenderContext, RenderTarget
 from .source_graph import build_source_graph
+from .themes import (
+    THEME_PRESETS,
+    resolve_theme,
+    theme_edge_attrs,
+    theme_graph_attrs,
+    theme_node_attrs,
+)
 
 #: The default skin's font family. Forward ``draw`` and ``draw_backward`` reach it
 #: through the theme attribute helpers; the combined entrypoint takes no theme, so
@@ -38,9 +47,6 @@ def _emit_backward_key(
     painted -- shared by the backward and combined entrypoints. Tri-state
     ``show_legend``: only explicit ``False`` suppresses the key.
     """
-
-    from ._legend import add_legend_table_to_graphviz, backward_key_sections
-    from .themes import THEME_PRESETS
 
     if show_legend is False:
         return
@@ -155,11 +161,10 @@ def render_backward_graph(
         raise InvalidArgumentError(
             f"vis_mode must be either 'rolled' or 'unrolled'; received {vis_mode!r}",
             code="visualization_mode_invalid",
-            remedy="pass vis_mode='rolled' or 'unrolled'",
+            remedy="pass rolled=True or rolled=False to trace.draw",
             argument="vis_mode",
         )
     pass_filter = _normalize_backward_pass_filter(bwd)
-    from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
     skin = resolve_theme(theme)
 
@@ -397,14 +402,14 @@ def render_combined_graph(
         # Preserve the public NotImplementedError and name the supported
         # way out (R65 -- retyping with a code is a public API decision).
         raise NotImplementedError(
-            "draw_combined does not support vis_mode='rolled' yet; pass "
-            "vis_mode='unrolled' (the supported combined layout)."
+            "trace.draw(graph='combined') does not support rolled=True yet; pass "
+            "rolled=False (the supported combined layout)."
         )
     if vis_mode != "unrolled":
         raise InvalidArgumentError(
             f"vis_mode must be either 'unrolled' or 'rolled'; received {vis_mode!r}",
             code="visualization_mode_invalid",
-            remedy="pass vis_mode='unrolled' or 'rolled'",
+            remedy="pass rolled=False or rolled=True to trace.draw",
             argument="vis_mode",
         )
     if not self._autograd_has_backward_pass or not self._grad_fn_logs:
@@ -464,7 +469,6 @@ def render_combined_graph(
         direction=direction,
     )
     source_graph = build_source_graph(self, context)
-    from .node_universe import build_node_universe
 
     universe = build_node_universe(source_graph, None, {})
     forward_ir = build_render_ir(

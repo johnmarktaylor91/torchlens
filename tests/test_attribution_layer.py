@@ -251,3 +251,101 @@ def test_layer_path_methods_reject_bad_layer_name() -> None:
             target=0,
             layer="missing",
         )
+
+
+def test_grad_cam_unwraps_a_layer_returning_a_one_element_tuple() -> None:
+    """A layer returning its activation wrapped in a one-element tuple is attributed as that tensor.
+
+    transformers' ViT layers on the older band return ``(hidden_states,)``; the
+    attribution must equal the one for the same layer returning the bare tensor.
+    """
+
+    class _Wrapped(nn.Module):
+        """Return the wrapped conv layer's output inside a one-element tuple."""
+
+        def __init__(self, conv: nn.Module) -> None:
+            """Keep the conv layer to wrap."""
+
+            super().__init__()
+            self.conv = conv
+
+        def forward(self, inputs: Tensor) -> tuple[Tensor]:
+            """Run the conv layer and wrap its output."""
+
+            return (self.conv(inputs),)
+
+    class _TupleCnn(nn.Module):
+        """``TinyCnn`` whose first feature layer returns a one-element tuple."""
+
+        def __init__(self, plain: TinyCnn) -> None:
+            """Share the plain model's layers."""
+
+            super().__init__()
+            self.block = _Wrapped(plain.features[0])
+            self.rest = plain.features[1:]
+            self.classifier = plain.classifier
+
+        def forward(self, inputs: Tensor) -> Tensor:
+            """Run the CNN, unpacking the wrapped layer's tuple."""
+
+            (features,) = self.block(inputs)
+            return self.classifier(self.rest(features).mean(dim=(2, 3)))
+
+    plain = TinyCnn()
+    wrapped = _TupleCnn(plain)
+    inputs = torch.randn(2, 1, 6, 6)
+
+    expected = attribution.grad_cam(plain, inputs, target=0, layer="features.0")
+    result = attribution.grad_cam(wrapped, inputs, target=0, layer="block")
+
+    assert torch.equal(result.values, expected.values)
+
+
+def test_grad_cam_auto_choice_takes_a_layer_returning_a_one_element_tuple() -> None:
+    """The Grad-CAM chooser counts a one-element tuple output as its tensor, as capture does.
+
+    The wrapper around the whole feature stack is the outermost module of the
+    deepest feature map, so it is chosen, just as ``features`` is on the plain
+    model, and both attributions agree.
+    """
+
+    class _WrappedFeatures(nn.Module):
+        """Return the wrapped feature stack's output inside a one-element tuple."""
+
+        def __init__(self, features: nn.Module) -> None:
+            """Keep the feature stack to wrap."""
+
+            super().__init__()
+            self.features = features
+
+        def forward(self, inputs: Tensor) -> tuple[Tensor]:
+            """Run the feature stack and wrap its output."""
+
+            return (self.features(inputs),)
+
+    class _TupleFeaturesCnn(nn.Module):
+        """``TinyCnn`` whose feature stack returns a one-element tuple."""
+
+        def __init__(self, plain: TinyCnn) -> None:
+            """Share the plain model's layers."""
+
+            super().__init__()
+            self.block = _WrappedFeatures(plain.features)
+            self.classifier = plain.classifier
+
+        def forward(self, inputs: Tensor) -> Tensor:
+            """Run the CNN, unpacking the wrapped stack's tuple."""
+
+            (features,) = self.block(inputs)
+            return self.classifier(features.mean(dim=(2, 3)))
+
+    plain = TinyCnn()
+    wrapped = _TupleFeaturesCnn(plain)
+    inputs = torch.randn(2, 1, 6, 6)
+
+    expected = attribution.grad_cam(plain, inputs, target=0, overlay=False)
+    result = attribution.grad_cam(wrapped, inputs, target=0, overlay=False)
+
+    assert expected.extra["layer"] == "features"
+    assert result.extra["layer"] == "block"
+    assert torch.equal(result.values, expected.values)

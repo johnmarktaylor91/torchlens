@@ -46,6 +46,7 @@ from typing import Any
 
 import torch
 
+from ..intervention import _edge_substitution
 from ._errors import refuse
 
 __all__ = ["patch_edges", "receiver_selection"]
@@ -54,7 +55,7 @@ __all__ = ["patch_edges", "receiver_selection"]
 def _input_edge_record(trace: Any, receiver: Any) -> Any:
     """Return the op edge that carries the receiver's pre-norm input into its norm."""
 
-    from ._residual import _innermost_module
+    from ._residual import _innermost_module  # deferred: cycle mechinterp
 
     matches = [
         record
@@ -135,8 +136,6 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     share one path search.
     """
 
-    from ..intervention.edge_substitution import _recompute_with_substitution
-
     groups: dict[tuple[str, str, str], list[int]] = {}
     for index, (receiver, _value) in enumerate(attention):
         home = str(_head_spec(trace, receiver).home_label)
@@ -144,7 +143,7 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
     values: list[torch.Tensor] = [attention[0][1]] * len(attention)
     for (_input, _norm, home), indices in groups.items():
         receiver = attention[indices[0]][0]
-        recomputed = _recompute_with_substitution(
+        recomputed = _edge_substitution._recompute_with_substitution(  # patch seam
             trace, _input_edge_record(trace, receiver), [attention[i][1] for i in indices], home
         )
         reason = recomputed if isinstance(recomputed, str) else "it is not a tensor"
@@ -230,7 +229,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     True
     """
 
-    from ._edges import component_graph
+    from ._edges import component_graph  # deferred: cycle mechinterp
 
     stages = _stages(list(edges))
     result = None

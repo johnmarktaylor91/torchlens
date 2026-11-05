@@ -12,11 +12,11 @@ from .._deprecations import MissingType
 from .._errors import CaptureNotActiveError
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..options import StorageOptions
+from ._exceptions import RecordingConfigError
 from ._lean import validate_lean_config
+from ._options import _RecordingConfig
 from ._recorder_streaming import _rank_prefixed_streaming_options
-from .exceptions import RecordingConfigError
-from .options import _RecordingConfig
-from .types import CaptureSpec
+from ._types import CaptureSpec
 
 if TYPE_CHECKING:
     from .._capture.projections import RecordingState
@@ -132,7 +132,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
-    from ..intervention.predicates import _warn_intervene_fired_nowhere
+    from ..intervention._predicates import _warn_intervene_fired_nowhere
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):

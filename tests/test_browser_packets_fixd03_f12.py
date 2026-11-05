@@ -2,7 +2,7 @@
 territory (browser-packet reserved prefix; evidence in the D03 themes packet).
 
 - D03-R1: the transformer subject probe on a trace with a REUSED module
-  refuses ``lens_attention_subject_absent`` (factual absence of SUBJECT),
+  refuses ``view_attention_subject_absent`` (factual absence of SUBJECT),
   never the accessor's ``module_call_ambiguous``.
 - D03-R2: Stage-0 label boxes are sized from VISIBLE text -- raw HTML-table
   markup length manufactured phantom geometry penetrations.
@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization import lenses
 from torchlens._visualization.lenses import audit
 from torchlens._visualization.lenses.audit import stage0
@@ -87,7 +88,7 @@ def test_transformer_refuses_subject_absent_on_reused_module_trace(
 
     with pytest.raises(Exception) as excinfo:
         lenses.resolve_lens(reused_module_log, "transformer")
-    assert excinfo.value.fields["code"] == "lens_attention_subject_absent"
+    assert excinfo.value.fields["code"] == "view_attention_subject_absent"
     assert "overview" in str(excinfo.value)
 
 
@@ -236,9 +237,9 @@ def test_tied_extrema_accept_any_tied_label(keyed_speed: Any) -> None:
     log, resolution, key = keyed_speed
     member = resolution.source.member
     values = {
-        op.layer_label: float(getattr(op, member))
+        op.layer_label: float(record_member(op, member))
         for op in log._layer_list
-        if getattr(op, member, None) is not None
+        if record_member(op, member, None) is not None
     }
     minimum = min(values.values())
     tied = tuple(sorted(label for label, value in values.items() if value == minimum))
