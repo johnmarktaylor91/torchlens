@@ -183,17 +183,34 @@ def _map_grad_entry_modes(fn: Any, args: Any) -> tuple[Any, ...]:
     map_impl = get_higher_order_operator("map", "map_impl")
     if map_impl is None or getattr(fn, "__module__", None) != type(map_impl).__module__:
         return ()
-    if not torch.is_grad_enabled() or not any(
-        isinstance(value, torch.Tensor) and value.requires_grad
-        for group in args
-        if isinstance(group, (list, tuple))
-        for value in group
-    ):
+    if not torch.is_grad_enabled() or not _has_grad_operand(args):
         return ()
     stack = get_current_dispatch_mode_stack()
     if not stack or not all(isinstance(mode, _TorchLensDispatchMode) for mode in stack):
         return ()
     return tuple(stack)
+
+
+def _has_grad_operand(args: Any) -> bool:
+    """Return whether a tensor in one of the entry's tensor lists requires grad.
+
+    Parameters
+    ----------
+    args:
+        The entry compile's positional arguments.
+
+    Returns
+    -------
+    bool
+        ``True`` when any tensor inside a list or tuple argument requires grad.
+    """
+
+    return any(
+        isinstance(value, torch.Tensor) and value.requires_grad
+        for group in args
+        if isinstance(group, (list, tuple))
+        for value in group
+    )
 
 
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:

@@ -689,8 +689,8 @@ def witness_on() -> Iterator[None]:
         Nothing; the fixture is used for its side effect.
     """
 
-    saved_escape = _state._escape_detector_mode
-    saved_witness = _state._completeness_witness_mode
+    saved_escape: Any = _state._escape_detector_mode
+    saved_witness: Any = _state._completeness_witness_mode
     unwrap_torch()
     wrap_torch(escape_detector=saved_escape, completeness_witness=True)
     yield
