@@ -59,13 +59,10 @@ pick out in TorchLens into a layer Captum's layer methods can hook.
   spliced into the forward at the op's structural `site_key` (its
   `repr` names the label and key), usable only through
   `tl.bridge.captum.attribute`. `pass_index=` (1-based) picks the call of a
-  module that runs more than once, `layer(trace, "layer4.1.relu", pass_index=2)`
-  is `layer(trace, "layer4.1.relu:2")`, or the pass of a label that names
-  several passes. A site naming several passes without it, an index past the
-  last pass or a non-positive value refuses `bridge_pass_index_invalid`;
-  `pass_index=` on a single-pass op label refuses
-  `bridge_pass_index_needs_module_address`. One probe per method object
-  (`bridge_captum_multi_probe_unsupported`).
+  module that runs more than once: `layer(trace, "layer4.1.relu", pass_index=2)`
+  is `layer(trace, "layer4.1.relu:2")`. An invalid `pass_index`, a site naming
+  several passes without one, or a second probe on one method refuses with a
+  typed error.
 - Extra: `captum`.
 
 ```python
@@ -75,8 +72,8 @@ lig = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, "layer4"))
 attribution = tl.bridge.captum.attribute(trace, lig, target=0, n_steps=4)
 print(tuple(attribution.shape))
 
-# A functional op: the residual add inside the last basic block.
-add_label = trace["layer4.1.relu:2"].parents[0]
+# A functional op: the residual add inside the last basic block (the input of its second relu call).
+add_label = trace["layer4.1.relu:2"].input_ops[0]
 lig_add = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, add_label))
 print(tuple(tl.bridge.captum.attribute(trace, lig_add, target=0, n_steps=4).shape))
 ```
@@ -87,9 +84,10 @@ print(tuple(tl.bridge.captum.attribute(trace, lig_add, target=0, n_steps=4).shap
 one saved activation with a sparse autoencoder (a pretrained `SAE` from
 SAELens, or anything with `encode`/`decode`).
 
-- `tl.bridge.sae_lens.encode(log, site, sae)` and
-  `tl.bridge.sae_lens.decode(log, site, sae)` call the SAE on the saved
-  output at `site`. Shapes are the SAE's business: pick a site whose output
+- `tl.bridge.sae_lens.encode(log, site, sae)` encodes the saved output at
+  `site`; `tl.bridge.sae_lens.reconstruct(log, site, sae)` returns
+  `sae.decode(sae.encode(out))` for it. To decode latents you already hold,
+  call `sae.decode(latents)` directly. Shapes are the SAE's business: pick a site whose output
   matches the SAE's input width, and trace with `config.use_cache = False` on
   Hugging Face decoders so a block address names one tensor.
 - `tl.bridge.sae.splice(model_or_log, inputs, *, site, sae, latents_edit=None)`
@@ -128,8 +126,9 @@ saved input.
   to `pytorch_grad_cam.GradCAM`. Keywords the CAM constructor declares
   (`reshape_transform`) go to the constructor, the rest (`aug_smooth`,
   `eigen_smooth`) to the call.
-- `tl.bridge.pytorch_grad_cam.layer(log, site)` is the same module resolver Captum
-  uses, with the same refusals.
+- `tl.bridge.pytorch_grad_cam.layer(log, site)` needs a live module: a module
+  address, or an op whose tensor one single-call module returns. It has no
+  site probes for functional ops, unlike Captum's `layer`.
 - Extra: `gradcam`.
 
 ```python
@@ -163,7 +162,7 @@ similarity analysis runs on rsatoolbox's side.
 - `tl.neuro.datasets(source, sites=None, *, pool=None, obs=None, stimulus_ids=None)`
   does the same for many sites at once, and `tl.neuro.rdms(...)` computes
   RDMs with provenance. Both appear only when rsatoolbox is installed. The
-  full treaty between the two packages is in [the neuro reference](reference/neuro.md).
+  full contract between the two packages is in [the neuro reference](reference/neuro.md).
 - Extra: `neuro`.
 
 ```python
@@ -186,7 +185,7 @@ name functional ops as well as modules.
 - `tl.bridge.brain_score.per_layer(log, benchmark, *, sites=None, **kwargs)`
   scores saved layers independently with any callable benchmark; offline.
 - `tl.bridge.xarray.neuroid_assembly(source, site)` builds a `NeuroidAssembly`
-  over one site for bring-your-own-alignment work.
+  over one site for your own alignment code.
 - Extra: `brainscore` (Python 3.11 or newer) for `activations_extractor` and
   `neuroid_assembly`; the other two calls run without it.
 
@@ -246,6 +245,17 @@ the same way.
   (`direction.to_dialz()` is the same call).
 - Extra: `dialz` (Python below 3.13).
 
+### pyreft
+
+[stanfordnlp/pyreft](https://github.com/stanfordnlp/pyreft). Reads a saved
+LoReFT artifact (the directory `ReftModel.save` writes: a rotation and an
+affine map) as a TorchLens subspace edit, so a trained ReFT intervention can
+be applied and inspected like any other edit. Never imports pyreft or pyvene.
+
+- `artifact = tl.bridge.pyreft.read(directory)`, then
+  `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`.
+- Extra: none. Details: [intervention explainers](intervention_explainers.md).
+
 ### LIT (Learning Interpretability Tool)
 
 [PAIR-code/lit](https://github.com/PAIR-code/lit). Wraps a live torch model
@@ -269,8 +279,7 @@ inspection. A live nnsight tracer is refused with a `TypeError` naming the
 accepted shapes.
 
 - `tl.bridge.nnsight.from_trace(trace)`.
-- Extra: none (offline). The `nnsight` extra only pins the version the
-  real-package test runs against.
+- Extra: none (offline).
 
 ## Hugging Face, training loops and compiled code
 
@@ -299,7 +308,7 @@ the framework's global step as the step source.
 
 - `torchlens.trackers.HFTrainerWatchCallback(to=...)` and
   `torchlens.trackers.LightningWatchCallback(to=...)` stream per-step
-  statistics to a sink (`TensorBoardSink`, `WandbSink`, `JSONLSink`).
+  statistics to a sink (`TensorBoardSink`, `WandbSink`, `MLflowSink`, `CometSink`, `JSONLSink`).
 - `tl.callbacks.lightning.LayerProfilerCallback` is a different tool: a
   per-epoch structure profiler that re-traces under `eval()`.
 - Extra: `lightning` for the Lightning callbacks; the Trainer callback needs
@@ -348,8 +357,9 @@ ONNX `ModelProto` JSON file that Netron opens with typed shapes on every
 edge and the module hierarchy as drill-down boxes. It is a graph for
 inspection, not a runnable ONNX model.
 
-- `tl.export.netron(log, path=None, *, granularity="module", depth=1, show_buffers="meaningful", attachment=False, open=False, baseline=None)`
-  returns the written path; `open=True` launches the Netron viewer on it.
+- `tl.export.netron(log, path=None, *, granularity="module", depth=1, show_buffers="meaningful", attachment=None, serve=False, baseline=None)`.
+  Pass a `.json` path to write the file and get that path back, or
+  `path=None, serve=True` to serve it to the Netron viewer from memory (returns `None`).
 - Extra: none to write the file; `netron` to open it from Python. Full
   guide: [Netron export](reference/netron_export.md).
 
@@ -367,10 +377,10 @@ Writes a JSON graph collection that Google Model Explorer opens through
 File > Open, with TorchLens's measured shapes and memory on the nodes.
 
 - `tl.export.model_explorer(log, path, **kwargs)` writes the file;
-  `tl.export.model_explorer_diff(members, out_dir)` writes a side-by-side
+  `tl.export.model_explorer_diff(members, path)` writes a side-by-side
   collection for a bundle; `tl.export.model_explorer_serve(source, **kwargs)`
   starts the viewer on an export.
-- Extra: none to write; the `ai-edge-model-explorer` package to serve. Full
+- Extra: none to write; `model-explorer` to serve. Full
   guide: [Model Explorer export](reference/model_explorer.md).
 
 ```python
@@ -386,13 +396,14 @@ print(path.name, path.exists())
 [wandb/wandb](https://github.com/wandb/wandb),
 [mlflow/mlflow](https://github.com/mlflow/mlflow),
 [aimhubio/aim](https://github.com/aimhubio/aim). Logs a finished trace's
-per-layer facts to an experiment tracker you already opened; TorchLens never
-creates runs or imports a tracker SDK itself.
+per-layer facts to an experiment tracker you already opened. TorchLens never
+creates tracker runs; the W&B exporter imports `wandb` to build its table, the
+others use only the writer or client you pass.
 
 - `tl.export.tensorboard(log, writer, *, step, prefix="torchlens")`,
-  `tl.export.wandb(log, run=None, name="torchlens_trace")`,
+  `tl.export.wandb(log, to=None, name="torchlens_trace")`,
   `tl.export.mlflow(log, client=None, prefix="torchlens", *, run_id=None)` and
-  `tl.export.aim(log, run=None, prefix="torchlens")`. The tracker object is
+  `tl.export.aim(log, to=None, prefix="torchlens")`. The tracker object is
   passed in and duck-typed on the method it needs; an `MlflowClient` needs
   `run_id=`, the fluent `mlflow` module does not.
 - For live training, the sinks in `torchlens.trackers` stream per-step
@@ -436,23 +447,16 @@ Publishes a saved trace or bundle to a Hub repository, and loads a published
 trace back in one call.
 
 - `tl.bridge.huggingface_hub.push_to_hub(artifact, repo_id, *, token=None, private=None, path_in_repo="torchlens_artifact.tar.gz", commit_message=..., create_repo=True, dry_run=False, api=None, save_level="portable")`.
-  A `Trace` or `Bundle` is always serialised through the privacy-scrubbed
-  portable `.tlspec` bundle path and uploaded as one gzipped tar; nothing is
-  ever uploaded as a raw pickle (a raw pickle would embed home paths and the
-  user name), and an object with no bundle path refuses
-  `hub_push_artifact_unsupported`. `dry_run=True` serialises locally and
-  reports the planned upload without contacting the Hub. The save step warns
-  when the bundle embeds custom module attributes or pre-forward buffer
-  values; review them before publishing.
+  A `Trace` or `Bundle` is uploaded as one gzipped tar of its portable
+  `.tlspec` bundle, never as a raw pickle; `dry_run=True` reports the planned
+  upload without contacting the Hub. Review embedded custom module attributes
+  and pre-forward buffer values before publishing (the save step warns about
+  them); portable saving does not make arbitrary payloads safe to share.
 - `tl.bridge.huggingface_hub.from_hub(repo_id, *, path_in_repo="torchlens_artifact.tar.gz", revision=None, token=None, api=None)`
-  downloads that tar (`hf_hub_download`), checks every member before
-  extraction (regular files and directories under one top-level bundle
-  directory only: no links, devices, absolute paths or `..`; a bound on
-  member count and size) and opens the bundle through the governed `tl.load`
-  door, so a published trace comes back under the same safety gates as a
-  local `.tlspec`; nothing is unpickled outside them. A download that is not
-  such a tar, or one with an unsafe member, refuses `hub_artifact_unsafe`
-  before anything is written. The extracted copy is deleted after the load.
+  downloads that tar, checks every member before extraction and loads the
+  bundle through `tl.load`, so a published trace comes back under the same
+  safety gates as a local `.tlspec`. An unsafe archive refuses
+  `hub_artifact_unsafe` before anything is written.
 - Extra: `hf` (brings `huggingface_hub`).
 
 ```python
@@ -481,7 +485,7 @@ server never runs model code or writes files.
 
 Connectors on this page, by external tool: Captum, SAELens, SHAP,
 pytorch-grad-cam, inseq, rsatoolbox, Brain-Score, xarray, steering-vectors,
-repeng, dialz, LIT, nnsight, Hugging Face transformers and timm, Hugging Face
+repeng, dialz, pyreft, LIT, nnsight, Hugging Face transformers and timm, Hugging Face
 Trainer, PyTorch Lightning, torchextractor, depyf, the PyTorch profiler,
 Netron, Model Explorer, TensorBoard, Weights & Biases, MLflow, Aim,
 speedscope and the other profiler-trace viewers (Chrome tracing, Perfetto,
