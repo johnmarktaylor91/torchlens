@@ -34,7 +34,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from ..._ir.op_record import FACET_DEFAULTS
-from ..._ir.op_record_scatter import _resolve_dtype
+from ..._ir.op_record_scatter import _resolve_dtype, _write_function_ref_cells
 from ..._trace_core.op_store import _MISSING
 from ._ops_freeze_refs import _copy_parent_arg_positions, _resolve_call_function_ref
 
@@ -323,45 +323,14 @@ def _fill_core_graph(row: Any, f: Any, trace: Trace, fields_dict: Mapping[str, A
     row[f["module_call_stack"]] = list(modules)
 
 
-def _fill_function(row: Any, f: Any, function: FunctionCallRef) -> None:
-    """Write the function-call cells of the op's shared call ref.
-
-    The same values and container copies as ``op_record_scatter._function_ref_cells``
-    (the record path); the shadow parity test pins the two together.
-    """
-
-    row[f["func"]] = function.func
-    row[f["func_id"]] = function.func_id
-    row[f["func_call_id"]] = function.func_call_id
-    row[f["func_name"]] = function.func_name
-    row[f["func_qualname"]] = function.func_qualname
-    row[f["code_context"]] = list(function.code_context)
-    row[f["var_names"]] = []
-    row[f["func_duration"]] = function.func_duration or 0
-    row[f["flops_forward"]] = function.flops_forward
-    row[f["flops_backward"]] = function.flops_backward
-    row[f["func_rng_states"]] = function.func_rng_states
-    row[f["func_autocast_state"]] = function.func_autocast_state
-    row[f["arg_names"]] = tuple(function.arg_names)
-    row[f["num_args_total"]] = function.num_args_total
-    row[f["num_pos_args"]] = function.num_pos_args
-    row[f["num_kwargs"]] = function.num_kwargs
-    row[f["non_tensor_pos_args"]] = list(function.non_tensor_pos_args)
-    row[f["non_tensor_kwargs"]] = dict(function.non_tensor_kwargs)
-    row[f["func_non_tensor_args"]] = list(function.func_non_tensor_args)
-    row[f["is_inplace"]] = function.is_inplace
-    row[f["func_config"]] = dict(function.func_config)
-
-
 def _fill_row(
     row: Any,
     f: Any,
     trace: Trace,
     fields_dict: Mapping[str, Any],
     fire_results: tuple[FireResult, ...],
-    function: FunctionCallRef,
 ) -> None:
-    """Write every per-op cell of one exhaustive draft into ``row`` at ``f[name]``.
+    """Write every per-op cell of one exhaustive draft but its function cells into ``row``.
 
     ``row`` is a layout row (``f`` the layout's field ids) or a cell dict
     (``f`` maps each name to itself). The scalar constants are not written
@@ -378,7 +347,6 @@ def _fill_row(
     _fill_core_graph(row, f, trace, fields_dict)
     _fill_output(row, f, fields_dict)
     _fill_transform(row, f, fields_dict, _fill_facets(row, f, fields_dict, fire_results))
-    _fill_function(row, f, function)
 
 
 class _RowPlan:
@@ -448,7 +416,9 @@ def write_draft_row(
     if plan is None or plan.layout is not layout:
         plan = _plan_for(layout)
     row = plan.template.copy()
-    _fill_row(row, plan.fids, trace, fields_dict, fire_results, function)
+    fids = plan.fids
+    _fill_row(row, fids, trace, fields_dict, fire_results)
+    _write_function_ref_cells(row, fids, function)
     return int(store.adopt_row(row))
 
 
@@ -482,7 +452,8 @@ def op_row_cells(
 
     function = _resolve_call_function_ref(cast(dict[str, Any], fields_dict), call_ref_box)
     cells: dict[str, Any] = dict(_SCALAR_CONSTANT_CELLS)
-    _fill_row(cells, _NAME_KEYS, trace, fields_dict, fire_results, function)
+    _fill_row(cells, _NAME_KEYS, trace, fields_dict, fire_results)
+    _write_function_ref_cells(cells, _NAME_KEYS, function)
     return cells
 
 

@@ -550,35 +550,35 @@ def _resolve_dtype(dtype: object) -> object:
     return materialize_resolve_dtype(dtype)
 
 
-def _function_ref_cells(function: Any) -> dict[str, Any]:
-    """Return the function-call cells of a present ``FunctionCallRef``.
+def _write_function_ref_cells(row: Any, f: Any, function: Any) -> None:
+    """Write the function-call cells of a present ``FunctionCallRef`` into ``row`` at ``f[name]``.
 
-    The row-direct writer (``backends/torch/_ops_row_cells.py``) reads these
-    cells from the shared call ref without a record; the values and container
-    copies match :func:`scatter_record_to_cells` for a record whose function
-    facet is ``function``.
+    The row-direct writer (``backends/torch/_ops_row_cells.py``) writes these
+    cells from the shared call ref without a record; ``row`` is a layout row
+    (``f`` the layout's field ids) or a cell dict (``f`` maps each name to
+    itself). The values and container copies match
+    :func:`scatter_record_to_cells` for a record whose function facet is
+    ``function``.
     """
 
-    return {
-        "func": function.func,
-        "func_id": function.func_id,
-        "func_call_id": function.func_call_id,
-        "func_name": function.func_name,
-        "func_qualname": function.func_qualname,
-        "code_context": list(function.code_context),
-        "var_names": [],
-        "func_duration": function.func_duration or 0,
-        "flops_forward": function.flops_forward,
-        "flops_backward": function.flops_backward,
-        "func_rng_states": function.func_rng_states,
-        "func_autocast_state": function.func_autocast_state,
-        "arg_names": tuple(function.arg_names),
-        "num_args_total": function.num_args_total,
-        "num_pos_args": function.num_pos_args,
-        "num_kwargs": function.num_kwargs,
-        "non_tensor_pos_args": list(function.non_tensor_pos_args),
-        "non_tensor_kwargs": dict(function.non_tensor_kwargs),
-        "func_non_tensor_args": list(function.func_non_tensor_args),
-        "is_inplace": function.is_inplace,
-        "func_config": dict(function.func_config),
-    }
+    row[f["func"]] = function.func
+    row[f["func_id"]] = function.func_id
+    row[f["func_call_id"]] = function.func_call_id
+    row[f["func_name"]] = function.func_name
+    row[f["func_qualname"]] = function.func_qualname
+    row[f["code_context"]] = list(function.code_context)
+    row[f["var_names"]] = []
+    row[f["func_duration"]] = function.func_duration or 0
+    row[f["flops_forward"]] = function.flops_forward
+    row[f["flops_backward"]] = function.flops_backward
+    row[f["func_rng_states"]] = function.func_rng_states
+    row[f["func_autocast_state"]] = function.func_autocast_state
+    row[f["arg_names"]] = tuple(function.arg_names)
+    row[f["num_args_total"]] = function.num_args_total
+    row[f["num_pos_args"]] = function.num_pos_args
+    row[f["num_kwargs"]] = function.num_kwargs
+    row[f["non_tensor_pos_args"]] = list(function.non_tensor_pos_args)
+    row[f["non_tensor_kwargs"]] = dict(function.non_tensor_kwargs)
+    row[f["func_non_tensor_args"]] = list(function.func_non_tensor_args)
+    row[f["is_inplace"]] = function.is_inplace
+    row[f["func_config"]] = dict(function.func_config)
