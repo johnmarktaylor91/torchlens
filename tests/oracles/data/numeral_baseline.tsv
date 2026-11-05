@@ -3060,6 +3060,7 @@ docs-md	docs/maintainers/where.md	158
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
+docs-md	docs/maintainers/where.md	1608
 docs-md	docs/maintainers/where.md	162
 docs-md	docs/maintainers/where.md	1622
 docs-md	docs/maintainers/where.md	1624
@@ -3088,6 +3089,7 @@ docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1734
 docs-md	docs/maintainers/where.md	174
+docs-md	docs/maintainers/where.md	1748
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	1768
@@ -3465,6 +3467,7 @@ docs-md	docs/maintainers/where.md	470
 docs-md	docs/maintainers/where.md	472
 docs-md	docs/maintainers/where.md	473
 docs-md	docs/maintainers/where.md	474
+docs-md	docs/maintainers/where.md	4754
 docs-md	docs/maintainers/where.md	476
 docs-md	docs/maintainers/where.md	4767
 docs-md	docs/maintainers/where.md	477
@@ -3550,6 +3553,7 @@ docs-md	docs/maintainers/where.md	571
 docs-md	docs/maintainers/where.md	572
 docs-md	docs/maintainers/where.md	574
 docs-md	docs/maintainers/where.md	577
+docs-md	docs/maintainers/where.md	57991
 docs-md	docs/maintainers/where.md	580
 docs-md	docs/maintainers/where.md	581
 docs-md	docs/maintainers/where.md	582
@@ -3629,6 +3633,7 @@ docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
+docs-md	docs/maintainers/where.md	684249
 docs-md	docs/maintainers/where.md	687
 docs-md	docs/maintainers/where.md	688
 docs-md	docs/maintainers/where.md	69
@@ -5824,6 +5829,8 @@ package-docstrings	torchlens/_capture/preflight.py	1.1.
 package-docstrings	torchlens/_capture/preflight.py	11
 package-docstrings	torchlens/_capture/preflight.py	12
 package-docstrings	torchlens/_capture/preflight.py	5_15
+package-docstrings	torchlens/_capture/prepare/_cache_pickle.py	2.1
+package-docstrings	torchlens/_capture/prepare/_cache_pickle.py	2.13
 package-docstrings	torchlens/_capture/prepare/cache.py	0600
 package-docstrings	torchlens/_capture/prepare/cache.py	0775
 package-docstrings	torchlens/_capture/prepare/request.py	16
@@ -7888,6 +7895,7 @@ package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	64,
 package-docstrings	torchlens/backends/torch/_trace_backward.py	21
 package-docstrings	torchlens/backends/torch/_transform_wrappers.py	39
 package-docstrings	torchlens/backends/torch/_view_writeback.py	31
+package-docstrings	torchlens/backends/torch/_warm_originals.py	56
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	1.4
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	11
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	24,
@@ -7979,6 +7987,7 @@ package-docstrings	torchlens/backends/torch/tensor_tracking.py	3_47_
 package-docstrings	torchlens/backends/torch/tensor_tracking.py	456
 package-docstrings	torchlens/backends/torch/wrappers.py	1.9
 package-docstrings	torchlens/backends/torch/wrappers.py	100.
+package-docstrings	torchlens/backends/torch/wrappers.py	138
 package-docstrings	torchlens/backends/torch/wrappers.py	150
 package-docstrings	torchlens/backends/torch/wrappers.py	28
 package-docstrings	torchlens/backends/torch/wrappers.py	2_1
