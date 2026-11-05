@@ -6,6 +6,7 @@ mutation code can import these without pulling the full tensor utilities.
 
 from __future__ import annotations
 
+import ctypes
 from collections.abc import Iterable, Iterator, Mapping
 from typing import Any, cast
 
@@ -41,6 +42,31 @@ def flat_byte_view(tensor: torch.Tensor) -> torch.Tensor:
     return flat.view(torch.uint8)
 
 
+def copy_host_bytes(flat: torch.Tensor) -> bytes:
+    """Return a CPU-contiguous 1-D ``uint8`` tensor's bytes, without NumPy.
+
+    Byte-identical to ``flat.numpy().tobytes()``, but copied straight out of
+    the tensor's storage, so it also works when torch's NumPy bridge is broken
+    (a torch build compiled against NumPy 1.x running under NumPy 2).
+
+    Parameters
+    ----------
+    flat:
+        CPU, contiguous, one-dimensional ``torch.uint8`` tensor.
+
+    Returns
+    -------
+    bytes
+        A copy of the tensor's bytes (``b""`` for an empty tensor).
+    """
+
+    host = flat_byte_view(flat.detach().cpu().contiguous())  # a no-op on the documented input
+    count = host.numel()
+    if count == 0:
+        return b""
+    return ctypes.string_at(host.data_ptr(), count)
+
+
 def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
     """Return a tensor's raw contiguous payload bytes, for ANY dense dtype.
 
@@ -64,7 +90,7 @@ def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
     flat = tensor.detach().reshape(-1).cpu().contiguous()
     if flat.numel() == 0:
         return b""
-    return flat_byte_view(flat).numpy().tobytes()
+    return copy_host_bytes(flat_byte_view(flat))
 
 
 def iter_tensors(

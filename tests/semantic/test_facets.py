@@ -796,3 +796,18 @@ def test_missing_facet_error_survives_pickle_and_deepcopy() -> None:
         assert clone.name == error.name
         assert clone.reason == error.reason
         assert str(clone) == str(error)
+
+
+def test_missing_grad_numpy_coercion_raises_without_protocol_warning() -> None:
+    """NumPy 2 passes ``copy=`` to ``__array__``; the sentinel accepts it and raises cleanly."""
+
+    import warnings
+
+    import numpy as np
+
+    sentinel = MissingGrad("recapture with gradients selected")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        for coerce in (np.array, np.asarray):
+            with pytest.raises(RuntimeError, match="recapture with gradients selected"):
+                coerce(sentinel)

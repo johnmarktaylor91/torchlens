@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from .._record_type import first_op
+from .._utils._numpy_bridge import tensor_from_numpy
 from ..intervention.errors import MultiMatchWarning
 from ._annotation_gate import (
     _VERB_VOCABULARY,
@@ -122,7 +123,7 @@ def mds_evolution(
             raise ValueError(f"mds_evolution failed for site {key!r}: {exc}") from exc
         if align and previous_coords is not None:
             coords = procrustes_align(coords, previous_coords)
-        staged[f"mds:{key}"] = torch.from_numpy(coords.copy())
+        staged[f"mds:{key}"] = tensor_from_numpy(coords.copy())
         coords_by_key[key] = coords.copy()
         previous_coords = coords
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
@@ -200,7 +201,7 @@ def rdm_evolution(
                 f"rdm_evolution has too few stimuli for {key!r}: "
                 f"got {matrix.shape[0]}, need at least {min_stimuli}."
             )
-        staged[f"rdm:{key}"] = torch.from_numpy(matrix.copy())
+        staged[f"rdm:{key}"] = tensor_from_numpy(matrix.copy())
         matrices_by_key[key] = matrix.copy()
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
     # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
@@ -266,7 +267,7 @@ def scree_evolution(
             eigenvalues = scree(activations, metric=metric, min_stimuli=min_stimuli)
         except ValueError as exc:
             raise ValueError(f"scree_evolution failed for site {key!r}: {exc}") from exc
-        staged[f"scree:{key}"] = torch.from_numpy(eigenvalues)
+        staged[f"scree:{key}"] = tensor_from_numpy(eigenvalues)
         eigenvalues_by_key[key] = eigenvalues
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
     # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
@@ -582,7 +583,7 @@ def _annotate_mds_coords(trace: Any, key: str, coords: np.ndarray) -> None:
     rerun refresh invalidates while preserving user blobs.
     """
 
-    _store_annotation_tensor(trace, f"mds:{key}", torch.from_numpy(coords.copy()))
+    _store_annotation_tensor(trace, f"mds:{key}", tensor_from_numpy(coords.copy()))
 
 
 def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None:

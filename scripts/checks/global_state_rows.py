@@ -546,6 +546,8 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/_utils/_torch_compat.py", "_SPARSE_SPSOLVE_CUDA_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_META_ITEM_GUARD"),
         ("torchlens/_utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
+        ("torchlens/_utils/_torch_compat.py", "HAS_NUMPY_BRIDGE"),
+        ("torchlens/_utils/_torch_compat.py", "_NUMPY_BRIDGE_PROBED"),
         # torch.utils.cpp_extension import probe (torch 2.1 imports pkg_resources,
         # which current setuptools no longer ships): lazy so a plain import never
         # loads setuptools; same shape as every other row in this class.

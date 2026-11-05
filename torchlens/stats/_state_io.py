@@ -35,7 +35,7 @@ import torch
 
 from .._io._json import loads_bounded
 from .._observability._kernels import Histogram, HistogramDescriptor, RunningStats
-from .._utils.tensor_leaves import flat_byte_view
+from .._utils.tensor_leaves import copy_host_bytes, flat_byte_view
 from ._aggregate import Aggregator
 from ._fitted import FittedArtifactError
 from ._per_unit import Quantile, TopK, _UnitLayout
@@ -303,7 +303,7 @@ def state_digest(state_json: str, tensors: Mapping[str, torch.Tensor]) -> str:
     for key in sorted(tensors):
         tensor = tensors[key].detach().to("cpu").contiguous()
         hasher.update(repr((key, str(tensor.dtype), tuple(tensor.shape))).encode("utf-8"))
-        hasher.update(flat_byte_view(tensor).numpy().tobytes())
+        hasher.update(copy_host_bytes(flat_byte_view(tensor)))
     return "sha256:" + hasher.hexdigest()
 
 

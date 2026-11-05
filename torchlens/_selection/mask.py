@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 
 import torch
 
+from .._utils.tensor_leaves import tensor_payload_bytes
+
 # ---------------------------------------------------------------------------
 # Canonical internal mask representation. NEVER handed out: any user-facing
 # tensor access returns a FRESH materialization (mask immutability pin).
@@ -84,7 +86,7 @@ class _Mask:
     def canonical_bytes(self) -> bytes:
         """Return canonical identity bytes (dense packing, form-independent)."""
 
-        return self._dense_ro().to(torch.uint8).numpy().tobytes()
+        return tensor_payload_bytes(self._dense_ro().to(torch.uint8))
 
 
 def _mask_whole(shape: tuple[int, ...]) -> _Mask:

@@ -31,6 +31,7 @@ from .._entry_refusals import require_xarray_presentations
 from .._errors import InvalidArgumentError
 from .._extraction.trace_safetensors import write_trace_safetensors
 from .._io._json import loads_bounded
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.display import atomic_write_text
 from ..intervention.errors import BundleComparisonError
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
@@ -802,10 +803,9 @@ def xarray(trace: Any) -> Any:
         if getattr(layer, "has_saved_activation", None) is False:
             skipped_unsaved.append(label)
             continue
-        out = getattr(layer, "out", None)
-        if not isinstance(out, torch.Tensor):
+        if not isinstance(out := getattr(layer, "out", None), torch.Tensor):
             continue
-        values = out.detach().cpu().numpy()
+        values = tensor_to_numpy(out.detach())
         # Batch-2 buffer ruling (option c): a buffer is module state with no
         # presentation axis; it exports as its own variable, on save-all and
         # partial traces alike.
