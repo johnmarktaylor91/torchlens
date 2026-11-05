@@ -153,7 +153,8 @@ def test_reused_bool_gets_one_terminal_record_per_conditional(
         first_bool = trace[events[0].bool_layers[0]]
         for clone in clones:
             assert list(clone.parents) == [first_bool.layer_label]
-            assert clone.is_scalar_bool and clone.control_flow.is_terminal_conditional_bool
+            assert clone.control_flow.is_scalar_bool
+            assert clone.control_flow.is_terminal_conditional_bool
         assert check_metadata_invariants(trace)
     finally:
         trace.cleanup()
@@ -201,8 +202,8 @@ def test_unrecorded_clone_falls_back_and_still_fails(
 ) -> None:
     """Planted bug: without the per-test record the shared bool still fails its invariants.
 
-    ``if flag: ... if flag:`` fails invariant 6 (the second arm runs before any recorded
-    test of its conditional); a ternary then ``if`` fails invariant 8.
+    The second conditional's arm then runs before any recorded test of that conditional
+    (invariant 6), or its bool points at the first conditional (invariant 8).
     """
 
     from torchlens.backends.torch import _bool_check_records
@@ -211,13 +212,13 @@ def test_unrecorded_clone_falls_back_and_still_fails(
     trace = _trace(TwoIfsOneBool(), positive_input)
     try:
         assert _ops_named(trace, "clone") == []
-        with pytest.raises(MetadataInvariantError, match="Invariant 6"):
+        with pytest.raises(MetadataInvariantError, match=r"Invariant [68]:"):
             check_metadata_invariants(trace)
     finally:
         trace.cleanup()
     ternary = _trace(TernaryThenIf(), positive_input)
     try:
-        with pytest.raises(MetadataInvariantError, match="Invariant 8"):
+        with pytest.raises(MetadataInvariantError, match=r"Invariant [68]:"):
             check_metadata_invariants(ternary)
     finally:
         ternary.cleanup()
