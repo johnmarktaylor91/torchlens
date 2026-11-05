@@ -1096,7 +1096,7 @@ torchlens/intervention/_trace_edits.py::do_with_options	65
 torchlens/intervention/_trace_edits.py::set_site	63
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	79
-torchlens/intervention/_trace_run.py::run	304
+torchlens/intervention/_trace_run.py::run	303
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	61
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71

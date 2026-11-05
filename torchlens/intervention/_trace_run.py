@@ -379,11 +379,9 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
 
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
     if seed is not None:
-        # Validate ``seed`` at the run door so junk raises the typed precondition
-        # lane instead of torch's raw ``RuntimeError``: non-int, ``bool`` (an int
-        # subclass ``Generator.manual_seed`` rejects) and an int outside torch's
-        # long range (pybind overflow). The failed call leaves global torch RNG
-        # untouched.
+        # Validate ``seed`` here so junk (non-int, ``bool``, an int outside torch's long
+        # range) raises the typed precondition lane, not torch's raw ``RuntimeError``;
+        # the failed call leaves global torch RNG untouched.
         validate_run_seed(seed)
     # R06: the settled-outcome gate is the FIRST authority on run(). The
     # outcome sidecar lives in ``__dict__`` and survives cleanup()-husking,
@@ -640,14 +638,15 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 trace, run_model, transformed_input, strict=replay_options.strict
             )
         else:
-            result = _live_rerun_engine(
-                trace,
-                (run_model, transformed_input, user_input),
-                replay_options=replay_options,
-                chunk_paths=chunk_paths,
-                output_transform=resolved_output_transform,
-                in_place=in_place,
-            )
+            close_fast_run_session(trace)  # no fast-door hook stays armed on the model
+            with run_result_fork(trace, in_place=in_place) as fork:
+                result = _live_rerun_engine(
+                    fork,
+                    (run_model, transformed_input, user_input),
+                    replay_options=replay_options,
+                    chunk_paths=chunk_paths,
+                    output_transform=resolved_output_transform,
+                )
     # The atomic swap rebuilt state; keep the new user input for draw and save.
     result.input = user_input
     return result
@@ -660,20 +659,19 @@ def rerun_in_place(trace: Trace, model: nn.Module | None, x: Any, **options: Any
 
 
 def _live_rerun_engine(
-    trace: Trace,
+    result: Trace,
     call: tuple[nn.Module, Any, Any],
     *,
     replay_options: ReplayOptions,
     chunk_paths: Any | None,
     output_transform: Callable[[Any], Any] | None,
-    in_place: bool = False,
 ) -> Trace:
-    """Run the guarded fast engine for a steered rerun, else the capture rerun, on a new Trace.
+    """Run the guarded fast engine for a steered rerun, else the capture rerun, into ``result``.
 
-    ``call`` is ``(model, transformed_input, user_input)``. Both engines run on
-    a fork of ``trace``, as the fast door's result fork is: the source stays
-    untouched, and the fork carries its live-model weak reference and staged
-    edits; ``in_place=True`` runs on ``trace`` itself. The guarded fast engine is
+    ``call`` is ``(model, transformed_input, user_input)``. ``result`` is the
+    caller's ``run_result_fork``: a fork of the source, as the fast door's
+    result fork is, carrying its live-model weak reference and staged edits,
+    or the trace itself for an in-place run. The guarded fast engine is
     a native forward with the staged spec applied at real module boundaries,
     guarded by the sealed call fingerprint;
     any typed refusal falls back to the capture rerun with the code in
@@ -681,26 +679,24 @@ def _live_rerun_engine(
     """
 
     run_model, transformed_input, user_input = call
-    close_fast_run_session(trace)  # no fast-door hook stays armed on the model
-    with run_result_fork(trace, in_place=in_place) as result:
-        fast_refused: str | None = None
-        if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
-            fast_done, fast_refused = try_guarded_fast_rerun(
-                result, run_model, transformed_input, output_transform=output_transform
-            )
-            if fast_done:
-                result.input = user_input
-                refuse_unfired_fast_run(result)
-                return result
-        return _rerun_impl(
-            result,
-            run_model,
-            transformed_input,
-            replay=replay_options,
-            chunk_paths=chunk_paths,
-            output_transform=output_transform,
-            fast_refused=fast_refused,
+    fast_refused: str | None = None
+    if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(result):
+        fast_done, fast_refused = try_guarded_fast_rerun(
+            result, run_model, transformed_input, output_transform=output_transform
         )
+        if fast_done:
+            result.input = user_input
+            refuse_unfired_fast_run(result)
+            return result
+    return _rerun_impl(
+        result,
+        run_model,
+        transformed_input,
+        replay=replay_options,
+        chunk_paths=chunk_paths,
+        output_transform=output_transform,
+        fast_refused=fast_refused,
+    )
 
 
 def append(trace: Trace, inputs: Any, *, model: nn.Module | None = None) -> None:
