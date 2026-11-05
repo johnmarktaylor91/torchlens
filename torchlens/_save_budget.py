@@ -43,6 +43,7 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
     available_device_bytes,
 )
 from ._state import pause_logging
+from ._utils import _torch_compat
 from ._utils._display_bounded import short_dataclass_repr
 from .errors._base import CaptureError
 
@@ -667,8 +668,15 @@ class SaveBudget:
         The watcher holds the budget weakly so the accountant never keeps itself
         alive through its own callbacks. A payload that cannot be weak-referenced
         keeps the historical permanent charge (conservative: never a zero-commit).
+        So does a storage payload on a torch without a retained storage wrapper
+        (``HAS_CACHED_UNTYPED_STORAGE_WRAPPER`` false, torch 2.1): a weak reference
+        to such a wrapper can leave freed memory behind and crash CPython later.
         """
 
+        if not isinstance(payload, torch.Tensor) and not (
+            _torch_compat.HAS_CACHED_UNTYPED_STORAGE_WRAPPER
+        ):
+            return
         budget_ref = self._self_ref
         if budget_ref is None:
             budget_ref = self._self_ref = weakref.ref(self)
