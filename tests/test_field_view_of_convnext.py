@@ -54,4 +54,9 @@ def test_readme_convnext_line_reads_module_strings(convnext_trace) -> None:
         return
     targets = [_module_output(trace, "stages.1"), _module_output(trace, "stages.2")]
     assert [f"{entry.key[0]}:{entry.key[1]}" for entry in region] == [op.label for op in targets]
-    assert all(0 < entry.num_selected < entry.mask.numel() for entry in region)
+    assert all(0 < entry.num_selected <= entry.mask.numel() for entry in region)
+    stage_1, stage_2 = region
+    # Three 7x7 depthwise blocks per stage spread the 2x2 stem patch to a strict
+    # part of stage 1's map; stage 2's three more blocks reach its whole map.
+    assert stage_1.num_selected < stage_1.mask.numel()
+    assert stage_2.num_selected == stage_2.mask.numel()

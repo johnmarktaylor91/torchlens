@@ -72,7 +72,7 @@ The shape of the node says what kind of record it is. An ellipse is a plain oper
 module that ran as one operation, such as an `nn.Linear` or `nn.Conv2d`, or the one operation
 a module ran itself while the rest ran in its submodules (the residual `add` of a block, in
 the [collapse](#collapsing-large-models) drawings). A double-bordered rectangle
-(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A three-dimensional box is a whole module drawn as one node (see
+(`batchnorm_1_3` in the first drawing) is such a module that also uses buffers. A `node_spec_fn` callback can drop that double border by setting `spec.extra_attrs["peripheries"] = "1"`. A three-dimensional box is a whole module drawn as one node (see
 [module depth](#module-depth)), and a cylinder is a buffer (see [buffers](#buffers)).
 
 When the trace was captured from a photo, `tl.trace(model, "cat.jpg")` or a PIL image, the
@@ -233,6 +233,7 @@ never folds.
 ## Focusing on one module
 
 `module=` draws only the inside of one module, given as its address or its `Module` record.
+It focuses the forward graph only: `graph="backward"` and `graph="combined"` refuse it.
 
 [![The inside of blocks.1, with its neighbours as stubs](../images/visualization/module_focus.png)](../images/visualization/module_focus.png)
 
@@ -401,6 +402,8 @@ the forward pass, and `graph="combined"` draws both.
 Each node is one autograd step (`grad_fn`). `@linear_2_3` names the forward operation the step
 differentiates, and the `module fc2` and `param fc2.bias` rows come from
 `show_module_paths=True`. `[i]` marks a step with no forward operation of its own, and a
+`grad` row gives the shape of the gradient a step passed back when that gradient was saved
+(gradients are saved per forward operation, so `[i]` steps have no `grad` row). A
 dotted **accum** arrow is a gradient being accumulated into a parameter. `show_grad_values=True`
 adds the norm and largest absolute value of each captured gradient.
 
@@ -428,7 +431,7 @@ renders a saved activation as an image grid. `tl.viz.nodes` holds the hooks (`no
 restyle each node from its record, which is also how a plot of a layer's representation (an MDS
 scatter, an RDM) ends up inside its node. Models TorchLens recognizes
 (for example Hugging Face image classifiers) also label output nodes with their class names; see
-[model conveniences](model_conveniences.md).
+[model conveniences](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/model_conveniences.md).
 
 ## Comparing runs
 
@@ -461,6 +464,7 @@ These keywords of `Trace.draw` are not pictured above:
 | `fold_patterns` | fold named linear paths into one node: `"idiomatic"` for the curated conv-bn-relu preset, or a mapping such as `{"ConvBnRelu": "conv2d > batch_norm > relu"}`; not combined with automatic `collapse` |
 | `collapse_fn`, `skip_fn` | your own predicates for which modules collapse and which operations are left out (see `tl.viz.nodes`) |
 | `show_edge_shapes` | label each forward edge with the producer's output shape |
+| `show_arg_labels` | label the edges into a multi-input operation (`cat`, a two-input function) with the argument position each parent fills (default `True`); `False` draws none |
 | `show_input_transform_summary` | add a row summarizing the input preprocessing |
 | `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
 | `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"as_node"` |

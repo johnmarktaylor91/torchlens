@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import _index_domain, last_validation_failure
+from torchlens.validation import _index_domain
 from torchlens.validation._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _INDEX_SINGLE_ENTRY_STRATEGY,
@@ -109,14 +109,16 @@ def test_permuted_rows_writing_one_scalar_validate() -> None:
     assert tl.validate(RowColumnWrite(), x, scope="forward", seed=3) is True
 
 
-def test_dead_setitem_index_edge_still_fails(probe_calls) -> None:
-    """Every row already holds -1: no in-domain row changes the write, so the edge fails."""
+def test_dead_setitem_index_edge_takes_the_held_value_proof(probe_calls) -> None:
+    """Every row already holds -1: the probe finds no move, and only the held-value proof passes it.
 
-    assert tl.validate(NeighbourRowWrite(), _neighbour_input(20), scope="forward") is False
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "perturbation"
-    assert failure.func_name == "__setitem__"
-    assert [label.split("_")[0] for label in failure.extra["perturbed_parents"]] == ["getitem"]
+    Every cell the row index can address (column 1 of every row) holds the written
+    value, so the ``setitem_destination_holds_value`` proof exempts the edge. A
+    destination where one addressable cell differs is still perturbation-tested:
+    ``tests/test_validation_unread_value_proofs.py::test_setitem_held_value_planted_bug_fails``.
+    """
+
+    assert tl.validate(NeighbourRowWrite(), _neighbour_input(20), scope="forward") is True
     assert probe_calls and all(moved is None for _, moved in probe_calls)
 
 

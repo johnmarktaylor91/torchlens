@@ -50,6 +50,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | backends | 21 | 0 |
 | bridge | 53 | 0 |
 | bundle | 3 | 0 |
+| callbacks | 2 | 0 |
 | compat | 10 | 0 |
 | dataset_extraction | 3 | 0 |
 | debug | 63 | 0 |
@@ -80,6 +81,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 10 | 0 |
 | viz | 11 | 0 |
-| **total** | **1079** | **0** |
+| **total** | **1081** | **0** |
 
-Public callable members of those classes (methods and properties): 1661.
+Public callable members of those classes (methods and properties): 1668.

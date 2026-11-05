@@ -616,10 +616,10 @@ def _compute_backward_node_lines(
     lines.extend(_backward_pass_row(grad_fn_handle, call, pass_filter, inventory))
     if grad_fn_handle.op is not None:
         lines.append(f"@{grad_fn_handle.op.layer_label}")
-    if not (inventory is not None and inventory.suppress_grad_row):
-        # Suppressed only when EVERY visible node would print "grad N/A"
-        # (the memo's x36 uniform row); a mixed render keeps its N/A rows.
-        lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
+    grad_shape = _format_backward_output_shape(grad_fn_handle)
+    if grad_shape != "N/A":
+        # Grads are saved per forward op: "[i]" nodes hold none, so no row.
+        lines.append(f"grad {grad_shape}")
     rows = _BACKWARD_ROWS.get()
     if rows is not None:
         from ._backward_rows import backward_opt_in_rows  # deferred: cycle _visualization

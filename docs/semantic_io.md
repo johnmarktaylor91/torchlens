@@ -278,6 +278,22 @@ from `trace.input` at draw time, then embeds a fresh PNG in the rendered
 node. If raw images are missing or the batch size no longer matches the
 coordinates, it renders an explicit point-cloud fallback.
 
+Module outputs work the same way. Selecting `tl.module("layer1")` saves the
+op that ends the stage, which for a reused module (ResNet's shared ReLU) is a
+later pass; in an unrolled drawing that pass's node carries the scatter. When
+the stages are drawn as collapsed boxes, pass the same hook as
+`collapsed_node_spec_fn`, and each box shows the scatter of its call's output:
+
+```python
+stages = tl.module("layer1") | tl.module("layer2")
+trace = tl.trace(model, image_list, save=stages)
+tl.repgeom.mds_evolution(trace, save=stages)
+trace.draw(depth=1, collapsed_node_spec_fn=tl.viz.nodes.mds_scatter())
+```
+
+A rolled box that stands for several calls of one module has no single output
+and is left undecorated, as is a rolled multi-pass layer.
+
 ## Node-Visual Render Toolkit (provisional)
 
 Sprint C extends the provisional node-visual surface with PIL-only render

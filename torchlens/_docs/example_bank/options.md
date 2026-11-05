@@ -691,6 +691,21 @@ print("shaped", "[3, 8]" in shaped.dot)
 # shaped True
 ```
 
+### options-vis-arg-labels
+Turn off the `arg 0` / `arg (0, 1)` labels on the edges into multi-input operations; they are on by default.
+
+- covers: `VisualizationOptions.show_arg_labels`
+- tasks: draw, style
+- fixture: toy
+
+```python
+trace = tl.trace(model, x)
+quiet = trace.draw(path="quiet", file_format="gv", show_arg_labels=False)
+print("arg labels", "arg " in quiet.dot)
+# Output:
+# arg labels False
+```
+
 ### options-vis-backward-graph
 After a backward, the forward drawing gains gradient edges you can restyle, and `graph="backward"` draws the autograd graph itself.
 

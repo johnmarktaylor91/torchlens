@@ -23,6 +23,12 @@ from the op. A mutating operator returning nothing that cannot be recorded that 
 logged op recorded) is disclosed as a ``source_provenance`` gap instead of vanishing from
 the graph.
 
+An operator outside the ATen and prims namespaces may write an argument its schema does
+not mark (a C++ extension registered without alias annotations: torch_scatter's
+``scatter_max`` fills its ``optional_out``), so before such a call the pending payload
+aliases of its tensor arguments are copied out, and a deferred saved out never shows
+the later write.
+
 Calls that TorchLens or torch itself makes are never recorded: a ``torch.ops`` call inside
 a wrapped torch function's original (a decomposition, a custom op's body) is detected by a
 frame walk, the dispatcher-census handler re-executes the operator it observed inside
@@ -44,6 +50,7 @@ import torch._ops as _torch_ops
 
 from ... import _state
 from ..._utils._tensor_label import get_tensor_label
+from ..._utils.tensor_utils import materialize_deferred_for_call
 from ._foreign_data import (
     CALL_OPERATOR_ATTR,
     FLASH_ATTENTION_2_CUSTOM_OP,
@@ -75,6 +82,9 @@ _UNRECORDED_NAMESPACES: frozenset[str] = frozenset(
     }
 )
 """Operator namespaces whose direct calls keep their dedicated (unrecorded) path."""
+
+_DECLARED_WRITE_NAMESPACES: frozenset[str] = frozenset({"aten", "prims"})
+"""Operator namespaces whose schemas annotate every argument write (``Tensor(a!)``)."""
 
 _CALL_ATTR = "__call__"
 _ORIGINAL_CALLS: dict[type, Callable[..., Any]] = {}
@@ -427,6 +437,8 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[...,
     call_operator = functools.partial(original, op)
     if recorded_custom_op_name(call_operator) == FLASH_ATTENTION_2_CUSTOM_OP:
         call_operator = _zeroing_fa2_softmax_padding(original, op)
+    elif _qualified_name(op).split("::", 1)[0] not in _DECLARED_WRITE_NAMESPACES:
+        call_operator = _copying_out_before_call(original, op)
     call_operator.__name__ = name  # type: ignore[attr-defined]
     call_operator.__qualname__ = name  # type: ignore[attr-defined]
     mutation = _mutation_kind(op)
@@ -438,6 +450,32 @@ def _decorated_for(op: Any, original: Callable[..., Any]) -> tuple[Callable[...,
         decorated = torch_func_decorator(call_operator, name)
     _DECORATED_BY_OP[id(op)] = (op, decorated, mutation)
     return decorated, mutation
+
+
+def _copying_out_before_call(original: Callable[..., Any], op: Any) -> functools.partial[Any]:
+    """Return the callable of an operator that may write arguments its schema does not mark.
+
+    An operator registered from C++ without alias annotations (torch_scatter's
+    ``scatter_max(src, index, dim, Tensor? optional_out, ...)`` fills ``optional_out`` in
+    place) declares no write, so the wrapper's write triggers never fire and a deferred
+    saved out aliasing the written tensor would show the later bytes. ATen and prims
+    schemas declare every write; for any other namespace this callable copies out the
+    pending payload aliases of the call's tensor arguments just before the operator runs,
+    after the wrapper has taken its argument copies. A spurious copy-out costs one clone,
+    never a value. Like every recorded operator's callable it is a ``functools.partial``
+    bound to ``op``, so :func:`~._foreign_data.recorded_custom_op_name` still finds it.
+    """
+
+    def _call_copying_out(packet: Any, /, *args: Any, **kwargs: Any) -> Any:
+        """Copy out the pending aliases of the operator's tensor arguments, then run it."""
+        values = [*args, *kwargs.values()]
+        # Operator arguments are flat: tensors, or a ``Tensor[]`` list of them.
+        nested = [item for value in values if isinstance(value, (list, tuple)) for item in value]
+        materialize_deferred_for_call(v for v in (*values, *nested) if isinstance(v, torch.Tensor))
+        call_operator = functools.partial(original, packet)
+        return call_operator(*args, **kwargs)
+
+    return functools.partial(_call_copying_out, op)
 
 
 def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:

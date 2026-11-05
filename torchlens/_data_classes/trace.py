@@ -1490,11 +1490,8 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
             has no parent.
         """
 
-        parent = self.parent_trace
-        if parent is None:
-            return None
-        root = parent
-        while root.parent_trace is not None:
+        root = self.parent_trace
+        while root is not None and root.parent_trace is not None:
             root = root.parent_trace
         return root
 
@@ -3264,6 +3261,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         node_style: VisNodeModeLiteral = "default",
         show_buffers: BufferVisibilityLiteral = "meaningful",
         show_edge_shapes: bool = False,
+        show_arg_labels: bool = True,
         show_legend: bool | None = None,
         color_by: Any = None,
         size_by: str | Callable[[Any], Any] | None = None,

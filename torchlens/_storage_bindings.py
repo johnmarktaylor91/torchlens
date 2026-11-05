@@ -34,6 +34,18 @@ save budget charges the whole storage, as it already projects) and validation
 replays the call on a clone of that context.
 """
 
+STORAGE_CONTEXT_READER_FUNCS = frozenset({"as_strided"})
+"""Out-of-place storage-geometry calls whose receiver is saved with its whole storage.
+
+``Tensor.as_strided`` builds its view from the receiver's storage, not its elements:
+any stride, and an explicit ``storage_offset`` counted from the storage's start, can
+reach bytes outside the receiver's own view (xformers ``stack_or_none`` views two
+halves of a packed weight from a slice of its first half). A compact clone has no
+such bytes, so replay raised or read the wrong ones. The receiver is saved and
+replayed exactly as a :data:`STORAGE_CONTEXT_RECEIVER_FUNCS` receiver, and, since
+the call writes nothing, it keeps its ``requires_grad`` on that context.
+"""
+
 VIEW_CONTEXT_RECEIVER_FUNCS = frozenset(
     {"_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"}
 )
@@ -68,11 +80,12 @@ def storage_context_arg_index(func_name: str | None) -> int | None:
     Returns
     -------
     int | None
-        ``0`` for a :data:`STORAGE_CONTEXT_RECEIVER_FUNCS` receiver, ``1`` for a
+        ``0`` for a :data:`STORAGE_CONTEXT_RECEIVER_FUNCS` or
+        :data:`STORAGE_CONTEXT_READER_FUNCS` receiver, ``1`` for a
         :data:`STORAGE_CONTEXT_NEW_VIEW_FUNCS` new view, else ``None``.
     """
 
-    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS:
+    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS or func_name in STORAGE_CONTEXT_READER_FUNCS:
         return 0
     if func_name in STORAGE_CONTEXT_NEW_VIEW_FUNCS:
         return 1

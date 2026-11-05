@@ -12,11 +12,13 @@ under their original names.
 
 import functools
 import gc
+import logging
+import sys
 import types
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from types import ModuleType
-from typing import Any
+from typing import Any, TypeAlias
 
 import torch
 from torch import nn
@@ -27,9 +29,14 @@ __all__ = [
     "_clear_callable_session_tensor_metadata",
     "_clear_container_tree_tensor_metadata",
     "_clear_module_attribute_tensor_metadata",
+    "_clear_model_tree_tensor_metadata",
     "_clear_module_callables_tensor_metadata",
     "_clear_session_tensor_metadata",
+    "method_index",
 ]
+
+#: The model's user methods by attribute name (see :func:`method_index`).
+MethodIndex: TypeAlias = Mapping[str, tuple[types.FunctionType, ...]]
 
 #: Exact leaf types that can never carry TorchLens tensor metadata.
 _SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
@@ -43,6 +50,30 @@ _LRU_CACHE_WRAPPER_TYPE: type | None = getattr(functools, "_lru_cache_wrapper", 
 _METHOD_DESCRIPTOR_TYPES = frozenset({staticmethod, classmethod})
 #: Referents of a cache wrapper the sweep never walks: its type and the wrapped function.
 _LRU_REFERENT_SKIP_TYPES = frozenset({type, types.FunctionType})
+#: The process logging registry. A reachable ``Logger`` or ``Handler`` leads through
+#: ``manager.loggerDict`` to every logger and handler in the process, so the walk's size
+#: followed which packages had been imported (``import accelerate`` alone added container
+#: builds to every capture of a transformers model). Logging objects are process plumbing,
+#: not model state: the walk stops at them, as it never recurses out of a module namespace.
+#: ``nn.Module`` instances stop the object walk too, as before.
+_OBJECT_WALK_STOP_TYPES = (nn.Module, logging.Filterer, logging.Manager, logging.PlaceHolder)
+#: Function hops followed from a forward into the user helpers it names (the MLX
+#: closure-constant census follows the same number).
+_HELPER_HOP_BUDGET = 3
+#: ``functools.wraps`` links followed inward from one function (decorator stacks).
+_WRAPPED_LINK_LIMIT = 8
+#: Top-level packages whose functions are library code, never a user helper keeping
+#: model state: torch (and TorchLens's own wrappers, which copy torch's
+#: ``__module__``), TorchLens and the standard library.
+_LIBRARY_PACKAGE_ROOTS = frozenset(
+    {"torch", "torchlens", "builtins", *getattr(sys, "stdlib_module_names", ())}
+)
+#: Exact scalar leaf types the walk never descends into, and the sequence types it
+#: iterates. Module constants, not tuple literals at the call site: a literal of
+#: names is built again on every visit, and the walk visits every reachable object
+#: of every forward and helper twice per capture (snapshot and clear).
+_WALK_SCALAR_TYPES = (str, bytes, int, float, bool)
+_WALK_SEQUENCE_TYPES = (list, tuple, set, frozenset, deque)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -165,7 +196,7 @@ def _clear_session_tensor_metadata(
     action = clear_meta if visit is None else visit
     if value is None or _is_isinstance_hostile_deprecation_shim(value):
         return
-    if isinstance(value, (str, bytes, int, float, bool)):
+    if isinstance(value, _WALK_SCALAR_TYPES):
         return
     if isinstance(value, ModuleType):
         _clear_module_namespace_tensor_metadata(value, seen, depth, action, visit)
@@ -252,7 +283,7 @@ def _clear_reachable_tensor_metadata(
     # shim answers with a FutureWarning -- the recursion's entry guard
     # never runs for inline-skipped items, so this check must stay hostile-safe.
     # Non-exact scalar subclasses fall through to the guarded recursive call.
-    _scalar_leaves = (str, bytes, int, float, bool)
+    _scalar_leaves = _WALK_SCALAR_TYPES
     if isinstance(value, dict):
         for key, item in value.items():
             if key is not None and type(key) not in _scalar_leaves:
@@ -260,12 +291,12 @@ def _clear_reachable_tensor_metadata(
             if item is not None and type(item) not in _scalar_leaves:
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
         return
-    if isinstance(value, (list, tuple, set, frozenset, deque)):
+    if isinstance(value, _WALK_SEQUENCE_TYPES):
         for item in value:
             if item is not None and type(item) not in _scalar_leaves:
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
         return
-    if isinstance(value, nn.Module):
+    if isinstance(value, _OBJECT_WALK_STOP_TYPES):
         return
     if _LRU_CACHE_WRAPPER_TYPE is not None and type(value) is _LRU_CACHE_WRAPPER_TYPE:
         for entry in _lru_cache_entries(value):
@@ -367,8 +398,9 @@ def _clear_callable_link_tensor_metadata(
 
     defaults = getattr(link, "__defaults__", None) or ()
     _clear_session_tensor_metadata(defaults, seen, visit=visit)
-    kwdefaults = getattr(link, "__kwdefaults__", None) or {}
-    _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
+    kwdefaults = getattr(link, "__kwdefaults__", None)
+    if kwdefaults:
+        _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
     closure = getattr(link, "__closure__", None) or ()
     for cell in closure:
         try:
@@ -382,6 +414,7 @@ def _clear_callable_session_tensor_metadata(
     callable_obj: Any,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
+    methods: MethodIndex | None = None,
 ) -> None:
     """Clear TorchLens tensor metadata captured by a callable object.
 
@@ -406,6 +439,12 @@ def _clear_callable_session_tensor_metadata(
         Candidate callable, such as a model's bound ``forward`` method.
     seen
         Object ids already visited during this cleanup scan.
+    visit
+        Optional per-tensor action replacing the default ``clear_meta``.
+    methods
+        The model's user methods by name (:func:`method_index`), so a
+        ``self.<method>`` or ``self.child.<method>`` the forward names is followed
+        as a helper (see :func:`_walk_named_globals`).
 
     Returns
     -------
@@ -416,17 +455,206 @@ def _clear_callable_session_tensor_metadata(
     chain = _forward_wrapper_chain(getattr(callable_obj, "__func__", callable_obj))
     for link in chain:
         _clear_callable_link_tensor_metadata(link, seen, visit)
+    # A user decorator on the forward itself (``@beartype``, a ``functools.wraps``
+    # gradient switch) is transparent: the decorated forward's names are read at
+    # the full budget, not one hop down behind the wrapper.
+    for link in _wrapped_links(chain[-1]):
+        _clear_callable_link_tensor_metadata(link, seen, visit)
+        _walk_named_globals(link, methods, seen, visit, _HELPER_HOP_BUDGET)
 
-    user_callable = chain[-1]
-    globals_dict = getattr(user_callable, "__globals__", None)
-    if not isinstance(globals_dict, dict):
+
+def _code_names(code: types.CodeType) -> Iterator[str]:
+    """Yield the names a code object and its nested code (comprehensions, lambdas) load.
+
+    Depth first, the forward's own names first and nested code last-to-first. A
+    code object's constants are an acyclic compile-time tree, so the walk needs no
+    stack or visited set; it builds no container because it runs for every forward
+    and helper the walk follows, twice per capture (snapshot and clear).
+    """
+
+    yield from code.co_names
+    for const in reversed(code.co_consts):
+        if type(const) is types.CodeType:
+            yield from _code_names(const)
+
+
+def _user_helper(value: Any) -> types.FunctionType | None:
+    """Return ``value`` when it is a plain function defined outside library packages."""
+
+    if type(value) is not types.FunctionType:
+        return None
+    module = getattr(value, "__module__", None)
+    root = module.partition(".")[0] if isinstance(module, str) else ""
+    return None if root in _LIBRARY_PACKAGE_ROOTS else value
+
+
+def _wrapped_links(func: Any) -> list[Any]:
+    """Return ``func`` and the user functions its ``functools.wraps`` chain wraps, outermost first.
+
+    A decorator built with ``functools.wraps`` (``torch.no_grad()``, ``@beartype``, an
+    autocast pin) holds the decorated function in a closure cell the wrapper's code
+    never names, and records it as ``__wrapped__``. Following that link keeps a
+    decorated helper as visible as an undecorated one. ``__wrapped__`` is read from
+    the function's own ``__dict__`` so no user ``__getattr__`` runs; library links
+    are not followed (see :func:`_user_helper`).
+    """
+
+    links = [func]
+    current = (
+        getattr(func, "__dict__", {}).get("__wrapped__")
+        if type(func) is types.FunctionType
+        else None
+    )
+    while current is not None and len(links) < _WRAPPED_LINK_LIMIT:
+        if type(current) is types.MethodType:
+            current = current.__func__
+        if _user_helper(current) is None or any(current is link for link in links):
+            break
+        links.append(current)
+        current = current.__dict__.get("__wrapped__")
+    return links
+
+
+#: The ``torch.autograd.Function`` methods ``apply`` runs during the forward.
+_AUTOGRAD_FUNCTION_STEPS = ("forward", "setup_context")
+
+
+def _autograd_function_steps(value: Any) -> tuple[types.FunctionType, ...]:
+    """Return the user ``forward``/``setup_context`` a named ``autograd.Function`` class runs.
+
+    ``MyFunction.apply(x)`` runs the class's static ``forward`` from inside torch, so
+    the module-level state that ``forward`` reads (L-GATr's sparse geometric product
+    reads an ``lru_cache`` of index and sign tables) is reached through no function
+    the forward names. Only user subclasses count; torch's own are library code.
+    """
+
+    if not (
+        isinstance(value, type)
+        and issubclass(value, torch.autograd.Function)
+        and _user_class(value)
+    ):
+        return ()
+    steps = (_class_helper(value, name) for name in _AUTOGRAD_FUNCTION_STEPS)
+    return tuple(step for step in steps if step is not None)
+
+
+def _class_helper(owner: type, name: str) -> types.FunctionType | None:
+    """Return the user function ``owner`` resolves ``name`` to, ``self.<name>``'s method."""
+
+    for klass in owner.__mro__:
+        attr = vars(klass).get(name)
+        if attr is None:
+            continue
+        if type(attr) in _METHOD_DESCRIPTOR_TYPES:
+            attr = attr.__func__
+        return _user_helper(attr)
+    return None
+
+
+def method_index(classes: Iterable[type]) -> MethodIndex:
+    """Index the user methods of the model's module classes by attribute name.
+
+    A forward reaches module-level state through methods of its own class
+    (``self.forward_once``) and of its children's classes
+    (``self.SO3_rotation[i].set_wigner`` calling a module-level ``wigner_D``).
+    Each class resolves a name through its MRO as an instance would; library
+    classes (``nn.Module`` and the rest of torch) contribute nothing.
+
+    Parameters
+    ----------
+    classes
+        The module classes of the prepared model, in any order (duplicates ignored).
+
+    Returns
+    -------
+    MethodIndex
+        ``name -> user functions`` that some class in ``classes`` resolves ``name`` to.
+    """
+
+    index: dict[str, list[types.FunctionType]] = {}
+    for owner in dict.fromkeys(classes):
+        user_classes = [klass for klass in owner.__mro__ if _user_class(klass)]
+        for name in dict.fromkeys(name for klass in user_classes for name in vars(klass)):
+            helper = _class_helper(owner, name)
+            if helper is not None and not any(helper is fn for fn in index.get(name, ())):
+                index.setdefault(name, []).append(helper)
+    return {name: tuple(functions) for name, functions in index.items()}
+
+
+def _user_class(klass: type) -> bool:
+    """Return whether ``klass`` is defined outside the library packages."""
+
+    module = getattr(klass, "__module__", None)
+    root = module.partition(".")[0] if isinstance(module, str) else ""
+    return root not in _LIBRARY_PACKAGE_ROOTS
+
+
+def _walk_named_globals(
+    func: Any,
+    methods: MethodIndex | None,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None,
+    hops: int,
+) -> None:
+    """Sweep the globals ``func``'s code names, following user helpers for ``hops`` hops.
+
+    A forward often reaches module-level state only through the helpers it calls:
+    ``forward -> hyp_up -> disp_up`` reading a module-level ``lru_cache`` function,
+    or ``forward -> flow_warp -> torch_warp`` reading a module-global dict of
+    cached grids. Reading only the forward's own names left that state outside
+    the snapshot (a warm cache's tensor became an unattributed argument) and
+    outside the session clear (a cold cache filled in one capture kept a stale
+    label into the next). A named user function, or a model-class method the
+    code names (``self.forward_once``, ``self.child.set_wigner``; see
+    :func:`method_index`), is swept like the forward itself: defaults, closure
+    cells, its ``__dict__`` and the globals its code names, one hop less each
+    time. A ``functools.wraps`` decorator costs no hop (:func:`_wrapped_links`).
+    Library functions (torch, TorchLens, the standard library) are not
+    followed; at zero hops a function is swept as an object.
+    """
+
+    globals_dict = getattr(func, "__globals__", None)
+    code = getattr(func, "__code__", None)
+    if not isinstance(globals_dict, dict) or code is None:
         return
-    code = getattr(user_callable, "__code__", None)
-    if code is None:
+    for name in _code_names(code):
+        if methods is not None and hops > 0:
+            for method in methods.get(name, ()):
+                _walk_user_helper(method, methods, seen, visit, hops)
+        if name not in globals_dict:
+            continue
+        value = globals_dict[name]
+        helper = _user_helper(value) if hops > 0 else None
+        if helper is None:
+            _clear_session_tensor_metadata(value, seen, visit=visit)
+            for apply_step in _autograd_function_steps(value) if hops > 0 else ():
+                _walk_user_helper(apply_step, methods, seen, visit, hops)
+        else:
+            _walk_user_helper(helper, methods, seen, visit, hops)
+
+
+def _walk_user_helper(
+    func: types.FunctionType,
+    methods: MethodIndex | None,
+    seen: set[int],
+    visit: Callable[[torch.Tensor], None] | None,
+    hops: int,
+) -> None:
+    """Sweep one user helper function once per budget, its wrapped links, then their names."""
+
+    # The inverted key keeps the helper walk apart from the plain object visit of the
+    # same function (``seen`` holds object ids, all non-negative), so a function met
+    # first as a module attribute is still followed when a forward names it. The
+    # budget is part of the key: a helper first met deep in one chain (few hops
+    # left) is walked again when a shorter chain reaches it with more hops.
+    walk_key = ~(id(func) * (_HELPER_HOP_BUDGET + 1) + hops)
+    if walk_key in seen:
         return
-    for name in code.co_names:
-        if name in globals_dict:
-            _clear_session_tensor_metadata(globals_dict[name], seen, visit=visit)
+    seen.add(walk_key)
+    for link in _wrapped_links(func):
+        _clear_callable_link_tensor_metadata(link, seen, visit)
+        _clear_session_tensor_metadata(link, seen, visit=visit)
+        _walk_named_globals(link, methods, seen, visit, hops - 1)
 
 
 def _lru_cache_entries(wrapper: Any) -> list[Any]:
@@ -483,8 +711,9 @@ def _clear_module_callables_tensor_metadata(
     module: nn.Module,
     seen: set[int],
     visit: Callable[[torch.Tensor], None] | None = None,
+    methods: MethodIndex | None = None,
 ) -> None:
-    """Walk one module's forward callable, then the ``lru_cache`` contents its class holds.
+    """Walk one module's forward callable and its helpers, then its class's ``lru_cache`` contents.
 
     The callable half of the pre-forward ownership snapshot and of the session-end
     clear, so both reach the same cached tensors: the snapshot records a warm
@@ -499,8 +728,32 @@ def _clear_module_callables_tensor_metadata(
         Object ids already visited during this sweep.
     visit
         Optional per-tensor action replacing the default ``clear_meta``.
+    methods
+        The whole model's :func:`method_index`, built once per sweep; ``None``
+        indexes ``module``'s own class only.
     """
 
-    _clear_callable_session_tensor_metadata(getattr(module, "forward", None), seen, visit=visit)
+    _clear_callable_session_tensor_metadata(
+        getattr(module, "forward", None),
+        seen,
+        visit=visit,
+        methods=method_index((type(module),)) if methods is None else methods,
+    )
     for cache in _class_lru_caches(type(module)):
         _clear_session_tensor_metadata(cache, seen, visit=visit)
+
+
+def _clear_model_tree_tensor_metadata(model: nn.Module, seen: set[int]) -> None:
+    """Clear the session metadata on every submodule's attributes and forward callables.
+
+    The session-end half of the sweep :func:`._module_boundary_adoption.
+    collect_pre_forward_tensor_ids` runs before the forward, over the same
+    surfaces with the same :func:`method_index`, so the clear reaches every
+    cached tensor the snapshot pinned.
+    """
+
+    submodules = list(model.modules())
+    methods = method_index(type(submodule) for submodule in submodules)
+    for submodule in submodules:
+        _clear_module_attribute_tensor_metadata(submodule, seen)
+        _clear_module_callables_tensor_metadata(submodule, seen, methods=methods)

@@ -60,6 +60,10 @@ def _emit_backward_key(
             has_custom=inventory.has_custom,
             num_backward_passes=inventory.num_backward_passes,
         ),
+        # Measured cell widths with margin: the key's tight cells let the
+        # longest row run past the border in a viewer face wider than the
+        # layout measurement.
+        fit=True,
     )
 
 
@@ -334,6 +338,30 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
+def _combined_graph_args(
+    self: "Trace", rankdir: str, pass_filter: Any, overrides: VisualizationOverrides
+) -> dict[str, str]:
+    """Return the combined graph's Graphviz attributes: caption and layout, then user overrides."""
+
+    graph_caption = (
+        f"<<B>{html_escape(self._source_class_name)} combined forward/backward graph</B><br align='left'/>"
+        f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
+        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
+        f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
+    )
+    graph_args = {
+        "rankdir": rankdir,
+        "label": graph_caption,
+        "labelloc": "t",
+        "labeljust": "left",
+        "ordering": "out",
+        "fontname": _DEFAULT_FONT_FAMILY,
+    }
+    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
+        graph_args[arg_name] = str(arg_val(self) if callable(arg_val) else arg_val)
+    return graph_args
+
+
 @_with_per_draw_collapse_cache
 def render_combined_graph(
     self: "Trace",
@@ -350,6 +378,7 @@ def render_combined_graph(
     show_buffer_layers: BufferVisibilityLiteral = "meaningful",
     bwd: int | Iterable[int] | None = None,
     show_edge_shapes: bool = False,
+    show_arg_labels: bool = True,
     show_legend: bool | None = None,
 ) -> str:
     """Render one Graphviz graph containing forward ops and backward grad_fns.
@@ -434,26 +463,11 @@ def render_combined_graph(
         edge=vis_edge_overrides or {},
         grad_edge={},
         module={},
+        arg_labels=show_arg_labels,
     )
 
-    graph_caption = (
-        f"<<B>{html_escape(self._source_class_name)} combined forward/backward graph</B><br align='left'/>"
-        f"{len(self)} forward nodes, {len(self.autograd.grad_fns)} grad_fn_handle nodes"
-        f"<br align='left'/>{self._num_backward_passes} backward pass(es)"
-        f"{_format_backward_filter_caption(pass_filter)}<br align='left'/>>"
-    )
-    graph_args = {
-        "rankdir": rankdir,
-        "label": graph_caption,
-        "labelloc": "t",
-        "labeljust": "left",
-        "ordering": "out",
-        "fontname": _DEFAULT_FONT_FAMILY,
-    }
-    for arg_name, arg_val in overrides.graph.items():  # type: ignore[union-attr]
-        graph_args[arg_name] = str(arg_val(self) if callable(arg_val) else arg_val)
     ir_builder = _RenderIRDecisionBuilder()
-    ir_builder.attr("graph", **graph_args)
+    ir_builder.attr("graph", **_combined_graph_args(self, rankdir, pass_filter, overrides))
     ir_builder.attr("node", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
     ir_builder.attr("edge", ordering="out", fontname=_DEFAULT_FONT_FAMILY)
 

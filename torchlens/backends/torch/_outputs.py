@@ -32,7 +32,9 @@ from ..._utils.introspection import (
 from ...recording._storage_resolver import _resolve_storage
 from ...recording._types import CaptureSpec, StorageIntent
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
+from ._storage_exports import note_alias_rebound_outputs
 from .buffer_writes import reconcile_buffer_writes, session_validated_buffer_address
+from .ops import _VIEW_MUTATION_RELABELS as _RELABELS
 
 if TYPE_CHECKING:
     from torchlens.backends.torch.backend import TorchBackend
@@ -743,14 +745,12 @@ def extract_and_mark_outputs(
 
     self_trace = cast("Trace", session)
     output_entries = list(_walk_output_tensors_with_paths(outputs))
-    # Stamp the POSITIVE model-output losslessness
-    # proof -- exact root kind, recursively supported children, encodable literal
-    # leaves, and a tensor-leaf/typed-path bijection (duplicate paths and any BFS
-    # fallback break the proof). The runnable producer refuses any save whose
-    # output is not PROVED lossless (refuse-unless-proved), closing every lossy
-    # cardinality/depth: bare one-tensor sets, nested sets, opaque tensor
-    # holders, set subclasses, and multi-tensor collapses alike. Ordinary
-    # analysis capture is unaffected by the stamp.
+    # Stamp the POSITIVE model-output losslessness proof -- exact root kind, recursively
+    # supported children, encodable literal leaves, and a tensor-leaf/typed-path bijection
+    # (duplicate paths and any BFS fallback break the proof). The runnable producer refuses
+    # any save whose output is not PROVED lossless (refuse-unless-proved), closing every
+    # lossy cardinality/depth: bare one-tensor sets, nested sets, opaque tensor holders, set
+    # subclasses, and multi-tensor collapses alike. Analysis capture ignores the stamp.
     self_trace._runnable.output_losslessness = runnable_output_losslessness(outputs, output_entries)
     output_tensors_w_addresses_all = _collect_output_addresses(self_trace, outputs, output_entries)
     output_tensors, output_tensor_addresses = _dedupe_output_addresses(
@@ -780,7 +780,9 @@ def extract_and_mark_outputs(
             if amendment is not None:
                 self_trace.capture_events.append_amendment(amendment)
 
-    return attributable_output_tensors, attributable_output_tensor_addresses
+    return note_alias_rebound_outputs(
+        self_trace, attributable_output_tensors, attributable_output_tensor_addresses, _RELABELS
+    )
 
 
 def finalize_forward_session(

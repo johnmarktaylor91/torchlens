@@ -120,6 +120,7 @@ from ._trace_graph_helpers import (
 from ._validation_log import (
     _JaxValidationLog,
     _JaxVerdict,
+    _record_insensitive_outcome,
     _record_jax_constant_leaves,
     _record_jax_decision,
 )
@@ -414,13 +415,9 @@ def _validate_one_jax_equation(
         )
         return False
     if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
-        _record_jax_decision(
-            log,
-            op_label,
-            func_name,
-            _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
+        return _record_insensitive_outcome(
+            log, (op_label, func_name), capture, op, (inputs, saved_outputs)
         )
-        return False
     _record_jax_decision(
         log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
     )

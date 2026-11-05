@@ -57,6 +57,9 @@ _SDPA = "torchlens.validation._sdpa_value_proofs:"
 _SAVED = "torchlens.validation._saved_value_proofs:"
 _SAVED_TESTS = "tests/test_validation_saved_value_proofs.py::"
 _ZERO_SOURCE = "tests/test_validation_zero_source_add.py::"
+_DEGENERATE = "tests/test_validation_degenerate_domains.py::"
+_UNREAD = "torchlens.validation._unread_value_proofs:"
+_UNREAD_TESTS = "tests/test_validation_unread_value_proofs.py::"
 _SINGLE_KEY = _GAP + "test_sdpa_single_key_edge_is_exempted"
 _NON_FINITE = _VHARD + "test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output"
 
@@ -447,7 +450,8 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         "conv_zero_input_output_is_bias",
         ("posthoc", _C2),
         _OPERAND + "conv_zero_input_output_is_bias",
-        "the weight edge of a convolution over an exactly zero input, so the output is bias",
+        "the weight edge of a convolution or transposed convolution over an exactly zero input, "
+        "so the output is bias",
         (
             _GAP + "test_conv_weight_edge_on_a_zero_input_is_exempted",
             _GAP + "test_dead_conv_weight_edge_on_a_near_zero_input_still_fails",
@@ -547,6 +551,17 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         ),
     ),
     _decision(
+        "setitem_empty_mask_value",
+        ("posthoc", _C2),
+        _SAVED + "setitem_empty_mask_value_decision",
+        "the value of a setitem whose saved index holds a bool mask with no True entry and "
+        "whose saved output equals the saved destination",
+        (
+            _DEGENERATE + "test_setitem_value_under_an_all_false_mask_is_exempt",
+            _DEGENERATE + "test_setitem_value_under_a_live_mask_still_fails_when_frozen",
+        ),
+    ),
+    _decision(
         "zero_source_index_irrelevant",
         ("posthoc", _C2),
         _SAVED + "_zero_source_add_decision",
@@ -555,6 +570,76 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         (
             _ZERO_SOURCE + "test_zero_source_scatter_add_index_is_exempt",
             _ZERO_SOURCE + "test_zero_source_proof_refuses_live_and_frozen_edges",
+        ),
+    ),
+    _decision(
+        "setitem_empty_write",
+        ("posthoc", _C2),
+        _UNREAD + "_setitem_empty_write_decision",
+        "an integer index component of a setitem whose other component is a bool mask with no True entry and whose saved output equals the saved destination",
+        (
+            _UNREAD_TESTS + "test_setitem_empty_write_is_exempt",
+            _UNREAD_TESTS + "test_setitem_empty_write_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "setitem_destination_holds_value",
+        ("posthoc", _C2),
+        _UNREAD + "_setitem_held_value_decision",
+        "an index component of a setitem whose every addressable destination element already equals the one finite written value",
+        (
+            _UNREAD_TESTS + "test_setitem_held_value_is_exempt",
+            _UNREAD_TESTS + "test_setitem_held_value_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "clamp_equal_bounds",
+        ("posthoc", _C2),
+        _UNREAD + "_clamp_equal_bounds_decision",
+        "the input of a clamp or clip whose saved bounds are equal finite scalars and whose saved output equals the bound everywhere",
+        (
+            _UNREAD_TESTS + "test_clamp_equal_bounds_is_exempt",
+            _UNREAD_TESTS + "test_clamp_equal_bounds_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "spmm_empty_sparse_operand",
+        ("posthoc", _C2),
+        _UNREAD + "_spmm_empty_sparse_decision",
+        "the dense operand of spmm whose saved sparse operand stores no entry and whose saved output is all zero",
+        (
+            _UNREAD_TESTS + "test_spmm_empty_sparse_is_exempt",
+            _UNREAD_TESTS + "test_spmm_empty_sparse_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "masked_scatter_all_true_mask",
+        ("posthoc", _C2),
+        _UNREAD + "_masked_scatter_all_true_decision",
+        "the destination of masked_scatter whose saved mask is True everywhere and whose saved output equals the source in order",
+        (
+            _UNREAD_TESTS + "test_masked_scatter_all_true_is_exempt",
+            _UNREAD_TESTS + "test_masked_scatter_all_true_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "embedding_bag_sum_placeholder_output",
+        ("posthoc", _C2),
+        _UNREAD + "_embedding_bag_sum_placeholder_decision",
+        "the indices of a sum-mode embedding_bag at its all-zero bag_size and max_indices placeholder outputs",
+        (
+            _UNREAD_TESTS + "test_embedding_bag_sum_placeholder_is_exempt",
+            _UNREAD_TESTS + "test_embedding_bag_sum_placeholder_planted_bug_fails",
+        ),
+    ),
+    _decision(
+        "deform_conv2d_unused_mask",
+        ("posthoc", _C2),
+        _UNREAD + "_deform_conv2d_unused_mask_decision",
+        "the mask argument of deform_conv2d whose saved use_mask flag is False",
+        (
+            _UNREAD_TESTS + "test_deform_conv2d_unused_mask_is_exempt",
+            _UNREAD_TESTS + "test_deform_conv2d_unused_mask_planted_bug_fails",
         ),
     ),
 )

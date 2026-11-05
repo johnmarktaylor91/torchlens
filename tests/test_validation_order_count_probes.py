@@ -200,12 +200,12 @@ def test_only_the_trim_moves_a_shape_only_output() -> None:
         assert _changed_by(case_trace, child, label, "trim_last_entry")
 
 
-def test_sum_mode_placeholder_outputs_still_fail() -> None:
+def test_sum_mode_placeholder_outputs_take_the_value_proof() -> None:
     """Sum-mode ``embedding_bag`` leaves bag sizes as zeros the indices never reach.
 
     Neither the index values nor their number reach that placeholder, so no
-    probe can move it and the edge still fails ``perturbation_insensitive``:
-    the shape probe does not bless it.
+    probe can move it; the shape probe does not bless it, and only the
+    ``embedding_bag_sum_placeholder_output`` value proof exempts the edge.
     """
 
     trace, _ = _capture(_Bags("sum"), _bag_ids())
@@ -221,8 +221,8 @@ def test_sum_mode_placeholder_outputs_still_fail() -> None:
         perturb=True,
         layers_to_perturb=[bag_size.call.parent_arg_positions["args"][1]],
     )
-    assert result.decision == "failed"
-    assert result.reason == "perturbation_insensitive"
+    assert result.decision == "exempted"
+    assert result.reason == "embedding_bag_sum_placeholder_output"
 
 
 def test_trim_rung_is_only_for_shape_only_outputs() -> None:

@@ -17,10 +17,15 @@ saved co-arguments, and returns non-exempt for anything else:
   the lone softmax weight is exactly one whatever the additive float mask
   (``args[3]``) holds (the query and key edges are the ``_sdpa_value_proofs``);
 - ``__setitem__``: the perturbed parent is an integer index component that
-  addresses a destination dim of size 1, where every valid index is position 0;
+  addresses a destination dim of size 1, where every valid index is position 0,
+  or the value when a saved bool mask selects nothing
+  (``setitem_empty_mask_value_decision``);
 - ``scatter_add``/``index_add``: the saved source is all zero, so the index
   (``args[2]``) only says where zeros are added, and the saved output already
   equals the saved destination.
+
+Writes that cannot change the output and arguments the kernel never reads are
+proved by ``_unread_value_proofs``, consulted when no family here proves the edge.
 
 Zero einsum operands, eval-mode batch norm at its running mean, unread
 ``scatter_reduce`` destinations and empty split chunks or matmul products are
@@ -42,6 +47,7 @@ from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import tensor_nanequal
 from ._posthoc_decision import PosthocPerturbDecision
 from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
+from ._unread_value_proofs import unread_value_proof_decision
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 
 if TYPE_CHECKING:
@@ -383,6 +389,67 @@ def _key_is_integer_index_into_singleton_dim(
     return bool(destination.shape[dim] == 1)
 
 
+def _is_empty_bool_mask(component: Any) -> bool:
+    """Return whether an index component is a torch or numpy bool mask with no True entry."""
+
+    if isinstance(component, torch.Tensor) and component.dtype == torch.bool:
+        return not bool(component.any())
+    return isinstance(component, np.ndarray) and component.dtype == np.bool_ and not component.any()
+
+
+def setitem_empty_mask_value_decision(
+    layer: Op, keys: set[Any], args: tuple[Any, ...]
+) -> PosthocPerturbDecision | None:
+    """Prove a ``__setitem__`` value irrelevant when a saved bool mask selects nothing.
+
+    ``dest[index] = value`` with a bool mask component that holds no True
+    entry selects zero elements, so no value is written and the output equals
+    the destination. Applies only to the value parent (``args[2]``) and only
+    when the saved output equals the saved destination exactly (NaN matching
+    NaN); the destination and index parents stay strict.
+
+    Parameters
+    ----------
+    layer:
+        Captured ``__setitem__`` op whose perturbed replay left its output unchanged.
+    keys:
+        Positional keys the single perturbed parent occupies.
+    args:
+        Saved positional arguments ``(destination, index, value)``.
+
+    Returns
+    -------
+    PosthocPerturbDecision or None
+        The exemption, or ``None`` when the proof does not apply.
+    """
+
+    if keys != {2} or len(args) < 3 or not isinstance(args[0], torch.Tensor):
+        return None
+    components = args[1] if isinstance(args[1], tuple) else (args[1],)
+    if not any(_is_empty_bool_mask(component) for component in components):
+        return None
+    out = getattr(layer, "out", None)
+    if not isinstance(out, torch.Tensor) or out.shape != args[0].shape:
+        return None
+    if out.dtype != args[0].dtype or not tensor_nanequal(out, args[0]):
+        return None
+    return PosthocPerturbDecision(
+        True,
+        "setitem_empty_mask_value",
+        "a saved bool mask component of the index holds no True entry, so the write "
+        "selects no element and the value cannot reach the output",
+    )
+
+
+def _setitem_decision(layer: Op, keys: set[Any], args: tuple[Any, ...]) -> PosthocPerturbDecision:
+    """Try the empty-mask value proof, then the singleton-index-dim proof."""
+
+    empty_write = setitem_empty_mask_value_decision(layer, keys, args)
+    if empty_write is not None:
+        return empty_write
+    return _setitem_singleton_index_decision(layer, keys, args)
+
+
 #: Accumulating index writes whose source is added at the indexed positions.
 ZERO_SOURCE_ADD_FUNC_NAMES = frozenset(
     {"scatter_add", "scatter_add_", "scatteradd", "index_add", "index_add_"}
@@ -427,7 +494,7 @@ _DECISIONS_BY_FAMILY = (
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
     (DISJUNCTION_FUNC_NAMES, _disjunction_decision),
     (POW_FUNC_NAMES, _pow_decision),
-    (frozenset({"__setitem__"}), _setitem_singleton_index_decision),
+    (frozenset({"__setitem__"}), _setitem_decision),
     (frozenset({"scaled_dot_product_attention"}), _sdpa_singleton_key_decision),
     (ZERO_SOURCE_ADD_FUNC_NAMES, _zero_source_add_decision),
 )
@@ -459,5 +526,7 @@ def saved_value_proof_decision(
         return _NOT_PROVED
     for func_names, decide in _DECISIONS_BY_FAMILY:
         if layer.func_name in func_names:
-            return decide(layer, keys, args)
-    return _NOT_PROVED
+            decision = decide(layer, keys, args)
+            if decision.exempt:
+                return decision
+    return unread_value_proof_decision(layer, keys, args)

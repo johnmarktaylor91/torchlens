@@ -1,7 +1,7 @@
 """Replay a storage-geometry or view-function receiver on a clone of its saved context.
 
-``as_strided_`` and an in-storage ``resize_`` / ``resize_as_`` read bytes of the
-receiver's storage outside the receiver's own view, and ``_rev_view_func_unsafe``
+``as_strided_``, ``as_strided`` and an in-storage ``resize_`` / ``resize_as_`` read bytes
+of the receiver's storage outside the receiver's own view, and ``_rev_view_func_unsafe``
 reads bytes of its new view's storage the same way, so capture saves that argument
 with its whole storage (:func:`torchlens._storage_bindings.copy_with_storage_context`).
 The view-function methods (``_view_func`` and kin) read the receiver's view chain,
@@ -24,6 +24,7 @@ from typing import Any, cast
 import torch
 
 from .._storage_bindings import (
+    STORAGE_CONTEXT_READER_FUNCS,
     VIEW_CONTEXT_RECEIVER_FUNCS,
     copy_with_storage_context,
     copy_with_view_context,
@@ -62,7 +63,30 @@ def restore_receiver_storage_context(layer: Any, input_args: dict[str, Any]) -> 
     if not isinstance(saved, torch.Tensor) or not views_part_of_its_storage(saved):
         return
     copy = copy_with_storage_context(saved.detach())
+    if func_name in STORAGE_CONTEXT_READER_FUNCS:
+        args[index] = _grad_view_keeping_storage(copy, *_snapshot_grad_flags(saved))
+        return
     args[index] = _mirror_captured_requires_grad(copy, *_snapshot_grad_flags(saved))
+
+
+def _grad_view_keeping_storage(copy: torch.Tensor, requires_grad: bool, leaf: bool) -> torch.Tensor:
+    """Give a storage-context copy its captured ``requires_grad`` without compacting it.
+
+    :func:`_mirror_captured_requires_grad` rebuilds a captured non-leaf as a ``clone``,
+    which drops the bytes outside the view that a storage-geometry reader reads. Here
+    the non-leaf is an ``as_strided`` view of a grad-requiring leaf over the same
+    private storage, at the same offset, size and stride.
+    """
+
+    if not requires_grad or not (copy.is_floating_point() or copy.is_complex()):
+        return copy
+    with torch.enable_grad():
+        grad_leaf = copy.detach().requires_grad_(True)
+        if leaf:
+            return grad_leaf
+        return grad_leaf.as_strided(
+            grad_leaf.size(), grad_leaf.stride(), grad_leaf.storage_offset()
+        )
 
 
 def _restore_receiver_view_context(layer: Any, input_args: dict[str, Any]) -> None:
@@ -147,17 +171,28 @@ def write_into_receiver_storage_context(
         return _write_into_receiver_view_context(input_args["args"][0], values)
     if key != storage_context_arg_index(func_name):
         return False
-    return _write_into_storage_context(input_args["args"][key], values)
+    reader = func_name in STORAGE_CONTEXT_READER_FUNCS
+    return _write_into_storage_context(input_args["args"][key], values, reader)
 
 
-def _write_into_storage_context(current: Any, values: Any) -> bool:
-    """Copy swapped-in values into an argument restored with its whole storage."""
+def _write_into_storage_context(current: Any, values: Any, reader: bool = False) -> bool:
+    """Copy swapped-in values into an argument restored with its whole storage.
+
+    A storage-geometry reader's receiver (``reader``) may carry grad: the values go
+    into its storage through a detached alias, which the read-only call never writes.
+    """
 
     if not isinstance(current, torch.Tensor) or not isinstance(values, torch.Tensor):
         return False
     if not views_part_of_its_storage(current) or current.shape != values.shape:
         return False
-    if current.requires_grad or values.requires_grad or current.dtype != values.dtype:
+    if current.dtype != values.dtype:
+        return False
+    if reader:
+        with torch.no_grad():
+            current.detach().copy_(values.detach())
+        return True
+    if current.requires_grad or values.requires_grad:
         return False
     with torch.no_grad():
         current.copy_(values)

@@ -717,11 +717,13 @@ STATUS_REASONS: frozenset[str] = frozenset(
 
 #: Per-op decision reasons torch's replay engine already writes to
 #: ``decisions[*]["reason"]`` and the ``*_reason_counts`` mappings, kept here
-#: so the shared list stays a superset of them.
+#: so the shared list stays a superset of them. ``multiplicative_zero_annihilator``
+#: is also written by the JAX preview's port of the same proof.
 TORCH_DECISION_REASONS: frozenset[str] = frozenset(
     {
         "intentional_intervention_replacement",
         "edge_boundary_reexecuted",
+        "multiplicative_zero_annihilator",
     }
 )
 

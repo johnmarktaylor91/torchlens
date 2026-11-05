@@ -17,6 +17,7 @@ import torch
 import torchlens as tl
 import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as public_impls
+import torchlens._validation_entry_options as entry_options
 from torchlens.errors import InvalidArgumentError, SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
@@ -196,8 +197,8 @@ def test_non_torch_backend_refuses_non_default_save_options() -> None:
     fake_spec = mock.Mock()
     fake_spec.name = "jax"
     model, x = _net_and_input()
-    with mock.patch.object(public_impls, "resolve_backend_spec", return_value=fake_spec):
-        with pytest.raises(BackendUnsupportedError, match="save options") as info:
+    with mock.patch.object(entry_options, "resolve_backend_spec", return_value=fake_spec):
+        with pytest.raises(BackendUnsupportedError, match="only the torch backend") as info:
             public_impls.validate_forward_pass(model, x, output_device="cpu")
         assert info.value.fields["code"] == "backend_unsupported"
         assert info.value.fields["options"] == ["output_device"]

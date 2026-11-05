@@ -10,8 +10,9 @@ objects, so their spellings are unchanged.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
-from contextvars import ContextVar
 from typing import Any
+
+from .._utils._render_slots import _SPEC_SLOT_BOX_OPS, _SPEC_SLOT_RENDERED_NODE
 
 __all__ = (
     "COLLAPSE_OPTIMIZER_MAX_OPS",
@@ -21,18 +22,8 @@ __all__ = (
     "call_collapsed_spec_fn",
 )
 
-#: The rendered node (per-pass Op on unrolled nodes, else the Layer) while a
-#: node-spec callback runs; the callback itself receives the aggregate Layer.
-#: Defined in a leaf, not in ``_render_nodes``, so building the intervention
-#: callback never imports the render modules: they bind ``node_spec``'s
-#: helpers by value at import time, and a first import while a helper is
-#: patched would keep the patch.
-_SPEC_SLOT_RENDERED_NODE: ContextVar[Any] = ContextVar("spec_slot_rendered_node", default=None)
-#: The pass-qualified op labels a collapsed box stands for, set around the
-#: collapsed-box callback so TorchLens-internal stages can read the box scope.
-_SPEC_SLOT_BOX_OPS: ContextVar[tuple[str, ...] | None] = ContextVar(
-    "spec_slot_box_ops", default=None
-)
+# The two node-spec slots are defined in ``_utils._render_slots`` so repgeom,
+# below this layer, reads the same objects without importing the renderer.
 
 
 def call_collapsed_spec_fn(

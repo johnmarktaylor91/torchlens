@@ -61,6 +61,13 @@ def _feature_getter() -> tuple[nn.Module, torch.Tensor, Callable[[nn.Module, str
     return model, torch.randn(1, 3, 224, 224), lambda m, name: m.model.get_submodule(name)
 
 
+def _output_layer(trace: tl.Trace, name: str) -> str:
+    """The layer label of the one op a stage name's module outputs."""
+
+    (label,) = trace[name].calls[0].output_ops
+    return trace.ops[label].layer_label
+
+
 _WRAPPERS = {
     "FeatureListNet": (_feature_list, 5),
     "FeatureGetterNet": (_feature_getter, 3),
@@ -85,7 +92,7 @@ def test_every_timm_stage_name_resolves_at_every_door(wrapper: str) -> None:
         torch.testing.assert_close(tl.pluck(model, x, name), expected)
         torch.testing.assert_close(full[name].out, expected)
         torch.testing.assert_close(selective[name].out, expected)
-        assert _until_outcome(full, x, name) == _until_outcome(full, x, full[name].layer_label)
+        assert _until_outcome(full, x, name) == _until_outcome(full, x, _output_layer(full, name))
 
 
 @pytest.mark.parametrize("source", ["torchvision", "timm"])
@@ -100,7 +107,8 @@ def test_resnet50_fc_resolves_to_the_classifier_output(source: str) -> None:
     x = torch.randn(1, 3, 64, 64)
     expected = _module_output(model, model.fc, x)
     torch.testing.assert_close(tl.extract(model, x, ["fc"])["fc"], expected)
-    torch.testing.assert_close(tl.trace(model, x, save=["fc"])["fc"].out, expected)
+    selective = tl.trace(model, x, save=["fc"])  # a ModuleCall does not keep its Trace alive
+    torch.testing.assert_close(selective["fc"].out, expected)
     trace = tl.trace(model, x)
     torch.testing.assert_close(trace["fc"].out, expected)
     assert _until_outcome(trace, x, "fc") == _until_outcome(trace, x, trace.ops["fc"].layer_label)

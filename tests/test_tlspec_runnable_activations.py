@@ -19,6 +19,7 @@ from torchlens._runnable import (
 )
 from torchlens.errors import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
+from torchlens.validation import validate_tlspec
 
 
 class ActivationPayloadModel(nn.Module):
@@ -250,6 +251,7 @@ def test_seeded_rng_operations_skip_original_input_numeric_attestation(
         level="runnable",
         include_activations=True,
     )
+    assert validate_tlspec(path) is None, "a runnable save passes the descriptor-version tripwire"
 
     result = tl.load(path).run_transaction(
         inputs=inputs.clone(),

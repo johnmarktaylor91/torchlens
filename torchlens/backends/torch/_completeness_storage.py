@@ -23,6 +23,7 @@ from ..._utils._tensor_label import (
 )
 from ...errors import ScalarEscapeWarning
 from ...errors._base import transparent_contextmanager
+from ._bool_check_records import bool_check_record_label
 
 __all__ = (
     "_nonowner_storage_observe",
@@ -368,6 +369,9 @@ def _make_host_value_escape_method(original: Any, state: _WitnessState, name: st
 def _record_bool_consumer_location(trace: Any, source: torch.Tensor) -> None:
     """Record where one labelled bool tensor reached Python's ``__bool__`` protocol.
 
+    A later conditional test of a bool that already decides one is recorded under its own
+    clone (``_bool_check_records``), so each conditional keeps its own terminal bool.
+
     Parameters
     ----------
     trace:
@@ -397,16 +401,12 @@ def _record_bool_consumer_location(trace: Any, source: torch.Tensor) -> None:
     if locations is None:
         locations = {}
         _HOST_ESCAPE_BOOL_CONSUMER_LOCATIONS[trace] = locations
-    entries = locations.setdefault(label, [])
     location = (filename, line_number)
+    label = bool_check_record_label(trace, source, label, location, locations)
+    entries = locations.setdefault(label, [])
     if location not in entries:
         entries.append(location)
-
-    bool_sources = _HOST_ESCAPE_BOOL_SOURCE_LABELS.get(trace)
-    if bool_sources is None:
-        bool_sources = set()
-        _HOST_ESCAPE_BOOL_SOURCE_LABELS[trace] = bool_sources
-    bool_sources.add(label)
+    _HOST_ESCAPE_BOOL_SOURCE_LABELS.setdefault(trace, set()).add(label)
 
 
 def _record_plain_direct_escape(trace: Any, source: torch.Tensor, name: str) -> None:

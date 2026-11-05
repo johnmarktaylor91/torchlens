@@ -82,6 +82,17 @@ class _InputState:
     merge_seen: bool = False
 
 
+def _has_no_units(op: Op) -> bool:
+    """Return whether ``op``'s captured tensor has a zero-length axis.
+
+    Such a tensor holds no units and carries no value onward, so no unit of a
+    parent reaches a projective target through it. A shapeless op
+    (``shape is None``) is not unit-less.
+    """
+
+    return op.shape is not None and 0 in tuple(op.shape)
+
+
 def _compose(parent: _Mapped, local: _Mapped) -> _Mapped:
     """Compose two sign-aware two-edge affine mappings exactly."""
 

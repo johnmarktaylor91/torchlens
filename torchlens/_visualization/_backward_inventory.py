@@ -34,8 +34,8 @@ class BackwardStyleInventory:
     Computed ONCE over the visible grad_fns (vizmech item 17): it feeds the
     in-frame backward key (a key row for an unused style would itself be an
     unexplained claim) and the uniform-row suppression (a row carrying the
-    same degenerate value on every node -- ``grad N/A`` x36 on the memo's
-    WGAN-GP render -- is ink, not information).
+    same degenerate value on every node is ink, not information). The grad
+    row needs no inventory: a node without a stored gradient omits it.
     """
 
     has_higher_order: bool
@@ -43,7 +43,6 @@ class BackwardStyleInventory:
     has_accumulation: bool
     has_custom: bool
     num_backward_passes: int
-    suppress_grad_row: bool
     suppress_order_row: bool
     suppress_bwd_row: bool
 
@@ -62,10 +61,10 @@ def compute_backward_style_inventory(
         Normalized backward-pass filter (visibility must match the render).
     """
 
-    # Call-time import: the filter and grad-shape helpers live in
-    # ``_render_leaf``, which imports THIS module at load time.
+    # Call-time import: the filter helper lives in ``_render_leaf``, which
+    # imports THIS module at load time.
     # deferred: cycle _visualization
-    from ._render_leaf import _format_backward_output_shape, _grad_fn_matches_backward_filter
+    from ._render_leaf import _grad_fn_matches_backward_filter
 
     visible = [
         grad_fn_handle
@@ -74,7 +73,6 @@ def compute_backward_style_inventory(
     ]
     orders = [getattr(grad_fn_handle, "order", None) for grad_fn_handle in visible]
     has_higher_order = any(order is not None and order > 1 for order in orders)
-    grad_shapes = [_format_backward_output_shape(grad_fn_handle) for grad_fn_handle in visible]
     num_passes = int(trace._num_backward_passes or 1)
     return BackwardStyleInventory(
         has_higher_order=has_higher_order,
@@ -82,9 +80,6 @@ def compute_backward_style_inventory(
         has_accumulation=any(grad_fn_handle.type == "accumulategrad" for grad_fn_handle in visible),
         has_custom=any(grad_fn_handle.is_custom for grad_fn_handle in visible),
         num_backward_passes=num_passes,
-        # "N/A" on EVERY node is a uniform constant row (pure ink); a mixed
-        # render keeps N/A rows -- there they are informative.
-        suppress_grad_row=bool(visible) and all(shape == "N/A" for shape in grad_shapes),
         suppress_order_row=not has_higher_order,
         suppress_bwd_row=num_passes <= 1,
     )

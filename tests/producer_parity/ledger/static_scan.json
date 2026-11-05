@@ -4457,6 +4457,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_quiet_property.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_utils/_sparse_invariant_guard.py",
   "has_default": true,
@@ -4627,6 +4635,14 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_validation_divergence.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_validation_retrace_saves.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7296,6 +7312,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_session_cleanup.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/_sources_lazy.py",
@@ -7516,7 +7540,7 @@
   "field": "modules",
   "file": "torchlens/backends/torch/model_prep.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -9148,7 +9172,7 @@
   "field": "parents",
   "file": "torchlens/receptive_field/_builtin_rules/transforms.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -9690,9 +9714,9 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/repgeom/_node_visuals.py",
+  "file": "torchlens/repgeom/_node_keys.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -10186,14 +10210,6 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/validation/__init__.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
   "file": "torchlens/validation/_autograd_grad_replay.py",
   "has_default": false,
   "sites": 3,
@@ -10612,7 +10628,7 @@
   "field": "kind",
   "file": "torchlens/validation/_script_metadata_proof.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 5,
   "via_getattr": false
  },
  {

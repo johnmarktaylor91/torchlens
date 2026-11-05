@@ -100,9 +100,11 @@ from ._root_prep import (
 )
 from ._session_cleanup import (  # noqa: F401  (re-exported for tests and sibling modules)
     _clear_container_tree_tensor_metadata,
+    _clear_model_tree_tensor_metadata,
     _clear_module_attribute_tensor_metadata,
     _clear_module_callables_tensor_metadata,
     _clear_session_tensor_metadata,
+    method_index,
 )
 from ._session_forwards import (
     install_session_forward_wrappers as _install_session_forward_wrappers,
@@ -316,7 +318,7 @@ def _make_once_visitor(
     def _visit_once(
         module: nn.Module,
         address: str,
-        child_entries: list[tuple[str, nn.Module, str]],
+        _child_entries: list[tuple[str, nn.Module, str]],
         is_root: bool,
     ) -> None:
         """Prepare one module and recursively visit its children once."""
@@ -324,25 +326,17 @@ def _make_once_visitor(
         # re-rooted away from as stale (role-swap bookkeeping).
         _state.record_module_root_prep(model, module)
 
-        # Annotate children with their full dotted address path (root-relative).
-        # The traversal visits a shared module once per registration path; its
-        # canonical address is the FIRST one (``named_modules()`` order, the
-        # address stock-torch module hooks and the glossary use), so a later
-        # path never overwrites it. The other paths stay alias addresses.
-        for _, child_module, child_address in child_entries:
-            if id(child_module) in addressed_module_ids:
-                continue
-            addressed_module_ids.add(id(child_module))
-            set_module_meta(
-                child_module,
-                address=child_address,
-                module_type=str(type(child_module).__name__),
-            )
-
         # Root module is handled separately by trace.
         if is_root:
             return
 
+        # The traversal is a pre-order DFS, the order ``named_modules()`` reports, and
+        # visits a shared module once per registration path. Its canonical address is
+        # the path that reaches it FIRST in that order (the address stock-torch module
+        # hooks and the glossary use), so it is stamped here, when the module itself is
+        # reached, and a later path never overwrites it; the other paths stay alias
+        # addresses. Stamping children while visiting their parent would let a shallow
+        # later alias (``self.B = self.A[0]``) win over the earlier nested path.
         if id(module) not in addressed_module_ids:
             addressed_module_ids.add(id(module))
             set_module_meta(module, address=address, module_type=str(type(module).__name__))
@@ -2207,10 +2201,7 @@ def _undecorate_model_tensors(trace: "Trace", model: nn.Module) -> None:
         for stamp_entry in identity_registry.values():
             clear_meta(stamp_entry.tensor)
         trace._session_buffer_identity = {}
-    seen: set[int] = set()
-    for submodule in model.modules():
-        _clear_module_attribute_tensor_metadata(submodule, seen)
-        _clear_module_callables_tensor_metadata(submodule, seen)
+    _clear_model_tree_tensor_metadata(model, set())
     # Also clean any tensors from the registered buffer dict (_buffers)
     for submodule in model.modules():
         for buf_tensor in submodule._buffers.values():

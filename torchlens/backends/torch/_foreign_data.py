@@ -120,8 +120,9 @@ class ForeignJournal:
     snapshot whose slots held the parent's own tensor on an exported storage to the
     parent's bound argument slots; ``alias_slots`` likewise marks slots holding an alias
     a view write relabeled onto the parent; ``unrecorded_writes`` holds the raw labels a
-    disclosed unrecordable mutating call received. Forward validation reads the marks;
-    postprocess step 3 keeps only them.
+    disclosed unrecordable mutating call received; ``alias_outputs`` maps a returned tensor's
+    address to the label a view write relabeled it onto, which postprocess step 1 turns into its
+    output node's ``alias_slots`` mark. Forward validation reads the marks; step 3 keeps only them.
     """
 
     departures: list[Departure] = field(default_factory=list)
@@ -129,6 +130,7 @@ class ForeignJournal:
     written_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
     alias_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
     unrecorded_writes: set[str] = field(default_factory=set)
+    alias_outputs: dict[str, str] = field(default_factory=dict)
 
     def end_capture(self) -> ForeignJournal | None:
         """Return the journal postprocess keeps: the marks only, or ``None``."""

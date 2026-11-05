@@ -189,6 +189,7 @@ def _validate_fold_repeats(value: FoldRepeatsLiteral) -> None:
 # truthily meant ON.
 _VISUALIZATION_BOOL_FIELDS = (
     "show_edge_shapes",
+    "show_arg_labels",
     "rolled",
     "open_viewer",
     "show_cone",
@@ -401,6 +402,36 @@ def _validate_transformed_output_request(values: Mapping[str, Any]) -> None:
         )
 
 
+# The VisualizationOptions fields ``visualization_to_render_kwargs`` passes to
+# ``Trace.draw`` under their own name, in keyword order (``file_format`` only when explicit).
+_DRAW_PASSTHROUGH_FIELDS: tuple[str, ...] = (
+    "graph",
+    "rolled",
+    "depth",
+    "graph_overrides",
+    "node_style",
+    "node_spec_fn",
+    "collapsed_node_spec_fn",
+    "collapse_fn",
+    "collapse",
+    "skip_fn",
+    "edge_overrides",
+    "grad_edge_overrides",
+    "module_overrides",
+    "open_viewer",
+    "file_format",
+    "show_buffers",
+    "show_edge_shapes",
+    "show_arg_labels",
+    "direction",
+    "layout",
+    "renderer",
+    "theme",
+    "intervention_mode",
+    "show_cone",
+)
+
+
 def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
     """Translate grouped visualization options into ``Trace.draw`` kwargs.
 
@@ -418,30 +449,10 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
         "path": visualization.container_path,
-        "graph": visualization.graph,
-        "rolled": visualization.rolled,
-        "depth": visualization.depth,
-        "graph_overrides": visualization.graph_overrides,
-        "node_style": visualization.node_style,
-        "node_spec_fn": visualization.node_spec_fn,
-        "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
-        "collapse_fn": visualization.collapse_fn,
-        "collapse": visualization.collapse,
-        "skip_fn": visualization.skip_fn,
-        "edge_overrides": visualization.edge_overrides,
-        "grad_edge_overrides": visualization.grad_edge_overrides,
-        "module_overrides": visualization.module_overrides,
-        "open_viewer": visualization.open_viewer,
-        "file_format": visualization.file_format if explicit("file_format") else None,
-        "show_buffers": visualization.show_buffers,
-        "show_edge_shapes": visualization.show_edge_shapes,
-        "direction": visualization.direction,
-        "layout": visualization.layout,
-        "renderer": visualization.renderer,
-        "theme": visualization.theme,
-        "intervention_mode": visualization.intervention_mode,
-        "show_cone": visualization.show_cone,
+        **{name: getattr(visualization, name) for name in _DRAW_PASSTHROUGH_FIELDS},
     }
+    if not explicit("file_format"):
+        kwargs["file_format"] = None
     if visualization.fold_repeats is not None or explicit("fold_repeats"):
         kwargs["fold_repeats"] = visualization.fold_repeats
     optional_kwargs = {

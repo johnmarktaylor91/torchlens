@@ -9,6 +9,7 @@ graph comment, never drawn.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -131,3 +132,64 @@ def test_show_legend_false_draws_no_key(tiny_log: tl.Trace, tmp_path: Path) -> N
     ).dot
     assert 'WIDTH="5" HEIGHT="10" BGCOLOR=' not in dot
     assert "encoding method" not in dot
+
+
+class _LongHeader(nn.Module):
+    """A focused module whose header line is far wider than its colour key."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.a_rather_long_submodule_name_that_widens_the_header = nn.Sequential(
+            nn.Linear(4, 64), nn.ReLU(), nn.Linear(64, 2)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.a_rather_long_submodule_name_that_widens_the_header(x)
+
+
+def _polygon_xs_ys(points: str) -> tuple[list[float], list[float]]:
+    """Return an SVG polygon's x and y coordinates."""
+
+    pairs = [pair.split(",") for pair in points.split()]
+    return [float(x) for x, _ in pairs], [float(y) for _, y in pairs]
+
+
+def test_key_border_fits_its_bar_under_a_wide_header(tmp_path: Path) -> None:
+    """The colour key's outline ends at its high label, not at the header's width.
+
+    Graphviz stretches a nested table to fill its cell, so the key's border
+    used to run out to the header's width with empty space right of the bar.
+    """
+
+    pytest.importorskip("graphviz")
+    log = tl.trace(_LongHeader(), torch.randn(2, 4))
+    try:
+        dot = log.draw(
+            module="a_rather_long_submodule_name_that_widens_the_header",
+            color_by="bytes",
+            path=str(tmp_path / "g"),
+            file_format="svg",
+        ).dot
+    finally:
+        log.cleanup()
+    graph_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
+    assert 'CELLSPACING="0" CELLPADDING="0" FIXEDSIZE="TRUE" ALIGN="LEFT"' in graph_line
+    svg = (tmp_path / "g.svg").read_text(encoding="utf-8")
+    texts = re.findall(
+        r'<text text-anchor="start" x="([-\d.]+)" y="([-\d.]+)"[^>]*>([^<]*)</text>', svg
+    )
+    header_x, _, _ = next(t for t in texts if "a_rather_long_submodule_name" in t[2])
+    low = next(t for t in texts if t[2].startswith("output bytes: "))
+    low_y = float(low[1])
+    # The high-end label is the next text on the bar's line.
+    high_x = next(float(t[0]) for t in texts if float(t[1]) == low_y and t is not low)
+    borders = []
+    for points in re.findall(r'<polygon fill="none" stroke="[^"]+" points="([^"]+)"', svg):
+        xs, ys = _polygon_xs_ys(points)
+        if min(ys) < low_y < max(ys) and min(xs) <= float(low[0]):
+            borders.append(max(xs))
+    assert borders, "no key outline around the bar's low label"
+    # The outline encloses the short high label ("N KB") and ends just after it;
+    # before the fix it ran hundreds of points further, to the header's width.
+    right = max(borders)
+    assert high_x < right < high_x + 60.0, (right, high_x, header_x)

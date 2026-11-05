@@ -318,12 +318,31 @@ def _foreign_tensor() -> torch.Tensor:
     return _FOREIGN_STORE["tensor"]
 
 
+def _foreign_hop3() -> torch.Tensor:
+    """Third helper hop; the store sits one function past it."""
+
+    return _foreign_tensor()
+
+
+def _foreign_hop2() -> torch.Tensor:
+    """Second helper hop."""
+
+    return _foreign_hop3()
+
+
+def _foreign_hop1() -> torch.Tensor:
+    """First helper hop, the one the forward names."""
+
+    return _foreign_hop2()
+
+
 class ForeignArgTensorModel(nn.Module):
     """Consume a tensor held outside the module as an op argument.
 
-    The tensor lives in a module-level store read through a helper function, so it
-    is neither model state (any module attribute, private ones included, is) nor a
-    global the forward references directly (a closure constant).
+    The tensor lives in a module-level store read four helper calls below the
+    forward, so it is neither model state (any module attribute, private ones
+    included, is) nor module state the forward reaches within the sweep's three
+    helper hops (a closure constant).
     """
 
     def __init__(self, foreign: torch.Tensor) -> None:
@@ -346,7 +365,7 @@ class ForeignArgTensorModel(nn.Module):
             Shifted tensor.
         """
 
-        return x + _foreign_tensor()
+        return x + _foreign_hop1()
 
 
 class ModuleAttrTensorModel(nn.Module):
@@ -714,6 +733,9 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
 def test_provenance_warning_foreign_tensor_contract() -> None:
     """Foreign arg tensors warn; module tensor attributes do not."""
 
+    from torchlens.backends.torch import _session_cleanup
+
+    assert _session_cleanup._HELPER_HOP_BUDGET == 3  # the store sits past this reach
     x = torch.randn(3)
     with pytest.warns(UserWarning, match="no graph/source provenance") as caught:
         foreign_log = tl.trace(ForeignArgTensorModel(torch.ones(3)).eval(), x)

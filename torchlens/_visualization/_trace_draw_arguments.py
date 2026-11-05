@@ -47,6 +47,7 @@ def _forward_render_arguments(
         "node_overlay": options["node_overlay"],
         "node_label_fields": options["node_label_fields"],
         "show_edge_shapes": options["show_edge_shapes"],
+        "show_arg_labels": options["show_arg_labels"],
         "show_legend": options["show_legend"],
         "font_size": options["font_size"],
         "dpi": options["dpi"],
@@ -89,4 +90,31 @@ def _backward_render_arguments(options: dict[str, Any]) -> dict[str, Any]:
         "theme": options["theme"],
         "show_module_paths": options["show_module_paths"],
         "show_grad_values": options["show_grad_values"],
+    }
+
+
+def _combined_render_arguments(options: dict[str, Any]) -> dict[str, Any]:
+    """Select the combined forward/backward renderer keywords from the drawing options.
+
+    Parameters
+    ----------
+    options : dict
+        Drawing arguments and resolved graph-local values.
+    """
+    return {
+        "vis_outpath": options["outpath"],
+        "vis_graph_overrides": options["graph_overrides"],
+        "node_spec_fn": options["node_spec_fn"],
+        "backward_node_spec_fn": options["backward_node_spec_fn"],
+        "vis_edge_overrides": options["edge_overrides"],
+        "vis_save_only": not options["open_viewer"],
+        "vis_fileformat": options["file_format"],
+        "direction": "leftright" if options["direction"] is None else options["direction"],
+        "vis_mode": "rolled" if options["rolled"] else "unrolled",
+        "intervening_cluster": options["intervening_cluster"],
+        "show_buffer_layers": options["show_buffers"],
+        "show_edge_shapes": options["show_edge_shapes"],
+        "show_arg_labels": options["show_arg_labels"],
+        "bwd": options["bwd"],
+        "show_legend": options["show_legend"],
     }

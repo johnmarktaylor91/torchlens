@@ -591,6 +591,8 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
     path = tmp_path / "trace_backward_intervention.tlspec"
 
     log.save(path)
+    assert validate_tlspec(path) is None
+    assert _read_manifest(path)["format_version"] == 3
     loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)

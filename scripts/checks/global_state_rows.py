@@ -649,6 +649,8 @@ _WEAK_SUBJECT_TABLES = frozenset(
         ("torchlens/_capture/_weightsfree_admission.py", "_ADMISSIONS"),
         ("torchlens/_capture/_weightsfree_admission.py", "_META_ACTIVE"),
         ("torchlens/_capture/_weightsfree_admission.py", "_WRAP_GENERATIONS"),
+        # Newest per-test bool clone, weak-keyed by the capturing trace (validation.10).
+        ("torchlens/backends/torch/_bool_check_records.py", "_LAST_CLONED_CHECK"),
         ("torchlens/backends/torch/completeness_witness.py", "_ALIAS_MUTATION_CANDIDATE_LABELS"),
         ("torchlens/backends/torch/completeness_witness.py", "_DATA_ALIAS_MUTATION_TRACES"),
         (
@@ -804,6 +806,10 @@ they carry an epoch/version counter where downstream caches must invalidate.
 
 _PROCESS_CACHES = frozenset(
     {
+        # Code objects of the unwrapped Function.apply frame (one per apply slot
+        # shape), registered at install so the census can tell a dispatch made by the
+        # C++ apply epilogue from one inside the user's forward; process-stable.
+        ("torchlens/backends/torch/_function_epilogue.py", "_APPLY_CODES"),
         # tl.errors.quiet: one quieted subclass per warning class, built on first use.
         ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
         # Routed tensor reads: last resolution per routed name (ten keys), held with the
@@ -1040,6 +1046,8 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/bundle/_compare_gate.py", "_INPUT_VALUE_DIGEST_CACHE"),
         ("torchlens/backends/torch/backward.py", "_PENDING_BACKWARD_FINALIZE"),
         ("torchlens/backends/torch/buffer_writes.py", "_PARAM_BYTE_WITNESS_NOT_ARMED"),
+        # Newest per-test bool clone, weak-keyed by the capturing trace (validation.10).
+        ("torchlens/backends/torch/_bool_check_records.py", "_LAST_CLONED_CHECK"),
         ("torchlens/backends/torch/completeness_witness.py", "_ALIAS_MUTATION_CANDIDATE_LABELS"),
         ("torchlens/backends/torch/completeness_witness.py", "_CAPTURED_STORAGE_PTRS"),
         ("torchlens/backends/torch/completeness_witness.py", "_DATA_ALIAS_MUTATION_TRACES"),

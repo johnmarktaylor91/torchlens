@@ -30,6 +30,7 @@ from ._engine_geometry import (
     _compose,
     _Dissolved,
     _Full,
+    _has_no_units,
     _identity_map,
     _InputState,
     _Mapped,
@@ -150,12 +151,11 @@ def _solve_projective_uncached(
     states_by_op: dict[str, dict[str, _InputState]] = {}
 
     for op in reversed(_topological_operations(operations, by_reference)):
-        if op.label not in active_labels:
+        # An op with no units seeds no geometry as a target and relays none.
+        if op.label not in active_labels or _has_no_units(op):
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
         target = target_by_label.get(op.label)
-        if target is not None and 0 in tuple(target.shape):
-            target = None  # no units, so no projective geometry to seed
         if target is not None:
             seed = _seed_target(target)
             branches[seed.io_role].append(seed)
