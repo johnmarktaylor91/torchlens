@@ -49,18 +49,18 @@ names, and resolves either to the captured site:
 
 nnterp standardizes no per-block norm names, and `ln_final.output` has no row (no facet
 names the final norm's output apart from the per-block norms; read `ln_final.input` and
-apply the norm, or address the module directly). An attention pattern exists only where
-the softmax runs as its own op: under a fused attention kernel `attention_probabilities[i]`
-resolves `structurally_absent` with a remedy, as it does in nnterp without
-`enable_attention_probs=True`.
+apply the norm, or address the module directly). Under a fused attention kernel there is no
+softmax op, so `attention_probabilities[i]` resolves `reconstructed_read_only`: the pattern
+rebuilt from the recorded kernel inputs and checked against the kernel output, readable but
+not editable (nnterp needs `enable_attention_probs=True` to read it at all).
 
 `alias_report(trace, generation="nnterp")` lists every site of the trace under its nnterp
 name, with an honest status for each (`generation="2.x"` and `"4.x"` give the
-TransformerLens names). The model below runs the default fused attention, so its two
-attention patterns are the only sites that are not live:
+TransformerLens names). The model below runs the default fused attention; its attention
+patterns resolve as read-only reconstructions, so no site is missing:
 
 ```python
-# migration-test: tool=torchlens expected=(19, ['attention_probabilities[0]', 'attention_probabilities[1]'], 'transformer.h.1', 'resid_post')
+# migration-test: tool=torchlens expected=(19, [], 'transformer.h.1', 'resid_post')
 import torch
 import transformers
 import torchlens as tl
