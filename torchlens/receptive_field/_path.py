@@ -64,13 +64,15 @@ def _op_by_name(trace: Trace, handle: str) -> Op:
     raise ReceptiveFieldError(detail)
 
 
-def resolve_graph_point(trace: Trace, handle: object) -> Op:
+def resolve_graph_point(trace: Trace | None, handle: object) -> Op:
     """Resolve one supported graph-point handle to a pass-qualified operation.
 
     Parameters
     ----------
     trace:
-        Trace against which the handle is resolved.
+        Trace against which the handle is resolved. ``None`` only when the caller has no
+        trace but the handle's own (``node_spec``); a label then has nothing to resolve
+        against and is refused as unsupported.
     handle:
         Exact pass-qualified label, IO role as field status reports it, ``Op``,
         ``Layer``, ``ModuleCall``, or ``Module``.
@@ -97,7 +99,7 @@ def resolve_graph_point(trace: Trace, handle: object) -> Op:
     from .._data_classes.op import Op
     from ..intervention.errors import MultiOutputModuleError
 
-    if isinstance(handle, str):
+    if isinstance(handle, str) and trace is not None:
         return _op_by_name(trace, handle)
 
     if isinstance(handle, Op):
@@ -278,7 +280,7 @@ def forward_index_image(
     return _IndexSet.from_values(reached, exact=exact), exact
 
 
-def _require_trace_owner(trace: Trace, owner: object, label: str) -> None:
+def _require_trace_owner(trace: Trace | None, owner: object, label: str) -> None:
     """Raise when an entity handle is detached or owned by another trace.
 
     Parameters

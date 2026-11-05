@@ -25,6 +25,8 @@ from ._types import (
 )
 
 if TYPE_CHECKING:
+    from .._data_classes.layer import Layer
+    from .._data_classes.module import Module, ModuleCall
     from .._data_classes.op import Op
     from ._types import ReceptiveFieldView
 
@@ -159,7 +161,7 @@ def _blend_heatmap(
 
 
 def node_spec(
-    op: Op,
+    op: Op | Layer | ModuleCall | Module,
     *,
     unit: Sequence[int] | None = None,
     input_op: Any | None = None,
@@ -178,7 +180,9 @@ def node_spec(
     Parameters
     ----------
     op:
-        Target operation whose receptive-field ancestry is shown.
+        Target whose receptive-field ancestry is shown: an ``Op``, or a single-pass
+        ``Layer``, single-call ``ModuleCall`` or single-call ``Module`` resolved to its
+        output operation on the trace that owns it.
     unit, input, cone, overlay, gradient, dim_others, box_color, alpha, cmap:
         Draw-time RF options. ``unit`` is forwarded only when an input-node
         overlay is requested.
@@ -192,6 +196,11 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+    ReceptiveFieldError
+        If ``op`` is not one of the accepted handles (a bare label string carries no trace
+        to resolve against), or a layer or module has several passes or calls.
+    MultiOutputModuleError
+        If a module call has zero or several output operations.
 
     Examples
     --------
@@ -202,6 +211,7 @@ def node_spec(
     """
 
     _ = overlay, grad, box_color, alpha, cmap
+    op = _node_spec_target(op)
     resolved_direction = ReceptiveFieldDirection(direction)
     selected = target if resolved_direction is ReceptiveFieldDirection.PROJECTIVE else input_op
     descriptor = _descriptor_for_op(op, selected, resolved_direction)
@@ -228,6 +238,19 @@ def node_spec(
         return spec.replace(fillcolor=_CONE_FILL, color="#D97706", penwidth=2.0, tooltip=tooltip)
 
     return node_spec_fn
+
+
+def _node_spec_target(handle: object) -> Op:
+    """Resolve a ``node_spec`` target handle to one operation on the trace that owns it.
+
+    Op, Layer, ModuleCall and Module handles carry their trace and resolve the way the
+    other receptive-field entry points resolve them; anything else, a bare label string
+    included, has no trace and reaches the resolver's typed refusal.
+    """
+
+    from ._path import resolve_graph_point
+
+    return resolve_graph_point(getattr(handle, "_source_trace", None), handle)
 
 
 def _select_descriptor(view: ReceptiveFieldView, selected: Any | None) -> ReceptiveField:
