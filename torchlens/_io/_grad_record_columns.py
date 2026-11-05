@@ -163,7 +163,8 @@ def _pack_payloads(values: list[Any]) -> tuple[dict[int, Any], RefColumn | None]
     if kind is None:
         return sparse, None
     packed_positions = _int_column(positions, _INT32)
-    assert packed_positions is not None  # positions are list indices, far below int32
+    if packed_positions is None:  # unreachable for list indices; keep every value per-object
+        return {i: value for i, value in enumerate(values) if value is not None}, None
     return sparse, (kind, packed_positions, _ID_SEPARATOR.join(blob_ids).encode("utf-8"))
 
 
