@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1599 modules, 682214 lines, 0 modules without a docstring.
+83 packages, 1600 modules, 682429 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 53 | 26816 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 106 | 40231 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 107 | 40387 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -62,10 +62,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57429 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9194 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2032 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 27 | 10914 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 27 | 10945 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 5 | 1428 |
@@ -300,7 +300,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (106 modules, 40231 lines)
+Core data structures for representing a logged forward pass. (107 modules, 40387 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -326,6 +326,7 @@ Core data structures for representing a logged forward pass. (106 modules, 40231
 | `_lookup_keys` | Shared lookup-key validation helpers for ''Trace'' access paths. | 131 |
 | `_lookup_kinds` | Cross-kind key resolution shared by the TorchLens indexing doors. | 398 |
 | `_module_accessor_filters` | Collection views of ''ModuleAccessor'' that read through the owning trace. | 38 |
+| `_module_edit_sites` | Read a module edit's replacement op at the site it replaced. | 156 |
 | `_module_facade_fields` | Stored-field tables for the ''ModuleCall'' and ''Module'' record facades. | 95 |
 | `_module_role_hints` | Semantic role hints for structured module outputs. | 152 |
 | `_moe_layouts` | Read-time structural candidates for ordinary and batched expert containers. | 76 |
@@ -1530,18 +1531,18 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2742 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 9166 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 9194 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1409 |
-| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 146 |
+| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 153 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 127 |
 | `_card` | Bundle card and folds: ''repr'', ''str'', ''summary'', the member table, the agent dump | 155 |
 | `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 455 |
-| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 368 |
-| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 717 |
+| `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 373 |
+| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 733 |
 | `_draw` | The one ''Bundle.draw'' door (the bundle graph and the member diff picture) and ''Bundle.show''. | 178 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 212 |
@@ -1585,14 +1586,14 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2032 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (27 modules, 10914 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (27 modules, 10945 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 149 |
 | `_audit` | One-call health reports assembled from trace-local debug diagnostics. | 457 |
 | `_capture_override` | Copy a ''CaptureOptions'' with some fields forced, keeping its explicit-field record. | 43 |
-| `_common` | Shared helpers for TorchLens debug utilities. | 430 |
+| `_common` | Shared helpers for TorchLens debug utilities. | 460 |
 | `_compile_counter` | Count Dynamo compilation events around a block of user code. | 175 |
 | `_cost` | Forward-cost ranking helpers for TorchLens traces. | 355 |
 | `_determinism` | check_determinism: one controlled repeatability verdict, cost never hidden. | 608 |
@@ -1603,7 +1604,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_grad_fn_walk` | Post-hoc ''grad_fn'' walker (approved diagnostic, R grad_fn ruling). | 424 |
 | `_grad_scale_proof` | Prove from a trace that a backward ran without loss scaling. | 189 |
 | `_gradients` | Gradient-flow audit helpers for TorchLens traces. | 743 |
-| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 796 |
+| `_graph` | Graph lineage, comparison, and activation-analysis helpers. | 797 |
 | `_graph_breaks` | Correlate TorchDynamo graph breaks with eager TorchLens operations. | 470 |
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2183 |
