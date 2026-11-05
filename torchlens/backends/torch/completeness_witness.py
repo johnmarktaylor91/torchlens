@@ -1326,7 +1326,7 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
             if _dispatch_result_holds_tensor(result):
                 event.outcome = "returned_tensor"
                 owner = event.owner
-                if owner is not None and owner.boundary_credit_is_output_scoped:
+                if owner is None or owner.boundary_credit_is_output_scoped:
                     event.credit_refs = epilogue_credit_refs(event, func, args, result)
                 if not event.mutates and _operator_base_name(func) == "aten.as_strided":
                     # Owner-independent: an ``__dlpack__``-wrapper-owned interval is

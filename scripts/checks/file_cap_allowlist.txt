@@ -824,7 +824,6 @@ torchlens/backends/tinygrad/backend.py::tinygrad_param_logs	62
 torchlens/backends/torch/_aten_capture.py::_finish_aten_call	65
 torchlens/backends/torch/_aten_capture.py::_walk_tensor_facts	75
 torchlens/backends/torch/_completeness_boundaries.py::_observe_input_metadata_read	71
-torchlens/backends/torch/_completeness_dispatch.py	801
 torchlens/backends/torch/_completeness_dispatch.py::_finalize_runnable_ledger	109
 torchlens/backends/torch/_completeness_dispatch.py::_make_invisible_escape_wrapper	103
 torchlens/backends/torch/_completeness_dispatch.py::_sample_writeback_at_consumption	70

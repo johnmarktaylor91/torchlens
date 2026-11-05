@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1730 modules, 701840 lines, 0 modules without a docstring.
+85 packages, 1730 modules, 701834 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6499 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8510 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 10 | 4489 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 137 | 58869 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 137 | 58863 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8876 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2741 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9194 |
@@ -1463,7 +1463,7 @@ tinygrad backend preview. (10 modules, 4489 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (137 modules, 58869 lines)
+Torch backend implementation package for TorchLens capture. (137 modules, 58863 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1480,7 +1480,7 @@ Torch backend implementation package for TorchLens capture. (137 modules, 58869 
 | `_completeness_audited` | Audited expected-opaque boundaries of the aten-dispatch completeness witness. | 129 |
 | `_completeness_boundaries` | Audited wrapper boundaries and input sites. | 352 |
 | `_completeness_cross_thread` | Cross-thread and scalar escape observation. | 477 |
-| `_completeness_dispatch` | Dispatch census and runnable-ledger processing. | 801 |
+| `_completeness_dispatch` | Dispatch census and runnable-ledger processing. | 771 |
 | `_completeness_dispatch_names` | Dispatch operator naming and callsite helpers. | 679 |
 | `_completeness_escape_state` | Host-escape state and caller authorization. | 416 |
 | `_completeness_finalize` | Witness finalization and capture scope. | 625 |
@@ -1497,7 +1497,7 @@ Torch backend implementation package for TorchLens capture. (137 modules, 58869 
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 796 |
 | `_foreign_wrappers` | Foreign wrappers over torchlens wrappers: detection, rebasing, reporting. | 173 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 787 |
-| `_function_epilogue` | Credit the alias autograd takes of a custom ''Function'''s output after its forward. | 143 |
+| `_function_epilogue` | Credit the alias autograd takes of a custom ''Function'''s output after its forward. | 167 |
 | `_function_input_views` | Record the view torch makes when an ''autograd.Function'' forward returns an input. | 130 |
 | `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 102 |
 | `_grad_fn_graph` | Backward graph relations of ''GradFn'' records: parents, children, siblings, co-parents. | 271 |

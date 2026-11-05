@@ -10,14 +10,14 @@ enclosing module forward as owner and counted it as a dropped op.
 The credit is exactly as narrow as that event:
 
 * at dispatch time, a pure alias (``aten.detach`` / ``aten.alias``) is marked only
-  when the Python frame that entered the dispatcher is ``Function.apply`` itself
-  (:data:`_APPLY_CODES`), so the dispatch ran in the C++ part of ``apply`` and not
-  inside the user's forward or ``setup_context`` (each of those is its own Python
-  frame);
+  when the first Python frame below the dispatcher is ``Function.apply`` itself
+  (:data:`_APPLY_CODES`, stepping over torch's dynamo-disable wrappers), so the
+  dispatch ran in the C++ part of ``apply`` and not inside the user's forward or
+  ``setup_context`` (each of those is its own Python frame);
 * after that ``apply`` returns, :func:`credit_saved_output_aliases` re-owns a marked
   event of the call's own census window only when its operand IS (object identity)
   one of the tensors the call returned, its result is not one of them, it did not
-  mutate, and only the enclosing module forward owned it.
+  mutate, and no wrapper owned it (no owner, or only the enclosing module forward).
 
 Every other dispatch in the epilogue, an alias of any other tensor, and every
 dispatch inside the user's forward keep their owner and still count.
@@ -37,6 +37,9 @@ SAVED_ALIAS_OWNER = "autograd_function:saved_output_alias"
 """Owner token name of a credited epilogue alias."""
 
 _PURE_ALIAS_OPERATORS = frozenset({"aten.detach", "aten.alias"})
+_TRAMPOLINES = frozenset({("_compile.py", "inner"), ("_dynamo/eval_frame.py", "_fn")})
+"""Torch's dynamo-disable wrapper frames (file under ``torch/``, function name)."""
+_MAX_TRAMPOLINES = 4
 _APPLY_CODES: set[types.CodeType] = set()
 """Code objects of the ``Function.apply`` frame that enters the C++ ``apply``."""
 
@@ -61,12 +64,11 @@ def epilogue_credit_refs(
 ) -> tuple[weakref.ref[torch.Tensor], ...]:
     """Return the event's credit references, marking a pure alias made by C++ ``apply``.
 
-    Called from the witness dispatch callback only for output-scoped (module forward)
-    owners, in place of ``_completeness_dispatch._dispatch_credit_refs``, whose rows it
-    keeps: the tensor results (one level deep), then a pure alias's operand. Kept here
-    so this module imports nothing from the witness import cycle. Frame 0 is this
-    function, frame 1 the dispatch callback, frame 2 the Python frame that entered the
-    dispatcher.
+    Called from the witness dispatch callback for an event with no owner or an
+    output-scoped (module forward) owner: the tensor results (one level deep), then a
+    pure alias's operand. This module imports nothing from the witness import cycle.
+    Frame 0 is this function, frame 1 the dispatch callback, frame 2 the first Python
+    frame below the dispatcher.
 
     Parameters
     ----------
@@ -96,8 +98,29 @@ def epilogue_credit_refs(
     if base in _PURE_ALIAS_OPERATORS and args and isinstance(args[0], torch.Tensor):
         refs.append(weakref.ref(args[0]))
         if _APPLY_CODES:
-            event.apply_epilogue_alias = sys._getframe(2).f_code in _APPLY_CODES
+            event.apply_epilogue_alias = _dispatching_frame_is_apply(sys._getframe(2))
     return tuple(refs)
+
+
+def _dispatching_frame_is_apply(frame: types.FrameType | None) -> bool:
+    """Return whether the dispatcher was entered from a ``Function.apply`` frame.
+
+    Torch's dynamo-disable wrappers around the C ``apply`` (``torch._compile``'s
+    ``inner``, ``torch._dynamo.eval_frame``'s ``_fn``) sit between the ``apply`` frame
+    and the dispatcher and are stepped over, at most :data:`_MAX_TRAMPOLINES` of them.
+    Any other frame, such as the user's forward, ends the walk without a match.
+    """
+
+    for _ in range(_MAX_TRAMPOLINES + 1):
+        if frame is None:
+            return False
+        if frame.f_code in _APPLY_CODES:
+            return True
+        filename = frame.f_code.co_filename.replace("\\", "/")
+        if (filename.rsplit("/torch/", 1)[-1], frame.f_code.co_name) not in _TRAMPOLINES:
+            return False
+        frame = frame.f_back
+    return False
 
 
 def _is_saved_output_alias(event: Any, outputs: list[torch.Tensor]) -> bool:
@@ -105,7 +128,8 @@ def _is_saved_output_alias(event: Any, outputs: list[torch.Tensor]) -> bool:
 
     if not event.apply_epilogue_alias or event.mutates or event.outcome != "returned_tensor":
         return False
-    if not getattr(event.owner, "boundary_credit_is_output_scoped", False):
+    owner = event.owner
+    if owner is not None and not getattr(owner, "boundary_credit_is_output_scoped", False):
         return False
     if len(event.credit_refs) != 2:
         return False

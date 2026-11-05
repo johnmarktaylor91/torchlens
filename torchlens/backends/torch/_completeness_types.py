@@ -72,7 +72,7 @@ class _DispatchEvent:
     keeps the incomplete fact (fail closed)."""
     credit_refs: tuple[weakref.ref[torch.Tensor], ...] = ()
     """Weak references to the tensor results (and a pure alias op's operand), recorded only
-    when the owner's boundary credit is output-scoped (module-forward tokens). Weak, so the
+    when the event has no owner or an output-scoped owner (module-forward tokens). Weak, so the
     census never extends an intermediate's lifetime; the token holds its boundary tensors
     strongly, so a dead reference can never name one of them."""
     apply_epilogue_alias: bool = False

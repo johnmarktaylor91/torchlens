@@ -23,6 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._user_funcs import _validate_forward_pass_torch
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch import _function_epilogue
 from torchlens.backends.torch._completeness_types import _DispatchEvent
 from torchlens.backends.torch._function_epilogue import (
@@ -52,7 +53,9 @@ class _AliasInForward(torch.autograd.Function):
     @staticmethod
     def forward(ctx: Any, x: torch.Tensor) -> torch.Tensor:
         y = x.sigmoid()
-        _ = y.data  # C-level accessor: an unowned aten.detach of y in the forward frame
+        # A raw TensorBase.detach (no TorchLens wrapper): an untraced aten.detach of y
+        # dispatched from the forward frame, not from the C++ apply epilogue.
+        _torch_compat.get_tensorbase_class().detach(y)
         ctx.save_for_backward(x)
         return y
 
@@ -139,9 +142,11 @@ def test_credit_takes_only_epilogue_aliases_of_the_calls_own_outputs() -> None:
         _event("aten.detach.default", output, alias, mutates=True),
         _event("aten.detach.default", output, alias, owner=SimpleNamespace()),
     ]
-    state = SimpleNamespace(events=[credited, *refused])
+    unowned = _event("aten.alias.default", output, alias, owner=None)
+    state = SimpleNamespace(events=[credited, *refused, unowned])
     credit_saved_output_aliases(state, 0, (output, 3), token)
     assert credited.owner.census_scope == "owned"
+    assert unowned.owner is credited.owner
     assert all(event.owner is not credited.owner for event in refused)
     before = _event("aten.detach.default", output, alias)
     late = SimpleNamespace(events=[before])
@@ -152,7 +157,7 @@ def test_credit_takes_only_epilogue_aliases_of_the_calls_own_outputs() -> None:
 def _dispatch_from(event: _DispatchEvent, operand: torch.Tensor) -> None:
     """Stand in for the witness callback: frame 2 of the refs call is the caller of this."""
 
-    epilogue_credit_refs(event, None, (operand,), operand.detach())
+    event.credit_refs = epilogue_credit_refs(event, None, (operand,), operand.detach())
 
 
 def _fake_apply(event: _DispatchEvent, operand: torch.Tensor) -> None:
@@ -181,3 +186,44 @@ def test_only_a_pure_alias_entered_from_the_apply_frame_is_marked() -> None:
         assert len(clone.credit_refs) == 1
     finally:
         _function_epilogue._APPLY_CODES.discard(code)
+
+
+@dataclasses.dataclass(eq=False)
+class _Code:
+    """A code stand-in: a file under ``site-packages/torch`` and a function name."""
+
+    co_filename: str
+    co_name: str
+
+
+@dataclasses.dataclass
+class _Frame:
+    """A frame stand-in linked to its caller."""
+
+    f_code: _Code
+    f_back: Any = None
+
+
+def test_frame_walk_steps_over_only_dynamo_disable_wrappers() -> None:
+    """``inner`` and ``_fn`` are stepped over; a user frame or too many wrappers end the walk."""
+
+    torch_dir = "/venv/site-packages/torch/"
+    apply_code = _Code(torch_dir + "autograd/function.py", "apply")
+    inner = _Code(torch_dir + "_compile.py", "inner")
+    disable = _Code(torch_dir + "_dynamo/eval_frame.py", "_fn")
+    forward = _Code("/models/odst.py", "forward")
+    _function_epilogue._APPLY_CODES.add(apply_code)  # type: ignore[arg-type]
+    try:
+        walk = _function_epilogue._dispatching_frame_is_apply
+        apply_frame = _Frame(apply_code)
+        assert walk(_Frame(disable, _Frame(inner, apply_frame)))  # type: ignore[arg-type]
+        assert walk(apply_frame)  # type: ignore[arg-type]
+        assert not walk(_Frame(forward, apply_frame))  # type: ignore[arg-type]
+        assert not walk(_Frame(disable, _Frame(forward, apply_frame)))  # type: ignore[arg-type]
+        deep: Any = apply_frame
+        for _ in range(5):
+            deep = _Frame(disable, deep)
+        assert not walk(deep)
+        assert not walk(None)
+    finally:
+        _function_epilogue._APPLY_CODES.discard(apply_code)  # type: ignore[arg-type]
