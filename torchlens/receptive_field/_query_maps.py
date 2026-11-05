@@ -229,4 +229,21 @@ def _interpolation_source(
     return (Fraction(output_index) + Fraction(1, 2)) * scale - Fraction(1, 2)
 
 
+def widen_channel_axis(
+    sets: list[_IndexSet | None], shape: Sequence[int], channel_axis: int, dependency: str
+) -> bool:
+    """Widen a channel-mixing window's channel axis to the whole extent in place.
+
+    A ``"pointwise"`` dependency (or no channel axis) leaves ``sets`` alone. Any
+    other dependency means every channel on the far side feeds every channel
+    here, so the channel set becomes the full captured extent; ``"full_exact"``
+    keeps that claim exact. Returns whether the channel claim is exact.
+    """
+    if channel_axis < 0 or dependency == "pointwise":
+        return True
+    exact = dependency == "full_exact"
+    sets[channel_axis] = _IndexSet.interval(0, int(shape[channel_axis]) - 1, exact=exact)
+    return exact
+
+
 __all__: list[str] = []
