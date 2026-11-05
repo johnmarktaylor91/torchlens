@@ -21,6 +21,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.arg_positions import FUNC_ARG_SPECS, _normalize_func_name
 from torchlens._constants import get_orig_torch_funcs
 from torchlens.validation import last_validation_failure
 
@@ -56,6 +57,23 @@ def test_dtype_query_is_decorated(name: str) -> None:
     """The dtype query is in TorchLens's decorated set."""
 
     assert ("torch", name) in set(get_orig_torch_funcs())
+
+
+@pytest.mark.parametrize(
+    ("name", "positions"),
+    (("promote_types", ()), ("can_cast", ()), ("result_type", (0, 1))),
+)
+def test_dtype_query_has_a_static_arg_spec(name: str, positions: tuple[int, ...]) -> None:
+    """Each wrapped query has a static ArgSpec row, so the suite's ArgSpec usage audit covers it.
+
+    The wrapper counts every decorated call in the usage stats that
+    ``tests/test_arg_positions.py::test_lookup_table_coverage`` audits at the end of a full
+    run. Without a row, any run that also traces a dtype query fails that audit.
+    """
+
+    spec = FUNC_ARG_SPECS[_normalize_func_name(name)]
+    assert spec.positions == positions
+    assert bool(spec.tensor_kwargs) == bool(positions)
 
 
 @pytest.mark.smoke

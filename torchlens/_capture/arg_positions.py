@@ -1196,6 +1196,7 @@ _BINARY_FUNCS = [
     "notequal",
     "isclose",
     "allclose",
+    "resulttype",  # torch.result_type(tensor, other): a wrapped dtype query, records no op
     # Min / max (binary form: torch.max(a, b))
     "max",
     "min",
@@ -1358,6 +1359,8 @@ _FACTORY_FUNCS = [
     "astensor",
     "getrngstate",  # torch.get_rng_state: reads the CPU generator, no tensor operand
     "makedeptoken",  # torch._make_dep_token: an export dependency token, no tensor operand
+    "promotetypes",  # torch.promote_types and torch.can_cast: wrapped dtype queries with
+    "cancast",  # dtype operands only; each records no op
     "fromnumpy",
     "fromfile",
     "scalartensor",
@@ -1386,11 +1389,8 @@ FUNC_ARG_SPECS["full"] = ArgSpec(positions=(1,), tensor_kwargs=("fill_value",))
 # dataflow corruption can never recur unnoticed.
 _BINARY_FACTORY_KEY_COLLISIONS = set(_BINARY_FUNCS) & set(_FACTORY_FUNCS)
 if _BINARY_FACTORY_KEY_COLLISIONS:
-    # A real ``raise``, never ``assert``: ``python -O`` strips
-    # asserts, and this guard's whole promise is that the corruption "can
-    # never recur unnoticed" -- under ``-O`` a future table collision would
-    # import clean and silently mis-assign tensor parents (wrong dataflow
-    # edges in every trace).
+    # A real ``raise``, never ``assert``: under ``python -O`` a future table collision would
+    # import clean and silently mis-assign tensor parents (wrong dataflow edges in every trace).
     raise RuntimeError(
         "arg-spec key collision between binary-op and factory-func tables: "
         f"{sorted(_BINARY_FACTORY_KEY_COLLISIONS)} -- these ops disagree on tensor-parent "
