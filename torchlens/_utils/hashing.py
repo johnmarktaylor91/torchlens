@@ -53,8 +53,6 @@ from collections.abc import Callable
 from os import PathLike
 from typing import Any, Final, Protocol
 
-from .._utils._record_group_table import record_member
-
 
 def _record_type(record: Any) -> Any:
     """Return ``record.type`` for an op, else ``record.layer_type`` (``None`` when absent).
@@ -339,6 +337,19 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
+def _record_is_buffer(record: Any) -> bool:
+    """Return a record's buffer flag: ``graph.is_buffer`` on an Op or Layer, else flat.
+
+    Reads the group without importing the record table, so this module still loads
+    standalone (``test_short_barcode_deterministic_across_processes``).
+    """
+
+    return bool(
+        getattr(getattr(record, "graph", None), "is_buffer", None)
+        or getattr(record, "is_buffer", False)
+    )
+
+
 def compute_graph_shape_hash(
     trace: Any,
     *,
@@ -434,7 +445,7 @@ def compute_graph_shape_hash(
                 ),
                 "is_input": bool(getattr(layer, "is_input", False)),
                 "is_output": bool(getattr(layer, "is_output", False)),
-                "is_buffer": bool(record_member(layer, "is_buffer", False)),
+                "is_buffer": _record_is_buffer(layer),
             }
         )
         if rerun_signature:
@@ -526,7 +537,7 @@ def compute_raw_event_shape_hash(capture_events: Any) -> str:
                 "kind": event.kind,
                 "layer_type": event.layer_type,
                 "func_name": getattr(function, "func_name", None),
-                "func_qualname": record_member(function, "func_qualname", None),
+                "func_qualname": getattr(function, "func_qualname", None),
                 "output_shape": getattr(tensor, "shape", None),
                 "output_dtype": getattr(tensor, "dtype", None),
                 "parent_indices": parent_indices,
