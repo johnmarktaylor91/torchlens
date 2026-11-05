@@ -511,7 +511,7 @@ def input_containers_from_op(op: Op) -> tuple[Container, ...]:
     trace = op._source_trace_or_none()
     if trace is None or not hasattr(trace, "_containers"):
         return ()
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = getattr(op.call, "call_id", None)
     if func_call_id is None:
         return ()
     ordinals = _input_registry_index(trace).get(func_call_id, ())
@@ -962,7 +962,7 @@ def _root_identity(op: Op) -> tuple[ContainerRootKind, tuple[str, Any]]:
 
     if _op_is_final_output(op):
         return "final_output", ("final_output", 0)
-    func_call_id = getattr(op, "func_call_id", None)
+    func_call_id = getattr(op.call, "call_id", None)
     if func_call_id is not None:
         return "call", ("call", func_call_id)
     return "path", ("path", tuple(getattr(op, "container_path", ()) or ()))
@@ -1002,7 +1002,7 @@ def _sibling_leaves(
             if _same_container_spec(getattr(sibling, "container_spec", None), spec):
                 leaves.append(sibling)
             continue
-        if getattr(sibling, "func_call_id", None) == getattr(op, "func_call_id", None) and (
+        if getattr(sibling.call, "call_id", None) == getattr(op.call, "call_id", None) and (
             spec is None or _same_container_spec(getattr(sibling, "container_spec", None), spec)
         ):
             leaves.append(sibling)
@@ -1056,7 +1056,7 @@ def _value_for_op(op: Op, source: str) -> Any:
     if source == "out":
         return getattr(op, "out", None)
     if source == "transformed":
-        return getattr(op, "transformed_out", None)
+        return getattr(op.payload, "transformed_out", None)
     raise InvalidArgumentError(
         f"Unsupported container value source {source!r}",
         code="container_value_source_invalid",

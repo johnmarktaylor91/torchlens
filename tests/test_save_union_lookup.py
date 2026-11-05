@@ -211,7 +211,7 @@ def _trace_fingerprint(trace: Any) -> tuple[Any, ...]:
             op.has_saved_activation,
             tuple(op.shape or ()),
             str(op.dtype),
-            tuple(op.output_of_module_calls or ()),
+            tuple(op.module_context.output_of_module_calls or ()),
             tuple(op.parents),
             tuple(op.children),
             _payload_bytes(op.out) if op.has_saved_activation else None,
@@ -236,7 +236,10 @@ def _trace_both_ways(
     make_selector: Callable[[], Any], monkeypatch: pytest.MonkeyPatch
 ) -> tuple[tuple[Any, ...], tuple[Any, ...]]:
     model, x = _model_and_input()
-    with _decisions(monkeypatch) as fast_decisions, _fire_counts(monkeypatch) as fast_fires:
+    with (
+        _decisions(monkeypatch) as fast_decisions,
+        _fire_counts(monkeypatch) as fast_fires,
+    ):
         fast_trace = tl.trace(model, x, save=make_selector())
         fast = _trace_fingerprint(fast_trace)
         fast_valid = fast_trace.check_metadata_invariants()

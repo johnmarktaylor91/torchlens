@@ -21,8 +21,8 @@ import torch.nn as nn
 from torchlens._capture.run_entry import _run_model_and_save_specified_outs
 from torchlens.report import ValidationFailure
 from torchlens.validation import get_validation_failure
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import (
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import (
     CHECK_GROUND_TRUTH,
     CHECK_REPLAY,
     describe_tensor_mismatch,

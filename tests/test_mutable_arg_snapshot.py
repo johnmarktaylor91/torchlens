@@ -42,8 +42,8 @@ def test_non_tensor_list_arg_is_snapshotted_at_call_time() -> None:
 
     trace = tl.trace(M(), torch.randn(4, 6))
     (op,) = _ops_named(trace, "reshape")
-    assert op.non_tensor_pos_args == [[2, 12]]
-    assert op.func_non_tensor_args == [[2, 12]]
+    assert op.call.non_tensor_pos_args == [[2, 12]]
+    assert op.call.non_tensor_args == [[2, 12]]
 
 
 def test_list_kwarg_is_snapshotted_at_call_time() -> None:
@@ -61,9 +61,9 @@ def test_list_kwarg_is_snapshotted_at_call_time() -> None:
 
     trace = tl.trace(M(), torch.randn(2, 4))
     (op,) = _ops_named(trace, "pad")
-    assert op.non_tensor_kwargs["pad"] == [1, 1]
-    assert [1, 1] in op.func_non_tensor_args
-    assert [3, 3] not in op.func_non_tensor_args
+    assert op.call.non_tensor_kwargs["pad"] == [1, 1]
+    assert [1, 1] in op.call.non_tensor_args
+    assert [3, 3] not in op.call.non_tensor_args
 
 
 def test_nested_list_and_tuple_of_list_args_are_snapshotted() -> None:
@@ -84,9 +84,9 @@ def test_nested_list_and_tuple_of_list_args_are_snapshotted() -> None:
 
     trace = tl.trace(M(), torch.randn(3, 2))
     (built_op,) = _ops_named(trace, "new_tensor")
-    assert built_op.non_tensor_pos_args == [[[1.0, 2.0], [3.0, 4.0]]]
+    assert built_op.call.non_tensor_pos_args == [[[1.0, 2.0], [3.0, 4.0]]]
     (index_op,) = _ops_named(trace, "__getitem__")
-    assert index_op.non_tensor_pos_args == [([0, 1],)]
+    assert index_op.call.non_tensor_pos_args == [([0, 1],)]
 
 
 class _MutatingPadConv(nn.Module):
@@ -128,7 +128,7 @@ def _conv_structure(model: nn.Module) -> list[tuple[str, str, list[int]]]:
     torch.manual_seed(0)
     trace = tl.trace(model, torch.randn(1, 1, 8, 8))
     return [
-        (op.label, op.layer_label, op.non_tensor_kwargs["padding"])
+        (op.label, op.layer_label, op.call.non_tensor_kwargs["padding"])
         for op in _ops_named(trace, "conv2d")
     ]
 

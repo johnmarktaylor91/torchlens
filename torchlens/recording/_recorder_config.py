@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from torch import nn
 
     from .._data_classes.trace import Trace
-    from .options import _RecordingConfig
+    from ._options import _RecordingConfig
 
 
 def _configure_predicate_capture(

@@ -26,6 +26,7 @@ from torchlens._data_classes._nonfinite import (
     first_nonfinite_layer,
 )
 from torchlens._io.lazy import LazyActivationRef
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -92,7 +93,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
         save=tl.func("relu"),
         storage=tl.to_disk(str(tmp_path / "run.tlspec")),
     )
-    assert any(getattr(op, "out_ref", None) is not None for op in trace._layer_list)
+    assert any(record_member(op, "out_ref", None) is not None for op in trace._layer_list)
 
     def fail_materialization(
         self: LazyActivationRef,
@@ -208,7 +209,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     output_rows = [
         layer for layer in full._layer_list if layer.type == "output" and layer.has_saved_activation
     ]
-    assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)
+    assert output_rows and all(int(layer.cost.activation_memory) > 0 for layer in output_rows)
     for layer in output_rows:
         parent = full[layer.parents[0]]
         assert layer.out.untyped_storage().data_ptr() == parent.out.untyped_storage().data_ptr()

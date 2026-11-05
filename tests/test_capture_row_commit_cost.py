@@ -205,3 +205,35 @@ def test_gpt2_generate_container_builds_per_op(monkeypatch: pytest.MonkeyPatch) 
     )
     assert trace_per_op <= _MAX_TRACE_BUILDS_PER_OP
     assert commit_per_op <= _MAX_COMMIT_BUILDS_PER_OP
+
+
+def test_gpt2_generate_whole_trace_builds_no_public_group_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A whole-trace capture reads Op and Layer storage directly: no public group view is built.
+
+    Internal readers in capture and postprocess read a moved member's storage
+    attribute (``op._graph_is_buffer``) or go through ``record_member``, which
+    reads plain stored leaves without a view. Public group views (``op.graph``,
+    ``op.call``, ...) are for users and are rebuilt on every access.
+    """
+
+    from torchlens._data_classes._record_group_base import _RecordGroup
+
+    fn, ids, kw = _tiny_gpt2_generate()
+    tl.trace(fn, ids, input_kwargs=kw)  # warm one-time instrumentation
+    built: list[str] = []
+    real_init = _RecordGroup.__init__
+
+    def counting_init(self: Any, record: Any) -> None:
+        """Record the view class, then bind it as usual."""
+
+        built.append(type(self).__name__)
+        real_init(self, record)
+
+    monkeypatch.setattr(_RecordGroup, "__init__", counting_init)
+    with quiet_gc():
+        traced = tl.trace(fn, ids, input_kwargs=kw)
+    monkeypatch.setattr(_RecordGroup, "__init__", real_init)
+    del traced
+    assert built == [], f"{len(built)} group views built: {sorted(set(built))}"

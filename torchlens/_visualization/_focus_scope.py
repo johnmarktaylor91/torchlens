@@ -24,6 +24,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._frame_penwidth import compute_module_penwidth
 
 if TYPE_CHECKING:
@@ -66,7 +67,7 @@ def focus_address(module: Any) -> str | None:
 
     if module is None:
         return None
-    address = module if isinstance(module, str) else getattr(module, "address", None)
+    address = module if isinstance(module, str) else record_member(module, "address", None)
     if not isinstance(address, str) or address in {"", "self"}:
         return None
     return address

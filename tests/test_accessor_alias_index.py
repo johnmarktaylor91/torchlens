@@ -24,6 +24,7 @@ from torchlens._data_classes._trace_accessors import (
     TraceOpAccessor,
 )
 from torchlens._data_classes.op import Op
+from torchlens._utils._record_group_table import record_member
 
 
 class Nested(nn.Module):
@@ -192,7 +193,9 @@ def _op_probe_keys(accessor: TraceOpAccessor) -> list[str]:
 def _reference_module_call_match(accessor: TraceModuleCallAccessor, key: str) -> Any:
     """Resolve a ModuleCall key by scanning, mirroring the pre-index behavior."""
 
-    parent_matches = [call for call in accessor._list if key == getattr(call, "address", None)]
+    parent_matches = [
+        call for call in accessor._list if key == record_member(call, "address", None)
+    ]
     if len(parent_matches) == 1:
         return parent_matches[0]
     if len(parent_matches) > 1:
@@ -277,7 +280,7 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
         trace.backward(loss, retain_graph=True)
 
         module_calls = trace.module_calls
-        module_keys = [getattr(call, "address", None) for call in module_calls]
+        module_keys = [record_member(call, "address", None) for call in module_calls]
         module_keys += [getattr(call, "label", None) for call in module_calls]
         module_keys += ["nope", "self", "cell"]
         ambiguous_modules = 0
@@ -333,7 +336,7 @@ def test_edge_counters_match_unmemoized_reference() -> None:
                 (op.label, ops[child_label].label)
                 for op in rows
                 for child_label in op.children
-                if op.is_buffer or ops[child_label].is_buffer
+                if op.graph.is_buffer or ops[child_label].graph.is_buffer
             }
             assert trace.num_edges == len(direct_edges), name
             assert trace.graph.num_compute_edges == len(direct_compute), name

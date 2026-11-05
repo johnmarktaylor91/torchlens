@@ -1,6 +1,6 @@
 """Cone-of-effect membership and site labelling for saved-DAG replay.
 
-Split from :mod:`torchlens.intervention.replay`: the cone walk, the label-to-replay-key
+Split from :mod:`torchlens.intervention._replay`: the cone walk, the label-to-replay-key
 map every replay step resolves through, origin validation, the user-facing
 disclosure spelling of a site and the dependency-ordered call-cone scheduler that
 replay and sparse runnable execution share. Nothing here mutates a trace; the
@@ -253,7 +253,7 @@ def _cone_from_maps(
         if layer is None:
             continue
 
-        group = call_groups.get(layer.func_call_id, ()) if layer.func_call_id is not None else ()
+        group = call_groups.get(layer.call.call_id, ()) if layer.call.call_id is not None else ()
         for sibling in group:
             visited.add(_replay_site_key(sibling))
             _enqueue_children(sibling)

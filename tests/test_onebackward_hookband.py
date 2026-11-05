@@ -42,7 +42,7 @@ def _one_node_graph() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 def test_cuda_auto_default_stays_sequential_pending_c_read() -> None:
     """The auto-B CUDA default is pinned to 1 until the C-READ row lands."""
 
-    from torchlens.attribution.onebackward._engine import resolve_batch_plan
+    from torchlens.attribution._onebackward._engine import resolve_batch_plan
 
     plan = resolve_batch_plan("auto", "cuda")
     assert plan.batch_size == 1

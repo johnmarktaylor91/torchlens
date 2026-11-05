@@ -62,9 +62,9 @@ from .._errors import InvalidArgumentError
 from .._selection.selection import Selection, Selector, Site, _Combinator, _lift, _Mask
 from .._selection.subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
+from ._masked_edit import _mask_digest, _masked_factory
 from ._subspace_edits import _orthonormal_rows
-from .masked_edit import _mask_digest, _masked_factory
-from .types import Edit
+from ._types import Edit
 
 __all__ = [
     "PROJECTION_NOTE",

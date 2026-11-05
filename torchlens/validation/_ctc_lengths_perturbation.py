@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
 
@@ -69,7 +71,7 @@ def ctc_length_rotation_values(
 def _is_length_operand(layer: Op, parent_label: str) -> bool:
     """Return whether ``parent_label`` is registered at a length argument."""
 
-    positions = getattr(layer, "parent_arg_positions", None) or {}
+    positions = record_member(layer, "parent_arg_positions", None) or {}
     args_map = positions.get("args", {}) or {}
     kwargs_map = positions.get("kwargs", {}) or {}
     return any(

@@ -77,12 +77,13 @@ tr.modules[name].output_ops, then tr[label].out.
     out = tr.output                        # exactly what model(x) returned
     h = tr.modules["blocks.0.attn"].out    # one module's output
     for op in tr.layers:                   # every op, in execution order
-        print(op.label, op.func_name, op.address)
+        print(op.label, op.func_name, op.module)
 
 Op fields: label (use with tr[label]), func_name ("linear", "softmax",
-"add"), address (innermost module name; None for code in the top-level
-forward), out (the output tensor), parents and children (labels of
-neighbouring ops). Module fields: out, input_ops, output_ops, class_name.
+"add"), module (innermost module call as "address:call", e.g.
+"blocks.0.attn:1"; None for code in the top-level forward), out (the
+output tensor), parents and children (labels of neighbouring ops).
+Module fields: out, input_ops, output_ops, class_name.
 For a HuggingFace model tr.output is its usual output object (tr.output.logits).
 
 ## Ops with no module (inline functions)
@@ -93,7 +94,8 @@ select them by func_name and module address.
     import torchlens as tl
     tr = tl.trace(model, x)
     probs = [op.out for op in tr.layers
-             if op.func_name == "softmax" and op.address == "blocks.0.attn"]
+             if op.func_name == "softmax"
+             and str(op.module or "").split(":")[0] == "blocks.0.attn"]
     print(len(probs), tuple(probs[0].shape))
 
 ## First NaN or Inf
@@ -104,7 +106,7 @@ select them by func_name and module address.
     bad = next((op for op in tr.layers if torch.is_tensor(op.out)
                 and not torch.isfinite(op.out).all()), None)
     if bad is not None:
-        print(bad.label, bad.func_name, bad.address, bad.parents)
+        print(bad.label, bad.func_name, bad.module, bad.parents)
 
 ## Edit tensors during the forward pass
 
@@ -202,7 +204,7 @@ edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
 
 - Use .out (not .activation or .tensor_contents), tr.layers (not
   layer_list), .parents and .children (not parent_layers or child_layers),
-  .address (not containing_module).
+  .module (not containing_module).
 - Capture-time selectors are tl.module, tl.func, tl.in_module; a label from
   a finished trace works with tr[label] and tr.fork().do, not inside
   intervene=.

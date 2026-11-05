@@ -299,7 +299,7 @@ def test_ops_compute_filter_matches_the_trace_level_view() -> None:
     compute = trace.ops.compute
     assert list(compute) == list(trace.compute_ops)
     assert compute.labels == trace.compute_ops.labels
-    assert not any(op.is_input or op.is_output or op.is_buffer for op in compute)
+    assert not any(op.is_input or op.is_output or op.graph.is_buffer for op in compute)
     assert {op.layer_label for op in compute} == set(trace.layers.compute.labels)
     assert list(trace.input_ops.compute) == []
 

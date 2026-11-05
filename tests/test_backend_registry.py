@@ -24,7 +24,7 @@ from torchlens.backends import (
     BackendSpec,
     CaptureBackend,
 )
-from torchlens.backends.default_specs import (
+from torchlens.backends._default_specs import (
     _jax_can_handle,
     _mlx_can_handle,
     _paddle_can_handle,
@@ -49,7 +49,7 @@ from torchlens.errors import (
     UnknownBackendError,
 )
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _TinyModel(nn.Module):
@@ -503,7 +503,7 @@ def test_paddle_backend_registered_with_alias_and_priority() -> None:
     assert tl.backends.spec("tinygrad").priority == 30
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_paddle_detector_returns_false_without_paddle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -554,7 +554,7 @@ def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     assert not _paddle_can_handle(_TinyModel(), torch.ones(1), None)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/door.py, backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/door.py, backends/_default_specs.py.
 def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -581,7 +581,7 @@ def test_mlx_detector_rejects_mixed_foreign_tensor_inputs(
         tl.trace(MlxModule(), (MlxArray(), TFTensor()))
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_jax_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -604,7 +604,7 @@ def test_jax_detector_rejects_mixed_foreign_tensor_inputs(
     assert not _jax_can_handle(lambda x: x, (JaxArray(),), {"other": PaddleTensor()})
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_tinygrad_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -620,7 +620,7 @@ def test_tinygrad_detector_rejects_mixed_foreign_tensor_inputs(
     assert not _tinygrad_can_handle(lambda x: x, (TinyTensor(), JaxArray()), None)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_paddle_detector_rejects_mixed_foreign_tensor_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -652,7 +652,7 @@ def _test_leaves(value: object) -> Iterator[object]:
     yield value
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_tf_detector_declines_unsupported_tensorflow_stack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -677,7 +677,7 @@ def test_tf_detector_declines_unsupported_tensorflow_stack(
     assert not _tf_can_handle(tf_module.Module(), object(), None)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -730,7 +730,7 @@ def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     assert trace.provenance.backend == "torch"
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
 def test_tf_detector_reraises_genuine_backend_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -865,8 +865,10 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
     assert saved_ops[0].func_name == "functional.relu"
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
-def test_tf_version_gate_reports_installed_version_floor(monkeypatch: pytest.MonkeyPatch) -> None:
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_default_specs.py.
+def test_tf_version_gate_reports_installed_version_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Unsupported TF/Keras versions raise the actionable explicit-backend mismatch."""
 
     keras_module = types.SimpleNamespace(__version__="2.13.1")
@@ -1107,7 +1109,9 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
     Pin the arm itself so a silent disarm (``if False:``) cannot survive.
     """
 
-    from torchlens.validation._invariants_entry import _check_backend_identity_invariants
+    from torchlens.validation._invariants_entry import (
+        _check_backend_identity_invariants,
+    )
 
     class _BadBackendStub:
         _provenance_backend = bad_backend
@@ -1116,7 +1120,7 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
         _check_backend_identity_invariants(_BadBackendStub())
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py, backends/default_specs.py, backends/registry.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/dispatch.py, backends/_default_specs.py, backends/registry.py.
 def test_backend_none_ambiguity_is_deterministic() -> None:
     """Equal-priority detector collisions fail with a canonical error."""
 
@@ -1147,7 +1151,10 @@ def test_backend_none_ambiguity_is_deterministic() -> None:
 def test_every_refusable_capability_flag_owes_a_registered_code(flag: str, code: str) -> None:
     """Each ``BackendCapabilities`` flag that can be False maps to a registered refusal code."""
 
-    from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS, REFUSAL_CODES
+    from torchlens.backends._backend_protocol import (
+        REFUSABLE_CAPABILITY_FLAGS,
+        REFUSAL_CODES,
+    )
 
     assert REFUSABLE_CAPABILITY_FLAGS[flag] == code
     assert code in REFUSAL_CODES

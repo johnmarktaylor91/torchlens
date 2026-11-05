@@ -20,6 +20,7 @@ from torchlens._capture.flops import (
     compute_forward_flops,
 )
 from torchlens._data_classes import FuncCallLocation
+from torchlens._utils._record_group_table import record_member
 
 # =============================================================================
 # Trace fields
@@ -137,8 +138,8 @@ def test_input_layer_properties(small_input):
     assert input_entry is not None
     assert input_entry.is_input is True
     assert input_entry.is_output is False
-    assert input_entry.has_parents is False
-    assert input_entry.has_children is True
+    assert input_entry.graph.has_parents is False
+    assert input_entry.graph.has_children is True
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py.
@@ -153,7 +154,7 @@ def test_output_layer_properties(small_input):
             break
     assert output_entry is not None
     assert output_entry.is_output is True
-    assert output_entry.has_children is False
+    assert output_entry.graph.has_children is False
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_labels.py, _data_classes/_layer_views.py, _data_classes/_op_relations.py ....
@@ -168,8 +169,8 @@ def test_module_fields(small_input):
         entry = mh.layers[label]
         if entry.in_submodule:
             assert isinstance(entry.module, str)
-            assert isinstance(entry.module_call_depth, int)
-            assert entry.module_call_depth > 0
+            assert isinstance(entry.module_context.call_depth, int)
+            assert entry.module_context.call_depth > 0
             found = True
             break
     assert found, "NestedModules should have layers inside submodules"
@@ -206,7 +207,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     )
     orphan_labels = list(mh.graph.orphans.keys())
     assert orphan_labels, "probe model must produce orphans"
-    orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].siblings)
+    orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].graph.siblings)
 
     mainline = next(
         mh.layers[label]
@@ -219,7 +220,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     parent_op.children = list(parent_op.children) + [orphan_sibling]
 
     op0 = list(mainline.ops.values())[0]
-    assert orphan_sibling in op0.siblings  # op level tolerates and appends
+    assert orphan_sibling in op0.graph.siblings  # op level tolerates and appends
     aggregated = mainline.siblings  # RED before the fix: uncaught lookup error
     assert mh.graph.orphans[orphan_sibling].layer_label in aggregated
     assert isinstance(mainline.co_parents, list)
@@ -278,7 +279,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
         {
             op.layer_label
             for op in trace._layer_list
-            if op.has_saved_activation and not getattr(op, "is_orphan", False)
+            if op.has_saved_activation and not record_member(op, "is_orphan", False)
         }
     )
 
@@ -388,7 +389,7 @@ def test_flops_conv_transpose_uses_input_work_basis() -> None:
     operation = next(entry for entry in trace._layer_list if entry.func_name == "conv_transpose2d")
 
     assert operation.shape == (1, 4, 15, 15)
-    assert operation.flops_forward == 2 * 6 * 8 * 8 * (4 // 2) * 3 * 3
+    assert operation.cost.flops_forward == 2 * 6 * 8 * 8 * (4 // 2) * 3 * 3
 
 
 # =============================================================================
@@ -478,7 +479,7 @@ def _get_code_context_with_flag(small_input, save_source_context: bool):
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input:
-            return entry.code_context, mh
+            return entry.source.frames, mh
     raise RuntimeError("No non-input layer found")
 
 
@@ -542,9 +543,9 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
     captured_entries = [
         entry for entry in mh._layer_list if not entry.is_input and entry.func_name != "none"
     ]
-    assert all(len(entry.code_context) > 0 for entry in captured_entries)
+    assert all(len(entry.source.frames) > 0 for entry in captured_entries)
     for entry in captured_entries:
-        for frame in entry.code_context:
+        for frame in entry.source.frames:
             assert frame.file is not None
             assert frame.line_number is not None
             assert frame.code_firstlineno is not None
@@ -580,7 +581,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
     # Never persisted: the stored no-source state is what a pickle carries.
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
-        entry.code_context for entry in mh_roundtrip._layer_list if not entry.is_input
+        entry.source.frames for entry in mh_roundtrip._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -640,7 +641,7 @@ def valid_mh_and_ground_truth():
     return mh, ground_truth
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/core.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_core.py.
 def test_wrong_shape_outs(valid_mh_and_ground_truth):
     """Replacing out with a wrong-shaped tensor should fail."""
     mh, ground_truth = valid_mh_and_ground_truth
@@ -658,12 +659,14 @@ def test_corrupt_saved_args(valid_mh_and_ground_truth):
         entry = mh.layers[label].ops[0]
         if entry.is_input:
             continue
-        if entry.saved_args and any(isinstance(a, torch.Tensor) for a in entry.saved_args):
-            for i, arg in enumerate(entry.saved_args):
+        if entry.call.saved_args and any(
+            isinstance(a, torch.Tensor) for a in entry.call.saved_args
+        ):
+            for i, arg in enumerate(entry.call.saved_args):
                 if isinstance(arg, torch.Tensor):
-                    corrupted_args = list(entry.saved_args)
+                    corrupted_args = list(entry.call.saved_args)
                     corrupted_args[i] = torch.randn_like(arg)
-                    entry.saved_args = tuple(corrupted_args)
+                    entry._call_saved_args = tuple(corrupted_args)
                     assert mh.validate_forward_pass(ground_truth) is False
                     return
     pytest.fail(
@@ -708,7 +711,7 @@ class TestConditionalBranchDetection:
         """ConditionalBranching has is_in_conditional_body=True nodes."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
+        found = any(mh[label].control_flow.is_in_conditional_body for label in mh.layer_labels)
         assert found, "Should detect conditional branch nodes"
 
     # --- False positive tests (Bug #88) ---

@@ -191,7 +191,7 @@ _TESTS_ROOT = os.path.dirname(os.path.abspath(__file__)) + os.sep
 #: checked after every test; the whole-package scan runs after every module.
 _WRAPPED_INTERNALS: tuple[tuple[str, str], ...] = (
     ("torchlens._capture.run_entry", "_run_resolved_request"),
-    ("torchlens.intervention.replay", "_run_replay"),
+    ("torchlens.intervention._replay", "_run_replay"),
     ("torchlens._postprocess", "materialize_from_events"),
     ("torchlens._postprocess._materialize", "materialize_from_events"),
     ("torchlens._postprocess._materialize", "ingest_op_records"),

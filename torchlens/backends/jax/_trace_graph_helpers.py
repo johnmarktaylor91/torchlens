@@ -16,6 +16,7 @@ from typing import Any
 
 from ..._ir.container import DictKey, TupleIndex
 from ..._ir.events import is_control_edge_use
+from ..._utils._record_group_table import record_member
 from .._validation_shared import float_replay_tolerances
 from .jaxpr import JaxEquationCapture, replay_equation
 
@@ -216,7 +217,7 @@ def _data_parent_arg_positions(op: Any) -> dict[int, str]:
     """
 
     data_labels = _data_parent_labels(op)
-    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
+    graph_positions = record_member(op, "parent_arg_positions", {}).get("args", {})
     return {
         position: parent_label
         for position, parent_label in graph_positions.items()

@@ -628,7 +628,7 @@ tests/test_intervention_phase11.py,5,4.56,2.11,unmarked
 tests/test_intervention_phase12.py,8,5.05,1.41,unmarked
 tests/test_intervention_phase13.py,8,2.50,0.85,unmarked
 tests/test_intervention_phase2.py,6,0.73,0.16,unmarked
-tests/test_intervention_phase3.py,26,4.93,0.67,smoke
+tests/test_intervention_phase3.py,25,4.93,0.67,smoke
 tests/test_intervention_phase4a.py,4,0.75,0.40,unmarked
 tests/test_intervention_phase4b.py,6,0.98,0.28,smoke
 tests/test_intervention_phase4c.py,17,3.00,0.51,unmarked

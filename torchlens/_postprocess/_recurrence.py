@@ -29,6 +29,7 @@ from dataclasses import replace as _dataclass_replace
 from typing import TYPE_CHECKING, Any
 
 from .._ir.events import is_control_edge_use
+from .._utils._record_group_table import record_member, record_storage_attr
 from .loop_detection import _module_site, _structural_arg_signature
 from .loop_grouping_adapter import (
     _PSEUDO_FUNC_NAME,
@@ -107,31 +108,9 @@ def _build_preview_recurrence_graph(
     raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
     raw_label_set = set(raw_labels)
 
-    data_parents_by_label: dict[str, tuple[str, ...]] = {}
-    data_children_by_label: dict[str, list[str]] = {label: [] for label in raw_labels}
-    for label in raw_labels:
-        op_log = raw_dict[label]
-        control_parents = {
-            parent_label
-            for edge in getattr(op_log, "_edge_uses", ()) or ()
-            if is_control_edge_use(edge)
-            and isinstance(parent_label := getattr(edge, "parent_label", None), str)
-        }
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for parent in getattr(op_log, "parents", ()) or ():
-            if (
-                isinstance(parent, str)
-                and parent in raw_label_set
-                and parent not in seen
-                and parent not in control_parents
-            ):
-                seen.add(parent)
-                ordered.append(parent)
-        data_parents_by_label[label] = tuple(ordered)
-    for label, parents in data_parents_by_label.items():
-        for parent in parents:
-            data_children_by_label[parent].append(label)
+    data_parents_by_label, data_children_by_label = _preview_data_edges(
+        raw_dict, raw_labels, raw_label_set
+    )
 
     equivalence_keys = {
         label: _preview_equivalence_key(raw_dict[label], label, backend_name)
@@ -146,13 +125,13 @@ def _build_preview_recurrence_graph(
     source_labels: list[str] = []
     for raw_order, label in enumerate(raw_labels):
         op_log = raw_dict[label]
-        pruned = bool(getattr(op_log, "is_orphan", False))
+        pruned = bool(record_member(op_log, "is_orphan", False))
         retain = not pruned
         if retain:
             eligible_labels.append(label)
         if (
             getattr(op_log, "is_input", False)
-            or getattr(op_log, "is_internal_source", False)
+            or record_member(op_log, "is_internal_source", False)
             or not data_parents_by_label[label]
         ):
             source_labels.append(label)
@@ -183,9 +162,10 @@ def _build_preview_recurrence_graph(
             module_site=_module_site(op_log),
             arg_signature=_structural_arg_signature(op_log) if uses_params else None,
             recurrence_anchored=(
-                bool(getattr(op_log, "modules", None)) or bool(getattr(op_log, "is_buffer", False))
+                bool(getattr(op_log, "modules", None))
+                or bool(record_member(op_log, "is_buffer", False))
             ),
-            site_key=getattr(op_log, "site_key", None),
+            site_key=record_member(op_log, "site_key", None),
         )
 
     return RecurrenceGroupingGraph(
@@ -194,6 +174,57 @@ def _build_preview_recurrence_graph(
         source_labels=tuple(source_labels),
         eligible_labels=tuple(eligible_labels),
     )
+
+
+def _preview_data_edges(
+    raw_dict: Mapping[str, Any],
+    raw_labels: tuple[str, ...],
+    raw_label_set: set[str],
+) -> tuple[dict[str, tuple[str, ...]], dict[str, list[str]]]:
+    """Return the data-edge parents and children of every preview raw op.
+
+    Parameters
+    ----------
+    raw_dict:
+        Materialized preview raw ops keyed by raw label.
+    raw_labels:
+        Raw labels in capture order.
+    raw_label_set:
+        The same raw labels as a set.
+
+    Returns
+    -------
+    tuple[dict[str, tuple[str, ...]], dict[str, list[str]]]
+        Ordered, de-duplicated data parents per label (control edges and
+        unknown labels dropped) and the matching data children per label.
+    """
+
+    data_parents_by_label: dict[str, tuple[str, ...]] = {}
+    data_children_by_label: dict[str, list[str]] = {label: [] for label in raw_labels}
+    for label in raw_labels:
+        op_log = raw_dict[label]
+        control_parents = {
+            parent_label
+            for edge in getattr(op_log, "_edge_uses", ()) or ()
+            if is_control_edge_use(edge)
+            and isinstance(parent_label := getattr(edge, "parent_label", None), str)
+        }
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for parent in getattr(op_log, "parents", ()) or ():
+            if (
+                isinstance(parent, str)
+                and parent in raw_label_set
+                and parent not in seen
+                and parent not in control_parents
+            ):
+                seen.add(parent)
+                ordered.append(parent)
+        data_parents_by_label[label] = tuple(ordered)
+    for label, parents in data_parents_by_label.items():
+        for parent in parents:
+            data_children_by_label[parent].append(label)
+    return data_parents_by_label, data_children_by_label
 
 
 def _is_pseudo_op(op_log: Any) -> bool:
@@ -213,9 +244,11 @@ def _is_pseudo_op(op_log: Any) -> bool:
 
     if getattr(op_log, "is_input", False) or getattr(op_log, "is_output", False):
         return True
-    if getattr(op_log, "is_internal_source", False):
+    if record_member(op_log, "is_internal_source", False):
         return True
-    return bool(getattr(op_log, "is_buffer", False)) and not (getattr(op_log, "parents", ()) or ())
+    return bool(record_member(op_log, "is_buffer", False)) and not (
+        getattr(op_log, "parents", ()) or ()
+    )
 
 
 def _preview_equivalence_key(op_log: Any, label: str, backend_name: str) -> str:
@@ -313,7 +346,7 @@ def relabel_edge_metadata(
         "internal_source_ancestors",
         "internal_source_parents",
     ):
-        lineage = getattr(op_log, lineage_field, None)
+        lineage = record_member(op_log, lineage_field, None)
         if lineage:
             # Reconstruct via the ORIGINAL container type (set or frozenset)
             # rather than always a plain set: callers may rely on the
@@ -321,10 +354,10 @@ def relabel_edge_metadata(
             relabeled = (
                 raw_to_final.get(item, item) if isinstance(item, str) else item for item in lineage
             )
-            setattr(op_log, lineage_field, type(lineage)(relabeled))
-    parent_arg_positions = getattr(op_log, "parent_arg_positions", None)
+            setattr(op_log, record_storage_attr(op_log, lineage_field), type(lineage)(relabeled))
+    parent_arg_positions = record_member(op_log, "parent_arg_positions", None)
     if parent_arg_positions:
-        op_log.parent_arg_positions = {
+        op_log._call_parent_arg_positions = {
             section: {
                 position: (raw_to_final.get(value, value) if isinstance(value, str) else value)
                 for position, value in positions.items()

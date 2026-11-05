@@ -27,7 +27,7 @@ pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call
 _CONFIRM = InterventionOptions()
 _DIFFERENTIABLE = InterventionOptions(differentiable=True)
 
-replay_mod = importlib.import_module("torchlens.intervention.replay")
+replay_mod = importlib.import_module("torchlens.intervention._replay")
 
 
 def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -442,11 +442,11 @@ def test_default_trace_pickle_drops_argument_templates() -> None:
 
     model = torch.nn.Sequential(torch.nn.Linear(1024, 1024), torch.nn.ReLU())
     log = tl.trace(model, torch.randn(1, 1024))
-    assert any(op.args_template is not None for op in log.ops)
+    assert any(op.call.args_template is not None for op in log.ops)
 
     data = pickle.dumps(log)
     restored = pickle.loads(data)
 
     weight_bytes = model[0].weight.numel() * model[0].weight.element_size()
     assert len(data) < weight_bytes
-    assert all(op.args_template is None for op in restored.ops)
+    assert all(op.call.args_template is None for op in restored.ops)

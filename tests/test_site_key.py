@@ -24,8 +24,8 @@ from torchlens._postprocess._site_key import (
     parse_site_key,
     render_site_key,
 )
+from torchlens.validation._invariants import MetadataInvariantError
 from torchlens.validation._invariants_sites import _check_site_key_uniqueness
-from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _Tied(nn.Module):
@@ -62,7 +62,7 @@ def _ops(log: tl.Trace) -> dict[str, object]:
 
 
 def _key_multiset(log: tl.Trace) -> Counter:
-    return Counter(op.site_key for op in _ops(log).values())
+    return Counter(op.graph.site_key for op in _ops(log).values())
 
 
 # ---------------------------------------------------------------------------
@@ -120,11 +120,13 @@ def test_degraded_path_key_parity() -> None:
 
 def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     ops = _ops(log)
-    groups = {frozenset(op.recurrent_ops) for op in ops.values() if len(op.recurrent_ops) > 1}
+    groups = {
+        frozenset(op.graph.recurrent_ops) for op in ops.values() if len(op.graph.recurrent_ops) > 1
+    }
     spanning = sum(
         1
         for group in groups
-        if len({ops[member].site_key for member in group if member in ops}) > 1
+        if len({ops[member].graph.site_key for member in group if member in ops}) > 1
     )
     return spanning, len(groups)
 
@@ -148,7 +150,7 @@ def test_gpt2_4l_structural_facts() -> None:
     expected_ops = 199 if cache_layers_initialize_lazily() else 194
     assert len(log.op_labels) == expected_ops
     assert _site_spanning_recurrent_groups(log) == (0, 0)
-    keys = [log.ops[label].site_key for label in log.op_labels]
+    keys = [log.ops[label].graph.site_key for label in log.op_labels]
     assert len(set(keys)) == expected_ops
 
 
@@ -164,10 +166,10 @@ def test_bare_label_lookup_referents_pinned_by_site() -> None:
     # Pin today's referents BY SITE so a silent referent change fails here
     # instead of shipping.
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log.layers["linear_1_1"].ops[1].site_key == "s1|lin|linear||1"
-    assert log.layers["relu_1_2"].ops[1].site_key == "s1|act|relu||1"
-    assert log["linear_1_1:2"].site_key == "s1|lin|linear||1"
-    assert log["relu_1_2:3"].site_key == "s1|act|relu||1"
+    assert log.layers["linear_1_1"].ops[1].graph.site_key == "s1|lin|linear||1"
+    assert log.layers["relu_1_2"].ops[1].graph.site_key == "s1|act|relu||1"
+    assert log["linear_1_1:2"].graph.site_key == "s1|lin|linear||1"
+    assert log["relu_1_2:3"].graph.site_key == "s1|act|relu||1"
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +222,7 @@ def test_witness_on_real_capture_is_operation_frame() -> None:
         if op.type in ("input", "output", "buffer"):
             assert operation_witness(op) is None  # I/O boundary: witness-absent
             continue
-        context = list(op.code_context or ())
+        context = list(op.source.frames or ())
         assert len(context) >= 2
         witness = operation_witness(op)
         # The selected frame is the deepest OPERATION frame [-1] -- never the

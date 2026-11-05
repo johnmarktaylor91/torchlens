@@ -25,7 +25,7 @@ import torch
 
 from .. import fingerprint as _fingerprint
 from .._state import pause_logging
-from .types import Edit
+from ._types import Edit
 
 #: HookSpec metadata key holding the staged helper's tensor digests.
 DIGEST_KEY = "helper_tensor_digests"

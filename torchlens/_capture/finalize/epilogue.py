@@ -24,6 +24,7 @@ from ..._data_classes.trace import (
     Trace,
 )
 from ..._quantities import Bytes
+from ..._utils._record_group_table import record_member
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
 from ...errors import TorchLensWarning
 from .._episode_ledger import (
@@ -281,7 +282,11 @@ def _store_capture_cache(trace: Trace, cache: dict[str, Any] | None) -> None:
     """Stamp the cache identity on the trace and store it through the request's callable."""
     if cache is None:
         return
-    cache_path, cache_key, cache_secret = cache.get("path"), cache.get("key"), cache.get("secret")
+    cache_path, cache_key, cache_secret = (
+        cache.get("path"),
+        cache.get("key"),
+        cache.get("secret"),
+    )
     if cache_path is None or cache_key is None or cache_secret is None:
         return
     trace._provenance_cache_hit = False
@@ -388,11 +393,11 @@ def _failed_step_counts(
     enter_events = getattr(events, "module_enter_events", None) if events else None
     if enter_events:
         started = sum(
-            1 for event in enter_events if getattr(event, "address", None) == resolved.address
+            1 for event in enter_events if record_member(event, "address", None) == resolved.address
         )
         exit_events = getattr(events, "module_exit_events", None) or ()
         returned = sum(
-            1 for event in exit_events if getattr(event, "address", None) == resolved.address
+            1 for event in exit_events if record_member(event, "address", None) == resolved.address
         )
     else:
         try:

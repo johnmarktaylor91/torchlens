@@ -56,8 +56,8 @@ def test_for_pass_takes_pass_number_keyword(two_pass_trace: tl.Trace) -> None:
     passes = two_pass_trace.autograd.backward_passes
     assert passes.for_pass(pass_number=2).pass_number == 2
 
-    op = next(op for op in two_pass_trace.saved_grad_ops if len(op.grads) == 2)
-    assert op.grads.for_pass(pass_number=1) is op.grads.for_pass(1)
+    op = next(op for op in two_pass_trace.saved_grad_ops if len(op.autograd.grads) == 2)
+    assert op.autograd.grads.for_pass(pass_number=1) is op.autograd.grads.for_pass(1)
 
     grad_fn = next(
         grad_fn for grad_fn in two_pass_trace.autograd.grad_fns if len(grad_fn.calls) == 2
@@ -68,11 +68,11 @@ def test_for_pass_takes_pass_number_keyword(two_pass_trace: tl.Trace) -> None:
 def test_for_pass_refuses_pass_index_keyword(two_pass_trace: tl.Trace) -> None:
     """The removed ``pass_index=`` keyword refuses on all three accessors."""
 
-    op = next(op for op in two_pass_trace.saved_grad_ops if len(op.grads) == 2)
+    op = next(op for op in two_pass_trace.saved_grad_ops if len(op.autograd.grads) == 2)
     grad_fn = next(
         grad_fn for grad_fn in two_pass_trace.autograd.grad_fns if len(grad_fn.calls) == 2
     )
-    for accessor in (two_pass_trace.autograd.backward_passes, op.grads, grad_fn.calls):
+    for accessor in (two_pass_trace.autograd.backward_passes, op.autograd.grads, grad_fn.calls):
         with pytest.raises(TypeError, match="pass_index"):
             accessor.for_pass(pass_index=1)
 

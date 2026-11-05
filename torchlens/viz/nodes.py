@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._batch_summary import text_table
+from ._feature_maps import feature_map_node_spec as feature_map
 from ._node_visualizers import channel_grid, heatmap, histogram
-from .batch_summary import text_table
-from .feature_maps import feature_map_node_spec as feature_map
 
 #: Representational-geometry node visualizers, resolved on first access so
 #: importing this module does not import ``torchlens.repgeom``.

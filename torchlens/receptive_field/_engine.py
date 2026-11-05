@@ -369,7 +369,7 @@ def _seed_input(op: Op) -> _InputState:
     """
 
     shape = tuple(op.shape)
-    role = op.io_role or op.label
+    role = op.graph.io_role or op.label
     identity = _Mapped(_Affine(Fraction(1), Fraction(0)), _Affine(Fraction(1), Fraction(0)))
     return _InputState(
         input_op_label=op.label,

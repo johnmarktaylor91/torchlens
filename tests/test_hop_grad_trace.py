@@ -46,7 +46,7 @@ from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS
+from torchlens.validation._diagnostics import CHECK_COMPLETENESS
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
 
@@ -671,7 +671,7 @@ def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     torch.testing.assert_close(traced_input.grad, reference_input.grad)
     producer = trace[output.parents[0]]
     assert producer.has_saved_grad
-    assert type(producer.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
+    assert type(producer.autograd.grads.for_pass(1).grad).__name__ not in _TRACING_TENSOR_NAMES
 
 
 def test_map_grad_operands_backward_runs_through_the_trace() -> None:
@@ -694,7 +694,7 @@ def test_map_grad_operands_backward_runs_through_the_trace() -> None:
     torch.testing.assert_close(traced_input.grad, reference_input.grad)
     source = trace[trace.input_layers[0]]
     assert source.has_saved_grad
-    torch.testing.assert_close(source.grads.for_pass(1).grad, reference_input.grad)
+    torch.testing.assert_close(source.autograd.grads.for_pass(1).grad, reference_input.grad)
     assert trace[output.parents[0]].out.grad_fn is None
 
 

@@ -18,7 +18,7 @@ from torchlens._validation_status import known_validation_reasons
 from torchlens.backends._backend_protocol import VALIDATION_REASONS
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/status.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_status.py.
 def test_structural_reasons_are_public_members() -> None:
     assert {"op_unclassified", "capture_inconsistent"} <= VALIDATION_REASONS
     assert {"op_unclassified", "capture_inconsistent"} <= known_validation_reasons()
