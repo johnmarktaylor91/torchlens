@@ -746,6 +746,26 @@ class SharedLayerLm(nn.Module):
         return self.head(hidden)
 
 
+class SharedBlockEncoder(nn.Module):
+    """ALBERT-style encoder over input embeddings: the shared block consumes the input."""
+
+    def __init__(self, width: int = 16, depth: int = 3) -> None:
+        """Initialize the shared block and the head."""
+
+        super().__init__()
+        self.shared = nn.Linear(width, width)
+        self.depth = depth
+        self.head = nn.Linear(width, 2)
+
+    def forward(self, embeds: torch.Tensor) -> torch.Tensor:
+        """Apply the shared block ``depth`` times, then the head."""
+
+        hidden = embeds
+        for _ in range(self.depth):
+            hidden = torch.tanh(self.shared(hidden))
+        return self.head(hidden)
+
+
 def test_multipass_readme_loop_is_found() -> None:
     """A module called twice reads its first pass instead of aborting on the layer."""
 
@@ -757,7 +777,7 @@ def test_multipass_readme_loop_is_found() -> None:
     assert report.shape is not None and report.shape[-1] == 4
     assert report.dtype == torch.float32
     assert report.constraining_module == "fc1:1"
-    assert report.constraining_op == "linear_1_1:1"
+    assert report.constraining_op == "linear_1_3"
     assert repr(report).endswith(", constrained by fc1"), repr(report)
     _assert_result_runs(model, report)
 
@@ -774,6 +794,19 @@ def test_multipass_shared_layer_token_model_is_found() -> None:
     assert report.value_range is not None and report.value_range[0] == "randint"
     assert report.value_range[2] <= 50
     assert repr(report).endswith(", constrained by embed"), repr(report)
+    _assert_result_runs(model, report)
+
+
+def test_multipass_shared_block_consuming_the_input_is_found() -> None:
+    """The first pass of a block shared across depth constrains the input width."""
+
+    model = SharedBlockEncoder(width=16)
+    report = tl.debug.guess_input_shape(model)
+
+    assert report.found, report.message
+    assert report.shape is not None and report.shape[-1] == 16
+    assert report.constraining_module == "shared:1"
+    assert repr(report).endswith(", constrained by shared"), repr(report)
     _assert_result_runs(model, report)
 
 
