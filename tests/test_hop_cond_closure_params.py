@@ -32,8 +32,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _capture_state_helpers, _state
+from torchlens._utils import _torch_compat
 from torchlens.backends.torch import _tracing_pass, rescue
 from torchlens.backends.torch._tl import get_module_meta
+from torchlens.backends.torch.completeness_witness import _CompletenessDispatchMode
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
@@ -438,18 +440,17 @@ def test_closure_param_cond_runs_the_branch_once_by_count() -> None:
     assert torch.equal(_output(trace).detach(), untraced.detach())
 
 
+@pytest.mark.parametrize("nested", [False, True])
 @pytest.mark.parametrize("grad", [True, False])
 @pytest.mark.parametrize("take_true", [True, False])
-def test_closure_param_cond_validates_true(take_true: bool, grad: bool) -> None:
-    """``tl.validate`` holds on the closure-parameter ``cond``.
+def test_closure_param_cond_validates_true(take_true: bool, grad: bool, nested: bool) -> None:
+    """``tl.validate`` holds on the closure-parameter ``cond``, bound-method or plain branches.
 
-    The branches are plain functions: under validation's completeness check
-    torch runs ``cond`` without compiling it, and with a grad operand its
-    autograd retraces each branch with ``make_fx``, which cannot take a bound
-    method (it counts ``self`` as an operand).
+    Validation's completeness witness is a dispatch mode; it steps aside while
+    Dynamo compiles the ``cond`` entry and rejoins the compiled run.
     """
 
-    model, x = _ClosureCond(take_true=take_true, nested=True), _input(grad)
+    model, x = _ClosureCond(take_true=take_true, nested=nested), _input(grad)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, validate_metadata=True) is True
@@ -488,7 +489,7 @@ def test_closure_param_cond_with_a_planted_drop_fails_validation(
     """
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    model, x = _ClosureCond("mul", mul=raw_mul, nested=True), _input(grad)
+    model, x = _ClosureCond("mul", mul=raw_mul), _input(grad)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, validate_metadata=True) is False
@@ -573,3 +574,179 @@ def test_direct_forward_call_outside_a_cond_compile_logs_and_is_noted() -> None:
     assert _module_func_names(trace, "lin") == ["linear"]
     meta = get_module_meta(model.lin)
     assert meta is not None and meta.direct_forward_called
+
+
+@pytest.fixture
+def witness_on() -> Iterator[None]:
+    """Run the test with the completeness witness's dispatch mode on every capture.
+
+    Yields
+    ------
+    None
+        While the wrappers are installed with the witness on; they are
+        re-installed with the prior setting after.
+    """
+
+    saved_escape: Any = _state._escape_detector_mode
+    saved_witness: Any = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+
+
+def _witness_census(model: nn.Module, x: torch.Tensor) -> collections.Counter[str]:
+    """Capture ``model`` and return every op the witness saw inside its ``cond`` rule.
+
+    Parameters
+    ----------
+    model:
+        Model to capture.
+    x:
+        Its input.
+
+    Returns
+    -------
+    collections.Counter[str]
+        Census by operator overload name.
+    """
+
+    cond_op = _torch_compat.get_higher_order_operator("cond", "cond_op")
+    assert cond_op is not None
+    rule = cond_op.python_key_table[_CompletenessDispatchMode]
+    real_dispatch = _CompletenessDispatchMode.__torch_dispatch__
+    inside = [False]
+    census: collections.Counter[str] = collections.Counter()
+
+    def spy_rule(mode: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run the witness's ``cond`` rule, marking its census window.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        *args, **kwargs:
+            The rule's arguments.
+
+        Returns
+        -------
+        Any
+            The rule's result.
+        """
+
+        inside[0] = True
+        try:
+            return rule(mode, *args, **kwargs)
+        finally:
+            inside[0] = False
+
+    def spy_dispatch(mode: Any, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
+        """Count ``func`` inside the ``cond`` rule, then dispatch it as the witness does.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        func, types, args, kwargs:
+            The dispatched call.
+
+        Returns
+        -------
+        Any
+            The witness's result.
+        """
+
+        if inside[0]:
+            census[str(func)] += 1
+        return real_dispatch(mode, func, types, args, kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(cond_op.python_key_table, _CompletenessDispatchMode, spy_rule)
+        patch.setattr(_CompletenessDispatchMode, "__torch_dispatch__", spy_dispatch)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tl.trace(model, x).cleanup()
+    return census
+
+
+@pytest.mark.usefixtures("witness_on")
+@pytest.mark.parametrize("take_true", [True, False])
+def test_closure_param_cond_grad_witness_census_equals_no_grad(take_true: bool) -> None:
+    """With a grad operand the witness sees the branch's ops exactly as without one."""
+
+    model = _ClosureCond(take_true=take_true)
+    with_grad = _witness_census(model, _input(True))
+    without_grad = _witness_census(model, _input(False))
+    assert with_grad, with_grad
+    assert with_grad == without_grad
+    assert any("addmm" in name or "linear" in name for name in with_grad) is take_true
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_closure_param_cond_grad_planted_drop_is_named_by_the_witness(
+    raw_mul: _Mul, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under grad, the branch's raw ``mul`` is named by the witness and fails the capture's check.
+
+    The rescue re-run is disabled so the capture keeps the planted drop.
+    """
+
+    monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
+    model, x = _ClosureCond("mul", mul=raw_mul), _input(True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x)
+    try:
+        operators = [str(row["operator"]) for row in trace.completeness_diagnostics]
+        verified = trace.provenance.verified
+    finally:
+        trace.cleanup()
+    assert "aten.mul.Tensor" in operators, operators
+    assert verified is False
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_closure_param_cond_grad_branch_real_calls_are_all_witnessed() -> None:
+    """Every real call of a branch op runs inside the witness, none while it steps aside.
+
+    The counting op's real kernel runs only on real tensors; the witness counts
+    each call it dispatches. A real call while the witness is off the stack
+    (Dynamo's trace of the entry) would leave the real count above the
+    witness's.
+    """
+
+    if not _COUNT_OP:
+        _COUNT_OP.append(_define_count_op())
+    model = _ClosureCond("count")
+    real_dispatch = _CompletenessDispatchMode.__torch_dispatch__
+    witnessed = [0]
+
+    def spy_dispatch(mode: Any, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
+        """Count the witness's dispatches of the counting op, then dispatch as the witness does.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        func, types, args, kwargs:
+            The dispatched call.
+
+        Returns
+        -------
+        Any
+            The witness's result.
+        """
+
+        if "count_real_calls" in str(func):
+            witnessed[0] += 1
+        return real_dispatch(mode, func, types, args, kwargs)
+
+    _REAL_CALLS[0] = 0
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(_CompletenessDispatchMode, "__torch_dispatch__", spy_dispatch)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            tl.trace(model, _input(True)).cleanup()
+    assert _REAL_CALLS[0] == 1
+    assert witnessed[0] == _REAL_CALLS[0]
