@@ -124,9 +124,9 @@ def _bump_deduped_edge_multiplicity(
     base_label = entry["base_label"]
     if base_label and str(base_label).startswith("<"):
         # A pre-existing HTML label keeps the historical concatenation.
-        entry["edge_dict"]["label"] = f"{base_label} x{count}"
+        entry["edge_dict"]["label"] = f"{base_label} x{count:,}"
     else:
-        text = f"{base_label} x{count}" if base_label else f"x{count}"
+        text = f"{base_label} x{count:,}" if base_label else f"x{count:,}"
         entry["edge_dict"]["label"] = _html_multiplicity_edge_label(text)
     body_index = entry["body_index"]
     if body_index is None:

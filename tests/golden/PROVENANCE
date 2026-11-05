@@ -368,3 +368,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 4181fa4e0590d0ef8d370a688d097ddb77c1a84b (clean)
 recorded: 2026-11-05T07:04:59.137347+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: render-units-1105: drawn sizes divide by 1000 to match KB and MB; full counts carry thousands separators
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 55bb34dbffbe437c703fec4a8c8afce8aef3306a (clean)
+recorded: 2026-11-05T10:28:20.434298+00:00

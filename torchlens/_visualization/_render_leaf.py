@@ -815,7 +815,7 @@ def _add_collapsed_container_node(
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
-    label_lines = [f"{kind} x{len(leaves)}", shape]
+    label_lines = [f"{kind} x{len(leaves):,}", shape]
     if label_lines_sink is not None:
         label_lines_sink[node_name] = label_lines
     pending_nodes.append(

@@ -33,7 +33,7 @@ program to be installed.
 
 The graph flows from the input at the bottom to the output at the top. The header in the top
 left corner names the model and counts the whole network, whatever the drawing collapses: 12
-operations (18.9 KB of outputs; two of them, the batch norms' step-counter updates, are hidden
+operations (19.4 KB of outputs; two of them, the batch norms' step-counter updates, are hidden
 with the buffers) and 1.61K parameters, all trainable. Large counts print compact (`86.6M params`,
 `12.3K ops`). Each thick-bordered box is one module call: here
 `@features` (an `nn.Sequential`) holds two `ConvBlock` modules, `@features.0` and
