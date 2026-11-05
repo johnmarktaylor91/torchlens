@@ -493,7 +493,7 @@ def test_output_role_spelling_names_the_projective_target() -> None:
         assert role and role != output.label
         by_op = source.projective_field.at((4, 4), target=output)
         by_role = source.projective_field.at((4, 4), target=role)
-        assert (by_role.io_role, by_role.axes) == (by_op.graph.io_role, by_op.axes)
+        assert (by_role.io_role, by_role.axes) == (by_op.io_role, by_op.axes)
     finally:
         trace.cleanup()
 
