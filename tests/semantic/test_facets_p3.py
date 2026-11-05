@@ -180,13 +180,19 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     assert torch.allclose(view.z, op.out, atol=1e-5, rtol=1e-4)
 
 
-class _MaskedSdpaAttention(nn.Module):
-    """SDPA attention reading a boolean key mask passed in by its caller."""
+class MistralAttention(nn.Module):
+    """SDPA attention reading a boolean key mask passed in by its caller.
+
+    The class name selects the built-in Llama-family attention recipe.
+    """
 
     def __init__(self, dropout_p: float = 0.0) -> None:
         """Initialize projections and the train-mode dropout probability."""
 
         super().__init__()
+        self.num_heads = 2
+        self.num_key_value_heads = 2
+        self.head_dim = 4
         self.q_proj = nn.Linear(8, 8)
         self.k_proj = nn.Linear(8, 8)
         self.v_proj = nn.Linear(8, 8)
@@ -211,7 +217,7 @@ class _MaskBuildingWrapper(nn.Module):
         """Initialize the attention child."""
 
         super().__init__()
-        self.attn = _MaskedSdpaAttention(dropout_p)
+        self.attn = MistralAttention(dropout_p)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Mark rows whose features sum below -1 as padding keys."""
