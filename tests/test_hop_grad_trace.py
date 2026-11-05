@@ -803,7 +803,9 @@ def test_map_grad_witness_census_of_the_body_equals_the_forced_eager_capture() -
 
     The lifted entry compile runs the compiled graph with the witness re-entered,
     so the witness sees every aten call of the body rows; the capture returns the
-    one stacked output the untraced call returns, and is verified.
+    one stacked output the untraced call returns, and is verified. The reference
+    is the forced-eager capture without grad: with grad and no lifted entry the
+    capture refuses (``test_map_grad_operand_capture_fails_loudly_without_the_entry_lift``).
     """
 
     x = _input("map")
@@ -815,7 +817,7 @@ def test_map_grad_witness_census_of_the_body_equals_the_forced_eager_capture() -
     finally:
         trace.cleanup()
     with _forced_eager_capture():
-        forced, forced_trace = _map_body_census(x.clone().requires_grad_(True))
+        forced, forced_trace = _map_body_census(x.clone())
     forced_trace.cleanup()
     assert lifted["aten.mul.Tensor"] == 3, lifted
     assert lifted == forced
