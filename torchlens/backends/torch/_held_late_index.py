@@ -11,8 +11,9 @@ exactly like a held buffer. Without a stamp, their first consumer was recorded a
 parentless op with an unattributed tensor argument.
 
 At first use, :func:`late_index_model_owned_tensor` resolves such a tensor to an
-address derived from where the model holds it and stamps it as a session buffer, so
-the caller logs a buffer source. It admits only the exact object the snapshot pinned,
+address derived from where the model holds it; the caller
+(``buffer_writes.resolve_or_late_index_buffer_address``) stamps it as a session buffer and
+logs a buffer source. It admits only the exact object the snapshot pinned,
 untagged, and not reachable only from a forward callable (those are closure
 constants). A tensor first seen mid-forward is not in the snapshot and keeps the
 unattributed witness.
@@ -48,7 +49,7 @@ _SCALAR_TYPES = (str, bytes, int, float, bool, complex)
 
 
 def late_index_model_owned_tensor(trace: Trace, tensor: torch.Tensor) -> str | None:
-    """Stamp an unnamed pre-forward model-owned tensor as a buffer and return its address.
+    """Return the buffer address for an unnamed pre-forward model-owned tensor.
 
     Parameters
     ----------
@@ -60,7 +61,7 @@ def late_index_model_owned_tensor(trace: Trace, tensor: torch.Tensor) -> str | N
     Returns
     -------
     str | None
-        The stamped buffer address, or ``None`` when ``tensor`` is not an untagged
+        The buffer address for the caller to stamp, or ``None`` when ``tensor`` is not an untagged
         pre-forward model-owned tensor.
     """
 
@@ -85,11 +86,7 @@ def late_index_model_owned_tensor(trace: Trace, tensor: torch.Tensor) -> str | N
         with _state.pause_logging():
             addresses = held_tensor_addresses(root, taken) if root is not None else {}
         build_data[_ADDRESSES_KEY] = addresses
-    address = addresses.get(id(tensor)) or _reserve(_FALLBACK_STEM, taken)
-    from .buffer_writes import register_session_buffer_stamp
-
-    register_session_buffer_stamp(trace, tensor, address)
-    return address
+    return addresses.get(id(tensor)) or _reserve(_FALLBACK_STEM, taken)
 
 
 def held_tensor_addresses(root: nn.Module, taken: set[str]) -> dict[int, str]:

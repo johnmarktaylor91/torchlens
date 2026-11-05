@@ -25,6 +25,7 @@ from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils._torch_symbols import tensor_read
 from ..._utils.tensor_utils import safe_copy
 from ._fused_norm_writes import _fused_update_mode, _is_fused_mutator, fused_call_writes
+from ._held_late_index import late_index_model_owned_tensor
 from ._identity_cache import IdentityCache, identity_cached
 from ._state_bytes import _whole_storage_uint8
 from ._storage_overlap import _ranges_overlap, _storage_range
@@ -1734,12 +1735,11 @@ def _could_mutate(func_name: str, kwargs: dict[str, Any] | None = None) -> bool:
 def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> str | None:
     """Resolve a wrapped-call tensor arg to a buffer address, late-indexing lazies.
 
-    The first-encounter registration ladder used by the wrapper hot path
-    (hoisted from ``wrappers.py`` under the R43 file-size ratchet): the
-    session-validated stamp first (r81 -- never trust a raw static stamp),
-    the storage-anchored tracker resolution second, the F20 lazy-buffer late-index
-    third (a no-op unless pending lazy buffers were recorded), and an unstamped
-    pre-forward model-owned tensor last (``_held_late_index``).
+    The first-encounter registration ladder of the wrapper hot path: the
+    session-validated stamp first (r81 -- never trust a raw static stamp), the
+    storage-anchored tracker resolution second, the F20 lazy-buffer late-index
+    third (a no-op unless pending lazy buffers were recorded), and last an
+    unstamped pre-forward model-owned tensor (``_held_late_index``), stamped here.
 
     Parameters
     ----------
@@ -1765,6 +1765,6 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     tracker = peek_buffer_write_tracker(trace) if address is None else None
     if tracker is not None:
         address = tracker.index_materialized_buffer(tensor)
-    from ._held_late_index import late_index_model_owned_tensor
-
-    return address if address is not None else late_index_model_owned_tensor(trace, tensor)
+    if address is None and (address := late_index_model_owned_tensor(trace, tensor)) is not None:
+        register_session_buffer_stamp(trace, tensor, address)
+    return address
