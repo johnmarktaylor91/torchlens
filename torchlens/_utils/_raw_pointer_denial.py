@@ -63,8 +63,8 @@ namespaces -- ``tests/test_sec_raw_pointer_family.py`` re-enumerates at runtime
 so a future admission regression fails). ``data_ptr`` as a RESULT (the pure read
 ``Tensor.data_ptr()``, which consumes no address) is deliberately NOT denied.
 
-Leaf module: imports ``torch``, the standard library and the torch-only
-``_torch_symbols`` leaf, so the gate in
+Leaf module: imports ``torch``, the standard library, the torch-only
+``_torch_symbols`` leaf and the ``errors`` taxonomy, so the gate in
 ``_utils/_callable_safety`` (which the early security front doors call) can
 import it without import-order coupling.
 """
@@ -77,6 +77,7 @@ from typing import Any
 
 import torch
 
+from ..errors.runnable import RunPreconditionError
 from ._torch_symbols import torch_attr
 
 __tl_layer__ = "L0"
@@ -395,3 +396,34 @@ def mapping_pointer_keyword(kwargs: Mapping[str, Any]) -> str | None:
     """
 
     return raw_pointer_keyword_name(kwargs.keys())
+
+
+def refuse_pointer_keywords(layer: Any, kwargs: Any) -> None:
+    """Refuse a replay re-execution whose keywords name a raw pointer.
+
+    The execution-boundary belt behind the loaded-validation resolution refusal: it
+    covers in-memory traces and every re-execution (forward replay, perturbation,
+    influence probes), so no replayed call hands torch an address. It raises the
+    same typed refusal and code as the runnable argument writer.
+
+    Parameters
+    ----------
+    layer:
+        The op about to be re-executed.
+    kwargs:
+        The keyword mapping the re-execution would pass.
+
+    Raises
+    ------
+    RunPreconditionError
+        When a keyword names a raw pointer or foreign handle.
+    """
+
+    name = raw_pointer_keyword_name(kwargs or ())
+    if name is None:
+        return
+    label = getattr(layer, "layer_label", "<unknown>")
+    raise RunPreconditionError(
+        pointer_keyword_refusal_detail(name, f"Replay of op {label!r}"),
+        code="call_structure_mismatch",
+    )

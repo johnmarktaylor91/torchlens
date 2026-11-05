@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils._raw_pointer_denial import refuse_pointer_keywords
 from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, recorder_signature
@@ -35,7 +36,6 @@ from ..backends.torch._autograd_grad_marker import (
     is_autograd_backward_recorder,
     is_autograd_grad_recorder,
 )
-from ._loaded_callables import refuse_pointer_keywords
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 from ._replay_storage_context import check_view_context_receiver
 

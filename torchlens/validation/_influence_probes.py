@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._loaded_callables import refuse_pointer_keywords
+from .._utils._raw_pointer_denial import refuse_pointer_keywords
 from ._replay_warnings import replay_warnings_ignored
 
 if TYPE_CHECKING:

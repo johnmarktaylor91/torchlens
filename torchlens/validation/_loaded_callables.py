@@ -10,8 +10,8 @@ resolver intervention replay uses: only pure torch, ``torch.Tensor``,
 (foreign code) is never imported here, so its op stays unresolved and the
 entry check refuses the bundle by name exactly as before. An op whose saved
 keyword names a raw pointer (``Tensor.new(cdata=...)``) is never resolved, and
-:func:`refuse_pointer_keywords` refuses the same call again at every replay
-re-execution (``_raw_pointer_denial``).
+``_raw_pointer_denial.refuse_pointer_keywords`` refuses the same call again at
+every replay re-execution.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 from .._utils._callable_safety import _unwrap_capture_wrapper
-from .._utils._raw_pointer_denial import pointer_keyword_refusal_detail, raw_pointer_keyword_name
+from .._utils._raw_pointer_denial import raw_pointer_keyword_name
 
 #: Registry namespaces resolved for replay; ``custom`` (foreign code) never is.
 RESOLVABLE_NAMESPACES: frozenset[str] = frozenset(
@@ -161,36 +161,3 @@ def release_loaded_callables(layers: list[Any]) -> None:
 
     for layer in layers:
         layer.func = None
-
-
-def refuse_pointer_keywords(layer: Any, kwargs: Any) -> None:
-    """Refuse a replay re-execution whose keywords name a raw pointer.
-
-    The execution-boundary belt behind the resolution refusal: it covers
-    in-memory traces and every re-execution (forward replay, perturbation,
-    influence probes), so no replayed call hands torch an address.
-
-    Parameters
-    ----------
-    layer:
-        The op about to be re-executed.
-    kwargs:
-        The keyword mapping the re-execution would pass.
-
-    Raises
-    ------
-    UntrustedCallableError
-        When a keyword names a raw pointer or foreign handle.
-    """
-
-    name = raw_pointer_keyword_name(kwargs or ())
-    if name is None:
-        return
-    from ..intervention.errors import UntrustedCallableError
-
-    label = getattr(layer, "layer_label", "<unknown>")
-    raise UntrustedCallableError(
-        pointer_keyword_refusal_detail(name, f"Replay of op {label!r}"),
-        code="custom_callable_not_pure",
-        import_path=str(getattr(layer, "func_name", "")),
-    )

@@ -60,7 +60,11 @@ from torchlens._utils._torch_symbols import (
     getattr_allowlisted,
     torch_namespace,
 )
-from torchlens.errors import RunCapabilityUnavailableError, UntrustedCallableError
+from torchlens.errors import (
+    RunCapabilityUnavailableError,
+    RunPreconditionError,
+    UntrustedCallableError,
+)
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.validation._autograd_grad_replay import execute_replay_func
@@ -462,9 +466,9 @@ def test_replay_execution_refuses_a_pointer_keyword() -> None:
     op = next(op for op in trace._layer_list if op.func_name == "relu")
     calls: list[Any] = []
     op.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
-    with pytest.raises(UntrustedCallableError) as excinfo:
+    with pytest.raises(RunPreconditionError) as excinfo:
         execute_replay_func(op, {"args": list(op.saved_args), "kwargs": {"cdata": 0}}, [])
-    assert excinfo.value.fields["code"] == "custom_callable_not_pure"
+    assert excinfo.value.code == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
     assert calls == []
 
 
@@ -479,7 +483,7 @@ def test_influence_probe_refuses_a_pointer_keyword() -> None:
         func_name="new",
     )
     call = _ProbeCall((torch.zeros(2),), {"cdata": 0}, 0)
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(RunPreconditionError):
         _substitutes_move_output(layer, call, lambda: (torch.ones(2),))  # type: ignore[arg-type]
     assert calls == []
 
