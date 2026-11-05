@@ -9,6 +9,7 @@ used to write an entry whose load raised ``AttributeError: type object
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +71,12 @@ def _capture(cache_dir: Path) -> Any:
     return tl.options.CaptureOptions(cache=True, cache_dir=cache_dir, save_args=True)
 
 
+# ``Tensor.set_`` makes the capture report its in-place target as an argument
+# with no known source on every supported torch; that advisory is not what this
+# file checks, so the set-storage case ignores exactly that message.
+_SET_TARGET_ADVISORY = "TorchLens found tensor arguments with no graph/source provenance"
+
+
 @pytest.mark.parametrize(
     ("model_cls", "shape", "saves_storage"),
     [(_ViewsAndInPlace, (3, 4), False), (_SetStorage, (2, 4), True)],
@@ -82,8 +89,11 @@ def test_save_args_cache_round_trip_loads_equal_args_and_outputs(
 
     torch.manual_seed(0)
     model, x = model_cls(), torch.randn(*shape)
-    fresh = tl.trace(model, x, capture=_capture(tmp_path / "cache"))
-    loaded = tl.trace(model, x, capture=_capture(tmp_path / "cache"))
+    with warnings.catch_warnings():
+        if saves_storage:
+            warnings.filterwarnings("ignore", message=_SET_TARGET_ADVISORY, category=UserWarning)
+        fresh = tl.trace(model, x, capture=_capture(tmp_path / "cache"))
+        loaded = tl.trace(model, x, capture=_capture(tmp_path / "cache"))
     assert loaded.provenance.cache_hit is True
     for fresh_op, loaded_op in zip(fresh._layer_list, loaded._layer_list, strict=True):
         label = str(fresh_op.label)
