@@ -342,7 +342,7 @@ pattern = log.modules["blocks.0.attn"].facets.pattern
 z = log.modules["blocks.0.attn"].facets.z
 ```
 
-When the default capture did not keep an input (a selective `save=` that skips
+When the default capture did not keep an input (a selective `save=` that does not save
 the op producing Q, K, V or the mask, or a structure-only capture), the facet
 fails closed: `facets.declared()` marks it `needs_capture` and access raises
 `MissingFacetError` naming the missing input. Saving the SDPA call's arguments
