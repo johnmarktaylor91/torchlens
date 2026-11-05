@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1598 modules, 680722 lines, 0 modules without a docstring.
+83 packages, 1598 modules, 680721 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 34493 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 77 | 34492 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34493 lines)
+TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34492 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -155,7 +155,7 @@ TorchLens - extract outs and metadata from PyTorch models. (77 modules, 34493 li
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 95 |
 | `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 963 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
-| `_state` | Global state for torchlens toggle-gated decoration. | 1408 |
+| `_state` | Global state for torchlens toggle-gated decoration. | 1407 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 279 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
 | `_torchvision_ops` | Torchvision custom-op wrap targets, appended lazily once torchvision is imported. | 54 |
