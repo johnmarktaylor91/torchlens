@@ -5,6 +5,11 @@ logged against a safe copy whose own ``grad_fn`` is TorchLens's ``CloneBackward`
 bookkeeping node. The wrapper stamps the USER op's live node on the copy
 (``tl_user_grad_fn``) and the op record reads it back, so the copy's node is never
 recorded as the operation's autograd handle.
+
+An in-place write through a view also rebases the view's autograd history:
+``rebase_history`` gives the base a fresh ``CopySlices`` node that takes the
+place of the view's own node in the graph. ``rebind_rebased_view_producers``
+moves the ops whose recorded node autograd discarded onto that ``CopySlices``.
 """
 
 from __future__ import annotations
@@ -14,7 +19,15 @@ from typing import Any
 
 import torch
 
+from ..._state import pause_logging
+from ..._utils._internal_read import internal_scalar_read
+from ..._utils._tensor_label import get_tensor_label
+
 _USER_GRAD_FN_ATTR = "tl_user_grad_fn"
+
+# Bound on the autograd-node walks below (view chains and base lineage are short;
+# the bound only keeps a malformed graph from looping).
+_MAX_VIEW_REBASE_DEPTH = 64
 
 NO_USER_GRAD_FN: object = object()
 """Stamp for a same-object in-place return whose live receiver has no ``grad_fn``.
@@ -68,3 +81,86 @@ def recorded_op_grad_fn(user_grad_fn: Any, t: torch.Tensor) -> Any:
     if user_grad_fn is NO_USER_GRAD_FN:
         return None
     return user_grad_fn if user_grad_fn is not None else t.grad_fn
+
+
+def _first_input_node(node: Any) -> Any:
+    """Return the node behind an autograd node's first input edge, or ``None``."""
+
+    edges = getattr(node, "next_functions", None) or ()
+    return edges[0][0] if edges else None
+
+
+def _orphaned_view_nodes(start: Any, copy_slices: Any) -> list[Any]:
+    """Return the nodes a view write's ``CopySlices`` cut out of the graph.
+
+    ``rebase_history`` points ``CopySlices``'s first edge at the base's prior node
+    and drops the view's node (and, for a view of a view, every intermediate view
+    node) from the graph. Walking first-input edges from the receiver's recorded
+    node, every node before the walk meets the base lineage behind ``CopySlices``
+    is such a node. Any other shape (the walk reaches ``CopySlices`` itself, never
+    meets the lineage, or exceeds the bound) proves nothing and returns ``[]``.
+    """
+
+    lineage: list[Any] = []
+    node = _first_input_node(copy_slices)
+    while node is not None and len(lineage) < _MAX_VIEW_REBASE_DEPTH:
+        lineage.append(node)
+        node = _first_input_node(node)
+    chain: list[Any] = []
+    node = start
+    while node is not None and node is not copy_slices and len(chain) < _MAX_VIEW_REBASE_DEPTH:
+        if any(node is base_node for base_node in lineage):
+            return chain
+        chain.append(node)
+        node = _first_input_node(node)
+    return []
+
+
+def rebind_rebased_view_producers(trace: Any, receiver: Any) -> None:
+    """Point ops whose node an in-place view write discarded at its ``CopySlices``.
+
+    Called after an in-place op ran and before the receiver takes the op's label.
+    When the receiver is a view, autograd's ``rebase_history`` gave the base a new
+    ``CopySlices`` node that takes the place of the view's node: the op that
+    produced the view (and any intermediate view op) recorded a node that no
+    backward pass can reach. Each such op's recorded handle moves to the
+    ``CopySlices`` node, so the recorded backward graph keeps the forward
+    topology (the node between the view's consumers and the base's producer).
+    Only a fresh ``CopySlices`` (no op records it yet) whose regenerated view node
+    reads from it, reached by a provable view chain, triggers a rebind; anything
+    else leaves the records unchanged.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    receiver:
+        The live tensor the in-place op wrote through.
+    """
+
+    handles = getattr(getattr(trace, "capture_events", None), "grad_fn_handles_by_label_raw", None)
+    if handles is None or not isinstance(receiver, torch.Tensor):
+        return
+    with pause_logging(), internal_scalar_read():
+        if not receiver.requires_grad or not receiver._is_view():
+            return
+        copy_slices = receiver._base.grad_fn
+        view_node = receiver.grad_fn
+        label = get_tensor_label(receiver)
+    if (
+        label is None
+        or type(copy_slices).__name__ != "CopySlices"
+        or _first_input_node(view_node) is not copy_slices
+        or any(handle is copy_slices for handle in handles.values())
+    ):
+        return
+    orphaned = _orphaned_view_nodes(handles.get(label), copy_slices)
+    if not orphaned:
+        return
+    # Deferred: ``backward`` imports this package's wrappers at module load.
+    from .backward import _register_forward_grad_fn
+
+    for raw_label, handle in list(handles.items()):
+        if any(handle is node for node in orphaned):
+            handles[raw_label] = copy_slices
+            _register_forward_grad_fn(trace, copy_slices, raw_label)
