@@ -6880,6 +6880,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_ops_arg_slots.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/backends/torch/_ops_arg_slots.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/_ops_arguments.py",
@@ -6892,7 +6908,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/torch/_ops_arguments.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -7170,6 +7186,22 @@
  {
   "ambiguous": false,
   "field": "backend_semantics",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_ops_shared_fields.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
   "file": "torchlens/backends/torch/_ops_shared_fields.py",
   "has_default": false,
   "sites": 1,
