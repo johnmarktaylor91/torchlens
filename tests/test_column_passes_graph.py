@@ -223,9 +223,7 @@ def test_column_and_facade_bodies_store_the_same_result(
     facade_ops = list(facade_trace.ops)
     assert [op.label for op in column_ops] == [op.label for op in facade_ops]
     assert any(op.control_flow.branch_stack for op in column_ops), "step 5 must attribute"
-    assert any(op.graph.is_internal_sink for op in column_ops), (
-        "step 3 must log a sink"
-    )  # record-groups: flat
+    assert any(op.is_internal_sink for op in column_ops), "step 3 must log a sink"
     for column_op, facade_op in zip(column_ops, facade_ops, strict=True):
         for name in _OP_FIELDS:
             left = record_member(column_op, name, None)

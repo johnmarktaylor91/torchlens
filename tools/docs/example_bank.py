@@ -374,12 +374,9 @@ def _member_spellings() -> dict[str, dict[str, str | None]]:
 
     The lockstep inventory lists an Op or Layer member by its persisted flat name;
     the public spelling is ``group.leaf``, the renamed flat name, or ``None`` when the
-    member was removed (imports torchlens). A Layer member with no Layer row that Layer
-    neither defines nor stores reads through the Op row, as ``Layer.__getattr__`` does.
+    member was removed (imports torchlens).
     """
 
-    from torchlens._constants import LAYER_LOG_FIELD_ORDER
-    from torchlens._data_classes.layer import Layer
     from torchlens._utils._record_group_table import LAYER_MEMBER_MOVES, OP_MEMBER_MOVES
 
     spellings: dict[str, dict[str, str | None]] = {}
@@ -388,10 +385,6 @@ def _member_spellings() -> dict[str, dict[str, str | None]]:
             old: None if group == "removed" else leaf if group == "rename" else f"{group}.{leaf}"
             for old, group, leaf in moves
         }
-    defined = {name for cls in Layer.__mro__ for name in vars(cls)} | set(LAYER_LOG_FIELD_ORDER)
-    for old, spelled in spellings["Op"].items():
-        if old not in spellings["Layer"] and old not in defined:
-            spellings["Layer"][old] = spelled
     return spellings
 
 

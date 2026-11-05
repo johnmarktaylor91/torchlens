@@ -258,8 +258,9 @@ def test_label_field_set_matches_every_builder_read(
     field_reads = reads & stored
     assert _uncovered(field_reads, declared) == set()
     assert field_reads == declared
-    # Each is a plain cell descriptor, so the cell IS what the builder reads.
-    assert all(type(vars(Op)[name]) is _OpField for name in declared)
+    # Each is a plain cell descriptor (a grouped field's sits under its storage
+    # attribute), so the cell IS what the builder reads.
+    assert all(type(vars(Op)[OP_STORAGE_ATTRS.get(name, name)]) is _OpField for name in declared)
     # Red-capable: dropping any one entry is caught.
     for name in sorted(declared):
         assert _uncovered(field_reads, declared - {name}) == {name}
