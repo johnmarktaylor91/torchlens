@@ -65,6 +65,20 @@ jobs:
             numpy: "numpy==1.26.4"
             constraints: .github/workflows/numpy1-constraints.txt
             scope: smoke
+          # NumPy 2 boundary (walk late.6): torch 2.3 is the first torch built
+          # against NumPy 2. torch 2.1 and 2.2 import under NumPy 2, but every
+          # torch<->NumPy exchange inside torch raises "Numpy is not
+          # available", which is why the floor rows above pin NumPy 1.26.4.
+          # This row runs the smoke tier on the lowest torch whose bridge works
+          # with the latest NumPy 2 (python 3.11, so the resolver can pick the
+          # newest NumPy release; transformers 5.x needs torch>=2.4, so no R0
+          # sweep here). Every other NumPy 2 row runs torch 2.6 or later.
+          - track: numpy2-boundary
+            python: "3.11"
+            torch: "2.3.1+cpu"
+            torchvision: "0.18.1+cpu"
+            numpy: numpy
+            scope: smoke
           - track: floor
             python: "3.13"
             torch: "2.6.0+cpu"
