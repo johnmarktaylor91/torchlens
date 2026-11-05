@@ -6000,7 +6000,10 @@ drops a newly listed record from the keyword rows.
 | `tl.preprocessing.InputDiagnostics` | Opt-in tensor findings (record three of three) |
 | `tl.preprocessing.PreprocessingComparison` | The field-level audit report (record two of three) |
 | `tl.preprocessing.Resolution` | One authority resolution: provenance record + declared fields + transform |
+| `tl.preprocessing.compare` | Field-by-field audit of an applied preprocessing pipeline against an authority (`authority`, `applied=`); returns a `PreprocessingComparison`, never a transform, and refuses mismatch or unknown verdicts only under `strict=True` |
+| `tl.preprocessing.diagnose` | Opt-in tensor diagnostics on the batch fed to the model (`batch`, `declared=`, `checks=`); returns `InputDiagnostics` findings, never a match |
 | `tl.preprocessing.register` | Decorator registering a custom input detector (`name=`, `priority=`; lower runs first) that turns a model's raw input into a trace |
+| `tl.preprocessing.resolve` | Resolve a preprocessing authority (an explicit `authority`, or discovery from `model=`; `offline=`) into a `Resolution`; nothing resolving returns the honest unknown, never a TorchLens-authored recipe |
 | `tl.preprocessing.unregister` | Remove a registered input detector by name |
 | `tl.receptive_field.AmbiguousInputError` | Raised when a query has more than one reachable model input |
 | `tl.receptive_field.EmpiricalAdjointCheck` | One sampled comparison of receptive and projective empirical derivatives |
