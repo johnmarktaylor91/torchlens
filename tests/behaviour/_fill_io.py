@@ -422,14 +422,21 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
 
 
 def _row_wise_pieces(cell: Cell, stimuli: torch.Tensor, size: int) -> list[torch.Tensor] | None:
-    """Plain per-chunk outputs when the model is row-wise over the batch, else ``None``."""
+    """Plain per-chunk outputs when the model is row-wise over the batch, else ``None``.
+
+    Each reference forward runs on an uncloned row view of one fresh copy of the
+    batch, at the offsets ``chunk_size`` slicing gives, as the chunked capture's
+    forwards do. A cloned piece would start at a fresh allocation, and some BLAS
+    kernels (MKL on AMD AVX2) round a matmul over a row-offset view 1 ulp apart
+    from the same rows at an aligned start; exact equality needs the same layout.
+    The views are built here from the input, never read from the product.
+    """
 
     rows = int(stimuli.shape[0])
+    batch = stimuli.clone()
     torch.manual_seed(SEED)
     try:
-        pieces = [
-            cell.model(stimuli[start : start + size].clone()) for start in range(0, rows, size)
-        ]
+        pieces = [cell.model(batch[start : start + size]) for start in range(0, rows, size)]
     except Exception:  # noqa: BLE001 - the model's own forward needs the whole batch
         return None
     if not all(isinstance(piece, torch.Tensor) for piece in pieces):

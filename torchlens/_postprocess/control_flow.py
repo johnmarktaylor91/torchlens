@@ -15,12 +15,12 @@ Step 6 (_fix_buffer_layers): Connects buffer sources, merges re-logged reads of
 from __future__ import annotations
 
 from collections import defaultdict
-from itertools import chain
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes.op import Op
-from . import ast_branches
-from ._branch_attribution import _code_context_position_key, _translate_conditional_stack
+from .._utils._record_group_table import record_member
+from . import _column_passes_graph, ast_branches
+from ._branch_attribution import _translate_conditional_stack
 from ._buffer_source_wiring import _buffer_values_identical, _wire_buffer_to_source
 
 if TYPE_CHECKING:
@@ -119,7 +119,7 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
         if label not in proven_labels:
             continue
         layer = self[label]
-        if not layer.control_flow.is_scalar_bool or getattr(layer.graph, "is_orphan", False):
+        if not layer.control_flow.is_scalar_bool or record_member(layer.graph, "is_orphan", False):
             continue
         if label not in seen_terminated_bool_labels:
             seen_terminated_bool_labels.add(label)
@@ -477,41 +477,14 @@ def _mark_conditional_branches_if_backward_flood(
         Per-bool branch-participating classifications keyed by raw layer label.
     """
 
-    self._graph_conditional_branch_edges = []
-    for layer in self:
-        if getattr(layer.graph, "is_orphan", False):
-            continue
-        layer._control_flow_entry_children = []
-        layer._control_flow_is_in_conditional_body = False
-
     branch_bool_labels = [
         bool_label
         for bool_label in _iter_terminal_scalar_bool_labels(self)
         if bool_classifications[bool_label]
         and self[bool_label].control_flow.is_terminal_conditional_bool
     ]
-
-    nodes_seen: set[str] = set()
-    node_stack = branch_bool_labels.copy()
-    while node_stack:
-        node_label = node_stack.pop()
-        node = self[node_label]
-        if node_label in nodes_seen:
-            continue
-        for parent_label in node.parents:
-            parent_layer = self[parent_label]
-            if parent_layer.graph.has_output_descendant:
-                parent_layer.control_flow.entry_children.append(node_label)
-                parent_layer._control_flow_is_in_conditional_body = False
-                nodes_seen.add(parent_label)
-                self._graph_conditional_branch_edges.append((parent_label, node_label))
-            else:
-                if parent_label in nodes_seen:
-                    continue
-                parent_layer._control_flow_is_in_conditional_body = True
-                node_stack.append(parent_label)
-
-        nodes_seen.add(node_label)
+    # Reset and flood bodies (column view, facade fallback) live in ``_column_passes_graph``.
+    _column_passes_graph.reset_and_flood_if_edges(self, branch_bool_labels)
 
 
 def _attribute_branches_forward(
@@ -528,41 +501,8 @@ def _attribute_branches_forward(
         Structural-to-dense conditional event lookup created in phase 5c.
     """
 
-    conditional_arm_entry_edges: dict[tuple[int, str], list[tuple[str, str]]] = defaultdict(list)
-    conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-
     _assign_conditional_branch_stacks(self, events_by_key)
-
-    for parent_label in self._raw_graph_ws.raw_layer_labels_list:
-        parent_layer = self[parent_label]
-        if getattr(parent_layer.graph, "is_orphan", False):
-            continue
-        for child_label in parent_layer.children:
-            child_layer = self[child_label]
-            if getattr(child_layer.graph, "is_orphan", False):
-                continue
-            gained_entries = _get_gained_branch_entries(
-                parent_layer.control_flow.branch_stack,
-                child_layer.control_flow.branch_stack,
-            )
-            for conditional_id, branch_kind in gained_entries:
-                parent_layer.control_flow.arm_children.setdefault(conditional_id, {}).setdefault(
-                    branch_kind, []
-                ).append(child_label)
-                conditional_arm_entry_edges[(conditional_id, branch_kind)].append(
-                    (parent_layer._label_raw, child_layer._label_raw)
-                )
-                conditional_edge_call_indices[
-                    (
-                        parent_layer._label_raw.split(":", 1)[0],
-                        child_layer._label_raw.split(":", 1)[0],
-                        conditional_id,
-                        branch_kind,
-                    )
-                ].append(child_layer.pass_number)
-
-    self._graph_conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
-    self._graph_conditional_edge_call_indices = dict(conditional_edge_call_indices)
+    _column_passes_graph.attribute_forward_edges(self)
 
 
 def _assign_conditional_branch_stacks(
@@ -583,20 +523,9 @@ def _assign_conditional_branch_stacks(
         Structural-to-dense conditional event lookup created in phase 5c.
     """
 
-    translated_by_stack: dict[tuple[tuple[Any, ...], ...], list[tuple[int, str]]] = {}
-    for layer_label in self._raw_graph_ws.raw_layer_labels_list:
-        layer = self[layer_label]
-        if getattr(layer.graph, "is_orphan", False):
-            continue
-        code_context = layer.source.frames
-        stack_key = _code_context_position_key(code_context)
-        translated = translated_by_stack.get(stack_key)
-        if translated is None:
-            translated = _translate_conditional_stack(code_context, events_by_key)
-            translated_by_stack[stack_key] = translated
-        layer._control_flow_branch_stack = list(translated)
-        layer._control_flow_branch_depth = len(layer.control_flow.branch_stack)
-        layer._control_flow_arm_children = {}
+    _column_passes_graph.assign_conditional_branch_stacks(
+        self, events_by_key, _translate_conditional_stack
+    )
 
 
 def _materialize_derived_views(self: Trace) -> None:
@@ -608,44 +537,7 @@ def _materialize_derived_views(self: Trace) -> None:
         Model log being postprocessed.
     """
 
-    self._graph_conditional_edge_call_indices = {
-        key: sorted(set(call_indexs))
-        for key, call_indexs in self._graph_conditional_edge_call_indices.items()
-    }
-
-    for layer_label in self._raw_graph_ws.raw_layer_labels_list:
-        layer = self[layer_label]
-        if getattr(layer.graph, "is_orphan", False):
-            continue
-        layer._control_flow_then_children = sorted(
-            set(
-                chain.from_iterable(
-                    branch_children.get("then", [])
-                    for branch_children in layer.control_flow.arm_children.values()
-                )
-            )
-        )
-
-        elif_children: dict[int, set[str]] = defaultdict(set)
-        for branch_children in layer.control_flow.arm_children.values():
-            for branch_kind, child_labels in branch_children.items():
-                if not branch_kind.startswith("elif_"):
-                    continue
-                elif_index = int(branch_kind.split("_", 1)[1])
-                elif_children[elif_index].update(child_labels)
-        layer._control_flow_elif_children = {
-            elif_index: sorted(child_labels)
-            for elif_index, child_labels in sorted(elif_children.items())
-        }
-
-        layer._control_flow_else_children = sorted(
-            set(
-                chain.from_iterable(
-                    branch_children.get("else", [])
-                    for branch_children in layer.control_flow.arm_children.values()
-                )
-            )
-        )
+    _column_passes_graph.materialize_derived_views(self)
 
 
 def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
@@ -669,7 +561,7 @@ def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
         for layer_label in self._raw_graph_ws.raw_layer_labels_list
         if layer_label in terminal_bool_labels
         and self[layer_label].control_flow.is_scalar_bool
-        and not getattr(self[layer_label].graph, "is_orphan", False)
+        and not record_member(self[layer_label].graph, "is_orphan", False)
     ]
 
 
@@ -700,35 +592,6 @@ def _build_conditional_record_lookup(
             for conditional_record in scope.conditionals:
                 record_lookup[conditional_record.key] = (conditional_record, scope.qualname)
     return record_lookup
-
-
-def _get_gained_branch_entries(
-    parent_stack: list[tuple[int, str]],
-    child_stack: list[tuple[int, str]],
-) -> list[tuple[int, str]]:
-    """Return child stack entries gained across one forward edge.
-
-    Parameters
-    ----------
-    parent_stack:
-        Parent operation branch stack, ordered outer-to-inner.
-    child_stack:
-        Child operation branch stack, ordered outer-to-inner.
-
-    Returns
-    -------
-    List[Tuple[int, str]]
-        Entries present in the child's stack beyond the shared prefix with the
-        parent, preserving outer-to-inner order.
-    """
-
-    shared_prefix_len = 0
-    max_shared = min(len(parent_stack), len(child_stack))
-    while shared_prefix_len < max_shared:
-        if parent_stack[shared_prefix_len] != child_stack[shared_prefix_len]:
-            break
-        shared_prefix_len += 1
-    return child_stack[shared_prefix_len:]
 
 
 def _merge_same_version_buffers(
@@ -828,7 +691,7 @@ def _fix_buffer_layers(self: Trace) -> None:
             _wire_buffer_to_source(self, layer, layer_label)
 
         if layer.buffer_address is None:
-            equivalence_class = str(getattr(layer.graph, "equivalence_class", ""))
+            equivalence_class = str(record_member(layer.graph, "equivalence_class", ""))
             if equivalence_class.startswith("buffer_"):
                 recovered_address = equivalence_class.removeprefix("buffer_")
                 if recovered_address and recovered_address != "None":
