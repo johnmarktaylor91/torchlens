@@ -32,7 +32,7 @@ walk now reads a distribution's instance state only.
 
 Planted-bug tests keep the checks' teeth: a cache refilled mid-forward by a hidden
 op behind a decorator still fails validation, and a distribution parameter made by
-a hidden op still fails output attribution.
+a hidden op still fails validation.
 """
 
 from __future__ import annotations
@@ -40,13 +40,11 @@ from __future__ import annotations
 import functools
 import warnings
 
-import pytest
 import torch
 from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import OutputAttributionError
 
 
 def _passthrough_decorator(func):  # type: ignore[no-untyped-def]
@@ -301,7 +299,8 @@ def test_distribution_inside_an_attribute_walked_output_is_not_evaluated() -> No
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # the unsupported-container fallback warning
         trace = tl.trace(model, x)  # raised OutputAttributionError at '0._exp.mean'
-    assert trace is not None
+        assert trace is not None
+        assert tl.validate(model, x, scope="forward") is True
 
 
 class _HiddenRateModel(nn.Module):
@@ -316,11 +315,11 @@ class _HiddenRateModel(nn.Module):
         return [_PoissonHolder(_STALE_MUL[0](h, 2.0)), h]
 
 
-def test_hidden_op_distribution_parameter_still_fails_output_attribution() -> None:
+def test_hidden_op_distribution_parameter_still_fails_validation() -> None:
     _install_stale_mul()
     torch.manual_seed(0)
     x = torch.randn(2, 4)
     model = _HiddenRateModel().eval()
-    with warnings.catch_warnings(), pytest.raises(OutputAttributionError, match="rate"):
-        warnings.simplefilter("ignore")
-        tl.trace(model, x)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the capture-gap warnings are not under test
+        assert tl.validate(model, x, scope="forward") is False
