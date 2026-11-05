@@ -1,5 +1,28 @@
 # TorchLens glossary
 
+Each entry gives a short definition first, then its fields, methods, keywords and refusal codes as
+a list. Spelling tables at the end list every current public name on one line each.
+
+## Contents
+
+- [Capture products](#capture-products)
+- [Graph records](#graph-records)
+- [Selection and storage](#selection-and-storage)
+- [Replay and intervention](#replay-and-intervention)
+- [Capture honesty and visualization](#capture-honesty-and-visualization)
+- [Backend-neutral identity](#backend-neutral-identity)
+- [Site selectors](#site-selectors)
+- [Intervention helpers](#intervention-helpers)
+- [Extraction, observers, and admin](#extraction-observers-and-admin)
+- [Persistence, containers, and namespaces](#persistence-containers-and-namespaces)
+- [Quantities and typed errors](#quantities-and-typed-errors)
+- [Distributed capture and cross-rank merging](#distributed-capture-and-cross-rank-merging)
+- [Backends: the backend protocol, maturity and conformance](#backends-the-backend-protocol-maturity-and-conformance)
+- [Unstable surfaces (documented-unstable; no deprecation shim owed)](#unstable-surfaces-documented-unstable-no-deprecation-shim-owed)
+- [Capture door and options: current spellings](#capture-door-and-options-current-spellings)
+- [Visuals and kits spellings](#visuals-and-kits-spellings)
+- [Current spellings: namespaces, members and keywords](#current-spellings-namespaces-members-and-keywords)
+
 This glossary fixes the public meaning of TorchLens terms. It describes the current 2.x API;
 removed spellings are listed separately in [Deprecations](deprecations.md).
 
@@ -10,34 +33,43 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   payloads, and capture metadata. `tl.trace(...)` returns a `Trace`.
 
 **Trace.provenance / Trace.options / Trace.cost / Trace.source / Trace.health / Trace.graph / Trace.autograd**
-: Read-only concern groups of a `Trace`; every persisted capture fact lives in exactly one group and
-  is stored privately as `_<group>_<leaf>` (tlspec v11). `trace.provenance` says how, when and from
-  what the capture happened (`backend`, `backend_version`, `backend_config`, `kind`, `start_time`,
-  `end_time`, `duration`, `setup_duration`, `cleanup_duration`, `verified`, `verification_reason`,
-  `cache_hit`, `cache_key`, `cache_path`, `recording_kept`, `fingerprint`, `input_signature_hash`,
-  `input_structure`, `input_object_id`, `model_object_id`, `param_hash_quick`, `param_hash_full`,
-  `param_source`, `root_entry_point`, `owner_thread_id`, `thread_count_start`, `thread_count_end`,
-  `thread_activity_detected`, `distributed_scope`, `observer_spans`, `is_appended`, ...) and
-  `trace.provenance.summary()` returns the capture-provenance text block; `trace.options` is the
-  stored snapshot of the capture options (`mode`, `save`, `save_grads`, `save_mode`, `save_args`,
-  `save_raw_input`, `save_transformed_output`, `save_rng`, `save_source_context`,
-  `source_context_lines`, `backward_ready`, `inference_only`, `structure_only`, `grouping`,
-  `grouping_policy`, `seed`, `on_nonfinite`, `input_transform`, `activation_transform`,
-  `grad_transform`, `output_device`, `verbose`, `chunk_size`, ...); `trace.cost` holds compute,
-  memory and timing totals (`total_flops`, `total_macs`, `macs_by_kind`, `forward_duration`,
-  `backward_durations`, `func_calls_duration`, `overhead_duration`, `forward_peak_memory`,
-  `total_activation_memory`, `total_param_memory`, `total_grad_memory`, `saved_grad_memory`, ...);
-  `trace.source` holds the model source facts (`class_name`, `class_qualname`, `class_file`,
-  `class_line`, `class_docstring`, `init_signature`, `forward_signature`, `frames`, `snapshots`,
-  `class_location`, `forward_location`, `init_location`, `cls`); `trace.health` holds the honesty
-  diagnostics (`completeness_verified`, `completeness_mode`, `num_witness_events`,
-  `num_accounted_witness_events`, `num_unaccounted_witness_events`, `escape_detector_verified`,
-  `escape_detector_mode`, `num_escape_detector_events`, ...); `trace.graph` holds graph-shape
-  facts (`edges`, `is_recurrent`, `is_dynamic`, `conditionals`, `conditional_records`,
-  `stop_frontier`, `op_equivalence_classes`, `relationship_evidence`, `structure_evidence`,
-  `manual_tensor_connections`, `orphans`, `tied_param_groups`, ...); `trace.autograd` holds the
-  backward records (`backward_passes`, `grad_fns`, `grad_fn_calls`, `grad_fn_order`,
-  `has_backward_pass`, `has_grads`, `derived_grads`, `backward_root_grad_fn_object_ids`, ...).
+: Read-only groups that sort a `Trace`'s capture facts by concern. Every capture fact saved with
+  the trace lives in exactly one group.
+  - `trace.provenance`: how, when and from what the capture happened. Run fields: `backend`,
+    `backend_version`, `backend_config`, `kind`, `start_time`, `end_time`, `duration`,
+    `setup_duration`, `cleanup_duration`, `verified`, `verification_reason`, `cache_hit`,
+    `cache_key`, `cache_path`, `recording_kept`.
+  - Provenance identity fields: `fingerprint`, `input_signature_hash`, `input_structure`,
+    `input_object_id`, `model_object_id`, `param_hash_quick`, `param_hash_full`, `param_source`,
+    `root_entry_point`.
+  - Provenance thread and scope fields: `owner_thread_id`, `thread_count_start`,
+    `thread_count_end`, `thread_activity_detected`, `distributed_scope`, `observer_spans`,
+    `is_appended`, and more. `trace.provenance.summary()` returns the capture-provenance text
+    block.
+  - `trace.options`: the stored snapshot of the capture options. Save fields: `mode`, `save`,
+    `save_grads`, `save_mode`, `save_args`, `save_raw_input`, `save_transformed_output`,
+    `save_rng`, `save_source_context`, `source_context_lines`.
+  - Other option fields: `backward_ready`, `inference_only`, `structure_only`, `grouping`,
+    `grouping_policy`, `seed`, `on_nonfinite`, `input_transform`, `activation_transform`,
+    `grad_transform`, `output_device`, `verbose`, `chunk_size`, and more.
+  - `trace.cost`: compute, memory and timing totals. Fields: `total_flops`, `total_macs`,
+    `macs_by_kind`, `forward_duration`, `backward_durations`, `func_calls_duration`,
+    `overhead_duration`, `forward_peak_memory`, `total_activation_memory`, `total_param_memory`,
+    `total_grad_memory`, `saved_grad_memory`, and more.
+  - `trace.source`: facts about the model's source code. Fields: `class_name`, `class_qualname`,
+    `class_file`, `class_line`, `class_docstring`, `init_signature`, `forward_signature`,
+    `frames`, `snapshots`, `class_location`, `forward_location`, `init_location`, `cls`.
+  - `trace.health`: the honesty diagnostics. Fields: `completeness_verified`,
+    `completeness_mode`, `num_witness_events`, `num_accounted_witness_events`,
+    `num_unaccounted_witness_events`, `escape_detector_verified`, `escape_detector_mode`,
+    `num_escape_detector_events`, and more.
+  - `trace.graph`: facts about the graph's shape. Fields: `edges`, `is_recurrent`, `is_dynamic`,
+    `conditionals`, `conditional_records`, `stop_frontier`, `op_equivalence_classes`,
+    `relationship_evidence`, `structure_evidence`, `manual_tensor_connections`, `orphans`,
+    `tied_param_groups`, and more.
+  - `trace.autograd`: the backward records. Fields: `backward_passes`, `grad_fns`,
+    `grad_fn_calls`, `grad_fn_order`, `has_backward_pass`, `has_grads`, `derived_grads`,
+    `backward_root_grad_fn_object_ids`, and more.
 
 **Trace.params filters and totals**
 : `trace.params.trainable`, `.frozen`, `.executed` and `.unexecuted` are parameter collections;
@@ -61,82 +93,94 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   module has no Module record, so the answer is addresses, not records.
 
 **Collection labels (`.labels`)**
-: Every collection serves `.labels`, the tuple of its lookup labels in collection order:
-  `trace.layers.labels` the Layer labels, `trace.ops.labels` the counted Op labels,
-  `trace.modules.labels` the module addresses, `trace.params.labels` the parameter addresses, and
-  the same on any filtered collection (`trace.layers.compute.labels`). The per-noun Trace
-  projections (`Trace.layer_labels`) stay.
+: Every collection serves `.labels`, the tuple of its lookup labels in collection order.
+  - `trace.layers.labels`: the Layer labels. `trace.ops.labels`: the counted Op labels.
+  - `trace.modules.labels`: the module addresses. `trace.params.labels`: the parameter
+    addresses.
+  - The same works on any filtered collection (`trace.layers.compute.labels`). The per-noun
+    Trace projections (`Trace.layer_labels`) stay.
 
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
-  `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
-  by `save=` fails explicitly. Recorded ops carry the capture-time `equivalence_class` and
-  parameter identity exhaustive capture gives them, so the cooked `Trace` groups a reused layer
-  into passes the way `tl.trace` does. A `Recording` has no `draw()` and no facets; `to_trace()`
-  unlocks every `Trace.draw` option and `modules[...].facets`. `tl.extract` takes only `model`,
-  `inputs`, `layers` and `detach_saved_activations`; every other capture option is a `tl.trace`
-  keyword. `tl.record` installs gradient hooks only when `backward_ready=True`,
-  `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
-  code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
-  public constructor. `tl.record` always returns one object.
-  The Trace-parity verbs `Recording.to_agent_json()`, `Recording.save(path)`, `Recording.fork()`
-  and `Recording.do(site, edit)` cook through `to_trace()` and delegate to the Trace verb, as do
-  `tl.export.xarray(recording)` and the bundle writer behind `Trace.save` when handed a Recording;
-  a typed `to_trace` refusal propagates unchanged, and a failed recording refuses as a capture
-  outcome (code `N1`) rather than cooking. `tl.record(..., episode=)` refuses typed
-  (`record_episode_unsupported`): episode capture runs on `tl.trace(model, x, episode=...)`.
+  `tl.record` and `Recorder` build it; `Recording` has no public constructor. `tl.record` always
+  returns one object.
+  - Cooking: `Recording.to_trace()` materializes full graph structure. Recorded ops carry the
+    capture-time `equivalence_class` and parameter identity exhaustive capture gives them, so the
+    cooked `Trace` groups a reused layer into passes the way `tl.trace` does.
+  - Payloads: reading a payload that was not selected by `save=` fails explicitly.
+  - Drawing: a `Recording` has no `draw()` and no facets; `to_trace()` unlocks every
+    `Trace.draw` option and `modules[...].facets`.
+  - `tl.extract` takes only `model`, `inputs`, `layers` and `detach_saved_activations`; every
+    other capture option is a `tl.trace` keyword.
+  - Backward: `tl.record` installs gradient hooks only when `backward_ready=True`, `save_grads=`
+    or `default_grad=` is given; without one, `Recording.backward()` refuses with code
+    `recording_backward_not_requested`.
+  - Trace-parity verbs: `Recording.to_agent_json()`, `Recording.save(path)`, `Recording.fork()`
+    and `Recording.do(site, edit)` cook through `to_trace()` and delegate to the Trace verb, as
+    do `tl.export.xarray(recording)` and the bundle writer behind `Trace.save` when handed a
+    Recording. A typed `to_trace` refusal propagates unchanged, and a failed recording refuses
+    as a capture outcome (code `N1`) rather than cooking.
+  - Episodes: `tl.record(..., episode=)` refuses typed (`record_episode_unsupported`); episode
+    capture runs on `tl.trace(model, x, episode=...)`.
 
 **Trace.output / Recording.output**
 : The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
-  output object, distribution); for a multi-pass `Recorder`, the last pass's. With
-  `generate_kwargs=`, `GenerationRecording.output` (and its `recording.output`) is what
-  `generate()` returned. `Trace.output` is the exact return from a live `tl.trace` forward,
-  independent of `save=` and output transforms; it is neither transformed `raw_output` nor
-  the saved-payload rebuild from `reconstruct_output()`. Traces cooked from recordings,
-  forked, or merged from chunks have no live forward return. The trace or recording keeps
-  that object alive for as long as it exists (for a Hugging Face model this includes
-  `past_key_values`); the object is released when the trace or recording is dropped. Held in
-  memory only: a trace or recording loaded from disk or unpickled refuses
-  with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
-  with `output_forward_failed`, and a capture that `stop_after=` ended before the model
-  returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
-  `None` for a missing output.
+  output object, distribution); for a multi-pass `Recorder`, the last pass's.
+  - Generation: with `generate_kwargs=`, `GenerationRecording.output` (and its
+    `recording.output`) is what `generate()` returned.
+  - `Trace.output` is the exact return from a live `tl.trace` forward, independent of `save=`
+    and output transforms. It is neither transformed `raw_output` nor the saved-payload rebuild
+    from `reconstruct_output()`. Traces cooked from recordings, forked, or merged from chunks
+    have no live forward return.
+  - Memory: the trace or recording keeps that object alive for as long as it exists (for a
+    Hugging Face model this includes `past_key_values`); the object is released when the trace
+    or recording is dropped.
+  - Held in memory only. It never returns `None` for a missing output; it refuses with a
+    `PayloadUnavailableError` instead:
+  - `output_not_stored`: a trace or recording loaded from disk or unpickled.
+  - `output_forward_failed`: a failed partial recording (`on_forward_error="return_partial"`).
+  - `output_capture_stopped`: a capture that `stop_after=` ended before the model returned.
 
 **Recording.options / RecordingSettings**
 : `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
-  the recording was made with, across every door that configured it: the capture knobs from
-  `capture=CaptureOptions(...)` (`RecordingSettings.save_grads`,
-  `RecordingSettings.activation_transform`, `RecordingSettings.grad_transform`,
-  `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
-  `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
-  `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
-  `recording=RecordingOptions(...)` (`RecordingSettings.default_op`,
-  `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
-  `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
-  `RecordingSettings.lean` (PROVISIONAL SPELLING), `RecordingSettings.max_predicate_failures`, `RecordingSettings.on_predicate_error`,
-  `RecordingSettings.on_forward_error`, `RecordingSettings.postprocess`) and the door keywords
-  (`RecordingSettings.keep_op` from `save=`, `RecordingSettings.intervene` from `intervene=`,
-  `RecordingSettings.stop_after`, `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
-  recorder used, never repr strings; there is no public constructor. A recording recovered from
-  disk keeps the plain values (bools, numbers, strings); callables and objects are not stored with
-  saved recordings and read `None` there.
+  the recording was made with, across every door that configured it. Values are the live objects
+  the recorder used, never repr strings; there is no public constructor.
+  - Capture knobs from `capture=CaptureOptions(...)`: `RecordingSettings.save_grads`,
+    `RecordingSettings.activation_transform`, `RecordingSettings.grad_transform`,
+    `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
+    `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
+    `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`.
+  - Recorder knobs from `recording=RecordingOptions(...)`: `RecordingSettings.default_op`,
+    `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
+    `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
+    `RecordingSettings.lean` (PROVISIONAL SPELLING), `RecordingSettings.max_predicate_failures`,
+    `RecordingSettings.on_predicate_error`, `RecordingSettings.on_forward_error`,
+    `RecordingSettings.postprocess`.
+  - Door keywords: `RecordingSettings.keep_op` from `save=`, `RecordingSettings.intervene` from
+    `intervene=`, `RecordingSettings.stop_after`, `RecordingSettings.storage`,
+    `RecordingSettings.narrate`.
+  - Saved recordings: a recording recovered from disk keeps the plain values (bools, numbers,
+    strings); callables and objects are not stored with saved recordings and read `None` there.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
-: `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
-  payload graph-connected on every save path: the save-all default, `tl.module` and
-  `tl.in_module` selectors, op-label `save=`, the legacy `trace.run(model, x)` rerun,
-  `trace.run_transaction(inputs=...)` and `trace.run_transaction(inputs=..., fast=True)`; `True` detaches on every one
-  of them. `tl.extract(..., detach_saved_activations=False)` and
-  `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
-  `tl.recording.Recorder`) attach on request; both keep their detached
-  default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
-  (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
-  way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
-  temporary disk comes back detached, with a `RuntimeWarning` naming the count.
-  `Trace.cost.pinned_autograd_memory` discloses what the attached payloads keep alive: the bytes of
-  the tensors autograd saved for every op upstream of a saved site, once per storage,
-  excluding Parameters and views of them. It reads `Bytes(0)` when every payload is detached
-  or the forward ran without grad, and `None` on a loaded trace (session-time, never saved).
+: Whether saved payloads stay connected to the autograd graph.
+  `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
+  payload graph-connected on every save path; `True` detaches on every one of them.
+  - The save paths: the save-all default, `tl.module` and `tl.in_module` selectors, op-label
+    `save=`, the legacy `trace.run(model, x)` rerun, `trace.run_transaction(inputs=...)` and
+    `trace.run_transaction(inputs=..., fast=True)`.
+  - `tl.extract(..., detach_saved_activations=False)` and
+    `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
+    `tl.recording.Recorder`) attach on request; both keep their detached default. `tl.record`
+    refuses an explicit `True` with `backward_ready=True` (`backward_ready_conflict`).
+  - A per-site `CaptureSpec(save_grad=True)` stays attached either way, and disk payloads are
+    always detached. An escrowed deferred-selector payload spilled to temporary disk comes back
+    detached, with a `RuntimeWarning` naming the count.
+  - Memory: `Trace.cost.pinned_autograd_memory` discloses what the attached payloads keep alive:
+    the bytes of the tensors autograd saved for every op upstream of a saved site, once per
+    storage, excluding Parameters and views of them. It reads `Bytes(0)` when every payload is
+    detached or the forward ran without grad, and `None` on a loaded trace (session-time, never
+    saved).
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
@@ -154,54 +198,63 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Generation recording** *(spellings documented-unstable)*
 : `tl.record(model, input_ids, save=..., generate_kwargs={...})` runs the model's own Hugging Face
   `generate(*inputs, **input_kwargs, **generate_kwargs)` once, with its KV cache, and records the
-  selected sites at every forward it runs, so each decode step records only its new position and
-  the cost grows linearly with the number of generated tokens. It returns a
-  `GenerationRecording`: `.recording` (the multi-pass `Recording`, one pass per forward),
-  `.steps` (one `GenerationStep` per forward: `step`, 0 for the prefill; `pass_number`, the
-  recorder pass holding its records (was `pass_index`; JMT 1 Nov 2026 3:00 PM PT); `kind`;
-  `positions`, the absolute positions it computed; `n_ops`, `n_records`, `saved_bytes`),
-  `.sequences`, `.prompt_length`, `.settings` (the settings that decide the tokens, the torch seed
-  and an RNG-state digest), `.not_recorded` (cache tensors, the sampling between forwards, the
-  last token's own position), `.n_steps`, `.records_at(step)` and `.step_of_position(position)`
-  (both refuse a missing step with `record_generation_step_missing`). `seed=` seeds once
-  for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
-  decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
-  cache, `intervene=`, `stop_after=` and partial forward-error modes refuse with
-  `record_generation_unsupported`, whose `reason` field names what is unsupported.
+  selected sites at every forward it runs. Each decode step records only its new position, so the
+  cost grows linearly with the number of generated tokens. `seed=` seeds once for the whole
+  generation.
+  - It returns a `GenerationRecording`. Fields: `.recording` (the multi-pass `Recording`, one
+    pass per forward), `.steps`, `.sequences`, `.prompt_length`, `.settings` (the settings that
+    decide the tokens, the torch seed and an RNG-state digest), `.not_recorded` (cache tensors,
+    the sampling between forwards, the last token's own position), `.n_steps`.
+  - `.steps` holds one `GenerationStep` per forward. Fields: `step` (0 for the prefill),
+    `pass_number` (the recorder pass holding its records; formerly `pass_index`), `kind`,
+    `positions` (the absolute positions it computed), `n_ops`, `n_records`, `saved_bytes`.
+  - Methods: `.records_at(step)` and `.step_of_position(position)`; both refuse a missing step
+    with `record_generation_step_missing`.
+  - Refusals: beam search, more than one return sequence, batched prompts, assisted decoding,
+    encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a cache,
+    `intervene=`, `stop_after=` and partial forward-error modes refuse with
+    `record_generation_unsupported`, whose `reason` field names what is unsupported.
 
 **Streaming generation recording** *(spellings documented-unstable)*
 : `tl.record(model, input_ids, generate_kwargs={...}, generation=GenerationOptions(...))` widens
   the generation recorder from "keep the selected sites at every token" to a per-token stream
-  that stays small at thousands of tokens. `torchlens.recording.GenerationOptions` groups it:
-  `reducers=` maps a site address to a callable applied to the site's payload after every forward,
-  whose result (first axis the forward's positions) replaces the payload in the record and is
-  recorded in the record's `metadata` (`reducer`, `reduced_from_shape`); the declared sites are
-  recorded even without `save=`. `torchlens.recording.reducers` ships `norm(ord=2.0, dim=-1,
-  position_dim=1)` (one norm per position), `top_k(k, dim=-1, position_dim=-2)` (the `k` largest
-  indices per position, the attended keys on an attention-probability site) and
-  `probe(fitted, position_dim=1)` (the decision function of an already-fitted linear probe: a
-  scikit-learn linear estimator with `coef_`/`intercept_`, an `nn.Linear` or a `(weight, bias)`
-  pair), each a named `Reducer` (calling it, `Reducer.__call__`, applies the wrapped callable `Reducer.fn`). `kv_sites=` names decoder layer indexes (or `True` for all)
-  whose new KV-cache slices are kept per token as series `kv.<layer>.key` and `kv.<layer>.value`
-  (`[positions, kv_heads, head_dim]`); `kv_sites=` alone needs no `save=`. `keep_last=N` is a ring buffer: the payloads of older
-  forwards are written to `spill=` (one `torch.save` file per step) or dropped, and the record
-  keeps a metadata stub (`payload`, `spill_file`). `max_saved_bytes=` (512 MiB by default,
-  `None` off) refuses with `record_generation_budget_exceeded` when the retained bytes exceed
-  the budget, projected for the whole generation right after the first decode step. What the
-  options do not keep is released as each forward is reduced (a pass's model inputs, the fed-back
-  KV cache among them, and the logits of every pass but the newest), so memory grows with the
-  token count, not its square. The
-  `GenerationRecording` adds `.options`, `.series_names`, `.series(name)` (a `TokenSeries`:
-  `name`, `positions`, a `range` of absolute positions, `values`, one row per position, and
-  `len(series)` (`TokenSeries.__len__`) the number of positions; values are read back
-  from the spill when evicted; refuses an unknown or fully dropped series with
-  `record_generation_step_missing`), `.peak_saved_bytes` and `.evicted_steps` (step to
-  `"spilled"` or `"dropped"`). A reducer that raises, returns a non-tensor or a value whose
-  first axis is not the forward's positions, a site a forward did not record, a duplicate site
-  per forward, or a `kv_sites` layer the cache lacks refuses with
-  `record_generation_reducer_invalid`; a malformed `GenerationOptions` or `generation=` without
-  `generate_kwargs=` refuses with `record_generation_options_invalid`. The cost benchmark is
-  `benchmarks/generation_stream_cost.py`.
+  that stays small at thousands of tokens. `torchlens.recording.GenerationOptions` groups its
+  options.
+  - `reducers=` maps a site address to a callable applied to the site's payload after every
+    forward. Its result (first axis the forward's positions) replaces the payload in the record
+    and is recorded in the record's `metadata` (`reducer`, `reduced_from_shape`). The declared
+    sites are recorded even without `save=`.
+  - `torchlens.recording.reducers` ships three reducers, each a named `Reducer` (calling it,
+    `Reducer.__call__`, applies the wrapped callable `Reducer.fn`):
+    `norm(ord=2.0, dim=-1, position_dim=1)` (one norm per position),
+    `top_k(k, dim=-1, position_dim=-2)` (the `k` largest indices per position, the attended keys
+    on an attention-probability site) and `probe(fitted, position_dim=1)` (the decision function
+    of an already-fitted linear probe: a scikit-learn linear estimator with
+    `coef_`/`intercept_`, an `nn.Linear` or a `(weight, bias)` pair).
+  - `kv_sites=` names decoder layer indexes (or `True` for all) whose new KV-cache slices are
+    kept per token as series `kv.<layer>.key` and `kv.<layer>.value`
+    (`[positions, kv_heads, head_dim]`); `kv_sites=` alone needs no `save=`.
+  - `keep_last=N` is a ring buffer: the payloads of older forwards are written to `spill=` (one
+    `torch.save` file per step) or dropped, and the record keeps a metadata stub (`payload`,
+    `spill_file`).
+  - `max_saved_bytes=` (512 MiB by default, `None` off) refuses with
+    `record_generation_budget_exceeded` when the retained bytes exceed the budget, projected for
+    the whole generation right after the first decode step.
+  - Memory: what the options do not keep is released as each forward is reduced (a pass's model
+    inputs, the fed-back KV cache among them, and the logits of every pass but the newest), so
+    memory grows with the token count, not its square.
+  - The `GenerationRecording` adds `.options`, `.series_names`, `.series(name)`,
+    `.peak_saved_bytes` and `.evicted_steps` (step to `"spilled"` or `"dropped"`).
+  - `.series(name)` returns a `TokenSeries`: `name`, `positions` (a `range` of absolute
+    positions), `values` (one row per position), and `len(series)` (`TokenSeries.__len__`), the
+    number of positions. Values are read back from the spill when evicted. It refuses an unknown
+    or fully dropped series with `record_generation_step_missing`.
+  - `record_generation_reducer_invalid`: a reducer that raises, returns a non-tensor or a value
+    whose first axis is not the forward's positions, a site a forward did not record, a duplicate
+    site per forward, or a `kv_sites` layer the cache lacks.
+  - `record_generation_options_invalid`: a malformed `GenerationOptions`, or `generation=`
+    without `generate_kwargs=`.
+  - The cost benchmark is `benchmarks/generation_stream_cost.py`.
 
 **Capture outcome**
 : The frozen `Trace.outcome`, `Recording.outcome`, or `PartialTrace.outcome`. Its status is one of
@@ -210,102 +263,112 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Inference-only capture**
 : A capture whose forward ran under `torch.no_grad()`, so it built no autograd graph. Request it
-  with `CaptureOptions(inference_only=True)`; a `tl.trace` or `tl.record` entered under
-  `torch.no_grad()` or `torch.inference_mode()` implies it unless `backward_ready`, `save_grads`
-  (or `default_grad` on `tl.record`, `replayable` in `capture=tl.options.CaptureOptions(...)` on `tl.trace`) asks for a backward, and
-  an explicit `inference_only=False` keeps it off. The implied flag holds only when the forward
-  really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
-  and returns an output with autograd history is not inference-only, and backward stays
-  available. An explicit `inference_only=True` is never changed. `Trace.options.inference_only` and
-  `outcome.inference_only` report the effective value; a later `backward()` refuses and names
-  the cause (`recording_backward_inference_only` on a `Recording`).
+  with `CaptureOptions(inference_only=True)`; an explicit `inference_only=True` is never changed.
+  - Implied: a `tl.trace` or `tl.record` entered under `torch.no_grad()` or
+    `torch.inference_mode()` implies it, unless `backward_ready`, `save_grads` (or `default_grad`
+    on `tl.record`, `replayable` in `capture=tl.options.CaptureOptions(...)` on `tl.trace`) asks
+    for a backward. An explicit `inference_only=False` keeps it off.
+  - The implied flag holds only when the forward really discarded its graph: a forward that turns
+    grad back on (`with torch.enable_grad():`) and returns an output with autograd history is
+    not inference-only, and backward stays available.
+  - Reporting: `Trace.options.inference_only` and `outcome.inference_only` report the effective
+    value; a later `backward()` refuses and names the cause (`recording_backward_inference_only`
+    on a `Recording`).
 
 **carry_state (CaptureOptions) / pure-observer capture** — *unstable — no deprecation shim owed*
-: A default `tl.trace` is a pure observer: it snapshots buffers (persistent and non-persistent),
-  every module's `training` flag and the global random states (torch, live CUDA devices, Python,
-  NumPy) before the forward and restores them afterwards, on success and on failure, so a
-  train-mode BatchNorm's running statistics do not advance. A buffer the forward changed is written
-  back only where its bytes changed, and trace payloads that alias it keep their forward-time
-  values. Every plain module attribute is restored too: a rebound or removed attribute gets its
-  original object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in
-  place, and attributes the forward added are removed; what the forward wrote is read from the
-  trace (`Module.attribute_writes`). Builtin containers are snapshotted at any size (a tensor inside
-  one is cloned whatever its size); custom objects are tracked by identity: a rebinding is undone,
-  a change inside them is neither undone nor recorded. A container nested more than 256 levels
-  deep is tracked by identity below that level and named in a `capture_state_restore_incomplete`
-  warning. Lazy modules are left as their materializing forward leaves them.
-  `CaptureOptions(carry_state=True)` opts into forward-equivalent state: buffers, modes and
-  plain attributes advance exactly as one direct `model(x)` would, and the attribute writes are
-  recorded the same way, the same spelling as `trace.run_transaction(inputs=..., carry_state=True)`. No capture advances the caller's random streams
-  under either setting (each capture draws from its own seed and restores the global engines). A capture-cache hit runs no forward, so nothing advances. An item that
-  cannot be restored is named in one `capture_state_restore_incomplete` warning. Transient: an
-  option only, never persisted.
+: A default `tl.trace` is a pure observer: it restores the model's state after the forward, on
+  success and on failure. `CaptureOptions(carry_state=True)` opts into forward-equivalent state
+  instead. Transient: an option only, never persisted.
+  - Default restore: buffers (persistent and non-persistent), every module's `training` flag and
+    the global random states (torch, live CUDA devices, Python, NumPy) are snapshotted before
+    the forward and restored afterwards, so a train-mode BatchNorm's running statistics do not
+    advance. A buffer the forward changed is written back only where its bytes changed, and
+    trace payloads that alias it keep their forward-time values.
+  - Plain module attributes are restored too: a rebound or removed attribute gets its original
+    object back, a tensor or builtin `list`/`dict`/`set` changed in place is restored in place,
+    and attributes the forward added are removed. What the forward wrote is read from the trace
+    (`Module.attribute_writes`).
+  - Containers: builtin containers are snapshotted at any size (a tensor inside one is cloned
+    whatever its size). Custom objects are tracked by identity: a rebinding is undone, a change
+    inside them is neither undone nor recorded. A container nested more than 256 levels deep is
+    tracked by identity below that level and named in a `capture_state_restore_incomplete`
+    warning. Lazy modules are left as their materializing forward leaves them.
+  - `CaptureOptions(carry_state=True)`: buffers, modes and plain attributes advance exactly as
+    one direct `model(x)` would, and the attribute writes are recorded the same way. It is the
+    same spelling as `trace.run_transaction(inputs=..., carry_state=True)`.
+  - Random streams: no capture advances the caller's random streams under either setting (each
+    capture draws from its own seed and restores the global engines). A capture-cache hit runs
+    no forward, so nothing advances.
+  - An item that cannot be restored is named in one `capture_state_restore_incomplete` warning.
 
 **Module.attribute_writes / AttributeWrite** — *unstable — no deprecation shim owed*
 : The plain instance attributes one module's forward wrote during the capture, as a read-only
   mapping `{attribute name: AttributeWrite}`, for example
   `trace.modules["encoder.attn"].attribute_writes["last_weights"].value`.
-  `torchlens.types.AttributeWrite` is a frozen record with `kind`
-  (`"added"`, `"replaced"` for a rebinding or an in-place change, `"removed"`) and `value`, what
-  the forward left: the object itself when the forward bound a new object (the trace keeps it
-  alive, so a large stashed tensor costs its full memory for the trace's lifetime), a copy when
-  the forward changed the original object in place (builtin `list`/`tuple`/`dict`/`set`
-  containers are copied recursively, a tensor that existed before the forward is cloned whatever
-  its size, a tensor the forward created is kept by reference), `None` when removed. `{}` when the forward wrote
-  nothing on the module; `None` when no record exists (a loaded trace, a lazy module, a
-  non-torch backend). Recorded by default and under `CaptureOptions(carry_state=True)`; a change
-  inside an identity-tracked object is not recorded; a capture that re-ran the forward (escape
-  rescue) records the net effect of both runs. Session-time only: never persisted, excluded
-  from `to_pandas()`.
+  - `torchlens.types.AttributeWrite` is a frozen record. Fields: `kind` (`"added"`, `"replaced"`
+    for a rebinding or an in-place change, `"removed"`) and `value`, what the forward left.
+  - `value` is the object itself when the forward bound a new object (the trace keeps it alive,
+    so a large stashed tensor costs its full memory for the trace's lifetime); a copy when the
+    forward changed the original object in place (builtin `list`/`tuple`/`dict`/`set`
+    containers are copied recursively, a tensor that existed before the forward is cloned
+    whatever its size, a tensor the forward created is kept by reference); `None` when removed.
+  - The mapping is `{}` when the forward wrote nothing on the module, and `None` when no record
+    exists (a loaded trace, a lazy module, a non-torch backend).
+  - Recorded by default and under `CaptureOptions(carry_state=True)`. A change inside an
+    identity-tracked object is not recorded; a capture that re-ran the forward (escape rescue)
+    records the net effect of both runs.
+  - Session-time only: never persisted, excluded from `to_pandas()`.
 
 **Bound-method root**
-: The ruled `tl.trace` root contract: an `nn.Module` OR a bound method of one, e.g.
-  `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). The owner resolves via
-  `method.__self__` and is the root module `self` of a TorchLens-authored wrapper root whose
-  forward calls the exact bound method exactly once: module addresses, layer labels, module
-  paths, drawings, pandas exports and saved files read as on a plain `tl.trace(model, ...)`
-  (`transformer.h.5.mlp`, no wrapper prefix), and the owner's own calls inside the method are the
-  root's calls (`self:1` .. `self:N`, `trace.modules["self"].num_calls == N`); the capture's identity reads
-  `type(owner).__name__`, `Trace.provenance.root_entry_point` records
-  `"bound_method:<owner_qualname>.<method>"`, and the root op record (the output-boundary ops)
-  carries `tl_authored_root=True` — both persisted with fail-closed load validation. On
-  bound-method episode captures `EpisodeOptions.stepped_module` defaults to the owner. Bound-method
-  captures refuse rerun/append at the identity gate (`rerun_entry_point_unsupported`; an absent
-  fact on a legacy artifact refuses `root_entry_point_unavailable`); replay engines are
-  unaffected. Other callables (closures, bare functions) refuse `model_type_unsupported`. All
-  spellings are provisional.
+: The roots `tl.trace` accepts: an `nn.Module` or a bound method of one, e.g.
+  `tl.trace(model.generate, ids, ...)` (also accepted by `tl.validate`). All spellings are
+  provisional.
+  - Owner: resolved via `method.__self__`. It is the root module `self` of a TorchLens-authored
+    wrapper root whose forward calls the exact bound method exactly once.
+  - Names read as on a plain `tl.trace(model, ...)`: module addresses, layer labels, module
+    paths, drawings, pandas exports and saved files (`transformer.h.5.mlp`, no wrapper prefix).
+    The owner's own calls inside the method are the root's calls (`self:1` .. `self:N`,
+    `trace.modules["self"].num_calls == N`).
+  - Identity: the capture's identity reads `type(owner).__name__`,
+    `Trace.provenance.root_entry_point` records `"bound_method:<owner_qualname>.<method>"`, and
+    the root op record (the output-boundary ops) carries `tl_authored_root=True`. Both are saved
+    with the trace and validated fail-closed on load.
+  - Episodes: on bound-method episode captures `EpisodeOptions.stepped_module` defaults to the
+    owner.
+  - Refusals: bound-method captures refuse rerun/append at the identity gate
+    (`rerun_entry_point_unsupported`; an absent fact on a legacy artifact refuses
+    `root_entry_point_unavailable`); replay engines are unaffected. Other callables (closures,
+    bare functions) refuse `model_type_unsupported`.
 
 **Episode capture**
-: One wrapped multi-step generation run captured as a single product
-  (`capture_kind=episode`): `tl.trace(episode_root, x, episode=EpisodeOptions(stepped_module=...))`
-  stamps the declaration and lands a per-step status ledger (grammar v2,
-  `episode_ledger_version=2`: header with the declared `step_output_kind`
-  (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the
-  `step_axis` with the disclosed `step_output_positions` each row was read
-  from, the minted `capture_digest` binding, the measured
-  `step_join` envelope grading every cross-step join —
-  continuous/forced/transformed/declared/exogenous/unchecked, with episode-dependent
-  claims refused across a measured break — and, on intervened (COUPLED)
-  captures, the deterministic `intervention_digest`; rows with
-  `complete`/`interrupted`/`absent`
-  statuses, the generic `step_output`, the channel-keyed carried-state witness
-  slots `entry_state_digest`/`exit_state_digest` (`None` = not measured; the
-  arithmetic `cache_len` is deleted), the measured per-step `fire_count` on
-  coupled captures (zero and multiple fires are first-class), and the
-  managed-RNG entry
-  seed) at `trace.annotations["episode"]`. `episode=` x `intervene=` runs
-  COUPLED (attested coupling): `trace.episode_coupling` recomputes and
-  compares the capture digest (the positive ledger-to-product binding) and
-  serves fire counts plus per-segment facts that never span a measured break;
-  `torchlens.at_step(*steps)` is the step-qualified selector
-  (live and post hoc via the persisted `Op.episode_step` stamps); replay
-  derives a fresh ledger or refuses (`episode_coupled_replay_underivable` on
-  both `run()` engines; `do()` edits quarantine inherited episode evidence). A diagnostic-tier product for tens of steps
-  (cost is superlinear in step count); the ledger is a disclosure, never a settlement
-  authority, and it persists plainly as of the tlspec v8 coordinated bump (loads validate
-  fail-closed). All episode
-  spellings are provisional (no deprecation shim owed). See
-  [Episode capture](episode_capture.md).
+: One wrapped multi-step generation run captured as a single product (`capture_kind=episode`).
+  `tl.trace(episode_root, x, episode=EpisodeOptions(stepped_module=...))` stamps the declaration
+  and lands a per-step status ledger at `trace.annotations["episode"]`. A diagnostic-tier product
+  for tens of steps (cost is superlinear in step count). All episode spellings are provisional
+  (no deprecation shim owed). See [Episode capture](episode_capture.md).
+  - Ledger header (grammar v2, `episode_ledger_version=2`): the declared `step_output_kind`
+    (`tokens`/`digest`/`none`), the `step_output_from` source disclosure, the `step_axis` with
+    the disclosed `step_output_positions` each row was read from, and the minted
+    `capture_digest` binding.
+  - Header joins: the measured `step_join` envelope grades every cross-step join
+    (continuous/forced/transformed/declared/exogenous/unchecked), and episode-dependent claims
+    are refused across a measured break. On intervened (COUPLED) captures the header also holds
+    the deterministic `intervention_digest`.
+  - Ledger rows: `complete`/`interrupted`/`absent` statuses, the generic `step_output`, the
+    channel-keyed carried-state witness slots `entry_state_digest`/`exit_state_digest` (`None`
+    means not measured; they replace the arithmetic `cache_len`, which is deleted), the measured
+    per-step `fire_count` on coupled captures (zero and multiple fires are first-class), and the
+    managed-RNG entry seed.
+  - Coupling: `episode=` x `intervene=` runs COUPLED (attested coupling).
+    `trace.episode_coupling` recomputes and compares the capture digest (the positive
+    ledger-to-product binding) and serves fire counts plus per-segment facts that never span a
+    measured break.
+  - Step selector: `torchlens.at_step(*steps)` is the step-qualified selector, live and post hoc
+    via the persisted `Op.episode_step` stamps.
+  - Replay derives a fresh ledger or refuses (`episode_coupled_replay_underivable` on both
+    `run()` engines); `do()` edits quarantine inherited episode evidence.
+  - The ledger is a disclosure, never a settlement authority. It is saved with the trace, and
+    loads validate it fail-closed.
 
 ## Graph records
 
@@ -316,11 +379,15 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Layer**
 : The user-facing grouping of Ops that run one place in a module's code. Running that place
   again (a loop, a recursion, a comprehension) is another pass, addressed with a one-based
-  suffix such as `linear_1:2`; `op.pass_number` is the pass and `num_passes` the count. A module
-  object called again is another module call (`m:1`, `m:2`), a separate concept: each op inside it
-  runs once per module call, so its passes match the module's calls. Two different places are two layers even with the same weights, so a
-  loop written out by hand is N layers. The exact rule (scope, call site, operation, output slot)
-  and the case table are in `docs/guides/grouping.md`.
+  suffix such as `linear_1:2`.
+  - Passes: `op.pass_number` is the pass and `num_passes` the count.
+  - Module calls: a module object called again is another module call (`m:1`, `m:2`), a
+    separate concept. Each op inside it runs once per module call, so its passes match the
+    module's calls.
+  - Two different places are two layers even with the same weights, so a loop written out by
+    hand is N layers.
+  - Related: the exact rule (scope, call site, operation, output slot) and the case table are in
+    `docs/guides/grouping.md`.
 
 **Module**
 : A captured framework module or backend-neutral module-like object. A module contains Ops but is
@@ -328,41 +395,41 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **Parameter / Buffer**
 : Registered model state. Parameters are trainable state; buffers are non-parameter state and may
-  have multiple captured versions. Every journaled write (a reassignment, a `.data =` or `set_`
-  swap, a tracked in-place write) is its own version whatever value it wrote, so a capture records
-  the same buffer structure whatever values the buffers start from. A training-mode `BatchNorm2d` collapse label can say
-  “5 layers total” because it counts the parameter leaves `weight` and `bias` plus the buffer
-  leaves `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five
-  BatchNorm calls. An in-place op on a Parameter inside `forward`
-  (`with torch.no_grad(): self.temp.clamp_(lo, hi)`) is captured as an op whose `params` holds
-  that Parameter; every later read of the Parameter in the same pass binds to that op as a graph
-  parent, not as a parameter edge, so it is absent from that read's `params`. `draw()` shows
-  such a Parameter as a grey cylinder labeled `parameter <name>` in its owning module's box, with
-  an edge to each op that reads its pre-mutation value; Parameters never mutated get no node.
-  BatchNorm calls. A plain tensor a module already holds when the forward starts (a tensor
-  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache) is
-  captured as a buffer too, addressed `<module>.<attr>`, `<module>.<attr>.<index>`, or
-  `<module>.<attr>.<key>`.
-  parent, not as a parameter edge, so it is absent from that read's `params`.
-  The receiver may be given by keyword, as the `input` keyword of `torch.clamp_`. A frozen Parameter written
-  in place with a grad-requiring operand ends the pass a non-leaf, exactly as in eager. An `out=`
-  write into a Parameter (`torch.add(a, b, out=p)`) is not captured yet; validation reports it as
-  a completeness failure.
-  an edge to each op that reads its pre-mutation value, under both layout engines (`dot` and
-  `rank`). The node is drawn when the first in-place op on the Parameter is drawn as its own
-  node: a collapsed module box or `skip_fn` that hides that op hides the node with it, and a
-  `module=` focus draws it only when the focused module is the owner or contains it. Parameters
-  never mutated get no node. The legend row's swatch is the trainable-parameter grey.
-  attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias cache,
-  nested up to four container levels) is captured as a buffer too, addressed
-  `<module>.<attr>`, `<module>.<attr>.<index>`, or `<module>.<attr>[<key>]` with one
-  `[<index>]`/`[<key>]` per nested level, e.g. `attn.attention_bias_cache['cpu']`. The key
-  is its `repr` with `.`, `:` and `%` percent-escaped, so the last `.` always separates the
-  owning module; keys that print alike get `#2`, `#3`, ... A public tensor attribute of a
-  plain (non-Module) object the module holds, such as a `torch.distributions` prior or a
-  diffusers scheduler built in `__init__`, is a buffer too, addressed
-  `<module>.<attr>[<name>]` (e.g. `vae.prior[scale]`); only the object's own attributes are
-  read, not containers inside it.
+  have multiple captured versions.
+  - Versions: every journaled write (a reassignment, a `.data =` or `set_` swap, a tracked
+    in-place write) is its own version whatever value it wrote, so a capture records the same
+    buffer structure whatever values the buffers start from.
+  - Collapse labels: a training-mode `BatchNorm2d` collapse label can say "5 layers total"
+    because it counts the parameter leaves `weight` and `bias` plus the buffer leaves
+    `running_mean`, `running_var`, and `num_batches_tracked`; it is not claiming five BatchNorm
+    calls.
+  - In-place writes to a Parameter: an in-place op on a Parameter inside `forward`
+    (`with torch.no_grad(): self.temp.clamp_(lo, hi)`) is captured as an op whose `params`
+    holds that Parameter. Every later read of the Parameter in the same pass binds to that op
+    as a graph parent, not as a parameter edge, so it is absent from that read's `params`. The
+    receiver may be given by keyword, as the `input` keyword of `torch.clamp_`. A frozen
+    Parameter written in place with a grad-requiring operand ends the pass a non-leaf, exactly
+    as in eager. An `out=` write into a Parameter (`torch.add(a, b, out=p)`) is not captured
+    yet; validation reports it as a completeness failure.
+  - Drawing: `draw()` shows such a Parameter as a grey cylinder labeled `parameter <name>` in
+    its owning module's box, with an edge to each op that reads its pre-mutation value, under
+    both layout engines (`dot` and `rank`). The node is drawn when the first in-place op on the
+    Parameter is drawn as its own node: a collapsed module box or `skip_fn` that hides that op
+    hides the node with it, and a `module=` focus draws it only when the focused module is the
+    owner or contains it. Parameters never mutated get no node. The legend row's swatch is the
+    trainable-parameter grey.
+  - Module-held tensors: a plain tensor a module already holds when the forward starts (a
+    tensor attribute, a list/tuple item, or a dict value such as a warm-filled attention-bias
+    cache, nested up to four container levels) is captured as a buffer too. It is addressed
+    `<module>.<attr>`, `<module>.<attr>.<index>`, or `<module>.<attr>[<key>]` (not
+    `<module>.<attr>.<key>`), with one `[<index>]`/`[<key>]` per nested level, e.g.
+    `attn.attention_bias_cache['cpu']`.
+  - Keys: a key is rendered as its `repr` with `.`, `:` and `%` percent-escaped, so the last `.`
+    always separates the owning module; keys that print alike get `#2`, `#3`, ...
+  - Plain objects: a public tensor attribute of a plain (non-Module) object the module holds,
+    such as a `torch.distributions` prior or a diffusers scheduler built in `__init__`, is a
+    buffer too, addressed `<module>.<attr>[<name>]` (e.g. `vae.prior[scale]`). Only the
+    object's own attributes are read, not containers inside it.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
@@ -375,14 +442,13 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)`
 (value-free rows) or `CaptureOptions(aten_ops="values")` (rows plus each call's output tensors in
-`AtenOp.out`) and
-served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`, `Trace.aten_gaps` and
-`Op.aten_ops` (entries below this index); an absent profile refuses typed with
-`AtenOpsUnavailableError` (`aten_ops_unavailable`). As of the tlspec v8 coordinated bump the
-profile's fields persist (`FieldPolicy.KEEP`) and loaded profiles validate their foreign keys
-whenever present; older v6/v7 artifacts contain no primitive profile. The names below are the
-row-level surface the profile exposes. Each is documented unstable and may be renamed or removed
-without a compatibility alias. No validation or honesty tripwire may be weakened.
+`AtenOp.out`). It is served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`,
+`Trace.aten_gaps` and `Op.aten_ops` (entries below this index); an absent profile refuses typed
+with `AtenOpsUnavailableError` (`aten_ops_unavailable`). The profile is saved with the trace
+(`FieldPolicy.KEEP`), and a loaded profile validates its foreign keys whenever present; older
+artifacts contain no primitive profile. The names below are the row-level surface the profile
+exposes. Each is documented unstable and may be renamed or removed without a compatibility
+alias. No validation or honesty tripwire may be weakened.
 
 <!-- ATEN-UNSTABLE-INDEX:START -->
 
@@ -412,22 +478,25 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 <!-- ATEN-UNSTABLE-INDEX:END -->
 
 **aten_ops (CaptureOptions)**
-: Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
-  dispatched to, as `AtenOp` rows, through a dispatch mode installed for the forward and, with
-  `backward_ready=True`, for `Trace.backward()`. `True` keeps the rows
-  value-free; `"values"` additionally keeps what each call returned in `AtenOp.out`, under the
-  capture's save policy (the `save=` selection, `save_mode`, `output_device`, `save_budget`); any
-  other value refuses typed (`InvalidArgumentError`, `aten_ops_invalid`). The default installs
-  no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
-  `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
-  loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
-  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026); `"values"` literal: aten-values lane (3 Nov 2026).
+: Opt-in switch (default `False`) that makes the torch capture record the ATen operations each
+  logged torch call dispatched to, as `AtenOp` rows. It works through a dispatch mode installed
+  for the forward and, with `backward_ready=True`, for `Trace.backward()`.
+  - Values: `True` keeps the rows value-free; `"values"` also keeps what each call returned in
+    `AtenOp.out`, under the capture's save policy (the `save=` selection, `save_mode`,
+    `output_device`, `save_budget`). Any other value refuses typed (`InvalidArgumentError`,
+    `aten_ops_invalid`).
+  - Cost: the default installs no dispatch mode and adds no per-op work.
+  - Saving: the switch is a session-time knob that is not saved (load restores `False`); the
+    recorded rows themselves are saved, so a loaded trace keeps `has_aten_ops`.
+  - Reruns: `run()` refreshes inherit the switch, and `run()` results, fast or not, inherit the
+    recording of the trace they refresh.
+  - Scope: non-torch backends record nothing. GPU kernel recording is out of scope.
 
 **Trace.has_aten_ops**
 : `True` when the trace carries recorded ATen operations: after a capture with
   `CaptureOptions(aten_ops=True)` (a present-but-empty profile counts) and after loading an
-  artifact saved from one; `False` otherwise. The one accessor that never raises. Spelling:
-  velocity walk builds.3 (1 Nov 2026; booleans take `is_`/`has_`).
+  artifact saved from one; `False` otherwise. The one accessor that never raises. Like every
+  boolean it is named with `is_`/`has_`.
 
 **Trace.aten_ops**
 : Every recorded `AtenOp` in dispatch order, forward rows then backward rows, as a tuple. Raises
@@ -451,41 +520,48 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 : What the ATen call returned, mirroring `Op.out`: a tensor for a single-tensor result, a tuple of
   tensors (one per `output_tensor_facts` entry, in the same order) for a container result, `None`
   when no value was kept. Recorded only under `CaptureOptions(aten_ops="values")`; otherwise every
-  row reads `None`. Each value is a snapshot copied below autograd at the moment the call returned:
-  it never carries a `grad_fn` (`detach_saved_activations=False` attaches `Op.out`, not these), an
-  in-place call's value is the mutated tensor as returned, a view's value is the view's content, and
-  aliasing between rows is not preserved (`view_copy_kind` and `storage_alias_group` describe it).
-  Which rows keep values follows the owning torch call: a forward row keeps its value when an `Op`
-  of its call saved its output (`has_saved_activation`), so `save=` restricts ATen values the way
-  it restricts `Op.out`; a dropped owner frees its values during the forward. Backward rows (with
-  `backward_ready=True`) and orphan rows keep values unconditionally. Values honour `save_mode`
-  (`"reference"` becomes a copy for in-place calls), `output_device` and the `save_budget` (each
-  value is admitted like an activation; the budget error names `aten:<operator>.<overload>`). Not
-  retained when activations stream to disk or an out sink is active (every row reads `None`; a
-  typed gap, see limitations). Persist and load with `Op.out` (`BLOB_RECURSIVE`;
-  `include_outs=False` drops them while the facts stay). The `aten_values_consistent` invariant
-  checks every kept value against its facts and, under `save_mode="copy"`, that some row beneath
-  each saved op equals the op's `out`.
-  A `run()` refresh re-records the profile against the new input, so values follow `Op.out`; the
-  fast tier (`run_transaction(inputs=..., fast=True)`, and the guarded fast rerun behind `run(model, x)` with
-  staged hooks) never re-records ATen values, so it refuses a values capture with
-  `run_capability_unavailable` at stage `fast_run_aten_values_unsupported` and the legacy door
-  falls back to the capture engine.
+  row reads `None`.
+  - Snapshots: each value is copied below autograd at the moment the call returned. It never
+    carries a `grad_fn` (`detach_saved_activations=False` attaches `Op.out`, not these); an
+    in-place call's value is the mutated tensor as returned; a view's value is the view's
+    content; aliasing between rows is not preserved (`view_copy_kind` and `storage_alias_group`
+    describe it).
+  - Which rows keep values: this follows the owning torch call. A forward row keeps its value
+    when an `Op` of its call saved its output (`has_saved_activation`), so `save=` restricts
+    ATen values the way it restricts `Op.out`; a dropped owner frees its values during the
+    forward. Backward rows (with `backward_ready=True`) and orphan rows keep values
+    unconditionally.
+  - Save policy: values honour `save_mode` (`"reference"` becomes a copy for in-place calls),
+    `output_device` and the `save_budget` (each value is admitted like an activation; the budget
+    error names `aten:<operator>.<overload>`).
+  - Streaming: values are not retained when activations stream to disk or an out sink is active;
+    every row reads `None` (a typed gap, see limitations).
+  - Saving and loading: values persist and load with `Op.out` (`BLOB_RECURSIVE`);
+    `include_outs=False` drops them while the facts stay.
+  - Checks: the `aten_values_consistent` invariant checks every kept value against its facts
+    and, under `save_mode="copy"`, that some row beneath each saved op equals the op's `out`.
+  - Reruns: a `run()` refresh re-records the profile against the new input, so values follow
+    `Op.out`. The fast tier (`run_transaction(inputs=..., fast=True)`, and the guarded fast
+    rerun behind `run(model, x)` with staged hooks) never re-records ATen values, so it refuses
+    a values capture with `run_capability_unavailable` at stage
+    `fast_run_aten_values_unsupported` and the legacy door falls back to the capture engine.
 
 **AtenOpsUnavailableError**
 : `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code
-  `aten_ops_unavailable` in `exc.fields["code"]`: `Trace.aten_ops`, `Trace.aten_gaps` or
-  `Op.aten_ops` was read on a capture that recorded no ATen operations (the switch was off, the
-  artifact was saved without it, or the trace is a `run(fast=True)` result). The message names the
-  remedy, `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first to avoid it.
+  `aten_ops_unavailable` in `exc.fields["code"]`. Raised when `Trace.aten_ops`, `Trace.aten_gaps`
+  or `Op.aten_ops` is read on a capture that recorded no ATen operations.
+  - Causes: the switch was off, the artifact was saved without it, or the trace is a
+    `run(fast=True)` result.
+  - Remedy: the message names `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first
+    to avoid the error.
 
 `AtenOp` is one dispatcher call measured during a concrete capture (value-free unless
-`aten_ops="values"` filled `out`). Its label is opaque,
-capture-local, and intentionally excluded from universal Trace string lookup. `OpRef` is a redundant
-dense foreign key whose row index, Op label, and function-call witness must all agree. A
-`mode_paused_interior` entry says only that TorchLens paused its owned dispatch observer around a
-strict Tensor-subclass constructor; recorded rows and counts on that parent are lower bounds, and no
-synthetic primitive row is created for the unseen interior.
+`aten_ops="values"` filled `out`). Its label is opaque, capture-local, and intentionally
+excluded from universal Trace string lookup. `OpRef` is a redundant dense foreign key whose row
+index, Op label, and function-call witness must all agree. A `mode_paused_interior` entry says
+only that TorchLens paused its owned dispatch observer around a strict Tensor-subclass
+constructor; recorded rows and counts on that parent are lower bounds, and no synthetic
+primitive row is created for the unseen interior.
 
 `SuperAtenOp` aligns observed rows positionally by `decomposition_slot`. Its `comparison_status`
 distinguishes equal-schema coverage, different-schema coverage, proven sparse membership, and
@@ -495,9 +571,9 @@ alignment is evidence, not semantic equivalence.
 ### Documented-unstable kernel telemetry INDEX
 
 The optional CUDA/CUPTI adapter is the detachable trailing lane of the ATen execution profile. Its
-rows persist as of the tlspec v8 coordinated bump (`FieldPolicy.KEEP`), and it is not imported by
-the capture core. Every spelling below is documented unstable
-and may be renamed or removed without a compatibility alias.
+rows are saved with the trace (`FieldPolicy.KEEP`), and the capture core does not import it.
+Every spelling below is documented unstable and may be renamed or removed without a
+compatibility alias.
 
 <!-- KERNEL-TELEMETRY-UNSTABLE-INDEX:START -->
 
@@ -525,9 +601,9 @@ the paused region is not profiled synthetically and no hidden launch is fabricat
 
 ### Documented-unstable attribution kit INDEX
 
-The L6 stage-4b attribution kit is a detachable orchestration layer over shipped gradient,
-Selection, intervention, and receptive-field visualization primitives. Every spelling below is
-documented unstable and may be renamed or removed without a compatibility alias.
+The attribution kit is a detachable orchestration layer over shipped gradient, Selection,
+intervention, and receptive-field visualization primitives. Every spelling below is documented
+unstable and may be renamed or removed without a compatibility alias.
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:START -->
 
@@ -567,27 +643,39 @@ documented unstable and may be renamed or removed without a compatibility alias.
 Integrated Gradients always reports its signed completeness residual against the exact endpoint
 target delta. Occlusion always names its replacement baseline. CAM overlays visibly state the
 native measured map resolution, while their larger display grid is labeled as interpolation.
-`build_graph` builds an attribution graph from one prompt's capture and a set of transcoders: typed feature, error, token and logit nodes whose edges are direct linear effects along a frozen graph, with every feature and logit node accounted for by its incoming edges plus named constant terms (`AttributionGraph`). A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
-of the model output, and with `sae=` one latent of that SAE's encoding of the output (unstable, no
-deprecation shim owed); layer methods given only integer inputs start their input path at the
-embedding output. `deletion_curve` and `insertion_curve` score an attribution by removing or
-revealing its most-attributed input features in steps (each step a recorded intervention), and
+
+`build_graph` builds an attribution graph from one prompt's capture and a set of transcoders:
+typed feature, error, token and logit nodes whose edges are direct linear effects along a frozen
+graph, with every feature and logit node accounted for by its incoming edges plus named constant
+terms (`AttributionGraph`).
+
+A `SiteTarget` passed as `target=` attributes a hidden layer's output (or one unit of it) instead
+of the model output, and with `sae=` one latent of that SAE's encoding of the output (unstable,
+no deprecation shim owed). Layer methods given only integer inputs start their input path at the
+embedding output.
+
+`deletion_curve` and `insertion_curve` score an attribution by removing or revealing its
+most-attributed input features in steps (each step a recorded intervention), and
 `randomization_test` checks that a method's maps change when the model's layers are
 re-initialized. `road_curve` is ROAD, the deletion curve with removed pixels filled by noisy
-linear imputation from their neighbours. `causal_audit` grades an internal attribution (a layer attribution, a direct-logit-attribution
+linear imputation from their neighbours.
+
+`causal_audit` grades an internal attribution (a layer attribution, a direct-logit-attribution
 table or a one-backward read table) by ablating the units it ranks, through forks of an
-intervention-ready trace, and comparing the measured effects with the claim; each row names its
-`site` and its `component`, and a direct-logit table's `constant_row` is reported apart. An EDGE table
-from `torchlens.mechinterp.edge_scores` is audited by patching each edge alone with the `corrupted_input` inputs and
-`metric` it was scored with (`edges` names a subset); every set is patched in one call, into one
-receiver or several, and `sets_not_measured` stays empty. The callable/index/site annotation used inside `torchlens.attribution` is
-privately named `_AttributionTarget`; `TargetSpec` refers only to the intervention selector record and is not an
-attribution-target alias. See the [attribution reference](attribution.md).
+intervention-ready trace, and comparing the measured effects with the claim. Each row names its
+`site` and its `component`, and a direct-logit table's `constant_row` is reported apart. An EDGE
+table from `torchlens.mechinterp.edge_scores` is audited by patching each edge alone with the
+`corrupted_input` inputs and `metric` it was scored with (`edges` names a subset); every set is
+patched in one call, into one receiver or several, and `sets_not_measured` stays empty.
+
+`TargetSpec` refers only to the intervention selector record; it is not an alias for the
+callable/index/site attribution target used inside `torchlens.attribution`. See the
+[attribution reference](attribution.md).
 
 ### Documented-unstable mechinterp kit additions INDEX
 
-Batch-2 additions to `torchlens.mechinterp` (the transformer analysis kit). Every spelling below
-is documented unstable and may be renamed or removed without a compatibility alias.
+Additions to `torchlens.mechinterp` (the transformer analysis kit). Every spelling below is
+documented unstable and may be renamed or removed without a compatibility alias.
 
 <!-- MECHINTERP-KIT-UNSTABLE-INDEX:START -->
 
@@ -614,27 +702,30 @@ keyed by MIB/EAP-IG vocabulary name (`input`, `a{L}.h{H}`, `b{L}`, `m{L}`; recei
 `a{L}.h{H}<q|k|v>`, `m{L}`, `logits`; edges `"<sender>-><receiver>"`). Each `ComponentReceiver`
 holds the captured pre-norm input (`value`, from the op `input_label` entering the norm at
 `norm_address`) and its `senders`. Nodes and receivers carry `layer_index` (transformer block
-index) and `head` (head index), each `None` where it does not apply. `ComponentSender.module_address`
-is the owning module (embedding, attention or MLP; the attention module for head and bias nodes)
-and `ComponentReceiver.module_address` the reading module (attention, MLP, or the unembedding
-head). Each `ComponentEdge` exposes
-the sender's output as its `contribution`. `identity_receipt` records the in-API check that every receiver input equals the
-sum of its contributions. Each attention output bias is its own node `b{L}`. A `ComponentEdge` is
-also a selection (`__selection__`): an EDGE selection of the pre-norm input edge for `m{L}` and
-`logits` receivers, an ACT selection of one head's q, k or v projection slice otherwise.
-`patch_edges(trace, edges, *, corrupted_graph)` returns a fork of `trace` in which every receiver the
-edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupted_graph` is the
-corrupted input's `ComponentGraph`); `input` and `s` are the patched forward's own values (the
-clean values when one receiver is patched), so a circuit (everything outside a kept set patched)
-is one call; the trace needs `capture=tl.options.CaptureOptions(replayable=True)`.
+index) and `head` (head index), each `None` where it does not apply.
+`ComponentSender.module_address` is the owning module (embedding, attention or MLP; the
+attention module for head and bias nodes) and `ComponentReceiver.module_address` the reading
+module (attention, MLP, or the unembedding head). Each `ComponentEdge` exposes the sender's
+output as its `contribution`. `identity_receipt` records the in-API check that every receiver
+input equals the sum of its contributions. Each attention output bias is its own node `b{L}`. A
+`ComponentEdge` is also a selection (`__selection__`): an EDGE selection of the pre-norm input
+edge for `m{L}` and `logits` receivers, an ACT selection of one head's q, k or v projection slice
+otherwise.
 
-`edge_scores(model, inputs, *, corrupted_input, metric, method="eap_ig", steps=None,
-example_reduction="mean")` returns a one-backward `ReadTable` of `EDGE` rows, one per
-component-graph edge, addressed `(edge name,)`: the edge attribution patching score
-`(s_corrupt - s_clean) . dM/d(input of t)`, summed over positions and reduced over examples
-(`example_reduction`, `"mean"` or `"sum"`). `metric` maps the unembedding output to one value per
-example. `method="eap"` takes the gradient at the clean input; `method="eap_ig"` averages it over
-`steps` points (default 5) from the corrupted to the clean `input` node (left Riemann sum).
+`patch_edges(trace, edges, *, corrupted_graph)` returns a fork of `trace` in which every receiver
+the edges enter reads `input - sum(s) + sum(s_corrupt)` over its patched edges (`corrupted_graph`
+is the corrupted input's `ComponentGraph`). `input` and `s` are the patched forward's own values
+(the clean values when one receiver is patched), so a circuit (everything outside a kept set
+patched) is one call. The trace needs `capture=tl.options.CaptureOptions(replayable=True)`.
+
+`edge_scores(model, inputs, *, corrupted_input, metric, method="eap_ig", steps=None, example_reduction="mean")`
+returns a one-backward `ReadTable` of `EDGE` rows, one per component-graph edge, addressed
+`(edge name,)`: the edge attribution patching score `(s_corrupt - s_clean) . dM/d(input of t)`,
+summed over positions and reduced over examples (`example_reduction`, `"mean"` or `"sum"`).
+`metric` maps the unembedding output to one value per example. `method="eap"` takes the gradient
+at the clean input; `method="eap_ig"` averages it over `steps` points (default 5) from the
+corrupted to the clean `input` node (left Riemann sum).
+
 `circuit_performance_ratio(faithfulness, *, fractions=None, log_scale=False)` (CPR) and
 `circuit_model_difference(...)` (CMD) are the trapezoidal areas under `f` and under `|1 - f|` of a
 faithfulness curve over kept edge fractions (`fractions` default: the ten MIB fractions 0.001 to
@@ -645,32 +736,32 @@ shape `[num_q_heads, d_model, d_model]` built from `head_weight_views` (Transfor
 `model.QK` / `model.OV` convention; biases excluded; under grouped-query attention each query head
 pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `ComponentStack` with
 one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
-input), a verified bias constant, and the grading; unselected neurons under `neurons=` fold into
-one exact `other_neurons` row.
+input), a verified bias constant, and the stack grading; unselected neurons under `neurons=` fold
+into one exact `other_neurons` row.
 
-`patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None,
-budget=None, trace_kwargs=None)` returns a `PatchGrid` with axes `("layer", "head")` whose head
-coordinates are QUERY heads, on grouped-query attention. Each cell patches one query head's copy of
-its key/value group (`site="v"` for the value copy, `"k"` for the key copy) at the op that expands
-the grouped tensor to the query heads, so the other heads of the group are untouched; a k/v-site
-`grid` can only patch the whole group. Receipts add `effect_site` (the interceptor wording),
-`site`, `num_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. As for
-every `PatchGrid`, `values` are patched-run metrics and the receipts carry the unpatched baselines
-`clean_metric` and `corrupted_metric`. Fused
-kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expansion ops refuse
-`mi_kv_expansion_ambiguous`; equal query and key/value head counts refuse
-`mi_kv_heads_not_grouped`.
+`patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None, budget=None, trace_kwargs=None)`
+returns a `PatchGrid` with axes `("layer", "head")` whose head coordinates are QUERY heads, on
+grouped-query attention. Each cell patches one query head's copy of its key/value group
+(`site="v"` for the value copy, `"k"` for the key copy) at the op that expands the grouped tensor
+to the query heads, so the other heads of the group are untouched; a k/v-site `grid` can only
+patch the whole group. Receipts add `effect_site` (the interceptor wording), `site`,
+`num_q_heads`, `n_kv_heads` and `expansion_ops`, and every cell fires exactly once. As for every
+`PatchGrid`, `values` are patched-run metrics and the receipts carry the unpatched baselines
+`clean_metric` and `corrupted_metric`. Refusals: fused kernels with no expansion op refuse
+`mi_kv_expansion_unavailable`; several expansion ops refuse `mi_kv_expansion_ambiguous`; equal
+query and key/value head counts refuse `mi_kv_heads_not_grouped`.
 
 ## Selection and storage
 
 **Predicate**
 : A site selector built with `tl.func`, `tl.module`, `tl.in_module`, `tl.label`, and boolean or
-  temporal composition. `save=` is the only selective sparse-capture spelling; removed
-  `keep_op=` and `keep_module=` arguments raise `TypeError`. On `tl.trace`, `save=` also takes
-  the list form (layer names, pass-qualified labels, module addresses, integer indexes,
-  substrings, `'all'`, `'none'`), with final-label selection resolved after capture. `save="stats"` is a third level beside `'all'` and `'none'`:
-  reduce and discard, one `tl.stats.RunningStats` per op and no payload (see Streaming
-  statistics).
+  temporal composition. `save=` is the only selective sparse-capture spelling.
+  - Removed arguments: `keep_op=` and `keep_module=` raise `TypeError`.
+  - List form: on `tl.trace`, `save=` also takes a list (layer names, pass-qualified labels,
+    module addresses, integer indexes, substrings, `'all'`, `'none'`), with final-label
+    selection resolved after capture.
+  - Statistics: `save="stats"` is a third level beside `'all'` and `'none'`: reduce and discard,
+    one `tl.stats.RunningStats` per op and no payload (see Streaming statistics).
 
 **Capture options**
 : `CaptureOptions` configures capture mechanics. Select payloads with the `save=`
@@ -688,361 +779,411 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Streaming storage**
 : A `storage=tl.to_disk(...)` capture that writes selected payloads while capture proceeds. It is
-  distinct from saving a completed in-memory Trace. `trace` blob writes overlap the forward on a
-  bounded single-worker pipeline by default (`to_disk(..., async_writes=...)`, a
-  DOCUMENTED-UNSTABLE spelling): payloads are snapshotted at submission so later in-place
-  mutation never reaches the artifact, writes land in submission order, `max_pending_bytes`
-  (default 256 MiB) blocks capture when the disk falls behind, a failed write raises a typed
-  `ArtifactError` and marks the temp bundle `PARTIAL`, and finalization waits for every
-  pending write before the bundle publishes. `tl.record` streaming stays synchronous and
-  refuses an explicit `async_writes=True`. The model output the forward returns stays in
-  memory (the output op's payload may alias it). A streamed trace does not run: `trace.run(...)`
-  on it refuses `trace_option_unsupported` (every run door, `inputs=` and `fast=True` included),
-  because a run would re-capture every payload into RAM while the bundle kept the first
-  capture; capture again with `to_disk` to a new path, or without `to_disk`, and run that trace
-  (a trace loaded from the bundle runs through its loaded providers). A `path` that already
-  exists refuses with `bundle_path_exists`, as does `Trace.save` or `Bundle.save` to an existing
-  path without `overwrite=True`. A `path` whose final component is a symlink refuses (the same
-  final-component rule `Trace.save` and `tl.load` apply; a symlinked parent passes).
+  distinct from saving a completed in-memory Trace.
+  - Async writes: `trace` blob writes overlap the forward on a bounded single-worker pipeline by
+    default (`to_disk(..., async_writes=...)`, a DOCUMENTED-UNSTABLE spelling). Payloads are
+    snapshotted at submission so later in-place mutation never reaches the artifact, and writes
+    land in submission order. `max_pending_bytes` (default 256 MiB) blocks capture when the disk
+    falls behind. A failed write raises a typed `ArtifactError` and marks the temp bundle
+    `PARTIAL`. Finalization waits for every pending write before the bundle publishes.
+  - `tl.record` streaming stays synchronous and refuses an explicit `async_writes=True`.
+  - Model output: the output the forward returns stays in memory (the output op's payload may
+    alias it).
+  - No reruns: a streamed trace does not run. `trace.run(...)` on it refuses
+    `trace_option_unsupported` (every run door, `inputs=` and `fast=True` included), because a
+    run would re-capture every payload into RAM while the bundle kept the first capture. Capture
+    again with `to_disk` to a new path, or without `to_disk`, and run that trace (a trace loaded
+    from the bundle runs through its loaded providers).
+  - Paths: a `path` that already exists refuses with `bundle_path_exists`, as does `Trace.save`
+    or `Bundle.save` to an existing path without `overwrite=True`. A `path` whose final component
+    is a symlink refuses (the same final-component rule `Trace.save` and `tl.load` apply; a
+    symlinked parent passes).
 
 **Capture cache**
-: The opt-in `cache=True` content-hash store of finished captures. A hit requires the model's
-  tensor content (including device and `requires_grad`), training flags, module tree and
-  `forward` code, plain instance attributes, user-registered module hooks, inputs, and capture
-  configuration to all match. Entries are HMAC-authenticated with a per-user secret kept outside
-  every cache directory (`$XDG_STATE_HOME/torchlens`, default `~/.local/state/torchlens`), so a
-  copied-in or restored cache directory cannot forge entries; they are bounded by entry count and
-  bytes, and `tl.clear_cache()` empties the cache and leaves the secret alone.
+: The opt-in `cache=True` content-hash store of finished captures.
+  - A hit requires all of these to match: the model's tensor content (including device and
+    `requires_grad`), training flags, module tree and `forward` code, plain instance attributes,
+    user-registered module hooks, inputs, and capture configuration.
+  - Entries are HMAC-authenticated with a per-user secret kept outside every cache directory
+    (`$XDG_STATE_HOME/torchlens`, default `~/.local/state/torchlens`), so a copied-in or
+    restored cache directory cannot forge entries.
+  - Entries are bounded by entry count and bytes.
+  - `tl.clear_cache()` empties the cache and leaves the secret alone.
 
 ## Replay and intervention
 
 **Intervention**
-: A value or gradient edit performed at a selected live site. `tl.when(predicate, helper)` binds a
-  selector to helpers such as `tl.zero_ablate()` or `tl.scale(...)`. `spec.bind(model)` returns a
-  bound executor that applies a spec to live calls. A synchronous generator or iterator returned
-  by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
-  settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`. A
-  module-boundary rule (`tl.module(address)`) edits the tensor leaves of a module output that
-  is a tensor or a supported container (tuple, list, dict, namedtuple, dataclass, HF model
-  output); an output of another type (a distribution object) holds no addressable tensor
-  site, so the rule records zero fire there at both doors, bound executor and capture.
+: A value or gradient edit applied at a selected live site.
+  - Spelling: `tl.when(predicate, helper)` binds a selector to helpers such as `tl.zero_ablate()` or
+    `tl.scale(...)`. `spec.bind(model)` returns a bound executor that applies a spec to live calls.
+  - Lazy outputs: a synchronous generator or iterator returned by a bound call (for example
+    `bound.generate(...)`) stays steered for every step, and its report settles on `last_report`
+    when the iteration is exhausted, closed or raises. An async lazy output (async generator or
+    iterator, coroutine, awaitable) refuses `bind_lazy_output`.
+  - Module-boundary rules: `tl.module(address)` edits the tensor leaves of a module output that is a
+    tensor or a supported container (tuple, list, dict, namedtuple, dataclass, HF model output). An
+    output of another type (a distribution object) holds no addressable tensor site, so the rule
+    records zero fire there at both doors, bound executor and capture.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
-: One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
-  recorded on the door's own record (the bind report's `zero_fire_rule_ids`, the capture's
-  `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
-  `last_run["hooks_unfired"]`). The knob then decides the same way everywhere: `"warn"`
-  (default) emits the door's coded warning (`bind_zero_fire`, `trace_zero_fire`,
-  `rerun_zero_fire`), `"error"` raises the door's typed refusal with that code, and
-  `"disclose"` records only. Any other value refuses `zero_fire_policy_invalid`. A rerun edit
-  that cannot fire live (`rerun_selector_unmatchable_live`) is refused before the policy runs,
-  whatever the knob says. When the rule targeted a module (a plain `tl.module` union at
-  `tl.trace(intervene=)`, a module entry at a rerun, a module rule under `spec.bind`) whose
-  output is not a tensor, the warning, the refusal and the fast rerun's
-  `fast_rerun_graph_unsteered` refusal carry
-  `fields["reason"] == "module_output_not_tensor"` and a `reason_detail` sentence naming the
-  output type and, for a `torch.distributions` output, the parameter output paths to target
-  instead (`module 'policy' output is a Normal, not a tensor; target its parameter ops instead
-  (output paths .loc, .scale)`).
+: One knob on every intervention door (`spec.bind`, `tl.trace(intervene=)` and `Trace.run`) for an
+  intervention that fires at zero sites. The zero fire is always recorded on the door's own record;
+  the knob then decides what else happens, the same way everywhere.
+  - Where it is recorded: the bind report's `zero_fire_rule_ids`, the capture's
+    `annotations["unmatched_capture_selectors"]` and intervention audit, the rerun's
+    `last_run["hooks_unfired"]`.
+  - Values: `"warn"` (default) emits the door's coded warning (`bind_zero_fire`, `trace_zero_fire`,
+    `rerun_zero_fire`); `"error"` raises the door's typed refusal with that code; `"disclose"`
+    records only. Any other value refuses `zero_fire_policy_invalid`.
+  - Unmatchable rerun edits: a rerun edit that cannot fire live (`rerun_selector_unmatchable_live`)
+    is refused before the policy runs, whatever the knob says.
+  - Non-tensor module outputs: when the rule targeted a module (a plain `tl.module` union at
+    `tl.trace(intervene=)`, a module entry at a rerun, a module rule under `spec.bind`) whose output
+    is not a tensor, the warning, the refusal and the fast rerun's `fast_rerun_graph_unsteered`
+    refusal carry `fields["reason"] == "module_output_not_tensor"` and a `reason_detail` sentence.
+    The sentence names the output type and, for a `torch.distributions` output, the parameter output
+    paths to target instead, for example:
+    `module 'policy' output is a Normal, not a tensor; target its parameter ops instead (output paths .loc, .scale)`
 
 **Bound intervention executor** *(spelling documented-unstable)*
-: `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and
-  returns a `tl.intervention.BoundModel`; its read-only `BoundModel.recipe` is the bound
-  `tl.Recipe` and `BoundModel.model` the base model.
-  It runs the model with the spec's edits held live, returns the model's own output, records
-  only a firing report (`.last_report`), and supports HF `generate` with the KV cache on or off.
-  It is not an `nn.Module` and bindings never nest; a rule that never fires is recorded on
-  `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**). Decode steps: the binding counts root forwards, so
-  `torchlens.at_step(k)` on a bound call or `generate` names the k-th forward
-  (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
-  boundary rules, capture-free; outside a binding or an episode capture the qualifier still
-  refuses `episode_step_selector_without_episode`. Gradient sites (`tl.grad(...)`) refuse
-  `bind_rule_unsupported`: the lane replaces forward values only; edit gradients with
-  `trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`, or capture with
-  `backward_ready=True, intervene=tl.when(tl.grad(site), edit)` and call `trace.backward(loss)`.
+: `spec.bind(model)` pairs a `tl.Recipe` with a base model as a capture-free callable and returns a
+  `tl.intervention.BoundModel`. It runs the model with the spec's edits held live and returns the
+  model's own output.
+  - Attributes: the read-only `BoundModel.recipe` is the bound `tl.Recipe`, and `BoundModel.model`
+    is the base model.
+  - Behaviour: it records only a firing report (`.last_report`) and supports HF `generate` with the
+    KV cache on or off. It is not an `nn.Module`, and bindings never nest. A rule that never fires
+    is recorded on `.last_report` and settles by `on_zero_fire` (see **Zero-fire policy**).
+  - Decode steps: the binding counts root forwards, so `torchlens.at_step(k)` on a bound call or
+    `generate` names the k-th forward (step 0 is the prefill). This works capture-free on op-level
+    rules and as `tl.module(address) & at_step(...)` boundary rules. Outside a binding or an episode
+    capture the qualifier still refuses `episode_step_selector_without_episode`.
+  - Gradient sites: `tl.grad(...)` refuses `bind_rule_unsupported`, because the bound executor
+    replaces forward values only. Edit gradients with
+    `trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`, or capture with
+    `backward_ready=True, intervene=tl.when(tl.grad(site), edit)` and call `trace.backward(loss)`.
 
 **Recipe and Rule** *(spelling documented-unstable)*
 : `tl.Recipe` is the immutable multi-clause intervention spec that `tl.when(...)` builds and every
-  intervention door accepts. `Recipe.rules` is the tuple of its clauses, each a
-  `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
-  callable). `Rule.signal` is a read-only property derived from the target, never a field and
-  never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
-  for an activation site, `"both"` for a union of the two. The site decides the pass: `Rule`
-  has no `direction` field, and `Rule(..., direction=...)` (or the old third positional
-  value) refuses `intervention_direction_invalid`. `Recipe.merge(*others)`
-  (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
-  refuses `spec_rules_duplicate`.
+  intervention door accepts. Each clause is a `tl.intervention.Rule`.
+  - `Recipe.rules`: the tuple of clauses. Each `tl.intervention.Rule` has `target` (the selector or
+    predicate) and `edit` (the helper or callable).
+  - `Rule.signal`: a read-only property derived from the target, never a field and never saved. It
+    is `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"` for an
+    activation site, `"both"` for a union of the two.
+  - No direction field: the site decides the pass. `Rule` has no `direction` field, and
+    `Rule(..., direction=...)` (or the old third positional value) refuses
+    `intervention_direction_invalid`.
+  - `Recipe.merge(*others)` (also `recipe_a & recipe_b`): returns one `tl.Recipe` joining the
+    clauses; a duplicate clause refuses `spec_rules_duplicate`.
 
 **Recipe.save and tl.load of a recipe** *(spelling documented-unstable)*
 : `Recipe.save(path, level="portable", overwrite=False)` writes the authored rules alone as a
-  `.tlspec` directory whose manifest carries `kind: "recipe"` (no trace, model or fire records;
-  tensor arguments travel in `blobs/recipe-<nnnn>.safetensors`), and `tl.load(path)` returns a `tl.Recipe` whose rule
-  identities (`Recipe.digest`) equal the saved ones. A predicate WHERE term or an opaque callable
-  edit has no portable form: it refuses below `"audit"` (`OpaqueCallableError`), and an audit
-  record, which stores it as a callable placeholder, refuses `tl.load` with `recipe_audit_only`; a hand-edited or foreign record refuses with `recipe_record_malformed`. `level="runnable"`
-  refuses `artifact_save_level_unsupported`: a recipe carries no model to run. The saved
-  intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is the lowered,
-  capture-bound form and still loads as an `InterventionSpec`.
+  `.tlspec` directory, and `tl.load(path)` returns them as a `tl.Recipe`.
+  - Contents: the manifest carries `kind: "recipe"` (no trace, model or fire records); tensor
+    arguments travel in `blobs/recipe-<nnnn>.safetensors`.
+  - Round trip: the loaded recipe's rule identities (`Recipe.digest`) equal the saved ones.
+  - Refusals: a predicate WHERE term or an opaque callable edit has no portable form, so it refuses
+    below `"audit"` (`OpaqueCallableError`). An audit record stores it as a callable placeholder and
+    refuses `tl.load` with `recipe_audit_only`. A hand-edited or foreign record refuses with
+    `recipe_record_malformed`. `level="runnable"` refuses `artifact_save_level_unsupported`: a
+    recipe carries no model to run.
+  - Related: the saved intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is
+    the lowered, capture-bound form and still loads as an `InterventionSpec`.
 
 **Trace.recipe and Trace.clear_edits**
-: `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
-  `Trace.clear_edits(site=None, handle=None, *, strict=False)` removes the
-  sticky edits staged with `do` by site or by handle id, marks the recipe stale and
-  returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
-  Removal takes effect at once, like a torch hook handle: a
-  rerun or backward pass in progress skips the removed hooks from the next hook site it reaches,
-  while the site firing at that moment finishes its queued hooks; afterwards the recipe is the
-  same as after a removal between runs.
-  It is the one way to detach an edit: `do` returns the trace, not a removable handle.
-  Editing a root trace warns `TraceMutationWarning` once per root trace; a `fork()` never warns
-  and `torchlens.errors.quiet()` quiets the session. There is no per-call opt-out
-  keyword: the `confirm_mutation` option is gone from every door and from `InterventionOptions` (ruled
-  3 Nov 2026).
+: `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe. Clearing edits,
+  below, is the one way to detach an edit: `do` returns the trace, not a removable handle.
+  - `Trace.clear_edits(site=None, handle=None, *, strict=False)`: removes the sticky edits staged
+    with `do` by site or by handle id, marks the recipe stale and returns the trace. With
+    `strict=True` it refuses a call that names neither or matches nothing.
+  - Timing: removal takes effect at once, like a torch hook handle. A rerun or backward pass in
+    progress skips the removed hooks from the next hook site it reaches, while the site firing at
+    that moment finishes its queued hooks; afterwards the recipe is the same as after a removal
+    between runs.
+  - Mutation warning: editing a root trace warns `TraceMutationWarning` once per root trace. A
+    `fork()` never warns, and `torchlens.errors.quiet()` quiets the session. There is no per-call
+    opt-out keyword: the `confirm_mutation` option is gone from every door and from
+    `InterventionOptions`.
 
 **Region instances** *(spellings documented-unstable)*
-: A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
-  lists the region's pass-qualified member op labels in execution order; each `RegionInstance`
-  carries `RegionInstance.labels` (that instance's member labels) and
-  `RegionInstance.exit_labels` (its exit op labels, in the order the replacement function must
-  return its tensors; the `labels=` and `exit_labels=` constructor fields). A replacement
-  returning several exits returns a tuple of
-  `len(exit_labels)` tensors.
+: A region edit's admissible region is partitioned into pass instances, each a `RegionInstance`. A
+  replacement returning several exits returns a tuple of `len(exit_labels)` tensors.
+  - `RegionTarget.labels`: the region's pass-qualified member op labels, in execution order.
+  - `RegionInstance.labels`: that instance's member labels (constructor field `labels=`).
+  - `RegionInstance.exit_labels`: its exit op labels, in the order the replacement function must
+    return its tensors (constructor field `exit_labels=`).
 
 **allow_changed_params** (`InterventionOptions`, `ReplayOptions`) *(spelling documented-unstable)*
-: A replay template holds the live `nn.Parameter` each call consumed, and capture records its
-  version counter, storage pointer and shape. If a parameter changed since capture (an optimizer
-  step, `load_state_dict`, an in-place op under `torch.no_grad()`, `param.data = t`), every replay
-  door refuses `replay_param_changed_since_capture` (`ReplayPreconditionError`, naming the
-  parameter and the op) rather than silently compute with the new value: `do()` on the replay
-  engine (a single site, a mapping of several edits, or a resolved selection),
-  `do(..., intervention=InterventionOptions(differentiable=True))`, and later replays of every
-  fork (a rerun fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
-  `False`) replays with the current values and records the parameter names in
-  `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
-  `param.data` or through a numpy or raw-storage alias. A replaced parameter object
-  (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
-  captured object. For an as-if weight edit use `fork.do(tl.param(name), edit)`. The rerun
-  engine runs the live model and ignores the option.
+: Lets replay run with parameters that changed since capture. Without it (default `False`), every
+  replay door refuses rather than silently compute with the new value.
+  - Detection: a replay template holds the live `nn.Parameter` each call consumed, and capture
+    records its version counter, storage pointer and shape. Detected changes include an optimizer
+    step, `load_state_dict`, an in-place op under `torch.no_grad()` and `param.data = t`.
+  - Refusal: `replay_param_changed_since_capture` (`ReplayPreconditionError`, naming the parameter
+    and the op).
+  - Doors checked: `do()` on the replay engine (a single site, a mapping of several edits, or a
+    resolved selection), `do(..., intervention=InterventionOptions(differentiable=True))`, and later
+    replays of every fork (a rerun fork checks against the weights its rerun ran with).
+  - `allow_changed_params=True`: replays with the current values and records the parameter names in
+    `trace.last_run["replayed_with_changed_params"]`.
+  - Not detected: an in-place write through `param.data` or through a numpy or raw-storage alias.
+  - Replaced parameters: a replaced parameter object (`module.weight = nn.Parameter(t)`) is not used
+    by replay at all, because the template keeps the captured object. For an as-if weight edit use
+    `fork.do(tl.param(name), edit)`.
+  - The rerun engine runs the live model and ignores the option.
 
 **differentiable** (`InterventionOptions`) *(spelling documented-unstable)*
-: `InterventionOptions(differentiable=True)` (default `False`) on `Trace.do`. Only the replay
-  engine reads it; rerun and set-only ignore it; the replay lands on a new fork whose outputs
-  stay differentiable (fresh frontier leaves), and `do` returns that fork instead of replaying
-  the trace it was called on in place. `ReplayOptions` carries no `differentiable` field. Which edits keep
-  the graph under which door: docs/gradient_contract.md.
+: `InterventionOptions(differentiable=True)` (default `False`) on `Trace.do` makes the replay's
+  outputs stay differentiable.
+  - Only the replay engine reads it; rerun and set-only ignore it. `ReplayOptions` carries no
+    `differentiable` field.
+  - The replay lands on a new fork whose outputs stay differentiable (fresh frontier leaves), and
+    `do` returns that fork instead of replaying the trace it was called on in place.
+  - Related: which edits keep the graph under which door is in docs/gradient_contract.md.
 
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
-: Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
-  not be orthonormal; a rank-deficient or non-finite basis refuses `subspace_basis_invalid`).
-  With `P` the orthogonal projector onto the span: `mode="zero"` gives `x - P x` (the
-  k-dimensional `project_out`), `mode="mean"` gives `x - P x + P mean`, and `mode="resample"`
-  gives `x - P x + P x[perm]` for a seeded batch permutation (`seed=` required). Inconsistent
-  mode arguments refuse `subspace_mode_invalid`; a basis over the wrong width refuses
-  `subspace_basis_dim_mismatch` at fire time. Zero mode on the span of class-mean differences
-  is the LEACE mean-equalizing erasure.
+: Edit acting on the component of a site value inside the span of a `[k, d]` basis. The rows need
+  not be orthonormal.
+  - Modes, with `P` the orthogonal projector onto the span: `mode="zero"` gives `x - P x` (the
+    k-dimensional `project_out`); `mode="mean"` gives `x - P x + P mean`; `mode="resample"` gives
+    `x - P x + P x[perm]` for a seeded batch permutation (`seed=` required).
+  - Refusals: a rank-deficient or non-finite basis refuses `subspace_basis_invalid`; inconsistent
+    mode arguments refuse `subspace_mode_invalid`; a basis over the wrong width refuses
+    `subspace_basis_dim_mismatch` at fire time.
+  - Zero mode on the span of class-mean differences is the LEACE mean-equalizing erasure.
 
 **torchlens.intervention.set_affine_coordinates(weight, *, bias=None)** — *documented-unstable*
-: Source verb for a subspace edit: under `do(tl.subspace(site, R.T, origin=...), set_affine_coordinates(W,
-  bias=b))` the new coordinates are `W x + b` of the whole site value `x`, so the site gets
-  `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`). `weight` is
-  a finite real `[k, d]` tensor shaped like the basis rows, `bias` `None` or a finite real `[k]`
-  tensor; anything else refuses `affine_source_invalid`. Outside a subspace (a site label,
-  `tl.units`, a capture or replay hook) it refuses `affine_source_needs_subspace`. Builtin: it
-  saves inside the `subspace_edit` payload, `weight` and `bias` as tensor sidecars. TorchLens
-  applies a LoReFT edit trained elsewhere and never fits one.
+: Source verb for a subspace edit: it sets the subspace coordinates to an affine function of the
+  whole site value. TorchLens applies a LoReFT edit trained elsewhere and never fits one.
+  - Effect: under `do(tl.subspace(site, R.T, origin=...), set_affine_coordinates(W, bias=b))` the
+    new coordinates are `W x + b` of the whole site value `x`, so the site gets
+    `x + Q^T (W x + b - Q x)` with `Q` the basis rows (LoReFT, `h + R (W h + b - R^T h)`).
+  - Arguments: `weight` is a finite real `[k, d]` tensor shaped like the basis rows; `bias` is
+    `None` or a finite real `[k]` tensor. Anything else refuses `affine_source_invalid`.
+  - Outside a subspace (a site label, `tl.units`, a capture or replay hook) it refuses
+    `affine_source_needs_subspace`.
+  - Saving: it is builtin and saves inside the `subspace_edit` payload, with `weight` and `bias` as
+    tensor sidecars.
 
 **torchlens.intervention.subspace_interchange(basis, source, *, dim=-1)** — *documented-unstable*
-: k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the
-  same site (same-site donor resolution as `tl.patch_from`); applies a learned rotation the
-  user trained elsewhere.
+: k-dimensional basis interchange: `x - P x + P s`, with `s` the source trace's value at the same
+  site (same-site donor resolution as `tl.patch_from`). It applies a learned rotation the user
+  trained elsewhere.
 
 **torchlens.intervention.keep_grad(edit)** — *documented-unstable*
-: Returns the same forward edit (an `Edit` or a hook callable) with the gradient-connectivity
-  check: at fire time it raises `InvalidArgumentError` / `edit_detached_from_graph` (with the
-  site label, a `reason` of `edit_detached`, `site_has_no_graph` or `grad_disabled`, and a
-  spelling that keeps the graph) when the edit writes values carrying no autograd graph, when
-  the site value has none, or when gradients are disabled. `keep_grad(tl.scale(0.0))` is the
-  graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
-  graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
-  `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
-  Under differentiable replay
-  (`do(site, edit, intervention=InterventionOptions(differentiable=True))`) a passing check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
-  replay frontier get no gradient; the live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
-  reaches them. Which verbs keep the graph under which door: docs/gradient_contract.md.
+: Returns the same forward edit (an `Edit` or a hook callable) with a gradient-connectivity check
+  added. `keep_grad(tl.scale(0.0))` is the graph-keeping zero;
+  `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` is the graph-keeping fixed
+  value.
+  - Check: at fire time it raises `InvalidArgumentError` / `edit_detached_from_graph` when the edit
+    writes values carrying no autograd graph, when the site value has none, or when gradients are
+    disabled. The error carries the site label, a `reason` of `edit_detached`, `site_has_no_graph`
+    or `grad_disabled`, and a spelling that keeps the graph.
+  - Metadata: a wrapped `Edit` carries `("keep_grad", True)` in its metadata and
+    `portability="opaque_audit"`.
+  - Refusals: a backward edit or a non-edit refuses `keep_grad_edit_invalid`.
+  - Differentiable replay: under
+    `do(site, edit, intervention=InterventionOptions(differentiable=True))` a passing check warns
+    once per session with code `keep_grad_replay_frontier`, because parameters upstream of the
+    replay frontier get no gradient. The live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
+    reaches them.
+  - Related: which verbs keep the graph under which door is in docs/gradient_contract.md.
 
 **torchlens.positions(edit, positions, *, mask=None, assume_no_padding=False, axis=1)** — *documented-unstable*
 : Restricts a same-shape edit to chosen token positions of a `(batch, tokens, ...)` site value
-  (token-position editing): `positions` is an int, a list of ints, a slice, a per-row
-  `(batch,)` index tensor, or `"first"` / `"last"`, the first or last REAL token of each row
-  resolved from `mask=` under the token-pooling mask policy (no mask and no
-  `assume_no_padding=True` refuses `transform_mask_missing`; a mask that does not describe the
-  value refuses `transform_mask_incompatible`). Unsupported spellings refuse
-  `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
+  (token-position editing).
+  - `positions`: an int, a list of ints, a slice, a per-row `(batch,)` index tensor, or `"first"` /
+    `"last"`. The last two pick the first or last REAL token of each row, resolved from `mask=`
+    under the token-pooling mask policy.
+  - Refusals: no mask and no `assume_no_padding=True` refuses `transform_mask_missing`; a mask that
+    does not describe the value refuses `transform_mask_incompatible`; unsupported spellings refuse
+    `position_edit_invalid`; positions past the sequence refuse `position_edit_out_of_range`.
 
 **tl.intervention.fit_direction(pos_traces, neg_traces, site, method="mean_diff", *, read_token_index=-1)** — *documented-unstable*
-: Builds one contrastive steering direction from saved activations. `pos_traces` and
-  `neg_traces` are a trace or a sequence of traces with one prompt per batch row; row `i` of the
-  negatives pairs with row `i` of the positives. One token per prompt is read at `site`
-  (`-1` is the last real token when the trace saved its `attention_mask` input; a sequence gives
-  one position per prompt; `None` reads `[n, hidden]` outs unsliced). With `D = pos - neg`:
-  `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is the first uncentered
-  principal axis of `D`, unit norm, signed toward the positives; `"logistic"` is L2 logistic
-  regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch only, unit
-  norm. Also `torchlens.intervention.fit_direction`. Returns a `Direction`. Refusals use
-  the `direction_*` codes of the error contract.
+: Builds one contrastive steering direction from saved activations and returns a `Direction`. Also
+  spelled `torchlens.intervention.fit_direction`.
+  - Inputs: `pos_traces` and `neg_traces` are a trace or a sequence of traces with one prompt per
+    batch row; row `i` of the negatives pairs with row `i` of the positives.
+  - Read position: one token per prompt is read at `site`. `-1` is the last real token when the
+    trace saved its `attention_mask` input; a sequence gives one position per prompt; `None` reads
+    `[n, hidden]` outs unsliced.
+  - Methods, with `D = pos - neg`: `"mean_diff"` is `D.mean(0)` on the activation scale; `"pca"` is
+    the first uncentered principal axis of `D`, unit norm, signed toward the positives; `"logistic"`
+    is L2 logistic regression (`C = 1`, no intercept) of `D / 2` against `-D / 2`, solved with torch
+    only, unit norm.
+  - Refusals use the `direction_*` codes of the error contract.
 
 **Direction (`torchlens.intervention.Direction`)** — *documented-unstable*
-: The frozen result of `fit_direction`: `vector` (1-D, the rows' dtype), `site`,
-  `method`, `num_pairs`, `read_token_index`, `model_type` (the traced model's
-  `config.model_type`, or `None`) and `provenance`, a
-  `tl.types.BasisProvenance` whose origin records the site, method, pair
-  count, read position and a sha256 digest of the rows, and whose `sha256` is the digest of
-  the canonical float64 vector. `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`;
-  place it with `tl.when(tl.module(direction.site), ...)`. `direction.to_steering_vectors()`,
-  `direction.to_repeng()` and `direction.to_dialz()` convert it to a real
-  `steering_vectors.SteeringVector`, `repeng.ControlVector` and `dialz.SteeringVector` without
-  recomputing it (thin converters `tl.bridge.steering_vectors.from_direction`,
-  `tl.bridge.repeng.from_direction` and `tl.bridge.dialz.from_direction`), keyed by
-  `direction.library_layer(layer=None)`: the site label's trailing index unless `layer=` is
-  given; a different explicit index refuses `direction_layer_mismatch`. Applied with the same
-  multiplier, each library object gives the native steer's logits.
+: The frozen result of `fit_direction`: a steering vector plus a record of how it was fitted. It
+  steers natively and converts to three steering libraries.
+  - Fields: `vector` (1-D, the rows' dtype), `site`, `method`, `num_pairs`, `read_token_index`,
+    `model_type` (the traced model's `config.model_type`, or `None`) and `provenance`.
+  - `provenance`: a `tl.types.BasisProvenance` whose origin records the site, method, pair count,
+    read position and a sha256 digest of the rows, and whose `sha256` is the digest of the canonical
+    float64 vector.
+  - Steering: `direction.steer(m)` is `tl.steer(vector, m, dim=-1)`; place it with
+    `tl.when(tl.module(direction.site), ...)`.
+  - Converters: `direction.to_steering_vectors()`, `direction.to_repeng()` and
+    `direction.to_dialz()` convert it to a real `steering_vectors.SteeringVector`,
+    `repeng.ControlVector` and `dialz.SteeringVector` without recomputing it (thin converters
+    `tl.bridge.steering_vectors.from_direction`, `tl.bridge.repeng.from_direction` and
+    `tl.bridge.dialz.from_direction`). Applied with the same multiplier, each library object gives
+    the native steer's logits.
+  - Layer key: the converters are keyed by `direction.library_layer(layer=None)`, the site label's
+    trailing index unless `layer=` is given; a different explicit index refuses
+    `direction_layer_mismatch`.
 
 **`Direction.upload_to_neuronpedia` (publish a vector)** — *documented-unstable*
-: `direction.upload_to_neuronpedia(*, api_key, model_id, name, layer=None,
-  hook_type="resid_post", default_steering_strength=1.0)` publishes the vector on neuronpedia.org under
-  the account that owns `api_key` through Neuronpedia's "Create Vector" endpoint and returns
-  the vector page's URL. `model_id` is Neuronpedia's model id, `name` the name it shows,
-  `layer` defaults to `direction.library_layer()`, `hook_type` is `"resid_post"` or
-  `"resid_pre"`, `default_steering_strength` the default steering strength (-100 to 100). Every field
-  is checked before the request (`neuronpedia_upload_argument_invalid`); the key never
-  enters a message.
+: Publishes the vector on neuronpedia.org under the account that owns `api_key`, through
+  Neuronpedia's "Create Vector" endpoint, and returns the vector page's URL.
+  - Signature:
+    `direction.upload_to_neuronpedia(*, api_key, model_id, name, layer=None, hook_type="resid_post", default_steering_strength=1.0)`
+  - Arguments: `model_id` is Neuronpedia's model id; `name` is the name it shows; `layer` defaults
+    to `direction.library_layer()`; `hook_type` is `"resid_post"` or `"resid_pre"`;
+    `default_steering_strength` is the default steering strength (-100 to 100).
+  - Every field is checked before the request (`neuronpedia_upload_argument_invalid`); the key never
+    enters a message.
 
 **Bundle**
-: A named collection of aligned Traces, constructed with `tl.Bundle(...)` or `tl.Bundle(...)`, for
-  cross-run comparison. `tl.Bundle()` with no members builds an empty bundle to fill later with
-  `add`; an empty bundle saves and loads like any other.
+: A named collection of aligned Traces, constructed with `tl.Bundle(...)`, for cross-run comparison.
+  `tl.Bundle()` with no members builds an empty bundle to fill later with `add`; an empty bundle
+  saves and loads like any other.
 
 **Bundle.relations** *(spelling documented-unstable)*
 : The bundle's typed, directed relation rows between members, read as an immutable tuple of
   `MemberRelationRow` (plus `OpaqueRelationRow` for unknown namespaced kinds loaded from an
-  artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
-  `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
-  params are a
-  closed set; rows persist in the bundle artifact (`relations.json` in saved format 3) and every
-  load re-checks them. On a pair row `from` is
-  always the LATER member. Rows are ordering and topology claims: members joined by a directed
-  path of ordering kinds are not comparison operands.
+  artifact). Rows are ordering and topology claims: members joined by a directed path of ordering
+  kinds are not comparison operands.
+  - Pair kinds: `alternative_of` (peers; still comparable), `forked_from`, `successor_of`,
+    `escalates`, `fed_by`, `selected_by`. On a pair row `from` is always the LATER member.
+  - Member kind: `episode_member`.
+  - Params: each kind's params are a closed set.
+  - Saving: rows persist in the bundle artifact (`relations.json` in saved format 3), and every load
+    re-checks them.
 
 **Bundle.relation_grades** *(spelling documented-unstable)*
-: `b.relation_grades()` returns one `RelationGrade` per relation row, in table order: the row's
-  grade DERIVED at read from its evidence items and declared params, never stored. The ladder,
-  weakest to strongest: `unchecked` (no check ran; the contracted reasons are listed),
-  `disclosed` (declared only: a bare row, a `carry_mode="none"` fresh start, disclosed items),
-  `consistent` (every check that ran agrees, not proven), `verified` (every item verified). Any
-  divergent item grades the row `divergent`. `broken` fires on exactly two premises, named in
-  `broken_premises`: `bulk_origin_failure` (more than half of the checked member-origin items
-  diverge) and `verbatim_carry_failure` (`carry_mode="verbatim"` with a divergent
-  `declared_carry` item). A divergence at a declared seam (the item's `seam` is in the row's
-  `seams`) is counted in `seam_local_divergences`, grades `divergent` on record and never
-  escalates. `OpaqueRelationRow` grades `unchecked` with reason `kind_unregistered`.
+: `b.relation_grades()` returns one `RelationGrade` per relation row, in table order. Each grade is
+  DERIVED at read from the row's evidence items and declared params, never stored.
+  - Ladder, weakest to strongest: `unchecked` (no check ran; the contracted reasons are listed),
+    `disclosed` (declared only: a bare row, a `carry_mode="none"` fresh start, disclosed items),
+    `consistent` (every check that ran agrees, not proven), `verified` (every item verified).
+  - `divergent`: any divergent item grades the row `divergent`.
+  - `broken`: fires on exactly two premises, named in `broken_premises`: `bulk_origin_failure` (more
+    than half of the checked member-origin items diverge) and `verbatim_carry_failure`
+    (`carry_mode="verbatim"` with a divergent `declared_carry` item).
+  - Seams: a divergence at a declared seam (the item's `seam` is in the row's `seams`) is counted in
+    `seam_local_divergences`, grades `divergent` on record and never escalates.
+  - `OpaqueRelationRow` grades `unchecked` with reason `kind_unregistered`.
 
 **RelationGrade** *(`from torchlens.bundle import RelationGrade`; spelling documented-unstable)*
-: Frozen record of one row's derived grade: `kind`, `members`, `grade`, `broken_premises`,
-  `unchecked_reasons`, `seam_local_divergences`, `exogenous_items` (items whose class lies
-  outside the member-measured kinds; derived, never written to an item), `items_by_class`,
-  `items_by_grade`.
+: Frozen record of one row's derived grade.
+  - Fields: `kind`, `members`, `grade`, `broken_premises`, `unchecked_reasons`,
+    `seam_local_divergences`, `exogenous_items` (items whose class lies outside the member-measured
+    kinds; derived, never written to an item), `items_by_class`, `items_by_grade`.
 
 **successor_of.evidence item class** *(evidence item key `class`; spelling documented-unstable)*
-: The ground-truth origin of one evidence item, from the closed vocabulary of seven kinds:
-  member-measured `member_input`, `member_output`, `member_state`, `member_params`, and
-  exogenous `declared_carry`, `declared_transform`, `harness_record`. Required on every item of a
-  reserved schema (`version_boundary_v1` admits the four member kinds plus `declared_transform`;
-  `turn_boundary_v1` admits `member_input`, `member_output`, `member_state`, `declared_carry`,
-  `declared_transform`, `harness_record`); optional under a user schema, but load-validated
-  against the seven when present (`bundle_relation_schema_invalid`). "Exogenous" is a rollup
-  read from the class, never a persisted value.
+: The ground-truth origin of one evidence item, from a closed vocabulary of seven kinds. "Exogenous"
+  is a rollup read from the class, never a persisted value.
+  - Member-measured: `member_input`, `member_output`, `member_state`, `member_params`.
+  - Exogenous: `declared_carry`, `declared_transform`, `harness_record`.
+  - Reserved schemas require it on every item: `version_boundary_v1` admits the four member kinds
+    plus `declared_transform`; `turn_boundary_v1` admits `member_input`, `member_output`,
+    `member_state`, `declared_carry`, `declared_transform`, `harness_record`.
+  - User schemas: optional, but load-validated against the seven when present
+    (`bundle_relation_schema_invalid`).
 
 **successor_of.carry_mode / seams / item seam** *(relation params; spelling documented-unstable)*
-: `carry_mode` is the closed vocabulary `none` (a declared fresh start: nothing carried across
-  the boundary), `verbatim` (state carried unchanged) and `summarized` (state carried through a
-  declared transform); any other value refuses at load. `seams` is a list of distinct names for
-  the boundaries where the chain is EXPECTED to change (a chat-template revision, a tokenizer
-  swap); an evidence item may name one of them under `seam`, and a divergence there never
-  escalates the row to `broken`. An item `seam` that the row does not declare refuses at load.
+: Relation params that say what crosses a boundary and where the chain is expected to change.
+  - `carry_mode`: the closed vocabulary `none` (a declared fresh start: nothing carried across the
+    boundary), `verbatim` (state carried unchanged) and `summarized` (state carried through a
+    declared transform). Any other value refuses at load.
+  - `seams`: a list of distinct names for the boundaries where the chain is EXPECTED to change (a
+    chat-template revision, a tokenizer swap).
+  - Item `seam`: an evidence item may name one of the row's seams, and a divergence there never
+    escalates the row to `broken`. An item `seam` that the row does not declare refuses at load.
 
 **Bundle.relate** *(spelling documented-unstable)*
-: Appends relation rows and returns the bundle. Positional form, read as the sentence it records:
-  `b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]], label="critique")` is
-  "critique fed_by draft" (kind, the later member, the earlier member, then the kind's params; a
-  member kind names one member). Row form: `b.relate(MemberRelationRow(...))` or payload mappings.
-  Refusals carry stable codes (`bundle_relation_schema_invalid`, `bundle_relation_member_missing`,
-  `bundle_relation_auto_spans_unavailable`, `bundle_relation_auto_spans_ambiguous`,
-  `bundle_relation_auto_spans_unmatched`, `bundle_relation_span_out_of_bounds`,
-  `bundle_relation_span_unverified`); a refusal leaves the table unchanged.
+: Appends relation rows and returns the bundle. A refusal leaves the table unchanged.
+  - Positional form, read as the sentence it records:
+    `b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]], label="critique")` is
+    "critique fed_by draft". The arguments are the kind, the later member, the earlier member, then
+    the kind's params; a member kind names one member.
+  - Row form: `b.relate(MemberRelationRow(...))` or payload mappings.
+  - Refusal codes: `bundle_relation_schema_invalid`, `bundle_relation_member_missing`,
+    `bundle_relation_auto_spans_unavailable`, `bundle_relation_auto_spans_ambiguous`,
+    `bundle_relation_auto_spans_unmatched`, `bundle_relation_span_out_of_bounds`,
+    `bundle_relation_span_unverified`.
 
 **fed_by** *(relation kind; spelling documented-unstable)*
 : "B fed_by A": the later member B's prompt contains the earlier member A's output. Content
   provenance only: a router whose decision selects a call without its output entering that call's
-  prompt is not `fed_by`; record that decision with `selected_by`. Optional params: `token_spans`
-  (rows of four ints, half-open: source start, source end, destination start, destination end),
-  `basis` (`declared`, `verified`, `matched`), `coverage` (a fraction in [0, 1]) and `label` (free
-  human text such as `"critique"` or `"judge"`; nothing in TorchLens interprets it).
-  `token_spans="auto"` asks TorchLens to find the spans: the source's eligible output (its bound
-  completion range minus `excluded_ids`) is searched as exact runs of token ids in the reader's
-  prompt, trimming up to two boundary tokens per side when a run is not found whole, and the row
-  is written with `basis="matched"` and a computed `coverage`. Several placements (a repeated
-  quote, or a tie between two trims) refuse `bundle_relation_auto_spans_ambiguous`; no placement
-  refuses `bundle_relation_auto_spans_unmatched`; missing evidence (no source completion range,
-  ids not retained) refuses `bundle_relation_auto_spans_unavailable`. `fed_by` is an ordering kind
-  for the comparison gate.
+  prompt is not `fed_by`; record that decision with `selected_by`. `fed_by` is an ordering kind for
+  the comparison gate.
+  - Optional params: `token_spans` (rows of four ints, half-open: source start, source end,
+    destination start, destination end), `basis` (`declared`, `verified`, `matched`), `coverage` (a
+    fraction in [0, 1]) and `label` (free human text such as `"critique"` or `"judge"`; nothing in
+    TorchLens interprets it).
+  - `token_spans="auto"`: TorchLens finds the spans. The source's eligible output (its bound
+    completion range minus `excluded_ids`) is searched as exact runs of token ids in the reader's
+    prompt, trimming up to two boundary tokens per side when a run is not found whole. The row is
+    written with `basis="matched"` and a computed `coverage`.
+  - Auto refusals: several placements (a repeated quote, or a tie between two trims) refuse
+    `bundle_relation_auto_spans_ambiguous`; no placement refuses
+    `bundle_relation_auto_spans_unmatched`; missing evidence (no source completion range, ids not
+    retained) refuses `bundle_relation_auto_spans_unavailable`.
 
 **selected_by** *(relation kind; spelling documented-unstable)*
-: "B selected_by A": the earlier member A's decision (a router's route, a judge's verdict)
-  selected the later member B, deciding whether B ran or which input it got. Control only: A's
-  text need not appear in B's prompt (text that does is `fed_by`), and the row never says A
-  caused B's content. `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])`
-  persists `from="writer"`, `to="router"`, like every ordering kind. Optional params, a closed set:
-  `chosen`, `candidates` and `evidence`. Malformed params refuse
-  `bundle_relation_schema_invalid`. An ordering kind: `upstream`/`downstream` walk it and the
-  comparison gate refuses the selected call and its decider as operands. Admitted from tlspec 10;
-  an artifact stamped earlier that carries the kind refuses.
+: "B selected_by A": the earlier member A's decision (a router's route, a judge's verdict) selected
+  the later member B, deciding whether B ran or which input it got. Control only: A's text need not
+  appear in B's prompt (text that does is `fed_by`), and the row never says A caused B's content.
+  - Example: `b.relate("selected_by", "writer", "router", chosen=1, candidates=[0, 1])` persists
+    `from="writer"`, `to="router"`, like every ordering kind.
+  - Optional params, a closed set: `chosen`, `candidates` and `evidence`. Malformed params refuse
+    `bundle_relation_schema_invalid`.
+  - Ordering: `upstream`/`downstream` walk it, and the comparison gate refuses the selected call and
+    its decider as operands.
+  - Saved artifacts admit the kind from tlspec 10; an artifact stamped earlier that carries the kind
+    refuses.
 
 **selected_by.chosen** *(relation param; spelling documented-unstable)*
-: The decision, as one JSON scalar: a bool, an int, a finite float or a non-empty string of at
-  most 256 characters (route `1`, candidate `"c2"`). Compared by type and value, so `1` and `True`
-  are different decisions. When `candidates` is also given, `chosen` must be one of them.
+: The decision, as one JSON scalar: a bool, an int, a finite float or a non-empty string of at most
+  256 characters (route `1`, candidate `"c2"`). Compared by type and value, so `1` and `True` are
+  different decisions. When `candidates` is also given, `chosen` must be one of them.
 
 **selected_by.candidates** *(relation param; spelling documented-unstable)*
-: The options the decider chose among: a non-empty list of distinct JSON scalars (same scalar
-  rule as `chosen`). They may be member names, routes or tool names; TorchLens never resolves
-  them as members.
+: The options the decider chose among: a non-empty list of distinct JSON scalars (same scalar rule
+  as `chosen`). They may be member names, routes or tool names; TorchLens never resolves them as
+  members.
 
 **selected_by.evidence** *(relation param; spelling documented-unstable)*
 : Why the decider chose, as the graded evidence envelope `successor_of` admits
-  (`{schema, items, facts_digest}`; each item a graded claim with a nullable `basis`), for
-  example the router's scores. User-written measurement grades (`verified`, `consistent`,
-  `divergent`) are stored as `disclosed` with the original under `declared_grade`, and the
-  envelope keeps the 1 MiB per-row budget (`bundle_relation_evidence_over_budget`).
+  (`{schema, items, facts_digest}`; each item a graded claim with a nullable `basis`), for example
+  the router's scores.
+  - User-written measurement grades (`verified`, `consistent`, `divergent`) are stored as
+    `disclosed`, with the original under `declared_grade`.
+  - The envelope keeps the 1 MiB per-row budget (`bundle_relation_evidence_over_budget`).
 
 **Token-stream binding** *(`token_boundary_v1`; spelling documented-unstable)*
 : What makes `fed_by` spans checkable: a per-member descriptor in the reserved
-  `"torchlens.boundary_facts"` sidecar family naming the captured stream the coordinates index
-  (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`, the measured
-  `length` and `ids_digest` of its token ids (filled in by `relate` when left out), the member's
-  own `completion` range, the `excluded_ids` outside the eligible set (padding, special tokens),
-  and `tokenizer` / `template` identity strings. Attach one with `torchlens.io.attach_sidecar`
-  before relating; with none, `relate` derives an input-stream binding for a batch-of-one capture
-  whose ids are retained. A row reads `basis="verified"` only when both members are bound, each
-  digest matches the retained ids, the source binding names its completion range, every source
-  span lies inside it, and the token ids agree span by span; anything less is `declared`. A
-  claimed `verified`/`matched` row re-checks at every door (relate, constructor, load): missing
-  evidence makes it `declared`, contradicting evidence refuses `bundle_relation_span_unverified`.
-  A `matched` row also re-runs the matcher on the members and keeps `matched` only when it finds
-  the same spans; spans that check out but are not what the matcher finds are stored as
-  `verified`. `coverage` on a verified or matched row is
-  computed: covered eligible source tokens over all eligible ones (the bound completion range
-  minus `excluded_ids`).
+  `"torchlens.boundary_facts"` sidecar family that names the captured token stream the span
+  coordinates index. Attach one with `torchlens.io.attach_sidecar` before relating; with none,
+  `relate` derives an input-stream binding for a batch-of-one capture whose ids are retained.
+  - Fields: the stream (`"input"`, the first integer-dtype input; or `"output"`), the `batch_row`,
+    the measured `length` and `ids_digest` of its token ids (filled in by `relate` when left out),
+    the member's own `completion` range, the `excluded_ids` outside the eligible set (padding,
+    special tokens), and `tokenizer` / `template` identity strings.
+  - Verified basis: a row reads `basis="verified"` only when both members are bound, each digest
+    matches the retained ids, the source binding names its completion range, every source span lies
+    inside it, and the token ids agree span by span. Anything less is `declared`.
+  - Re-checks: a claimed `verified`/`matched` row re-checks at every door (relate, constructor,
+    load). Missing evidence makes it `declared`; contradicting evidence refuses
+    `bundle_relation_span_unverified`.
+  - Matched rows: a `matched` row also re-runs the matcher on the members and keeps `matched` only
+    when it finds the same spans; spans that check out but are not what the matcher finds are stored
+    as `verified`.
+  - Coverage: `coverage` on a verified or matched row is computed as covered eligible source tokens
+    over all eligible ones (the bound completion range minus `excluded_ids`).
 
 **Bundle.upstream / Bundle.downstream** *(spelling documented-unstable)*
 : `b.upstream(name)` lists every member `name` transitively came after (what fed it), and
@@ -1051,157 +1192,176 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `compare`.
 
 **Bundle.token_pairs** *(spelling documented-unstable)*
-: `b.token_pairs(reader, source)` returns the verified one-to-one token positions of "reader
-  fed_by source", arguments in `relate`'s order (the later member, then the earlier one). The
-  result's `pairs` are `(source_pos, reader_pos)` tuples, each position at most once, with
-  `source_positions` / `reader_positions` lists for indexing activations; `coverage` is the paired
-  share of the source's eligible tokens (`None` without a bound completion range); `excluded`
-  lists what was not paired, each entry a dict with `side`, `start`, `end`, `reason` and
-  `row_index`. Only spans of `verified` or `matched` rows that re-check at call time pair.
-  Declared spans (retokenized many-to-many text, a token mixing a template delimiter with copied
-  text), excluded ids, positions claimed twice, streams whose bindings name different tokenizers,
-  and eligible source tokens no verified span covers are reported, never paired. Equal lengths are
-  never evidence of matching meaning. A verified row whose evidence now contradicts it refuses
-  `bundle_relation_span_unverified`. A Bundle method; any reduction over a
-  many-to-one group is the caller's own descriptive comparison.
+: `b.token_pairs(reader, source)` returns the verified one-to-one token positions of "reader fed_by
+  source", arguments in `relate`'s order (the later member, then the earlier one). Equal lengths are
+  never evidence of matching meaning. A Bundle method; any reduction over a many-to-one group is the
+  caller's own descriptive comparison.
+  - Result: `pairs` are `(source_pos, reader_pos)` tuples, each position at most once, with
+    `source_positions` / `reader_positions` lists for indexing activations. `coverage` is the paired
+    share of the source's eligible tokens (`None` without a bound completion range). `excluded`
+    lists what was not paired, each entry a dict with `side`, `start`, `end`, `reason` and
+    `row_index`.
+  - What pairs: only spans of `verified` or `matched` rows that re-check at call time.
+  - Reported, never paired: declared spans (retokenized many-to-many text, a token mixing a template
+    delimiter with copied text), excluded ids, positions claimed twice, streams whose bindings name
+    different tokenizers, and eligible source tokens no verified span covers.
+  - Refusal: a verified row whose evidence now contradicts it refuses
+    `bundle_relation_span_unverified`.
 
 **Bundle.token_divergence** *(spelling documented-unstable)*
 : `b.token_divergence(original, rerun)` returns a `TokenDivergence`: where two members' prompts and
-  completions part, by exact token ids: `original=` is the member from the original run (the
-  reference), `rerun=` the member from the re-run compared against it. Each member needs a
-  token-stream binding that names its
-  `completion` range, with its token ids retained; the prompt is the bound stream before the
-  completion. Typical use is a call and its copy from a steered re-run
-  (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare. Refuses
-  `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its completion
-  range or the ids are missing; an unknown name raises `KeyError`. A Bundle method.
+  completions part, by exact token ids. A Bundle method.
+  - Arguments: `original=` is the member from the original run (the reference); `rerun=` is the
+    member from the re-run compared against it. Typical use is a call and its copy from a steered
+    re-run (`b.token_divergence("critique", "cf_critique")`), but any two bound members compare.
+  - Requirements: each member needs a token-stream binding that names its `completion` range, with
+    its token ids retained; the prompt is the bound stream before the completion.
+  - Refusals: `bundle_token_divergence_unavailable` (fields `member`, `reason`) when a binding, its
+    completion range or the ids are missing; an unknown name raises `KeyError`.
 
 **TokenDivergence** *(`from torchlens.bundle import TokenDivergence`; spelling documented-unstable)*
-: The frozen result of `Bundle.token_divergence`. `original`, `rerun`: the member names.
-  `prompt_divergence`: the first prompt position whose ids differ (the shorter prompt's length when
-  one extends the other; `None` when equal). `completion_divergence`: the same for the completions,
-  counted from the first generated token. `lengths`: `((prompt, completion), (prompt,
-  completion))`. `shared`: the stretches both runs share as `(orig_start, orig_end, rerun_start,
-  rerun_end)` half-open stream positions, the `token_spans` grammar: the common prompt prefix, the
-  common prompt tail after a divergence, the common completion prefix. `intervened`: whether each
-  capture ran under an intervention. Properties `prompt_same` and `completion_same`.
+: The frozen result of `Bundle.token_divergence`.
+  - `original`, `rerun`: the member names.
+  - `prompt_divergence`: the first prompt position whose ids differ (the shorter prompt's length
+    when one extends the other; `None` when equal).
+  - `completion_divergence`: the same for the completions, counted from the first generated token.
+  - `lengths`: `((prompt, completion), (prompt, completion))`.
+  - `shared`: the stretches both runs share as `(orig_start, orig_end, rerun_start, rerun_end)`
+    half-open stream positions (the `token_spans` grammar): the common prompt prefix, the common
+    prompt tail after a divergence, the common completion prefix.
+  - `intervened`: whether each capture ran under an intervention.
+  - Properties: `prompt_same` and `completion_same`.
 
 **Bundle.add_alternative** *(spelling documented-unstable)*
-: `b.add_alternative(second_run, steered=("draft",), prefix="cf_")` merges a second run of your
-  own harness, made with the `steered` calls captured under their specs, into `b` and returns an
-  `AlternativeReport`. Calls pair by member name, never by order. Before anything changes it
-  refuses, with these codes: `alternative_target_missing` (a steered call absent from either run;
-  field `side`), `alternative_target_unsteered` (a declared call captured without a spec that
-  fired), `alternative_steer_undeclared` (another second-run call captured under a spec),
-  `alternative_capture_position_dependent` (the spec edits chosen positions or decode steps:
-  `at_positions`, `at_step`), `alternative_member_name_taken` (a copy would reuse a name; pass
-  another `prefix`), `bundle_token_divergence_unavailable` (a paired call lacks a bound completion
-  range) and `alternative_unchanged_call_diverged` (an unsteered call saw the same prompt but wrote
-  different text: noise TorchLens cannot separate from the steer). Then every second-run member is
-  added as `prefix + name`, each paired call gets an `alternative_of` row from its copy, the second
-  run's own relation rows are copied onto the copies, and one `add` operation records the statuses.
-  A failure while merging restores the bundle. TorchLens never runs your harness. A Bundle
-  helper-table method.
+: `b.add_alternative(second_run, steered=("draft",), prefix="cf_")` merges a second run of your own
+  harness, made with the `steered` calls captured under their specs, into `b` and returns an
+  `AlternativeReport`. Calls pair by member name, never by order. TorchLens never runs your harness.
+  A Bundle helper-table method.
+  Before anything changes it refuses with these codes:
+  - `alternative_target_missing`: a steered call is absent from either run (field `side`).
+  - `alternative_target_unsteered`: a declared call was captured without a spec that fired.
+  - `alternative_steer_undeclared`: another second-run call was captured under a spec.
+  - `alternative_capture_position_dependent`: the spec edits chosen positions or decode steps
+    (`at_positions`, `at_step`).
+  - `alternative_member_name_taken`: a copy would reuse a name; pass another `prefix`.
+  - `bundle_token_divergence_unavailable`: a paired call lacks a bound completion range.
+  - `alternative_unchanged_call_diverged`: an unsteered call saw the same prompt but wrote different
+    text, which is noise TorchLens cannot separate from the steer.
+  - Merge: every second-run member is added as `prefix + name`, each paired call gets an
+    `alternative_of` row from its copy, the second run's own relation rows are copied onto the
+    copies, and one `add` operation records the statuses. A failure while merging restores the
+    bundle.
 
 **AlternativeReport** *(`from torchlens.bundle import AlternativeReport`; spelling documented-unstable)*
-: The frozen result of `Bundle.add_alternative`: `prefix`, `steered` (the declared calls), `calls`
-  (one `AlternativeCall` per call of either run, the original's order first), `uncopied_rows` (the
-  second run's rows of unknown namespaced kinds, not copied) and `table()`, a fixed-width text
-  table with one line per call.
+: The frozen result of `Bundle.add_alternative`.
+  - Fields: `prefix`, `steered` (the declared calls), `calls` (one `AlternativeCall` per call of
+    either run, the original's order first), `uncopied_rows` (the second run's rows of unknown
+    namespaced kinds, not copied).
+  - Methods: `table()`, a fixed-width text table with one line per call.
 
 **AlternativeCall** *(`from torchlens.bundle import AlternativeCall`; spelling documented-unstable)*
-: One call of an `AlternativeReport`: `call` (the original member name), `member` (its copy,
-  `None` when dropped), `status`, and `prompt_divergence` / `completion_divergence` as on
-  `TokenDivergence` (`None` for unpaired calls). Statuses: `steered` (declared in `steered=`),
-  `unchanged` (prompt and output the same), `absorbed` (the prompt changed, the output did not; the
-  common case), `changed` (both changed), `added` (only the second run made the call) and
-  `dropped` (only the original made it).
+: One call of an `AlternativeReport`.
+  - Fields: `call` (the original member name), `member` (its copy, `None` when dropped), `status`,
+    and `prompt_divergence` / `completion_divergence` as on `TokenDivergence` (`None` for unpaired
+    calls).
+  - Statuses: `steered` (declared in `steered=`), `unchanged` (prompt and output the same),
+    `absorbed` (the prompt changed, the output did not; the common case), `changed` (both changed),
+    `added` (only the second run made the call) and `dropped` (only the original made it).
 
 **Bundle.at**
-: `b.at(site)` returns the cross-member `Super*` view of one site. A string is a label from any
-  Bundle accessor family; any other selector-like site (`tl.func("relu")`, `tl.module(address)`)
-  resolves to one op in every member after the model-axis floor (`same_param_shapes`) passes for
-  every member pair (a view read, so different inputs are allowed). `b.at(site).compare()` is the
-  member-by-member matrix at that site and first runs the comparison gate over the members it
-  reads. To read a subset of members, build a bundle of them:
-  `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
-  the view for the rest.
+: `b.at(site)` returns the cross-member `Super*` view of one site.
+  - Sites: a string is a label from any Bundle accessor family. Any other selector-like site
+    (`tl.func("relu")`, `tl.module(address)`) resolves to one op in every member after the
+    model-axis floor (`same_param_shapes`) passes for every member pair (a view read, so different
+    inputs are allowed).
+  - Comparing: `b.at(site).compare()` is the member-by-member matrix at that site and first runs the
+    comparison gate over the members it reads.
+  - Subsets: to read a subset of members, build a bundle of them,
+    `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
+    the view for the rest.
 
 **Bundle.draw** *(`nodes=` spelling documented-unstable)*
-: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
-  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
-  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
-  the bundle as one picture and returns a `tl.viz.Drawing` (`str(drawing)` is the DOT source,
-  `drawing.path` the written file). It follows `Trace.draw`'s rules (JMT decision, Sun 1 Nov 2026,
-  3:00 PM PT): the path comes first and its extension picks the format (`b.draw("diff.svg")`
-  writes SVG); `file_format=` applies only to a path with no extension (`<path>.<file_format>`,
-  `"pdf"` by default); a `file_format` that disagrees with the extension refuses with
-  `ArgumentConflictError` (`draw_format_mismatch`). Outside a notebook a bare `b.draw()` writes a
-  collision-safe `bundle_modelgraph.<format>` and prints its path; in a Jupyter kernel a bare call
-  writes no file and returns the drawing for inline display. No viewer opens unless
-  `open_viewer=True`. `graph="forward"` (default), `"backward"` (each member's captured grad_fn
-  graph) or `"combined"` draw the bundle's union op graph for that pass, with a member list on
-  each node and arrow that not every member runs; `rolled=True` draws each repeated module once;
-  `direction=None` is `"bottomup"`; `theme` takes the `Trace.draw` skin names (`None` is
-  `"torchlens"`). `node_overrides=` (Bundle-only) keys Graphviz node attributes by op label
-  (member name under `nodes="members"`), `edge_overrides=` by `(source, target)`. `nodes="ops"`
-  (default) draws the ops; `nodes="members"` draws one node per member and one edge per relation
-  row, from the earlier member to the later one, labelled with the kind, the row's `label`, on
-  `fed_by` its basis and coverage, and on `selected_by` its `chosen` decision; solid edges carry
-  token spans TorchLens checked, every other row is dashed, and `graph` must stay `"forward"`.
-  `graph="diff"` draws two members side by side, one node per op, coloured by `metric` distance
-  on the `on` field; each pass of a layer that runs more than once is its own node with its own
-  distance, the per-pass rows of `Bundle.compare`: `members=(left, right)` names them (default the baseline and the
-  next member); its defaults are `theme="paper"`, `"svg"` and a `bundle_diff` file, and it runs
-  the comparison gate on the rendered pair only. Any other keyword (a `Trace.draw` keyword the
-  bundle renderer does not support yet, such as `depth=`) refuses with
-  `ArgumentTypeError` (`bundle_draw_keyword_unsupported`) naming the supported list; each is added
-  when the renderer supports it (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). Replaces the removed
-  `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).
+: Draws the bundle as one picture and returns a `tl.viz.Drawing` (`str(drawing)` is the DOT source,
+  `drawing.path` the written file). It follows `Trace.draw`'s rules.
+  - Signature:
+    `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None, show_legend=None, file_format=None, open_viewer=False, graph_overrides=None, node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")`
+  - Path and format: the path comes first and its extension picks the format (`b.draw("diff.svg")`
+    writes SVG). `file_format=` applies only to a path with no extension (`<path>.<file_format>`,
+    `"pdf"` by default); a `file_format` that disagrees with the extension refuses with
+    `ArgumentConflictError` (`draw_format_mismatch`).
+  - Bare call: outside a notebook a bare `b.draw()` writes a collision-safe
+    `bundle_modelgraph.<format>` and prints its path; in a Jupyter kernel it writes no file and
+    returns the drawing for inline display. No viewer opens unless `open_viewer=True`.
+  - Passes: `graph="forward"` (default), `"backward"` (each member's captured grad_fn graph) or
+    `"combined"` draw the bundle's union op graph for that pass, with a member list on each node and
+    arrow that not every member runs.
+  - Layout: `rolled=True` draws each repeated module once; `direction=None` is `"bottomup"`; `theme`
+    takes the `Trace.draw` skin names (`None` is `"torchlens"`).
+  - Overrides: `node_overrides=` (Bundle-only) keys Graphviz node attributes by op label (member
+    name under `nodes="members"`), `edge_overrides=` by `(source, target)`.
+  - Node kinds: `nodes="ops"` (default) draws the ops. `nodes="members"` draws one node per member
+    and one edge per relation row, from the earlier member to the later one, labelled with the kind,
+    the row's `label`, on `fed_by` its basis and coverage, and on `selected_by` its `chosen`
+    decision. Solid edges carry token spans TorchLens checked, every other row is dashed, and
+    `graph` must stay `"forward"`.
+  - Diff: `graph="diff"` draws two members side by side, one node per op, coloured by `metric`
+    distance on the `on` field. Each pass of a layer that runs more than once is its own node with
+    its own distance (the per-pass rows of `Bundle.compare`). `members=(left, right)` names the two
+    (default the baseline and the next member). Its defaults are `theme="paper"`, `"svg"` and a
+    `bundle_diff` file, and it runs the comparison gate on the rendered pair only.
+  - Unsupported keywords: any other keyword (a `Trace.draw` keyword the bundle renderer does not
+    support yet, such as `depth=`) refuses with `ArgumentTypeError`
+    (`bundle_draw_keyword_unsupported`) naming the supported list; each is added when the renderer
+    supports it.
+  - Replaces the removed `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).
 
 **Bundle.show**
-: `bundle.show(kind=None, **kwargs)` is the one bundle display door. With no kind (or
-  `kind="graph"`) it is `bundle.draw(**kwargs)` and returns that `Drawing`, the merged graph of
-  where the members differ. `kind="strip"` draws each member's own graph with
-  `Trace.draw(**kwargs)` and returns a dict of member name to `Drawing` (a `path` gets
-  `_<member>` appended per member); `kind="repr"` and `kind="html"` return each member's `repr` /
-  HTML text by member name. Any other kind refuses with `InvalidArgumentError`
-  (`bundle_show_kind_invalid`).
+: `bundle.show(kind=None, **kwargs)` is the one bundle display door.
+  - No kind (or `kind="graph"`): it is `bundle.draw(**kwargs)` and returns that `Drawing`, the
+    merged graph of where the members differ.
+  - `kind="strip"`: draws each member's own graph with `Trace.draw(**kwargs)` and returns a dict of
+    member name to `Drawing` (a `path` gets `_<member>` appended per member).
+  - `kind="repr"` and `kind="html"`: return each member's `repr` / HTML text by member name.
+  - Any other kind refuses with `InvalidArgumentError` (`bundle_show_kind_invalid`).
 
 **Bundle.compare**
-: `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
-  two members as `(site_label, distance)` rows over the sites both members share, paired through
-  the structural alignment; `metric` is a metric name or callable (scalar-like sites always use
-  `relative_l1`) and `on` reads `"out"` or `"grad"`. The receiver sets the axis: `bundle.at(site)
-  .compare()` is the member-by-member matrix at one site. The pair goes through the comparison
-  gate first and refuses typed when the members cannot be aligned; its grade is
-  `bundle.comparability(a, b)`, a `tl.types.Relationship`.
+: `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between two
+  members as `(site_label, distance)` rows over the sites both members share, paired through the
+  structural alignment.
+  - Arguments: `metric` is a metric name or callable (scalar-like sites always use `relative_l1`);
+    `on` reads `"out"` or `"grad"`.
+  - Axis: the receiver sets it. `bundle.at(site) .compare()` is the member-by-member matrix at one
+    site.
+  - Gate: the pair goes through the comparison gate first and refuses typed when the members cannot
+    be aligned; its grade is `bundle.comparability(a, b)`, a `tl.types.Relationship`.
 
 **Bundle.store_comparison / Bundle.stored_comparison / Bundle.stored_comparison_names**
-: `b.store_comparison(metric="relative_l2", *, name=None, baseline=None, on="out")` computes the
-  per-node distances of every member from the baseline once (the configured baseline, else the
-  first member) and stamps them on the supergraph under the returned name (the metric's name
-  unless `name` is given; a callable metric needs an explicit name); `b.stored_comparison(name)`
-  reads one back without recomputing (`comparison_unknown` for a name never stored) and
-  `b.stored_comparison_names()` lists the stored names. A layer that runs more than once has
-  one value per member: the metric over its passes' tensors joined in pass order. Session-level
-  state on the built supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
-  first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
-  shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
-  or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
-  `bundle_gate_*` code.
+: Computes the per-node distances of every member from the baseline once and stamps them on the
+  supergraph under a name, so later reads do not recompute. Session-level state on the built
+  supergraph, never persisted.
+  - `b.store_comparison(metric="relative_l2", *, name=None, baseline=None, on="out")`: computes and
+    stores; the baseline is the configured baseline, else the first member. It returns the stored
+    name: the metric's name unless `name` is given (a callable metric needs an explicit name).
+  - `b.stored_comparison(name)`: reads one back without recomputing (`comparison_unknown` for a name
+    never stored).
+  - `b.stored_comparison_names()`: lists the stored names.
+  - Repeated layers: a layer that runs more than once has one value per member, the metric over its
+    passes' tensors joined in pass order.
+  - Gate: every (baseline, member) pair goes through the comparison gate first, with the same
+    predicates as `bundle.at(site).compare()`: no ordering path between them, a shared graph, and
+    sites that line up (proven-equal input values, or for runs on different inputs or checkpoints,
+    equal graph-shape hashes). Otherwise the read refuses with the gate's `bundle_gate_*` code.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
 : `b.episode_status(episode_id, *, episode_ledger=None)` folds the outcomes of the members named by
-  `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
-  a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
+  `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never a
+  stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
 
 **Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
-: `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
-  member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
-  residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
-  the same facts. Both are derived views; nothing is stored. Reference:
-  `docs/reference/experiments.md`.
+: `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a member
+  against the baseline (or `relative_to`), with lineage status, payload fidelity, value residual and
+  comparability reported as separate axes. `b.provenance.summary()` is the per-member list of the
+  same facts. Both are derived views; nothing is stored. Reference: `docs/reference/experiments.md`.
 
 **Bundle.vary** *(spelling documented-unstable)*
 : `b.vary(mapping, *, unmentioned=None)` applies one explicit intervention spec (or `None`, the
@@ -1210,29 +1370,33 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `do()` is unchanged.
 
 **Parameter value basis** *(spelling documented-unstable)*
-: The derived, read-time, persisted-nowhere disclosure `Param.value_basis` of where a parameter
-  value comes from: `live_ref` (the live-model handle resolves; the value may have moved since
-  capture) or `absent(not_persisted)` (deserialized; parameter bytes were never persisted —
-  replacing the historical untyped bare `None`). `snapshot` arrives only with capture-time
-  parameter snapshots (R8(b)). `Param.value` keeps its documented live-handle meaning; the basis
-  is a disclosure beside the live read, never a change to it.
+: The derived, read-time disclosure `Param.value_basis` of where a parameter value comes from,
+  persisted nowhere. It sits beside the live read and never changes it: `Param.value` keeps its
+  documented live-handle meaning.
+  - Values: `live_ref` (the live-model handle resolves; the value may have moved since capture) or
+    `absent(not_persisted)` (deserialized; parameter bytes were never persisted). `snapshot` arrives
+    only with capture-time parameter snapshots.
 
 **Checkpoint live-ref guard** *(spelling documented-unstable)*
-: TorchLens records which parameter a run used, not its bytes, so cross-member parameter
-  value/difference/trajectory reads on a Bundle (`weight_norm_diff`, `compare`, `aggregate`,
-  `out`/`grad` on `SuperParam` views with two or more members) refuse BEFORE tensor lookup with
-  the stable code `checkpoint_series_live_params` unless every member carries immutable
-  capture-time parameter evidence. The guard is keyed on the claim, never on Python object
-  identity, and survives save/load; a version-axis relation row still orders members.
+: TorchLens records which parameter a run used, not its bytes, so cross-member parameter value,
+  difference and trajectory reads on a Bundle refuse unless every member carries immutable
+  capture-time parameter evidence.
+  - Guarded reads: `weight_norm_diff`, `compare`, `aggregate`, and `out`/`grad` on `SuperParam`
+    views with two or more members.
+  - Refusal: the stable code `checkpoint_series_live_params`, raised BEFORE tensor lookup.
+  - The guard is keyed on the claim, never on Python object identity, and survives save/load; a
+    version-axis relation row still orders members.
 
 **Runnable artifact**
-: A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
-  must use `capture=tl.options.CaptureOptions(replayable=True)`: the flag records the runnable apparatus (callable registry keys,
-  state snapshots, alias topology, escape records), which no default capture keeps; the per-op
-  argument templates that `trace.do(site, edit)` replays are recorded on every capture.
-  In saved format 3 the descriptor is `runnable/descriptor.json` and the state is
-  safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
-  pickled (the maintainer contract `docs/maintainers/saved_format_3.md`, section 7; not on the site).
+: A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. No callable is ever
+  pickled.
+  - Source capture: it must use `capture=tl.options.CaptureOptions(replayable=True)`. The flag
+    records the runnable apparatus (callable registry keys, state snapshots, alias topology, escape
+    records), which no default capture keeps. The per-op argument templates that
+    `trace.do(site, edit)` replays are recorded on every capture.
+  - On disk (saved format 3): the descriptor is `runnable/descriptor.json` and the state is
+    safetensors files beside it, listed by the manifest's `runnable` object.
+  - Maintainer reference, not on the site: `docs/maintainers/saved_format_3.md`, section 7.
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
@@ -1254,23 +1418,24 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `owner_thread_tripwire_changed`, or `dynamo_region_not_logged`.
 
 **Pristine (`Trace.is_pristine`)** *(spelling documented-unstable)*
-: Whether nothing ever intervened on the trace, read from the evidence it carries: `True`,
-  `False`, or `None`. It is derived at read time from records that persist with the trace (the
-  intervention audit, the operation history, mutation states, direct writes and op intervention
-  marks), never stored as a flag, so it survives `Trace.save`/`tl.load`, pickle and `fork()`, and no
-  reset makes a touched trace read `True` again. `False` means some touch was recorded: a
-  capture-time `intervene=` (including one that fired nowhere), a staged hook or value
-  replacement (even after `clear_edits(site)` removes it), `do()`, `set()`, a region edit, a
-  hooked rerun or run, a direct write. Plain reruns, plain runs, forks and `clear_edits(site)` on
-  an untouched trace are not touches. `None` means no evidence: the artifact predates tlspec 9 or the backend is not
-  torch, and it is never a pristine reading. Bundle's pristine label and baseline
-  auto-detection count a member only when it reads `True`. It is a reading, not a verdict: it
-  never changes validation or a run report. Not `Trace.state`: `TraceState.PRISTINE` is an
-  operational state that an assignment can set and that a func-targeted `intervene=` capture
-  keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
-  functions. How the reading relates to the runnable clean-run promise (a hooked run
-  settles `unverifiable` and marks the trace non-pristine) is stated in the maintainer page
-  `runnable_model.md`, "Clean run, hooked run, and disclosure".
+: Whether nothing ever intervened on the trace: `True`, `False`, or `None`. It is a reading taken
+  from the evidence the trace carries, not a verdict: it never changes validation or a run report.
+  - Evidence: derived at read time from records saved with the trace (the intervention audit, the
+    operation history, mutation states, direct writes and op intervention marks), never stored as
+    a flag. It survives `Trace.save`/`tl.load`, pickle and `fork()`, and no reset makes a touched
+    trace read `True` again.
+  - `False`: some touch was recorded: a capture-time `intervene=` (including one that fired
+    nowhere), a staged hook or value replacement (even after `clear_edits(site)` removes it),
+    `do()`, `set()`, a region edit, a hooked rerun or run, or a direct write. Plain reruns, plain
+    runs, forks and `clear_edits(site)` on an untouched trace are not touches.
+  - `None`: no evidence, because the artifact was saved by an older format that does not record
+    it, or the backend is not torch. It is never a pristine reading.
+  - Bundle's pristine label and baseline auto-detection count a member only when it reads `True`.
+  - Clean runs: a hooked run settles `unverifiable` and marks the trace non-pristine. The
+    maintainer page `runnable_model.md` relates this reading to the runnable clean-run promise.
+  - Not `Trace.state`: `TraceState.PRISTINE` is an operational state that an assignment can set
+    and that a func-targeted `intervene=` capture keeps.
+  - Not validation's pristine-torch oracle, which means running on unwrapped torch functions.
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
@@ -1278,23 +1443,28 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `mode_rescue_rerun`.
 
 **Collapse**
-: A rendering-only condensation of module detail. `collapse="none"`, `"auto"`, `"max"`, or a
-  float in `[0, 1]` never changes the underlying Trace. Admission gates on the rendered
-  universe U against the defensive constant `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) plus a
-  measured (U, W) work estimator: over-budget requests degrade to a deterministic compact
-  fallback plan (coded `collapse_budget_fallback`), never an uncollapsed wall; only
-  pathological inputs (raw ops above 20x the constant) decline outright
-  (`collapse_pathological_skip`; `Drawing.collapse_plan` refuses typed
-  (`collapse_plan_unavailable`); `Drawing.collapse_schedule` degrades to its single
-  full-graph step).
+: A rendering-only condensation of module detail: `collapse="none"`, `"auto"`, `"max"`, or a
+  float in `[0, 1]`. It never changes the underlying Trace.
+  - Budget: admission checks the rendered universe U against the defensive constant
+    `COLLAPSE_OPTIMIZER_MAX_OPS` (2000) plus a measured (U, W) work estimator.
+  - Over budget: the request degrades to a deterministic compact fallback plan (coded
+    `collapse_budget_fallback`), never an uncollapsed wall.
+  - Pathological inputs (raw ops above 20x the constant) decline outright
+    (`collapse_pathological_skip`): `Drawing.collapse_plan` refuses typed
+    (`collapse_plan_unavailable`) and `Drawing.collapse_schedule` degrades to its single
+    full-graph step.
 
 **Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
-: A module's smart-collapse priority: its hidden ops (distinct subtree ops minus one) over the
-  largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or the
-  only child of a non-root module that hides the same ops (the parent, the name the user wrote,
-  ranks instead; in a chain of such wrappers the outermost ranks). It ranks candidates and never reads the selected plan
-  (`Drawing.collapse_plan` may skip a high-priority module); `module_collapse_order` lists every
-  module's priority, highest first. Computed at access, never persisted.
+: A module's smart-collapse priority, used to rank collapse candidates. Computed at access, never
+  persisted.
+  - Value: the module's hidden ops (distinct subtree ops minus one) over the largest submodule's,
+    rounded to 6 places.
+  - 0.0 for the root, for a module of at most one Layer, and for the only child of a non-root
+    module that hides the same ops: the parent, the name the user wrote, ranks instead (in a chain
+    of such wrappers the outermost ranks).
+  - It ranks candidates and never reads the selected plan, so `Drawing.collapse_plan` may skip a
+    high-priority module.
+  - `module_collapse_order` lists every module's priority, highest first.
 
 **Run folding**
 : `fold_repeats=True` replaces eligible runs of distinct same-class sibling modules with a
@@ -1302,107 +1472,123 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   same parameters executed repeatedly.
 
 **Receptive field / Projective field**
-: Influence geometry through the captured DAG toward inputs / toward outputs. Entity-level
-  `op.receptive_field` and `op.projective_field` pair with Trace-level
-  `Trace.receptive_fields()` and `Trace.projective_fields()` tables. A field view's
-  `.at(unit)` answers for one unit; `.of(units, within=None, method="geometric",
-  probe_budget=256)` answers for many (the units `tl.units` takes: a bool mask over the
-  owner's full output or full-shape coordinate tuples) and returns a trace-bound
-  `tl.Selection`, one region per `within=` site (default: model outputs for projective,
-  model inputs for receptive), usable in `trace.do`, `trace.subgraph` and `& | - ~`
-  *(unstable — no deprecation shim owed)*.
+: Influence geometry through the captured DAG: toward inputs (receptive) or toward outputs
+  (projective).
+  - Per op: `op.receptive_field` and `op.projective_field`. Per trace: the
+    `Trace.receptive_fields()` and `Trace.projective_fields()` tables.
+  - `.at(unit)` on a field view answers for one unit.
+  - `.of(units, within=None, method="geometric", probe_budget=256)` answers for many units (the
+    units `tl.units` takes: a bool mask over the owner's full output, or full-shape coordinate
+    tuples). It returns a trace-bound `tl.Selection` with one region per `within=` site
+    (default: model outputs for projective, model inputs for receptive), usable in `trace.do`,
+    `trace.subgraph` and `& | - ~` *(unstable — no deprecation shim owed)*.
 
 **Encoding channel** *(unstable — no deprecation shim owed)*
 : A declarative value source (record field name, scalar builtin, or callable `node -> value`)
   mapped to a visual channel on `draw()`. v1 ships the color channel; size and rank channels
-  follow. Channels are presentation-only: they never change the Trace or the collapse plan, and
-  they require the Graphviz dot layout (`layout="auto"` forces dot when a channel is active;
-  explicit `layout="rank"` refuses with `encoding_requires_dot_layout`).
+  follow.
+  - Channels are presentation-only: they never change the Trace or the collapse plan.
+  - They require the Graphviz dot layout: `layout="auto"` forces dot when a channel is active,
+    and explicit `layout="rank"` refuses with `encoding_requires_dot_layout`.
 
 **color_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(color_by=...)` fills eligible operation nodes from a colorblind-safe sequential ramp,
-  normalized linear min-max over the visible nodes. The drawn key is a colour bar labelled with
-  the quantity and its units at both ends, and nothing else (no transform, coverage or notes).
-  The ramp is a stop list blended in OKLab at even perceptual speed (default viridis, dark =
-  high on a light page). Missing,
-  non-finite, or rolled-ambiguous values leave nodes unencoded. On rolled
-  multi-pass layers, field sources resolve through a name-keyed rolled-aggregate allowlist:
-  per-pass-varying and first-pass-only sources are never painted as if uniform, exact cross-pass
-  totals encode (the aggregation is kept on the encoding state, not drawn), and unclassified sources refuse
-  (`encoding_source_invalid`). Wrong-typed values refuse (`encoding_value_invalid`); a raising
-  callable refuses with the original exception chained (`encoding_callable_error`). On a
-  collapsed draw, module boxes and segments take the exact sum of their member ops for additive
-  sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields) with an aggregation
-  line on the encoding state; other sources leave them unencoded with a note on the encoding state.
+  normalized linear min-max over the visible nodes.
+  - The drawn key is a colour bar labelled with the quantity and its units at both ends, and
+    nothing else (no transform, coverage or notes).
+  - The ramp is a stop list blended in OKLab at even perceptual speed (default viridis, dark =
+    high on a light page).
+  - Missing, non-finite, or rolled-ambiguous values leave nodes unencoded.
+  - Rolled multi-pass layers: field sources resolve through a name-keyed rolled-aggregate
+    allowlist. Per-pass-varying and first-pass-only sources are never painted as if uniform;
+    exact cross-pass totals encode (the aggregation is kept on the encoding state, not drawn);
+    unclassified sources refuse (`encoding_source_invalid`).
+  - Collapsed draws: module boxes and segments take the exact sum of their member ops for
+    additive sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields), with an
+    aggregation line on the encoding state; other sources leave them unencoded with a note on
+    the encoding state.
+  - Refusal codes: `encoding_value_invalid` for wrong-typed values; `encoding_callable_error`
+    for a raising callable, with the original exception chained.
 
 **size_by** *(unstable — no deprecation shim owed; keyword-only)*
-: `draw(size_by=...)` sizes eligible operation nodes from a scalar field, the `color_by`
-  builtin tokens (`"time"`, `"bytes"`, `"flops"`, ... with the same meaning and units), the
-  closed `"dims"` shape token (numel of the non-batch output shape), or a callable
-  `node -> scalar`. Collapsed boxes and segments size from the same exact member-op sums as
-  `color_by`. The smallest value draws at the drawing's typical node size (the median size the
-  nodes' labels need, widened for ellipses and other non-box shapes) and the largest at 2x that
-  area; a node whose text needs more room draws at what its text needs, so one long label never
-  inflates the other nodes. Emitted sizes are width/height
-  MINIMUMS under `fixedsize=false`: a label can never be truncated by an encoding and fonts never
-  scale. Strictly opt-in — plain `draw()` keeps
-  uniform boxes. On rolled multi-pass layers size REFUSES where color degrades
-  (`size_by_rolled_varying`): a size source that cannot be certified single-valued
-  (marker-varying, first-pass projection, varying shape under `"dims"`) has no honest "n/a"
-  rendering. Exact cross-pass totals (`total_*`) encode with a mandatory aggregation line on the
-  encoding state; callables bypass the rolled table with a note on the encoding state. The drawn key
-  is one line, for example `size: output bytes, 15 KB ... 60 KB`.
+: `draw(size_by=...)` sizes eligible operation nodes from a value source. Strictly opt-in: plain
+  `draw()` keeps uniform boxes.
+  - Sources: a scalar field, the `color_by` builtin tokens (`"time"`, `"bytes"`, `"flops"`, ...
+    with the same meaning and units), the closed `"dims"` shape token (numel of the non-batch
+    output shape), or a callable `node -> scalar`.
+  - Collapsed boxes and segments size from the same exact member-op sums as `color_by`.
+  - Sizes: the smallest value draws at the drawing's typical node size (the median size the
+    nodes' labels need, widened for ellipses and other non-box shapes) and the largest at 2x
+    that area. A node whose text needs more room draws at what its text needs, so one long
+    label never inflates the other nodes.
+  - Emitted sizes are width/height minimums under `fixedsize=false`, so an encoding can never
+    truncate a label and fonts never scale.
+  - Rolled multi-pass layers: size refuses where color degrades (`size_by_rolled_varying`). A
+    size source that cannot be certified single-valued (marker-varying, first-pass projection,
+    varying shape under `"dims"`) has no honest "n/a" rendering. Exact cross-pass totals
+    (`total_*`) encode with a mandatory aggregation line on the encoding state; callables bypass
+    the rolled table with a note on the encoding state.
+  - The drawn key is one line, for example `size: output bytes, 15 KB ... 60 KB`.
 
 **size_scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
 : The size-channel scale transform: `"sqrt"` (default; compresses dynamic range) or `"linear"`
-  (the literal area motif). Log is rejected by design (flattens 512-vs-4096). Supplied without
-  `size_by` it refuses (`scale_requires_size_by`); an unknown token refuses
-  (`encoding_scale_invalid`).
+  (the literal area motif). Log is rejected by design (it flattens 512-vs-4096).
+  - Refusal codes: `scale_requires_size_by` when supplied without `size_by`;
+    `encoding_scale_invalid` for an unknown token.
 
 **stack_by** *(unstable — no deprecation shim owed; keyword-only)*
-: `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank (the classic
-  unrolled-RNN timestep diagram; strictly opt-in). `True`/`"auto"` derives the annotation
-  (`pass_number` on multi-pass ops only) under the LOCKSTEP LICENSE: granted iff the pass_number
-  sequence over all multi-pass ops in raw execution order is globally non-decreasing — then
-  "same column = same execution window" is exactly what the figure claims. Non-monotone traces
-  refuse (`stack_by_auto_underivable`); an explicit field/callable bypasses the license with the
-  caption disclosing what was used; rolled graphs refuse (`stack_by_requires_unrolled`).
-  Rank groups ride `RenderIR.stack_rank_groups` and emit as `rank=same` subgraphs under
-  `newrank=true`; the sibling-ordering post-pass no-ops while stacking is active.
+: `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank, as in the
+  classic unrolled-RNN timestep diagram. Strictly opt-in.
+  - `True`/`"auto"` derives the annotation (`pass_number` on multi-pass ops only) under the
+    lockstep license: granted exactly when the pass_number sequence over all multi-pass ops in
+    raw execution order is globally non-decreasing. Then "same column = same execution window"
+    is exactly what the figure claims.
+  - An explicit field or callable bypasses the license, and the caption discloses what was used.
+  - Refusal codes: `stack_by_auto_underivable` for non-monotone traces;
+    `stack_by_requires_unrolled` for rolled graphs.
+  - Rendering: rank groups ride `RenderIR.stack_rank_groups` and emit as `rank=same` subgraphs
+    under `newrank=true`; the sibling-ordering post-pass does nothing while stacking is active.
 
 **show_redundant_args** *(unstable — no deprecation shim owed; keyword-only)*
-: Checked suppression of redundant constructor-arg label rows is DEFAULT-ON: `draw()` omits a
-  module constructor arg exactly when the check licenses it — the arg value provably equals the
-  captured shape dimension it claims to duplicate on THIS trace (a closed torch nn module-family
-  candidate table; kernel_size/stride/padding/groups/num_embeddings/num_heads are never
-  candidates). A mismatch or unavailable shape keeps the arg VISIBLE — the rule can only reveal
-  more, never hide a discrepancy. Rolled varying aggregates keep args visible while their
-  unrolled per-pass nodes suppress (deliberate divergence); detached records render all args.
-  `draw(show_redundant_args=True)` shows every captured arg. Reference:
-  `docs/reference/encoding.md`.
+: Turns off the checked suppression of redundant constructor-arg label rows, which is on by
+  default. `draw(show_redundant_args=True)` shows every captured arg.
+  - The check: `draw()` omits a module constructor arg only when the arg value provably equals
+    the captured shape dimension it claims to duplicate on this trace. Candidates come from a
+    closed table of torch nn module families; kernel_size/stride/padding/groups/num_embeddings/
+    num_heads are never candidates.
+  - A mismatch or unavailable shape keeps the arg visible: the rule can only reveal more, never
+    hide a discrepancy.
+  - Rolled varying aggregates keep args visible while their unrolled per-pass nodes suppress
+    (deliberate divergence); detached records render all args.
+  - Reference: `docs/reference/encoding.md`.
 
 **show_legend tri-state**
-: `show_legend` accepts `None` (default, AUTO: no legend unless an encoding channel is active,
-  then the channel key alone; a `module=` focused draw also gets the key), `True` (the
-  key: one compact row per drawn mark, each drawn with its real shape and fill --
-  input, output, trainable and frozen weights, module frame, module run as one op, collapsed
-  module, hidden buffers, buffer, true/false test, mutated parameter or intervention only when the
-  picture has one -- plus
-  the channel key when active), and `False` (no legend, honored even with channels active — the
-  key is then not drawn). On `Trace.draw` the key sits in the top-left block under the
-  header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
+: `show_legend` accepts three values. On `Trace.draw` the key sits in the top-left block under
+  the header and above the graph, so a top crop keeps both.
+  - `None` (default, AUTO): no legend unless an encoding channel is active, then the channel key
+    alone; a `module=` focused draw also gets the key. The `None` value is
+    *(unstable — no deprecation shim owed)*.
+  - `True` (the key): one compact row per drawn mark, each drawn with its real shape and fill
+    (input, output, trainable and frozen weights, module frame, module run as one op, collapsed
+    module, hidden buffers, buffer, true/false test, and mutated parameter or intervention only
+    when the picture has one), plus the channel key when active.
+  - `False`: no legend, honored even with channels active (the key is then not drawn).
 
 **show_containers / container_max_inline (Trace.draw kwargs)**
-: `show_containers` accepts `False` (default: the plain graph, container paths on the node
-  labels), `"labels"` (the key or index on each edge into a container leaf), `"collapsed"`
-  (`"labels"` plus: an unrolled container with more than `container_max_inline` leaves of
-  identical shape folds into one dashed summary box) or `"nodes"` (`"collapsed"` plus one dashed
-  record node per container, grey keyed source and sink edges, dashed member-of ties for mid-graph
-  containers, and a dotted box around an op-returned tuple whose leaves share one module). Any
-  string setting forces the `dot` engine. `container_max_inline` (default 12) is read only under
-  `"collapsed"` and `"nodes"`. The former `"auto"` (drew `"collapsed"`) and `"cluster"` (drew
-  `"labels"` plus the tuple box) spellings refuse `visualization_show_containers_invalid` with the
-  replacement named. Guide: `docs/containers.md`.
+: `show_containers` sets how `Trace.draw` shows container structure; `container_max_inline` sets
+  when a container folds. Any string setting of `show_containers` forces the `dot` engine.
+  Guide: `docs/containers.md`.
+  - `False` (default): the plain graph, with container paths on the node labels.
+  - `"labels"`: the key or index on each edge into a container leaf.
+  - `"collapsed"`: `"labels"` plus: an unrolled container with more than `container_max_inline`
+    leaves of identical shape folds into one dashed summary box.
+  - `"nodes"`: `"collapsed"` plus one dashed record node per container, grey keyed source and
+    sink edges, dashed member-of ties for mid-graph containers, and a dotted box around an
+    op-returned tuple whose leaves share one module.
+  - `container_max_inline` (default 12) is read only under `"collapsed"` and `"nodes"`.
+  - Removed spellings: the former `"auto"` (drew `"collapsed"`) and `"cluster"` (drew `"labels"`
+    plus the tuple box) refuse `visualization_show_containers_invalid` with the replacement
+    named.
 
 ## Backend-neutral identity
 
@@ -1425,640 +1611,721 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicate callable.
 
 **Pass tokens (`label:N`, `label:last`, `label:all`)**
-: Passes are 1-based: `relu_1_1:2` is the second pass of a recurrent layer, and there are no
-  negative pass indices. `relu_1_1:last` names the final pass and `relu_1_1:all` every pass,
-  wherever a label is accepted: `trace["relu_1_1:last"]` and `trace.ops["relu_1_1:last"]`
-  return that Op, `trace["relu_1_1:all"]` and `trace[tl.label("relu_1_1:all")]` return the
-  Selection of every pass (an Op collection refuses `:all` with a `KeyError` naming those
-  doors), and `trace.layers["relu_1_1:last"]` is the aggregate Layer like any pass spelling.
-  A bare layer label at `trace[...]` is the Layer, single- or multi-pass; a single-pass Layer
-  passes single-op reads (`.out`, `.shape`) through to its Op, and on a multi-pass Layer they
-  refuse (`layer_pass_ambiguous`) naming `label:1` and `label:last`. A door that must give one
-  Op refuses a bare multi-pass label: `tl.label(label)` with `multipass_bare_label_ambiguous`
-  naming these spellings and `trace[label]`, `trace.ops[label]` with `ambiguous_op_lookup`.
+: Spellings that name one pass, the final pass, or every pass of a recurrent layer. They work
+  wherever a label is accepted.
+  - `label:N`: passes are 1-based, so `relu_1_1:2` is the second pass of a recurrent layer. There
+    are no negative pass indices.
+  - `label:last`: `relu_1_1:last` names the final pass. `trace["relu_1_1:last"]` and
+    `trace.ops["relu_1_1:last"]` return that Op; `trace.layers["relu_1_1:last"]` is the
+    aggregate Layer like any pass spelling.
+  - `label:all`: `relu_1_1:all` names every pass. `trace["relu_1_1:all"]` and
+    `trace[tl.label("relu_1_1:all")]` return the Selection of every pass; an Op collection
+    refuses `:all` with a `KeyError` naming those doors.
+  - Bare labels: a bare layer label at `trace[...]` is the Layer, single- or multi-pass. A
+    single-pass Layer passes single-op reads (`.out`, `.shape`) through to its Op; on a
+    multi-pass Layer they refuse (`layer_pass_ambiguous`) naming `label:1` and `label:last`.
+  - A door that must give one Op refuses a bare multi-pass label: `tl.label(label)` with
+    `multipass_bare_label_ambiguous` naming these spellings, and `trace[label]`,
+    `trace.ops[label]` with `ambiguous_op_lookup`.
 
 **Indexing coherence (every door returns the kind it names)**
-: The plain door `trace[key]` returns the kind the key names: a layer label its `Layer` and
-  `label:N` its Op (*Pass tokens*, above), a module address its `Module` whether called once or many times, `address:N`
-  its `ModuleCall`, a parameter address its `Param`, a buffer address its `Buffer`
-  (`buffer_address:N` the version Op), a grad_fn label its `GradFn`. A typed door always
-  returns its own kind and converts a key that names exactly one such object: `trace.ops[address]`
-  and `trace.ops["address:N"]` give the call's output Op, `trace.layers[address]` its Layer,
-  `trace.modules[op_label]` (also a parameter or buffer address) the Module it belongs to,
-  `trace.module_calls[op_label]` the call that ran it, `trace.params[address_or_op_label]` and
-  `trace.buffers[...]` the single record a module or op owns, `trace.autograd.grad_fns[op_label]`
-  the op's grad_fn. A key that names several objects of the door's kind refuses
-  `ambiguous_op_lookup` listing the `:N` spellings (a module called twice at `trace.ops`, a module
-  with weight and bias at `trace.params`, a substring matching several grad_fns). The same rule
-  holds inside a module (`module[address]` is a descendant Module, `module["address:N"]` its
-  call, `module[label]` what `trace[label]` gives; `module.calls[op_label]` the call that ran
-  it), on `layer.ops["address:N"]`, and on every Bundle door, which converts through each
-  member's typed door and propagates its refusal. Filtered collections (`trace.params.frozen()`)
-  convert only to their own members. Wrapper-relative module spellings (*Module and stage names*)
-  are plain-door and selector affordances.
+: The plain door `trace[key]` returns the kind the key names. A typed door always returns its own
+  kind and converts a key that names exactly one such object.
+  - Plain door: a layer label gives its `Layer` and `label:N` its Op (*Pass tokens*, above); a
+    module address gives its `Module` whether called once or many times, and `address:N` its
+    `ModuleCall`; a parameter address gives its `Param`, a buffer address its `Buffer`
+    (`buffer_address:N` the version Op), and a grad_fn label its `GradFn`.
+  - Typed doors: `trace.ops[address]` and `trace.ops["address:N"]` give the call's output Op,
+    `trace.layers[address]` its Layer, `trace.modules[op_label]` (also a parameter or buffer
+    address) the Module it belongs to, `trace.module_calls[op_label]` the call that ran it,
+    `trace.params[address_or_op_label]` and `trace.buffers[...]` the single record a module or
+    op owns, and `trace.autograd.grad_fns[op_label]` the op's grad_fn.
+  - Ambiguity: a key that names several objects of the door's kind refuses
+    `ambiguous_op_lookup` listing the `:N` spellings (a module called twice at `trace.ops`, a
+    module with weight and bias at `trace.params`, a substring matching several grad_fns).
+  - Inside a module the same rule holds: `module[address]` is a descendant Module,
+    `module["address:N"]` its call, `module[label]` what `trace[label]` gives, and
+    `module.calls[op_label]` the call that ran it. It also holds on `layer.ops["address:N"]` and
+    on every Bundle door, which converts through each member's typed door and propagates its
+    refusal.
+  - Filtered collections (`trace.params.frozen()`) convert only to their own members.
+  - Wrapper-relative module spellings (*Module and stage names*) are plain-door and selector
+    affordances.
 
 **tl.all_sites** — *unstable — no deprecation shim owed*
 : `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
-  trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
-  kind and pattern, so it matches, binds and persists the same way; a saved spec reloads as
-  `tl.label_matches(".*")`). It composes with `|`, `&`, `-` and `~` like any selector.
-  `tl.all_sites() - region` is the complement of a region in the whole trace; the graph
-  producers and `trace.subgraph` read it as the sites outside `region`, because a site whose
-  element mask is empty seeds nothing. Resolution refuses typed (`non_tensor_site` /
-  `no_index_space`) when some op has no output index space, rather than dropping it.
+  trace as a whole site.
+  - It gives the same result as `trace[tl.label_matches(".*")]`: it stores that kind and
+    pattern, so it matches, binds and persists the same way, and a saved spec reloads as
+    `tl.label_matches(".*")`.
+  - It composes with `|`, `&`, `-` and `~` like any selector. `tl.all_sites() - region` is the
+    complement of a region in the whole trace; the graph producers and `trace.subgraph` read it
+    as the sites outside `region`, because a site whose element mask is empty seeds nothing.
+  - Resolution refuses typed (`non_tensor_site` / `no_index_space`) when some op has no output
+    index space, rather than dropping it.
 
 **Structural selectors**
-: `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context
-  (`in_module` only builds a selector; whether one record lies in a module is read on the
-  record, `layer.module == address` or `address in layer.modules`);
-  a module registered under several names (`self.dec = self.enc`, all recorded in
-  `Module.all_addresses`) is selected by its canonical `named_modules()` name, which fires at
-  every call site of it (pass labels such as `"enc:2"` count calls of that one object); an
-  alias spelling (`"dec"`, `"dec:2"`) refuses with `bind_static_anchor_unresolved` and one
-  message at every door (capture, record, post hoc, `spec.bind`), since no hook can tell which
-  name a forward called the object through;
-  `tl.head` selects one attention head; `tl.facet` selects a semantic facet view; an unscoped
-  `tl.head(i)` writes head `i` of every matching facet in every module and says how many sites
-  it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
-  36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
-  module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
-  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`);
-  a facet already scoped to another module refuses
-  `selector_module_facet_scope_conflict`; in `do`, a `|` union of facet selectors
-  (`tl.module(a) & tl.head(i) | tl.module(b) & tl.head(j)`, or
-  `(tl.module(a) | tl.module(b)) & tl.head(i)`) edits every branch in one call, exactly as
-  chained `do` calls would, while `find_sites` and any other composite holding a facet refuse
-  `facet_selector_unsupported`;
-  `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
-  (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
-  `torch.autograd.backward` call, with `transform_kind="autograd.backward"`, one op per leaf
-  gradient the pass writes, parented on the roots and, when the leaf already held a grad, on
-  that previous grad as its in-place receiver, so a later `param.grad` read has a producer;
-  `autogradfunction`, a custom `autograd.Function`
-  whose forward left torch through a numpy or dlpack round trip or a known foreign kernel
-  (FlashAttention 4's `flash_attn.cute` Functions, exit `flash_attn.cute`), with
-  `transform_kind="autograd.Function"`, `foreigndata`, a host constructor (`from_numpy`,
-  `from_dlpack`, `frombuffer`, or a tensorless `tensor` / `as_tensor` / `asarray`) that brings
-  data back into torch after a plain-code `numpy` / `__array__` / `__dlpack__` / `to_dlpack` /
-  `tolist` export outside any Function, with `transform_kind="foreign_data"` and
-  `transform_config["resolution"]` of `view`, `copy`, `constant` or `unresolved`, and `jitscript`, one call to a
-  `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
-  `tl.model_output` selects model outputs, and
-  `tl.model_input` selects a nested model-input path.
+: Selectors that pick sites by callable, module context, attention head, facet, transform
+  boundary, or model input and output.
+  - `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context.
+    `in_module` only builds a selector; whether one record lies in a module is read on the
+    record, `layer.module == address` or `address in layer.modules`.
+  - Aliased modules: a module registered under several names (`self.dec = self.enc`, all
+    recorded in `Module.all_addresses`) is selected by its canonical `named_modules()` name,
+    which fires at every call site of it (pass labels such as `"enc:2"` count calls of that one
+    object). An alias spelling (`"dec"`, `"dec:2"`) refuses with `bind_static_anchor_unresolved`
+    and one message at every door (capture, record, post hoc, `spec.bind`), since no hook can
+    tell which name a forward called the object through.
+  - `tl.head` selects one attention head; `tl.facet` selects a semantic facet view.
+  - Unscoped heads: `tl.head(i)` writes head `i` of every matching facet in every module and
+    says how many sites it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with
+    `fields["site_count"]`; 36 on a 12-layer GPT-2: q, k and v in each layer).
+  - Scoping: `.in_module(address)` scopes it to one module, and so does composition:
+    `tl.module(address) & tl.head(i)` (either order) is that same scoped facet selector,
+    accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`). A facet already scoped to
+    another module refuses `selector_module_facet_scope_conflict`.
+  - Facet unions: in `do`, a `|` union of facet selectors
+    (`tl.module(a) & tl.head(i) | tl.module(b) & tl.head(j)`, or
+    `(tl.module(a) | tl.module(b)) & tl.head(i)`) edits every branch in one call, exactly as
+    chained `do` calls would. `find_sites` and any other composite holding a facet refuse
+    `facet_selector_unsupported`.
+  - `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops,
+    including the five kinds in the next bullets.
+  - `autogradgrad`: an in-forward `torch.autograd.grad` call, with
+    `transform_kind="autograd.grad"`.
+  - `autogradbackward`: an in-forward `loss.backward()` or `torch.autograd.backward` call, with
+    `transform_kind="autograd.backward"`. There is one op per leaf gradient the pass writes,
+    parented on the roots and, when the leaf already held a grad, on that previous grad as its
+    in-place receiver, so a later `param.grad` read has a producer.
+  - `autogradfunction`: a custom `autograd.Function` whose forward left torch through a numpy or
+    dlpack round trip or a known foreign kernel (FlashAttention 4's `flash_attn.cute`
+    Functions, exit `flash_attn.cute`), with `transform_kind="autograd.Function"`.
+  - `foreigndata`: a host constructor (`from_numpy`, `from_dlpack`, `frombuffer`, or a
+    tensorless `tensor` / `as_tensor` / `asarray`) that brings data back into torch after a
+    plain-code `numpy` / `__array__` / `__dlpack__` / `to_dlpack` / `tolist` export outside any
+    Function, with `transform_kind="foreign_data"` and `transform_config["resolution"]` of
+    `view`, `copy`, `constant` or `unresolved`.
+  - `jitscript`: one call to a `torch.jit.ScriptFunction` from an eager forward, with
+    `transform_kind="jit.script"`.
+  - `tl.model_output` selects model outputs, and `tl.model_input` selects a nested model-input
+    path.
 
 **Temporal composition**
 : `tl.followed_by` (retroactive successor) and `tl.preceded_by` (lookback predecessor)
   compose with boolean operators to form temporal predicates over the op stream.
 
 **Backward selectors**
-: `tl.grad_fn` (backward grad_fn; `label=` matches one exact grad_fn label),
-  `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
-  (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
-  the former `intervening` alias is removed). These are NODE selectors: they address an
-  autograd node and its `grad_input` tuple, resolved against `trace.autograd.grad_fns` after
-  `backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
-  instead (see **tl.grad**).
+: NODE selectors: they address an autograd node and its `grad_input` tuple, resolved against
+  `trace.autograd.grad_fns` after `backward()`.
+  - `tl.grad_fn`: a backward grad_fn; `label=` matches one exact grad_fn label.
+  - `tl.grad_input` / `tl.grad_output`: backward event tensors.
+  - `tl.in_backward_pass`: one backward pass number.
+  - `tl.without_op`: grad_fns without a paired forward op (the former `intervening` alias is
+    removed).
+  - The gradient of a forward site's output is addressed with `tl.grad(site)` instead (see
+    **tl.grad**).
 
 **tl.grad(site)** *(spelling documented-unstable)*
-: Builds a `GradSelector` (frozen, hashable, selector kind `"grad"`; also
-  `torchlens._selection.selectors.grad`) that names the gradient of the loss with respect to the
-  site's OUTPUT, observed at the TorchLens boundary before it enters the op's backward function:
-  the same tensor `trace[site].grad` stores. It is an address and never calls autograd.
-  `repr(tl.grad("relu_3"))` is `tl.grad('relu_3')`. It accepts a label (pass-qualified
-  `"relu_3:2"` on multi-pass layers), any activation selector (`tl.label`, `tl.func`,
-  `tl.module`, `tl.in_module`, `tl.label_contains`, `tl.label_matches`, `tl.where`,
-  `tl.model_output`, `tl.model_input`, `tl.followed_by`, `tl.preceded_by`, `tl.at_step`, ... and
-  `&`/`|`/`~` compositions of these), an `Op` or `Layer` record, or a `find_sites()` table. An op with
-  several outputs has one gradient per output (`tuple_index` names the slot). It refuses, with
-  `SelectorCompositionError` carrying `code` and `remedy`: a nested `tl.grad`
-  (`grad_selector_nested`), a node selector or a pass qualifier inside
-  (`grad_selector_inner_not_forward`: write `tl.grad(s) & tl.in_backward_pass(2)`), a facet or
-  head selector (`grad_facet_unsupported`), a `Selection` (`grad_selection_unsupported`), and a
-  list or mapping (`grad_selector_inner_invalid`). No site door takes a pass keyword; the site
-  decides. Read side is unchanged in spelling: `trace[site].grad`, `.grads` and `.has_grad`
-  (`trace[tl.grad(s)]` is not an indexing form).
+: Builds a `GradSelector` that names the gradient of the loss with respect to the site's OUTPUT,
+  observed at the TorchLens boundary before it enters the op's backward function: the same
+  tensor `trace[site].grad` stores. It is an address and never calls autograd.
+  - `GradSelector`: frozen, hashable, selector kind `"grad"`; also
+    `torchlens._selection.selectors.grad`. `repr(tl.grad("relu_3"))` is `tl.grad('relu_3')`.
+  - Accepts: a label (pass-qualified `"relu_3:2"` on multi-pass layers); any activation selector
+    (`tl.label`, `tl.func`, `tl.module`, `tl.in_module`, `tl.label_contains`,
+    `tl.label_matches`, `tl.where`, `tl.model_output`, `tl.model_input`, `tl.followed_by`,
+    `tl.preceded_by`, `tl.at_step`, ... and `&`/`|`/`~` compositions of these); an `Op` or
+    `Layer` record; or a `find_sites()` table.
+  - An op with several outputs has one gradient per output (`tuple_index` names the slot).
+  - Refusals raise `SelectorCompositionError` carrying `code` and `remedy`: a nested `tl.grad`
+    (`grad_selector_nested`); a node selector or a pass qualifier inside
+    (`grad_selector_inner_not_forward`: write `tl.grad(s) & tl.in_backward_pass(2)`); a facet or
+    head selector (`grad_facet_unsupported`); a `Selection` (`grad_selection_unsupported`); a
+    list or mapping (`grad_selector_inner_invalid`).
+  - No site door takes a pass keyword; the site decides.
+  - Reading is unchanged in spelling: `trace[site].grad`, `.grads` and `.has_grad`
+    (`trace[tl.grad(s)]` is not an indexing form).
 
 **Activation, gradient and node universes**
-: Every site belongs to one universe. A bare selector or label is an ACTIVATION site (forward out
-  hook, payload the activation); `tl.grad(inner)` is a GRADIENT site (the output gradient of each
-  forward op `inner` matches); the backward selectors are NODE sites (a grad_fn post-hook per
-  `grad_input` slot). A bare label never reaches the backward graph unless wrapped in `tl.grad`.
-  `tl.grad(a) | tl.grad(b)` is one gradient branch, `tl.grad(s) | s` is two branches (activation
-  and gradient, each resolved, mounted and recorded separately; union keeps both because
-  identity is typed, never the label alone), `~tl.grad(s)` normalises to `tl.grad(~s)`, and
-  `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
-  universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
-  `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
-  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), a pass
-  qualifier on a bare activation selector refuses `selector_signal_mismatch`, and
-  `tl.module(a) & tl.head(i).in_module(b)` with `a != b` refuses
-  `selector_module_facet_scope_conflict`. A gradient site resolves its inner selector exactly as the
-  activation door does (zero matches refuse); a matched op the loss never reaches is a
-  `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
-  returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
-  carries that value in a `signal` column (`"forward"` for activation sites, `"backward"` for node sites).
+: Every site belongs to one universe: activation, gradient or node. A bare label never reaches
+  the backward graph unless wrapped in `tl.grad`.
+  - Activation site: a bare selector or label (forward out hook, payload the activation).
+  - Gradient site: `tl.grad(inner)`, the output gradient of each forward op `inner` matches.
+  - Node site: the backward selectors (a grad_fn post-hook per `grad_input` slot).
+  - Composition: `tl.grad(a) | tl.grad(b)` is one gradient branch. `tl.grad(s) | s` is two
+    branches (activation and gradient, each resolved, mounted and recorded separately; union
+    keeps both because identity is typed, never the label alone). `~tl.grad(s)` normalises to
+    `tl.grad(~s)`, and `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to
+    pass `n`.
+  - Refusals: `&` across universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`,
+    `s & tl.grad_fn(...)`, `tl.grad(s) & tl.grad_fn(...)`); `~` over a union that spans
+    universes refuses `selector_cross_universe_not` (negate inside each branch:
+    `tl.grad(~a) | ~a`); a pass qualifier on a bare activation selector refuses
+    `selector_signal_mismatch`; `tl.module(a) & tl.head(i).in_module(b)` with `a != b` refuses
+    `selector_module_facet_scope_conflict`.
+  - Resolution: a gradient site resolves its inner selector exactly as the activation door does
+    (zero matches refuse). A matched op the loss never reaches is a `no_fire`, never a
+    resolution error and never a zero tensor.
+  - `Trace.find_sites(tl.grad(s))` returns the matched forward sites with `signal="backward"`;
+    its `.to_dataframe()` table carries that value in a `signal` column (`"forward"` for
+    activation sites, `"backward"` for node sites).
 
 **signal (record field)** *(spelling documented-unstable)*
 : The one field that says which pass a record or event belongs to: `"forward"` or `"backward"`
-  (plan and span summaries may say `"both"`). It is spelled `signal` on `HookContext`,
-  `FireRecord`, `TapRecord`, `Edit`, `NarrationEvent` and `Rule` (derived), on the audit payload,
-  the coupling record and the span record. Sites carry no `signal=` keyword; the only door that
-  does is `tl.observers.span(name, signal="both")`. `HookContext` also carries `ctx.state` (the
-  per-(site, hook) scratch dict) and `ctx.run_state` (the run-scoped dict); a callable attached
-  to `tl.grad(s) | s` runs in both passes and reads `ctx.signal`.
+  (plan and span summaries may say `"both"`).
+  - Spelled `signal` on `HookContext`, `FireRecord`, `TapRecord`, `Edit`, `NarrationEvent` and
+    `Rule` (derived), on the audit payload, the coupling record and the span record.
+  - Sites carry no `signal=` keyword; the only door that does is
+    `tl.observers.span(name, signal="both")`.
+  - `HookContext` also carries `ctx.state` (the per-(site, hook) scratch dict) and
+    `ctx.run_state` (the run-scoped dict). A callable attached to `tl.grad(s) | s` runs in both
+    passes and reads `ctx.signal`.
 
 **`Accessor.count_by(*keys)`**
-: Every accessor (`trace.layers`, `trace.ops`, `trace.modules`, `trace.params`, ...) counts
-  its records by one or more record fields: one key gives `{value: count}`, two or more give
-  `{(v1, v2, ...): count}`, in first-seen order; `len(accessor)` is the total. Layers and ops
-  count by `"module"` (containing module address) and `"kind"` (the op family token,
-  `conv2d`, `relu`); other accessors count by any string or int field their records carry
-  (`trace.modules.count_by("class_name")`, `trace.params.count_by("dtype")`). No key refuses
-  `accessor_count_by_key_required`; an unknown key refuses `accessor_count_by_key_unknown`
-  naming the countable fields. Filtering (the labels for one value) is a selector lookup:
-  `trace[tl.in_module(address)].labels`.
+: Every accessor (`trace.layers`, `trace.ops`, `trace.modules`, `trace.params`, ...) counts its
+  records by one or more record fields. `len(accessor)` is the total.
+  - Result: one key gives `{value: count}`, two or more give `{(v1, v2, ...): count}`, in
+    first-seen order.
+  - Keys: layers and ops count by `"module"` (containing module address) and `"kind"` (the op
+    family token, `conv2d`, `relu`); other accessors count by any string or int field their
+    records carry (`trace.modules.count_by("class_name")`, `trace.params.count_by("dtype")`).
+  - Refusal codes: `accessor_count_by_key_required` when no key is given;
+    `accessor_count_by_key_unknown` for an unknown key, naming the countable fields.
+  - Filtering (the labels for one value) is a selector lookup:
+    `trace[tl.in_module(address)].labels`.
 
 ## Intervention helpers
 
 **Value helpers**
-: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.add_noise` (Gaussian noise),
-  `tl.mean_ablate` (fill with a mean; its own entry below), `torchlens.intervention.scramble_elements`
-  (elementwise iid scramble from a flattened source -- the honest rename of
-  the removed `resample_ablate` spelling, which a saved spec may not name either: it refuses
-  `intervention_helper_renamed`; for coherent donor patching use
-  `tl.patch_from`), `tl.replace_with` (fixed value), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
-  `tl.project_out` (keep or remove the component along a direction), and
-  `tl.splice_module` (call a module as a black-box forward splice), and `tl.clip_norm` (norm clip).
-  Availability outside
-  the torch backend is narrower; see the per-backend rosters in the backends guide.
-  The value helpers take the keyword-only `allow_shape_change=` (default `False`), which
-  allows the edit to change the site's output shape; by default the edit must preserve it. `tl.steer`
-  also takes `strength=` (its second argument, default `1.0`), the multiplier applied to the
-  steering direction, and `dim=`, the out axis a vector direction lies along: when omitted it is
-  inferred only if exactly one out axis has the direction's length (`tl.steer(direction, 4.0)` with
-  a `[d_model]` direction on a `[batch, seq, d_model]` site), and two or more matching axes, or none,
-  raise `tl.errors.AmbiguousAxisError` naming the matching dims. Pass `dim=` whenever another axis
-  can take the same size during a run (a generated sequence growing to `d_model` tokens).
-  Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`, `tl.project_out`)
-  keep the caller's tensor by reference. Each staged entry records a
-  full-content digest of those tensors when it is staged; a rerun and `save_intervention`
-  refuse `helper_tensor_changed_since_capture` once the tensor changed (in place or through
-  `.data`). Re-stage the edit to use the new value. A bound executor (`spec.bind(model)`) reads
-  the helper's tensor at each call; in-place changes apply to the next call, and
-  `BindReport.helper_tensor_versions` (on `.last_report`) records each tensor's version counter,
-  keyed by the rule id the call started with (a rule id follows its tensor's content).
+: Ready-made edits that change the value at a site. Availability outside the torch backend is
+  narrower; see the per-backend rosters in the backends guide.
+  - Helpers: `tl.zero_ablate`, `tl.scale`, `tl.add`, `tl.clamp`, `tl.add_noise` (Gaussian
+    noise), `tl.mean_ablate` (fill with a mean; its own entry below), `tl.replace_with` (fixed
+    value), `tl.steer` (add a scaled steering direction), `tl.project_onto` / `tl.project_out`
+    (keep or remove the component along a direction), `tl.splice_module` (call a module as a
+    black-box forward splice), and `tl.clip_norm` (norm clip).
+  - `torchlens.intervention.scramble_elements`: elementwise iid scramble from a flattened
+    source. It replaces the removed `resample_ablate` spelling, which a saved spec may not name
+    either (it refuses `intervention_helper_renamed`). For coherent donor patching use
+    `tl.patch_from`.
+  - Shape: the value helpers take the keyword-only `allow_shape_change=` (default `False`). By
+    default the edit must preserve the site's output shape; setting it allows a change.
+  - `tl.steer` also takes `strength=` (its second argument, default `1.0`), the multiplier
+    applied to the steering direction, and `dim=`, the out axis a vector direction lies along.
+    When `dim=` is omitted it is inferred only if exactly one out axis has the direction's
+    length (`tl.steer(direction, 4.0)` with a `[d_model]` direction on a
+    `[batch, seq, d_model]` site); two or more matching axes, or none, raise
+    `tl.errors.AmbiguousAxisError` naming the matching dims. Pass `dim=` whenever another axis
+    can take the same size during a run (a generated sequence growing to `d_model` tokens).
+  - Tensor-carrying helpers (`tl.steer`, `tl.mean_ablate`, `tl.project_onto`,
+    `tl.project_out`) keep the caller's tensor by reference. Each staged entry records a
+    full-content digest of those tensors when it is staged; once the tensor changes (in place
+    or through `.data`), a rerun and `save_intervention` refuse
+    `helper_tensor_changed_since_capture`. Re-stage the edit to use the new value.
+  - A bound executor (`spec.bind(model)`) instead reads the helper's tensor at each call, so
+    in-place changes apply to the next call. `BindReport.helper_tensor_versions` (on
+    `.last_report`) records each tensor's version counter, keyed by the rule id the call
+    started with (a rule id follows its tensor's content).
 
 **`tl.mean_ablate(source=None, *, dim, allow_shape_change=False)`**
-: The one mean door. `dim` is required: `None` averages every axis of the source to one
-  scalar, whatever the source; an int or tuple of ints averages those axes (`keepdim`, broadcast
-  back to the site); `"members"` averages over a `Population`'s members and refuses
-  `intervention_over_invalid` for any other source.
-  `source` is what is averaged: the site's own value (the default; it reads the whole batch, so
-  the spec derives `is_batch_independent=False`, the append gate refuses and a chunked capture
-  refuses `chunked_replay_batch_coupling`), a tensor or Op-like object (averaged instead of the
-  site; `is_batch_independent=True`), or a `tl.intervention.Population` (its members are averaged
-  elementwise first; `dim="members"` fills with that member-shaped mean, `dim=None` reduces it to
-  one scalar, axes reduce it with `keepdim`; the spec is `opaque_audit` and the fire record says
-  `stochastic=False`). A mean is a reduction,
-  never a draw: no seed. A semantic axis name (`"batch"`, `"position"`, `"feature"`) refuses
-  `axis_semantics_unknown` until axis-role evidence exists; any other `dim` refuses
-  `intervention_over_invalid` at construction. The removed `mean_fill(dim=...)` is
-  `mean_ablate(dim=...)`, the removed `mean_from(population)` is `mean_ablate(population,
-  dim="members")`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
+: The one mean door: it fills the site with a mean. A mean is a reduction, never a draw, so it
+  takes no seed.
+  - `dim` (required) picks the axes: `None` averages every axis of the source to one scalar,
+    whatever the source; an int or tuple of ints averages those axes (`keepdim`, broadcast back
+    to the site); `"members"` averages over a `Population`'s members and refuses
+    `intervention_over_invalid` for any other source.
+  - A semantic axis name (`"batch"`, `"position"`, `"feature"`) refuses
+    `axis_semantics_unknown` until axis-role evidence exists; any other `dim` refuses
+    `intervention_over_invalid` at construction.
+  - `source` is what is averaged. The default is the site's own value; it reads the whole
+    batch, so the spec derives `is_batch_independent=False`, the append gate refuses and a
+    chunked capture refuses `chunked_replay_batch_coupling`.
+  - A tensor or Op-like `source` is averaged instead of the site (`is_batch_independent=True`).
+  - A `tl.intervention.Population` source has its members averaged elementwise first:
+    `dim="members"` fills with that member-shaped mean, `dim=None` reduces it to one scalar,
+    and axes reduce it with `keepdim`. The spec is `opaque_audit` and the fire record says
+    `stochastic=False`.
+  - Removed spellings: `mean_fill(dim=...)` is now `mean_ablate(dim=...)`, and
+    `mean_from(population)` is now `mean_ablate(population, dim="members")`. A saved spec
+    naming `mean_fill` refuses `intervention_helper_renamed`.
 
 **Edits on gradient sites**
-: A tensor edit is a function of one tensor and the site decides which tensor, so the neutral
-  edits apply to activation and gradient sites alike: `tl.scale`, `tl.zero_ablate`, `tl.clamp`,
-  `tl.add_noise`, `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.project_onto`,
-  `tl.project_out`, `tl.replace_with`, `swap_with` with a fixed tensor donor, `tl.clip_norm`,
-  and any callable `fn(tensor, *, ctx)`; their `Edit.signal` is `None`. Edits that read recorded
-  forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`, `swap_with` with a
-  site or trace donor; `Edit.signal == "forward"`) refuse on a gradient site with
-  `edit_signal_mismatch` at attach time, before any mutation. There are no gradient-only helpers:
+: A tensor edit is a function of one tensor, and the site decides which tensor, so the neutral
+  edits apply to activation and gradient sites alike. There are no gradient-only helpers:
   `trace.do(tl.grad("relu_3"), tl.zero_ablate(), model=model, inputs=x)` zeroes a gradient.
+  - Neutral edits (their `Edit.signal` is `None`): `tl.scale`, `tl.zero_ablate`, `tl.clamp`,
+    `tl.add_noise`, `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.project_onto`,
+    `tl.project_out`, `tl.replace_with`, `swap_with` with a fixed tensor donor, `tl.clip_norm`,
+    and any callable `fn(tensor, *, ctx)`.
+  - Edits that read recorded forward state (`Edit.signal == "forward"`): `tl.patch_from`,
+    `tl.mean_ablate`, `tl.splice_module`, and `swap_with` with a site or trace donor. On a
+    gradient site they refuse `edit_signal_mismatch` at attach time, before any mutation.
 
 **tl.clip_norm(max_norm, norm_type=2.0)** *(spelling documented-unstable)*
 : Neutral, portable edit that rescales its tensor so its `norm_type` norm is at most `max_norm`,
   per tensor. On `tl.grad(site)` it is gradient-norm clipping at that site.
 
 **Armed gradient edits and Trace.armed_edits** *(spellings documented-unstable)*
-: `trace.do(tl.grad(s), edit, model=model, inputs=x)` reruns the forward with the activation half of
-  the plan applied live and the gradient half carried into the result's recipe as sticky backward
-  hooks of the returned execution only (the source trace is not armed). The rerun is made
-  graph-connected whatever the source's `backward_ready` was and says so in
-  `result.last_run["backward_ready_forced"]`. Its `intervention_event_v2` envelope has status
-  `"armed"` (beside `"fired"`, `"no_fire"`, `"error"`), `fire_count=0` and
-  `extra={"armed_edits": n, "awaiting": "backward"}` (a mixed plan keeps the activation half's
-  `fired`/`no_fire` status and adds the same keys). `Trace.armed_edits` is the read-only tuple of
-  the gradient rules in the trace's recipe, and the trace summary says "N gradient edits armed;
-  call trace.backward(loss)" until they fire. Each `trace.backward(loss)` then writes one settle
-  envelope per arming transaction (`door="backward"`, `lane="live_hook"`, `parent_event_id` and
-  `extra["arming_event_id"]` the arming row, `backward_pass_number`, status `fired` or `no_fire`
-  with `no_fire_reason` `"gradient_not_reached"` or `"pass_filtered"`); a second backward never
-  rewrites the first pass's row. `loss=` on `Trace.do` (and `tl.sweep`) is a callable of the
-  returned trace returning a scalar with a `grad_fn`; the door runs `result.backward(loss(result))`
-  in the same call. A non-callable refuses `do_loss_not_callable`, a plan with no gradient site
-  refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
-  detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
-  on the trace itself for its own `trace.backward(loss)`. Staging the recipe
-  `do(tl.when(tl.grad(s), edit), intervention=InterventionOptions(engine="set_only"))`
-  registers the sticky rule without a rerun; when the trace holds no live backward graph its
-  staging history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
-  backward). A saved trace keeps the armed rules and records their
-  count in `annotations["armed_gradient_edits"]`.
+: An edit on a gradient site is armed: it waits as a backward hook until a backward pass runs.
+  `Trace.armed_edits` lists the armed rules.
+  - Rerun: `trace.do(tl.grad(s), edit, model=model, inputs=x)` reruns the forward with the
+    activation half of the plan applied live, and carries the gradient half into the result's
+    recipe as sticky backward hooks of the returned execution only (the source trace is not
+    armed). The rerun is made graph-connected whatever the source's `backward_ready` was, and
+    says so in `result.last_run["backward_ready_forced"]`.
+  - Arming record: its `intervention_event_v2` envelope has status `"armed"` (beside `"fired"`,
+    `"no_fire"`, `"error"`), `fire_count=0` and
+    `extra={"armed_edits": n, "awaiting": "backward"}`. A mixed plan keeps the activation half's
+    `fired`/`no_fire` status and adds the same keys.
+  - `Trace.armed_edits`: the read-only tuple of the gradient rules in the trace's recipe. The
+    trace summary says "N gradient edits armed; call trace.backward(loss)" until they fire.
+  - Settling: each `trace.backward(loss)` writes one settle envelope per arming transaction
+    (`door="backward"`, `lane="live_hook"`, `parent_event_id` and `extra["arming_event_id"]`
+    the arming row, `backward_pass_number`, status `fired` or `no_fire` with `no_fire_reason`
+    `"gradient_not_reached"` or `"pass_filtered"`). A second backward never rewrites the first
+    pass's row.
+  - `loss=` on `Trace.do` (and `tl.sweep`): a callable of the returned trace returning a scalar
+    with a `grad_fn`; the door runs `result.backward(loss(result))` in the same call. A
+    non-callable refuses `do_loss_not_callable`, a plan with no gradient site refuses
+    `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
+    detaches the hooks this call attached, and re-raises.
+  - `engine="set_only"` arms the gradient rules on the trace itself, for its own
+    `trace.backward(loss)`. Staging the recipe
+    `do(tl.when(tl.grad(s), edit), intervention=InterventionOptions(engine="set_only"))`
+    registers the sticky rule without a rerun. When the trace holds no live backward graph, its
+    staging history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
+    backward).
+  - Saving: a saved trace keeps the armed rules and records their count in
+    `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
-: `Trace.do` is the one editing verb on a captured log, and it propagates what it stages: a
-  non-callable value sets the site, a hook or helper attaches as a sticky rule, a mapping of
-  sites to edits (`trace.do({a: h1, b: h2})`) applies several edits in one propagation, and an
-  `InterventionSpec` or `Recipe` applies its rules, including a spec loaded back with
-  `tl.io.load_intervention_spec`. On the replay engine the edit is pushed
-  downstream through the recorded graph (DAG replay of the affected cone);
-  `InterventionOptions(engine="set_only")` stages the edit without propagating;
-  `InterventionOptions(differentiable=True)` replays onto a new fork whose outputs stay
-  differentiable and returns it; `Trace.clear_edits` detaches staged edits, and the scoped
-  form `with trace.fork() as scoped: scoped.do(...)` detaches the last `do`'s hooks on exit.
-  `Trace.run`
-  performs a full-forward run with the log's active intervention spec; `tl.sweep` captures one
-  intervened trace per swept replacement value. (The former `replay`/`replay_from`/`rerun`
-  aliases are removed, and so are the separate stage, propagate and detach verbs that `do`
-  folded in; docs/reference/deprecations.md maps each.)
-  `Trace.do(site, value_or_hook, /, *, ...)`: the first parameter is `site`, positional-only, on
-  `Trace`, `Layer`, `Op` and `Bundle` alike (ruled 3 Nov 2026). `Trace.run(model, x, /, *,
-  inputs=..., ...)`: the model and input are positional-only; positional inputs return a new
-  `Trace` (ruled 3 Nov 2026).
-  Replay re-executes
-  forward ops only, so a gradient site on `do` without `model=`/`inputs=` or on `engine="replay"`
-  refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and inputs= to
-  rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
-  engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
-  gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
-  (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
-  keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
-  addressed pass and recompute every downstream pass. An edit or selector that names a
-  multi-pass layer by its bare label (a `do` string target, `tl.label(label)`, so
-  `trace[tl.label(label)]`) refuses `multipass_bare_label_ambiguous`, and
-  `trace.ops[label]` refuses `ambiguous_op_lookup`; single-pass bare labels stay
-  accepted. Reading is not refused: `trace[label]` returns the aggregate Layer, and
-  `trace["label:N"]` or `trace["label:last"]` gives one pass's Op. Replay disclosures (`last_run` origins/cone, `_replay_frontier` keys) spell
-  multi-pass ops pass-qualified and keep bare labels for single-pass layers.
-  Engines treat the trace's staged spec as read-only: a rerun (plain, append, or
-  chunked), a failed or interrupted rerun, and a fork leave it exactly as staged.
-  A capture-time `intervene=` predicate that is not lowered to module hooks stages
-  one entry per fired op on its final label; `Trace.run` re-arms the trace's retained
-  predicate through the capture door instead, and refuses
-  `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
-  different ops than the staged entries name, or at the same ops with changed rule content
-  (a staged steer edited since capture). A staged edit addressed by a finalized exact label
-  (`do(label, value)` with the `set_only` engine, `do(tl.label(...), edit)`) is translated before the forward to
-  the raw capture labels of the ops it names, the translation a mixed gradient plan's
-  activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
-  its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
-  A substring or regex selector on a finalized label still refuses through the live matcher
-  (`LiveModeLabelError`, with its authoring remedy). A staged edit whose selector matches sites on the trace but fires at none
-  during a rerun of the same graph on the same inputs refuses with
-  `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
-  `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
-  its forward (a predicate on `p.layer_label`, which exists only after postprocess). A
-  predicate that matches nothing on the new inputs warns `rerun_zero_fire`. The rerun divergence check (`ControlFlowDivergenceWarning`, or
-  `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes with
-  each value-only edit node folded into the op it replaces, so a staged edit is never
-  reported as control-flow divergence while a changed op, edge, shape or batch size still is.
+: `Trace.do` is the one editing verb on a captured log, and it propagates what it stages.
+  `Trace.run` performs a full-forward run with the log's active intervention spec, and
+  `tl.sweep` captures one intervened trace per swept replacement value.
+  - What `do` accepts: a non-callable value sets the site; a hook or helper attaches as a
+    sticky rule; a mapping of sites to edits (`trace.do({a: h1, b: h2})`) applies several edits
+    in one propagation; an `InterventionSpec` or `Recipe` applies its rules, including a spec
+    loaded back with `tl.io.load_intervention_spec`.
+  - Signatures: in `Trace.do(site, value_or_hook, /, *, ...)` the first parameter is `site`,
+    positional-only, on `Trace`, `Layer`, `Op` and `Bundle` alike. In
+    `Trace.run(model, x, /, *, inputs=..., ...)` the model and input are positional-only;
+    positional inputs return a new `Trace`.
+  - Engine options: on the replay engine the edit is pushed downstream through the recorded
+    graph (DAG replay of the affected cone). `InterventionOptions(engine="set_only")` stages the
+    edit without propagating. `InterventionOptions(differentiable=True)` replays onto a new fork
+    whose outputs stay differentiable and returns it.
+  - Undoing: `Trace.clear_edits` detaches staged edits, and the scoped form
+    `with trace.fork() as scoped: scoped.do(...)` detaches the last `do`'s hooks on exit.
+  - Removed: the former `replay`/`replay_from`/`rerun` aliases, and the separate stage,
+    propagate and detach verbs that `do` folded in; docs/reference/deprecations.md maps each.
+  - Gradient sites: replay re-executes forward ops only, so a gradient site on `do` without
+    `model=`/`inputs=` or on `engine="replay"` refuses `replay_gradient_edit_unsupported`
+    before any mutation ("Pass model= and inputs= to rerun with the edit armed, then call
+    result.backward(loss) (or pass loss=), or stage it with engine='set_only' and call
+    trace.backward(loss) on this trace"). Differentiable replay of gradient edits is out of
+    scope this release.
+  - Multi-pass layers: the replay engine works on pass-qualified op labels (`label:pass`).
+    Cone traversal, the replay overlay, hook targets and commits are keyed per pass, so edits
+    on multi-pass (recurrence-grouped) layers touch exactly the addressed pass and recompute
+    every downstream pass.
+  - Bare labels: an edit or selector that names a multi-pass layer by its bare label (a `do`
+    string target, `tl.label(label)`, so `trace[tl.label(label)]`) refuses
+    `multipass_bare_label_ambiguous`, and `trace.ops[label]` refuses `ambiguous_op_lookup`;
+    single-pass bare labels stay accepted. Reading is not refused: `trace[label]` returns the
+    aggregate Layer, and `trace["label:N"]` or `trace["label:last"]` gives one pass's Op.
+    Replay disclosures (`last_run` origins/cone, `_replay_frontier` keys) spell multi-pass ops
+    pass-qualified and keep bare labels for single-pass layers.
+  - Staged spec is read-only: a rerun (plain, append, or chunked), a failed or interrupted
+    rerun, and a fork leave the trace's staged spec exactly as staged.
+  - Capture-time predicates: an `intervene=` predicate that is not lowered to module hooks
+    stages one entry per fired op on its final label. `Trace.run` re-arms the trace's retained
+    predicate through the capture door instead, and refuses `rerun_predicate_restage_mismatch`
+    (trace unchanged) when the predicate fires at different ops than the staged entries name,
+    or at the same ops with changed rule content (a staged steer edited since capture).
+  - Exact labels: a staged edit addressed by a finalized exact label (`do(label, value)` with
+    the `set_only` engine, `do(tl.label(...), edit)`) is translated before the forward to the
+    raw capture labels of the ops it names, so it fires on the rerun. A mixed gradient plan's
+    activation half already uses the same translation. Each pass of a multi-pass op keeps its
+    own raw label, so a pass-qualified label edits that pass alone. A substring or regex
+    selector on a finalized label still refuses through the live matcher
+    (`LiveModeLabelError`, with its authoring remedy).
+  - Unmatched selectors: a staged edit whose selector matches sites on the trace but fires at
+    none during a rerun of the same graph on the same inputs refuses
+    `rerun_selector_unmatchable_live` (trace unchanged). So does, on any inputs, a `tl.where`
+    predicate that matches sites on the rerun's own trace but fired at none during its forward
+    (a predicate on `p.layer_label`, which exists only after postprocess). A predicate that
+    matches nothing on the new inputs warns `rerun_zero_fire`.
+  - Divergence check: the rerun divergence check (`ControlFlowDivergenceWarning`, or
+    `ControlFlowDivergenceError` with `strict=True`) compares raw op order, edges and shapes,
+    with each value-only edit node folded into the op it replaces. A staged edit is never
+    reported as control-flow divergence, while a changed op, edge, shape or batch size still is.
 
 **Guarded fast rerun** *(spellings documented-unstable)*
-: The engine a steered rerun takes when the trace's staged intervention spec targets only
+: The fast engine a steered rerun takes when the trace's staged intervention spec targets only
   plain module selectors (`tl.module(...)` / module-address hooks, no `set()` value
-  replacements): a native forward with the staged hooks fired at each targeted module's exit
-  and forward hooks refreshing the saved sites, so the rerun costs close to a plain hooked
-  forward instead of a full capture. Both doors use it: the legacy `trace.run(model, x)` on a
-  trace with a staged intervention tries it first (a trace with nothing staged keeps the capture
-  rerun) and falls back to the capture engine on any typed refusal, and
-  `trace.run_transaction(inputs=..., fast=True)` on a live or loaded-activation trace applies the staged
-  spec through it. The plain `trace.run_transaction(inputs=...)` on a live trace applies the staged spec
-  too, inside its refresh capture (`engine` `live`, the fork adopts the captured graph and
-  `last_run["unfired_plan_ids"]` names the staged plans that fired nowhere); only a loaded
-  artifact refuses with `run_staged_spec_unapplied`. `last_run`
-  discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,
-  where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
-  `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
-  non-module target, `run_capability_unavailable:fast_rerun_graph_unsteered` when a staged
-  entry has never fired in the trace's recorded graph, as after a sticky hook staged by `do` with
-  `engine="set_only"` on a plain capture, or when the graph records a fire no staged entry
-  accounts for, as after `clear_edits(site)` on a steered capture, so the capture engine reruns
-  once to record the current plan, or
-  `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
-  never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
-  `run_transaction(inputs=...)`, fast or not, a run that applies staged edits reports `unverifiable`, never
-  `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
-  it is an edited forward, and no hook-aware check exists yet. On a live trace the
-  `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
-  Trace untouched (JMT, Sun 1 Nov 2026); the legacy rerun door (`run(model, x)`) also returns a new
-  Trace and leaves the source untouched (ruled 3 Nov 2026). Output leaves (the model's and each saved module's) are paired
-  with the captured output ops by container path through capture's own output walker, so a
-  stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
-  fast; a changed leaf count or an unmatched path still refuses
-  (`output_structure_mismatch:fast_live_model_output_structure`). Input sizes may differ from the capture (generation)
-  when rank, dtype, device and input tree match and the capture sealed a call fingerprint
-  (`trace._raw_call_fingerprint`, an ordered rolling hash of every wrapped torch call and
-  module entry, compared against `last_run["call_fingerprint"]`); such a run sets
-  `last_run["shape_varied"]` and resets `shape`, `transformed_out_shape`, `activation_memory`
-  and `transformed_activation_memory` to `None` on every op the run did not refresh, so no
-  capture-time number is presented as current. The save scope never widens: unsaved ops stay
-  unsaved, `transformed_output` follows the capture's output-transform rule, and the stored spec is
-  unchanged. A real structural divergence still refuses (`PathDivergenceError` from the
-  explicit door; the legacy door falls back and records why). A staged helper tensor changed
-  since it was staged refuses `helper_tensor_changed_since_capture` on both doors, as the
-  capture rerun does, and the explicit door's cached session rebuilds whenever the staged spec
-  changes, so it always applies the spec staged at call time.
+  replacements). It runs a native forward with the staged hooks fired at each targeted module's
+  exit and forward hooks refreshing the saved sites, so the rerun costs close to a plain hooked
+  forward instead of a full capture.
+  - Legacy door: `trace.run(model, x)` on a trace with a staged intervention tries it first (a
+    trace with nothing staged keeps the capture rerun) and falls back to the capture engine on
+    any typed refusal.
+  - Explicit door: `trace.run_transaction(inputs=..., fast=True)` on a live or loaded-activation
+    trace applies the staged spec through it.
+  - Without `fast=True`: the plain `trace.run_transaction(inputs=...)` on a live trace applies
+    the staged spec too, inside its refresh capture (`engine` `live`, the fork adopts the
+    captured graph and `last_run["unfired_plan_ids"]` names the staged plans that fired
+    nowhere). Only a loaded artifact refuses with `run_staged_spec_unapplied`.
+  - Outcome: `last_run` reports `engine` as `guarded_fast` when the fast engine ran and `rerun`
+    after a fallback, where `fast_refused` names the refusing guard as `<code>:<stage>`.
+    Examples follow.
+  - `run_capability_unavailable:fast_rerun_target_unsupported`: a value replacement or a
+    non-module target.
+  - `run_capability_unavailable:fast_rerun_graph_unsteered`: a staged entry has never fired in
+    the trace's recorded graph (as after a sticky hook staged by `do` with `engine="set_only"`
+    on a plain capture), or the graph records a fire no staged entry accounts for (as after
+    `clear_edits(site)` on a steered capture), so the capture engine reruns once to record the
+    current plan.
+  - `<divergence code>:fast_live_call_fingerprint`: a structural change.
+  - Fire counts: `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan
+    that never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`).
+  - Verification: through `run_transaction(inputs=...)`, fast or not, a run that applies staged
+    edits reports `unverifiable`, never `verified` (diagnostic `user_intervention_unsupported`,
+    stage `hooked_run_unverified`): it is an edited forward, and no hook-aware check exists yet.
+  - Source trace: on a live trace the `fast=True` door returns a new result Trace carrying that
+    `last_run` and leaves the source Trace untouched; the legacy rerun door (`run(model, x)`)
+    also returns a new Trace and leaves the source untouched.
+  - Outputs: output leaves (the model's and each saved module's) are paired with the captured
+    output ops by container path through capture's own output walker, so a stock Hugging Face
+    forward returning a `DynamicCache` of per-layer key/value tensors reruns fast. A changed
+    leaf count or an unmatched path still refuses
+    (`output_structure_mismatch:fast_live_model_output_structure`).
+  - Input sizes may differ from the capture (generation) when rank, dtype, device and input
+    tree match and the capture sealed a call fingerprint (`trace._raw_call_fingerprint`, an
+    ordered rolling hash of every wrapped torch call and module entry, compared against
+    `last_run["call_fingerprint"]`). Such a run sets `last_run["shape_varied"]` and resets
+    `shape`, `transformed_out_shape`, `activation_memory` and `transformed_activation_memory`
+    to `None` on every op the run did not refresh, so no capture-time number is presented as
+    current.
+  - Save scope never widens: unsaved ops stay unsaved, `transformed_output` follows the
+    capture's output-transform rule, and the stored spec is unchanged.
+  - Refusals: a real structural divergence still refuses (`PathDivergenceError` from the
+    explicit door; the legacy door falls back and records why). A staged helper tensor changed
+    since it was staged refuses `helper_tensor_changed_since_capture` on both doors, as the
+    capture rerun does. The explicit door's cached session rebuilds whenever the staged spec
+    changes, so it always applies the spec staged at call time.
 
 ## Extraction, observers, and admin
 
 **Extraction helpers**
-: `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers
-  (detached by default; `detach_saved_activations=False` returns graph-connected outs), and
-  `tl.extract_dataset` extracts outs from an iterable dataset in batches. (The former
-  `peek` and `batched_extract` aliases are removed.) Disk-mode `extract_dataset`
-  (``path=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards
-  plus a ``manifest.json`` recording the run signature, per-site identity (layer label
-  and structural site key where derivable), stimulus ordering/provenance
-  (``stimulus_ids=`` optional), axis semantics, dtypes, devices, and the TorchLens
-  version. ``resume=True`` (DOCUMENTED-UNSTABLE, like ``stimulus_ids=`` and the loader)
-  continues an interrupted disk run from its last completed shard after a signature
-  check; `torchlens.load(path)` reads the artifact back with
-  its metadata as a `LoadedExtraction`.
+: Helpers that return saved outs for chosen layers, or for a whole dataset in batches. (The
+  former `peek` and `batched_extract` aliases are removed.)
+  - `tl.pluck` returns the saved out for one layer, `tl.extract` for many layers (detached by
+    default; `detach_saved_activations=False` returns graph-connected outs).
+  - `tl.extract_dataset` extracts outs from an iterable dataset in batches.
+  - Disk-mode `extract_dataset`
+    (``path=``) writes a SELF-DESCRIBING artifact: atomic ``batch_XXXXX.pt`` shards plus a
+    ``manifest.json`` recording the run signature, per-site identity (layer label and
+    structural site key where derivable), stimulus ordering/provenance
+    (``stimulus_ids=`` optional), axis semantics, dtypes, devices, and the TorchLens version.
+  - ``resume=True`` (DOCUMENTED-UNSTABLE, like ``stimulus_ids=`` and the loader) continues an
+    interrupted disk run from its last completed shard after a signature check.
+    `torchlens.load(path)` reads the artifact back with its metadata as a `LoadedExtraction`.
 
 **Module and stage names** *(rule documented-unstable)*
 : A module name resolves to that module's output at every selector door: `tl.extract`,
-  `tl.pluck`, `tl.trace(save=[...])`, `trace.run_transaction(inputs=..., until=...)` and the typed op doors
-  (`trace.ops[name]`, `trace.layers[name]`); at the plain door `trace[name]` it is the Module
-  itself (see *Indexing coherence*). Three spellings
-  name a module: its address (`"fc"`, `"layer1.0"`); a name relative to a wrapped inner model
-  (timm `FeatureGetterNet` reports `"blocks.9"` for the module at `"model.blocks.9"`); and a
-  dotted name whose module was registered with dots flattened to underscores (timm
-  `FeatureListNet` registers stage `"stages.0"` as `"stages_0"`). A module whose output is also
-  a model output resolves to its own output op, not the model-output alias. A relative name
-  that ends several module addresses refuses `ambiguous_op_lookup` and lists them; a
-  `":<call>"` suffix selects one call of a reused module.
+  `tl.pluck`, `tl.trace(save=[...])`, `trace.run_transaction(inputs=..., until=...)` and the
+  typed op doors (`trace.ops[name]`, `trace.layers[name]`). At the plain door `trace[name]` it
+  is the Module itself (see *Indexing coherence*).
+  - Three spellings name a module: its address (`"fc"`, `"layer1.0"`); a name relative to a
+    wrapped inner model (timm `FeatureGetterNet` reports `"blocks.9"` for the module at
+    `"model.blocks.9"`); and a dotted name whose module was registered with dots flattened to
+    underscores (timm `FeatureListNet` registers stage `"stages.0"` as `"stages_0"`).
+  - A module whose output is also a model output resolves to its own output op, not the
+    model-output alias.
+  - A relative name that ends several module addresses refuses `ambiguous_op_lookup` and lists
+    them; a `":<call>"` suffix selects one call of a reused module.
+
 **Intervened extraction** *(spellings documented-unstable)*
 : `tl.extract_dataset(..., intervene=spec)` takes a `tl.when(selector, helper)` spec and
   captures every batch with it armed, so the stored rows are the intervened activations.
-  Batch zero freezes the structural sites the spec fired at; a later batch that fires
-  nowhere refuses `extraction_intervention_no_fire` and one that fires elsewhere refuses
-  `extraction_intervention_site_drift`. Module (`tl.module`, `tl.in_module`) and op-type
-  (`tl.func`) addressed specs run; finer address classes refuse
-  `harvest_address_class_ungated`, and every helper must declare `is_batch_independent=True`.
-  Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1`
-  block (policy, engine `live_hook`, address class, site keys, fire receipt digest),
-  ledgers each shard's fire receipt, and puts the intervention identity in the resume
-  signature; a clean run declares `policy="none"`.
+  - Site freeze: batch zero freezes the structural sites the spec fired at. A later batch that
+    fires nowhere refuses `extraction_intervention_no_fire`, and one that fires elsewhere
+    refuses `extraction_intervention_site_drift`.
+  - Supported addresses: module (`tl.module`, `tl.in_module`) and op-type (`tl.func`)
+    addressed specs run; finer address classes refuse `harvest_address_class_ungated`. Every
+    helper must declare `is_batch_independent=True`.
+  - Disk mode records the counterfactual in the manifest's `tl_counterfactual_harvest_v1` block
+    (policy, engine `live_hook`, address class, site keys, fire receipt digest), ledgers each
+    shard's fire receipt, and puts the intervention identity in the resume signature. A clean
+    run declares `policy="none"`.
 
 **Token store** *(spellings documented-unstable)*
-: `tl.extract_dataset(..., store_input_ids=True)` stores each batch's token ids as the
-  ordinary `input_ids` key, trimmed by the batch mask under `ragged="trim"` like the
-  token-axis activations. `ExtractionReader.token_batch(shard_index, keys=None)` and
-  `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
-  token as a `torchlens.dataset_extraction.TokenRows` (`values` per key, `stimulus_row`,
-  `position`, `num_tokens`); padding is never a token row.
-  `ExtractionReader.shuffled_batches(batch_size, *, seed=0,
-  keys=None, buffer_shards=1, tokens=False)` shuffles across `buffer_shards` shards at
-  once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
+: `tl.extract_dataset(..., store_input_ids=True)` stores each batch's token ids as the ordinary
+  `input_ids` key, trimmed by the batch mask under `ragged="trim"` like the token-axis
+  activations. Padding is never a token row.
+  - Reading tokens: `ExtractionReader.token_batch(shard_index, keys=None)` and
+    `ExtractionReader.token_rows(keys=None, *, max_bytes=None)` read stored keys one row per
+    token as a `torchlens.dataset_extraction.TokenRows`. Fields: `values` per key,
+    `stimulus_row`, `position`, `num_tokens`.
+  - Shuffling:
+    `ExtractionReader.shuffled_batches(batch_size, *, seed=0, keys=None, buffer_shards=1, tokens=False)`
+    shuffles across `buffer_shards` shards at once (the cross-shard mixing buffer) and yields
+    token rows when `tokens=True`.
 
 **Observers**
-: `tl.observers.tap` creates a tap observer for a site (`tap(tl.grad(s))` records gradients with
-  `signal="backward"` and `grad_kind="grad_output"`; `tap(tl.grad(s) | s)` records both);
-  `tl.observers.span(name, signal="both")` records a named observer span around captures or hook
-  execution, `signal=` (`"forward"`, `"backward"` or `"both"`) scoping which records carry the span
-  name (the former `record_span` alias is removed);
-  `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge during
-  capture.
+: Observers record extra information at sites during a capture.
+  - `tl.observers.tap` creates a tap observer for a site. `tap(tl.grad(s))` records gradients
+    with `signal="backward"` and `grad_kind="grad_output"`; `tap(tl.grad(s) | s)` records both.
+  - `tl.observers.span(name, signal="both")` records a named observer span around captures or
+    hook execution; `signal=` (`"forward"`, `"backward"` or `"both"`) scopes which records carry
+    the span name. The former `record_span` alias is removed.
+  - `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge
+    during capture.
 
 **Validation entry**
-: `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
-  (`"forward"` when omitted, so `tl.validate(model, x)` runs the forward replay check; others
-  include `"saved"` and `"receptive_field"`), capturing what it needs itself. Like
-  `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
-  its own runs and restores the caller's streams on return and on error; the lower-level
-  `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
-  promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
-  RNG state.
-  Under `scope="backward"`, when torch reports a backward through a graph an earlier backward
-  freed and a module attribute holds a tensor with autograd history, the model is refused with
-  `ValidationError` code `backward_validation_carried_graph`, naming those attributes; without
-  that evidence torch's own error propagates unchanged.
-  Keyword-only `output_device` and `save_budget` set the validator capture's save options,
-  with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
-  `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
-  with its saved activations in host memory (replay still runs each op on its original
-  device), and an exceeded budget raises `SaveBudgetExceededError` as the capture does.
-  Under `output_device="cpu"` saved function arguments (the replay inputs) other than
-  parameters are kept in host memory too and moved back to each op's device for its
-  check, so the GPU keeps only the parameters and one forward's transients. On every
-  `output_device`, parameter arguments the validator capture keeps as references to its own
-  copy of the model are not charged to its `save_budget`. Both keywords
-  apply to the `"forward"`, `"saved"`, and `"intervention"` scopes; a non-default value on
-  `"backward"` or `"receptive_field"` raises `TypeError`. The lower-level
-  `torchlens.validation.validate_forward_pass` accepts the same two keywords.
+: `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope,
+  capturing what it needs itself. The scope is `"forward"` when omitted, so
+  `tl.validate(model, x)` runs the forward replay check; others include `"saved"` and
+  `"receptive_field"`.
+  - RNG: like `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and
+    CUDA) for its own runs and restores the caller's streams on return and on error. The
+    lower-level `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make
+    the same promise, as does `Trace.validate_forward_pass`, which replays each op under its
+    recorded RNG state.
+  - Carried graphs: under `scope="backward"`, when torch reports a backward through a graph an
+    earlier backward freed and a module attribute holds a tensor with autograd history, the
+    model is refused with `ValidationError` code `backward_validation_carried_graph`, naming
+    those attributes. Without that evidence torch's own error propagates unchanged.
+  - Keywords: keyword-only `output_device` and `save_budget` set the validator capture's save
+    options, with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
+    `CaptureOptions.save_budget` (`"auto"`). Both apply to the `"forward"`, `"saved"`, and
+    `"intervention"` scopes; a non-default value on `"backward"` or `"receptive_field"` raises
+    `TypeError`. The lower-level `torchlens.validation.validate_forward_pass` accepts the same
+    two keywords.
+  - `output_device="cpu"` lets a GPU model validate with its saved activations in host memory
+    (replay still runs each op on its original device). Saved function arguments (the replay
+    inputs) other than parameters are kept in host memory too and moved back to each op's
+    device for its check, so the GPU keeps only the parameters and one forward's transients.
+  - Budget: an exceeded budget raises `SaveBudgetExceededError` as the capture does. On every
+    `output_device`, parameter arguments the validator capture keeps as references to its own
+    copy of the model are not charged to its `save_budget`.
 
 **Session admin**
-: `tl.release_model` evicts TorchLens's module metadata and preparation bookkeeping for a
-  traced model and normalizes plain attributes holding torch functions from the other wrap
-  epoch, so whole-model pickle / `torch.save` survive later wrap-state changes (a capture
-  itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
-  session-scoped); `tl.clear_cache`
-  empties the capture cache; `tl.io.list_traces` / `tl.io.reset_naming_counter` manage log
-  bookkeeping.
+: Housekeeping calls for traced models and the TorchLens session.
+  - `tl.release_model` evicts TorchLens's module metadata and preparation bookkeeping for a
+    traced model, and normalizes plain attributes holding torch functions from the other wrap
+    epoch, so whole-model pickle / `torch.save` survive later wrap-state changes. A capture
+    itself leaves no TorchLens callable on the model: submodule `forward` wrappers are
+    session-scoped.
+  - `tl.clear_cache` empties the capture cache.
+  - `tl.io.list_traces` / `tl.io.reset_naming_counter` manage log bookkeeping.
 
 ## Persistence, containers, and namespaces
 
 `tl.io.detect_tlspec_format(path)`
 : Inspects a saved-artifact directory without loading its payloads. Returns `"v3"` when the
-  root manifest names saved format 3, `"pre_3"` for save markers of torchlens 2.37 and earlier, or `"unknown"`
-  when no TorchLens save markers are present. Symlinked metadata paths refuse. Detection does
-  not validate the artifact; use `tl.validation.validate_tlspec(path)` for validation.
+  root manifest names saved format 3, `"pre_3"` for save markers of torchlens 2.37 and earlier,
+  or `"unknown"` when no TorchLens save markers are present. Symlinked metadata paths refuse.
+  Detection does not validate the artifact; use `tl.validation.validate_tlspec(path)` for that.
 
 `tl.types.UnencodableValue`
-: The stand-in a loaded saved format 3 artifact carries where the save met a value outside the saved
-  format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
-  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
-  and `at` (the record, row and column it sat in). The load attaches one advisory,
-  `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
-  manifest discloses such values. A record cell that fails its typed schema refuses
-  `record_schema_invalid`.
+: The stand-in a loaded saved format 3 artifact carries where the save met a value outside the
+  saved format's vocabulary (a user object in a module attribute, a custom metadata value).
+  - Fields (frozen): `type_name` (the value's `module.qualname`), `repr_text` (its repr text,
+    bounded) and `at` (the record, row and column it sat in).
+  - Advisory: when the artifact's manifest discloses such values, the load attaches one
+    advisory, `unencodable_values_stringified`, to the trace's capture advisories.
+  - Refusals: a record cell that fails its typed schema refuses `record_schema_invalid`.
 
 
 **Save / load**
-: `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
-  level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  2.38 format: the maintainer contract `docs/maintainers/saved_format_3.md` (not on the site).
-  Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
-  at load, on its manifest, metadata and blobs entries): a symlink there refuses
-  (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
-  and save and load use the same rule; `storage=tl.to_disk(...)` and `save_intervention`
-  apply it to their own targets (documented as is, JMT, Sun 1 Nov 2026).
-  A saved value with no typed encoding is written as text and counted in the manifest's
-  `disclosures`; it loads back as `tl.types.UnencodableValue`, a frozen stand-in carrying
-  `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
-  characters) and `at` (where it was in the artifact). A saved cell that fails its type check
-  on load refuses `record_schema_invalid`.
-  `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
-  beside the intervened values and their per-op provenance (`save_intervention` writes the same
-  recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns
-  it through every legacy rerun door (`run(model, x)` plain, append or chunked, a fork's `run`,
-  `do(engine="rerun")`, and an edit staged after loading). A custom callable is saved as a
-  callable placeholder (its position and qualified name, never its code), and a recipe holding one
-  refuses `run_intervention_spec_not_persisted` naming the rule, rather than rerun without the
-  recorded intervention; the replay and `run_transaction(inputs=...)` doors cannot run an analysis artifact
-  at all.
-  A rerun replays the capture's recorded `save=` request on its own graph, so it saves the same
-  sites a fresh capture would even after a staged edit inserts ops. A trace restored from pickle
-  carries no recorded request and re-saves by the capture's raw op indices, which is exact only
-  when the rerun graph matches op for op; otherwise the rerun refuses `rerun_resave_ops_shifted`
-  (trace unchanged).
-  `tl.io.PayloadLoadHints` carries backend-specific payload materialization hints
-  (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
+: `Trace.save` writes a `Trace` into a portable `.tlspec` directory bundle at a chosen level;
+  `tl.load` loads a `.tlspec` object with eager tensor materialization. Saved format 3
+  (torchlens 2.38) is specified in `docs/maintainers/saved_format_3.md`, a maintainer document
+  that is not on the site.
+  - Symlinks: both doors check the final path component only (`path.is_symlink()` on the bundle
+    path and, at load, on its manifest, metadata and blobs entries). A symlink there refuses
+    (`load_path_symlink_rejected` at load); a symlinked parent directory passes on both sides.
+    Save and load use the same rule, and `storage=tl.to_disk(...)` and `save_intervention`
+    apply it to their own targets.
+  - Values with no typed encoding: written as text and counted in the manifest's
+    `disclosures`. They load back as `tl.types.UnencodableValue`, a frozen stand-in carrying
+    `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
+    characters) and `at` (where it was in the artifact). A saved cell that fails its type check
+    on load refuses `record_schema_invalid`.
+  - Interventions: `Trace.save` writes the staged intervention spec as the typed recipe
+    `intervention.json` beside the intervened values and their per-op provenance
+    (`save_intervention` writes the same recipe as an artifact of its own). A loaded trace whose
+    recipe holds only built-in edits reruns it through every legacy rerun door (`run(model, x)`
+    plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit staged after
+    loading).
+  - Custom callables: saved as a callable placeholder (its position and qualified name, never
+    its code). A recipe holding one refuses `run_intervention_spec_not_persisted`, naming the
+    rule, rather than rerun without the recorded intervention. The replay and
+    `run_transaction(inputs=...)` doors cannot run an analysis artifact at all.
+  - Re-saving on rerun: a rerun replays the capture's recorded `save=` request on its own graph,
+    so it saves the same sites a fresh capture would, even after a staged edit inserts ops. A
+    trace restored from pickle carries no recorded request and re-saves by the capture's raw op
+    indices, which is exact only when the rerun graph matches op for op; otherwise the rerun
+    refuses `rerun_resave_ops_shifted` (trace unchanged).
+  - Load hints: `tl.io.PayloadLoadHints` carries backend-specific payload materialization hints
+    (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
-: `tl.options` groups the public option dataclasses: `CaptureOptions`,
-  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`,
-  `RecordingOptions`. The doors take only the model and the inputs by position;
-  every capture knob rides `capture=CaptureOptions(...)` (`activation_transform`,
-  `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
-  `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
-  `jax_static_argnums`, `grad_options`, `chunk_size` included), and `tl.record`'s
-  recorder knobs ride `recording=RecordingOptions(...)` (`default_op`,
-  `default_module`, `history_size`, `include_source_events`,
-  `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
-  `default_grad`, `postprocess`, and `lean`, a PROVISIONAL SPELLING; see
-  **lean (tl.record; PROVISIONAL SPELLING)**), matching `tl.trace`'s `capture=`. The door keywords are
-  `save=`, `intervene=`, `recording=` (on `tl.record`),
-  `stop_after=` (a site or a predicate), `storage=`,
-  `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`, `input_shape=`
-  and `on_zero_fire=`.
+: `tl.options` groups the public option dataclasses. The doors take only the model and the
+  inputs by position; every other setting rides an options object or a door keyword.
+  - Dataclasses: `CaptureOptions`, `VisualizationOptions`, `ReplayOptions`,
+    `InterventionOptions`, `StorageOptions`, `RecordingOptions`.
+  - Capture knobs ride `capture=CaptureOptions(...)`, including `activation_transform`,
+    `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
+    `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
+    `jax_static_argnums`, `grad_options`, `chunk_size`.
+  - Recorder knobs of `tl.record` ride `recording=RecordingOptions(...)`, matching `tl.trace`'s
+    `capture=`: `default_op`, `default_module`, `history_size`, `include_source_events`,
+    `max_predicate_failures`, `on_predicate_error`, `on_forward_error`, `default_grad`,
+    `postprocess`, and `lean`, a PROVISIONAL SPELLING (see
+    **lean (tl.record; PROVISIONAL SPELLING)**).
+  - Door keywords: `save=`, `intervene=`, `recording=` (on `tl.record`), `stop_after=` (a site
+    or a predicate), `storage=`, `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`,
+    `input_shape=` and `on_zero_fire=`.
 
 **lean (tl.record; PROVISIONAL SPELLING)**
 : `tl.record(..., lean=True)` (also `RecordingOptions(lean=True)` and `Recorder(lean=True)`)
-  journals only the events the selection keeps: an op or module boundary the save predicate
-  does not keep gets no shell journal event, no frozen record and no replay clone, which
-  removes most of the per-op bookkeeping of a one-module read. The behaviour is ruled; the
-  public spelling `lean` is PROVISIONAL until the maintainer rules it, so no other name
-  derives from it. A lean recording says what it omitted: `Recording.lean_omissions` names the
-  omitted content (`shell_records_of_unkept_ops`, `module_boundary_events_of_unkept_modules`,
-  `event_indexes_of_unkept_events`, `op_counts`; `()` on a default recording) and the reads
-  that need the full journal (`Recording.event_stream`, `Recording.op_events`,
-  `Recording.lazy_trace`, `Recording.raw_metadata()`, `Recording.to_trace()`) refuse with
-  `recording_lean_omitted` instead of answering from a partial journal; `Recording.records`,
-  `Recording.output`, `summary()`, `to_pandas()` and the other retained-record reads are
-  complete. Gradient capture (`backward_ready=True`, `save_grads=`, `default_grad=`),
-  `intervene=`, `narrate=` and the partial forward-error modes refuse at construction with
-  `record_lean_unsupported`. `RecordingSettings.lean` persists the flag. Default `False`: a
-  default recording's contents are unchanged.
+  journals only the events the selection keeps. An op or module boundary the save predicate does
+  not keep gets no shell journal event, no frozen record and no replay clone, which removes most
+  of the per-op bookkeeping of a one-module read. Default `False`: a default recording's contents
+  are unchanged.
+  - Spelling: the behaviour is settled, but the public spelling `lean` is provisional and may
+    change, so no other name derives from it.
+  - What was omitted: `Recording.lean_omissions` names the omitted content
+    (`shell_records_of_unkept_ops`, `module_boundary_events_of_unkept_modules`,
+    `event_indexes_of_unkept_events`, `op_counts`; `()` on a default recording).
+  - Reads that need the full journal refuse with `recording_lean_omitted` instead of answering
+    from a partial journal: `Recording.event_stream`, `Recording.op_events`,
+    `Recording.lazy_trace`, `Recording.raw_metadata()`, `Recording.to_trace()`.
+  - Complete reads: `Recording.records`, `Recording.output`, `summary()`, `to_pandas()` and the
+    other retained-record reads.
+  - Refusals: gradient capture (`backward_ready=True`, `save_grads=`, `default_grad=`),
+    `intervene=`, `narrate=` and the partial forward-error modes refuse at construction with
+    `record_lean_unsupported`.
+  - Related: `RecordingSettings.lean` keeps the flag with the recording's settings.
 
 **on_nonfinite (CaptureOptions)**
-: The one NaN/Inf policy, replacing `raise_on_nan` and `track_nonfinite`:
-  `'ignore'` (the default; neither checks nor records, today's default
-  behaviour), `'track'` (per-op finiteness verdicts, served by
-  `Trace.nonfinite_ops` / `Trace.nonfinite_coverage`), `'warn'` (tracks and
-  warns `capture_nonfinite_detected` once per capture when any op produced a
-  non-finite output) and `'raise'` (stop at the first non-finite tensor and
-  raise). Any other value refuses `on_nonfinite_invalid`.
+: The one NaN/Inf policy, replacing `raise_on_nan` and `track_nonfinite`. Any other value
+  refuses `on_nonfinite_invalid`.
+  - `'ignore'`: the default; neither checks nor records (today's default behaviour).
+  - `'track'`: per-op finiteness verdicts, served by `Trace.nonfinite_ops` /
+    `Trace.nonfinite_coverage`.
+  - `'warn'`: tracks, and warns `capture_nonfinite_detected` once per capture when any op
+    produced a non-finite output.
+  - `'raise'`: stops at the first non-finite tensor and raises.
 
 **Structural hash**
-: `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
-  a model still matches a pinned address-free structural hash.
+: `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged`
+  asserts a model still matches a pinned address-free structural hash.
 
 **Container registration**
-: `tl.types.register_container` registers a custom container type (flatten/unflatten pair) for
+: `tl.types.register_container` registers a custom container type (a flatten/unflatten pair) for
   capture and reconstruction. `tl.types.Container` is the computed view over a captured Python
-  output container. The container surface is stable: `tl.types.Container`, `Op.container`,
-  the `input_at` and `output_at` selectors, `tl.types.register_container`, `Container.reconstruct`,
-  `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the
-  `capture_container_structure` option (see [Containers](../containers.md)).
+  output container.
+  - Stable surface: `tl.types.Container`, `Op.container`, the `input_at` and `output_at`
+    selectors, `tl.types.register_container`, `Container.reconstruct`,
+    `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the
+    `capture_container_structure` option (see [Containers](../containers.md)).
 
 **Capture-product bases**
 : `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections.
 
 **Namespaces**
-: `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
-  `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
-  `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections, and `Bundle.draw` (below) draws a bundle's merged graph. `tl.load(path, lazy=True)` on a
-  saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
+: Submodules that group related public names.
+  - `tl.recording`: the sparse predicate-recording namespace behind `tl.record`.
+  - `tl.facets`: the semantic facet namespace (canonical home `torchlens._semantic`).
+  - `tl.export`: static export helpers.
+  - `tl.Bundle(...)` / `tl.Bundle`: build aligned Trace collections; `Bundle.draw` (below)
+    draws a bundle's merged graph. `tl.load(path, lazy=True)` on a saved bundle passes `lazy`
+    (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
-: `trace.using(name)` returns the appliance registered as `name`, bound to that trace (for
-  example `trace.using("mechinterp").logit_lens()`; TorchLens registers `"mechinterp"`, the mechinterp
-  kit, whose methods return exactly what the matching `torchlens.mechinterp` functions return).
-  Appliances hang off this one door instead of adding methods to `Trace`; TorchLens's own and
-  outside packages register the same way, with
-  `torchlens.appliances.register(name, factory, summary="", replace=False)`, where
-  `factory` is a callable taking the trace or a lazily imported `"module:attribute"` path.
-  `torchlens.appliances.names()` lists the names with their summaries. An
-  unknown name refuses `appliance_unknown` and lists the registered names; re-registering a
-  name without `replace=True` refuses `appliance_name_taken`; a malformed name or factory
-  refuses `appliance_registration_invalid`. The word clashes with `torchlens.facets.adding(*facets)`
-  (a recipe scope); the naming review settles both.
+: `trace.using(name)` returns the appliance registered as `name`, bound to that trace, for
+  example `trace.using("mechinterp").logit_lens()`. Appliances hang off this one door instead of
+  adding methods to `Trace`.
+  - Built in: TorchLens registers `"mechinterp"`, the mechinterp kit, whose methods return
+    exactly what the matching `torchlens.mechinterp` functions return.
+  - Registering: TorchLens's own and outside packages register the same way, with
+    `torchlens.appliances.register(name, factory, summary="", replace=False)`, where `factory`
+    is a callable taking the trace or a lazily imported `"module:attribute"` path.
+    `torchlens.appliances.names()` lists the names with their summaries.
+  - Refusals: `appliance_unknown` for an unknown name (it lists the registered names);
+    `appliance_name_taken` for re-registering a name without `replace=True`;
+    `appliance_registration_invalid` for a malformed name or factory.
+  - Naming: the word clashes with `torchlens.facets.adding(*facets)` (a recipe scope), so either
+    spelling may still change.
+
 **Safetensors Trace export** *(spellings documented-unstable)*
-: `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file: every
-  tensor-valued op payload (`out`, `transformed_out`, `grad`, `transformed_grad`) as a
-  tensor entry, and a JSON header document (schema `tl_trace_safetensors_v1`) holding the
-  tlspec version, the writer-contract digest, the capture-honesty facts, and, for the
-  `trace` record and every `op` record, each writer-contract KEEP field with an exact JSON
-  encoding (the rest listed under `omitted` with their value types).
-  `tl.io.read_safetensors(path)` reads it back as a read-only record (`header`,
-  `trace_fields`, `op_fields`, `tensors`, `omitted`); payloads are bit-equal, complex
-  included.
+: `tl.export.safetensors(trace, path)` writes one pickle-free `.safetensors` file;
+  `tl.io.read_safetensors(path)` reads it back. Payloads are bit-equal, complex included.
+  - Tensor entries: every tensor-valued op payload (`out`, `transformed_out`, `grad`,
+    `transformed_grad`).
+  - JSON header (schema `tl_trace_safetensors_v1`): the saved-format version, the
+    writer-contract digest, the capture-honesty facts, and, for the `trace` record and every
+    `op` record, each writer-contract KEEP field with an exact JSON encoding. The rest are
+    listed under `omitted` with their value types.
+  - Reading back: a read-only record with `header`, `trace_fields`, `op_fields`, `tensors`,
+    `omitted`.
 
 **Bridges (`tl.bridge.*`)**
 : Optional-extra adapters to third-party tools (reference: `docs/bridges.md`).
-  `tl.bridge.captum.layer(trace, site, *, pass_index=None)` gives Captum's layer methods a
-  module for any site: the live module when a single-call module returns the site's tensor,
-  otherwise a site probe that `tl.bridge.captum.attribute` splices into the forward at the
-  op's `site_key` (`pass_index`, 1-based, picks one call of a repeated module, the same as
-  the `"address:N"` spelling, or one pass of a label naming several). Published traces come back through
-  `torchlens.bridge.huggingface_hub.from_hub` (its own entry), the reader for `push_to_hub`.
+  - Captum: `tl.bridge.captum.layer(trace, site, *, pass_index=None)` gives Captum's layer
+    methods a module for any site: the live module when a single-call module returns the site's
+    tensor, otherwise a site probe that `tl.bridge.captum.attribute` splices into the forward at
+    the op's `site_key`. `pass_index` (1-based) picks one call of a repeated module, the same as
+    the `"address:N"` spelling, or one pass of a label naming several.
+  - Hugging Face Hub: published traces come back through
+    `torchlens.bridge.huggingface_hub.from_hub` (its own entry), the reader for `push_to_hub`.
 
 **Streaming statistics**
-: `tl.stats` is the streaming-statistics namespace: constant-memory accumulators
-  (`tl.stats.Mean`, `tl.stats.Norm`, `tl.stats.Covariance`, `tl.stats.CrossCovariance`,
-  `tl.stats.Quantile`, `tl.stats.TopK`, `tl.stats.PCA`, `tl.stats.CKA` -- exact
-  full-data linear CKA, never a minibatch approximation -- `tl.stats.Histogram`,
-  `tl.stats.RunningStats`) built on the `tl.stats.StreamingStat` protocol, plus one
-  persistence path (`tl.stats.save_fitted` / `tl.stats.load_fitted`) for fitted PCA and,
-  DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`; a reload
-  keeps folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an
-  `encoder=` callable, which is not stored). `tl.stats.aggregate(model,
-  dataloader, metrics)` streams activations or gradients through those accumulators, keyed
-  by site: `metrics={"relu_3": tl.stats.Mean(), tl.grad("relu_3"): tl.stats.Mean()}` (a plain
-  string key is an activation; a gradient key needs `loss_fn=`, else
-  `aggregate_loss_fn_required`; result and cache keys use the key's canonical repr) across a whole
-  dataloader without retaining per-batch tensors; `cache=True` (with `cache_dir=`, as
-  for `tl.trace`; DOCUMENTED-UNSTABLE) keys the run by value (model contents and code,
-  every batch, each accumulator's starting state and encoder, the metric keys, `loss_fn=`,
-  versions) so a rerun restores the saved states and skips the loop, and refuses a run
-  it cannot key (`stats_aggregate_cache_unkeyable`). Per-unit statistics
-  (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on `tl.stats.Quantile` and
-  `tl.stats.TopK` keeps one reservoir or top-k list per unit (neuron, channel or SAE
-  latent); per-unit `TopK` returns a `tl.stats.UnitTopK` (`values`, `example_ids`,
-  `positions`, `unit_axis`), the one top-k-over-a-dataset tool for neurons and SAE
-  latents, with ties broken toward the lowest example id, then position;
-  `encoder=` maps each batch (for example through an SAE encoder) before it is
-  folded; `TopK.update(..., example_ids=...)` names examples outside
-  `tl.stats.aggregate`. Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x,
-  save="stats")` folds every op's out into a `tl.stats.RunningStats` during the forward and
-  keeps no payload (one 16-slot float64 vector per op); `tl.stats.site_stats(trace)`
-  returns `{op label: RunningStats}`, payload reads refuse `activation_reduced_to_stats`, and
-  replay or validation on the trace refuses `stats_capture_not_replayable`. Trajectory
-  statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
-  statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False,
-  verify=True)` traces each batch and folds the logit-lens trajectory's `entropy`,
-  `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches,
-  `cross_entropy` and `target_rank` into a `tl.mechinterp.TrajectoryStats`
-  (`position_means[statistic]`, a float64 `[layers, positions]` tensor;
-  `running_stats[statistic][layer]`; `summary(statistic)`; `examples`, the number of examples
-  (batch rows) folded; `validated`, whether the default lens was numerically validated;
-  `tie_convention`, how `target_rank` breaks ties). Doc of record:
-  [docs/reference/stats.md](stats.md).
+: `tl.stats` is the streaming-statistics namespace: constant-memory accumulators built on the
+  `tl.stats.StreamingStat` protocol, a driver that streams a whole dataloader through them, and
+  one persistence path. Doc of record: [docs/reference/stats.md](stats.md).
+  - Accumulators: `tl.stats.Mean`, `tl.stats.Norm`, `tl.stats.Covariance`,
+    `tl.stats.CrossCovariance`, `tl.stats.Quantile`, `tl.stats.TopK`, `tl.stats.PCA`,
+    `tl.stats.CKA` (exact full-data linear CKA, never a minibatch approximation),
+    `tl.stats.Histogram`, `tl.stats.RunningStats`.
+  - Persistence: `tl.stats.save_fitted` / `tl.stats.load_fitted` for fitted PCA and,
+    DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`). A reload keeps
+    folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an `encoder=`
+    callable, which is not stored.
+  - Aggregating: `tl.stats.aggregate(model, dataloader, metrics)` streams activations or
+    gradients through those accumulators, keyed by site, across a whole dataloader without
+    retaining per-batch tensors. Example:
+    `metrics={"relu_3": tl.stats.Mean(), tl.grad("relu_3"): tl.stats.Mean()}`. A plain string
+    key is an activation; a gradient key needs `loss_fn=`, else `aggregate_loss_fn_required`.
+    Result and cache keys use the key's canonical repr.
+  - Caching (DOCUMENTED-UNSTABLE): `cache=True` (with `cache_dir=`, as for `tl.trace`) keys the
+    run by value (model contents and code, every batch, each accumulator's starting state and
+    encoder, the metric keys, `loss_fn=`, versions), so a rerun restores the saved states and
+    skips the loop. A run it cannot key refuses `stats_aggregate_cache_unkeyable`.
+  - Per-unit statistics (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on
+    `tl.stats.Quantile` and `tl.stats.TopK` keeps one reservoir or top-k list per unit (neuron,
+    channel or SAE latent). Per-unit `TopK` returns a `tl.stats.UnitTopK` (`values`,
+    `example_ids`, `positions`, `unit_axis`), the one top-k-over-a-dataset tool for neurons and
+    SAE latents, with ties broken toward the lowest example id, then position. `encoder=` maps
+    each batch (for example through an SAE encoder) before it is folded;
+    `TopK.update(..., example_ids=...)` names examples outside `tl.stats.aggregate`.
+  - Reduce and discard (DOCUMENTED-UNSTABLE): `tl.trace(model, x, save="stats")` folds every
+    op's out into a `tl.stats.RunningStats` during the forward and keeps no payload (one 16-slot
+    float64 vector per op). `tl.stats.site_stats(trace)` returns `{op label: RunningStats}`;
+    payload reads refuse `activation_reduced_to_stats`, and replay or validation on the trace
+    refuses `stats_capture_not_replayable`.
+  - Trajectory statistics (DOCUMENTED-UNSTABLE):
+    `tl.mechinterp.measure_trajectory(model, data, *, statistics=None, facet="resid_post", layers=None, lens=None, mask_input=False, verify=True)`
+    traces each batch and folds the logit-lens trajectory's `entropy`,
+    `kl_to_final`, `max_prob` and, for `(input_ids, target_ids)` batches, `cross_entropy` and
+    `target_rank` into a `tl.mechinterp.TrajectoryStats`.
+  - `tl.mechinterp.TrajectoryStats` fields: `position_means[statistic]` (a float64
+    `[layers, positions]` tensor), `running_stats[statistic][layer]`, `summary(statistic)`,
+    `examples` (the number of examples, or batch rows, folded), `validated` (whether the default
+    lens was numerically validated) and `tie_convention` (how `target_rank` breaks ties).
 
 ## Quantities and typed errors
 
@@ -2068,62 +2335,72 @@ routing-table read without saved router weights or expert indices. Its
 
 **Quantities**
 : `tl.types.Quantity` is the marker base for numeric quantity wrappers with unit-aware
-  display: `tl.types.Bytes` (memory), `tl.types.Duration` (seconds), `tl.types.Flops` (floating-point
-  operations), `tl.types.Macs` (multiply-accumulates).
+  display: `tl.types.Bytes` (memory), `tl.types.Duration` (seconds), `tl.types.Flops`
+  (floating-point operations), `tl.types.Macs` (multiply-accumulates).
 
 **FLOP convention (`flop_convention=`)**
-: `"fma2"` (default; one multiply-accumulate = 2 FLOPs) or `"fma1"` (recounted
-  from each op's two-term compute record; refuses typed with
-  `flop_convention_unavailable` when an op has no MAC split). Accepted by
-  `summary(...)`; the removed `count_fma_as_two=`
-  spelling refuses typed naming it.
+: How FLOPs are counted. Accepted by `summary(...)`; the removed `count_fma_as_two=` spelling
+  refuses typed, naming it.
+  - `"fma2"` (default): one multiply-accumulate = 2 FLOPs.
+  - `"fma1"`: recounted from each op's two-term compute record; refuses typed with
+    `flop_convention_unavailable` when an op has no MAC split.
 
 **Autograd-saved bytes**
-: `Op.cost.autograd_memory` / `Op.autograd.num_autograd_tensors` count the tensors the captured forward's
-  autograd saved for that op's backward (each storage once within the op; a view counts in full),
-  and `Layer.cost.total_autograd_memory`, `ModuleCall.autograd_memory`,
-  `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
-  tensor two ops save counts twice. Capture never changes a Parameter's `requires_grad`, so on
-  frozen Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
+: `Op.cost.autograd_memory` / `Op.autograd.num_autograd_tensors` count the tensors the captured
+  forward's autograd saved for that op's backward (each storage once within the op; a view
+  counts in full).
+  - Totals: `Layer.cost.total_autograd_memory`, `ModuleCall.autograd_memory`,
+    `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op
+    bands, so a tensor two ops save counts twice.
+  - Frozen Parameters: capture never changes a Parameter's `requires_grad`, so on frozen
+    Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
 
 **Module and call counts**
-: `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
-  runs twice counts twice) and `ModuleCall.num_layers` the distinct Layers among them.
-  `len(Module.layer_labels)` counts a Module's distinct Layers and `len(Module.params)` the
-  parameter tensors it owns.
-  `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes. `Param.num_calls` is
-  the number of Ops that consumed the parameter (0 for a never-called module's parameters).
-  `Trace.num_uncalled_modules` is recorded when the capture finishes, so it survives the source
-  model being collected; it reads `None` when it cannot be known (a loaded or unpickled trace
-  whose model is gone), never 0.
+: How to count the parts of a module, its calls and its parameters.
+  - `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer
+    it runs twice counts twice); `ModuleCall.num_layers` counts the distinct Layers among them.
+  - `len(Module.layer_labels)` counts a Module's distinct Layers and `len(Module.params)` the
+    parameter tensors it owns.
+  - `Trace.num_buffer_layers` counts distinct buffer Layers, not their passes.
+  - `Param.num_calls` is the number of Ops that consumed the parameter (0 for a never-called
+    module's parameters).
+  - `Trace.num_uncalled_modules` is recorded when the capture finishes, so it survives the
+    source model being collected. It reads `None` when it cannot be known (a loaded or unpickled
+    trace whose model is gone), never 0.
 
 **Conditional depth**
-: `Op.control_flow.depth` and `Layer.control_flow.depth` count the distinct conditionals the record
-  takes a direct role in, as listed in `in_conditionals`: the `evaluation` role marks the bool an
-  arm's test consumed, and the `body` role marks an op an arm's entry edge feeds (an op whose
-  input was computed outside that arm), not every op inside the arm. An op nested in two `if`
-  bodies takes a role only where an entry edge reaches it. Nesting depth is
+: `Op.control_flow.depth` and `Layer.control_flow.depth` count the distinct conditionals the
+  record takes a direct role in, as listed in `in_conditionals`. Nesting depth is
   `len(conditional_branch_stack)`.
+  - The `evaluation` role marks the bool an arm's test consumed.
+  - The `body` role marks an op an arm's entry edge feeds (an op whose input was computed
+    outside that arm), not every op inside the arm. An op nested in two `if` bodies takes a role
+    only where an entry edge reaches it.
 
 **Lookup and reentrancy errors**
-: `tl.errors.AmbiguousOpLookupError` (`ambiguous_op_lookup`) is raised when a bare Op lookup
-  matches multiple pass-qualified Ops, and when a typed door's key names several objects of
-  its kind (`trace.ops["shared"]` for a module called twice lists `shared:1`, `shared:2`);
-  `tl.errors.ReentrantTraceError` when a trace is started while another trace is active.
+: Two typed errors for lookups and nested captures.
+  - `tl.errors.AmbiguousOpLookupError` (`ambiguous_op_lookup`): raised when a bare Op lookup
+    matches multiple pass-qualified Ops, and when a typed door's key names several objects of
+    its kind (`trace.ops["shared"]` for a module called twice lists `shared:1`, `shared:2`).
+  - `tl.errors.ReentrantTraceError`: raised when a trace is started while another trace is
+    active.
 
 **Report disclosure helpers** *(spellings documented-unstable)*
-: `tl.debug.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names a
-  possible `torch.amp.GradScaler` loss scale behind large or non-finite gradients and the
-  `grad_scale=` remedy; it edits no rows or verdicts. `tl.report.flops_vs_dispatch(model,
-  inputs=None, input_kwargs=None, *, sdpa_backend=None, **trace_kwargs)` runs the detached
-  two-way FLOP cross-check on one model and input and returns a `FlopsCrossCheck` holding both
-  totals, the per-overload native ledger and the coverage notes.
+: Helpers that produce shared report text and cross-checks.
+  - `tl.debug.amp_scaled_grads_hint(*, all_nonfinite=False)` returns the shared text that names
+    a possible `torch.amp.GradScaler` loss scale behind large or non-finite gradients and the
+    `grad_scale=` remedy; it edits no rows or verdicts.
+  - `tl.report.flops_vs_dispatch(model, inputs=None, input_kwargs=None, *, sdpa_backend=None, **trace_kwargs)`
+    runs the detached
+    two-way FLOP cross-check on one model and input and returns a `FlopsCrossCheck` holding both
+    totals, the per-overload native ledger and the coverage notes.
 
 **Output-difference metrics**
-: `tl.stats.cosine_distance(a, b)` is `1 - cosine_similarity` of the two flattened tensors;
-  `tl.stats.relative_l2(a, b)` is `norm(a - b) / max(norm(a), eps)`; `tl.stats.relative_l1(a, b)`
-  is `|a - b| / max(|a|, eps)`, the scalar fallback. Each returns a 0-d tensor; `relative_l1` and
+: Scalar distances between two outputs. Each returns a 0-d tensor; `relative_l1` and
   `relative_l2` are anchored on `a`, and mismatched element counts refuse typed.
+  - `tl.stats.cosine_distance(a, b)`: `1 - cosine_similarity` of the two flattened tensors.
+  - `tl.stats.relative_l2(a, b)`: `norm(a - b) / max(norm(a), eps)`.
+  - `tl.stats.relative_l1(a, b)`: `|a - b| / max(|a|, eps)`, the scalar fallback.
 
 ## Distributed capture and cross-rank merging
 
@@ -2168,12 +2445,14 @@ routing-table read without saved router weights or expert indices. Its
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.provenance.distributed_scope** — *unstable — no deprecation shim owed*
-: The persisted shard-local capture marker: `None` for ordinary captures,
-  `"rank_local_shard"` when any parameter or input the capture saw was one rank's local
-  shard — the trace is a rank-local recording, never whole-model truth. Persists as of
-  tlspec v8 with closed-vocabulary load validation; the bundle-save chokepoint refuses
-  `shard_local_persistence_unsupported` under any schema that would silently drop the
-  disclosure (see the [error and refusal contract](error_refusal_contract.md)).
+: The shard-local capture marker, saved with the trace: `None` for ordinary captures,
+  `"rank_local_shard"` when any parameter or input the capture saw was one rank's local shard.
+  Such a trace is a rank-local recording, never whole-model truth. This spelling is
+  documented-unstable: it may rename without a deprecation shim.
+  - Load: the value is checked against its closed vocabulary.
+  - Refusals: saving a bundle refuses `shard_local_persistence_unsupported` under any schema
+    that would silently drop the disclosure (see the
+    [error and refusal contract](error_refusal_contract.md)).
 
 ## Backends: the backend protocol, maturity and conformance
 
@@ -2185,21 +2464,25 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 
 **tl.backends.BackendProtocol**
 : The one trace-producing contract every backend fills (`typing.Protocol`, runtime-checkable).
-  Members: `name` (the registered name: `"torch"`, `"tf"`, `"jax"`, `"mlx"`, `"paddle"`,
-  `"tinygrad"`), `maturity`, `framework` (a `FrameworkRequirement`), `materialization`,
-  `capabilities()` (the declared `BackendCapabilities`), `runtime_available()` (`None`, or the
-  refusal code `runtime_missing` / `runtime_version_unsupported`; never raises),
-  `can_handle(model, args, kwargs)`, `capture(model, args, kwargs, **trace_options)` (returns a
-  `Trace`; an unsupported option or capability refuses typed before any framework call),
-  `reference_output(model, args, kwargs)` (the framework's own forward with no TorchLens wrapper
-  installed: the oracle's independent arm), `validate(trace, ground_truth)` (returns a
-  `ValidationStatus`, never a bare bool; a failure names the first offending op and a reason from
-  `tl.backends.VALIDATION_REASONS`), `is_tensor(value)`, `host_copy(value)` (a detached NumPy copy
-  with shape and dtype kept; 0-d stays 0-d), `realize_once(values)`, `trace_options()` and
-  `refusal_codes()` (a subset of `tl.backends.REFUSAL_CODES`). Reached through
-  `BackendSpec.protocol()`; registration checks the returned object against the member list. The
-  older `CaptureBackend` orchestration adapter stays torch's internal capture seam; it is not the
-  backend contract.
+  It is reached through `BackendSpec.protocol()`; registration checks the returned object against
+  the member list. The older `CaptureBackend` orchestration adapter stays torch's internal
+  capture seam; it is not the backend contract.
+  - Identity members: `name` (the registered name: `"torch"`, `"tf"`, `"jax"`, `"mlx"`,
+    `"paddle"`, `"tinygrad"`), `maturity`, `framework` (a `FrameworkRequirement`),
+    `materialization`, `capabilities()` (the declared `BackendCapabilities`),
+    `runtime_available()` (`None`, or the refusal code `runtime_missing` /
+    `runtime_version_unsupported`; never raises).
+  - Capture members: `can_handle(model, args, kwargs)`,
+    `capture(model, args, kwargs, **trace_options)` (returns a `Trace`; an unsupported option or
+    capability refuses typed before any framework call), `reference_output(model, args, kwargs)`
+    (the framework's own forward with no TorchLens wrapper installed: the oracle's independent
+    arm).
+  - Validation: `validate(trace, ground_truth)` returns a `ValidationStatus`, never a bare bool;
+    a failure names the first offending op and a reason from `tl.backends.VALIDATION_REASONS`.
+  - Value members: `is_tensor(value)`, `host_copy(value)` (a detached NumPy copy with shape and
+    dtype kept; 0-d stays 0-d), `realize_once(values)`.
+  - Declarations: `trace_options()` and `refusal_codes()` (a subset of
+    `tl.backends.REFUSAL_CODES`).
 
 **BackendSpec.protocol** and **BackendSpec.maturity**
 : `BackendSpec.protocol` is the lazy factory (`Callable[[], BackendProtocol] | None`) that returns
@@ -2208,32 +2491,38 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 
 **maturity** (`"preview"` | `"stable"`)
 : A backend's launch label, on `BackendSpec.maturity` and `BackendProtocol.maturity`. Torch is
-  `"stable"`; tf, jax, mlx, paddle and tinygrad are `"preview"`. Only a recorded maintainer
-  decision changes it, as a one-line change to the backend's registration plus the docs table;
-  no code computes it, and `graduation_report` is advisory. A backend registered `"stable"` must
-  have every graduation item met in its shipped scorecard (`tests/test_backend_maturity.py`).
+  `"stable"`; tf, jax, mlx, paddle and tinygrad are `"preview"`.
+  - Changing it: only a recorded maintainer decision changes it, as a one-line change to the
+    backend's registration plus the docs table. No code computes it, and `graduation_report` is
+    advisory.
+  - Rule: a backend registered `"stable"` must have every graduation item met in its shipped
+    scorecard; `tests/test_backend_maturity.py` checks this.
 
 **materialization** (`"eager"` | `"lazy"`)
 : Whether a backend's op outputs are concrete values when the wrapped call returns (`"eager"`:
-  torch, tf, jax, paddle) or deferred until an evaluation (`"lazy"`: mlx, tinygrad). Lazy backends
-  follow the realize-once rule: the traced forward runs once to its outputs, then
-  `realize_once(values)` evaluates every recorded value in one framework evaluation before any
-  payload is read, so random-number consumption equals one eager forward. Random state created
-  before the forward (a default-initialized weight) is realized in that same evaluation and
-  recorded as the value it produced; random numbers drawn inside the traced forward refuse with
-  `rng_state_in_graph`, because replay would draw them again. On eager backends `realize_once` is
-  a no-op.
+  torch, tf, jax, paddle) or deferred until an evaluation (`"lazy"`: mlx, tinygrad).
+  - Realize-once rule (lazy backends): the traced forward runs once to its outputs, then
+    `realize_once(values)` evaluates every recorded value in one framework evaluation before any
+    payload is read, so random-number consumption equals one eager forward.
+  - Random state: state created before the forward (a default-initialized weight) is realized in
+    that same evaluation and recorded as the value it produced. Random numbers drawn inside the
+    traced forward refuse with `rng_state_in_graph`, because replay would draw them again.
+  - On eager backends `realize_once` is a no-op.
 
 **tl.backends.FrameworkRequirement**
-: What a backend needs from its framework, stated once (frozen dataclass): `distributions`
-  (installed distribution names that version the framework, in lookup order), `minimum`
-  (inclusive floor), `below` (exclusive ceiling, or `None` when none is declared), `tested_through`
-  (the highest version the backend's suite has run on; a preview sets `below` or this), `pinned`
-  (the exact version the per-change CI leg installs, or `None` while the leg is unpinned) and
-  `extra` (the pyproject extra that installs the framework; `""` for a base dependency). The
-  supported range is `[minimum, below)`. `pinned` lies inside it, the extra's specifier equals it
-  and the CI leg installs `pinned` (`tests/test_backend_framework_pins.py`).
-  `tl.report.doctor()` shows the installed version, the pin and the range per backend.
+: What a backend needs from its framework, stated once (frozen dataclass). The supported range is
+  `[minimum, below)`. `tl.report.doctor()` shows the installed version, the pin and the range per
+  backend.
+  - `distributions`: installed distribution names that version the framework, in lookup order.
+  - `minimum`: the inclusive floor.
+  - `below`: the exclusive ceiling, or `None` when none is declared.
+  - `tested_through`: the highest version the backend's suite has run on; a preview sets `below`
+    or this.
+  - `pinned`: the exact version the per-change CI leg installs, or `None` while the leg is
+    unpinned.
+  - `extra`: the pyproject extra that installs the framework; `""` for a base dependency.
+  - Consistency: `pinned` lies inside the range, the extra's specifier equals it and the CI leg
+    installs `pinned`; `tests/test_backend_framework_pins.py` checks this.
 
 **tl.backends.REFUSAL_CODES** (backend refusal codes)
 : The closed registry of codes a backend may raise. A refusal is a `BackendUnsupportedError`
@@ -2270,147 +2559,164 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 **tl.backends.VALIDATION_REASONS** (validation decision reasons)
 : The closed list of per-op decision reasons a backend's `validate` uses in
   `ValidationStatus.decisions[*]["reason"]` and the status reason counts. One word per failure: a
-  backend whose cause matches a definition uses that name, and a different cause has its own entry.
-  Shared: `replay_mismatch` (re-executing the op from its saved inputs did not reproduce its saved
-  output), `parent_payload_missing` (a payload the replay needs is absent: the op's own saved output
-  or a parent's), `no_replayable_function` (no callable can re-execute the op: none was recorded for
-  a computational op, or a preview backend could not rebuild or re-invoke the saved call),
-  `constant_producer_leaf`, `constant_parent_payload`, `user_intervention_replacement`,
-  `effectful_region`, `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
-  `capture_inconsistent`. Torch's own: `arg_logging_mismatch` (the logged parent-argument positions
-  disagree with the data parents, or a parent's saved output disagrees with the argument snapshot at
-  its logged position), `missing_saved_args` (the argument snapshots replay needs were not
-  captured), `dispatch_op_count_mismatch` (replay saw a different number of dispatcher-level ops
-  than capture recorded), `bfs_incomplete` (the walk from outputs back to inputs did not reach every
-  op), `metadata_invariant_exception` (a metadata invariant check raised),
-  `replay_execution_exception` (the recorded function raised on re-execution),
-  `unattributed_tensor_arg` (a tensor argument matches no recorded parent and no known source),
-  `dropped_parent_edge_witness` (the completeness witness shows a parent edge capture dropped).
-  MLX's own: `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
-  saved call reads), `replay_coverage_incomplete` (the replay did not cover every captured op).
-  `op_unclassified`: an op the checker cannot classify (outside every
-  classification table, or an initializer that contaminated the forward), recorded as a failed
-  `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
-  each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
-  that differs from the captured kind, a region boundary check), recorded as a failed
-  `metadata`-phase decision on the op or, for a trace-wide disagreement, on `"<trace>"`.
-  `constant_producer_leaf`: replay reads a
-  constant's saved payload because there is no function to re-execute it from (counted as
-  exempted; a parentless op that does have a replayable function is still replayed and a mismatch
-  still fails). `constant_parent_payload`: perturbation skips a constant parent, and the consumer
-  is still perturbed on its other parents. The suite checks membership, so the list may be a
-  superset of what one backend emits.
+  backend whose cause matches a definition uses that name, and a different cause has its own
+  entry. The suite checks membership, so the list may be a superset of what one backend emits.
+  - Shared, with meanings: `replay_mismatch` (re-executing the op from its saved inputs did not
+    reproduce its saved output), `parent_payload_missing` (a payload the replay needs is absent:
+    the op's own saved output or a parent's), `no_replayable_function` (no callable can
+    re-execute the op: none was recorded for a computational op, or a preview backend could not
+    rebuild or re-invoke the saved call).
+  - Shared, explained below: `constant_producer_leaf`, `constant_parent_payload`,
+    `user_intervention_replacement`, `effectful_region`, `perturbation_insensitive`,
+    `dtype_tolerance_exceeded`, `op_unclassified`, `capture_inconsistent`.
+  - Torch's own: `arg_logging_mismatch` (the logged parent-argument positions disagree with the
+    data parents, or a parent's saved output disagrees with the argument snapshot at its logged
+    position), `missing_saved_args` (the argument snapshots replay needs were not captured),
+    `dispatch_op_count_mismatch` (replay saw a different number of dispatcher-level ops than
+    capture recorded), `bfs_incomplete` (the walk from outputs back to inputs did not reach every
+    op), `metadata_invariant_exception` (a metadata invariant check raised).
+  - Torch's own, continued: `replay_execution_exception` (the recorded function raised on
+    re-execution), `unattributed_tensor_arg` (a tensor argument matches no recorded parent and no
+    known source), `dropped_parent_edge_witness` (the completeness witness shows a parent edge
+    capture dropped).
+  - MLX's own: `declared_parents_inconsistent` (an op's declared parents disagree with the arrays
+    its saved call reads), `replay_coverage_incomplete` (the replay did not cover every captured
+    op).
+  - `op_unclassified`: an op the checker cannot classify (outside every classification table, or
+    an initializer that contaminated the forward), recorded as a failed `metadata`-phase decision
+    on that op.
+  - `capture_inconsistent`: capture records that disagree with each other (a callback
+    self-consistency failure, an equation or op count mismatch, a replay kind that differs from
+    the captured kind, a region boundary check), recorded as a failed `metadata`-phase decision
+    on the op or, for a trace-wide disagreement, on `"<trace>"`.
+  - `constant_producer_leaf`: replay reads a constant's saved payload because there is no
+    function to re-execute it from (counted as exempted; a parentless op that does have a
+    replayable function is still replayed and a mismatch still fails).
+  - `constant_parent_payload`: perturbation skips a constant parent, and the consumer is still
+    perturbed on its other parents.
 
 **`constant` op (closure constants and literal producers)**
 : A tensor the forward used that is neither an input, a parameter or buffer of the model, nor the
-  output of a recorded op (a closure tensor built outside the traced call) is recorded as a source
-  op with `func_name="constant"`, no parents and a saved payload; the op that read it lists it as
-  a parent. Labels follow the backend's label convention (`constant_<n>` on the previews; torch
-  numbers it like its other source ops). An op with no tensor parents whose arguments are all
-  literals (a `fill` or `ones` inside the forward) keeps its own `func_name`, has zero parents and
-  a saved payload. Constant payloads count toward the payload budget and `save=` applies.
-  Validation treats a constant as a leaf (reasons `constant_producer_leaf` and
-  `constant_parent_payload`); a constant with no readable buffer refuses `constant_unrealizable`.
+  output of a recorded op (a closure tensor built outside the traced call) is recorded as a
+  source op with `func_name="constant"`, no parents and a saved payload; the op that read it lists
+  it as a parent.
+  - Labels follow the backend's label convention (`constant_<n>` on the previews; torch numbers
+    it like its other source ops).
+  - Literal producers: an op with no tensor parents whose arguments are all literals (a `fill` or
+    `ones` inside the forward) keeps its own `func_name`, has zero parents and a saved payload.
+  - Payloads: constant payloads count toward the payload budget and `save=` applies.
+  - Validation treats a constant as a leaf (reasons `constant_producer_leaf` and
+    `constant_parent_payload`); a constant with no readable buffer refuses
+    `constant_unrealizable`.
 
 **`backend_scorecard:<name>` (doctor row)**
 : `tl.report.doctor()` carries one row per registered backend, key `backend_scorecard:<name>`,
   label `"<name> backend scorecard"`, built from the scorecard record shipped in the backend's
-  package (no framework is imported and nothing executes). Status `pass` when the record's highest
-  tier is the durable tier with no failed cell, `known_broken` when any cell failed, `scope` when the framework
-  is not installed here, `not_tested` when no record ships. Details read
-  `"<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;
-  pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`; the
-  suggestion names the install extra when the framework is absent, otherwise the first failed
-  cell.
+  package (no framework is imported and nothing executes).
+  - Statuses: `pass` when the record's highest tier is the durable tier with no failed cell,
+    `known_broken` when any cell failed, `scope` when the framework is not installed here,
+    `not_tested` when no record ships.
+  - Details read:
+    `"<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed; pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`.
+  - Suggestion: names the install extra when the framework is absent, otherwise the first failed
+    cell.
 
 **`HAS_MODULE_CALL_DISPATCH_FRAME` (torch capability flag)**
 : True when TorchLens can tell a direct `module.forward(x)` call from a normal `module(x)` call on
   this torch, measured by a behavioural probe (never a version parse). Shown in the torch
-  capability snapshot that `tl.report.doctor()` reports. When it is False no call is
-  classed direct, so the fast run keeps refusing a hook-invisible module call as
-  `fast_live_module_hook_unobserved`. Spelling decided (JMT 1 Nov 2026 3:01 PM PT).
+  capability snapshot that `tl.report.doctor()` reports. When it is False no call is classed
+  direct, so the fast run keeps refusing a hook-invisible module call as
+  `fast_live_module_hook_unobserved`.
 
 **`python -m tests.conformance.scorecard --backend <name>`**
-: Computes the backend's scorecard. `--write` writes the shipped record
-  (`torchlens/backends/<name>/scorecard.json`, in the wheel), `--check` recomputes and exits
-  nonzero when the shipped record differs (the backend's pinned CI leg runs it, so the record is a
-  tested fact, never hand-edited) and `--graduation` prints the graduation report from the shipped
-  record.
+: Computes the backend's scorecard.
+  - `--write` writes the shipped record (`torchlens/backends/<name>/scorecard.json`, in the
+    wheel).
+  - `--check` recomputes and exits nonzero when the shipped record differs (the backend's pinned
+    CI leg runs it, so the record is a tested fact, never hand-edited).
+  - `--graduation` prints the graduation report from the shipped record.
 
 **Capability summary** (`supported` | `unsupported` | `untested`)
-: The scorecard's per-flag reading of `BackendCapabilities`: `supported` when the flag is `True`
-  and the suite consumed it, `unsupported` when it is `False` and its `c1_refusal_<flag>` cell
-  passed (the request refuses with the contracted code), `untested` when it is `False` and the
-  refusal cell failed or did not run. Each backend page's can and cannot table equals this
-  summary and renders `untested` as "not yet proven" (`scripts/checks/backend_docs_lockstep.py`).
+: The scorecard's per-flag reading of `BackendCapabilities`. Each backend page's can and cannot
+  table equals this summary and renders `untested` as "not yet proven"; the check is
+  `scripts/checks/backend_docs_lockstep.py`.
+  - `supported`: the flag is `True` and the suite consumed it.
+  - `unsupported`: the flag is `False` and its `c1_refusal_<flag>` cell passed (the request
+    refuses with the contracted code).
+  - `untested`: the flag is `False` and the refusal cell failed or did not run.
 
 **Conformance case ids added by the protocol**
-: Tier 0, the provider API (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,
-  `c0_refusal_codes_registered`, `c0_capability_table_complete`. Tier 1 (capture):
-  `c1_graph_integrity`, `c1_intermediates_match`, `c1_shape_metadata_matches_payload`,
-  `c1_validation_passes`, `c1_validation_names_reason`, `c1_constant_parents_recorded`,
-  `c1_rng_consumed_once`, `c1_no_silent_gap`, one `c1_refusal_<flag>` per capability flag the
-  backend sets `False` and one `c1_refusal_trace_option_<name>` per public trace option outside
-  its `trace_options()`. Tier 2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`. A
-  typed refusal inside any other cell makes it `unsupported`; an untyped exception, a wrong value
-  or a trace marked `capture_verified=False` makes it `failed`.
+: The conformance cells the backend protocol adds, by tier. A typed refusal inside any other cell
+  makes it `unsupported`; an untyped exception, a wrong value or a trace marked
+  `capture_verified=False` makes it `failed`.
+  - Tier 0, the provider API (no model execution): `c0_protocol_complete`,
+    `c0_framework_requirement_consistent`, `c0_refusal_codes_registered`,
+    `c0_capability_table_complete`.
+  - Tier 1 (capture): `c1_graph_integrity`, `c1_intermediates_match`,
+    `c1_shape_metadata_matches_payload`, `c1_validation_passes`, `c1_validation_names_reason`,
+    `c1_constant_parents_recorded`, `c1_rng_consumed_once`, `c1_no_silent_gap`.
+  - Tier 1, per backend: one `c1_refusal_<flag>` per capability flag the backend sets `False`
+    and one `c1_refusal_trace_option_<name>` per public trace option outside its
+    `trace_options()`.
+  - Tier 2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`.
 
 **Per-backend namespaces**
-: `tl.backends.torch` is the stable PyTorch eager backend (`docs/backends/torch.md`).
-  `tl.backends.tf` (`GradOptions`, `TFBackend`; `docs/backends/tf.md`), `tl.backends.jax`
-  (`GradOptions`, `JAXBackend`; `docs/backends/jax.md`), `tl.backends.mlx` (`GradOptions`,
-  `MLXBackend`; `docs/backends/mlx.md`), `tl.backends.paddle` (`GradOptions`, `PaddleBackend`;
-  `docs/backends/paddle.md`) and `tl.backends.tinygrad` (`GradOptions`, `TinygradBackend`;
-  `docs/backends/tinygrad.md`) are the five preview backends. Each `GradOptions` requests the
-  backend's derived gradients (`trace.autograd.derived_grads`, opt-in intermediate derived gradients); each
-  `<Name>Backend` is the backend's capture object behind `tl.trace(..., backend="<name>")`.
+: `tl.backends.torch` is the stable PyTorch eager backend (`docs/backends/torch.md`); the other
+  five are preview backends.
+  - `tl.backends.tf` (`GradOptions`, `TFBackend`; `docs/backends/tf.md`).
+  - `tl.backends.jax` (`GradOptions`, `JAXBackend`; `docs/backends/jax.md`).
+  - `tl.backends.mlx` (`GradOptions`, `MLXBackend`; `docs/backends/mlx.md`).
+  - `tl.backends.paddle` (`GradOptions`, `PaddleBackend`; `docs/backends/paddle.md`).
+  - `tl.backends.tinygrad` (`GradOptions`, `TinygradBackend`; `docs/backends/tinygrad.md`).
+  - Each `GradOptions` requests the backend's derived gradients
+    (`trace.autograd.derived_grads`, opt-in intermediate derived gradients); each
+    `<Name>Backend` is the backend's capture object behind `tl.trace(..., backend="<name>")`.
 
 ## Unstable surfaces (documented-unstable; no deprecation shim owed)
 
-Spellings below shipped ahead of their naming-session/S2 ratification under
-the provisional-name protocol: they may rename WITHOUT deprecation
-shims, by declared contract. Each carries the same tag at its definition.
+These spellings are documented-unstable: they may rename without a deprecation shim. Each
+carries the same tag at its definition.
 
 **splice / SpliceResult (`tl.bridge.sae.splice(model_or_log, inputs, *, site, sae, latents_edit=None, tokens=None, exclude_bos=False, keep_latents=True, log_latents=False)` returns `tl.bridge.sae.SpliceResult`)** — *unstable — no deprecation shim owed*
-: The SAE splice experiment: a duck-typed SAE's reconstruction replaces one
-  site and the fork replays downstream. Every metric is float64 and follows
-  the SAELens evals and the Gemma Scope paper. `fraction_variance_explained_pooled`
-  is the standard reading (each feature dimension, the last axis, centred on
-  its own mean over tokens); `fraction_variance_explained_by_dim` gives it per
-  dimension; `fraction_variance_explained` centres on one global mean. A zero
-  denominator gives `nan`, `zero_variance=True` and a reason in
-  `unavailable_metrics`, never 0.0. `latents` is the encoder output exactly as
-  `sae.encode` returned it and `edited_latents` the latents after
-  `latents_edit`, both kept by default (`keep_latents=False` drops them;
-  `sae_splice_latents_large` warns once past 256 MiB). With `tokens=` (the
-  integer ids the model ran on) the first output shaped `tokens.shape +
-  (vocab,)` is read as logits: `ce_loss_clean`, `ce_loss_spliced`,
-  `ce_loss_zero_ablated`, `ce_loss_recovered` = `(CE_zero - CE_spliced) /
-  (CE_zero - CE_clean)` and `kl_divergence` = mean `KL(P_clean || P_spliced)`;
-  without it they are `None` with a reason. `exclude_bos=True` keeps sequence
-  position 0 clean and out of every metric. `log_latents=True` (off by
-  default; live-model door only) makes `spliced` a fresh capture with the SAE
-  run inside the model as ordinary ops, so the encoder ops, the latents node
-  and the decoder ops are trace nodes between the site and its consumers;
-  `latents_site` names the latents node (`None` with logging off). The spliced
-  outputs are the same with logging on and off. Recipe:
-  `docs/field-guide/pretrained_saes.md`.
+: The SAE splice experiment: a duck-typed SAE's reconstruction replaces one site and the fork
+  replays downstream. Every metric is float64 and follows the SAELens evals and the Gemma Scope
+  paper.
+  - Variance explained: `fraction_variance_explained_pooled` is the standard reading (each
+    feature dimension, the last axis, centred on its own mean over tokens);
+    `fraction_variance_explained_by_dim` gives it per dimension; `fraction_variance_explained`
+    centres on one global mean. A zero denominator gives `nan`, `zero_variance=True` and a
+    reason in `unavailable_metrics`, never 0.0.
+  - Latents: `latents` is the encoder output exactly as `sae.encode` returned it, and
+    `edited_latents` is the latents after `latents_edit`. Both are kept by default
+    (`keep_latents=False` drops them; `sae_splice_latents_large` warns once past 256 MiB).
+  - Loss metrics: with `tokens=` (the integer ids the model ran on), the first output shaped
+    `tokens.shape + (vocab,)` is read as logits and gives `ce_loss_clean`, `ce_loss_spliced`,
+    `ce_loss_zero_ablated`, `ce_loss_recovered` =
+    `(CE_zero - CE_spliced) / (CE_zero - CE_clean)` and `kl_divergence` = mean
+    `KL(P_clean || P_spliced)`. Without it they are `None` with a reason.
+  - `exclude_bos=True` keeps sequence position 0 clean and out of every metric.
+  - `log_latents=True` (off by default; live-model door only) makes `spliced` a fresh capture
+    with the SAE run inside the model as ordinary ops, so the encoder ops, the latents node and
+    the decoder ops are trace nodes between the site and its consumers. `latents_site` names
+    the latents node (`None` with logging off). The spliced outputs are the same with logging
+    on and off.
+  - Recipe: `docs/field-guide/pretrained_saes.md`.
 
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
-: Make (or stop making) an SAE's latents the facet family `name` at `site`.
-  `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
-  `tl.head` selector serves (`Trace.do`,
-  `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
-  `Facet` whose `.value` is
-  the read, and `tl.trace(save=selector)`, which keeps the ops that read
-  needs), and `trace[site].facets[name]` (every latent),
-  `facets[f"{name}[{k}]"]` or `facets[f"{name}[{j},{k}]"]` read the encoder
-  activation. A write edits the latents and adds the decoder-space change
-  `decode(z') - decode(z)` to the site (for an affine decoder, `delta *
-  W_dec[k]`), so the reconstruction error is untouched. A string site must
-  name one op of a layer that runs once (`sae_latent_site_ambiguous`
-  otherwise); a selector site is every match, and an edit there fans out and
-  reports its count (`facet_selector_fanout`). Registration is process-wide.
+: Make (or stop making) an SAE's latents the facet family `name` at `site`. Registration is
+  process-wide.
+  - Addressing: `tl.facet(name).latent(k)` then addresses latent `k` at the doors a `tl.head`
+    selector serves: `Trace.do`, `fork().do`, and, as a bare selector, `trace[selector]` (which
+    returns the `Facet` whose `.value` is the read) and `tl.trace(save=selector)` (which keeps
+    the ops that read needs).
+  - Reading: `trace[site].facets[name]` (every latent), `facets[f"{name}[{k}]"]` or
+    `facets[f"{name}[{j},{k}]"]` read the encoder activation.
+  - Writing: a write edits the latents and adds the decoder-space change
+    `decode(z') - decode(z)` to the site (for an affine decoder, `delta * W_dec[k]`), so the
+    reconstruction error is untouched.
+  - Sites: a string site must name one op of a layer that runs once
+    (`sae_latent_site_ambiguous` otherwise); a selector site is every match, and an edit there
+    fans out and reports its count (`facet_selector_fanout`).
 
 **FacetSelector.latent (`tl.facet(name).latent(index)`)** — *unstable — no deprecation shim owed*
 : Latent `index` (an int, or a list of ints edited together in one write) of
@@ -2418,32 +2724,34 @@ shims, by declared contract. Each carries the same tag at its definition.
   `sae_latent_index_invalid` or `sae_latent_index_unknown`.
 
 **reconstruct (`tl.bridge.sae_lens.reconstruct(trace, site, sae)`)** — *unstable — no deprecation shim owed*
-: The SAE's reconstruction of a saved site activation,
-  `sae.decode(sae.encode(out))`; a callable SAE without that pair is called on
-  the activation (an SAE Lens `SAE`'s forward is the same encode then decode).
-  Replaces the removed `decode(log, site, sae)`, which passed the activation
-  to `sae.decode` as if it were latents. `tl.bridge.sae_lens.encode(trace, site,
-  sae)` gives the latents.
+: The SAE's reconstruction of a saved site activation, `sae.decode(sae.encode(out))`. A
+  callable SAE without that pair is called on the activation (an SAE Lens `SAE`'s forward is
+  the same encode then decode).
+  - Replaces the removed `decode(log, site, sae)`, which passed the activation to `sae.decode`
+    as if it were latents.
+  - Related: `tl.bridge.sae_lens.encode(trace, site, sae)` gives the latents.
 
 **write_delphi (`tl.bridge.sae.write_delphi(latents, tokens, *, site, model_name, n_splits=5, directory)`)** — *unstable — no deprecation shim owed*
-: Writes SAE latents as the latent cache delphi's `LatentDataset` loads
-  (eai-delphi 0.1.3): `directory/site/{start}_{end}.safetensors` splits with
-  `locations` (example, position, latent), `float16` `activations` and the
-  `tokens`, plus a `config.json` naming `model_name`. `latents` is dense
-  (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
-  `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
-  dataset (only the retained top entries). Recipe:
-  `docs/field-guide/sae_latent_export.md`.
+: Writes SAE latents as the latent cache that delphi's `LatentDataset` loads (eai-delphi
+  0.1.3).
+  - Output: `directory/site/{start}_{end}.safetensors` splits with `locations` (example,
+    position, latent), `float16` `activations` and the `tokens`, plus a `config.json` naming
+    `model_name`.
+  - Input: `latents` is dense (`SpliceResult.latents`, every activation above delphi's 1e-5)
+    or the `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a dataset
+    (only the retained top entries).
+  - Recipe: `docs/field-guide/sae_latent_export.md`.
 
 **write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
-: Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
-  `SaeVisData.load_json` loads (sae-dashboard 0.8.0): one "TOP ACTIVATIONS"
-  group of whole sequences per latent, ranked by activation, then lowest
-  example, then lowest position (the `tl.stats.TopK` order). Dense latents
-  carry every token's activation and give `feature_stats` `max` and
-  `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
-  `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
-  warns once past 256 MiB. Recipe: `docs/field-guide/sae_latent_export.md`.
+: Writes SAE latents and each latent's top examples as the JSON that SAEDashboard's
+  `SaeVisData.load_json` loads (sae-dashboard 0.8.0).
+  - Layout: one "TOP ACTIVATIONS" group of whole sequences per latent, ranked by activation,
+    then lowest example, then lowest position (the `tl.stats.TopK` order).
+  - Dense latents carry every token's activation and give `feature_stats` `max` and
+    `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
+  - `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large` warns once
+    past 256 MiB.
+  - Recipe: `docs/field-guide/sae_latent_export.md`.
 
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.compute()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
@@ -2463,18 +2771,18 @@ shims, by declared contract. Each carries the same tag at its definition.
   (`{"score": ..., "similarity_repository_id": ...}`); pickling keeps it too.
 
 **ScoreInterval (`tl.repgeom.ScoreInterval`; returned by `tl.repgeom.compare_rdms_interval` and `tl.repgeom.cka_interval`)** — *unstable — no deprecation shim owed*
-: A TorchLens score with a descriptive uncertainty interval beside it:
-  `score` (the unchanged estimator on all stimuli), `low` and `high` (a
-  percentile bootstrap over stimuli), `confidence`, `num_resamples`, `num_valid_resamples`
-  (resamples with a finite score), `seed`, `basis` (how the interval was
-  made, in words) and `similarity_repository_id` (the measure variant `score`
-  computes: the linear CKA identifier from `cka_interval`, `None` from
-  `compare_rdms_interval`, whose precomputed RDMs do not name their metric),
-  plus `width` and `to_dict()` (every field). `rdm_compare_interval(rdm_a,
-  rdm_b, method, num_resamples=1000, seed=0, confidence=0.95)` resamples
-  stimuli and recomputes `compare_rdms`, dropping self-pairs; `cka_interval(a,
-  b, ...)` does the same for linear CKA. Descriptive, not a test; inference
-  stays with rsatoolbox.
+: A TorchLens score with a descriptive uncertainty interval beside it. Descriptive, not a
+  test; inference stays with rsatoolbox.
+  - Fields: `score` (the unchanged estimator on all stimuli), `low` and `high` (a percentile
+    bootstrap over stimuli), `confidence`, `num_resamples`, `num_valid_resamples` (resamples
+    with a finite score), `seed`, `basis` (how the interval was made, in words) and
+    `similarity_repository_id` (the measure variant `score` computes: the linear CKA
+    identifier from `cka_interval`, `None` from `compare_rdms_interval`, whose precomputed
+    RDMs do not name their metric).
+  - Methods: `width` and `to_dict()` (every field).
+  - `rdm_compare_interval(rdm_a, rdm_b, method, num_resamples=1000, seed=0, confidence=0.95)`
+    resamples stimuli and recomputes `compare_rdms`, dropping self-pairs;
+    `cka_interval(a, b, ...)` does the same for linear CKA.
 
 **ScoreParts (`tl.bridge.brain_score.ScoreParts`; returned by `tl.bridge.brain_score.score_parts` and, per layer, `tl.bridge.brain_score.per_layer`)** — *unstable — no deprecation shim owed*
 : A benchmark score split into named parts so a ceiling-normalised value
@@ -2485,79 +2793,76 @@ shims, by declared contract. Each carries the same tag at its definition.
   these numbers; it computes no ceiling.
 
 **metric_disagreement (`tl.repgeom.metric_disagreement`; returns `tl.repgeom.MetricDisagreement` with `tl.repgeom.DisagreeingPair` rows)** — *unstable — no deprecation shim owed*
-: The rank order of sites (layers or models) under each comparison metric on
-  one extraction, with every pair of sites that two metrics order oppositely
-  flagged. Input is `scores[metric][site]` (a float or a `ScoreInterval`);
-  higher scores rank first, ties share their average rank, missing scores
-  take no side. Each flagged pair names the site each metric ranks higher
-  and, when the scores carry intervals, whether the opposite orders are
-  separated by them (`firm`). `MetricDisagreement.metrics` lists the metric
-  names in input order and `MetricDisagreement.ranks` holds
-  `ranks[metric][site]` (1 is the highest score; ties share their average
-  rank; a NaN score gets a NaN rank). Each `DisagreeingPair` names its two
-  sites as `site_a` and `site_b` (in the report's site order) and, in
-  `higher`, the site each metric scores higher (`None` for a tie or a
-  missing score). `table()` gives the plain-text report and
-  `to_dict()` the data form.
+: The rank order of sites (layers or models) under each comparison metric on one extraction,
+  with every pair of sites that two metrics order oppositely flagged.
+  - Input: `scores[metric][site]` (a float or a `ScoreInterval`). Higher scores rank first,
+    ties share their average rank, missing scores take no side.
+  - Flagged pairs name the site each metric ranks higher and, when the scores carry
+    intervals, whether the opposite orders are separated by them (`firm`).
+  - `MetricDisagreement.metrics` lists the metric names in input order;
+    `MetricDisagreement.ranks` holds `ranks[metric][site]` (1 is the highest score; ties share
+    their average rank; a NaN score gets a NaN rank).
+  - Each `DisagreeingPair` names its two sites as `site_a` and `site_b` (in the report's site
+    order) and, in `higher`, the site each metric scores higher (`None` for a tie or a missing
+    score).
+  - Methods: `table()` gives the plain-text report and `to_dict()` the data form.
 
 **neuro dependency conflict (refusal code `neuro_dependency_conflict`)** — *unstable — no deprecation shim owed*
-: When rsatoolbox is installed but cannot import because another installed package
-  pins scikit-learn below what it needs (the `torchlens[neuro,brainscore]` install),
-  `tl.neuro` leaves `rdms` and `datasets` out of `__all__` and `dir()`, and touching
-  them raises `MissingDependencyError` with this code. The diagnosis reads package
-  metadata only. `exc.fields` carries `dependency_version`, `conflicting`,
-  `conflicting_version` and `pinned_by` (`None` when no pinning package is found).
+: When rsatoolbox is installed but cannot import because another installed package pins
+  scikit-learn below what it needs (the `torchlens[neuro,brainscore]` install), `tl.neuro`
+  leaves `rdms` and `datasets` out of `__all__` and `dir()`, and touching them raises
+  `MissingDependencyError` with this code. The diagnosis reads package metadata only.
+  - `exc.fields` carries `dependency_version`, `conflicting`, `conflicting_version` and
+    `pinned_by` (`None` when no pinning package is found).
 
 **neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
-: One call that scores every site of one extraction against one target with
-  several descriptive analyses: `tl.neuro.compare(source, target,
-  analyses=("rsa", "ridge", "cka"))`. Each site's activations are read once
-  from what `source` (a Trace with saved activations, an extraction, or a
-  `{site: array}` mapping) already holds; the model is never re-run. `"rsa"`
-  is `compare_rdms` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
-  `rsa_method`); `"ridge"` is a cross-validated ridge score (a seeded
-  `num_folds` split, the penalty per fold chosen from `ridge_alphas` by exact
-  leave-one-out on the training fold, then the mean over target columns of
-  the Pearson r between out-of-fold predictions and the target); `"cka"` is
-  linear CKA. `num_resamples=` adds a `ScoreInterval` per score. The returned
-  report has `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
-  `similarity_repository_ids`, `table()`, `disagreement()` (a
-  `MetricDisagreement`) and `to_dict()`. Descriptive only: inference,
-  variance partitioning, voxel maps and stacked fits stay with rsatoolbox,
-  himalaya, scikit-learn and Net2Brain.
+: One call that scores every site of one extraction against one target with several
+  descriptive analyses: `tl.neuro.compare(source, target, analyses=("rsa", "ridge", "cka"))`.
+  Each site's activations are read once from what `source` (a Trace with saved activations,
+  an extraction, or a `{site: array}` mapping) already holds; the model is never re-run.
+  - `"rsa"` is `compare_rdms` over `rdm(site)` and `rdm(target)` (`rdm_metric`,
+    `rsa_method`).
+  - `"ridge"` is a cross-validated ridge score: a seeded `num_folds` split, the penalty per
+    fold chosen from `ridge_alphas` by exact leave-one-out on the training fold, then the
+    mean over target columns of the Pearson r between out-of-fold predictions and the target.
+  - `"cka"` is linear CKA. `num_resamples=` adds a `ScoreInterval` per score.
+  - Report: `scores`, `intervals`, `settings`, `ridge_alphas_chosen`,
+    `similarity_repository_ids`, `table()`, `disagreement()` (a `MetricDisagreement`) and
+    `to_dict()`.
+  - Descriptive only: inference, variance partitioning, voxel maps and stacked fits stay with
+    rsatoolbox, himalaya, scikit-learn and Net2Brain.
 
 **site_key (`Op.graph.site_key`)** — *unstable — no deprecation shim owed*
-: The portable structural-position identity of one retained op
-  (`site_key_v1`): a `"s1|"`-prefixed string of the pass-free module address
-  stack, the normalized op type, the output slot, and a 1-based occurrence
-  ordinal within one pass-qualified innermost module call instance, minted
-  from raw records at grouping time on every backend. Policy-independent
-  (identical whether grouping ran, degraded, or was off), process-portable
-  (no barcodes, ids, or arg hashes), and a BRIDGING relation: two captures of
-  the same program agree on site keys even when their layer labels disagree.
-  It proves POSITION, never source identity — cross-capture joins carry a
-  per-call-instance cardinality guard, a source-location witness, and a
-  three-tier verdict (corroborated / positional / refused). Editing the
-  model's `forward()` changes downstream sites: keys bridge captures of the
-  SAME program, never a program diff. The `"s1"` prefix makes any future
-  re-keying a visible schema event. Persists as of tlspec v8 with
-  byte-exact recomputation at load; older artifacts are wholly keyless.
+: The portable identity of one retained op's structural position (`site_key_v1`). Two
+  captures of the same program agree on site keys even when their layer labels disagree.
+  - Form: a `"s1|"`-prefixed string of the pass-free module address stack, the normalized op
+    type, the output slot, and a 1-based occurrence ordinal within one pass-qualified
+    innermost module call instance. It is minted from raw records at grouping time on every
+    backend. The `"s1"` prefix makes any future re-keying a visible schema event.
+  - Properties: policy-independent (identical whether grouping ran, degraded, or was off) and
+    process-portable (no barcodes, ids, or arg hashes).
+  - Limits: it proves position, never source identity. Cross-capture joins carry a
+    per-call-instance cardinality guard, a source-location witness, and a three-tier verdict
+    (corroborated / positional / refused). Editing the model's `forward()` changes downstream
+    sites: keys bridge captures of the same program, never a program diff.
+  - Saving: saved with the trace and recomputed byte-exactly at load; artifacts saved before
+    site keys existed are wholly keyless.
 
 **Layer.graph.site_peers** — *unstable — no deprecation shim owed*
-: Layers sharing any of this layer's site keys within the trace (the
-  reused-relu cohort surface), computed live per call and never persisted.
-  Refuses typed `site_key_unavailable` on keyless layers — a legacy artifact
-  never collapses into a `None`-key peer-of-everything.
+: Layers sharing any of this layer's site keys within the trace (the reused-relu cohort
+  surface), computed live per call and never persisted. Refuses typed `site_key_unavailable`
+  on keyless layers, so a legacy artifact never collapses into a `None`-key
+  peer-of-everything.
 
 **Layer.shape_summary** — *unstable — no deprecation shim owed*
-: Derived (never persisted) data string summarizing output shapes ACROSS
-  PASSES of one layer: `None` for single-pass and shape-uniform layers; one
-  varying axis renders `"A->B"` (monotone) or `"A-B"` (min-max); multi-axis
-  or rank-varying layers render first-to-last full shapes
-  (`"2x64x8x8->2x512x4x4"`). Distinct from the internal module-run fold
-  summary (`ModuleRepeatFold.shape_summary`), which summarizes across a
-  repeated MODULE RUN. The string legitimately contains `->`; renderers must
-  HTML-escape it (escape-at-render, never assert-absence).
+: A derived (never persisted) string summarizing one layer's output shapes across its passes.
+  - Values: `None` for single-pass and shape-uniform layers; one varying axis renders
+    `"A->B"` (monotone) or `"A-B"` (min-max); multi-axis or rank-varying layers render the
+    first and last full shapes (`"2x64x8x8->2x512x4x4"`).
+  - Distinct from the internal module-run fold summary (`ModuleRepeatFold.shape_summary`),
+    which summarizes across a repeated module run.
+  - The string legitimately contains `->`; renderers must HTML-escape it at render time
+    rather than assume it is absent.
 
 **Op.has_params** / **Layer.has_params** — *unstable — no deprecation shim owed*
 : Whether the operation (or any pass of the layer) consumed a parameter tensor.
@@ -2585,522 +2890,476 @@ shims, by declared contract. Each carries the same tag at its definition.
   buffer, or the parameter's `.grad` tensor.
 
 **Trace.nonfinite_ops** — *unstable — no deprecation shim owed*
-: The queryable per-op NaN/Inf record: a tuple of pass-qualified op labels
-  (`Op.label`, each a valid `trace[label]` key) whose output held at least one
-  NaN or Inf. On default captures it derives from the memoized saved-payload
-  scan already backing `print(trace)` — zero capture-time cost, one scan paid
-  at first query. When the capture ran with
-  `CaptureOptions(on_nonfinite='track')` it serves the capture-time verdicts
-  instead, which also cover ops that retained no payload. An empty tuple is
-  only as strong as its coverage; read `Trace.nonfinite_coverage` first.
+: The queryable per-op NaN/Inf record: a tuple of pass-qualified op labels (`Op.label`, each
+  a valid `trace[label]` key) whose output held at least one NaN or Inf.
+  - On default captures it derives from the memoized saved-payload scan already backing
+    `print(trace)`: zero capture-time cost, one scan paid at first query.
+  - When the capture ran with `CaptureOptions(on_nonfinite='track')` it serves the
+    capture-time verdicts instead, which also cover ops that retained no payload.
+  - An empty tuple is only as strong as its coverage; read `Trace.nonfinite_coverage` first.
 
 **Trace.nonfinite_coverage** — *unstable — no deprecation shim owed*
-: The frozen evidence disclosure behind `nonfinite_ops`: `basis`
-  (`"capture"` vs `"saved_payloads"`), `checked`, `nonfinite`, `unchecked`
-  (dtypes with no runnable finiteness kernel), `unexamined` (ops the scan
-  could not look at), and `unmapped` (capture-basis events whose op did not
-  survive postprocessing). The programmatic twin of the prose coverage-gap
-  note in `first_nonfinite()`.
+: The frozen evidence disclosure behind `nonfinite_ops`; the programmatic twin of the prose
+  coverage-gap note in `first_nonfinite()`.
+  - Fields: `basis` (`"capture"` vs `"saved_payloads"`), `checked`, `nonfinite`, `unchecked`
+    (dtypes with no runnable finiteness kernel), `unexamined` (ops the scan could not look
+    at), and `unmapped` (capture-basis events whose op did not survive postprocessing).
 
 **on_nonfinite='track' (CaptureOptions)** — *unstable — no deprecation shim owed*
-: Session-time opt-in: torch capture records a per-op finiteness verdict for
-  every committed op output. Never changes control flow (`on_nonfinite='raise'` stays
-  the stop-and-throw and is independent); device flags are drained in one
-  batch after the forward, never a per-op CUDA synchronization.
-  `structure_only=True` refuses the combination typed. Load restores the
-  default `False`; loaded traces serve the saved-payload basis. The default
-  stays `False` (no overhead); the `print(trace)` NOT-CHECKED health line
-  names this option.
+: Session-time opt-in: torch capture records a per-op finiteness verdict for every committed
+  op output. The default stays `False` (no overhead); the `print(trace)` NOT-CHECKED health
+  line names this option.
+  - It never changes control flow (`on_nonfinite='raise'` stays the stop-and-throw and is
+    independent). Device flags are drained in one batch after the forward, never a per-op
+    CUDA synchronization.
+  - `structure_only=True` refuses the combination typed.
+  - Load restores the default `False`; loaded traces serve the saved-payload basis.
 
-**grouping= (trace kwarg) / trace.options.grouping** — *unstable — no deprecation
-shim owed; S2-gated vocabulary*
-: Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
-  grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
-  own reviewed design lands), `"fold_sites"` (the within-capture folding
-  axis; refuses typed on plain captures until an affirmative ruling).
-  Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
-  refuse `grouping_policy_unavailable`. The mirror field `trace.options.grouping`
-  records the requested value. Distinct from the display-only `fold_repeats`
-  viz knob, which folds repeated module runs at render time and never
-  changes grouping.
+**grouping= (trace kwarg) / trace.options.grouping** — *unstable — no deprecation shim owed; S2-gated vocabulary*
+: The grouping-policy knob, with a closed vocabulary. The mirror field
+  `trace.options.grouping` records the requested value.
+  - Values: `"structural"` (default; call-site grouping, `docs/guides/grouping.md`),
+    `"strict_shapes"` (reserved; refuses typed until its own reviewed design lands),
+    `"fold_sites"` (the within-capture folding axis; refuses typed on plain captures until
+    its design is decided).
+  - Refusals: unknown values refuse `grouping_invalid`; legal values that this entry point
+    does not accept refuse `grouping_policy_unavailable`.
+  - Distinct from the display-only `fold_repeats` viz knob, which folds repeated module runs
+    at render time and never changes grouping.
 
-**trace.options.grouping_policy** — *unstable — no deprecation shim owed; S2-gated
-vocabulary*
-: The persisted, load-validated `grouping_policy_v1` stamp recording HOW the
-  trace was grouped: `policy` (the step-7 grouping that actually ran —
-  `structural` / `params_only` / later `fold_sites`), `requested` (the knob
-  mirror), `folded_sites` and `site_join` (two distinct site-granular axes:
-  step-7 folds vs product-layer joins), `detector` (`callsite_v1` for
-  call-site grouping, `grouper_v1` for the structural grouper that serves
-  captures without call-site evidence, `unknown` when grouping did not run),
-  `effective`, and
-  `note`. Loads validate against the exact writer key set, closed
-  vocabularies, and coherence rules C1–C8; parse failure or incoherence
-  warns once and settles to THE canonical degraded representation
-  (`policy="unknown"`, `note="grouping_stamp_<reason>"`), which
-  round-trips byte-stable and stays degraded — verdicts only worsen across
-  persistence. Legacy pre-stamp artifacts settle silently to
-  `grouping_stamp_legacy`; degraded stamps refuse stamp-consuming
-  operations typed. Persists as of tlspec v8 with C1-C8 load validation.
+**trace.options.grouping_policy** — *unstable — no deprecation shim owed; S2-gated vocabulary*
+: The `grouping_policy_v1` stamp recording how the trace was grouped. It is saved with the
+  trace and validated on load.
+  - Fields: `policy` (the grouping that actually ran: `structural` / `params_only` / later
+    `fold_sites`), `requested` (the knob mirror), `folded_sites` and `site_join` (two
+    distinct site-granular axes: grouping folds vs product-layer joins), `detector`,
+    `effective`, and `note`.
+  - `detector`: `callsite_v1` for call-site grouping, `grouper_v1` for the structural grouper
+    that serves captures without call-site evidence, `unknown` when grouping did not run.
+  - Loading: loads validate against the exact writer key set, closed vocabularies, and
+    coherence rules. A parse failure or incoherence warns once and settles to the one
+    canonical degraded form (`policy="unknown"`, `note="grouping_stamp_<reason>"`), which
+    round-trips byte-stable and stays degraded: verdicts only worsen across saves. Legacy
+    artifacts from before the stamp settle silently to `grouping_stamp_legacy`; degraded
+    stamps refuse stamp-consuming operations typed.
 
-**L1 grouping refusal codes** — *unstable — no deprecation shim owed;
-S2-gated*
+**L1 grouping refusal codes** — *unstable — no deprecation shim owed; S2-gated*
 : `layer_site_ambiguous`, `site_key_unavailable`, `grouping_invalid`,
   `grouping_policy_unavailable`.
 
-**structure_only (capture kwarg) / trace.options.structure_only** — *unstable — no
-deprecation shim owed*
-: `tl.trace(model, x, capture=CaptureOptions(structure_only=True))` runs the
-  capture under the structure-only contract: the op graph, module hierarchy,
-  parameter geometry, and per-op shape/dtype are recorded with every
-  value-bearing claim a HYPOTHESIS; value payloads are never retained,
-  value-requiring consumers refuse typed through
-  `torchlens._capture.structure_only.require_structure_only_capability`, and
-  value-dependent branches refuse with the user's source line
-  (device-neutral). The mirror field `trace.options.structure_only` declares the
-  mode. Capability contract:
-  [structure_only_capabilities.md](structure_only_capabilities.md).
+**structure_only (capture kwarg) / trace.options.structure_only** — *unstable — no deprecation shim owed*
+: `tl.trace(model, x, capture=CaptureOptions(structure_only=True))` runs the capture under
+  the structure-only contract: the op graph, module hierarchy, parameter geometry, and per-op
+  shape/dtype are recorded, and every value-bearing claim is a hypothesis. The mirror field
+  `trace.options.structure_only` declares the mode.
+  - Value payloads are never retained. Value-requiring consumers refuse typed through
+    `torchlens._capture.structure_only.require_structure_only_capability`, and
+    value-dependent branches refuse with the user's source line (device-neutral).
+  - Capability contract: [structure_only_capabilities.md](structure_only_capabilities.md).
 
 **Trace.discharge_against(real_trace)** — *unstable — no deprecation shim owed*
-: Discharges a structure-only trace's hypotheses against an ordinary settled
-  COMPLETE capture of the same graph. Returns a frozen `StructureDischarge`
-  (per-claim table + overall corroborated/refuted verdict, positional join
-  licensed by graph-shape digest equality); a REFUTED discharge flips
-  hypothesis consumers to typed refusals. Neither trace is mutated.
+: Discharges a structure-only trace's hypotheses against an ordinary settled complete capture
+  of the same graph. Returns a frozen `StructureDischarge`: a per-claim table plus an overall
+  corroborated/refuted verdict, with the positional join licensed by equal graph-shape
+  digests. A refuted discharge flips hypothesis consumers to typed refusals. Neither trace is
+  mutated.
 
-**StructureClaimStatus (hypothesis / corroborated / refuted)** — *unstable —
-no deprecation shim owed*
+**StructureClaimStatus (hypothesis / corroborated / refuted)** — *unstable — no deprecation shim owed*
 : The tri-state evidence class of a structure-only trace's value-bearing
   claims; never silently promoted.
 
-**Structure-only refusal codes** — *unstable — no deprecation shim owed;
-S2-gated*
+**Structure-only refusal codes** — *unstable — no deprecation shim owed; S2-gated*
 : `structure_only_option_conflict`, `structure_only_values_unsupported`,
   `value_dependent_branch_unsupported`, `meta_kernel_unavailable`,
   `structure_only_{save,runnable,replay,validation,backward,episode}_unsupported`,
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**Selector / Selection / `__selection__`** — *unstable — no
-deprecation shim owed (do/Selection spellings slate-ratified)*
-: `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
-  terms (selector / receptive-field box / gradient-RF / facet / param / unit)
-  and boolean combinators, trace-independent; `trace[selector]` (the one
-  resolution door) returns a `tl.Selection` — frozen, trace-bound, an ordered
-  tuple of `tl.types.Site(key, mask, provenance)` rows, never capped (a row's
-  `.record` is the `Op`, `Param` or `EdgeUseRecord` it names, read through a weak
-  link to the trace; `selection_trace_released` once the trace is gone); a
-  spelling that names one thing (an exact label, a target spec, a facet
-  selector) must match exactly one site and returns that record
-  (`site_spelling_not_unique` otherwise). `Selection` is a container: `len`,
-  iteration, `[i]` (a `Site`) and slices (a `Selection`), `.labels` (property,
-  pass-qualified op labels), `.selector` (the selector that produced it, or
-  `None`), `.kind`, `.is_empty`, `.digest`, `.align_to(other)` and
-  `.to_pandas()`; its repr gives the kind, compact counts and producing selector,
-  for example `Selection ACT: 12 sites, 184.3k values, from tl.func('tanh')`.
-  Its card gives exact counts and the first five sites. Dense-mask counts that
-  require reading tensor values say `not computed`. The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
-  `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:
-  (touched-site family, selected-element set); zero-mask entries are retained
-  first-class (`len()` and iteration count them; the graph producers and
-  `trace.subgraph` do not seed from them); `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
-  type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
-  implements `__selection__`; `Site.mask` returns a FRESH materialization
-  (mutation cannot alter the selection). Masks are exact AS SETS; producer
-  inexactness rides the closed `provenance.relation` lattice
-  (`exact | upper_bound | lower_bound | unknown`). `tl.Selection` is
-  session-time only, never persisted. Selection kinds `ACT | PARAM | EDGE`
-  are a closed vocabulary; mixed kinds refuse `selection_kind_incompatible`.
-  See also: [Completeness of the selection algebra](selection_completeness.md).
+**Selector / Selection / `__selection__`** — *unstable — no deprecation shim owed (do/Selection spellings slate-ratified)*
+: `tl.Selector` is the composable selection query: a frozen, trace-independent syntax tree
+  over leaf terms (selector / receptive-field box / gradient-RF / facet / param / unit) and
+  boolean combinators. `trace[selector]` (the one resolution door) returns a `tl.Selection`:
+  frozen, trace-bound, an ordered tuple of `tl.types.Site(key, mask, provenance)` rows, never
+  capped. `tl.Selection` is session-time only, never persisted.
+  - Rows: a row's `.record` is the `Op`, `Param` or `EdgeUseRecord` it names, read through a
+    weak link to the trace (`selection_trace_released` once the trace is gone). `Site.mask`
+    returns a fresh materialization, so mutating it cannot alter the selection.
+  - Single-thing spellings: a spelling that names one thing (an exact label, a target spec, a
+    facet selector) must match exactly one site and returns that record
+    (`site_spelling_not_unique` otherwise).
+  - Container: `len`, iteration, `[i]` (a `Site`) and slices (a `Selection`), `.labels`
+    (property, pass-qualified op labels), `.selector` (the selector that produced it, or
+    `None`), `.kind`, `.is_empty`, `.digest`, `.align_to(other)` and `.to_pandas()`.
+  - Display: the repr gives the kind, compact counts and producing selector, for example
+    `Selection ACT: 12 sites, 184.3k values, from tl.func('tanh')`. Its card gives exact
+    counts and the first five sites. Dense-mask counts that require reading tensor values say
+    `not computed`.
+  - The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
+    `selection[0]` and `trace[selector & other]` spell those.
+  - Two-level meaning: a selection is a touched-site family plus a selected-element set.
+    Zero-mask entries are kept first-class (`len()` and iteration count them; the graph
+    producers and `trace.subgraph` do not seed from them). `.is_empty`/`__bool__` are
+    element-level; `bool()` on the query type refuses typed (`selection_bool_ambiguous`).
+  - Anything region-shaped implements `__selection__`.
+  - Exactness: masks are exact as sets; producer inexactness rides the closed
+    `provenance.relation` lattice (`exact | upper_bound | lower_bound | unknown`).
+  - Kinds: `ACT | PARAM | EDGE` are a closed vocabulary; mixed kinds refuse
+    `selection_kind_incompatible`.
+  - See also: [Completeness of the selection algebra](selection_completeness.md).
 
-**Selection operators `| & - ~` (+ reflected)** — *ratified set (slate 5.4);
-semantics unstable-documented*
-: Same-site operands compose as masks; different-site yields a MULTI-SITE
-  selection; `-` never un-touches sites (`fam(A-B) = fam(A)`); `~` is the
-  touched-site mask complement (never predicate negation and never
-  model-universe). NO `__xor__`: `(a - b) | (b - a)` spells it.
-  `BaseSelector` keeps its shipped composite semantics; `selector - selector`
-  desugars to `and(a, not(b))`; a selector composed with a region producer
-  defers to the Selection algebra.
+**Selection operators `| & - ~` (+ reflected)** — *ratified set (slate 5.4); semantics unstable-documented*
+: Set operators on selections. Same-site operands compose as masks; different-site operands
+  yield a multi-site selection.
+  - `-` never un-touches sites (`fam(A-B) = fam(A)`).
+  - `~` is the touched-site mask complement (never predicate negation and never
+    model-universe).
+  - There is no `__xor__`: `(a - b) | (b - a)` spells it.
+  - `BaseSelector` keeps its shipped composite semantics; `selector - selector` desugars to
+    `and(a, not(b))`; a selector composed with a region producer defers to the Selection
+    algebra.
 
-**tl.units / tl.param / tl.random_like** — *unstable — no deprecation
-shim owed*
-: Stage-1 producer constructors: `units(site, indices)` (explicit site +
-  index set), `params(name, mask=None)` (named-parameter element region),
-  `random_selection(like=, within=, seed=)` (seeded size-matched control
-  sampled without replacement inside `within`; too-small populations refuse
-  `selection_unresolvable` / `population_too_small`).
+**tl.units / tl.param / tl.random_like** — *unstable — no deprecation shim owed*
+: Stage-1 producer constructors.
+  - `units(site, indices)`: an explicit site plus index set.
+  - `params(name, mask=None)`: a named-parameter element region.
+  - `random_selection(like=, within=, seed=)`: a seeded size-matched control sampled without
+    replacement inside `within`; too-small populations refuse `selection_unresolvable` /
+    `population_too_small`.
 
-**Value producers: tl.top_k / tl.top_fraction / tl.threshold / tl.sign** —
-*unstable — no deprecation shim owed*
-: Select by WHAT VALUES ARE on the resolution trace's retained activations:
-  `top_k(within, k, by='value'|'abs', largest=)` (global ranking across the
-  population with a deterministic stable tie-break: canonical site order,
-  then flat index; too-few rankable elements refuse `population_too_small`),
-  `top_fraction(within, fraction)` (`k = ceil(fraction * population)`),
-  `threshold(within, above=, below=, by=)` (strict open bounds; both = band),
-  `sign(within, 'positive'|'negative'|'zero'|'nonzero', atol=)` (`'zero'` is
-  the sparsity mask and the single-capture "didn't fire on this input"
-  spelling). `within` is `None` (default population: every retained tensor
-  site — value claims exist only about retained values), a site label
-  string, or any ACT selection; PARAM/EDGE populations refuse
-  `selection_kind_incompatible`. Masks are computed at resolve time and are
-  exact as sets about THIS capture (`provenance.relation="exact"`); unsaved
-  payloads refuse `value_not_saved`; NaN elements never satisfy a criterion;
-  complex payloads refuse ordered comparisons
-  (`value_criterion_invalid` — use `by='abs'`).
+**Value producers: tl.top_k / tl.top_fraction / tl.threshold / tl.sign** — *unstable — no deprecation shim owed*
+: Select by what the values are on the resolution trace's retained activations.
+  - `top_k(within, k, by='value'|'abs', largest=)`: global ranking across the population with
+    a deterministic stable tie-break (canonical site order, then flat index); too few
+    rankable elements refuse `population_too_small`.
+  - `top_fraction(within, fraction)`: `k = ceil(fraction * population)`.
+  - `threshold(within, above=, below=, by=)`: strict open bounds; both together give a band.
+  - `sign(within, 'positive'|'negative'|'zero'|'nonzero', atol=)`: `'zero'` is the sparsity
+    mask and the single-capture "didn't fire on this input" spelling.
+  - `within`: `None` (default population: every retained tensor site, since value claims
+    exist only about retained values), a site label string, or any ACT selection.
+    PARAM/EDGE populations refuse `selection_kind_incompatible`.
+  - Masks are computed at resolve time and are exact as sets about this capture
+    (`provenance.relation="exact"`).
+  - Refusals: unsaved payloads refuse `value_not_saved`; complex payloads refuse ordered
+    comparisons (`value_criterion_invalid`; use `by='abs'`). NaN elements never satisfy a
+    criterion.
 
-**Statistical producers: tl.dead / tl.saturated / tl.low_variance** —
-*unstable — no deprecation shim owed*
-: Inherently MULTI-SAMPLE selections over an explicit evidence set:
-  `samples=` takes an iterable of Traces (a `Bundle` iterates its members),
-  at least TWO — the single-capture form is deliberately a different
-  spelling (`sign(site, 'zero')`), so one name never means two things. The
-  resolution trace supplies geometry and population only; include it in
-  `samples` to count it as evidence. `dead(samples, atol=)` selects elements
-  with `|v| <= atol` in EVERY sample; `saturated(samples, low=, high=, atol=)`
-  selects elements pinned within `atol` of the same declared bound in every
-  sample (a bound is required — saturation is relative to the
-  nonlinearity's range); both make dispositional claims from finite
-  evidence and declare `provenance.relation="upper_bound"` (observed-silent
-  is a superset of truly-dead) with the sample count disclosed in
-  `provenance.source`. `low_variance(samples, threshold=)` names the sample
-  statistic itself (elementwise unbiased variance in float64) and declares
-  `exact`; its touched-family complement `~low_variance(...)` is the
-  high-variance selection. Missing sample sites, unsaved sample payloads,
-  and cross-sample shape drift refuse typed (`site_not_in_trace` /
-  `value_not_saved` / `mask_shape_mismatch` with the offending sample
-  named), never silently shrink the evidence set.
+**Statistical producers: tl.dead / tl.saturated / tl.low_variance** — *unstable — no deprecation shim owed*
+: Selections that are inherently multi-sample, over an explicit evidence set: `samples=`
+  takes an iterable of Traces (a `Bundle` iterates its members), at least two. The
+  single-capture form is deliberately a different spelling (`sign(site, 'zero')`), so one
+  name never means two things.
+  - The resolution trace supplies geometry and population only; include it in `samples` to
+    count it as evidence.
+  - `dead(samples, atol=)` selects elements with `|v| <= atol` in every sample.
+  - `saturated(samples, low=, high=, atol=)` selects elements pinned within `atol` of the
+    same declared bound in every sample (a bound is required, because saturation is relative
+    to the nonlinearity's range).
+  - The dead and saturated selections make dispositional claims from finite evidence and declare
+    `provenance.relation="upper_bound"` (observed-silent is a superset of truly-dead), with
+    the sample count disclosed in `provenance.source`.
+  - `low_variance(samples, threshold=)` names the sample statistic itself (elementwise
+    unbiased variance in float64) and declares `exact`; its touched-family complement
+    `~low_variance(...)` is the high-variance selection.
+  - Refusals: missing sample sites, unsaved sample payloads, and cross-sample shape drift
+    refuse typed (`site_not_in_trace` / `value_not_saved` / `mask_shape_mismatch` with the
+    offending sample named); the evidence set never silently shrinks.
 
-**Graph-structural producers: tl.neighborhood / tl.between** — *unstable —
-no deprecation shim owed*
-: Select by WHERE OPS SIT IN THE EXECUTED DAG.
-  `neighborhood(selector, hops=, direction=)` selects every op within N recorded
-  dataflow hops of a seed region (`hops=0` is the seed family itself;
-  `direction` is `'both' | 'upstream' | 'downstream'`).
-  `between(sources, sinks)` selects the executed sub-DAG carrying influence
-  from the source region to the sink region — exactly the ops on at least
-  one directed source-to-sink path, endpoints included; no directed path
-  resolves to the EMPTY selection (emptiness is disclosure, never an
-  error). Operands are site label strings (a bare layer label on a
-  multi-pass layer is the all-passes Layer spelling), `Op`/`Layer` handles,
-  or any ACT selection; `between` endpoints also accept lists of regions.
-  A seed or endpoint site that carries at least one selected element counts
-  as its whole node (a partial mask never shrinks a graph region). A site
-  whose element mask is EMPTY seeds nothing: `x - y` keeps every site `x`
-  touched, with an empty mask where `y` removed all of it, and those sites
-  are not part of the region the closure grows from, so
-  `tl.neighborhood(tl.all_sites() - region, ...)` grows from the sites
-  outside `region`. `trace.subgraph(selection)` takes the same member set.
-  Membership is a structural fact about THIS
-  capture, so entries are whole-site masks with
-  `provenance.relation="exact"`. PARAM/EDGE operands refuse
-  `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
-  member sites with no output index space refuse `non_tensor_site` /
-  `no_index_space`. Both producers are pure functions over the ONE
-  executed-DAG graph substrate (`torchlens._selection.graph._ExecutedDag`,
-  shared with the influence-geometry path machinery), the seam a future
-  graph-MOTIF producer plugs into. See also: [Completeness of the selection
-  algebra](selection_completeness.md) (why `tl.neighborhood` and `tl.between` are necessary).
+**Graph-structural producers: tl.neighborhood / tl.between** — *unstable — no deprecation shim owed*
+: Select by where ops sit in the executed graph (DAG).
+  - `neighborhood(selector, hops=, direction=)` selects every op within N recorded dataflow
+    hops of a seed region (`hops=0` is the seed family itself; `direction` is
+    `'both' | 'upstream' | 'downstream'`).
+  - `between(sources, sinks)` selects the executed sub-DAG carrying influence from the source
+    region to the sink region: exactly the ops on at least one directed source-to-sink path,
+    endpoints included. No directed path resolves to the empty selection (emptiness is a
+    disclosure, never an error).
+  - Operands: site label strings (a bare layer label on a multi-pass layer is the all-passes
+    Layer spelling), `Op`/`Layer` handles, or any ACT selection; `between` endpoints also
+    accept lists of regions.
+  - A seed or endpoint site that carries at least one selected element counts as its whole
+    node (a partial mask never shrinks a graph region). A site whose element mask is empty
+    seeds nothing: `x - y` keeps every site `x` touched, with an empty mask where `y` removed
+    all of it, and those sites are not part of the region the closure grows from, so
+    `tl.neighborhood(tl.all_sites() - region, ...)` grows from the sites outside `region`.
+  - `trace.subgraph(selection)` takes the same member set. Membership is a structural fact
+    about this capture, so entries are whole-site masks with `provenance.relation="exact"`.
+  - Refusals: PARAM/EDGE operands refuse `selection_kind_incompatible`; unknown sites refuse
+    `site_not_in_trace`; member sites with no output index space refuse `non_tensor_site` /
+    `no_index_space`.
+  - Both producers are pure functions over one executed-graph substrate
+    (`torchlens._selection.graph._ExecutedDag`, shared with the influence-geometry path
+    machinery), where a future graph-motif producer would plug in.
+  - See also: [Completeness of the selection algebra](selection_completeness.md) (why
+    `tl.neighborhood` and `tl.between` are necessary).
 
-**TraceSlice / trace.between / trace.subgraph** — *unstable — no
-deprecation shim owed*
-: `trace.between(sources, sinks)` returns the influence region as a
-  sub-DAG VIEW: the same member set the `tl.between` producer selects (one
-  idea, two binding modes), presented as a `TraceSlice` — a frozen
-  presenter (composition, never a `Trace`/`Bundle` subclass, exactly like
-  `MergedTrace`) exposing the member `Op` records in execution order, the
-  region's internal dataflow edges, and an EXPLICIT BOUNDARY: every edge
-  crossing into the region (`boundary_in_edges` — the external
-  dependencies) or out of it (`boundary_out_edges`) is declared, never
-  silently dropped, plus the region's entry/exit ops
-  (`source_ops`/`sink_ops`). A slice deliberately offers NO
-  save/replay/validate (a region with dangling external inputs cannot
-  honour them); `Trace.save` refuses it typed (`slice_save_unsupported`).
-  `__selection__` lifts the member family back into the algebra, so a
-  slice composes under `| & - ~` and feeds `do()`.
-  `trace.subgraph(selection)` is the general door: any ACT region — an
-  n-hop neighborhood, explicit units, a future motif matcher's hits —
-  presents as the same view via its touched-site family. Session-time
-  only; never persisted.
-**Differential producers: tl.changed / tl.top_changed** — *unstable — no
-deprecation shim owed*
-: Select by HOW VALUES DIFFER between two runs. The SUBJECT is the resolution
-  trace (masks land on its sites); the REFERENCE is one explicit Trace
-  argument (a fork after `do()`, a capture on another input — deliberately
-  pairwise: multi-sample dispersion is `low_variance(samples=...)`). The
-  delta is directional, `subject - reference`, elementwise in float64;
-  `by='abs'` (default) compares `|delta|`, `by='signed'` the signed delta
-  (increased/decreased). `changed(reference, within=None, above=, below=)`
-  applies strict bounds (neither given defaults to `above=0.0` — bare
-  `changed(reference)` is the "every element that moved" intervention-effect
-  mask); `top_changed(reference, within=None, k= | fraction=, by=,
-  largest=)` globally ranks deltas with the deterministic stable tie-break
-  (exactly one of `k`/`fraction`; `largest=False` selects the least-moved
-  control; too-few rankable refuse `population_too_small`). STRUCTURE
-  HONESTY: the reference must retain a shape-identical payload at every
-  population site's pass-qualified address — missing sites
-  (`site_not_in_trace`), unsaved payloads (`value_not_saved`), shape drift
-  (`mask_shape_mismatch`, all naming the reference), and structural-site-key
-  disagreement (label coincidence across different architectures) refuse
-  typed; structures are NEVER silently intersected, and resolving against
-  the reference itself refuses (vacuous by construction). NaN deltas never
-  satisfy or rank; complex deltas refuse `by='signed'`. Relation is `exact`
-  (the pairwise delta between THESE two captures is complete evidence).
-  PARAM populations refuse `selection_kind_incompatible`: Param records hold
-  a LIVE parameter reference, never capture-time payloads, so
-  "weights that shifted between checkpoints" cannot be claimed honestly from
-  Trace records (compare runnable-save `state_dict_v1` blobs; a
-  capture-time weight differential is a named possibility, not a promise).
+**TraceSlice / trace.between / trace.subgraph** — *unstable — no deprecation shim owed*
+: `trace.between(sources, sinks)` returns the influence region as a sub-graph view: the same
+  member set the `tl.between` producer selects (one idea, two binding modes), presented as a
+  `TraceSlice`. Session-time only; never persisted.
+  - `TraceSlice` is a frozen presenter (composition, never a `Trace`/`Bundle` subclass,
+    exactly like `MergedTrace`). It exposes the member `Op` records in execution order, the
+    region's internal dataflow edges, and an explicit boundary: every edge crossing into the
+    region (`boundary_in_edges`, the external dependencies) or out of it
+    (`boundary_out_edges`) is declared, never silently dropped, plus the region's entry and
+    exit ops (`source_ops`/`sink_ops`).
+  - A slice deliberately offers no save, replay or validate (a region with dangling external
+    inputs cannot honour them); `Trace.save` refuses it typed (`slice_save_unsupported`).
+  - `__selection__` lifts the member family back into the algebra, so a slice composes under
+    `| & - ~` and feeds `do()`.
+  - `trace.subgraph(selection)` is the general door: any ACT region (an n-hop neighborhood,
+    explicit units, a future motif matcher's hits) presents as the same view via its
+    touched-site family.
 
-**Cross-pass producers: tl.stable_across_passes / tl.pass_variance** —
-*unstable — no deprecation shim owed*
-: Select by behaviour ACROSS a recurrent layer's passes, pass-qualified
-  throughout (one capture is the evidence; population entries group per
-  layer). `stable_across_passes(within=None, atol=, passes=)` selects
-  elements whose range (max - min, float64) across the pass window is
-  `<= atol`; `pass_variance(within=None, above=, below=, passes=)` applies
-  strict bounds on the unbiased (n-1) cross-pass variance (at least one
-  bound; "variance explodes late" = `above=` on a late window).
-  `passes=None` uses every population pass; an explicit window is an
-  iterable of >= 2 distinct 1-based pass indices (each must be in the
-  population, else `site_not_in_trace`, pass-qualified). HONESTY FLOOR: a
-  layer contributing fewer than two window passes refuses
-  `population_too_small` with a teaching message (a single-pass cross-pass
-  claim is vacuous — the default population on a feedforward model refuses
-  loudly rather than returning an everything-mask). Cross-pass shape drift
-  refuses `mask_shape_mismatch`; complex payloads refuse
-  `value_criterion_invalid`; NaN at any window pass excludes the element.
-  The element population is the INTERSECTION of the window entries' masks
-  (complete evidence per element), and the mask lands on EVERY window
-  pass-site — the claim is about the unit across the window, so `do()`
-  edits every window pass. Relation is `exact` (the statistic of this
-  capture's passes; the `low_variance` precedent).
+**Differential producers: tl.changed / tl.top_changed** — *unstable — no deprecation shim owed*
+: Select by how values differ between two runs. The subject is the resolution trace (masks
+  land on its sites); the reference is one explicit Trace argument (a fork after `do()`, or a
+  capture on another input). This is deliberately pairwise: multi-sample dispersion is
+  `low_variance(samples=...)`.
+  - Delta: directional, `subject - reference`, elementwise in float64. `by='abs'` (default)
+    compares `|delta|`; `by='signed'` compares the signed delta (increased/decreased).
+  - `changed(reference, within=None, above=, below=)` applies strict bounds. With neither
+    given it defaults to `above=0.0`, so bare `changed(reference)` is the "every element that
+    moved" intervention-effect mask.
+  - `top_changed(reference, within=None, k= | fraction=, by=, largest=)` globally ranks
+    deltas with the deterministic stable tie-break (exactly one of `k`/`fraction`;
+    `largest=False` selects the least-moved control; too few rankable refuse
+    `population_too_small`).
+  - Structure checks: the reference must retain a shape-identical payload at every
+    population site's pass-qualified address. Missing sites (`site_not_in_trace`), unsaved
+    payloads (`value_not_saved`), shape drift (`mask_shape_mismatch`), all naming the
+    reference, and structural site-key disagreement (labels that coincide across different
+    architectures) refuse typed. Structures are never silently intersected, and resolving
+    against the reference itself refuses (vacuous by construction).
+  - NaN deltas never satisfy or rank; complex deltas refuse `by='signed'`. Relation is
+    `exact` (the pairwise delta between these two captures is complete evidence).
+  - PARAM populations refuse `selection_kind_incompatible`: Param records hold a live
+    parameter reference, never capture-time payloads, so "weights that shifted between
+    checkpoints" cannot be claimed honestly from Trace records (compare runnable-save
+    `state_dict_v1` blobs; a capture-time weight differential is a named possibility, not a
+    promise).
+
+**Cross-pass producers: tl.stable_across_passes / tl.pass_variance** — *unstable — no deprecation shim owed*
+: Select by behaviour across a recurrent layer's passes, pass-qualified throughout. One
+  capture is the evidence; population entries group per layer.
+  - `stable_across_passes(within=None, atol=, passes=)` selects elements whose range
+    (max - min, float64) across the pass window is `<= atol`.
+  - `pass_variance(within=None, above=, below=, passes=)` applies strict bounds on the
+    unbiased (n-1) cross-pass variance (at least one bound; "variance explodes late" is
+    `above=` on a late window).
+  - Window: `passes=None` uses every population pass; an explicit window is an iterable of
+    >= 2 distinct 1-based pass indices (each must be in the population, else
+    `site_not_in_trace`, pass-qualified).
+  - Minimum evidence: a layer contributing fewer than two window passes refuses
+    `population_too_small` with a teaching message. A single-pass cross-pass claim is
+    vacuous, so the default population on a feedforward model refuses loudly rather than
+    returning an everything-mask.
+  - Refusals: cross-pass shape drift refuses `mask_shape_mismatch`; complex payloads refuse
+    `value_criterion_invalid`; NaN at any window pass excludes the element.
+  - Masks: the element population is the intersection of the window entries' masks
+    (complete evidence per element), and the mask lands on every window pass-site. The claim
+    is about the unit across the window, so `do()` edits every window pass. Relation is
+    `exact` (the statistic of this capture's passes, as for `low_variance`).
 
 **Subspace producer: tl.subspace** — *unstable — no deprecation shim owed*
-: Select the elements a DIRECTION (or small subspace) in activation space
-  lives on — probe directions, steering vectors, PCA components, SAE
-  decoder rows. `subspace(within, basis, *, origin=, method=None, dim=-1,
-  atol=0.0)` takes one direction `[d]` or a stack `[k, d]` (canonicalized to
-  float64). Under `do()` the edit acts on the COMPONENT along the span of the
-  basis rows: with `Q` the rows, on the coordinates `c = Q x`, written back as
-  `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged. Coordinate
-  verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`, `mean_ablate(dim=None)`, hook
-  callables, ...) act on `c`; value verbs (`patch_from`, the interchange;
-  `replace_with`, `steer`, ...) write a value's component; other verbs refuse
-  `subspace_edit_unsupported`. An orthonormal basis is used as given; any
-  other full-rank basis is orthonormalised (Gram-Schmidt in row order, signs
-  kept). A subspace combined with set operators, or resolved, refuses in
-  `do()` (`subspace_projection_composed`); `within=` restricts positions
-  (a partial-axis mask refuses `subspace_projection_partial_axis`).
-  `resolve()` reports the basis's SUPPORT SET: every element whose coordinate
-  on the bound axis carries weight `|w| > atol` in at least one basis vector,
-  expanded across the site's other axes (a dense direction supports the WHOLE
-  axis) (docs/intervention_explainers.md, "Subspace edits: the component along
-  a basis"). BASIS PROVENANCE IS MANDATORY: `origin=` is
-  a required non-empty account of where the basis came from; origin,
-  optional `method=`, geometry, and the basis's sha256 content digest are
-  stamped into every resolved entry's `provenance.source` (and therefore
-  `do()` audit records); the frozen
-  `tl.types.BasisProvenance` record is the programmatic
-  face. DIMENSION HONESTY: `dim=` names the bound site axis (default `-1`,
-  the trailing feature axis; conv channel directions are `dim=1`); a site
-  whose extent there differs from `d` refuses `selection_unresolvable` /
-  `basis_dim_mismatch` — never a silent broadcast, truncation, or padding.
-  `within=` is REQUIRED (a direction is minted for one representation
-  space). Non-finite bases and rows entirely at-or-below `atol` refuse at
-  construction (vacuous direction). Resolution is geometry-only (no payload
-  reads — unsaved sites resolve); relation is `exact`; PARAM/EDGE
-  populations refuse `selection_kind_incompatible` (a parameter-space
-  direction is a named possibility, not a promise). PORTABLE ROTATIONS: with a
-  builtin verb the staged per-site edit is the builtin `subspace_edit`, whose
-  stored arguments are the verb, the float64 orthonormal rows it applies (a
-  tensor sidecar), the bound `axis`, the rows' `basis_sha256` and the basis
-  provenance (`origin`, `method`, `origin_sha256`, `source_dtype`), so
-  `tl.io.save_intervention(trace, path, level="portable")` reloads it as the
-  same projection, never as the plain verb over the whole site (the target path
-  follows the save/load symlink rule: its final component may not be a
-  symlink, a symlinked parent passes). A rotation
-  learned elsewhere (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
-  origin=...)`; TorchLens applies it and does not fit it. At load a malformed
-  field refuses `subspace_spec_invalid`, rows changed after saving refuse
-  `subspace_spec_basis_tampered`, non-orthonormal rows refuse
-  `subspace_spec_basis_not_orthonormal`. A verb that is not builtin
-  (`patch_from`, population verbs, hook callables) keeps the edit
-  `opaque_audit`. `BasisProvenance.source_dtype` is the dtype of the caller's
-  basis before the float64 canonicalisation. A subspace restricted by a
-  `within=` element mask (one position, as LoReFT edits) stores the dense
-  `mask` and its `mask_sha256` too, so it still saves portably; a malformed
-  stored mask refuses `subspace_spec_invalid` and one changed after saving
-  refuses `subspace_spec_mask_tampered`; any other masked edit keeps its
-  portability. A stored keyword the loader does not know refuses
-  `subspace_spec_invalid`.
+: Select the elements a direction (or small subspace) in activation space lives on: probe
+  directions, steering vectors, PCA components, SAE decoder rows.
+  `subspace(within, basis, *, origin=, method=None, dim=-1, atol=0.0)` takes one direction
+  `[d]` or a stack `[k, d]` (canonicalized to float64).
+  - Edits: under `do()` the edit acts on the component along the span of the basis rows.
+    With `Q` the rows, it acts on the coordinates `c = Q x`, written back as
+    `x + Q^T (edit(c) - c)`; the orthogonal complement is unchanged.
+  - Verbs: coordinate verbs (`zero_ablate`, `scale`, `clamp`, `add_noise`,
+    `mean_ablate(dim=None)`, hook callables, ...) act on `c`; value verbs (`patch_from`, the
+    interchange; `replace_with`, `steer`, ...) write a value's component; other verbs refuse
+    `subspace_edit_unsupported`.
+  - Basis: an orthonormal basis is used as given; any other full-rank basis is
+    orthonormalised (Gram-Schmidt in row order, signs kept). Non-finite bases and rows
+    entirely at or below `atol` refuse at construction (vacuous direction).
+  - `within=` is required (a direction is minted for one representation space) and
+    restricts positions; a partial-axis mask refuses `subspace_projection_partial_axis`. A
+    subspace combined with set operators, or resolved, refuses in `do()`
+    (`subspace_projection_composed`).
+  - Resolution: `resolve()` reports the basis's support set: every element whose coordinate
+    on the bound axis carries weight `|w| > atol` in at least one basis vector, expanded
+    across the site's other axes (a dense direction supports the whole axis); see
+    docs/intervention_explainers.md, "Subspace edits: the component along a basis".
+    Resolution is geometry-only (no payload reads, so unsaved sites resolve); relation is
+    `exact`. PARAM/EDGE populations refuse `selection_kind_incompatible` (a parameter-space
+    direction is a named possibility, not a promise).
+  - Provenance (mandatory): `origin=` is a required non-empty account of where the basis
+    came from. The origin, optional `method=`, geometry, and the basis's sha256 content
+    digest are stamped into every resolved entry's `provenance.source` (and so into `do()`
+    audit records); the frozen `tl.types.BasisProvenance` record is the programmatic face.
+    `BasisProvenance.source_dtype` is the dtype of the caller's basis before the float64
+    canonicalisation.
+  - Dimension: `dim=` names the bound site axis (default `-1`, the trailing feature axis;
+    conv channel directions are `dim=1`). A site whose extent there differs from `d` refuses
+    `selection_unresolvable` / `basis_dim_mismatch`, never a silent broadcast, truncation, or
+    padding.
+  - Portable rotations: with a builtin verb the staged per-site edit is the builtin
+    `subspace_edit`, whose stored arguments are the verb, the float64 orthonormal rows it
+    applies (a tensor sidecar), the bound `axis`, the rows' `basis_sha256` and the basis
+    provenance (`origin`, `method`, `origin_sha256`, `source_dtype`). So
+    `tl.io.save_intervention(trace, path, level="portable")` reloads it as the same
+    projection, never as the plain verb over the whole site. The target path follows the
+    save/load symlink rule: its final component may not be a symlink; a symlinked parent
+    passes.
+  - A rotation learned elsewhere (DAS, ReFT) is applied as
+    `tl.subspace(site, R[:k], origin=...)`; TorchLens applies it and does not fit it.
+  - Masked subspaces: a subspace restricted by a `within=` element mask (one position, as
+    LoReFT edits) also stores the dense `mask` and its `mask_sha256`, so it still saves
+    portably; any other masked edit keeps its portability. A verb that is not builtin
+    (`patch_from`, population verbs, hook callables) keeps the edit `opaque_audit`.
+  - Load refusals: a malformed field, a malformed stored mask, or a stored keyword the loader
+    does not know refuses `subspace_spec_invalid`; rows changed after saving refuse
+    `subspace_spec_basis_tampered`; a mask changed after saving refuses
+    `subspace_spec_mask_tampered`; non-orthonormal rows refuse
+    `subspace_spec_basis_not_orthonormal`.
 
-**SelectionError / selection refusal codes** — *unstable — no deprecation
-shim owed; S2-gated*
-: One carrier class (`torchlens.errors.SelectionError`, catalogued in the
-  intervention error catalog) for the closed codes
-  `selection_trace_mismatch`, `selection_bool_ambiguous`,
-  `selection_kind_incompatible`, `selection_unresolvable` (closed reason set
-  `site_not_in_trace | value_not_saved | non_tensor_site | no_index_space |
-  mask_shape_mismatch | facet_write_mask_unavailable | population_too_small |
-  multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`),
-  `selection_apply_invalid` (stage 2), `selection_trace_released` (`Site.record`
-  after the trace was released), and `slice_save_unsupported`
-  (`Trace.save` on a `TraceSlice` presenter). The `multipass_bare_label` reason
-  is the `tl.units` face of the multi-pass bare-label ambiguity refusal: a
-  bare layer label addresses only single-pass layers, and each pass of a
-  recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`, or
-  `label:all` for every pass); the
-  string/`tl.label` addressing face is
-  `multipass_bare_label_ambiguous` on `AmbiguousSiteError` (both teaching refusals name
-  every pass-qualified spelling, `:last`, `:all` and `trace[label]`, which gives the
-  aggregate Layer; spellings DOCUMENTED-UNSTABLE).
+**SelectionError / selection refusal codes** — *unstable — no deprecation shim owed; S2-gated*
+: One carrier class (`torchlens.errors.SelectionError`, catalogued in the intervention error
+  catalog) for a closed set of codes.
+  - `selection_trace_mismatch`, `selection_bool_ambiguous`, `selection_kind_incompatible`.
+  - `selection_unresolvable`, with a closed reason set:
+    `site_not_in_trace | value_not_saved | non_tensor_site | no_index_space | mask_shape_mismatch | facet_write_mask_unavailable | population_too_small | multipass_bare_label | value_criterion_invalid | basis_dim_mismatch`.
+  - `selection_apply_invalid` (stage 2), `selection_trace_released` (`Site.record` after the
+    trace was released), and `slice_save_unsupported` (`Trace.save` on a `TraceSlice`
+    presenter).
+  - The `multipass_bare_label` reason is the `tl.units` face of the multi-pass bare-label
+    ambiguity refusal: a bare layer label addresses only single-pass layers, and each pass
+    of a recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`,
+    or `label:all` for every pass). The string/`tl.label` addressing face is
+    `multipass_bare_label_ambiguous` on `AmbiguousSiteError`. Both teaching refusals name
+    every pass-qualified spelling, `:last`, `:all` and `trace[label]` (which gives the
+    aggregate Layer); these spellings are documented-unstable.
 
-**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5,
-default-keep); mask-application semantics documented-unstable*
-: `tl.Edit` is the public edit-object type (the old class
-  spelling is removed, U00 clean break). `repr(edit)` prints the
-  public spelling: a builtin edit prints as the public call that builds it
-  (`tl.scale(2.0)`, default-valued keywords omitted; evaluating it
-  rebuilds an equal edit), any other edit as `tl.Edit('name', signal=...,
-  portability=...)`. An `Edit` is a frozen record of its identity:
-  `name`, positional `args`, keyword `kwargs`
-  (a tuple of name and value pairs), `signal`, `portability`, `metadata`
-  (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `is_batch_independent`,
-  `is_compatible_with_append` (an edit that may change the output shape is
-  refused on an append rerun unless this is true) and `selection_recipe`
-  (the selection recipe a selection-targeted `do()` attaches; `None`
-  otherwise). The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC`
-  is the class-level table of how a saved spec keeps each field: `factory`
-  is dropped, `selection_recipe` is saved as a recursive blob, every other
-  field is kept. `trace.do(selection, edit)`
-  applies an edit to a resolved selection under the NORMATIVE
-  MASK-APPLICATION CONTRACT: the edit hook computes its full replacement
-  exactly as today (helpers stay mask-oblivious), then the ENGINE applies
-  `torch.where(mask, edited, original)` on a FRESH tensor — never in-place
-  on, never a view aliasing, the stored capture value. Whole-site masks
-  short-circuit the scatter (exactly today's behavior). No broadcasting in
-  v1; shape/dtype/device/broadcast mismatches and ineligible sites refuse
-  `selection_apply_invalid` (closed reason set
-  `shape | dtype | device | broadcast | not_maskable`). Learned-parameter
-  edits route through PARAMETER SUBSTITUTION on the replay engine (see the
-  entry below; the 2026-08-17 decision supersedes the typed-refusal
-  default there — rerun/set_only keep refusing typed). Each
-  Selection-targeted do() appends an audit record (query repr + resolve
-  digest + per-site relations) to `trace.intervention_audit` (persisted as
-  of tlspec v8 with its load-validated digest relation; the tlspec v9 write
-  admits the shipped per-site `source` disclosure, the PARAM row kind and
-  PARAM-shaped recipes, and the EVENT transaction-envelope row kind with
-  its optional hash-chain extension -- pre-v9 readers refused a saved
-  selection- or param-intervened artifact's own load).
+**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, default-keep); mask-application semantics documented-unstable*
+: `tl.Edit` is the public edit-object type (the old class spelling is removed, with no
+  alias). `trace.do(selection, edit)` applies an edit to a resolved selection under the
+  mask-application contract below.
+  - Repr: `repr(edit)` prints the public spelling. A builtin edit prints as the public call
+    that builds it (`tl.scale(2.0)`, default-valued keywords omitted; evaluating it rebuilds
+    an equal edit); any other edit prints as
+    `tl.Edit('name', signal=..., portability=...)`.
+  - Fields: an `Edit` is a frozen record of its identity: `name`, positional `args`, keyword
+    `kwargs` (a tuple of name and value pairs), `signal`, `portability`, `metadata` (name and
+    value pairs, such as `("keep_grad", True)` or the selection disclosure a masked `do()`
+    adds), `is_batch_independent`, `is_compatible_with_append` (an edit that may change the
+    output shape is refused on an append rerun unless this is true) and `selection_recipe`
+    (the selection recipe a selection-targeted `do()` attaches; `None` otherwise).
+  - The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC` is the class-level table
+    of how a saved spec keeps each field: `factory` is dropped, `selection_recipe` is saved
+    as a recursive blob, every other field is kept.
+  - Mask application: the edit hook computes its full replacement exactly as without a mask
+    (helpers stay mask-oblivious), then the engine applies
+    `torch.where(mask, edited, original)` on a fresh tensor, never in place on, and never a
+    view aliasing, the stored capture value. Whole-site masks skip the scatter (the unmasked
+    behavior).
+  - No broadcasting in v1: shape/dtype/device/broadcast mismatches and ineligible sites
+    refuse `selection_apply_invalid` (closed reason set
+    `shape | dtype | device | broadcast | not_maskable`).
+  - Learned-parameter edits route through parameter substitution on the replay engine (see
+    the entry below); rerun/set_only keep refusing typed.
+  - Audit: each Selection-targeted do() appends an audit record (query repr, resolve digest
+    and per-site relations) to `trace.intervention_audit`. The audit is saved with the trace,
+    with its digest relation validated on load, and includes the per-site `source`
+    disclosure, the PARAM row kind and PARAM-shaped recipes, and the EVENT
+    transaction-envelope row kind with its optional hash-chain extension. Older readers
+    refuse to load an artifact saved with selection or param interventions.
 
 **tl.patch_from(source_trace, *, source_site=None, positions=None, position_axis=1)** — *unstable — no deprecation shim owed*
-: Edit factory patching targeted sites from another trace's recorded
-  post-capture values (activation patching); with a Selection target only
-  the selected elements are patched. With a facet or head target
-  (`tl.head(h, "v")`, `tl.facet(name)`) the donor is the same facet view of
-  the source's home-op value, so only that slice is copied (a single head of
-  GPT-2's fused `c_attn`, not the whole output); `positions=` then indexes
-  the facet slice's axes. Source-to-target mapping (Patchscopes,
-  SelfIE): `source_site=` reads the donor at another site of the source trace
-  (a label, pass-qualified on multi-pass layers, or a selector naming exactly
-  one op; else `patch_source_site_unresolved`), and `positions=` (an int, a
-  `{source_position: target_position}` dict, or a list of pairs; negatives
-  count from the end) writes those source positions into those target
-  positions along `position_axis`, leaving the other target positions
-  unchanged; the prompts may differ in length and a donor batch of one
-  broadcasts (`patch_positions_invalid`, `patch_positions_out_of_range`,
-  `patch_positions_shape_mismatch`). Portability `opaque_audit`: persisted
-  args carry source-trace IDENTITY plus the mapping (never the Trace, never
-  tensors); values bind at do() time session-side; no executable-save path
-  in v1.
+: Edit factory that patches targeted sites with another trace's recorded post-capture values
+  (activation patching). With a Selection target only the selected elements are patched.
+  - Facet and head targets: with a facet or head target (`tl.head(h, "v")`, `tl.facet(name)`)
+    the donor is the same facet view of the source's home-op value, so only that slice is
+    copied (a single head of GPT-2's fused `c_attn`, not the whole output); `positions=` then
+    indexes the facet slice's axes.
+  - Source-to-target mapping (Patchscopes, SelfIE): `source_site=` reads the donor at another
+    site of the source trace (a label, pass-qualified on multi-pass layers, or a selector
+    naming exactly one op; else `patch_source_site_unresolved`).
+  - `positions=` (an int, a `{source_position: target_position}` dict, or a list of pairs;
+    negatives count from the end) writes those source positions into those target positions
+    along `position_axis`, leaving the other target positions unchanged. The prompts may
+    differ in length and a donor batch of one broadcasts.
+  - Refusals: `patch_positions_invalid`, `patch_positions_out_of_range`,
+    `patch_positions_shape_mismatch`.
+  - Portability `opaque_audit`: saved args carry the source trace's identity plus the mapping
+    (never the Trace, never tensors); values bind at do() time session-side; no
+    executable-save path in v1.
 
-**trace.graph.edges / edge substitution** — *unstable — no deprecation shim owed;
-S2/S3-gated*
-: `trace.graph.edges` returns the dataflow edge family (one `EdgeUseRecord` per
-  parent→child occurrence; requires an `replayable` capture, else
-  `edge_provenance_unavailable`). The canonical occurrence address is
-  `(child_func_call_id, arg_kind, arg_path)`. Edge records lift as EDGE-kind
-  selections (whole-edge granularity; `~` complements within the trace's
-  edge family). `do(edge_selection, edit)` replaces the value CONSUMED on
-  the edge — only the child's consumption changes; `parent.out` stays
-  producer truth. Ships on the replay engine ONLY
-  (`edge_intervention_engine_unsupported` otherwise; the rerun-engine design
-  is an escalated named future). Storage fork: the substituted value lives
-  in the `Op.graph.edge_substitutions` store, persisted as of the tlspec v8 bump (+
-  `Op.edge_replacement_stamps`, `FireRecord.edge_address`); capture truth
-  (`saved_args`, `out_versions_by_child`, `parent.out`) is retained
-  unmodified — the pre-edit snapshot that makes divergence decidable.
-  Validation: every tier-(ii) entry must be corroborated (FireRecord +
-  stamp, and the stored value must digest to the stamp's `value_digest` —
-  `edge_substitution_stamp_mismatch` otherwise) else FAIL; corroborated
-  children are RE-EXECUTED with the substituted value spliced at the
-  address and must match (verdict `edge_intervention_boundary` — a
-  different check, never no check). Commits are PASS-QUALIFIED: an edge
-  into pass k of a multi-pass child edits exactly pass k (the FireRecord,
-  store, and pushed cone all land on `child.label`, never the bare
-  `layer_label` that names the last pass). Edits at one occurrence
-  COMPOSE like replay hooks (a second edit derives from the substituted
-  value; `scale(0.5)` twice is a quarter, every fire is kept), and every
-  tier-(ii) entry — edge, param, region — is RE-SPLICED whenever the cone
-  recomputes the child, so a second edge edit on another arg, an upstream
-  act edit, or a param edit reaching the child never silently reverts it.
-  FULL VALIDATION OF EDITED FORKS: the replay engine records the
-  capture-time content digest of every site's out the first time it
-  overwrites it (session-time, in the replay run context), and the
-  argument-logging check compares each child's retained `saved_args`
-  snapshot against that digest for replay-recomputed parents — the same
-  exact bidirectional check, never skipped — so non-identity act, edge,
-  and param forks validate against their hand-computed ground truth and
-  the boundary check is reached in a passing validation; a recomputed
-  parent with no recordable digest reads `unverified`
-  (`replay_recomputed_parent_unattested`), never validated.
-  PERSISTENCE: the edge carriers persist as of tlspec v8, so ordinary
-  saves proceed. The `edge_intervention_save_unsupported` refusal survives
-  as a schema-regression tripwire (re-firing at ALL four save levels,
-  preceding `artifact_save_level_unsupported`, if the carrier policy ever
-  drops again).
+**trace.graph.edges / edge substitution** — *unstable — no deprecation shim owed; S2/S3-gated*
+: `trace.graph.edges` returns the dataflow edge family: one `EdgeUseRecord` per
+  parent-to-child occurrence (requires an `replayable` capture, else
+  `edge_provenance_unavailable`). `do(edge_selection, edit)` replaces the value consumed on
+  the edge: only the child's consumption changes, and `parent.out` stays producer truth.
+  - Address: the canonical occurrence address is `(child_func_call_id, arg_kind, arg_path)`.
+    Edge records lift as EDGE-kind selections (whole-edge granularity; `~` complements within
+    the trace's edge family).
+  - Engine: ships on the replay engine only (`edge_intervention_engine_unsupported`
+    otherwise; a rerun-engine design is a named future possibility).
+  - Storage: the substituted value lives in the `Op.graph.edge_substitutions` store, saved with
+    the trace together with `Op.edge_replacement_stamps` and `FireRecord.edge_address`. Capture
+    truth (`saved_args`, `out_versions_by_child`, `parent.out`) is kept unmodified: the
+    pre-edit snapshot that makes divergence decidable.
+  - Validation: every substitution entry must be corroborated (FireRecord plus stamp, and
+    the stored value must digest to the stamp's `value_digest`;
+    `edge_substitution_stamp_mismatch` otherwise), else FAIL. Corroborated children are
+    re-executed with the substituted value spliced at the address and must match (verdict
+    `edge_intervention_boundary`: a different check, never no check).
+  - Passes: commits are pass-qualified. An edge into pass k of a multi-pass child edits
+    exactly pass k (the FireRecord, store, and pushed cone all land on `child.label`, never
+    the bare `layer_label` that names the last pass).
+  - Composition: edits at one occurrence compose like replay hooks (a second edit derives
+    from the substituted value; `scale(0.5)` twice is a quarter, every fire is kept). Every
+    substitution entry (edge, param, region) is re-spliced whenever the cone recomputes the
+    child, so a second edge edit on another arg, an upstream act edit, or a param edit
+    reaching the child never silently reverts it.
+  - Full validation of edited forks: the replay engine records the capture-time content
+    digest of every site's out the first time it overwrites it (session-time, in the replay
+    run context). The argument-logging check compares each child's retained `saved_args`
+    snapshot against that digest for replay-recomputed parents, the same exact bidirectional
+    check, never skipped. So non-identity act, edge, and param forks validate against their
+    hand-computed ground truth and the boundary check is reached in a passing validation. A
+    recomputed parent with no recordable digest reads `unverified`
+    (`replay_recomputed_parent_unattested`), never validated.
+  - Saving: the edge carriers are saved with the trace, so ordinary saves proceed. The
+    `edge_intervention_save_unsupported` refusal stays as a schema-regression tripwire: it
+    fires again at all four save levels, before `artifact_save_level_unsupported`, if the
+    carriers ever stop being saved.
 
-**parameter substitution (do over PARAM selections)** — *unstable — no
-deprecation shim owed*
-: `fork.do(tl.param(name, mask=None), edit)` applies the edit "as if" the
-  parameter were changed, FOR REPLAY ONLY: the value each consuming op sees
-  is substituted at its derived occurrence address, and the live
-  `nn.Parameter` object is NEVER written (bit-identical before and after —
-  pinned). Parameters are not in the dataflow edge family (they classify as
-  `LiteralTensor` template components), so the occurrence addresses are
-  DERIVED — `Param.used_by_ops` + template-component identity/barcode
-  matching, FAIL-CLOSED (`param_substitution_occurrence_underivable` when
-  any consumption cannot be addressed: nested container positions,
-  released legacy captures, a bare pass-ambiguous multi-pass consumer
-  spelling, or a consumer inventory omitting a pass). Recurrently reused
-  parameters (tied weights, one module called at N passes of a
-  recurrence-grouped layer) ARE substitutable: consumers are recorded and
-  staged pass-qualified (`label:pass`), the edit lands at EVERY
-  consumption (a parameter has one identity across passes), and the
-  pass-qualified replay engine recomputes each pass faithfully. The
-  substitution then drives the shipped edge-substitution
-  engine: tier-(ii) `Op.graph.edge_substitutions` entries marked
-  `substitution_kind="param"`, edit-then-scatter masking over the param
-  index space, one replay pass over all consumer origins (cone
-  recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
-  edge kinds — so later replays never silently revert any edit; a chained
-  `do(tl.param(p), scale(0.5))` COMPOSES on the staged "as if" value,
-  0.25, keeping both FireRecords), and the same validation boundary
-  (`edge_intervention_boundary` — a different check, never no check;
-  uncorroborated entries FAIL). Replay engine ONLY:
-  rerun/set_only refuse `param_substitution_engine_unsupported`. The audit
-  record (kind `PARAM`) discloses "substituted at consumption … live
-  parameters unchanged" — the product is DERIVED-class, never a blessed
-  VERIFIED reproduction of the original weights. BUFFER OPERANDS
-  (documented-unstable): `do(tl.param("<buffer address>", mask), edit)` on a
-  registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
-  substitutes the buffer's INITIAL version node, the value its consumers read,
-  and replays the cone through the leaf-site path (needs an
-  `replayable=True` capture); in-forward writes thread the edited
-  value; the live buffer is never written.
+**parameter substitution (do over PARAM selections)** — *unstable — no deprecation shim owed*
+: `fork.do(tl.param(name, mask=None), edit)` applies the edit "as if" the parameter were
+  changed, for replay only: the value each consuming op sees is substituted at its derived
+  occurrence address, and the live `nn.Parameter` object is never written (bit-identical
+  before and after).
+  - Derived addresses: parameters are not in the dataflow edge family (they classify as
+    `LiteralTensor` template components), so occurrence addresses are derived from
+    `Param.used_by_ops` plus template-component identity/barcode matching. This fails
+    closed: `param_substitution_occurrence_underivable` when any consumption cannot be
+    addressed (nested container positions, released legacy captures, a bare pass-ambiguous
+    multi-pass consumer spelling, or a consumer inventory omitting a pass).
+  - Reused parameters (tied weights, one module called at N passes of a recurrence-grouped
+    layer) can be substituted: consumers are recorded and staged pass-qualified
+    (`label:pass`), the edit lands at every consumption (a parameter has one identity across
+    passes), and the pass-qualified replay engine recomputes each pass faithfully.
+  - Mechanism: the substitution drives the shipped edge-substitution engine, with
+    `Op.graph.edge_substitutions` entries marked `substitution_kind="param"`, edit-then-scatter
+    masking over the param index space, and one replay pass over all consumer origins. Cone
+    recomputation re-splices every substitution entry (param, region, and edge kinds), so
+    later replays never silently revert any edit; a chained `do(tl.param(p), scale(0.5))`
+    composes on the staged "as if" value, 0.25, keeping both FireRecords.
+  - Validation: the same boundary as edge substitution (`edge_intervention_boundary`: a
+    different check, never no check; uncorroborated entries FAIL).
+  - Engine: replay engine only; rerun/set_only refuse `param_substitution_engine_unsupported`.
+  - Audit: the record (kind `PARAM`) discloses "substituted at consumption … live parameters
+    unchanged". The product is derived-class, never a verified reproduction of the original
+    weights.
+  - Buffer operands (documented-unstable): `do(tl.param("<buffer address>", mask), edit)` on
+    a registered buffer (BatchNorm running stats, a rotary cache, recurrent state)
+    substitutes the buffer's initial version node, the value its consumers read, and replays
+    the cone through the leaf-site path (needs an `replayable=True` capture). In-forward
+    writes thread the edited value; the live buffer is never written.
 
 **TapObserver.values(masked=True)** — *unstable — no deprecation shim owed*
 : `tap(resolved_selection)` stores each firing site's mask on the
@@ -3108,40 +3367,43 @@ deprecation shim owed*
   elements). `values()` stays exactly the shipped full-snapshot behavior.
 
 **color_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
-: The v1 encoding-channel value source on `Trace.draw` (L5 channel core). See
-  the "color_by" entry above for semantics.
+: The value source of the colour encoding channel on `Trace.draw`. See the "color_by" entry
+  above for semantics.
 
 **size_by / size_scale (draw kwargs)** — *unstable — no deprecation shim owed; keyword-only*
-: The wave-1 size encoding channel on `Trace.draw` (D4 default-applied: sqrt +
-  conservative area-only mapping + typed refusal on rolled varying sources).
-  See the "size_by" and "size_scale (size channel)" entries above for semantics.
+: The size encoding channel on `Trace.draw`. Applied by default: sqrt scaling, a conservative
+  area-only mapping, and a typed refusal on rolled varying sources. See the "size_by" and
+  "size_scale (size channel)" entries above for semantics.
 
 **view (draw kwarg): the premade views** — *keyword-only*
-: `Trace.draw(view=...)` draws one premade view: a bundle of draw settings plus evidence
-  checks and a caption, each answering one question. `None` (the default) draws the plain
-  graph, which already shows every op. The values are `"overview"` (what is this model?),
-  `"debug"` (what is broken?), `"speed"` (where does time go?), `"dims"` (what shape is the
-  data?), `"transformer"` (how is attention wired?), `"memory"` (what is big in bytes?),
-  `"sequence"` (how do the passes unfold?), `"compute"` (where are the FLOPs?) and
-  `"interventions"` (what did the edits change?). Each view prints any caption lines it needs
-  under the header block, which names the model, the traced network's op count and size (a `module=` draw: that
-  module's; never the drawn boxes), the parameters
-  (compact from 1,000, `11.7M params`) and, on an edited trace, one edit line. Keywords you pass win over
-  the view's own settings, so combinations are spelled with keywords, for example
-  `trace.draw(view="debug", show_edge_shapes=True)`. `theme=` stays the colour skin and
-  composes with any view; `"speed"`, `"memory"` and `"compute"` turn on the
-  `node_style="profiling"` rows themselves. `"transformer"` focuses the drawing on the first
-  repeated block that holds attention (for GPT-2, `transformer.h.0`) and names it in the
-  caption; an explicit `module=` wins. `"interventions"` outlines every edited op in purple
-  (dashed = inferred site) and every other op whose saved value differs from the clean run
-  (the unedited parent trace) in light purple with its largest absolute change (a collapsed
-  module box takes the marks of the ops inside it), and writes
-  the full record beside a written figure as `<path>.census.txt`. A
-  view whose evidence or subject is missing refuses typed with a remedy
-  (`view_headline_evidence_missing`, `view_attention_subject_absent`,
-  `view_single_pass_no_sequence`, or `surgery_evidence_missing` for `"interventions"` on a
-  trace with no recorded edit); any other value refuses `draw_view_invalid`, naming the
-  allowed values. See docs/reference/lenses.md.
+: `Trace.draw(view=...)` draws one premade view: a bundle of draw settings plus evidence checks
+  and a caption, each answering one question. `None` (the default) draws the plain graph, which
+  already shows every op.
+  - Values: `"overview"` (what is this model?), `"debug"` (what is broken?), `"speed"` (where
+    does time go?), `"dims"` (what shape is the data?), `"transformer"` (how is attention
+    wired?), `"memory"` (what is big in bytes?), `"sequence"` (how do the passes unfold?),
+    `"compute"` (where are the FLOPs?) and `"interventions"` (what did the edits change?).
+  - Caption: each view prints any caption lines it needs under the header block. The header
+    names the model, the traced network's op count and size (a `module=` draw: that module's;
+    never the drawn boxes), the parameters (compact from 1,000, `11.7M params`) and, on an
+    edited trace, one edit line.
+  - Combining: keywords you pass win over the view's own settings, so combinations are spelled
+    with keywords, for example `trace.draw(view="debug", show_edge_shapes=True)`. `theme=`
+    stays the colour skin and composes with any view.
+  - `"speed"`, `"memory"` and `"compute"` turn on the `node_style="profiling"` rows themselves.
+  - `"transformer"` focuses the drawing on the first repeated block that holds attention (for
+    GPT-2, `transformer.h.0`) and names it in the caption; an explicit `module=` wins.
+  - `"interventions"` outlines every edited op in purple (dashed for an inferred site) and
+    every other op whose saved value differs from the clean run (the unedited parent trace) in
+    light purple with its largest absolute change; a collapsed module box takes the marks of
+    the ops inside it. It writes the full record beside a written figure as
+    `<path>.census.txt`.
+  - Refusals: a view whose evidence or subject is missing refuses typed with a remedy
+    (`view_headline_evidence_missing`, `view_attention_subject_absent`,
+    `view_single_pass_no_sequence`, or `surgery_evidence_missing` for `"interventions"` on a
+    trace with no recorded edit); any other value refuses `draw_view_invalid`, naming the
+    allowed values.
+  - See docs/reference/lenses.md.
 
 **ContactSheet (contact-sheet page)** — *documented-unstable*
 : What `tl.viz.contact_sheet(view, page=...)` returns: the page's SVG text (a `str`, so
@@ -3150,76 +3412,88 @@ deprecation shim owed*
   prints the same number).
 
 **stack_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
-: The wave-1 rank encoding channel on `Trace.draw` (stacking split (a):
-  explicit + licensed auto on plain traces). The `True`/`"auto"` request form
-  is itself an unstable spelling. See the "stack_by" entry above.
+: The rank (stacking) encoding channel on `Trace.draw`: explicit, plus a licensed automatic
+  choice on plain traces. The `True`/`"auto"` request form is itself an unstable spelling. See
+  the "stack_by" entry above.
 
 **show_redundant_args (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
-: Opt-out for the default-on checked suppression of redundant constructor-arg
-  label rows (slate 8.7). See the "show_redundant_args" entry above.
+: Opt-out for the default-on, checked suppression of redundant constructor-argument label rows.
+  See the "show_redundant_args" entry above.
 
 **direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
-: The fourth layout direction on `Trace.draw(direction=)` for the forward, backward and combined graphs: edges flow right to left (Graphviz `rankdir=RL`), beside
-  `"bottomup"`, `"topdown"` and `"leftright"`. An unknown value refuses
-  `visualization_direction_invalid` naming all four.
+: The fourth layout direction on `Trace.draw(direction=)` for the forward, backward and
+  combined graphs: edges flow right to left (Graphviz `rankdir=RL`), beside `"bottomup"`,
+  `"topdown"` and `"leftright"`. An unknown value refuses `visualization_direction_invalid`
+  naming all four.
 
 **path=None (draw default)** — *unstable — no deprecation shim owed*
-: Outside a notebook a bare `Trace.draw()` writes a collision-safe file in the current directory --
-  `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>` -- and always prints
-  `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
-  In a Jupyter kernel (the same detection as `tl.draw`) a bare `trace.draw()` writes no file and
-  returns the `Drawing` with its rendered bytes (SVG unless `file_format=` says otherwise), which
-  the notebook displays inline (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). An explicit `path=` is
-  always written exactly (overwriting), in a notebook too, and printed only on a verbose trace.
-  `Bundle.draw` follows the same rules.
+: Where a bare draw writes. Outside a notebook a bare `Trace.draw()` writes a collision-safe
+  file in the current directory and always prints `TorchLens graph written to <path>`, so a
+  second bare draw never overwrites the first picture.
+  - File names: `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>`.
+  - In a Jupyter kernel (the same detection as `tl.draw`) a bare `trace.draw()` writes no file
+    and returns the `Drawing` with its rendered bytes (SVG unless `file_format=` says
+    otherwise), which the notebook displays inline.
+  - An explicit `path=` is always written exactly (overwriting), in a notebook too, and printed
+    only on a verbose trace.
+  - `Bundle.draw` follows the same rules.
 
 **file_format (draw kwarg)** — *unstable — no deprecation shim owed*
 : The path's extension picks the format: `trace.draw("graph.png")` writes PNG, and
-  `b.draw("graph.svg")` writes SVG. `file_format=` applies only to a path with no extension
-  (`trace.draw("graph", file_format="svg")` writes `graph.svg`) and to a bare call; its default is
-  `"pdf"` (`"svg"` for a notebook bare call and for `Bundle.draw(graph="diff")`). A `file_format`
-  that disagrees with the path's extension refuses with `ArgumentConflictError`
-  (`draw_format_mismatch`). Both draw doors share this rule (JMT decision, Sun 1 Nov 2026,
-  3:00 PM PT); `VisualizationOptions.file_format` reaches `Trace.draw` only when set explicitly.
+  `b.draw("graph.svg")` writes SVG.
+  - `file_format=` applies only to a path with no extension
+    (`trace.draw("graph", file_format="svg")` writes `graph.svg`) and to a bare call. Its
+    default is `"pdf"` (`"svg"` for a notebook bare call and for `Bundle.draw(graph="diff")`).
+  - A `file_format` that disagrees with the path's extension refuses with
+    `ArgumentConflictError` (`draw_format_mismatch`).
+  - Both draw doors share this rule; `VisualizationOptions.file_format` reaches `Trace.draw`
+    only when set explicitly.
 
 **show_module_paths / show_grad_values (draw kwargs, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
-: Opt-in label rows on `Trace.draw(graph="backward")`: `show_module_paths=True` adds `module <address>` to
-  each backward node a module owns (`param <address>` on AccumulateGrad nodes); `show_grad_values=True`
-  adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
-  captured` when the capture kept none). Both default to `False`, leaving the default render
-  unchanged.
+: Opt-in label rows on `Trace.draw(graph="backward")`. Both default to `False`, leaving the
+  default render unchanged.
+  - `show_module_paths=True` adds `module <address>` to each backward node a module owns
+    (`param <address>` on AccumulateGrad nodes).
+  - `show_grad_values=True` adds `grad norm <x>, absmax <y>` from the node's captured output
+    gradient (`grad values not captured` when the capture kept none).
 
 **theme (draw kwarg, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
-: The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
-  (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
-  colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
-  keep their colours. On `Trace.draw` the skin also sets the role colours: `torchlens` keeps the
-  released set (light green input, salmon output, light and darker grey weights, yellow branch
-  tests, every other node white), `colorblind` renders the Okabe-Ito set with grey weights (green input, vermillion output),
-  `paper` and `high_contrast` the legacy set (light green input, light red output, grey weights);
-  no skin draws blue. The functional form with grouped options reads it from
-  `VisualizationOptions.theme`.
+: The skin preset on `Trace.draw(graph="backward")`, with the same names the forward picture
+  takes: `"torchlens"` (default), `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`.
+  - Backward graph: the skin sets the page colour, text ink, typography and the backward key's
+    ink; backward node fills and gradient arrows keep their colours.
+  - Role colours on `Trace.draw`: `torchlens` keeps the released set (light green input,
+    salmon output, light and darker grey weights, yellow branch tests, every other node
+    white); `colorblind` renders the Okabe-Ito set with grey weights (green input, vermillion
+    output); `paper` and `high_contrast` use the legacy set (light green input, light red
+    output, grey weights). No skin draws blue.
+  - The functional form with grouped options reads it from `VisualizationOptions.theme`.
 
 **theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
 : `bundle.draw(path, theme="dark", show_legend=True)` draws the bundle picture like
-  `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
-  one function call, box for a leaf module, cylinder for a buffer; the weight fills for weights), and with
-  `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
-  not every member runs.
+  `Trace.draw`.
+  - Style: the skin's page, ink and Helvetica face, and `draw`'s node shapes and fills (oval
+    for one function call, box for a leaf module, cylinder for a buffer; the weight fills for
+    weights).
+  - `show_legend=True` adds the key under the header.
+  - Member lists appear only on nodes and arrows that not every member runs.
 
 **Bundled render font** — *unstable — no deprecation shim owed*
-: Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans 2.1.5
-  (SIL Open Font License 1.1, shipped unmodified under `torchlens/_visualization/fonts/` with its
-  license) through a fontconfig file layered over the caller's own (it maps `Helvetica` and
-  `Arial`, the family Graphviz's PostScript alias table asks for), so text metrics no longer
-  depend on which face a machine has installed. The emitted DOT keeps `fontname="Helvetica"`.
+: Every Graphviz render resolves the pinned `Helvetica` family to the bundled Liberation Sans
+  2.1.5 (SIL Open Font License 1.1, shipped unmodified under `torchlens/_visualization/fonts/`
+  with its license), so text metrics no longer depend on which face a machine has installed.
+  - It is wired in through a fontconfig file layered over the caller's own, which maps
+    `Helvetica` and `Arial` (the family Graphviz's PostScript alias table asks for).
+  - The emitted DOT keeps `fontname="Helvetica"`.
 
 **Expansion manifest** — *unstable — no deprecation shim owed*
-: The JSON file `<outpath>.expansion.json` (schema `torchlens_expansion_manifest_v1`) a `draw`
-  render writes beside an over-ceiling overview: a floor-fallback plan still above the readable
-  band, or the bounded top-level module overview served past the pathological pre-gate. One entry
-  per collapsed unit: a stable `expansion_id`, `kind`, `module`, `members`, and the `draw()`
-  keywords (`expand`) that open it. Disclosed by the `collapse_expansion_manifest` warning.
+: The JSON file `<outpath>.expansion.json` (schema `torchlens_expansion_manifest_v1`) that a
+  `draw` render writes beside an over-ceiling overview. The `collapse_expansion_manifest`
+  warning discloses it.
+  - Written for: a floor-fallback plan still above the readable band, or the bounded top-level
+    module overview served past the pathological pre-gate.
+  - Entries: one per collapsed unit, with a stable `expansion_id`, `kind`, `module`,
+    `members`, and the `draw()` keywords (`expand`) that open it.
 
 **render_vector_oversize (warning)** — *unstable — no deprecation shim owed*
 : A forward SVG or PDF page past the 14,400 pt per-side vector page ceiling is written exactly as
@@ -3227,18 +3501,18 @@ deprecation shim owed*
   `depth=`): warn and obey, never a refusal.
 
 **"shape_summary" node_label_fields token** — *unstable — no deprecation shim owed*
-: Selector token rendering `Layer.shape_summary` (the L1 across-pass shape
-  summary) as a label row; skipped when the field is unset. The default label
-  renders the summary automatically on rolled varying multi-pass nodes,
-  directly after the title row.
+: Selector token rendering `Layer.shape_summary` (the across-pass shape summary) as a label
+  row; skipped when the field is unset. The default label renders the summary automatically on
+  rolled varying multi-pass nodes, directly after the title row.
 
 **"shape" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering the node's output shape row, the same row the default label draws
-  (there with the activation memory appended: `(1, 4), 16 B`). Shapes print as Python tuples,
-  except a 0-d output, which reads `scalar` (`scalar, 4 B`) and, when its activation was saved,
-  gains a value row: `= 2.31`, or one value per pass on a rolled node (`= 0.87, 1.02, 0.95`; past
-  four passes the first, `...`, the last). A terminal boolean (an if-test) prints its outcome on
-  its first row instead. Kwarg values, parameter brackets and collapse summaries keep `()`.
+  (there with the activation memory appended: `(1, 4), 16 B`).
+  - Shapes print as Python tuples, except a 0-d output, which reads `scalar` (`scalar, 4 B`).
+    When its activation was saved, a 0-d output gains a value row: `= 2.31`, or one value per
+    pass on a rolled node (`= 0.87, 1.02, 0.95`; past four passes the first, `...`, the last).
+  - A terminal boolean (an if-test) prints its outcome on its first row instead.
+  - Kwarg values, parameter brackets and collapse summaries keep `()`.
 
 **"dtype" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering the node's output dtype as a label row with the
@@ -3247,103 +3521,113 @@ deprecation shim owed*
   when the node has no dtype.
 
 **torchlens.preprocessing.imagenet_default()** — *unstable — no deprecation shim owed*
-: The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256,
-  center-crop 224, ImageNet mean/std), passed as
-  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`. A PIL image
-  whose model resolves no preprocessing authority (torchvision weights
-  handle, timm data config, HF image processor) refuses typed
-  `preprocessing_unresolved` instead of receiving this recipe silently. The
-  opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
-  `verified=False`, status `unverified_fallback`: never an authority.
+: The explicit opt-in to the TorchLens-authored ImageNet recipe (resize 256, center-crop 224,
+  ImageNet mean/std), passed as
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`.
+  - A PIL image whose model resolves no preprocessing authority (torchvision weights handle,
+    timm data config, HF image processor) refuses typed `preprocessing_unresolved` instead of
+    receiving this recipe silently.
+  - The opted-in capture's `input_preprocessor` keeps `source="imagenet_default"`,
+    `verified=False`, status `unverified_fallback`: never an authority.
 
 **torchlens.preprocessing.attach_authority(model, authority)** — *unstable — no deprecation shim owed*
-: Records a model's preprocessing authority on the model so discovery finds
-  it: a torchvision model built with `weights=` keeps no handle to its
-  weights, and the preset cannot be inferred from the class. Without a
-  handle, discovery matches the model's loaded state against the presets
-  whose checkpoints are already in the torch hub cache (exact tensor
-  equality, one unique match, never a download) and records the match as
-  model metadata with `resolution_method="state_match"`; `attach_authority`
-  remains the explicit route when no cached checkpoint matches. Afterwards
-  `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
-  attached authority as model metadata. Accepts any recognized authority;
-  an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
+: Records a model's preprocessing authority on the model so discovery finds it. Returns the
+  model.
+  - Why: a torchvision model built with `weights=` keeps no handle to its weights, and the
+    preset cannot be inferred from the class.
+  - Without a handle, discovery matches the model's loaded state against the presets whose
+    checkpoints are already in the torch hub cache (exact tensor equality, one unique match,
+    never a download) and records the match as model metadata with
+    `resolution_method="state_match"`. `attach_authority` remains the explicit route when no
+    cached checkpoint matches.
+  - Afterwards `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
+    attached authority as model metadata.
+  - Accepts any recognized authority; an opaque callable refuses `preprocessing_attach_opaque`.
 
 **torchlens.preprocessing.check_card(trace, *, model=None, authority=None, offline=None)** — *unstable — no deprecation shim owed*
-: The on-request preprocessing verifier: `trace` is a `Trace` (its
-  `input_preprocessor` is read) or a `ResolvedPreprocessing` record. It compares the
-  preprocessing a capture recorded (`Trace.provenance.input_preprocessor`) with the model's known card (HF image
-  processor, torchvision weights, timm or open_clip config, or a named
-  `authority=`), returns the field-level `PreprocessingComparison`, and warns
-  `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
-  automatically. An opaque record compares as unknown, never as a match.
+: The on-request preprocessing verifier. Nothing runs it automatically.
+  - `trace` is a `Trace` (its `input_preprocessor` is read) or a `ResolvedPreprocessing`
+    record.
+  - It compares the preprocessing a capture recorded (`Trace.provenance.input_preprocessor`)
+    with the model's known card (HF image processor, torchvision weights, timm or open_clip
+    config, or a named `authority=`) and returns the field-level `PreprocessingComparison`.
+  - It warns `preprocessing_card_mismatch` when a field disagrees. An opaque record compares as
+    unknown, never as a match.
 
 **torchlens.postprocessing** — *unstable — no deprecation shim owed*
-: The public home of custom output detectors (the registry
-  `Trace.decode_output` and the end-of-capture decode consult):
-  `register(name=, priority=)` (a decorator; lower priority runs first),
-  `unregister(name)`, `list(pattern=None)`, `info(name)`, the `snapshot()`
-  save-and-restore context manager, the frozen `Detector` metadata record
-  and the `ResolvedPostprocessing` record a detector returns. A detector
-  receives `(outputs, meta)` and returns `ResolvedPostprocessing` or `None`;
-  registering a name twice refuses `ValueError` naming `unregister`.
+: The public home of custom output detectors: the registry that `Trace.decode_output` and the
+  end-of-capture decode consult.
+  - Functions: `register(name=, priority=)` (a decorator; lower priority runs first),
+    `unregister(name)`, `list(pattern=None)`, `info(name)`, and the `snapshot()`
+    save-and-restore context manager.
+  - Records: the frozen `Detector` metadata record and the `ResolvedPostprocessing` record a
+    detector returns.
+  - A detector receives `(outputs, meta)` and returns `ResolvedPostprocessing` or `None`.
+  - Registering a name twice refuses `ValueError` naming `unregister`.
 
 **torchlens.preprocessing.register / torchlens.preprocessing.unregister** — *unstable — no deprecation shim owed*
-: The public door of the input detector registry, the one the built-in
-  Hugging Face text, image and multimodal routes use: `register(name=,
-  priority=)` (a decorator; lower priority runs first, the built-ins sit at 10
-  to 30) and `unregister(name)`. A detector receives `(model, payload,
-  **kwargs)` before backend routing and returns a `Trace` or `None`; it claims
-  the call by re-entering `tl.trace` with what `forward` takes, forwarding
-  `kwargs` so the caller's `capture=`, `save=` and the other options survive,
-  and declines its own converted input so the re-entry does not loop. An
-  explicit `CaptureOptions(input_transform=...)`, `backend=` or `chunk_size=`
-  skips every detector for that call. Registration affects later traces only;
-  registering a name twice refuses `ValueError` naming `unregister`.
+: The public door of the input detector registry, the one the built-in Hugging Face text,
+  image and multimodal routes use.
+  - Functions: `register(name=, priority=)` (a decorator; lower priority runs first, the
+    built-ins sit at 10 to 30) and `unregister(name)`.
+  - A detector receives `(model, payload, **kwargs)` before backend routing and returns a
+    `Trace` or `None`. It claims the call by re-entering `tl.trace` with what `forward` takes,
+    forwarding `kwargs` so the caller's `capture=`, `save=` and the other options survive, and
+    declines its own converted input so the re-entry does not loop.
+  - An explicit `CaptureOptions(input_transform=...)`, `backend=` or `chunk_size=` skips every
+    detector for that call.
+  - Registration affects later traces only; registering a name twice refuses `ValueError`
+    naming `unregister`.
 
 **image file path as `tl.trace` input** — *unstable — no deprecation shim owed*
-: A `str` or `os.PathLike` naming an existing file with an image suffix
-  (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a
-  list of them, is opened as an RGB PIL image before routing, so
-  `tl.trace(vision_model, "dog.jpg")` takes the image path with resolved
-  preprocessing instead of the text path. A path string with whitespace is
-  text. A missing image path refuses `image_path_missing` unless the model
-  has a text tokenizer (then the string is text); an undecodable file
-  refuses `image_path_unreadable`.
+: A `str` or `os.PathLike` naming an existing file with an image suffix, or a list of them, is
+  opened as an RGB PIL image before routing. So `tl.trace(vision_model, "dog.jpg")` takes the
+  image path with resolved preprocessing instead of the text path.
+  - Suffixes: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`.
+  - A path string with whitespace is text.
+  - Refusals: a missing image path refuses `image_path_missing` unless the model has a text
+    tokenizer (then the string is text); an undecodable file refuses `image_path_unreadable`.
 
 **torchlens.bridge.pyreft.read(directory, *, repo=None, revision=None)** — *documented-unstable*
-: Read a pyreft LoReFT artifact (the directory `ReftModel.save` writes: `config.json` plus
-  `intkey_<key>.bin`, under the key's dotted or underscored name) into a
-  `torchlens.bridge.pyreft.LoreftArtifact`; never imports pyreft or pyvene and never fits
-  anything. Apply it with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`, which
-  is `tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")` with
-  `tl.intervention.set_affine_coordinates(W, bias=b)`. pyreft trains `R` in float32 (orthonormal to about
-  `1e-7`), so the subspace orthonormalises it once in float64 and the saved edit records
-  `origin_sha256` (R as read), `basis_sha256` (rows applied), `orthonormalised=True` and
-  `source_dtype="float32"`. Refuses `pyreft_artifact_invalid` (missing or malformed file) and
-  `pyreft_artifact_unsupported` (not exactly one `LoreftIntervention`).
+: Read a pyreft LoReFT artifact into a `torchlens.bridge.pyreft.LoreftArtifact`. It never
+  imports pyreft or pyvene and never fits anything.
+  - Input: the directory `ReftModel.save` writes, holding `config.json` plus
+    `intkey_<key>.bin` under the key's dotted or underscored name.
+  - Apply it with `fork.do(artifact.subspace(site, positions=mask), artifact.edit)`, which is
+    `tl.subspace(tl.units(site, ...), R.T, origin=..., method="loreft")` with
+    `tl.intervention.set_affine_coordinates(W, bias=b)`.
+  - Precision: pyreft trains `R` in float32 (orthonormal to about `1e-7`), so the subspace
+    orthonormalises it once in float64. The saved edit records `origin_sha256` (R as read),
+    `basis_sha256` (rows applied), `orthonormalised=True` and `source_dtype="float32"`.
+  - Refusals: `pyreft_artifact_invalid` (missing or malformed file) and
+    `pyreft_artifact_unsupported` (not exactly one `LoreftIntervention`).
 
 **torchlens.bridge.pyreft.LoreftArtifact** — *documented-unstable*
-: Frozen record of one LoReFT intervention as read: `rotation` (`R`, `[d, k]`), `weight` (`W`,
-  `[k, d]`), `bias` (`b`, `[k]`) in their saved dtypes; `layer`, `component`, `unit` and
-  `units_per_example` as pyreft names the site (for example layer 8, `"block_output"`, `"pos"`,
-  1); `rank`; `origin` (the subspace `origin=` text); `provenance` (repo, revision, each file's
-  sha256, the weight file name, each tensor's source dtype, the float64 sha256 of `R`, `W`, `b`,
-  and `orthonormality_max_abs`). `subspace(site, *, positions=None)` returns the selection
-  (`site` a site label or the site from a trace, `trace[label]`; `positions` a bool mask over the
-  site's axes except the trailing feature axis; `None` is every position; a non-bool mask refuses
-  `pyreft_positions_invalid`). Given the site from a trace, its shape is checked at once: a
-  trailing axis that is not the artifact's width (or a feature axis that is not last) refuses
-  `pyreft_site_invalid`, and a mask that does not cover the other axes refuses
-  `pyreft_positions_invalid`; a label is checked at `do()`. `edit` is the float64 `set_affine_coordinates`.
+: Frozen record of one LoReFT intervention as read.
+  - Tensors, in their saved dtypes: `rotation` (`R`, `[d, k]`), `weight` (`W`, `[k, d]`),
+    `bias` (`b`, `[k]`).
+  - Site: `layer`, `component`, `unit` and `units_per_example` as pyreft names the site (for
+    example layer 8, `"block_output"`, `"pos"`, 1).
+  - Other fields: `rank`; `origin` (the subspace `origin=` text); `provenance` (repo,
+    revision, each file's sha256, the weight file name, each tensor's source dtype, the float64
+    sha256 of `R`, `W`, `b`, and `orthonormality_max_abs`).
+  - `subspace(site, *, positions=None)` returns the selection. `site` is a site label or the
+    site from a trace, `trace[label]`; `positions` is a bool mask over the site's axes except
+    the trailing feature axis, and `None` is every position. A non-bool mask refuses
+    `pyreft_positions_invalid`.
+  - Given the site from a trace, its shape is checked at once: a trailing axis that is not the
+    artifact's width (or a feature axis that is not last) refuses `pyreft_site_invalid`, and a
+    mask that does not cover the other axes refuses `pyreft_positions_invalid`. A label is
+    checked at `do()`.
+  - `edit` is the float64 `set_affine_coordinates`.
 
 **torchlens.bridge.huggingface_hub.from_hub(repo_id, *, path_in_repo, revision, token, api)** — *unstable — no deprecation shim owed*
-: Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks
-  every tar member (no links, absolute or parent-escaping names, one
-  top-level bundle), and loads it eagerly onto the CPU through `tl.load`'s default-deny
-  loader. `push_to_hub` accepts only a `Trace` or `Bundle` and never uploads
-  a pickle (`hub_push_artifact_unsupported`); its default `path_in_repo` is
-  `torchlens_artifact.tar.gz`.
+: Downloads the gzipped `.tlspec` tar that `push_to_hub` uploads, checks every tar member (no
+  links, absolute or parent-escaping names, one top-level bundle), and loads it eagerly onto
+  the CPU through `tl.load`'s default-deny loader.
+  - `push_to_hub` accepts only a `Trace` or `Bundle` and never uploads a pickle
+    (`hub_push_artifact_unsupported`); its default `path_in_repo` is
+    `torchlens_artifact.tar.gz`.
 
 **call_kwargs (torchlens.bridge.pytorch_grad_cam.cam)** — *unstable — no deprecation shim owed*
 : Mapping forwarded unchanged to the pytorch-grad-cam call (`aug_smooth`,
@@ -3351,38 +3635,41 @@ deprecation shim owed*
   `bridge_gradcam_call_option_conflict`.
 
 **SummaryCallback (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
-: Lightning callback printing `tl.summary` once per fit. Sample: the
-  module's `example_input_array` (at fit start) else the first training batch
-  (before its training step), whose forward input is `input_getter(batch)`,
-  else `batch["x"]`, else `batch[0]`, else the batch (a mapping as keyword
-  arguments). One extra forward in eval mode under no_grad; every module's
-  training flag and the RNG state are restored. Rank zero only; the report
-  stays on `.report`; a rejected sample warns `lightning_summary_skipped`.
+: Lightning callback printing `tl.summary` once per fit. Rank zero only; the report stays on
+  `.report`.
+  - Sample: the module's `example_input_array` (at fit start), else the first training batch
+    (before its training step), whose forward input is `input_getter(batch)`, else
+    `batch["x"]`, else `batch[0]`, else the batch (a mapping as keyword arguments).
+  - Cost: one extra forward in eval mode under no_grad; every module's training flag and the
+    RNG state are restored.
+  - A rejected sample warns `lightning_summary_skipped`.
 
 **LayerProfilerCallback run_id / disclosure (torchlens.callbacks.lightning)** — *unstable — no deprecation shim owed*
-: Every JSONL record carries `run_id` (fresh at each Lightning `setup`, or
-  fixed by `LayerProfilerCallback(..., run_id=...)`) and `disclosure`
-  (`PROFILE_DISCLOSURE`: one extra forward per profiled batch, eval mode,
-  no_grad, training flags restored). A batch the forward cannot take is
-  skipped with a `lightning_profile_skipped` warning; training continues.
+: Every JSONL record carries `run_id` and `disclosure`.
+  - `run_id`: fresh at each Lightning `setup`, or fixed by
+    `LayerProfilerCallback(..., run_id=...)`.
+  - `disclosure`: `PROFILE_DISCLOSURE` (one extra forward per profiled batch, eval mode,
+    no_grad, training flags restored).
+  - A batch the forward cannot take is skipped with a `lightning_profile_skipped` warning;
+    training continues.
 
 **MLflowSink, CometSink (torchlens.trackers)** — *unstable — no deprecation shim owed*
-: Forward-watch sinks over a run or experiment the user created (never
-  started or ended by the sink). `MLflowSink(client=None, *, run_id=None)`
-  takes the fluent module, an `MlflowClient` + `run_id`, or nothing; keeps the
-  caller's step; raw histograms are exact JSON artifacts. `CometSink(experiment)`
-  takes an `Experiment` or `OfflineExperiment`; scalars and text only (Comet
-  re-bins histograms, so `raw_histogram` is not advertised). Both implement
-  the `torchlens.trackers` sink protocol: `capabilities()` returns what the sink
-  accepts (`MLflowSink`: `scalar`, `raw_histogram`, `text_manifest`,
-  `run_metadata`; `CometSink` the same without `raw_histogram`);
-  `emit_scalar(point)` logs one metric at the caller's step;
-  `emit_text(point)` stores one text payload (an MLflow text artifact, a
-  Comet text log tagged in its metadata); `emit_histogram(point)` stores
-  exact counts and edges as one MLflow JSON artifact, while `CometSink`
-  refuses it with `tracker_sink_capability_missing`; `flush()` has nothing
-  to force (MLflow writes synchronously, Comet writes at `experiment.end()`);
-  `close()` is idempotent and never ends the user's run or experiment.
+: Forward-watch sinks over a run or experiment the user created; the sink never starts or ends
+  it. Both implement the `torchlens.trackers` sink protocol.
+  - `MLflowSink(client=None, *, run_id=None)` takes the fluent module, an `MlflowClient` +
+    `run_id`, or nothing. It keeps the caller's step; raw histograms are exact JSON artifacts.
+  - `CometSink(experiment)` takes an `Experiment` or `OfflineExperiment`; scalars and text
+    only (Comet re-bins histograms, so `raw_histogram` is not advertised).
+  - `capabilities()`: what the sink accepts (`MLflowSink`: `scalar`, `raw_histogram`,
+    `text_manifest`, `run_metadata`; `CometSink` the same without `raw_histogram`).
+  - `emit_scalar(point)`: logs one metric at the caller's step.
+  - `emit_text(point)`: stores one text payload (an MLflow text artifact, a Comet text log
+    tagged in its metadata).
+  - `emit_histogram(point)`: stores exact counts and edges as one MLflow JSON artifact;
+    `CometSink` refuses it with `tracker_sink_capability_missing`.
+  - `flush()`: nothing to force (MLflow writes synchronously, Comet writes at
+    `experiment.end()`).
+  - `close()`: idempotent; never ends the user's run or experiment.
 
 **tl.export.mlflow / tl.export.aim parity keys** — *unstable — no deprecation shim owed*
 : Both exporters log the per-layer table, the report and every honesty fact as
@@ -3390,48 +3677,48 @@ deprecation shim owed*
   (and `artifacts` for MLflow) beside the summary metrics and `capture_honesty`.
 
 **tl.export.xarray(trace)** — *unstable — no deprecation shim owed*
-: Returns an `xarray.Dataset` (CHANGED, batch-2 buffer ruling, option c: it returned
-  a bare `DataArray`; read today's array as `tl.export.xarray(trace)["out"]`).
-  `out` is the NeuroidAssembly `DataArray` of saved non-buffer outs,
-  `presentation` by `neuroid` with `layer` / `layer_label` / `neuroid_index`
-  coords. Each saved buffer layer is its own variable named by its layer label:
-  own dims `<label>_dim_<i>`, no presentation axis, values unchanged, attrs
-  `torchlens_kind="module_state"`, `layer_label`, `buffer_address`; the Dataset's
-  `attrs["module_state_variables"]` lists them. Save-all and partial traces both
-  export buffers (the former buffer-layer refusal is removed);
-  unsaved layers are listed in `attrs["skipped_unsaved_layers"]`. Leading-size
-  disagreement refuses `xarray_presentation_mismatch`.
+: Returns an `xarray.Dataset`. It used to return a bare `DataArray`; read today's array as
+  `tl.export.xarray(trace)["out"]`.
+  - `out`: the NeuroidAssembly `DataArray` of saved non-buffer outs, `presentation` by
+    `neuroid` with `layer` / `layer_label` / `neuroid_index` coords.
+  - Buffers: each saved buffer layer is its own variable named by its layer label, with own
+    dims `<label>_dim_<i>`, no presentation axis, values unchanged, and attrs
+    `torchlens_kind="module_state"`, `layer_label`, `buffer_address`. The Dataset's
+    `attrs["module_state_variables"]` lists them.
+  - Save-all and partial traces both export buffers (the former buffer-layer refusal is
+    removed); unsaved layers are listed in `attrs["skipped_unsaved_layers"]`.
+  - Leading-size disagreement refuses `xarray_presentation_mismatch`.
 
 **watch(grain="op", allow_forward_wrap=True) (torchlens.trackers)** — *unstable — no deprecation shim owed*
-: Op-grain (tier O) watching: per-op activations from the Route-B op-tier
-  collector during ordinary training. Needs `signals=("activations",)`,
-  `select=` (module path prefixes or a selector-algebra object) and
-  `inputs=`; refuses `watch_forward_wrap_consent_required` without
-  `allow_forward_wrap=True`, the consent to wrap the root module's forward.
-  Attach calibrates the wrap (plain vs wrapped forward, RNG and buffers
-  restored) into `session.collector.calibration` and discloses it in
-  `plan_report()`, the `torchlens/meta/op_grain_calibration` and
-  `torchlens/run/op_grain_overhead_median_x` rows and one
-  `watch_op_grain_cost_disclosed` warning. `facets={op_label: splitter}`
-  adds per-facet series under `<op label>/<facet>`. Unknown `grain=` refuses
-  `watch_grain_invalid`.
+: Op-grain (tier O) watching: per-op activations from the op-tier collector during ordinary
+  training.
+  - Needs `signals=("activations",)`, `select=` (module path prefixes or a selector-algebra
+    object) and `inputs=`.
+  - Consent: refuses `watch_forward_wrap_consent_required` without `allow_forward_wrap=True`,
+    the consent to wrap the root module's forward.
+  - Calibration: attach calibrates the wrap (plain vs wrapped forward, RNG and buffers
+    restored) into `session.collector.calibration` and discloses it in `plan_report()`, the
+    `torchlens/meta/op_grain_calibration` and `torchlens/run/op_grain_overhead_median_x` rows
+    and one `watch_op_grain_cost_disclosed` warning.
+  - `facets={op_label: splitter}` adds per-facet series under `<op label>/<facet>`.
+  - Unknown `grain=` refuses `watch_grain_invalid`.
 
 **Watch callback environment configuration (TORCHLENS_WATCH_SIGNALS, _SELECT, _EVERY, _HIST_EVERY)** — *unstable — no deprecation shim owed*
-: An explicitly constructed `HFTrainerWatchCallback` / `LightningWatchCallback`
-  takes settings it was not given from these variables (configuration only;
-  the environment never activates instrumentation) and prints each setting's
-  source at attach through `print_fn=`: `[argument]`, `[env NAME]`,
-  `[derived: logging_steps=N]` or `[default]`. Resolved values and sources stay
-  on `callback.settings`; `hist_every=` is a constructor argument too. A
-  malformed variable refuses `watch_env_config_invalid`.
+: An explicitly constructed `HFTrainerWatchCallback` / `LightningWatchCallback` takes settings
+  it was not given from these variables. They are configuration only: the environment never
+  activates instrumentation.
+  - At attach it prints each setting's source through `print_fn=`: `[argument]`,
+    `[env NAME]`, `[derived: logging_steps=N]` or `[default]`.
+  - Resolved values and sources stay on `callback.settings`; `hist_every=` is a constructor
+    argument too.
+  - A malformed variable refuses `watch_env_config_invalid`.
 
 **show_legend=None AUTO value** — *unstable — no deprecation shim owed*
-: The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless
-  an encoding channel is active, then the channel key alone; a
-  `module=` focused draw also shows the key. The reading key (what `@name`,
-  an op name's two counters, the shape and size line and call arguments mean)
-  is opt-in: `show_legend=True` adds it to a focused draw.
-  `True`/`False` keep their stable historical meanings.
+: The tri-state AUTO value on the stable `show_legend` kwarg: no legend unless an encoding
+  channel is active, then the channel key alone. A `module=` focused draw also shows the key.
+  - The reading key (what `@name`, an op name's two counters, the shape and size line and call
+    arguments mean) is opt-in: `show_legend=True` adds it to a focused draw.
+  - `True`/`False` keep their stable historical meanings.
 
 **Encoding refusal codes** — *unstable — no deprecation shim owed*
 : `encoding_source_invalid`, `encoding_value_invalid`,
@@ -3440,106 +3727,102 @@ deprecation shim owed*
   `stack_by_auto_underivable`, `stack_by_requires_unrolled`.
 
 **trace.autograd.grad_fn_fire_timings** — *unstable — no deprecation shim owed*
-: Live-trace-only per-fire backward timing spans, keyed like
-  `trace.autograd.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`). Both stamps of
-  every span come from `time.perf_counter()`, paired at capture time by a
-  per-node keyed LIFO (stale entries are discarded, never paired); untimed
-  fires read `None`, never a false zero. Served from the runtime
-  `GradFnFired` event stream, which never persists: loaded or cleaned traces
-  refuse typed `grad_fn_fire_timing_unavailable`. As of the tlspec v8 bump
-  the persisted `GradFnCall` timing fields carry the per-fire
-  `perf_counter` pair, discriminated by `Trace.grad_fn_timing_provenance`.
+: Live-trace-only backward timing spans, one per fire, keyed like
+  `trace.autograd.grad_fn_calls` (`"<grad_fn_label>:<call_index>"`).
+  - Both stamps of every span come from `time.perf_counter()`, paired at capture time by a
+    per-node keyed LIFO (stale entries are discarded, never paired). Untimed fires read
+    `None`, never a false zero.
+  - Served from the runtime `GradFnFired` event stream, which never persists: loaded or
+    cleaned traces refuse typed `grad_fn_fire_timing_unavailable`.
+  - A saved trace keeps the per-fire `perf_counter` pair in the `GradFnCall` timing fields,
+    discriminated by `Trace.grad_fn_timing_provenance`.
 
 **Trace.grad_fn_timing_provenance** — *unstable — no deprecation shim owed*
-: The per-fire timing clock-provenance marker: `"unmeasured"` until a timing
-  prehook arms, `"perf_counter"` on the universal path
-  (`"perf_counter_grad_saved_only"` reserved for the fallback mode).
-  Persists as of tlspec v8, where the persisted `GradFnCall` stamps carry
-  the per-fire `perf_counter` pair this marker discriminates; an untimed
-  fire persists `(None, None)` and reads a `None` duration.
+: The marker that says which clock the per-fire timings came from: `"unmeasured"` until a
+  timing prehook arms, `"perf_counter"` on the universal path (`"perf_counter_grad_saved_only"`
+  is reserved for a fallback mode).
+  - Saved with the trace, where the saved `GradFnCall` stamps carry the per-fire
+    `perf_counter` pair this marker discriminates. An untimed fire saves `(None, None)` and
+    reads a `None` duration.
 
 **Trace.checkpoint_invocation_witness** — *unstable — no deprecation shim owed*
-: The projected checkpoint-invocation summary: token count, per-token pack
-  counts / unpack window evidence / BACKWARD-DERIVED site-key candidates,
-  degrade flags (`classifier_unavailable`, `patch_unavailable`,
-  `exotic_subclass`, `unmatched_backward_warn`, `reentrant_node_discovered`,
-  `unwitnessed_checkpoint_enter`), and an evidence-scoped completeness
-  verdict — any flag withdraws the affirmative no-checkpoint claim. Tokens
-  are minted only for classified non-reentrant `_checkpoint_hook` enters on
-  the armed owner thread outside any engine invocation; reentrant
-  checkpointing is token-free and affirmatively sentinel-flagged.
-  Persists as of tlspec v8 with closed-vocabulary load validation. The
-  typed checkpoint-ambiguity refusal awaits a pending contract amendment and is not yet
-  shipped.
+: The projected checkpoint-invocation summary: what the capture saw of activation
+  checkpointing, with a completeness verdict scoped to that evidence.
+  - Contents: token count, per-token pack counts, unpack window evidence and BACKWARD-DERIVED
+    site-key candidates, degrade flags, and the evidence-scoped completeness verdict.
+  - Degrade flags: `classifier_unavailable`, `patch_unavailable`, `exotic_subclass`,
+    `unmatched_backward_warn`, `reentrant_node_discovered`, `unwitnessed_checkpoint_enter`.
+    Any flag withdraws the affirmative no-checkpoint claim.
+  - Tokens are minted only for classified non-reentrant `_checkpoint_hook` enters on the armed
+    owner thread outside any engine invocation; reentrant checkpointing is token-free and
+    affirmatively sentinel-flagged.
+  - Saved with the trace and validated against a closed vocabulary on load.
+  - A typed checkpoint-ambiguity refusal is not yet shipped.
 
 **trace.grad_fn_site_summary** — *unstable — no deprecation shim owed*
-: The grouped-backward floor: a read-only per-`site_key` rollup of
-  GradFn/GradFnCall facts (labels, fire counts, pass coverage, and live
-  per-fire timing totals when evidence exists). Grad-fns without an op FK
-  aggregate under the `None` key; op-backed grad-fns on a keyless legacy
-  artifact refuse typed `site_key_unavailable`. Accessor-level only — no
-  persisted fields.
+: The grouped-backward floor: a read-only per-`site_key` rollup of GradFn/GradFnCall facts
+  (labels, fire counts, pass coverage, and live per-fire timing totals when evidence exists).
+  - Grad-fns without a forward op aggregate under the `None` key; op-backed grad-fns on a
+    keyless legacy artifact refuse typed `site_key_unavailable`.
+  - Accessor-level only: no persisted fields.
 
 **BackwardPass.aten_ops / DispatchedOp** — *unstable — no deprecation shim owed*
-: The ATen calls one backward pass dispatched, recorded while the pass ran
-  through a capture that requested a backward (`backward_ready=True`,
-  `save_grads=` or `default_grad=`). Each `DispatchedOp` is value-free:
-  `operator` (`"aten.mm.default"`), `input_shapes`/`input_dtypes` (one entry
-  per positional argument, `None` for non-tensors), `output_shapes`/
-  `output_dtypes`, `grad_fn_call_ref` (`(grad_fn_object_id, call_index,
-  pass_index)` of the GradFn call it ran under, or `None`), `family`
-  (`"matmul"`, `"convolution"`, `"zero_arithmetic"`, `"uncounted"`) and
-  `flops` (fma2 for counted calls, `0` for layout calls, `None` outside the
-  counted families). Session-time: `None` on a loaded trace or an implicit
-  pass. Calls made inside TorchLens's own GradFn posthooks are not recorded;
-  gradient-saving copies from its tensor hooks appear as zero-arithmetic calls.
+: The ATen calls one backward pass dispatched, recorded while the pass ran through a capture
+  that requested a backward (`backward_ready=True`, `save_grads=` or `default_grad=`). Each
+  `DispatchedOp` is value-free.
+  - `DispatchedOp` fields: `operator` (`"aten.mm.default"`), `input_shapes`/`input_dtypes`
+    (one entry per positional argument, `None` for non-tensors), `output_shapes`/
+    `output_dtypes`, `grad_fn_call_ref` (`(grad_fn_object_id, call_index, pass_index)` of the
+    GradFn call it ran under, or `None`), `family` (`"matmul"`, `"convolution"`,
+    `"zero_arithmetic"`, `"uncounted"`) and `flops` (fma2 for counted calls, `0` for layout
+    calls, `None` outside the counted families).
+  - Session-time: `None` on a loaded trace or an implicit pass.
+  - Calls made inside TorchLens's own GradFn posthooks are not recorded; gradient-saving
+    copies from its tensor hooks appear as zero-arithmetic calls.
 
 **BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_op_counts / convention** — *unstable — no deprecation shim owed*
-: `tl.report.backward_status(trace)` in the `backward_observed` state counts
-  the backward that ran over each pass's `aten_ops`: `executed_flops`
-  is exact for the matmul and convolution families at fma2
-  (`convention`, FlopCounterMode's convention), or `None` when a
-  pass has no record on this object. `executed_flops_per_pass` pairs each
-  pass index with its count; a `create_graph=True` gradient and the backward
-  through it are separate passes. `uncounted_op_counts` names every recorded op
-  kind outside the counted families with its call count, never zeroed or
-  estimated. `grad_disabled` still reads `0` and `grad_enabled_unobserved`
-  still reads unknown; the hypothetical `backward_estimate` is unchanged.
+: In the `backward_observed` state, `tl.report.backward_status(trace)` counts the backward that
+  ran over each pass's `aten_ops`.
+  - `executed_flops`: exact for the matmul and convolution families at fma2 (`convention`,
+    FlopCounterMode's convention), or `None` when a pass has no record on this object.
+  - `executed_flops_per_pass`: pairs each pass index with its count; a `create_graph=True`
+    gradient and the backward through it are separate passes.
+  - `uncounted_op_counts`: every recorded op kind outside the counted families with its call
+    count, never zeroed or estimated.
+  - Other states: `grad_disabled` still reads `0` and `grad_enabled_unobserved` still reads
+    unknown; the hypothetical `backward_estimate` is unchanged.
 
 **BackwardPass.flops_attribution / BackwardFlopsAttribution / BackwardFlopsRow** — *unstable — no deprecation shim owed*
-: One backward pass's executed FLOPs charged to the GradFn call each counted
-  call ran under and to the forward op that node differentiates. A
-  `BackwardFlopsAttribution` holds `pass_number`, `rows` (one `BackwardFlopsRow` per GradFn
-  call: `pass_number` (was `pass_index`; JMT 1 Nov 2026 3:00 PM PT), `grad_fn_label`,
-  `call_index`, `op_label` or `None` for
-  a node with no forward op, `flops`, `recompute_flops`), the
-  `unattributed_flops` bucket with every unattributed call named in
-  `unattributed_ops` (the seed gradient, nodes no capture walked), so rows
-  plus bucket equal `executed_flops` exactly; `uncounted_ops`, `recompute`
-  (`"labeled"`, `"none_observed"`, `"unknown"`), `other_trace_ops` (calls on
-  another capture's nodes in a shared backward, left to it) and `source`.
-  `flops_by_op()` sums rows per forward op. `None` when the pass has no
-  census on this object; a pass that raised has `executed_flops` `None`.
+: One backward pass's executed FLOPs, charged to the GradFn call each counted call ran under
+  and to the forward op that node differentiates. `None` when the pass has no census on this
+  object; a pass that raised has `executed_flops` `None`.
+  - `BackwardFlopsAttribution` fields: `pass_number`, `rows`, the `unattributed_flops` bucket
+    with every unattributed call named in `unattributed_ops` (the seed gradient, nodes no
+    capture walked), `uncounted_ops`, `recompute` (`"labeled"`, `"none_observed"`,
+    `"unknown"`), `other_trace_ops` (calls on another capture's nodes in a shared backward,
+    left to it) and `source`. Rows plus bucket equal `executed_flops` exactly.
+  - `BackwardFlopsRow` (one per GradFn call): `pass_number` (formerly `pass_index`),
+    `grad_fn_label`, `call_index`, `op_label` (or `None` for a node with no forward op),
+    `flops`, `recompute_flops`.
+  - `flops_by_op()` sums rows per forward op.
 
 **Persisted backward FLOPs record (`BackwardPass`)** — *unstable — no deprecation shim owed*
-: The pass's counted executed backward and its attribution as a closed
-  record (`convention`, `executed_flops`, `uncounted_ops`, `rows`,
-  `unattributed`; ints, `None` and short strings only), written when the
-  trace is saved so a loaded trace reads the counted answer through
-  `flops_attribution` and `tl.report.backward_status`. The record is the
-  private persisted field `_executed_flops_record` (stored key
-  `_executed_flops_record` as of tlspec v11), not a public read; it is `None`
-  on a live pass. A malformed record refuses at load with
-  `artifact_executed_flops_record_invalid`.
+: The pass's counted executed backward and its attribution, saved with the trace as a closed
+  record (`convention`, `executed_flops`, `uncounted_ops`, `rows`, `unattributed`; ints,
+  `None` and short strings only), so a loaded trace reads the counted answer through
+  `flops_attribution` and `tl.report.backward_status`.
+  - The record is internal, not a public read; it is `None` on a live pass.
+  - A malformed record refuses at load with `artifact_executed_flops_record_invalid`.
 
 **BackwardStatus.flops_attributions / unattributed_flops / recompute_flops** — *unstable — no deprecation shim owed*
-: `tl.report.backward_status(trace)` in the `backward_observed` state: one
-  `BackwardFlopsAttribution` per counted pass, the counted work that ran
-  under no recorded node, and the part that replayed forward kernels under
-  activation checkpointing (`None` when the evidence cannot separate replay
-  from backward, as in a `create_graph` pass that checkpoints). Empty or
-  `None` in the other two states. The record's constructor keyword is
-  `flops_attributions=`.
+: Three fields of `tl.report.backward_status(trace)` in the `backward_observed` state; empty or
+  `None` in the other two states.
+  - Per counted pass: one `BackwardFlopsAttribution` (the record's constructor keyword is
+    `flops_attributions=`).
+  - Unattributed: the counted work that ran under no recorded node.
+  - Recompute: the part that replayed forward kernels under activation checkpointing (`None`
+    when the evidence cannot separate replay from backward, as in a `create_graph` pass that
+    checkpoints).
 
 **DispatchedOp.grad_enabled** — *unstable — no deprecation shim owed*
 : Whether autograd grad mode was on when the call dispatched during a
@@ -3548,173 +3831,171 @@ deprecation shim owed*
   forward kernel is labeled recompute.
 
 **CostTreeRow forward/backward/total columns; CostTree.backward_state / total_backward_flops / total_forward_mac_flops / column_conventions** — *unstable — no deprecation shim owed*
-: `tl.report.cost_tree(trace)` rows carry `self_forward_mac_flops` (2 x true
-  MACs), `self_backward_flops` (executed backward, matmul and convolution
-  families, fma2) and `self_forward_backward_flops` (their sum, one convention), with
-  non-additive subtree twins `CostTreeRow.subtree_forward_mac_flops`,
-  `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_forward_backward_flops`
-  (constructor keywords `subtree_forward_mac_flops=`,
-  `subtree_backward_flops=`, `subtree_forward_backward_flops=`). Backward work on nodes with no
-  forward op and unattributed calls get their own remainder rows, so the self
-  backward column sums to `total_backward_flops`. Without a counted backward the
-  cells are `None` and `backward_state` names the state; never 0.
-  `column_conventions` names each FLOPs column's convention. Siblings fold
-  only when their MAC and backward cells agree too.
+: The forward and backward FLOPs columns of `tl.report.cost_tree(trace)`.
+  - Self columns: `self_forward_mac_flops` (2 x true MACs), `self_backward_flops` (executed
+    backward, matmul and convolution families, fma2) and `self_forward_backward_flops` (their
+    sum, one convention).
+  - Subtree twins (not additive): `CostTreeRow.subtree_forward_mac_flops`,
+    `CostTreeRow.subtree_backward_flops` and `CostTreeRow.subtree_forward_backward_flops`
+    (constructor keywords `subtree_forward_mac_flops=`, `subtree_backward_flops=`,
+    `subtree_forward_backward_flops=`).
+  - Remainder rows: backward work on nodes with no forward op and unattributed calls get their
+    own rows, so the self backward column sums to `total_backward_flops`.
+  - Without a counted backward the cells are `None` and `backward_state` names the state;
+    never 0.
+  - `column_conventions` names each FLOPs column's convention.
+  - Siblings fold only when their MAC and backward cells agree too.
 
-**until= (run kwarg) / report.truncated / report.stopped_at** — *unstable — no
-deprecation shim owed*
-: `trace.run_transaction(inputs=..., until=...)` executes only the dependency closure (or disclosed
-  sequential prefix) needed to reach the named sites. Truncation is a
-  RESULT/REPORT term, never a capture outcome: the report's flat surface is
-  `report.truncated` (bool) and `report.stopped_at` (the stop-frontier site
-  label), with the full `RunTruncation` disclosure on `report.truncation`
-  (regime, requested sites, executed/skipped counts, skipped-site digest).
-  Skipped sites are "not-run", never "passed". With `fast=True` on a live trace
-  the native forward is cut right after the `until=` site, which must be a
-  site the capture saved (a module address, `"address:call"`, or a saved op label;
-  otherwise `run_capability_unavailable` at stage `fast_until_site_unsaved`): the
-  prefix keeps the fast path's per-call guards and comes back graph-connected under
-  the default save, the regime is `live_stop_after`, the output and the later saved
-  sites read `None` for that run (the next full run refreshes them), and the verdict
-  is `unverifiable` because the whole-forward call fingerprint cannot be compared.
-  The fast run refreshes its result trace (`trace.run_transaction(inputs=..., fast=True)` on a live trace
-  returns a new Trace and leaves the source untouched; JMT, Sun 1 Nov 2026), so that
-  verdict marks the result trace as every truncated run product is marked (monotonic: save, export or validate it before
-  training through `until=`).
-  A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
-  contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
+**until= (run kwarg) / report.truncated / report.stopped_at** — *unstable — no deprecation shim owed*
+: `trace.run_transaction(inputs=..., until=...)` executes only the dependency closure (or
+  disclosed sequential prefix) needed to reach the named sites.
+  - Truncation is a RESULT/REPORT term, never a capture outcome. The report's flat surface is
+    `report.truncated` (bool) and `report.stopped_at` (the stop-frontier site label), with the
+    full `RunTruncation` disclosure on `report.truncation` (regime, requested sites,
+    executed/skipped counts, skipped-site digest).
+  - Skipped sites are "not-run", never "passed".
+  - With `fast=True` on a live trace the native forward is cut right after the `until=` site,
+    which must be a site the capture saved (a module address, `"address:call"`, or a saved op
+    label; otherwise `run_capability_unavailable` at stage `fast_until_site_unsaved`).
+  - In that fast run the prefix keeps the fast path's per-call guards and comes back
+    graph-connected under the default save; the regime is `live_stop_after`; the output and
+    the later saved sites read `None` for that run (the next full run refreshes them); and the
+    verdict is `unverifiable` because the whole-forward call fingerprint cannot be compared.
+  - The fast run refreshes its result trace: `trace.run_transaction(inputs=..., fast=True)` on
+    a live trace returns a new Trace and leaves the source untouched. So that verdict marks the
+    result trace as every truncated run product is marked (monotonic: save, export or validate
+    it before training through `until=`).
+  - A loaded artifact's fast tier still refuses `run_fast_until_unsupported`.
+  - Full contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
 
 **Trace.sites()** — *unstable — no deprecation shim owed*
-: The tabular view of a trace's structural sites: one row per distinct L1
-  `site_key` in first-occurrence execution order, aggregating the ops that
-  share the site (`module_site`, `layer_type`, `output_slot`,
-  `call_ordinal`, `n_ops`, labels, passes, shapes). Requires the `tabular`
-  extra (pandas); legacy artifacts without site keys refuse
-  `site_key_unavailable`, never a silently empty table.
+: The tabular view of a trace's structural sites: one row per distinct `site_key` in
+  first-occurrence execution order, aggregating the ops that share the site (`module_site`,
+  `layer_type`, `output_slot`, `call_ordinal`, `n_ops`, labels, passes, shapes).
+  - Requires the `tabular` extra (pandas).
+  - Legacy artifacts without site keys refuse `site_key_unavailable`, never a silently empty
+    table.
 
 **Trace.bill_of_materials()** — *unstable — no deprecation shim owed*
 : The inventory of what a trace actually contains: a nested, JSON-friendly
   dict of sections (`capture`, `graph`, `parameters`, `buffers`,
   `activations`, `backward`, `annotations`), every figure read from fields
-  the trace already carries — the rollup mints no new claims.
+  the trace already carries. The rollup mints no new claims.
 
 **logit_lens (torchlens._semantic)** — *unstable — no deprecation shim owed*
-: `torchlens._semantic.logit_lens(trace)` projects each block's
-  residual-stream facet through the model's own final norm + unembedding,
-  returning a `LogitLens` (per-layer logits, `summary()`,
-  `top_tokens()`). The reconstructed lens is validated against the captured
-  logits before use and refuses `LogitLensError` when the head cannot be
-  represented; pass `lens=` for a tuned lens or `verify=False` to trust
-  the reconstruction explicitly. With no language-model head, the default
-  lens falls back to a vision head recipe, validated the same way:
-  `classification_head` (final norm plus `classifier` over the `[CLS]`
-  token; `lens_source="classifier_head"`) or CLIP's
-  `contrastive_image_head` (per-layer scores against the captured text
-  features of the label prompts; `lens_source="contrastive_head"`). A user
-  lens may carry `model_identity` (an extraction manifest's identity
-  record): a differing measured identity refuses
-  `logit_lens_identity_mismatch` unless `verify=False`; a lens with no
-  comparable identity warns `logit_lens_identity_unrecorded` when its
-  last-layer decode misses the captured logits. Its streaming sibling
-  `logit_lens_predictions(trace, ...)` keeps only per-layer top-k, `logsumexp`
-  and requested-token values; its keyword-only `mask_input=True` bans the
-  model input's own token ids before those reductions (the trace's first input
-  must be saved integer token ids, else `logit_lens_mask_input_unavailable`).
-  Trajectory statistics over many batches: `tl.mechinterp.measure_trajectory`. See
-  [facets](../facets.md).
+: `torchlens._semantic.logit_lens(trace)` projects each block's residual-stream facet through
+  the model's own final norm + unembedding, returning a `LogitLens` (per-layer logits,
+  `summary()`, `top_tokens()`).
+  - Validation: the reconstructed lens is validated against the captured logits before use and
+    refuses `LogitLensError` when the head cannot be represented. Pass `lens=` for a tuned lens
+    or `verify=False` to trust the reconstruction explicitly.
+  - Vision fallback: with no language-model head, the default lens falls back to a vision head
+    recipe, validated the same way: `classification_head` (final norm plus `classifier` over
+    the `[CLS]` token; `lens_source="classifier_head"`) or CLIP's `contrastive_image_head`
+    (per-layer scores against the captured text features of the label prompts;
+    `lens_source="contrastive_head"`).
+  - User lens identity: a user lens may carry `model_identity` (an extraction manifest's
+    identity record). A differing measured identity refuses `logit_lens_identity_mismatch`
+    unless `verify=False`; a lens with no comparable identity warns
+    `logit_lens_identity_unrecorded` when its last-layer decode misses the captured logits.
+  - Streaming sibling: `logit_lens_predictions(trace, ...)` keeps only per-layer top-k,
+    `logsumexp` and requested-token values. Its keyword-only `mask_input=True` bans the model
+    input's own token ids before those reductions (the trace's first input must be saved
+    integer token ids, else `logit_lens_mask_input_unavailable`).
+  - Related: trajectory statistics over many batches are `tl.mechinterp.measure_trajectory`.
+    See [facets](../facets.md).
 
 **render_logit_lens_heatmap (torchlens.transformer)** — *unstable — no deprecation shim owed*
-: `torchlens.viz.logit_lens(result, path)` draws a
-  `LogitLens` as a layers-by-positions heatmap: one row per projected
-  block, one column per input position, each cell printing that layer's
-  top-1 next-token prediction and colored on a fixed 0-to-1 probability
-  scale (the top-1 probability, or with `value="target_prob",
-  target_token_id=...` a tracked token's). The footer states the lens
-  source, whether it was validated, and that every row is projected through
-  the final norm and head; only a validated lens lets it say that the last
-  row reproduces the model's own output scores. `title=` prefixes the
-  figure title with a subject such as the model's name. Lenses
-  wider than 48 positions refuse `tv_record_invalid` until `positions=`
-  names the columns; nothing is cropped silently. Returns a `SavedFigure`.
+: `torchlens.viz.logit_lens(result, path)` draws a `LogitLens` as a layers-by-positions heatmap
+  and returns a `SavedFigure`.
+  - Cells: one row per projected block, one column per input position; each cell prints that
+    layer's top-1 next-token prediction and is colored on a fixed 0-to-1 probability scale (the
+    top-1 probability, or with `value="target_prob", target_token_id=...` a tracked token's).
+  - Footer: states the lens source, whether it was validated, and that every row is projected
+    through the final norm and head. Only a validated lens lets it say that the last row
+    reproduces the model's own output scores.
+  - `title=` prefixes the figure title with a subject such as the model's name.
+  - Lenses wider than 48 positions refuse `tv_record_invalid` until `positions=` names the
+    columns; nothing is cropped silently.
 
 **kv-group receipts (torchlens.transformer)** — *unstable — no deprecation shim owed*
-: `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))`
-  builds a `CausalReceipt` whose cells are grouped-query KV groups, for
-  grids over a key or value site. The receipt's `kv_groups` field holds the
-  grouping, `unit` reads `"kv group"`, and `sharing_lines()` names each
-  group's query heads; `render_receipt_grid` labels the columns by group
-  and prints that no cell is a per-query-head effect. `GqaInfo` gains
-  `query_heads(group)` and `group_header(group)`. A grid whose head axis
-  exceeds the group count refuses `tv_record_invalid`; mixing kv-group and
-  query-head rows refuses `tv_receipt_invalid`; `Annotation.from_receipt`
-  refuses a kv-group receipt `tv_annotation_invalid`. A grid from
-  `mechinterp.patch_query_heads_grid` is an ordinary query-head receipt: its
-  `effect_site` receipt becomes the receipt's `effect_source`, printed as
-  "effect source: ..." on the grid figure, and passing `kv_groups=` for it
-  refuses `tv_receipt_invalid`.
+: `tviz.receipt_from_patch_grid(grid, ..., kv_groups=tviz.GqaInfo(...))` builds a
+  `CausalReceipt` whose cells are grouped-query KV groups, for grids over a key or value site.
+  - The receipt's `kv_groups` field holds the grouping, `unit` reads `"kv group"`, and
+    `sharing_lines()` names each group's query heads.
+  - `render_receipt_grid` labels the columns by group and prints that no cell is a
+    per-query-head effect.
+  - `GqaInfo` gains `query_heads(group)` and `group_header(group)`.
+  - Refusals: a grid whose head axis exceeds the group count refuses `tv_record_invalid`;
+    mixing kv-group and query-head rows refuses `tv_receipt_invalid`; `Annotation.from_receipt`
+    refuses a kv-group receipt `tv_annotation_invalid`.
+  - A grid from `mechinterp.patch_query_heads_grid` is an ordinary query-head receipt: its
+    `effect_site` receipt becomes the receipt's `effect_source`, printed as "effect source:
+    ..." on the grid figure, and passing `kv_groups=` for it refuses `tv_receipt_invalid`.
 
 **Receipt cells and patch-grid baselines (torchlens.transformer, torchlens.mechinterp)** — *unstable — no deprecation shim owed*
-: A `mechinterp.PatchGrid` from `mechinterp.patch_grid`, its presets or
-  `mechinterp.patch_query_heads_grid` keeps `values` as the metric of each
-  patched run (`to_pandas` names the column `metric`) and records the
-  unpatched baselines as `receipts["clean_metric"]` and
-  `receipts["corrupted_metric"]`. `tviz.receipt_from_patch_grid` turns a
-  row into effects: patched metric minus `corrupted_metric`, the run every
-  cell patches into, so a cell that changes nothing is exactly 0, the same
-  quantity as the self-patch negative control. A grid without
-  `corrupted_metric` refuses `tv_receipt_invalid`. The `CausalReceipt`
-  carries the baseline as `baseline_metric` (`None` when a producer did not
-  record one) and names its run in `baseline_run` ("unpatched corrupted
-  run" for a patch-grid receipt); its `effects`, `joint_effect` and
-  controls are all deltas from that run. The default `intervention` wording is "clean activation of
-  one head patched into the corrupted run" ("one kv group" with
-  `kv_groups=`); a row's `fires` is its own cell count when the grid's
-  ledger shows one fire per cell. `tl.viz.ablation_grid` titles the
-  figure "measured head effects on METRIC", labels the colorbar "change in
-  METRIC", labels the x axis "query head" (or "kv group"), prints "each
-  cell: change in METRIC from the unpatched corrupted run (B)" and says
-  single-head effects need not be additive in the footer, refuses rows
-  measured from different baselines (`tv_receipt_invalid`), and reserves the footer's height below the matrix
-  and its tick labels.
+: How patch-grid results become per-cell effects measured from one baseline run.
+  - A `mechinterp.PatchGrid` from `mechinterp.patch_grid`, its presets or
+    `mechinterp.patch_query_heads_grid` keeps `values` as the metric of each patched run
+    (`to_pandas` names the column `metric`) and records the unpatched baselines as
+    `receipts["clean_metric"]` and `receipts["corrupted_metric"]`.
+  - `tviz.receipt_from_patch_grid` turns a row into effects: patched metric minus
+    `corrupted_metric`, the run every cell patches into. A cell that changes nothing is exactly
+    0, the same quantity as the self-patch negative control. A grid without `corrupted_metric`
+    refuses `tv_receipt_invalid`.
+  - The `CausalReceipt` carries the baseline as `baseline_metric` (`None` when a producer did
+    not record one) and names its run in `baseline_run` ("unpatched corrupted run" for a
+    patch-grid receipt); its `effects`, `joint_effect` and controls are all deltas from that
+    run.
+  - The default `intervention` wording is "clean activation of one head patched into the
+    corrupted run" ("one kv group" with `kv_groups=`); a row's `fires` is its own cell count
+    when the grid's ledger shows one fire per cell.
+  - `tl.viz.ablation_grid` titles the figure "measured head effects on METRIC", labels the
+    colorbar "change in METRIC", labels the x axis "query head" (or "kv group"), prints "each
+    cell: change in METRIC from the unpatched corrupted run (B)" and says in the footer that
+    single-head effects need not be additive. It refuses rows measured from different
+    baselines (`tv_receipt_invalid`) and reserves the footer's height below the matrix and its
+    tick labels.
 
 **Summary columns (`summary(columns=...)`)** — *unstable — no deprecation shim owed*
-: The column registry of `tl.summary` / `trace.summary`: `name`, `input`,
-  `output`, `kernel_size`, `groups`, `params`, `params_pct`,
-  `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`,
-  `passes`, `evidence`. `input` lists the shapes of the distinct tensors
-  entering a row; `output` lists every member shape of the row's output in
-  return order (past 60 characters a run of identical shapes prints once as
-  `shape ×N`, and a list still too long ends in `... +K more`; `input` cells
-  compact the same way); `kernel_size` / `groups` read the row's own conv or
-  pooling op; `params_trainable` is the per-path trainable count (`train`
-  stays the yes/no/partial `requires_grad` tri-state); `mode` is
-  `module.training` as captured (`train` / `eval` / `mixed`); `flops_pct`
-  is the row's share of the known forward FLOPs. A `+name` delta inserts
-  at the column's registry position. A FLOP cell whose count includes a
-  full-square attention op ends in `^` with a footer note. See
-  [summary](summary.md).
+: The column registry of `tl.summary` / `trace.summary`. See [summary](summary.md).
+  - Columns: `name`, `input`, `output`, `kernel_size`, `groups`, `params`, `params_pct`,
+    `params_trainable`, `flops`, `flops_pct`, `macs`, `train`, `mode`, `passes`, `evidence`.
+  - `input` lists the shapes of the distinct tensors entering a row.
+  - `output` lists every member shape of the row's output in return order. Past 60 characters
+    a run of identical shapes prints once as `shape ×N`, and a list still too long ends in
+    `... +K more`; `input` cells compact the same way.
+  - `kernel_size` / `groups` read the row's own conv or pooling op.
+  - `params_trainable` is the per-path trainable count (`train` stays the yes/no/partial
+    `requires_grad` tri-state).
+  - `mode` is `module.training` as captured (`train` / `eval` / `mixed`).
+  - `flops_pct` is the row's share of the known forward FLOPs.
+  - A `+name` delta inserts at the column's registry position.
+  - A FLOP cell whose count includes a full-square attention op ends in `^` with a footer note.
 
 **SummaryReport.table (`trace.summary(view="stats").table`)** — *unstable — no deprecation shim owed*
-: The typed observation table (`StatsTable`) behind a `view="stats"` report: `rows`
-  (`StatsTableRow` records with `state`, `value_stats`, `reason`, `parent_mark`), `ok_rows`,
-  `sort_rows(by=..., descending=...)` (sorts on a sampled column are disclosed) and
-  `fold_same_as_parent()` (opt-in fold of `= parent` rows with an exact count). The report's
-  text is one rendering of it. A report built with any other view carries no table and
-  refuses `summary_table_unavailable`.
+: The typed observation table (`StatsTable`) behind a `view="stats"` report. The report's text
+  is one rendering of it.
+  - `rows`: `StatsTableRow` records with `state`, `value_stats`, `reason`, `parent_mark`.
+  - Also `ok_rows`, `sort_rows(by=..., descending=...)` (sorts on a sampled column are
+    disclosed) and `fold_same_as_parent()` (opt-in fold of `= parent` rows with an exact
+    count).
+  - A report built with any other view carries no table and refuses
+    `summary_table_unavailable`.
 
 **Summary Params footer extras** — *unstable — no deprecation shim owed*
-: The Params footer line carries `size` (unique parameter storage, dtype
-  true), a `pruned:` note with raw and effective nonzero counts on models
-  reparametrized by `torch.nn.utils.prune` (`<name>_orig` + `<name>_mask`),
-  and `optimizer state N params, X MB` when the capture was given
-  `CaptureOptions(optimizer=...)` (read from the optimizer's live state;
-  omitted on a loaded trace). The raw values ride `SummaryTotals.params_bytes`,
-  `.params_effective`, `.optimizer_state_params`, and
-  `.optimizer_state_bytes`: `params_bytes` is the unique parameters'
-  storage, `params_effective` is set only on a pruned model (raw total minus
-  mask zeros), and `optimizer_state_params` and `optimizer_state_bytes` are
-  set only when the capture was given an optimizer; each is `None`
-  otherwise.
+: Extras on the summary's Params footer line.
+  - `size`: unique parameter storage, dtype true.
+  - A `pruned:` note with raw and effective nonzero counts on models reparametrized by
+    `torch.nn.utils.prune` (`<name>_orig` + `<name>_mask`).
+  - `optimizer state N params, X MB` when the capture was given
+    `CaptureOptions(optimizer=...)` (read from the optimizer's live state; omitted on a loaded
+    trace).
+  - Raw values: `SummaryTotals.params_bytes`, `.params_effective`, `.optimizer_state_params`
+    and `.optimizer_state_bytes`. `params_bytes` is the unique parameters' storage;
+    `params_effective` is set only on a pruned model (raw total minus mask zeros);
+    `optimizer_state_params` and `optimizer_state_bytes` are set only when the capture was
+    given an optimizer. Each is `None` otherwise.
 
 **ParamFacts.nbytes / ParamFacts.pruned (`tl.report.PrunedParamFacts`)** — *unstable — no deprecation shim owed*
 : FactCore parameter facts (schema version 2): `bytes` is the unique
@@ -3724,26 +4005,26 @@ deprecation shim owed*
   the capture retained no mask values).
 
 **FlopsReport.attention_full_square_ops / ProfileReport.attention_full_square_ops** — *unstable — no deprecation shim owed*
-: The count (the `attention_full_square_ops` field) of `scaled_dot_product_attention` ops in the forward FLOP total
-  of a `flops` or a `trace.profile()`; when non-zero the report or the
-  profile footer prints that attention FLOPs count the full query x key
-  square and masks / `is_causal` are not discounted. Every attention FLOP
-  line carries the same note: the `tl.summary` FLOP cells (marked, with the
-  note as a legend), the `explain` FLOPs line, and graph labels, where an
-  attention node's `flops` label field or `flops` overlay row is followed by
-  the note.
+: The count (the `attention_full_square_ops` field) of `scaled_dot_product_attention` ops in the
+  forward FLOP total of a `flops` or a `trace.profile()`.
+  - When non-zero, the report or the profile footer prints that attention FLOPs count the full
+    query x key square and masks / `is_causal` are not discounted.
+  - Every attention FLOP line carries the same note: the `tl.summary` FLOP cells (marked, with
+    the note as a legend), the `explain` FLOPs line, and graph labels, where an attention
+    node's `flops` label field or `flops` overlay row is followed by the note.
 
 **`decode_style_unknown`** — *unstable — no deprecation shim owed*
-: The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
-  subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
-  detector resolves, with a did-you-mean over the built-in styles (`classification`,
-  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` when no
-  rank-2 or rank-3 logits are retained. `style="hf_text"` without a `tokenizer=` is not a
-  refusal: the rows carry the argmax `token_ids` and `text` is `None` (the trace was
-  captured without a tokenizer). Output decoding is read-time only: the capture runs the
-  automatic detector pass with no option, and `CaptureOptions` has no decode field;
-  `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
-  keywords on `tl.trace` refuse naming `trace.decode_output(...)`.
+: The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError` subclass)
+  for a `Trace.decode_output(style=...)` that no built-in or registered custom output detector
+  resolves, with a did-you-mean over the built-in styles (`classification`, `imagenet`,
+  `imagenet1k`, `hf_text`).
+  - The same code refuses `style="hf_text"` when no rank-2 or rank-3 logits are retained.
+  - `style="hf_text"` without a `tokenizer=` is not a refusal: the rows carry the argmax
+    `token_ids` and `text` is `None` (the trace was captured without a tokenizer).
+  - Output decoding is read-time only: the capture runs the automatic detector pass with no
+    option, and `CaptureOptions` has no decode field.
+  - `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
+    keywords on `tl.trace` refuse naming `trace.decode_output(...)`.
 
 **`decode_head_unknown`** — *unstable — no deprecation shim owed*
 : `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
@@ -3755,70 +4036,67 @@ deprecation shim owed*
   pass `head=` one of the heads the refusal lists.
 
 **tl.bridge.transformers.register_attention(model=None)** — *unstable — no deprecation shim owed*
-: Registers TorchLens as a Hugging Face attention backend: one call puts a
-  `"torchlens"` attention function in transformers' `AttentionInterface`
-  AND its matching mask function in `AttentionMaskInterface` (the boolean
-  `sdpa_mask` with the causal skip off), so the model always receives an
-  explicit causal and padding mask. Registering the attention function alone
-  is the mask trap: transformers then builds no mask and padding leaks into
-  attention. Never registers over a built-in key; a foreign `"torchlens"`
-  registration refuses `hf_attention_key_taken`. With `model=`, also calls
-  `model.set_attn_implementation("torchlens")`. Returns the key, for
-  `from_pretrained(..., attn_implementation="torchlens")`. Memory cost: the
-  backend materializes the full `(batch, heads, q_len, kv_len)` probability
-  matrix in every attention call, unlike fused SDPA or flash kernels.
+: Registers TorchLens as a Hugging Face attention backend and returns the key, for
+  `from_pretrained(..., attn_implementation="torchlens")`.
+  - One call puts a `"torchlens"` attention function in transformers' `AttentionInterface`
+    AND its matching mask function in `AttentionMaskInterface` (the boolean `sdpa_mask` with
+    the causal skip off), so the model always receives an explicit causal and padding mask.
+  - Registering the attention function alone is the mask trap: transformers then builds no
+    mask and padding leaks into attention.
+  - Never registers over a built-in key; a foreign `"torchlens"` registration refuses
+    `hf_attention_key_taken`.
+  - With `model=`, also calls `model.set_attn_implementation("torchlens")`.
+  - Memory cost: the backend materializes the full `(batch, heads, q_len, kv_len)` probability
+    matrix in every attention call, unlike fused SDPA or flash kernels.
 
 **tl.bridge.transformers.record_attention(model, *, check_sdpa=False)** — *unstable — no deprecation shim owed*
-: Context manager yielding an `AttentionRecording`: every attention call of
-  a model on the `"torchlens"` backend records its per-head probabilities,
-  keyed by the attention module's qualified name, without a TorchLens trace.
-  The recorded tensor is exactly the one the backend multiplied by the
-  values (and returns as `output_attentions`). Refuses
-  `hf_attention_backend_not_selected` for a model on another backend.
-  `check_sdpa=True` also runs `scaled_dot_product_attention` on each call
-  and refuses `hf_attention_sdpa_mismatch` beyond the semantic SDPA
-  reconstruction tolerance (doubles the attention cost; calls with dropout,
-  softcapping or learned sink logits (`s_aux`) are left unchecked and say so;
-  emergent attention sinks in trained heads are measured by the checks kit's
-  sink probe, see docs/reference/checks_kit.md). Retained
-  memory is `batch * heads * q_len * kv_len * itemsize` bytes per call: for
-  a Llama-2-7B shape (32 layers, 32 heads) at 4096 tokens in bfloat16, 1 GiB
-  per layer and 32 GiB per sequence.
+: Context manager yielding an `AttentionRecording`: every attention call of a model on the
+  `"torchlens"` backend records its per-head probabilities, keyed by the attention module's
+  qualified name, without a TorchLens trace.
+  - The recorded tensor is exactly the one the backend multiplied by the values (and returns
+    as `output_attentions`).
+  - Refuses `hf_attention_backend_not_selected` for a model on another backend.
+  - `check_sdpa=True` also runs `scaled_dot_product_attention` on each call and refuses
+    `hf_attention_sdpa_mismatch` beyond the semantic SDPA reconstruction tolerance, doubling
+    the attention cost. Calls with dropout, softcapping or learned sink logits (`s_aux`) are
+    left unchecked and say so; emergent attention sinks in trained heads are measured by the
+    checks kit's sink probe, see docs/reference/checks_kit.md.
+  - Retained memory is `batch * heads * q_len * kv_len * itemsize` bytes per call: for a
+    Llama-2-7B shape (32 layers, 32 heads) at 4096 tokens in bfloat16, 1 GiB per layer and
+    32 GiB per sequence.
 
 **AttentionRecording / AttentionCall (`tl.bridge.transformers`)** — *unstable — no deprecation shim owed*
-: `AttentionRecording` is a read-only mapping from attention-module name to
-  probabilities `(batch, heads, q_len, kv_len)`; `recording[name]` serves a
-  module called once and refuses `hf_attention_multiple_calls` otherwise,
-  `calls_for(name)` returns every call in order, `.calls` lists all
-  `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
-  `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
+: `AttentionRecording` is a read-only mapping from attention-module name to probabilities
+  `(batch, heads, q_len, kv_len)`.
+  - `recording[name]` serves a module called once and refuses `hf_attention_multiple_calls`
+    otherwise; `calls_for(name)` returns every call in order.
+  - `.calls` lists all `AttentionCall` records (`module_name`, `probs`, `num_key_value_heads`,
+    `mask_kind`, `sdpa_checked`).
+  - `.nbytes` is the retained total.
 
 **Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
-: The one typed result of every report-shaped `tl.debug` helper:
-  `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
-  JSON-friendly payload; tensors and graph records summarized, never
-  inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
-  lead line, at most five findings, the exact remainder, the exits). The
-  typed results (`HealthReport`, `DeterminismReport`, `NonfiniteReport`,
-  `FindNanReport`, `ParamHealthReport`, ...) subclass it; those with a house-voice
-  `__repr__` (`HealthReport`, `ParamHealthReport`) keep printing it and serve
-  the card as `report.card()`. The
-  table helpers `compare`, `compare_params`, `dead_neurons`,
-  `grad_health`, `hot_path` and `recompute_candidates` return a
-  tabular `Report` whose `.to_pandas()` is the DataFrame they used to
-  return (`attrs` included); the report has a table and never is one.
-  Every finding that names an op names its user source line too: the
-  `source_line` field or column holds `"<file>:<line>"` with the full path, and
-  the card prints ` at <file>:<line>` relative to the working directory when
-  the file is under it.
+: The one typed result of every report-shaped `tl.debug` helper.
+  - Lead: `report_type`, `subject` and `status`.
+  - Outputs: `to_dict()` (a plain, JSON-friendly payload; tensors and graph records
+    summarized, never inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
+    lead line, at most five findings, the exact remainder, the exits).
+  - Subclasses: the typed results (`HealthReport`, `DeterminismReport`, `NonfiniteReport`,
+    `FindNanReport`, `ParamHealthReport`, ...). Those with a house-voice `__repr__`
+    (`HealthReport`, `ParamHealthReport`) keep printing it and serve the card as
+    `report.card()`.
+  - Table helpers: `compare`, `compare_params`, `dead_neurons`, `grad_health`, `hot_path` and
+    `recompute_candidates` return a tabular `Report` whose `.to_pandas()` is the DataFrame
+    they used to return (`attrs` included); the report has a table and never is one.
+  - Source lines: every finding that names an op names its user source line too. The
+    `source_line` field or column holds `"<file>:<line>"` with the full path, and the card
+    prints ` at <file>:<line>` relative to the working directory when the file is under it.
 
 **Trace.profile(group_by="source_line") / ProfileReport.group_by** — *unstable — no deprecation shim owed*
-: `group_by="source_line"` folds the op rows of `trace.profile()` into one
-  row per user source line (`"<file>:<line>"`, the op's recorded call site),
-  summing activation bytes, FLOPs and instrumented time; boundary rows fold
-  into one `<inputs and outputs>` row, so every additive column sums to the
-  ungrouped op view. Only with `level="op"`. `ProfileReport.group_by` records
-  the key (`None` for one row per op).
+: `group_by="source_line"` folds the op rows of `trace.profile()` into one row per user source
+  line (`"<file>:<line>"`, the op's recorded call site). Only with `level="op"`.
+  - It sums activation bytes, FLOPs and instrumented time; boundary rows fold into one
+    `<inputs and outputs>` row, so every additive column sums to the ungrouped op view.
+  - `ProfileReport.group_by` records the key (`None` for one row per op).
 
 **tl.summary("<hub model id>", input_shape=...)** — *unstable — no deprecation shim owed*
 : A string model is a Hugging Face Hub id (or local config directory):
@@ -3828,249 +4106,324 @@ deprecation shim owed*
   `input_shape=` or meta inputs. Requires `transformers`.
 
 **Trace.cost.forward_peak_memory / Trace.cost.backward_peak_memory**
-: The largest memory growth above a bracket's starting baseline, including memory freed before the
-  bracket ends. CPU measures only under `CaptureOptions(measure_host_peak_memory=True)`: it reads
-  the process resident high-water mark, reset at each bracket on Linux (the reset also resets a
-  caller's own `VmHWM` and `ru_maxrss` readings). Without the opt-in (the default) a CPU
-  peak is `None` and its `*_peak_memory_reason` names the opt-in. CUDA reads the device allocator
-  peak; MPS the allocator delta. `backward_peak_memory` is the largest peak above a pass's starting
-  baseline over all backward passes (CUDA: the growth of the device high-water mark).
+: The largest memory growth above a bracket's starting baseline, including memory freed before
+  the bracket ends.
+  - CPU measures only under `CaptureOptions(measure_host_peak_memory=True)`: it reads the
+    process resident high-water mark, reset at each bracket on Linux (the reset also resets a
+    caller's own `VmHWM` and `ru_maxrss` readings). Without the opt-in (the default) a CPU
+    peak is `None` and its `*_peak_memory_reason` names the opt-in.
+  - CUDA reads the device allocator peak; MPS the allocator delta.
+  - `backward_peak_memory` is the largest peak above a pass's starting baseline over all
+    backward passes (CUDA: the growth of the device high-water mark).
 
 **measure_host_peak_memory (CaptureOptions)** — *unstable — no deprecation shim owed*
 : Opt-in (default `False`) for the CPU `Trace.cost.forward_peak_memory` and
-  `Trace.cost.backward_peak_memory`. Measuring resets the process-wide resident high-water mark at the
-  forward bracket and at each CPU backward pass, which also resets the caller's own `VmHWM` and
-  `ru_maxrss` readings and cannot be undone; the default writes nothing and reports CPU peaks as
-  `None` with a reason. Mirrored on the trace as `Trace.measure_host_peak_memory`, a session-time
-  knob (not persisted; load restores `False`); reruns and refreshes of a trace inherit it. CUDA
-  peaks and the MPS allocator delta ignore it.
+  `Trace.cost.backward_peak_memory`.
+  - Measuring resets the process-wide resident high-water mark at the forward bracket and at
+    each CPU backward pass, which also resets the caller's own `VmHWM` and `ru_maxrss` readings
+    and cannot be undone. The default writes nothing and reports CPU peaks as `None` with a
+    reason.
+  - Mirrored on the trace as `Trace.measure_host_peak_memory`, a session-time knob (not
+    persisted; load restores `False`); reruns and refreshes of a trace inherit it.
+  - CUDA peaks and the MPS allocator delta ignore it.
 
 **Trace.cost.forward_peak_memory_reason** — *unstable — no deprecation shim owed*
-: Why `Trace.cost.forward_peak_memory` is `None`. A CPU capture without
-  `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
-  opt-in. A CPU forward that measured zero (resident high-water growth,
-  end-of-forward RSS delta and, when opted in, the Python-allocation peak all 0) is recorded as
-  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)`.
-  `None` when a value was measured, and on artifacts that predate the field. Persisted
-  (KEEP); a loaded reason beside a number refuses
-  `artifact_forward_peak_memory_invalid`. CUDA and MPS keep their numeric semantics.
+: Why `Trace.cost.forward_peak_memory` is `None`. It is itself `None` when a value was
+  measured, and on artifacts that predate the field.
+  - A CPU capture without `CaptureOptions(measure_host_peak_memory=True)` records `None` with
+    a reason naming that opt-in.
+  - A CPU forward that measured zero (resident high-water growth, end-of-forward RSS delta
+    and, when opted in, the Python-allocation peak all 0) is recorded as `None` with a reason
+    naming `CaptureOptions(measure_python_peak_memory=True)`.
+  - Saved with the trace; a loaded reason beside a number refuses
+    `artifact_forward_peak_memory_invalid`.
+  - CUDA and MPS keep their numeric semantics.
 
 **Trace.backward_peak_memory_reason** — *unstable — no deprecation shim owed*
-: Why `Trace.cost.backward_peak_memory` is `None`: a CPU backward on a capture without
-  `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
-  opt-in. `None` when a value was measured, before any backward, and on artifacts
-  that predate the field. Persisted (KEEP); a loaded reason that is not a non-empty string, or
-  sits beside a number, refuses `artifact_backward_peak_memory_invalid`. CUDA and MPS keep their
-  numeric semantics.
+: Why `Trace.cost.backward_peak_memory` is `None`. It is itself `None` when a value was
+  measured, before any backward, and on artifacts that predate the field.
+  - A CPU backward on a capture without `CaptureOptions(measure_host_peak_memory=True)`
+    records `None` with a reason naming that opt-in.
+  - Saved with the trace; a loaded reason that is not a non-empty string, or sits beside a
+    number, refuses `artifact_backward_peak_memory_invalid`.
+  - CUDA and MPS keep their numeric semantics.
 
 **Trace.cost.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
 
 **trace.ops counting (`len(trace.ops)`)** — *unstable — no deprecation shim owed*
-: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
-  `to_pandas()` of `trace.ops` cover the counted ops (no
-  input, output or buffer rows; sumfam F1). Label lookup still resolves every
-  row: `trace.ops["input_1"]` returns the input row and `"input_1" in
-  trace.ops` is true although the label is not in `trace.ops.keys()`. The
-  every-row sequence (inputs, outputs and buffers included) is
-  `trace.ops`; `len(trace)`, `trace[int]` and `trace[plane]` index it.
-  Only `trace.ops` is the counted view: `input_ops`, `output_ops`,
-  `saved_ops`, `saved_grad_ops`, `compute_ops` and `ops_with_params` list
-  exactly their rows, boundary rows included.
+: `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and `to_pandas()` of
+  `trace.ops` cover the counted ops (no input, output or buffer rows).
+  - Label lookup still resolves every row: `trace.ops["input_1"]` returns the input row and
+    `"input_1" in trace.ops` is true although the label is not in `trace.ops.keys()`.
+  - The every-row sequence (inputs, outputs and buffers included) is `trace.ops`;
+    `len(trace)`, `trace[int]` and `trace[plane]` index it.
+  - Only `trace.ops` is the counted view: `input_ops`, `output_ops`, `saved_ops`,
+    `saved_grad_ops`, `compute_ops` and `ops_with_params` list exactly their rows, boundary
+    rows included.
 
 **`inv_rms` facet (Hugging Face `Gemma2RMSNorm`)** — *unstable — no deprecation shim owed*
-: The norm's single `rsqrt` op output, `1 / sqrt(mean(x**2) + eps)`, the
-  per-position factor that multiplies the input before the `(1 + weight)`
-  gain. `tl.facet("inv_rms")` names it in every Gemma-2 norm; an attribution
-  graph holds it with `tl.attribution.build_graph(..., frozen=[tl.facet("pattern"),
-  tl.facet("inv_rms")])`, which also holds every Gemma-2 attention pattern
-  (`Gemma2Attention` serves the attention facets; `pattern` is the eager
-  softmax after the score softcap).
+: The norm's single `rsqrt` op output, `1 / sqrt(mean(x**2) + eps)`, the per-position factor
+  that multiplies the input before the `(1 + weight)` gain.
+  - `tl.facet("inv_rms")` names it in every Gemma-2 norm.
+  - An attribution graph holds it with
+    `tl.attribution.build_graph(..., frozen=[tl.facet("pattern"), tl.facet("inv_rms")])`,
+    which also holds every Gemma-2 attention pattern (`Gemma2Attention` serves the attention
+    facets; `pattern` is the eager softmax after the score softcap).
 
 **`AttributionGraph.to_neuronpedia` (export in Neuronpedia's attribution-graph schema)** — *unstable — no deprecation shim owed*
-: `graph.to_neuronpedia(*, slug, model_id, tokenizer, prompt=None, node_influence_coverage=0.8,
-  edge_influence_coverage=0.98, path=None)` returns the graph, pruned by circuit-tracer's
-  influence rule, as a dict in Neuronpedia's published attribution-graph schema
-  (and writes it to `path` when given). `slug` is the graph's name on
-  Neuronpedia, `model_id` Neuronpedia's model id, `tokenizer` anything with
-  `decode(ids) -> str`, `prompt` the prompt string (`None` decodes the input
-  tokens), `node_influence_coverage` and `edge_influence_coverage` the shares of total influence
-  kept. Refusal codes `attribution_graph_export_argument_invalid` and
-  `attribution_graph_export_unsupported`.
+: `graph.to_neuronpedia(*, slug, model_id, tokenizer, prompt=None, node_influence_coverage=0.8, edge_influence_coverage=0.98, path=None)`
+  returns the graph, pruned by circuit-tracer's influence rule, as a dict in Neuronpedia's
+  published attribution-graph schema (and writes it to `path` when given).
+  - Arguments: `slug` is the graph's name on Neuronpedia, `model_id` Neuronpedia's model id,
+    `tokenizer` anything with `decode(ids) -> str`, `prompt` the prompt string (`None` decodes
+    the input tokens), and `node_influence_coverage` and `edge_influence_coverage` the shares
+    of total influence kept.
+  - Refusal codes: `attribution_graph_export_argument_invalid`,
+    `attribution_graph_export_unsupported`.
 
 **`trace.draw(color_by=graph)` with an `AttributionGraph`** — *unstable — no deprecation shim owed*
-: `trace.draw(color_by=graph)` paints an
-  attribution graph onto the trace it was built from: each site holding feature or error
-  nodes gets the `abs_sum` total of its nodes' influence on the logits over every position
-  (circuit-tracer's rule); a site-to-value mapping paints any other quantity, feature
-  activations included. Refusal code `attribution_overlay_graph_mismatch`.
+: `trace.draw(color_by=graph)` paints an attribution graph onto the trace it was built from:
+  each site holding feature or error nodes gets the `abs_sum` total of its nodes' influence on
+  the logits over every position (circuit-tracer's rule). A site-to-value mapping paints any
+  other quantity, feature activations included. Refusal code
+  `attribution_overlay_graph_mismatch`.
 
 **`tl.attribution.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
 : `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned
   (or the file it wrote) on neuronpedia.org under the account that owns `api_key`, through
-  Neuronpedia's documented two-step upload, and returns the graph page's URL. Standard
-  library only; the key goes in the `x-api-key` header and never into a message. Checked
-  before any request: the export's structure (`attribution_graph_contract_invalid`), the
-  `slug` and `model_id` characters and the file size (`neuronpedia_upload_argument_invalid`).
-  HTTP failures raise `neuronpedia_upload_http_error`, answers without their fields
-  `neuronpedia_upload_response_invalid`.
+  Neuronpedia's documented two-step upload, and returns the graph page's URL.
+  - Standard library only; the key goes in the `x-api-key` header and never into a message.
+  - Checked before any request: the export's structure (`attribution_graph_contract_invalid`),
+    the `slug` and `model_id` characters and the file size
+    (`neuronpedia_upload_argument_invalid`).
+  - HTTP failures raise `neuronpedia_upload_http_error`; answers without their fields raise
+    `neuronpedia_upload_response_invalid`.
 
 ## Capture door and options: current spellings
 
 **Capture keywords**
-: `CaptureOptions` and the capture doors spell the capture knobs `seed=` (`CaptureOptions.seed`),
-  `save_args=` (`CaptureOptions.save_args`), `save_source_context=`
-  (`CaptureOptions.save_source_context`), `save_rng=` (`CaptureOptions.save_rng`),
-  `save_transformed_output=` (`CaptureOptions.save_transformed_output`) and `input_transform=`
-  (`CaptureOptions.input_transform`). The saved `Trace` keeps its stored field names
-  in this release.
+: The keyword spellings that `CaptureOptions` and the capture doors accept for the capture
+  knobs. The saved `Trace` keeps its stored field names in this release.
+  - `seed=`: sets `CaptureOptions.seed`.
+  - `save_args=`: sets `CaptureOptions.save_args`.
+  - `save_source_context=`: sets `CaptureOptions.save_source_context`.
+  - `save_rng=`: sets `CaptureOptions.save_rng`.
+  - `save_transformed_output=`: sets `CaptureOptions.save_transformed_output`.
+  - `input_transform=`: sets `CaptureOptions.input_transform`.
 
 **Recording keywords**
-: `tl.record(...)` and `Recorder(...)` accept `episode=` only to refuse it typed
-  (`record_episode_unsupported`, teaching `tl.trace(model, x, episode=...)`). They take `narrate=` (a
-  `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
-  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`);
-  `save_raw_grads` is a `CaptureOptions` field (`capture=CaptureOptions(save_raw_grads=...)`
-  on `tl.record`). `NarrationOptions.sites` (`sites=`)
-  scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
-  live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
-  narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
-  narrates only when the forward raises, and `NarrationOptions.tail_on_error` is how many of the
-  last selected events the sink receives on a forward exception.
+: The keywords that `tl.record(...)` and `Recorder(...)` take.
+  - `episode=`: accepted only to refuse it with a typed error (`record_episode_unsupported`),
+    which points you to `tl.trace(model, x, episode=...)`.
+  - `narrate=`: a `tl.options.NarrationOptions`. Methods: `NarrationOptions.as_dict()`,
+    `NarrationOptions.from_values()`, `NarrationOptions.is_field_explicit()`.
+  - `NarrationOptions.sites` (`sites=`): scopes the narration: `True` for every event,
+    `"modules"` for structure lines only, or a live selector. `trace.narrate(select=...)`
+    filters after the run.
+  - `NarrationOptions.sink` receives the narrated lines and `NarrationOptions.max_lines` caps
+    them.
+  - `NarrationOptions.on_error_only`: narrate only when the forward raises.
+  - `NarrationOptions.tail_on_error`: how many of the last selected events the sink receives
+    when the forward raises.
+  - `save_raw_grads` is a `CaptureOptions` field; on `tl.record` pass it as
+    `capture=CaptureOptions(save_raw_grads=...)`.
 
 **StorageOptions**
-: `tl.options.StorageOptions` (also reachable as `torchlens._user_funcs.StorageOptions`) groups the
-  streaming-save knobs: `StorageOptions.path` (`path=`),
-  `StorageOptions.retain_in_memory`, `StorageOptions.on_save` (keyword
-  `on_save=`),
-  `StorageOptions.include_custom_attributes`, `StorageOptions.include_buffer_values`,
-  `StorageOptions.as_dict()`, `StorageOptions.from_values()` and
-  `StorageOptions.is_field_explicit()`.
+: `tl.options.StorageOptions` groups the streaming-save knobs. It is also reachable as
+  `torchlens._user_funcs.StorageOptions`.
+  - Fields: `StorageOptions.path` (`path=`), `StorageOptions.retain_in_memory`,
+    `StorageOptions.on_save` (keyword `on_save=`), `StorageOptions.include_custom_attributes`,
+    `StorageOptions.include_buffer_values`.
+  - Methods: `StorageOptions.as_dict()`, `StorageOptions.from_values()`,
+    `StorageOptions.is_field_explicit()`.
 
 **CaptureOutcome flags**
-: `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
-  `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
-  `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
-  stopped by `stop_after=` or `tl.recording.stop()`.
+: The flags and counts that say how a capture ended.
+  - Fields: `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
+    `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops`,
+    `CaptureOutcome.note`.
+  - `CaptureStatus.STOPPED` (value `"stopped"`): the status of a capture stopped by
+    `stop_after=` or `tl.recording.stop()`.
 
 **CaptureOutcome failure and boundary fields**
-: `CaptureOutcome.error_type` (qualified exception type name of a failed capture),
-  `CaptureOutcome.boundary_kind` and `CaptureOutcome.boundary_label` (the stop-boundary event kind
-  and op label), `CaptureOutcome.frontier_labels` (the halt-frontier labels). A failed capture
-  names its phase, one of `CapturePhase.FORWARD`, `CapturePhase.FINALIZE`,
-  `CapturePhase.POSTPROCESS` and `CapturePhase.TEARDOWN`, and its diagnostic origin, one of
-  `FailureOrigin.USER_OP`, `FailureOrigin.TORCHLENS` and `FailureOrigin.INTERRUPT`.
+: What a capture outcome records about a failure or a stop boundary.
+  - `CaptureOutcome.error_type`: the qualified exception type name of a failed capture.
+  - `CaptureOutcome.boundary_kind` and `CaptureOutcome.boundary_label`: the event kind and op
+    label of the stop boundary.
+  - `CaptureOutcome.frontier_labels`: the labels on the halt frontier.
+  - Phases: a failed capture names the phase it failed in, one of `CapturePhase.FORWARD`,
+    `CapturePhase.FINALIZE`, `CapturePhase.POSTPROCESS` or `CapturePhase.TEARDOWN`.
+  - Origins: it also names its diagnostic origin, one of `FailureOrigin.USER_OP`,
+    `FailureOrigin.TORCHLENS` or `FailureOrigin.INTERRUPT`.
 
 **Recording state**
-: `Recording.is_failed`, `Recording.is_stopped`,
-  `Recording.stop_reason`, `Recording.stops_by_pass`,
-  `Recording.records_in_pass(pass_index)`, `Recording.num_ops`,
-  `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
-  `Recording.lean_omissions` (PROVISIONAL SPELLING), `Recording.is_recovered` and
-  `Recording.backward(loss)`. `Recorder.__call__` runs one pass
-  (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
-  `ActivationRecord.recorded_time` and `GradRecord.recorded_time` (`recorded_time=`) stamp when a
-  record was taken.
+: The status, counts and controls of a live `Recording`, plus how a recorder runs a pass.
+  - Status: `Recording.is_failed`, `Recording.is_stopped`, `Recording.stop_reason`,
+    `Recording.stops_by_pass`, `Recording.is_recovered`.
+  - Counts: `Recording.num_ops`, `Recording.num_committed_ops`, `Recording.num_passes`.
+  - Access: `Recording.records_in_pass(pass_index)`, `Recording.lazy_trace`,
+    `Recording.lean_omissions` (provisional spelling), `Recording.backward(loss)`.
+  - `Recorder.__call__` runs one pass (`recorder(x)`) and `Recorder.backward(loss)` records its
+    backward.
+  - `ActivationRecord.recorded_time` and `GradRecord.recorded_time` (`recorded_time=`) stamp
+    when a record was taken.
 
 **Recording types**
-: `tl.recording.GradRecord` (`GradRecord.ctx`, `GradRecord.ram_payload`,
-  `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
-  `GradRecord.transformed_disk_payload`), `tl.recording.DryRun` (`DryRun.events`,
-  `DryRun.contexts`, `DryRun.decisions`, `DryRun.predicate_failures`, `DryRun.filter(...)`,
-  `DryRun.print_tree()`, `DryRun.timeline_html()`, `DryRun.to_pandas()`), `tl.recording.stop()` and `tl.recording.StopSignal`. `GradRecordContext.kind`
-  names the record kind and `CaptureSpec.save_grad` keeps a payload attached to autograd.
-  `CaptureSpec.save_out` keeps the tensor payload of an event, `CaptureSpec.save_metadata` keeps its
-  non-payload metadata and `CaptureSpec.save_mode` picks the retention mode (`copy`, `reference`,
-  `view` or `cpu_async`). The predicate input for a backward gradient event, `GradRecordContext`,
-  carries `GradRecordContext.grad_fn_class_name`, `GradRecordContext.backward_call_index`,
-  `GradRecordContext.grad_kind` (`grad_input` or `grad_output`), `GradRecordContext.grad_input_index`,
-  `GradRecordContext.grad_output_index`, `GradRecordContext.module_stack`,
-  `GradRecordContext.has_forward_op`, `GradRecordContext.has_op`, `GradRecordContext.order`,
-  `GradRecordContext.event_index`, `GradRecordContext.tensor_device` and the read-only
-  `GradRecordContext.effective_label` (the joined forward label when there is one, else the
-  autograd-node label).
-  `tl.types.TraceLike` is the read protocol shared by `Trace` and `Recording`
-  (`TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
-  `TraceLike.sibling_events`, `TraceLike.activation_by_raw_label(raw_label)`,
-  `TraceLike.activations_by_pass(pass_number)` (keyword was `pass_index`, and so was
-  `activation_by_raw_label(pass_number=)`; JMT 1 Nov 2026 3:00 PM PT), `TraceLike.activations_by_address(address)` and
-  `TraceLike.activation_payloads_by_raw_label`).
+: The record, dry-run and stop types of the recording namespace, the per-event save switches on a
+  capture spec, and the read protocol that traces and recordings share.
+  - `tl.recording.GradRecord`. Fields: `GradRecord.ctx`, `GradRecord.ram_payload`,
+    `GradRecord.transformed_ram_payload`, `GradRecord.disk_payload`,
+    `GradRecord.transformed_disk_payload`.
+  - `tl.recording.DryRun`. Fields: `DryRun.events`, `DryRun.contexts`, `DryRun.decisions`,
+    `DryRun.predicate_failures`. Methods: `DryRun.filter(...)`, `DryRun.print_tree()`,
+    `DryRun.timeline_html()`, `DryRun.to_pandas()`.
+  - Stopping: `tl.recording.stop()` and `tl.recording.StopSignal`.
+  - Save switches: `CaptureSpec.save_out` keeps the tensor payload of an event,
+    `CaptureSpec.save_metadata` keeps its non-payload metadata, `CaptureSpec.save_grad` keeps a
+    payload attached to autograd, and `CaptureSpec.save_mode` picks the retention mode (`copy`,
+    `reference`, `view` or `cpu_async`).
+  - `GradRecordContext`: the predicate input for a backward gradient event.
+    `GradRecordContext.kind` names the record kind. Fields:
+    `GradRecordContext.grad_fn_class_name`, `GradRecordContext.backward_call_index`,
+    `GradRecordContext.grad_kind` (`grad_input` or `grad_output`),
+    `GradRecordContext.grad_input_index`, `GradRecordContext.grad_output_index`,
+    `GradRecordContext.module_stack`, `GradRecordContext.has_forward_op`,
+    `GradRecordContext.has_op`, `GradRecordContext.order`, `GradRecordContext.event_index`,
+    `GradRecordContext.tensor_device`.
+  - `GradRecordContext.effective_label` (read-only): the joined forward label when there is
+    one, else the autograd-node label.
+  - `tl.types.TraceLike`: the read protocol shared by `Trace` and `Recording`. Members:
+    `TraceLike.op_events`, `TraceLike.backward_events`, `TraceLike.event_stream`,
+    `TraceLike.sibling_events`, `TraceLike.activation_payloads_by_raw_label`.
+  - Lookups: `TraceLike.activation_by_raw_label(raw_label)`,
+    `TraceLike.activations_by_pass(pass_number)`, `TraceLike.activations_by_address(address)`.
+    The pass keyword, spelled as above and in `activation_by_raw_label(pass_number=)`, replaces
+    the former `pass_index`.
 
 **Backend registry**
-: `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
-  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Each `BackendSpec` carries
-  `maturity` and the `protocol` factory (see "Backends: the backend protocol, maturity and
-  conformance").
-  `BackendCapabilities.has_streaming` is the streaming-save capability flag (flag name
-  `has_streaming`). `CaptureBackend.cleanup_stopped_forward_session` tears down a forward
-  stopped early.
+: The functions that look up, add, remove and resolve capture backends.
+  - Functions: `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
+    `tl.backends.unregister(name)`, `tl.backends.resolve(...)`.
+  - Each `BackendSpec` carries `maturity` and the `protocol` factory (see "Backends: the
+    backend protocol, maturity and conformance").
+  - `BackendCapabilities.has_streaming`: the streaming-save capability flag (flag name
+    `has_streaming`).
+  - `CaptureBackend.cleanup_stopped_forward_session` tears down a forward stopped early.
 
 **Extraction and preprocessing names**
-: `BatchEnvelope.num_rows` and `RaggedBatch.num_rows` (`num_rows=`), `TokenRows.num_tokens`,
-  `Resolution.preprocessing` and `SiteMatrix.shaping` (`shaping=`).
-  `tl.extract_dataset(..., output_transform=...)` and `tl.neuro.plan_extraction(...,
-  output_transform=...)` take the output transform;
-  `input_transform=` preprocesses inputs.
+: Current spellings of the row counts, preprocessing and transform names used in extraction.
+  - Counts: `BatchEnvelope.num_rows` and `RaggedBatch.num_rows` (`num_rows=`),
+    `TokenRows.num_tokens`.
+  - Preprocessing: `Resolution.preprocessing` and `SiteMatrix.shaping` (`shaping=`).
+  - Transforms: `tl.extract_dataset(..., output_transform=...)` and
+    `tl.neuro.plan_extraction(..., output_transform=...)` take the output transform;
+    `input_transform=` preprocesses inputs.
 
 **Admin and debugging names**
-: `tl.clear_cache()` (also `torchlens._user_funcs.clear_cache`) empties the capture cache;
-  `tl.observers.register_tensor_connection` registers a tensor connection;
-  `tl.debug.isolated_capture` runs a capture in isolation, with `tl.debug.preserved_rng_state()`
-  and `tl.debug.clone_input_tree(...)` as its parts; `Trace.capture_backward`
-  (a thin `Trace` method over `backends/torch/_trace_backward.py`) captures a backward pass for validation.
+: Helpers for clearing the cache, registering observers and debugging a capture.
+  - `tl.clear_cache()` (also `torchlens._user_funcs.clear_cache`) empties the capture cache.
+  - `tl.observers.register_tensor_connection` registers a tensor connection.
+  - `tl.debug.isolated_capture` runs a capture in isolation; its parts are
+    `tl.debug.preserved_rng_state()` and `tl.debug.clone_input_tree(...)`.
+  - `Trace.capture_backward` captures a backward pass for validation. It is a thin `Trace`
+    method over `backends/torch/_trace_backward.py`.
+
 ### Debugging tools and report results
+
 **DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*
 : Coverage-bounded dtype range audit result.
+
 **clone_input_tree (`tl.debug.clone_input_tree`)** — *unstable — no deprecation shim owed*
 : Return a detached clone of an input tree for one isolated run: tensors are detached and
   cloned (keeping `requires_grad`), dicts, lists and tuples are rebuilt as new containers, and
   other leaves pass through as the same object.
+
 **dtype_range (`tl.debug.dtype_range`)** — *unstable — no deprecation shim owed*
 : Audit saved activations for numeric-range and precision hazards.
+
 **nonfinite_origin (`tl.debug.nonfinite_origin`)** — *unstable — no deprecation shim owed*
 : One-call NaN forensics.
+
 **param_health (`tl.debug.param_health`)** — *unstable — no deprecation shim owed*
 : Audit parameter/buffer space for numeric-health findings.
+
 **preserved_rng_state (`tl.debug.preserved_rng_state`)** — *unstable — no deprecation shim owed*
 : Context manager that saves the Python, NumPy, torch CPU and initialized CUDA RNG states and
   restores them when the block exits, normally or by an exception.
+
 **ExplainReport (`tl.report.ExplainReport`)** — *unstable — no deprecation shim owed*
 : The plain-language report trace.explain() returns: a str of multi-section prose.
+
 **FlopsCrossCheck (`tl.report.FlopsCrossCheck`)** — *unstable — no deprecation shim owed*
 : Side-by-side dispatch-formula evidence (never an oracle).
+
 **MfuReport (`tl.report.MfuReport`)** — *unstable — no deprecation shim owed*
 : The mode-split time-normalized MFU facts.
+
 **OverheadReport (`tl.report.OverheadReport`)** — *unstable — no deprecation shim owed*
-: Measured capture costs on the USER'S model and host.
+: Measured capture costs on the user's model and host.
+
 **RooflineReport (`tl.report.RooflineReport`)** — *unstable — no deprecation shim owed*
 : The roofline map: rows, sum/sum aggregate, coverage by reason.
+
 **measure_clean_step (`tl.report.measure_clean_step`)** — *unstable — no deprecation shim owed*
-: Measure an UNINSTRUMENTED forward wall time (the MFU denominator).
+: Measure an uninstrumented forward wall time (the MFU denominator).
+
 **overhead (`tl.report.overhead`)** — *unstable — no deprecation shim owed*
 : Measure requested capture tiers on the user's own model/host.
+
 **profile (`tl.report.profile`)** — *unstable — no deprecation shim owed*
 : Build a unified op, module, or invocation resource profile.
+
 **DTypeRangeReport fields** — *unstable — no deprecation shim owed*
-: `DTypeRangeReport.findings`, `DTypeRangeReport.num_audited_ops`, `DTypeRangeReport.num_ops`.
+: `DTypeRangeReport.findings`, `DTypeRangeReport.num_audited_ops`,
+  `DTypeRangeReport.num_ops`.
+
 **HealthReport fields** — *unstable — no deprecation shim owed*
 : `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
+
 **MfuReport fields** — *unstable — no deprecation shim owed*
-: `MfuReport.denominator`, `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+: The fields of the MFU report.
+  - Fields: `MfuReport.denominator`, `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`,
+    `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+
 **NonfiniteReport fields** — *unstable — no deprecation shim owed*
-: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.has_nonfinite`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.num_checked_ops`, `NonfiniteReport.num_unchecked_ops`, `NonfiniteReport.num_unexamined_ops`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
+: The fields of the non-finite value report.
+  - Fields: `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`,
+    `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`,
+    `NonfiniteReport.has_nonfinite`, `NonfiniteReport.nonfinite_labels`,
+    `NonfiniteReport.num_checked_ops`, `NonfiniteReport.num_unchecked_ops`,
+    `NonfiniteReport.num_unexamined_ops`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`,
+    `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
+
 **OverheadReport fields** — *unstable — no deprecation shim owed*
 : `OverheadReport.num_forward_runs`, `OverheadReport.tiers`.
+
 **ParamHealthReport fields** — *unstable — no deprecation shim owed*
-: `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
+: The fields of the parameter health report.
+  - Fields: `ParamHealthReport.checks_run`, `ParamHealthReport.findings`,
+    `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
+
 **ProfileReport fields** — *unstable — no deprecation shim owed*
-: `ProfileReport.capture_status`, `ProfileReport.capture_verification_reason`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+: The fields of the resource profile.
+  - Fields: `ProfileReport.capture_status`, `ProfileReport.capture_verification_reason`,
+    `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`,
+    `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`,
+    `ProfileReport.unknown_events`.
+
 **RooflineReport fields** — *unstable — no deprecation shim owed*
-: `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.
+: The fields of the roofline map.
+  - Fields: `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`,
+    `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`,
+    `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.
+
 ## Visuals and kits spellings
 Spellings introduced by the visuals-and-kits rename (attribution, facets, the `tl.viz` and
 `tl.neuro` homes, transformer views, statistics and bridges), one line each. The sections above
 describe each surface in depth.
+
 ### Namespace names
 | Spelling | Meaning |
 | --- | --- |
@@ -4493,6 +4846,7 @@ describe each surface in depth.
 ## Current spellings: namespaces, members and keywords
 Public names whose spelling or home changed, and names new to the public surface, one line each.
 The sections above describe each surface in depth.
+
 ### Namespace names
 | Spelling | Meaning |
 | --- | --- |
@@ -5041,112 +5395,297 @@ The sections above describe each surface in depth.
 Members of classes whose public home changed, one entry per class.
 
 **`tl.types.Container`**
-: Computed view over a captured Python output container. `Container.leaf_occurrences`: every tensor occurrence and its container path; `Container.leaves`: the ops whose outputs are the container's tensor leaves; `Container.reconstruct_at`: rebuild the container from a snapshot selector (`site=`, `role=`, `values=`); `Container.reconstructable`: whether the view can rebuild the original Python object; `Container.root_id`: identity of the container's root; `Container.root_kind`: what kind of root the container hangs from; `Container.supports_reconstruct`: whether reconstruction is supported for this container.
+: Computed view over a captured Python output container.
+  - `Container.leaf_occurrences`: every tensor occurrence and its container path.
+  - `Container.leaves`: the ops whose outputs are the container's tensor leaves.
+  - `Container.reconstruct_at`: rebuild the container from a snapshot selector (`site=`, `role=`,
+    `values=`).
+  - `Container.reconstructable`: whether the view can rebuild the original Python object.
+  - `Container.root_id`: identity of the container's root.
+  - `Container.root_kind`: what kind of root the container hangs from.
+  - `Container.supports_reconstruct`: whether reconstruction is supported for this container.
 
 **`tl.types.ContainerSpec`**
-: Portable description of an output container seen during capture. `ContainerSpec.aux_data`: auxiliary data needed to rebuild the container type; `ContainerSpec.child_specs`: the child path components and their nested specs; `ContainerSpec.kind`: the container kind (`tuple`, `list`, `dict`, `namedtuple`, `dataclass`, `hf_model_output`, `registered`, `distribution` for a `torch.distributions` object recorded one output per parameter at attribute paths such as `.loc`, `literal`, or `opaque`); `ContainerSpec.literal_value`: the stored value for a non-tensor literal leaf; `ContainerSpec.lossy_reconstruction`: whether rebuilding the container loses information; `ContainerSpec.type_module`: module of the container's type; `ContainerSpec.type_qualname`: qualified name of the container's type.
+: Portable description of an output container seen during capture.
+  - `ContainerSpec.aux_data`: auxiliary data needed to rebuild the container type.
+  - `ContainerSpec.child_specs`: the child path components and their nested specs.
+  - `ContainerSpec.kind`: the container kind (`tuple`, `list`, `dict`, `namedtuple`, `dataclass`,
+    `hf_model_output`, `registered`, `distribution` for a `torch.distributions` object recorded one
+    output per parameter at attribute paths such as `.loc`, `literal`, or `opaque`).
+  - `ContainerSpec.literal_value`: the stored value for a non-tensor literal leaf.
+  - `ContainerSpec.lossy_reconstruction`: whether rebuilding the container loses information.
+  - `ContainerSpec.type_module`: module of the container's type.
+  - `ContainerSpec.type_qualname`: qualified name of the container's type.
 
 **`tl.types.ContainerLeafOccurrence`**
-: One tensor occurrence at one container path. `ContainerLeafOccurrence.occ_index`: index of this occurrence; `ContainerLeafOccurrence.producer_op_label`: label of the op that produced the tensor, or `None`; `ContainerLeafOccurrence.tensor_identity`: identity of the tensor, or `None`.
+: One tensor occurrence at one container path.
+  - `ContainerLeafOccurrence.occ_index`: index of this occurrence.
+  - `ContainerLeafOccurrence.producer_op_label`: label of the op that produced the tensor, or
+    `None`.
+  - `ContainerLeafOccurrence.tensor_identity`: identity of the tensor, or `None`.
 
 **`tl.types.MergeAlignment`**
-: Structural merge verdict; value divergence never changes it. `MergeAlignment.ALIGNED`: the rank captures line up structurally; `MergeAlignment.CONFLICTED`: at least one structural conflict was found.
+: Structural merge verdict; value divergence never changes it.
+  - `MergeAlignment.ALIGNED`: the rank captures line up structurally.
+  - `MergeAlignment.CONFLICTED`: at least one structural conflict was found.
 
 **`tl.types.MergeValueStatus`**
-: Merge-level value verdict derived from the join ledger. `MergeValueStatus.ATTESTED_COMPLETE`: every applicable join boundary is attested; `MergeValueStatus.ATTESTED_PARTIAL`: some applicable join boundaries are attested, not all; `MergeValueStatus.DIVERGENT`: at least one join boundary mismatched across ranks; `MergeValueStatus.UNWITNESSED`: no join boundary is attested.
+: Merge-level value verdict derived from the join ledger.
+  - `MergeValueStatus.ATTESTED_COMPLETE`: every applicable join boundary is attested.
+  - `MergeValueStatus.ATTESTED_PARTIAL`: some applicable join boundaries are attested, not all.
+  - `MergeValueStatus.DIVERGENT`: at least one join boundary mismatched across ranks.
+  - `MergeValueStatus.UNWITNESSED`: no join boundary is attested.
 
 **`tl.types.MergedFinding`**
-: One structured merge finding. `MergedFinding.detail`: human-readable explanation (diagnostics may sharpen it but are never authority); `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
+: One structured merge finding.
+  - `MergedFinding.detail`: human-readable explanation (diagnostics may sharpen it but are never
+    authority).
+  - `MergedFinding.membership_digest`: the membership the finding concerns, when it is
+    membership-scoped.
 
 **`tl.report.MergeReport`**
-: Graph-free diagnostic summary of a merge. `MergeReport.alignment`: the effective structural verdict; `MergeReport.conflicts`: the structural conflict findings, which never join and never become gaps; `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed value; `MergeReport.expected_ranks`: the declared world, when one was given; `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded; `MergeReport.stored_alignment`: the structural verdict derived at merge time; `MergeReport.value_status`: the merge-level value verdict.
+: Graph-free diagnostic summary of a merge.
+  - `MergeReport.alignment`: the effective structural verdict.
+  - `MergeReport.conflicts`: the structural conflict findings, which never join and never become
+    gaps.
+  - `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed
+    value.
+  - `MergeReport.expected_ranks`: the declared world, when one was given.
+  - `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded.
+  - `MergeReport.stored_alignment`: the structural verdict derived at merge time.
+  - `MergeReport.value_status`: the merge-level value verdict.
 
 **`tl.types.MergedTrace`**
-: N rank-local captures stitched at their collective boundaries. `MergedTrace.alignment`: the effective verdict: the stored one, lowered by load degradations; `MergedTrace.expected_ranks`: the declared world, when one was given (it can only widen expectations); `MergedTrace.gaps`: the typed presence-gap ledger; `MergedTrace.happens_before`: partial-order query over two join keys (`left`, `right`); `MergedTrace.join_ops`: resolve a join's boundary ops on every presenting rank; `MergedTrace.joins`: the cross-rank collective joins, in deterministic key order; `MergedTrace.member_outcomes`: read-only map of each rank to its settled capture-outcome status; `MergedTrace.rank_ids`: the global ranks present in the merge; `MergedTrace.cleanup`: drop every rank-trace handle so the member traces can be reclaimed; `MergedTrace.stored_alignment`: the structural verdict derived at merge time; `MergedTrace.stored_value_status`: the value verdict derived at merge time; `MergedTrace.value_status`: the merge-level value verdict from the join ledger.
+: N rank-local captures stitched at their collective boundaries.
+  - `MergedTrace.alignment`: the effective verdict: the stored one, lowered by load degradations.
+  - `MergedTrace.expected_ranks`: the declared world, when one was given (it can only widen
+    expectations).
+  - `MergedTrace.gaps`: the typed presence-gap ledger.
+  - `MergedTrace.happens_before`: partial-order query over two join keys (`left`, `right`).
+  - `MergedTrace.join_ops`: resolve a join's boundary ops on every presenting rank.
+  - `MergedTrace.joins`: the cross-rank collective joins, in deterministic key order.
+  - `MergedTrace.member_outcomes`: read-only map of each rank to its settled capture-outcome status.
+  - `MergedTrace.rank_ids`: the global ranks present in the merge.
+  - `MergedTrace.cleanup`: drop every rank-trace handle so the member traces can be reclaimed.
+  - `MergedTrace.stored_alignment`: the structural verdict derived at merge time.
+  - `MergedTrace.stored_value_status`: the value verdict derived at merge time.
+  - `MergedTrace.value_status`: the merge-level value verdict from the join ledger.
 
 **`tl.trackers.HistoryReader`**
-: Reads one history artifact without loading the run or importing a model. `HistoryReader.observations`: materialize observations, optionally filtered by `step`, `site_id` and `stream`; verifies checksums; `HistoryReader.step_blocks`: the committed step blocks, oldest first.
+: Reads one history artifact without loading the run or importing a model.
+  - `HistoryReader.observations`: materialize observations, optionally filtered by `step`, `site_id`
+    and `stream`; verifies checksums.
+  - `HistoryReader.step_blocks`: the committed step blocks, oldest first.
 
 **`tl.trackers.HistoryView`**
-: Session-side read view over one run's committed history. `HistoryView.from_blocks`: wrap in-memory committed blocks; `HistoryView.from_collector`: read the live collector's in-memory ring; `HistoryView.from_reader`: build a view from a disk artifact (checksums verified); `HistoryView.series`: one site and stream series in step order, disambiguated by phase; `HistoryView.site_streams`: the (stream, phase) pairs observed for one site.
+: Session-side read view over one run's committed history.
+  - `HistoryView.from_blocks`: wrap in-memory committed blocks.
+  - `HistoryView.from_collector`: read the live collector's in-memory ring.
+  - `HistoryView.from_reader`: build a view from a disk artifact (checksums verified).
+  - `HistoryView.series`: one site and stream series in step order, disambiguated by phase.
+  - `HistoryView.site_streams`: the (stream, phase) pairs observed for one site.
 
 **`tl.trackers.SeriesPoint`**
-: One sample of a series. `SeriesPoint.observation`: the observation record; `SeriesPoint.step_hi`: last step of the span the sample covers; `SeriesPoint.step_lo`: first step of the span the sample covers.
+: One sample of a series.
+  - `SeriesPoint.observation`: the observation record.
+  - `SeriesPoint.step_hi`: last step of the span the sample covers.
+  - `SeriesPoint.step_lo`: first step of the span the sample covers.
 
 **`tl.types.PartialTrace`**
-: Thin wrapper around raw capture state from a failed forward pass. `PartialTrace._FIELD_POLICY`: the declared field policy, so field-declaration checks also cover failed partial captures; `PartialTrace.audit`: an evidence-backed health report for the partial capture; `PartialTrace.capability_card`: which family members work on this object; `PartialTrace.from_trace`: build the wrapper from a failed capture's internal state and its exception; `PartialTrace.original_exception`: the exception the failed capture raised; `PartialTrace.output_table`: typed refusal: a failed forward has no outputs; `PartialTrace.raw_layers`: the layer entries captured before the failure; `PartialTrace.to_agent_json`: typed refusal: the machine map needs finalized identities.
+: Thin wrapper around raw capture state from a failed forward pass.
+  - `PartialTrace._FIELD_POLICY`: the declared field policy, so field-declaration checks also cover
+    failed partial captures.
+  - `PartialTrace.audit`: an evidence-backed health report for the partial capture.
+  - `PartialTrace.capability_card`: which family members work on this object.
+  - `PartialTrace.from_trace`: build the wrapper from a failed capture's internal state and its
+    exception.
+  - `PartialTrace.original_exception`: the exception the failed capture raised.
+  - `PartialTrace.output_table`: typed refusal: a failed forward has no outputs.
+  - `PartialTrace.raw_layers`: the layer entries captured before the failure.
+  - `PartialTrace.to_agent_json`: typed refusal: the machine map needs finalized identities.
 
 **`tl.types.InputProvenance`**
-: Persistent provenance for how a capture's input came to exist. `InputProvenance.cache_key_version`: version of the input cache key, or `None`; `InputProvenance.cache_status`: whether the input came from the cache, or `None`; `InputProvenance.call_structure`: normalized call description: positional count, keyword names, and whether non-tensor arguments are present; `InputProvenance.caveats`: the rendered disclosure sentences; `InputProvenance.d8_meta`: metadata for the reserved meta-device rung, or `None`; `InputProvenance.evidence_grade`: `verified_exact`, `empirically_flexible`, `under_determined` or `unsupported`; `InputProvenance.execution_policy`: `"caller_mode"` (the caller's flags are kept) or `"eval_no_grad_restored"` (eval and no-grad are pinned, then restored); `InputProvenance.lazy_transitions`: module addresses whose lazy parameters materialized during the captured forward; `InputProvenance.rung`: the input ladder rung, 1 to 3.
+: Persistent provenance for how a capture's input came to exist.
+  - `InputProvenance.cache_key_version`: version of the input cache key, or `None`.
+  - `InputProvenance.cache_status`: whether the input came from the cache, or `None`.
+  - `InputProvenance.call_structure`: normalized call description: positional count, keyword names,
+    and whether non-tensor arguments are present.
+  - `InputProvenance.caveats`: the rendered disclosure sentences.
+  - `InputProvenance.d8_meta`: metadata for the reserved meta-device rung, or `None`.
+  - `InputProvenance.evidence_grade`: `verified_exact`, `empirically_flexible`, `under_determined`
+    or `unsupported`.
+  - `InputProvenance.execution_policy`: `"caller_mode"` (the caller's flags are kept) or
+    `"eval_no_grad_restored"` (eval and no-grad are pinned, then restored).
+  - `InputProvenance.lazy_transitions`: module addresses whose lazy parameters materialized during
+    the captured forward.
+  - `InputProvenance.rung`: the input ladder rung, 1 to 3.
 
 **`tl.types.ContractCheck`**
-: One contract check recorded in a run report. `ContractCheck.diagnostic`: the diagnostic for a failed check, or `None`.
+: One contract check recorded in a run report.
+  - `ContractCheck.diagnostic`: the diagnostic for a failed check, or `None`.
 
 **`tl.types.NumericAttestationStatus`**
-: Result states for the optional saved-activation check. `NumericAttestationStatus.ATTESTED`: the run's values match the saved activations; `NumericAttestationStatus.NOT_APPLICABLE`: the check does not apply to this run; `NumericAttestationStatus.NOT_PRESENT`: no saved activations were available to check against; `NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED`: the run's values did not match the saved activations.
+: Result states for the optional saved-activation check.
+  - `NumericAttestationStatus.ATTESTED`: the run's values match the saved activations.
+  - `NumericAttestationStatus.NOT_APPLICABLE`: the check does not apply to this run.
+  - `NumericAttestationStatus.NOT_PRESENT`: no saved activations were available to check against.
+  - `NumericAttestationStatus.NUMERIC_ATTESTATION_FAILED`: the run's values did not match the saved
+    activations.
 
 **`tl.types.PathFaithfulness`**
-: Honesty states reported by a completed sparse run. `PathFaithfulness.DIVERGED`: the run left the recorded path; `PathFaithfulness.UNVERIFIABLE`: the path could not be checked; `PathFaithfulness.VERIFIED`: the run followed the recorded path.
+: Honesty states reported by a completed sparse run.
+  - `PathFaithfulness.DIVERGED`: the run left the recorded path.
+  - `PathFaithfulness.UNVERIFIABLE`: the path could not be checked.
+  - `PathFaithfulness.VERIFIED`: the run followed the recorded path.
 
 **`tl.types.ReadinessReport`**
-: Complete non-executing readiness report for a trace provider. `ReadinessReport.capability`: the capability the report is about, or `None`; `ReadinessReport.diagnostics`: the readiness diagnostics; `ReadinessReport.provider`: which provider would serve the run; `ReadinessReport.resolver_records`: how each callable was resolved; `ReadinessReport.state_sources_available`: the state sources the run could use; `ReadinessReport.witness_completeness`: how complete the recorded witnesses are, or `None`.
+: Complete non-executing readiness report for a trace provider.
+  - `ReadinessReport.capability`: the capability the report is about, or `None`.
+  - `ReadinessReport.diagnostics`: the readiness diagnostics.
+  - `ReadinessReport.provider`: which provider would serve the run.
+  - `ReadinessReport.resolver_records`: how each callable was resolved.
+  - `ReadinessReport.state_sources_available`: the state sources the run could use.
+  - `ReadinessReport.witness_completeness`: how complete the recorded witnesses are, or `None`.
 
 **`tl.types.ReadinessStatus`**
-: Overall non-executing readiness states. `ReadinessStatus.READY`: the trace can run; `ReadinessStatus.UNAVAILABLE`: the trace cannot run.
+: Overall non-executing readiness states.
+  - `ReadinessStatus.READY`: the trace can run.
+  - `ReadinessStatus.UNAVAILABLE`: the trace cannot run.
 
 **`tl.types.RunProvider`**
-: Providers selected by `Trace.run`. `RunProvider.LIVE`: run on the live model; `RunProvider.LOADED_ANALYSIS`: run from a loaded analysis trace; `RunProvider.LOADED_SPARSE`: run from a loaded sparse trace.
+: Providers selected by `Trace.run`.
+  - `RunProvider.LIVE`: run on the live model.
+  - `RunProvider.LOADED_ANALYSIS`: run from a loaded analysis trace.
+  - `RunProvider.LOADED_SPARSE`: run from a loaded sparse trace.
 
 **`tl.types.RunReport`**
-: Honesty, state, resolution and contract metadata for one run. `RunReport.contract_checks`: the contract checks the run recorded; `RunReport.first_mismatch`: the first mismatch diagnostic, or `None`; `RunReport.initializer_policy_version`: version of the initializer policy used to fill slots, or `None`; `RunReport.nondeterministic_sources`: sources of nondeterminism the run met; `RunReport.numeric_attestation`: the saved-activation check result; `RunReport.path_faithfulness`: whether the run followed the recorded path; `RunReport.random_filled_slot_ids`: slots filled with random values; `RunReport.readiness`: the readiness report the run started from; `RunReport.state_source`: where the run's state came from.
+: Honesty, state, resolution and contract metadata for one run.
+  - `RunReport.contract_checks`: the contract checks the run recorded.
+  - `RunReport.first_mismatch`: the first mismatch diagnostic, or `None`.
+  - `RunReport.initializer_policy_version`: version of the initializer policy used to fill slots, or
+    `None`.
+  - `RunReport.nondeterministic_sources`: sources of nondeterminism the run met.
+  - `RunReport.numeric_attestation`: the saved-activation check result.
+  - `RunReport.path_faithfulness`: whether the run followed the recorded path.
+  - `RunReport.random_filled_slot_ids`: slots filled with random values.
+  - `RunReport.readiness`: the readiness report the run started from.
+  - `RunReport.state_source`: where the run's state came from.
 
 **`tl.types.RunnableCompatibility`**
-: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.torchlens_version`: the torchlens version that produced the artifact; `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
+: Producer and runtime versions recorded for readiness diagnostics.
+  - `RunnableCompatibility.torchlens_version`: the torchlens version that produced the artifact.
+  - `RunnableCompatibility.backend_version`: backend version.
+  - `RunnableCompatibility.call_recipe_version`: call recipe version.
+  - `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version.
+  - `RunnableCompatibility.descriptor_version`: descriptor version.
+  - `RunnableCompatibility.initializer_policy_version`: initializer policy version.
+  - `RunnableCompatibility.python_version`: Python version.
 
 **`tl.types.RunnableDiagnostic`**
-: Structured diagnostic shared by preflight, readiness and run reports. `RunnableDiagnostic.affected_op_labels`: labels of the ops the diagnostic concerns; `RunnableDiagnostic.current_runtime`: the runtime now in use, or `None`; `RunnableDiagnostic.details`: extra (key, value) details; `RunnableDiagnostic.detection_stage`: the stage that found the problem; `RunnableDiagnostic.recorded_runtime`: the runtime recorded at capture, or `None`; `RunnableDiagnostic.registry_id`: the registry entry involved, or `None`; `RunnableDiagnostic.resolver_provenance`: how the callable was resolved, or `None`.
+: Structured diagnostic shared by preflight, readiness and run reports.
+  - `RunnableDiagnostic.affected_op_labels`: labels of the ops the diagnostic concerns.
+  - `RunnableDiagnostic.current_runtime`: the runtime now in use, or `None`.
+  - `RunnableDiagnostic.details`: extra (key, value) details.
+  - `RunnableDiagnostic.detection_stage`: the stage that found the problem.
+  - `RunnableDiagnostic.recorded_runtime`: the runtime recorded at capture, or `None`.
+  - `RunnableDiagnostic.registry_id`: the registry entry involved, or `None`.
+  - `RunnableDiagnostic.resolver_provenance`: how the callable was resolved, or `None`.
 
 **`tl.types.BasisProvenance`**
-: Frozen reproducibility record for one subspace basis. `BasisProvenance.space_dim`: dimension of the space the basis lives in.
+: Frozen reproducibility record for one subspace basis.
+  - `BasisProvenance.space_dim`: dimension of the space the basis lives in.
 
 **`tl.types.NarrationEvent`**
-: One immutable narration record. `NarrationEvent.value_stats` holds `tl.stats.TensorStats` or `None`; sampled narration omits the finiteness family, while a reused positive verdict renders "nonfinite present" without a count. `NarrationEvent.extra_labels`: extra (key, value) labels; `NarrationEvent.late`: ordinal distance disclosed on a buffered release; `NarrationEvent.module_depth`: nesting depth of the module; `NarrationEvent.module_type`: class name of the module, or `None`; `NarrationEvent.ordinal`: position of the event in the narration; `NarrationEvent.output_index`: index of the output, or `None`; `NarrationEvent.source_location`: the source location, or `None`; `NarrationEvent.step_index`: the step index, or `None`.
+: One immutable narration record. `NarrationEvent.value_stats` holds `tl.stats.TensorStats` or
+  `None`; sampled narration omits the finiteness family, while a reused positive verdict renders
+  "nonfinite present" without a count.
+  - `NarrationEvent.extra_labels`: extra (key, value) labels.
+  - `NarrationEvent.late`: ordinal distance disclosed on a buffered release.
+  - `NarrationEvent.module_depth`: nesting depth of the module.
+  - `NarrationEvent.module_type`: class name of the module, or `None`.
+  - `NarrationEvent.ordinal`: position of the event in the narration.
+  - `NarrationEvent.output_index`: index of the output, or `None`.
+  - `NarrationEvent.source_location`: the source location, or `None`.
+  - `NarrationEvent.step_index`: the step index, or `None`.
 
 **`tl.types.TraceSlice`**
-: Frozen presenter over one trace's executed sub-DAG. `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; the slice views its trace without copying it.
+: Frozen presenter over one trace's executed sub-DAG.
+  - `TraceSlice.as_region`: derive an admissible region that is operated on as one unit; the slice
+    views its trace without copying it.
 
 **`tl.transformer.Annotation`**
 : One typed annotation attached to an attention picture. `Annotation.legend`: the kind legend line.
 
 **`tl.transformer.AttentionView`**
-: One attention pattern in canonical coordinates. `AttentionView.coordinate`: optional shared site coordinate; `AttentionView.crop`: optional crop disclosure (cropping never renormalizes); `AttentionView.crop_to`: return a cropped view with an exact omitted-mass disclosure; `AttentionView.domain`: `"probability"` (fixed 0 to 1) or `"per_panel"`; `AttentionView.gqa`: optional grouped-query-attention disclosure; `AttentionView.head_view`: a single-head view selected by original head index; `AttentionView.key_tokens`: source-axis tokens, a separate record even for self-attention; `AttentionView.provenance_wording`: the rendered provenance wording for the view; `AttentionView.query_tokens`: destination-axis tokens.
+: One attention pattern in canonical coordinates.
+  - `AttentionView.coordinate`: optional shared site coordinate.
+  - `AttentionView.crop`: optional crop disclosure (cropping never renormalizes).
+  - `AttentionView.crop_to`: return a cropped view with an exact omitted-mass disclosure.
+  - `AttentionView.domain`: `"probability"` (fixed 0 to 1) or `"per_panel"`.
+  - `AttentionView.gqa`: optional grouped-query-attention disclosure.
+  - `AttentionView.head_view`: a single-head view selected by original head index.
+  - `AttentionView.key_tokens`: source-axis tokens, a separate record even for self-attention.
+  - `AttentionView.provenance_wording`: the rendered provenance wording for the view.
+  - `AttentionView.query_tokens`: destination-axis tokens.
 
 **`tl.transformer.CausalReceipt`**
-: Validated measured-intervention evidence for an annotation. `CausalReceipt.cell_sum`: the sum of the measured single-head effects; `CausalReceipt.fingerprints`: content fingerprints for the joined artifacts; `CausalReceipt.negative_control`: measured self-patch metric delta (must be about 0); `CausalReceipt.negative_control_tol`: tolerance for the negative control; `CausalReceipt.pattern_source`: where the attention pattern came from (default `"captured"`); `CausalReceipt.positive_control`: measured large-perturbation metric delta (must move); `CausalReceipt.positive_control_min`: smallest movement the positive control must show.
+: Validated measured-intervention evidence for an annotation.
+  - `CausalReceipt.cell_sum`: the sum of the measured single-head effects.
+  - `CausalReceipt.fingerprints`: content fingerprints for the joined artifacts.
+  - `CausalReceipt.negative_control`: measured self-patch metric delta (must be about 0).
+  - `CausalReceipt.negative_control_tol`: tolerance for the negative control.
+  - `CausalReceipt.pattern_source`: where the attention pattern came from (default `"captured"`).
+  - `CausalReceipt.positive_control`: measured large-perturbation metric delta (must move).
+  - `CausalReceipt.positive_control_min`: smallest movement the positive control must show.
 
 **`tl.transformer.CropInfo`**
-: Crop disclosure; cropping never renormalizes. `CropInfo.key_range`: kept source (column) index range; `CropInfo.omitted_keys`: number of source positions cropped away; `CropInfo.omitted_mass_max`: maximum probability mass omitted from any kept destination row, measured on the uncropped pattern; `CropInfo.query_range`: kept destination (row) index range.
+: Crop disclosure; cropping never renormalizes.
+  - `CropInfo.key_range`: kept source (column) index range.
+  - `CropInfo.omitted_keys`: number of source positions cropped away.
+  - `CropInfo.omitted_mass_max`: maximum probability mass omitted from any kept destination row,
+    measured on the uncropped pattern.
+  - `CropInfo.query_range`: kept destination (row) index range.
 
 **`tl.transformer.EpisodeCoordinates`**
-: Episode coordinates carried by transformer records. `EpisodeCoordinates.role`: `"prefill"` or `"decode"`.
+: Episode coordinates carried by transformer records.
+  - `EpisodeCoordinates.role`: `"prefill"` or `"decode"`.
 
 **`tl.transformer.PredictionTable`**
-: Top-k tokens per position. `PredictionTable.context_tokens`: the input token at each position; `PredictionTable.top_probs`: full-vocabulary probabilities, one row of k per position.
+: Top-k tokens per position.
+  - `PredictionTable.context_tokens`: the input token at each position.
+  - `PredictionTable.top_probs`: full-vocabulary probabilities, one row of k per position.
 
 **`tl.transformer.PredictionTrajectory`**
-: Per-layer prediction trajectory record. `PredictionTrajectory.target_probs`: the tracked token's probability at each layer, or `None`; `PredictionTrajectory.target_ranks`: the tracked token's rank at each layer, or `None`; `PredictionTrajectory.target_token`: optional tracked answer token; `PredictionTrajectory.top_probs`: full-vocabulary probabilities, one row of k per layer.
+: Per-layer prediction trajectory record.
+  - `PredictionTrajectory.target_probs`: the tracked token's probability at each layer, or `None`.
+  - `PredictionTrajectory.target_ranks`: the tracked token's rank at each layer, or `None`.
+  - `PredictionTrajectory.target_token`: optional tracked answer token.
+  - `PredictionTrajectory.top_probs`: full-vocabulary probabilities, one row of k per layer.
 
 **`tl.transformer.ScoreDecomposition`**
-: Term-complete score decomposition for one (head, destination, source) triple. `ScoreDecomposition.additive_terms`: named additive contributions applied after the scaled dot product; `ScoreDecomposition.destination`: destination position; `ScoreDecomposition.key_vector`: the key vector; `ScoreDecomposition.products`: elementwise query-times-key products; `ScoreDecomposition.query_vector`: the query vector; `ScoreDecomposition.reference_score`: the captured score this decomposition claims to equal; `ScoreDecomposition.tolerance`: closure tolerance.
+: Term-complete score decomposition for one (head, destination, source) triple.
+  - `ScoreDecomposition.additive_terms`: named additive contributions applied after the scaled dot
+    product.
+  - `ScoreDecomposition.destination`: destination position.
+  - `ScoreDecomposition.key_vector`: the key vector.
+  - `ScoreDecomposition.products`: elementwise query-times-key products.
+  - `ScoreDecomposition.query_vector`: the query vector.
+  - `ScoreDecomposition.reference_score`: the captured score this decomposition claims to equal.
+  - `ScoreDecomposition.tolerance`: closure tolerance.
 
 **`tl.transformer.TokenAxis`**
 : One labeled token axis. `TokenAxis.role`: `"query"`, `"key"` or `"position"`.
 
 **`tl.transformer.TokenMetrics`**
-: Per-token metric strip record (loss, entropy). `TokenMetrics.source_fingerprint`: fingerprint of the one logits tensor both metrics were computed from.
+: Per-token metric strip record (loss, entropy).
+  - `TokenMetrics.source_fingerprint`: fingerprint of the one logits tensor both metrics were
+    computed from.
 
 **`tl.transformer.TokenScores`**
-: Colored-token strip record. `TokenScores.domain`: `"zero_centered_diverging"`, `"unit_interval"` or `"magnitude_sequential"`; `TokenScores.from_attribution`: build a strip record from an attribution token payload.
+: Colored-token strip record.
+  - `TokenScores.domain`: `"zero_centered_diverging"`, `"unit_interval"` or
+    `"magnitude_sequential"`.
+  - `TokenScores.from_attribution`: build a strip record from an attribution token payload.
 
 ### Record class members
 
@@ -5230,7 +5769,7 @@ alphabetical order.
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
-| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input into a new Trace and return it; this Trace is unchanged (ruled 3 Nov 2026). The result is a fork named `<name>_fork_<n>`, as the `fast=True` door's result is, carrying this Trace's weak live-model reference and staged edits; keep it with `trace = trace.run(x)`. `Trace.append` is the in-place form. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
+| `Trace.run` | `trace.run(model, x, /, *, chunk_paths=None, replay=None, input_transform=<stored>, output_transform=<stored>, on_zero_fire=<unset>)`: rerun the live model on new input into a new Trace and return it; this Trace is unchanged. The result is a fork named `<name>_fork_<n>`, as the `fast=True` door's result is, carrying this Trace's weak live-model reference and staged edits; keep it with `trace = trace.run(x)`. `Trace.append` is the in-place form. `model` and `x` are positional-only: `model` is the module to run (omitted, the live model this Trace holds weakly is reused, so the caller must keep a strong reference), and `x` is the forward input in every form `tl.trace` takes (a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL image or modality dict); with one argument it is the input. A loaded artifact has no live model to rerun and refuses `run_capability_unavailable`, naming `run_transaction` |
 | `Trace.run_transaction` | `trace.run_transaction(inputs=..., *, seed=None, fast=False, carry_state=False, until=None, save=None, on_divergence="raise")`: a verified fresh execution on the live model or a loaded artifact; returns a `RunResult` with its report and leaves this Trace unchanged |
 | `Trace.save_visualizations` | Whether rendered visualizations are persisted in bundles |
 | `Trace.saved_grad_module_calls` | Accessor for the ModuleCalls whose outputs include saved gradients |
@@ -5619,9 +6158,8 @@ alphabetical order.
 source and are never invented: `then`, one `elif` per elif, `else` only when the source has one,
 and `fallthrough` for the code after a chain with no `else` whose every arm provably ends in
 `return`, `raise`, `break` or `continue` (that code runs only when every test was false). The
-fall-through arm, its token and drawing label `FALLTHROUGH`, and `Conditional.outcome` were added
-by JMT decision (Tue 3 Nov 2026, 3:23 PM PT); `docs/conditional_attribution.md` has the worked
-example.
+fall-through arm, its token and drawing label `FALLTHROUGH`, and `Conditional.outcome` are part of
+this record; `docs/conditional_attribution.md` has the worked example.
 
 | Spelling | Meaning |
 | --- | --- |
@@ -6019,38 +6557,272 @@ example.
 
 <!-- trace group views: generated by export_groups.py -->
 **`tl.types.TraceCost`**
-: Compute, memory and timing totals of a Trace; `trace.cost` is the instance a Trace serves. `TraceCost.backward_durations`: seconds per backward pass; `last_backward_duration` / `total_backward_duration` (@properties); `TraceCost.backward_peak_memory`: peak memory during forward / backward. On CPU/MPS this is only the cheap host RSS (or MPS allocator) delta and legitimately reads `0` for small models; `CaptureOptions(measure_python_peak_memory=True)` opts into a `tracemalloc` Python-allocation peak at 1.7x-2.5x capture-time cost (session-time only, never persisted); `TraceCost.flops_by_op_type`: group FLOPs by layer type; `TraceCost.forward_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceCost.forward_peak_memory`: peak memory during forward / backward. On CPU/MPS this is only the cheap host RSS (or MPS allocator) delta and legitimately reads `0` for small models; `CaptureOptions(measure_python_peak_memory=True)` opts into a `tracemalloc` Python-allocation peak at 1.7x-2.5x capture-time cost (session-time only, never persisted); `TraceCost.forward_peak_memory_pair`: session-time (live, resident) forward peak pair with backend named; `TraceCost.forward_peak_memory_reason`: why the forward peak memory is absent or estimated, if it is; `TraceCost.func_calls_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceCost.last_backward_duration`: most recent backward-pass duration, if any; `TraceCost.macs_by_kind`: group TRUE forward MACs by layer type; `TraceCost.overhead_duration`: time spent on TorchLens overhead (total minus function calls); `TraceCost.pinned_autograd_memory`: bytes of autograd memory pinned by retained saved tensors; `TraceCost.saved_activation_memory`: bytes for all / actually-saved Op activations; `TraceCost.saved_grad_memory`: bytes for all / actually-saved output gradients; `TraceCost.total_activation_memory`: bytes for all / actually-saved Op activations; `TraceCost.total_autograd_memory`: bytes autograd retained for backward; `TraceCost.total_backward_duration`: sum of all captured backward-pass durations; `TraceCost.total_backward_memory`: total bytes of backward activations retained; `TraceCost.total_flops`: total FLOPs (forward + backward); `TraceCost.total_flops_backward`: total backward FLOPs across all layers (skipping None/unknown); `TraceCost.total_flops_forward`: total forward FLOPs (the canonical identity-partition aggregation); `TraceCost.total_grad_memory`: bytes for all / actually-saved output gradients; `TraceCost.total_macs`: total MACs are not derivable and always ``None`` (see total_macs_backward); `TraceCost.total_macs_backward`: backward MACs are not derivable and always ``None`` (estimates only); `TraceCost.total_macs_forward`: total TRUE forward MACs over ops with a known MAC split; `TraceCost.total_param_grad_memory`: bytes for parameter tensors / populated parameter gradients; `TraceCost.total_param_memory`: bytes for parameter tensors / populated parameter gradients.
+: Compute, memory and timing totals of a Trace; `trace.cost` is the instance a Trace serves.
+  - `TraceCost.backward_durations`: seconds per backward pass; `last_backward_duration` /
+    `total_backward_duration` (@properties).
+  - `TraceCost.backward_peak_memory`: peak memory during forward / backward. On CPU/MPS this is only
+    the cheap host RSS (or MPS allocator) delta and legitimately reads `0` for small models;
+    `CaptureOptions(measure_python_peak_memory=True)` opts into a `tracemalloc` Python-allocation
+    peak at 1.7x-2.5x capture-time cost (session-time only, never persisted).
+  - `TraceCost.flops_by_op_type`: group FLOPs by layer type.
+  - `TraceCost.forward_duration`: phase timings (`func_calls_duration` = pure model compute proxy).
+  - `TraceCost.forward_peak_memory`: peak memory during forward / backward. On CPU/MPS this is only
+    the cheap host RSS (or MPS allocator) delta and legitimately reads `0` for small models;
+    `CaptureOptions(measure_python_peak_memory=True)` opts into a `tracemalloc` Python-allocation
+    peak at 1.7x-2.5x capture-time cost (session-time only, never persisted).
+  - `TraceCost.forward_peak_memory_pair`: session-time (live, resident) forward peak pair with
+    backend named.
+  - `TraceCost.forward_peak_memory_reason`: why the forward peak memory is absent or estimated, if
+    it is.
+  - `TraceCost.func_calls_duration`: phase timings (`func_calls_duration` = pure model compute
+    proxy).
+  - `TraceCost.last_backward_duration`: most recent backward-pass duration, if any.
+  - `TraceCost.macs_by_kind`: group TRUE forward MACs by layer type.
+  - `TraceCost.overhead_duration`: time spent on TorchLens overhead (total minus function calls).
+  - `TraceCost.pinned_autograd_memory`: bytes of autograd memory pinned by retained saved tensors.
+  - `TraceCost.saved_activation_memory`: bytes for all / actually-saved Op activations.
+  - `TraceCost.saved_grad_memory`: bytes for all / actually-saved output gradients.
+  - `TraceCost.total_activation_memory`: bytes for all / actually-saved Op activations.
+  - `TraceCost.total_autograd_memory`: bytes autograd retained for backward.
+  - `TraceCost.total_backward_duration`: sum of all captured backward-pass durations.
+  - `TraceCost.total_backward_memory`: total bytes of backward activations retained.
+  - `TraceCost.total_flops`: total FLOPs (forward + backward).
+  - `TraceCost.total_flops_backward`: total backward FLOPs across all layers (skipping
+    None/unknown).
+  - `TraceCost.total_flops_forward`: total forward FLOPs (the canonical identity-partition
+    aggregation).
+  - `TraceCost.total_grad_memory`: bytes for all / actually-saved output gradients.
+  - `TraceCost.total_macs`: total MACs are not derivable and always ``None`` (see
+    total_macs_backward).
+  - `TraceCost.total_macs_backward`: backward MACs are not derivable and always ``None`` (estimates
+    only).
+  - `TraceCost.total_macs_forward`: total TRUE forward MACs over ops with a known MAC split.
+  - `TraceCost.total_param_grad_memory`: bytes for parameter tensors / populated parameter
+    gradients.
+  - `TraceCost.total_param_memory`: bytes for parameter tensors / populated parameter gradients.
 
 **`tl.types.TraceGraph`**
-: Graph-shape facts of a Trace: edges, degrees, branching and conditionals; `trace.graph` is the instance a Trace serves. `TraceGraph.branching_factor`: mean fan-out: children (consumers) per compute Op; `TraceGraph.conditional_arm_entry_edges`: entry edges of each conditional arm, keyed by conditional; `TraceGraph.conditional_branch_edges`: edges that branch on a conditional; `TraceGraph.conditional_edge_call_indices`: call indices of the ops on each conditional edge; `TraceGraph.conditional_records`: raw conditional-flow records in trace order; `TraceGraph.conditionals`: conditionalAccessor (by int ordinal or stable label); `TraceGraph.edges`: return this trace's dataflow edge family (finalized edge views); `TraceGraph.has_conditional_branching`: whether any layer is in a conditional branch; `TraceGraph.has_conditionals`: whether this Trace contains conditional-flow records; `TraceGraph.is_branching`: whether any layer has more than one child; `TraceGraph.is_dynamic`: whether execution depends on runtime tensor values; `TraceGraph.is_recurrent`: whether any layer has more than one pass; `TraceGraph.manual_tensor_connections`: user-declared tensor connections added to the graph; `TraceGraph.max_in_degree`: maximum number of parents over compute Ops; `TraceGraph.max_ops_per_layer`: maximum number of ops for any layer; `TraceGraph.max_out_degree`: maximum number of children over compute Ops; `TraceGraph.num_buffer_edges`: distinct Op graph edges with at least one buffer endpoint; `TraceGraph.num_compute_edges`: distinct Op graph edges whose endpoints are both compute Ops; `TraceGraph.num_layer_edges`: distinct edges in the aggregate Layer graph; `TraceGraph.op_equivalence_classes`: dict of equivalence-class id → set of Op labels; `TraceGraph.orphans`: access retained orphan island operations by raw or final label; `TraceGraph.relationship_evidence`: evidence behind each inferred op relationship; `TraceGraph.stop_frontier`: early-halt state (partial trace); `TraceGraph.structure_evidence`: evidence behind the structure-only reconstruction; `TraceGraph.tied_param_groups`: alias-address groups of parameters registered at more than one path.
+: Graph-shape facts of a Trace: edges, degrees, branching and conditionals; `trace.graph` is the
+  instance a Trace serves.
+  - `TraceGraph.branching_factor`: mean fan-out: children (consumers) per compute Op.
+  - `TraceGraph.conditional_arm_entry_edges`: entry edges of each conditional arm, keyed by
+    conditional.
+  - `TraceGraph.conditional_branch_edges`: edges that branch on a conditional.
+  - `TraceGraph.conditional_edge_call_indices`: call indices of the ops on each conditional edge.
+  - `TraceGraph.conditional_records`: raw conditional-flow records in trace order.
+  - `TraceGraph.conditionals`: conditionalAccessor (by int ordinal or stable label).
+  - `TraceGraph.edges`: return this trace's dataflow edge family (finalized edge views).
+  - `TraceGraph.has_conditional_branching`: whether any layer is in a conditional branch.
+  - `TraceGraph.has_conditionals`: whether this Trace contains conditional-flow records.
+  - `TraceGraph.is_branching`: whether any layer has more than one child.
+  - `TraceGraph.is_dynamic`: whether execution depends on runtime tensor values.
+  - `TraceGraph.is_recurrent`: whether any layer has more than one pass.
+  - `TraceGraph.manual_tensor_connections`: user-declared tensor connections added to the graph.
+  - `TraceGraph.max_in_degree`: maximum number of parents over compute Ops.
+  - `TraceGraph.max_ops_per_layer`: maximum number of ops for any layer.
+  - `TraceGraph.max_out_degree`: maximum number of children over compute Ops.
+  - `TraceGraph.num_buffer_edges`: distinct Op graph edges with at least one buffer endpoint.
+  - `TraceGraph.num_compute_edges`: distinct Op graph edges whose endpoints are both compute Ops.
+  - `TraceGraph.num_layer_edges`: distinct edges in the aggregate Layer graph.
+  - `TraceGraph.op_equivalence_classes`: dict of equivalence-class id → set of Op labels.
+  - `TraceGraph.orphans`: access retained orphan island operations by raw or final label.
+  - `TraceGraph.relationship_evidence`: evidence behind each inferred op relationship.
+  - `TraceGraph.stop_frontier`: early-halt state (partial trace).
+  - `TraceGraph.structure_evidence`: evidence behind the structure-only reconstruction.
+  - `TraceGraph.tied_param_groups`: alias-address groups of parameters registered at more than one
+    path.
 
 **`tl.types.TraceAutograd`**
-: Backward-pass records and grad_fn facts of a Trace; `trace.autograd` is the instance a Trace serves. `TraceAutograd.backward_passes`: access backward pass records by 0-based position or named pass number; `TraceAutograd.backward_root_grad_fn_object_ids`: root grad-fn `object_id` per backward pass; `last_backward_root_grad_fn_object_id`; `TraceAutograd.derived_grads`: derivedGradAccessor for leaf-level derived gradients (non-torch backends / explicit derivation); `TraceAutograd.disarm`: detach this Trace from global autograd backward interception so plain backward calls no longer record into it; `TraceAutograd.escape_detector_backward_coverage`: backward coverage reported by the escape detector; `TraceAutograd.grad_fn_calls`: access per-invocation GradFnCall records by qualified label or index; `TraceAutograd.grad_fn_fire_timings`: return live per-fire backward timing spans keyed like ``grad_fn_calls``; `TraceAutograd.grad_fn_order`: grad_fn labels in backward execution order; `TraceAutograd.grad_fns`: access backward grad_fn_handle metadata by label, index, pass label, or substring; `TraceAutograd.has_backward_pass`: backward data / gradient values present; `TraceAutograd.has_grads`: backward data / gradient values present; `TraceAutograd.intermediate_derived_grads`: access exact op-level derived gradient records, when a backend provides them; `TraceAutograd.last_backward_pass`: return the most recent backward pass record, if any; `TraceAutograd.last_backward_root_grad_fn_object_id`: most recent backward root grad_fn_handle object id, if any; `TraceAutograd.num_backward_edges`: distinct edges in the backward GradFn graph, or ``None`` if ungated; `TraceAutograd.saved_grad_fn_calls`: access GradFnCall records with saved gradient inputs or outputs; `TraceAutograd.saved_grad_fns`: access GradFns containing at least one saved GradFnCall.
+: Backward-pass records and grad_fn facts of a Trace; `trace.autograd` is the instance a Trace
+  serves.
+  - `TraceAutograd.backward_passes`: access backward pass records by 0-based position or named pass
+    number.
+  - `TraceAutograd.backward_root_grad_fn_object_ids`: root grad-fn `object_id` per backward pass;
+    `last_backward_root_grad_fn_object_id`.
+  - `TraceAutograd.derived_grads`: derivedGradAccessor for leaf-level derived gradients (non-torch
+    backends / explicit derivation).
+  - `TraceAutograd.disarm`: detach this Trace from global autograd backward interception so plain
+    backward calls no longer record into it.
+  - `TraceAutograd.escape_detector_backward_coverage`: backward coverage reported by the escape
+    detector.
+  - `TraceAutograd.grad_fn_calls`: access per-invocation GradFnCall records by qualified label or
+    index.
+  - `TraceAutograd.grad_fn_fire_timings`: return live per-fire backward timing spans keyed like
+    ``grad_fn_calls``.
+  - `TraceAutograd.grad_fn_order`: grad_fn labels in backward execution order.
+  - `TraceAutograd.grad_fns`: access backward grad_fn_handle metadata by label, index, pass label,
+    or substring.
+  - `TraceAutograd.has_backward_pass`: backward data / gradient values present.
+  - `TraceAutograd.has_grads`: backward data / gradient values present.
+  - `TraceAutograd.intermediate_derived_grads`: access exact op-level derived gradient records, when
+    a backend provides them.
+  - `TraceAutograd.last_backward_pass`: return the most recent backward pass record, if any.
+  - `TraceAutograd.last_backward_root_grad_fn_object_id`: most recent backward root grad_fn_handle
+    object id, if any.
+  - `TraceAutograd.num_backward_edges`: distinct edges in the backward GradFn graph, or ``None`` if
+    ungated.
+  - `TraceAutograd.saved_grad_fn_calls`: access GradFnCall records with saved gradient inputs or
+    outputs.
+  - `TraceAutograd.saved_grad_fns`: access GradFns containing at least one saved GradFnCall.
 
 **`tl.types.TraceSource`**
-: Where the traced model's source lives: the class, `__init__` and `forward` locations (file, line, combined location), the forward signature, the three docstrings, the captured frames, and the live class while the model is still alive; `trace.source` is the instance a Trace serves. `TraceSource.class_docstring`: model class location and docs; `TraceSource.class_file`: model class location and docs; `TraceSource.class_line`: model class location and docs; `TraceSource.class_location`: combined model class source location; `TraceSource.class_name`: short Python class name of the source model; `TraceSource.class_qualname`: fully qualified class name; useful for run verification; `TraceSource.cls`: return the live source model class when the model is still alive; `TraceSource.forward_docstring`: `forward()` info; `TraceSource.forward_file`: `forward()` info; `TraceSource.forward_line`: `forward()` info; `TraceSource.forward_location`: combined forward source location; `TraceSource.forward_signature`: `forward()` info; `TraceSource.frames`: python call-stack frames at capture time (`list[FuncCallLocation]`); `TraceSource.init_docstring`: `__init__` info; `TraceSource.init_file`: `__init__` info; `TraceSource.init_line`: `__init__` info; `TraceSource.init_location`: combined model ``__init__`` source location; `TraceSource.init_signature`: `__init__` info; `TraceSource.snapshots`: source snapshots taken for the traced model.
+: Where the traced model's source lives: the class, `__init__` and `forward` locations (file, line,
+  combined location), the forward signature, the three docstrings, the captured frames, and the live
+  class while the model is still alive; `trace.source` is the instance a Trace serves.
+  - `TraceSource.class_docstring`: model class location and docs.
+  - `TraceSource.class_file`: model class location and docs.
+  - `TraceSource.class_line`: model class location and docs.
+  - `TraceSource.class_location`: combined model class source location.
+  - `TraceSource.class_name`: short Python class name of the source model.
+  - `TraceSource.class_qualname`: fully qualified class name; useful for run verification.
+  - `TraceSource.cls`: return the live source model class when the model is still alive.
+  - `TraceSource.forward_docstring`: `forward()` info.
+  - `TraceSource.forward_file`: `forward()` info.
+  - `TraceSource.forward_line`: `forward()` info.
+  - `TraceSource.forward_location`: combined forward source location.
+  - `TraceSource.forward_signature`: `forward()` info.
+  - `TraceSource.frames`: python call-stack frames at capture time (`list[FuncCallLocation]`).
+  - `TraceSource.init_docstring`: `__init__` info.
+  - `TraceSource.init_file`: `__init__` info.
+  - `TraceSource.init_line`: `__init__` info.
+  - `TraceSource.init_location`: combined model ``__init__`` source location.
+  - `TraceSource.init_signature`: `__init__` info.
+  - `TraceSource.snapshots`: source snapshots taken for the traced model.
 
 **`tl.types.TraceProvenance`**
-: How, when and from what this Trace was captured; `trace.provenance` is the instance a Trace serves. `TraceProvenance.backend`: `Literal["torch","tf","jax","mlx","paddle","tinygrad"]` capture backend tag. Portable; `TraceProvenance.backend_config`: backend runtime snapshot captured at trace time; `TraceProvenance.backend_version`: backend runtime snapshot captured at trace time; `TraceProvenance.backward_memory_backend`: backend used to measure backward memory; `TraceProvenance.cache_hit`: whether this capture was served from the capture cache; `TraceProvenance.cache_key`: key of the capture-cache entry this capture used or wrote; `TraceProvenance.cache_path`: path of the capture-cache entry, when one was used; `TraceProvenance.cleanup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.distributed_scope`: distributed scope of the capture (rank and world facts), if any; `TraceProvenance.duration`: total elapsed. `overhead_duration`: TorchLens overhead (capture minus func calls); `TraceProvenance.end_time`: epoch timestamps; `TraceProvenance.fingerprint`: hash of captured topology + shape-relevant structure; `TraceProvenance.forward_memory_backend`: memory backend that measured the forward peak; `TraceProvenance.input_annotations`: user-attached metadata (Trace-wide / inputs); `TraceProvenance.input_object_id`: python `id()` of the input at capture. Within-session only; `TraceProvenance.input_preprocessor`: descriptor of the input preprocessor applied before capture, if any; `TraceProvenance.input_signature_hash`: hash of input shapes/dtypes/devices; `TraceProvenance.input_structure`: structural descriptor of the model input (shape/dtype/pytree spec); `TraceProvenance.is_appended`: chunked-append provenance; `TraceProvenance.jax_closed_jaxpr`: closed jaxpr of the traced JAX function; `TraceProvenance.jax_inlined_call_primitives`: JAX call primitives inlined during capture; `TraceProvenance.kind`: kind of capture (live, cooked from a Recording, loaded); `TraceProvenance.model_object_id`: python `id()` of the model at capture time. Within-session only; `TraceProvenance.observer_spans`: observer spans recorded during the capture; `TraceProvenance.output_postprocessor`: output-decoding descriptors; `TraceProvenance.owner_thread_id`: thread id of the thread that owned the capture; `TraceProvenance.owner_thread_qualified`: whether the owner thread was fully qualified for the capture; `TraceProvenance.param_hash_full`: parameter-value hashes; `TraceProvenance.param_hash_quick`: parameter-value hashes; `TraceProvenance.param_source`: how params were derived — `"native-module"`, `"pytree-derived"`, `"none"`; `TraceProvenance.recording_kept`: whether the capture's Recording was kept; `TraceProvenance.root_entry_point`: persisted identity fact disclosing a bound-method capture root (`"bound_method:<owner>.<method>"`), absent on ordinary module-root captures; `TraceProvenance.setup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.start_time`: epoch timestamps; `TraceProvenance.summary()`: the capture-provenance block (the relocated summary preamble); `TraceProvenance.thread_activity_detected`: whether other threads were active during the capture; `TraceProvenance.thread_count_end`: thread count when the capture ended; `TraceProvenance.thread_count_start`: thread count when the capture started; `TraceProvenance.verification_reason`: machine-readable reason a live capture is not positively verified; `TraceProvenance.verified`: whether the live capture is positively verified (``None`` when not recorded).
+: How, when and from what this Trace was captured; `trace.provenance` is the instance a Trace
+  serves.
+  - `TraceProvenance.backend`: `Literal["torch","tf","jax","mlx","paddle","tinygrad"]` capture
+    backend tag. Portable.
+  - `TraceProvenance.backend_config`: backend runtime snapshot captured at trace time.
+  - `TraceProvenance.backend_version`: backend runtime snapshot captured at trace time.
+  - `TraceProvenance.backward_memory_backend`: backend used to measure backward memory.
+  - `TraceProvenance.cache_hit`: whether this capture was served from the capture cache.
+  - `TraceProvenance.cache_key`: key of the capture-cache entry this capture used or wrote.
+  - `TraceProvenance.cache_path`: path of the capture-cache entry, when one was used.
+  - `TraceProvenance.cleanup_duration`: phase timings (`func_calls_duration` = pure model compute
+    proxy).
+  - `TraceProvenance.distributed_scope`: distributed scope of the capture (rank and world facts), if
+    any.
+  - `TraceProvenance.duration`: total elapsed. `overhead_duration`: TorchLens overhead (capture
+    minus func calls).
+  - `TraceProvenance.end_time`: epoch timestamps.
+  - `TraceProvenance.fingerprint`: hash of captured topology + shape-relevant structure.
+  - `TraceProvenance.forward_memory_backend`: memory backend that measured the forward peak.
+  - `TraceProvenance.input_annotations`: user-attached metadata (Trace-wide / inputs).
+  - `TraceProvenance.input_object_id`: python `id()` of the input at capture. Within-session only.
+  - `TraceProvenance.input_preprocessor`: descriptor of the input preprocessor applied before
+    capture, if any.
+  - `TraceProvenance.input_signature_hash`: hash of input shapes/dtypes/devices.
+  - `TraceProvenance.input_structure`: structural descriptor of the model input (shape/dtype/pytree
+    spec).
+  - `TraceProvenance.is_appended`: chunked-append provenance.
+  - `TraceProvenance.jax_closed_jaxpr`: closed jaxpr of the traced JAX function.
+  - `TraceProvenance.jax_inlined_call_primitives`: JAX call primitives inlined during capture.
+  - `TraceProvenance.kind`: kind of capture (live, cooked from a Recording, loaded).
+  - `TraceProvenance.model_object_id`: python `id()` of the model at capture time. Within-session
+    only.
+  - `TraceProvenance.observer_spans`: observer spans recorded during the capture.
+  - `TraceProvenance.output_postprocessor`: output-decoding descriptors.
+  - `TraceProvenance.owner_thread_id`: thread id of the thread that owned the capture.
+  - `TraceProvenance.owner_thread_qualified`: whether the owner thread was fully qualified for the
+    capture.
+  - `TraceProvenance.param_hash_full`: parameter-value hashes.
+  - `TraceProvenance.param_hash_quick`: parameter-value hashes.
+  - `TraceProvenance.param_source`: how params were derived — `"native-module"`, `"pytree-derived"`,
+    `"none"`.
+  - `TraceProvenance.recording_kept`: whether the capture's Recording was kept.
+  - `TraceProvenance.root_entry_point`: persisted identity fact disclosing a bound-method capture
+    root (`"bound_method:<owner>.<method>"`), absent on ordinary module-root captures.
+  - `TraceProvenance.setup_duration`: phase timings (`func_calls_duration` = pure model compute
+    proxy).
+  - `TraceProvenance.start_time`: epoch timestamps.
+  - `TraceProvenance.summary()`: the capture-provenance block (the relocated summary preamble).
+  - `TraceProvenance.thread_activity_detected`: whether other threads were active during the
+    capture.
+  - `TraceProvenance.thread_count_end`: thread count when the capture ended.
+  - `TraceProvenance.thread_count_start`: thread count when the capture started.
+  - `TraceProvenance.verification_reason`: machine-readable reason a live capture is not positively
+    verified.
+  - `TraceProvenance.verified`: whether the live capture is positively verified (``None`` when not
+    recorded).
 
 **`TraceProvenance.summary()`**
 : `trace.provenance.summary()` returns the capture-provenance text block as a string: the backend, timing, cache, thread, input and parameter facts of the capture, the relocated summary preamble byte-for-byte. The Trace twin of `Bundle.provenance.summary()`. The view type names `TraceProvenance` and `TraceHealth` are confirmed (JMT 1 Nov 2026 3:00 PM PT).
 
 **`tl.types.TraceSettings`**
-: The capture options this Trace ran with (the stored snapshot); `trace.options` is the instance a Trace serves. `TraceSettings.activation_transform`: callable applied to saved forward outputs before storage; `TraceSettings.backward_ready`: backward machinery prepared at capture. `inference_only`: captured under `torch.no_grad()`; `TraceSettings.chunk_size`: chunked-append provenance; `TraceSettings.detach_saved_activations`: saved tensors detached from autograd; `TraceSettings.emit_nvtx`: capture toggles; `TraceSettings.grad_transform`: callable applied to saved gradients; `TraceSettings.grouping`: `"structural"` (default), `"strict_shapes"`/`"fold_sites"` (reserved, refuse typed pre-ratification); `TraceSettings.grouping_policy`: stamp of the layer-grouping policy that produced the layers; `TraceSettings.inference_only`: whether the capture ran under inference mode; `TraceSettings.input_transform`: portable `repr()` of the input / gradient transform callables. (`gradient_transform` ruled v12; not yet shipped -- the field itself is still `grad_transform`.); `TraceSettings.jax_static_argnums`: static argument positions passed to the JAX capture; `TraceSettings.keep_orphans`: whether orphan island Ops are retained; `TraceSettings.mark_layer_depths`: capture toggles; `TraceSettings.mode`: `"exhaustive"`, `"fast"`, or `"predicate"` (the capture-mechanism word); `TraceSettings.module_identity_mode`: how modules are identified — `"torch_module"`, `"pytree_module"`, `"function_root"`, `"object_module"`; `TraceSettings.on_nonfinite`: capture toggles; `TraceSettings.output_device`: device where saved outputs are placed. `save_mode`: tensor retention mode (`"copy"`, `"reference"`, `"view"`, `"cpu_async"`); `TraceSettings.recurrence_detection`: loop/recurrence detection on/off; `TraceSettings.save`: the save selector the capture ran with; `TraceSettings.save_arg_templates`: deep-copied Op arguments / structural arg templates; `TraceSettings.save_args`: deep-copied Op arguments / structural arg templates; `TraceSettings.save_grads`: whether operation gradients are retained after backward; `TraceSettings.save_mode`: how saved activations were retained (``copy`` or ``reference``); `TraceSettings.save_raw_activations`: whether raw untransformed tensors are saved; `TraceSettings.save_raw_grads`: whether raw untransformed tensors are saved; `TraceSettings.save_raw_input`: raw-I/O save policy + batch rendering policy for visualization; `TraceSettings.save_rng`: RNG snapshots. `save_code_context`: source-code context; `TraceSettings.save_source_context`: whether source text was snapshotted at capture for each frame (otherwise it is read lazily from disk while the file is unchanged); `TraceSettings.save_transformed_output`: raw-I/O save policy + batch rendering policy for visualization; `TraceSettings.seed`: RNG seed applied for capture, if any; `TraceSettings.source_context_lines`: number of source-context lines saved per op (stored as ``num_context_lines`` in v11); `TraceSettings.structure_only`: see Capture products above; `TraceSettings.verbose`: capture toggles.
+: The capture options this Trace ran with (the stored snapshot); `trace.options` is the instance a
+  Trace serves.
+  - `TraceSettings.activation_transform`: callable applied to saved forward outputs before storage.
+  - `TraceSettings.backward_ready`: backward machinery prepared at capture. `inference_only`:
+    captured under `torch.no_grad()`.
+  - `TraceSettings.chunk_size`: chunked-append provenance.
+  - `TraceSettings.detach_saved_activations`: saved tensors detached from autograd.
+  - `TraceSettings.emit_nvtx`: capture toggles.
+  - `TraceSettings.grad_transform`: callable applied to saved gradients.
+  - `TraceSettings.grouping`: `"structural"` (default), `"strict_shapes"`/`"fold_sites"` (reserved;
+    they refuse typed).
+  - `TraceSettings.grouping_policy`: stamp of the layer-grouping policy that produced the layers.
+  - `TraceSettings.inference_only`: whether the capture ran under inference mode.
+  - `TraceSettings.input_transform`: portable `repr()` of the input / gradient transform callables.
+    (`gradient_transform` ruled v12; not yet shipped -- the field itself is still
+    `grad_transform`.).
+  - `TraceSettings.jax_static_argnums`: static argument positions passed to the JAX capture.
+  - `TraceSettings.keep_orphans`: whether orphan island Ops are retained.
+  - `TraceSettings.mark_layer_depths`: capture toggles.
+  - `TraceSettings.mode`: `"exhaustive"`, `"fast"`, or `"predicate"` (the capture-mechanism word).
+  - `TraceSettings.module_identity_mode`: how modules are identified — `"torch_module"`,
+    `"pytree_module"`, `"function_root"`, `"object_module"`.
+  - `TraceSettings.on_nonfinite`: capture toggles.
+  - `TraceSettings.output_device`: device where saved outputs are placed. `save_mode`: tensor
+    retention mode (`"copy"`, `"reference"`, `"view"`, `"cpu_async"`).
+  - `TraceSettings.recurrence_detection`: loop/recurrence detection on/off.
+  - `TraceSettings.save`: the save selector the capture ran with.
+  - `TraceSettings.save_arg_templates`: deep-copied Op arguments / structural arg templates.
+  - `TraceSettings.save_args`: deep-copied Op arguments / structural arg templates.
+  - `TraceSettings.save_grads`: whether operation gradients are retained after backward.
+  - `TraceSettings.save_mode`: how saved activations were retained (``copy`` or ``reference``).
+  - `TraceSettings.save_raw_activations`: whether raw untransformed tensors are saved.
+  - `TraceSettings.save_raw_grads`: whether raw untransformed tensors are saved.
+  - `TraceSettings.save_raw_input`: raw-I/O save policy + batch rendering policy for visualization.
+  - `TraceSettings.save_rng`: RNG snapshots. `save_code_context`: source-code context.
+  - `TraceSettings.save_source_context`: whether source text was snapshotted at capture for each
+    frame (otherwise it is read lazily from disk while the file is unchanged).
+  - `TraceSettings.save_transformed_output`: raw-I/O save policy + batch rendering policy for
+    visualization.
+  - `TraceSettings.seed`: RNG seed applied for capture, if any.
+  - `TraceSettings.source_context_lines`: number of source-context lines saved per op.
+  - `TraceSettings.structure_only`: see Capture products above.
+  - `TraceSettings.verbose`: capture toggles.
 
 **`tl.types.TraceHealth`**
-: Honesty diagnostics of the capture: witness and escape-detector facts; `trace.health` is the instance a Trace serves. `TraceHealth.completeness_callback_ns`: time spent in the completeness-witness callback, in nanoseconds; `TraceHealth.completeness_decompositions`: completeness-witness decompositions of the captured op stream; `TraceHealth.completeness_mode`: mode the completeness witness ran in; `TraceHealth.completeness_verified`: whether the completeness witness verified the capture; `TraceHealth.escape_detector_callback_ns`: time spent in the escape-detector callback, in nanoseconds; `TraceHealth.escape_detector_mode`: mode the escape detector ran in; `TraceHealth.escape_detector_verified`: whether the escape detector verified the capture; `TraceHealth.num_accounted_witness_events`: number of witness events accounted for by captured ops; `TraceHealth.num_escape_detector_events`: number of escape-detector events observed; `TraceHealth.num_expected_opaque_witness_events`: number of witness events expected to be opaque; `TraceHealth.num_unaccounted_witness_events`: number of witness events no captured op accounts for; `TraceHealth.num_witness_events`: number of completeness-witness events observed.
+: Honesty diagnostics of the capture: witness and escape-detector facts; `trace.health` is the
+  instance a Trace serves.
+  - `TraceHealth.completeness_callback_ns`: time spent in the completeness-witness callback, in
+    nanoseconds.
+  - `TraceHealth.completeness_decompositions`: completeness-witness decompositions of the captured
+    op stream.
+  - `TraceHealth.completeness_mode`: mode the completeness witness ran in.
+  - `TraceHealth.completeness_verified`: whether the completeness witness verified the capture.
+  - `TraceHealth.escape_detector_callback_ns`: time spent in the escape-detector callback, in
+    nanoseconds.
+  - `TraceHealth.escape_detector_mode`: mode the escape detector ran in.
+  - `TraceHealth.escape_detector_verified`: whether the escape detector verified the capture.
+  - `TraceHealth.num_accounted_witness_events`: number of witness events accounted for by captured
+    ops.
+  - `TraceHealth.num_escape_detector_events`: number of escape-detector events observed.
+  - `TraceHealth.num_expected_opaque_witness_events`: number of witness events expected to be
+    opaque.
+  - `TraceHealth.num_unaccounted_witness_events`: number of witness events no captured op accounts
+    for.
+  - `TraceHealth.num_witness_events`: number of completeness-witness events observed.
 
 <!-- end trace group views -->
 
 ### Records built by TorchLens
-Records are built by TorchLens: the classes below, and every class of a family row (`tl.errors.*`:
-every exception and warning), have no public constructor keywords; a caller reads each value as the
-attribute of the same name. No keyword row names a record class (`tests/test_glossary_params.py`
-fails on one that does), and the lockstep gate owes no glossary entry for a keyword that only
-record constructors take; `PYTHONPATH=tools python -m name_lockstep.glossary_backfill --prune-records`
-drops a newly listed record from the keyword rows.
+TorchLens builds these records itself: the classes below, and every class of a family row
+(`tl.errors.*`: every exception and warning), have no public constructor keywords. A caller reads
+each value as the attribute of the same name, so no keyword row below names a record class.
 
 | Spelling | Meaning |
 | --- | --- |
@@ -6315,60 +7087,397 @@ drops a newly listed record from the keyword rows.
 
 <!-- record group views: Op and Layer concern groups -->
 **`tl.types.LayerCall`**
-: How one Layer's function was called; per-pass members (`saved_args`, `saved_kwargs`, `rng_states`) require a single-pass layer; `layer.call` is the instance a Layer serves. `LayerCall.arg_names`: parameter names from the signature of the function this layer calls; `LayerCall.config`: non-tensor configuration of the function call, stored as a dict; `LayerCall.num_args_total`: total number of positional and keyword arguments passed to this layer's function; `LayerCall.num_kwargs`: number of keyword arguments passed to this layer's function; `LayerCall.num_pos_args`: number of positional arguments passed to this layer's function; `LayerCall.parent_arg_positions`: map from argument kind and position to the parent layer label, merged across ops; `LayerCall.rng_states`: rNG states captured for this layer's function call, for single-pass layers; `LayerCall.saved_args`: positional arguments captured for this layer's function call, for single-pass layers; `LayerCall.saved_kwargs`: keyword arguments captured for this layer's function call, for single-pass layers.
+: How one Layer's function was called; per-pass members (`saved_args`, `saved_kwargs`, `rng_states`)
+  require a single-pass layer; `layer.call` is the instance a Layer serves.
+  - `LayerCall.arg_names`: parameter names from the signature of the function this layer calls.
+  - `LayerCall.config`: non-tensor configuration of the function call, stored as a dict.
+  - `LayerCall.num_args_total`: total number of positional and keyword arguments passed to this
+    layer's function.
+  - `LayerCall.num_kwargs`: number of keyword arguments passed to this layer's function.
+  - `LayerCall.num_pos_args`: number of positional arguments passed to this layer's function.
+  - `LayerCall.parent_arg_positions`: map from argument kind and position to the parent layer label,
+    merged across ops.
+  - `LayerCall.rng_states`: rNG states captured for this layer's function call, for single-pass
+    layers.
+  - `LayerCall.saved_args`: positional arguments captured for this layer's function call, for
+    single-pass layers.
+  - `LayerCall.saved_kwargs`: keyword arguments captured for this layer's function call, for
+    single-pass layers.
 
 **`tl.types.OpCall`**
-: How one Op's function was called; `op.call` is the instance an Op serves. `OpCall.arg_names`: names of the arguments in this Op's function call; `OpCall.args_template`: structural template of this Op's positional arguments, used to rebuild the call; `OpCall.autocast_state`: autocast state in effect when this Op's function was called; `OpCall.call_id`: identifier of the function call that produced this Op; Ops from one call share it; `OpCall.config`: dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride`; `OpCall.dropped_edge_tensor_args`: argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture; `OpCall.func_id`: portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind; `OpCall.func_transform_chain`: tuple of transform tags applied to the function this Op ran; `OpCall.func_transform_config`: configuration of the function transform for this transform-boundary Op; `OpCall.func_transform_fn_name`: name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_qualname`: qualified name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_source`: source location of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_kind`: kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None`; `OpCall.has_saved_args`: whether this Op's argument values were saved; `OpCall.injection_provenance`: record of which intervention injected this Op and where, or `None` for ordinary model Ops; `OpCall.is_func_transform`: whether this Op is a function-transform boundary node; `OpCall.is_internally_initialized`: alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input; `OpCall.kwargs_template`: structural template of this Op's keyword arguments, used to rebuild the call; `OpCall.non_tensor_args`: flat list of all non-tensor arguments of this Op's function call; `OpCall.non_tensor_kwargs`: non-tensor keyword arguments of this Op's function call; `OpCall.non_tensor_pos_args`: non-tensor positional arguments of this Op's function call; `OpCall.num_args_total`: total number of arguments in this Op's function call; `OpCall.num_kwargs`: number of keyword arguments in this Op's function call; `OpCall.num_pos_args`: number of positional arguments in this Op's function call; `OpCall.parent_arg_positions`: mapping from call argument positions, positional and keyword, to the parent Op label used there; `OpCall.rng_states`: rNG state snapshots recorded for this Op's function call; `OpCall.saved_args`: positional argument values saved for this Op's call, or `None` when not saved; `OpCall.saved_kwargs`: keyword argument values saved for this Op's call, or `None` when not saved; `OpCall.tl_authored_root`: whether this Op is the root of a TorchLens-authored call rather than a model call; `OpCall.unattributed_tensor_args`: tensor arguments that could not be attributed to a parent Op.
+: How one Op's function was called; `op.call` is the instance an Op serves.
+  - `OpCall.arg_names`: names of the arguments in this Op's function call.
+  - `OpCall.args_template`: structural template of this Op's positional arguments, used to rebuild
+    the call.
+  - `OpCall.autocast_state`: autocast state in effect when this Op's function was called.
+  - `OpCall.call_id`: identifier of the function call that produced this Op; Ops from one call share
+    it.
+  - `OpCall.config`: dict of lightweight hyperparameters captured from the call, such as
+    `kernel_size` and `stride`.
+  - `OpCall.dropped_edge_tensor_args`: argument positions, such as `"arg1"`, whose tensor inputs did
+    not become graph edges at capture.
+  - `OpCall.func_id`: portable key identifying the captured function this Op ran: its namespace,
+    qualified name and dispatch kind.
+  - `OpCall.func_transform_chain`: tuple of transform tags applied to the function this Op ran.
+  - `OpCall.func_transform_config`: configuration of the function transform for this
+    transform-boundary Op.
+  - `OpCall.func_transform_fn_name`: name of the function wrapped by the transform at this boundary
+    Op.
+  - `OpCall.func_transform_fn_qualname`: qualified name of the function wrapped by the transform at
+    this boundary Op.
+  - `OpCall.func_transform_fn_source`: source location of the function wrapped by the transform at
+    this boundary Op.
+  - `OpCall.func_transform_kind`: kind of function transform at this boundary Op, such as `vmap` or
+    `grad`, or `None`.
+  - `OpCall.has_saved_args`: whether this Op's argument values were saved.
+  - `OpCall.injection_provenance`: record of which intervention injected this Op and where, or
+    `None` for ordinary model Ops.
+  - `OpCall.is_func_transform`: whether this Op is a function-transform boundary node.
+  - `OpCall.is_internally_initialized`: alias of `is_internal_source`: whether this Op was created
+    inside the model rather than fed from an input.
+  - `OpCall.kwargs_template`: structural template of this Op's keyword arguments, used to rebuild
+    the call.
+  - `OpCall.non_tensor_args`: flat list of all non-tensor arguments of this Op's function call.
+  - `OpCall.non_tensor_kwargs`: non-tensor keyword arguments of this Op's function call.
+  - `OpCall.non_tensor_pos_args`: non-tensor positional arguments of this Op's function call.
+  - `OpCall.num_args_total`: total number of arguments in this Op's function call.
+  - `OpCall.num_kwargs`: number of keyword arguments in this Op's function call.
+  - `OpCall.num_pos_args`: number of positional arguments in this Op's function call.
+  - `OpCall.parent_arg_positions`: mapping from call argument positions, positional and keyword, to
+    the parent Op label used there.
+  - `OpCall.rng_states`: rNG state snapshots recorded for this Op's function call.
+  - `OpCall.saved_args`: positional argument values saved for this Op's call, or `None` when not
+    saved.
+  - `OpCall.saved_kwargs`: keyword argument values saved for this Op's call, or `None` when not
+    saved.
+  - `OpCall.tl_authored_root`: whether this Op is the root of a TorchLens-authored call rather than
+    a model call.
+  - `OpCall.unattributed_tensor_args`: tensor arguments that could not be attributed to a parent Op.
 
 **`tl.types.LayerAutograd`**
-: Autograd linkage of one Layer's output; `layer.autograd` is the instance a Layer serves. `LayerAutograd.grad_fn`: the autograd `grad_fn` node of this layer's output tensor, or `None`; `LayerAutograd.grad_fn_class_name`: class name of the autograd node that produced this layer's output, or `None`; `LayerAutograd.grad_fn_class_qualname`: qualified class name of the autograd node that produced this layer's output, or `None`; `LayerAutograd.grad_fn_handle`: the live autograd node object for this layer's output, not kept in saved files; `LayerAutograd.num_autograd_tensors`: number of tensors autograd saved for this layer's backward, as carried by the layer.
+: Autograd linkage of one Layer's output; `layer.autograd` is the instance a Layer serves.
+  - `LayerAutograd.grad_fn`: the autograd `grad_fn` node of this layer's output tensor, or `None`.
+  - `LayerAutograd.grad_fn_class_name`: class name of the autograd node that produced this layer's
+    output, or `None`.
+  - `LayerAutograd.grad_fn_class_qualname`: qualified class name of the autograd node that produced
+    this layer's output, or `None`.
+  - `LayerAutograd.grad_fn_handle`: the live autograd node object for this layer's output, not kept
+    in saved files.
+  - `LayerAutograd.num_autograd_tensors`: number of tensors autograd saved for this layer's
+    backward, as carried by the layer.
 
 **`tl.types.OpAutograd`**
-: Autograd linkage and saved gradients of one Op; `op.autograd` is the instance an Op serves. `OpAutograd.derived_grad`: backend-owned intermediate gradient payload for this Op, or `None`; `OpAutograd.grad_dtype`: dtype of this Op's saved output gradient; `OpAutograd.grad_fn`: the autograd `grad_fn` node of this Op's output tensor, or `None`; `OpAutograd.grad_fn_class_name`: class name of this Op's autograd node; `OpAutograd.grad_fn_class_qualname`: qualified class name of this Op's autograd node; `OpAutograd.grad_fn_handle`: the live PyTorch autograd node object for this Op; not portable; `OpAutograd.grad_for`: return the saved gradient tensor for one backward pass; `OpAutograd.grad_shape`: shape of this Op's saved output gradient; `OpAutograd.grads`: accessor over the per-backward-pass gradient records saved for this Op; `OpAutograd.num_autograd_tensors`: number of tensors the captured forward's autograd saved for this Op's backward.
+: Autograd linkage and saved gradients of one Op; `op.autograd` is the instance an Op serves.
+  - `OpAutograd.derived_grad`: backend-owned intermediate gradient payload for this Op, or `None`.
+  - `OpAutograd.grad_dtype`: dtype of this Op's saved output gradient.
+  - `OpAutograd.grad_fn`: the autograd `grad_fn` node of this Op's output tensor, or `None`.
+  - `OpAutograd.grad_fn_class_name`: class name of this Op's autograd node.
+  - `OpAutograd.grad_fn_class_qualname`: qualified class name of this Op's autograd node.
+  - `OpAutograd.grad_fn_handle`: the live PyTorch autograd node object for this Op; not portable.
+  - `OpAutograd.grad_for`: return the saved gradient tensor for one backward pass.
+  - `OpAutograd.grad_shape`: shape of this Op's saved output gradient.
+  - `OpAutograd.grads`: accessor over the per-backward-pass gradient records saved for this Op.
+  - `OpAutograd.num_autograd_tensors`: number of tensors the captured forward's autograd saved for
+    this Op's backward.
 
 **`tl.types.LayerSource`**
-: Where one Layer's function was called in user code; its members require a single-pass layer; `layer.source` is the instance a Layer serves. `LayerSource.frames`: the captured call stack of the user code that ran this layer's function, for single-pass layers; `LayerSource.fx_call_index`: the FX-style call index of a single-op layer; `LayerSource.fx_path`: the FX-style qualified path of a single-op layer, or `None`.
+: Where one Layer's function was called in user code; its members require a single-pass layer;
+  `layer.source` is the instance a Layer serves.
+  - `LayerSource.frames`: the captured call stack of the user code that ran this layer's function,
+    for single-pass layers.
+  - `LayerSource.fx_call_index`: the FX-style call index of a single-op layer.
+  - `LayerSource.fx_path`: the FX-style qualified path of a single-op layer, or `None`.
 
 **`tl.types.OpSource`**
-: Where one Op's function was called in user code; `op.source` is the instance an Op serves. `OpSource.arg_expressions`: source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable; `OpSource.frames`: call-stack frames showing where this Op ran; `OpSource.func_qualname`: qualified name of the function this Op called; `OpSource.fx_call_index`: call index in the `torch.fx`-style identity of this Op, when applicable; `OpSource.fx_path`: module path in the `torch.fx`-style identity of this Op, when applicable; `OpSource.var_names`: variable names the Op's result is assigned to at its call site; empty when unresolved.
+: Where one Op's function was called in user code; `op.source` is the instance an Op serves.
+  - `OpSource.arg_expressions`: source expressions of this Op's call arguments, parsed lazily from
+    `code_context`; an empty list when unavailable.
+  - `OpSource.frames`: call-stack frames showing where this Op ran.
+  - `OpSource.func_qualname`: qualified name of the function this Op called.
+  - `OpSource.fx_call_index`: call index in the `torch.fx`-style identity of this Op, when
+    applicable.
+  - `OpSource.fx_path`: module path in the `torch.fx`-style identity of this Op, when applicable.
+  - `OpSource.var_names`: variable names the Op's result is assigned to at its call site; empty when
+    unresolved.
 
 **`tl.types.LayerModuleContext`**
-: Module-nesting facts of one Layer; `layer.module_context` is the instance a Layer serves. `LayerModuleContext.call_depth`: depth of module nesting around this layer; `LayerModuleContext.is_atomic_module`: whether this layer's op is the only op of a module call, a single-op leaf module; `LayerModuleContext.is_module_input`: whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers; `LayerModuleContext.output_of_module_calls`: labels of the module calls whose output this layer is; `LayerModuleContext.output_of_modules`: addresses of the modules whose output this layer is.
+: Module-nesting facts of one Layer; `layer.module_context` is the instance a Layer serves.
+  - `LayerModuleContext.call_depth`: depth of module nesting around this layer.
+  - `LayerModuleContext.is_atomic_module`: whether this layer's op is the only op of a module call,
+    a single-op leaf module.
+  - `LayerModuleContext.is_module_input`: whether this layer's representative op feeds into at least
+    one `ModuleCall`, for single-op layers.
+  - `LayerModuleContext.output_of_module_calls`: labels of the module calls whose output this layer
+    is.
+  - `LayerModuleContext.output_of_modules`: addresses of the modules whose output this layer is.
 
 **`tl.types.OpModuleContext`**
-: Module-nesting facts of one Op; `op.module_context` is the instance an Op serves. `OpModuleContext.atomic_module`: the `Module` record for the atomic module this Op is the output of, or `None`; `OpModuleContext.atomic_module_address`: module address, without the pass suffix, of the atomic module this Op outputs from, or `None`; `OpModuleContext.atomic_module_call`: stored `ModuleCall` label for an atomic-module output Op, or `None`; `OpModuleContext.call_depth`: depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`); `OpModuleContext.call_stack`: root-first labels of the `ModuleCall`s active when this Op ran; `OpModuleContext.entry_arg_keys`: mapping from `ModuleCall` label to the argument keys this Op filled at module entry; `OpModuleContext.input_to_module_calls`: labels of the `ModuleCall` records whose input this Op's output fed; `OpModuleContext.input_to_modules`: module addresses, without the pass suffix, whose input this Op's output fed; `OpModuleContext.is_atomic_module`: whether this Op is the sole operation output of an atomic module call; `OpModuleContext.is_module_input`: whether this Op's output feeds at least one `ModuleCall` as an input; `OpModuleContext.is_module_output`: whether this Op is the output of a `ModuleCall`; `OpModuleContext.output_of_module_calls`: labels of the `ModuleCall` records whose output this Op is; `OpModuleContext.output_of_modules`: module addresses, without the pass suffix, whose output this Op is.
+: Module-nesting facts of one Op; `op.module_context` is the instance an Op serves.
+  - `OpModuleContext.atomic_module`: the `Module` record for the atomic module this Op is the output
+    of, or `None`.
+  - `OpModuleContext.atomic_module_address`: module address, without the pass suffix, of the atomic
+    module this Op outputs from, or `None`.
+  - `OpModuleContext.atomic_module_call`: stored `ModuleCall` label for an atomic-module output Op,
+    or `None`.
+  - `OpModuleContext.call_depth`: depth of this Op's active `ModuleCall` nesting (the length of
+    `module_call_stack`).
+  - `OpModuleContext.call_stack`: root-first labels of the `ModuleCall`s active when this Op ran.
+  - `OpModuleContext.entry_arg_keys`: mapping from `ModuleCall` label to the argument keys this Op
+    filled at module entry.
+  - `OpModuleContext.input_to_module_calls`: labels of the `ModuleCall` records whose input this
+    Op's output fed.
+  - `OpModuleContext.input_to_modules`: module addresses, without the pass suffix, whose input this
+    Op's output fed.
+  - `OpModuleContext.is_atomic_module`: whether this Op is the sole operation output of an atomic
+    module call.
+  - `OpModuleContext.is_module_input`: whether this Op's output feeds at least one `ModuleCall` as
+    an input.
+  - `OpModuleContext.is_module_output`: whether this Op is the output of a `ModuleCall`.
+  - `OpModuleContext.output_of_module_calls`: labels of the `ModuleCall` records whose output this
+    Op is.
+  - `OpModuleContext.output_of_modules`: module addresses, without the pass suffix, whose output
+    this Op is.
 
 **`tl.types.LayerPayload`**
-: Saved transformed payloads of one Layer; its output and gradient members require a single-pass layer; `layer.payload` is the instance a Layer serves. `LayerPayload.transformed_grad`: transformed gradient of the single pass, for single-pass layers; `LayerPayload.transformed_grad_dtype`: dtype of the saved transformed gradient, or `None`; `LayerPayload.transformed_grad_shape`: shape of the saved transformed gradient, or `None`; `LayerPayload.transformed_out`: transformed output of the single pass, for single-pass layers; `LayerPayload.transformed_out_dtype`: dtype of the saved transformed output, or `None`; `LayerPayload.transformed_out_shape`: shape of the saved transformed output, or `None`.
+: Saved transformed payloads of one Layer; its output and gradient members require a single-pass
+  layer; `layer.payload` is the instance a Layer serves.
+  - `LayerPayload.transformed_grad`: transformed gradient of the single pass, for single-pass
+    layers.
+  - `LayerPayload.transformed_grad_dtype`: dtype of the saved transformed gradient, or `None`.
+  - `LayerPayload.transformed_grad_shape`: shape of the saved transformed gradient, or `None`.
+  - `LayerPayload.transformed_out`: transformed output of the single pass, for single-pass layers.
+  - `LayerPayload.transformed_out_dtype`: dtype of the saved transformed output, or `None`.
+  - `LayerPayload.transformed_out_shape`: shape of the saved transformed output, or `None`.
 
 **`tl.types.OpPayload`**
-: Saved payloads of one Op; `op.payload` is the instance an Op serves. `OpPayload.materialize_grad`: materialize this Op's saved gradient from a lazy bundle reference; `OpPayload.materialize_out`: materialize this Op's saved output from a lazy bundle reference; `OpPayload.transformed_grad`: this Op's saved gradient after the trace's gradient transform, or `None`; `OpPayload.transformed_grad_dtype`: dtype of this Op's saved transformed gradient; `OpPayload.transformed_grad_shape`: shape of this Op's saved transformed gradient; `OpPayload.transformed_out`: this Op's saved output after the trace's activation transform, or `None`; `OpPayload.transformed_out_dtype`: dtype of this Op's saved transformed output; `OpPayload.transformed_out_shape`: shape of this Op's saved transformed output.
+: Saved payloads of one Op; `op.payload` is the instance an Op serves.
+  - `OpPayload.materialize_grad`: materialize this Op's saved gradient from a lazy bundle reference.
+  - `OpPayload.materialize_out`: materialize this Op's saved output from a lazy bundle reference.
+  - `OpPayload.transformed_grad`: this Op's saved gradient after the trace's gradient transform, or
+    `None`.
+  - `OpPayload.transformed_grad_dtype`: dtype of this Op's saved transformed gradient.
+  - `OpPayload.transformed_grad_shape`: shape of this Op's saved transformed gradient.
+  - `OpPayload.transformed_out`: this Op's saved output after the trace's activation transform, or
+    `None`.
+  - `OpPayload.transformed_out_dtype`: dtype of this Op's saved transformed output.
+  - `OpPayload.transformed_out_shape`: shape of this Op's saved transformed output.
 
 **`tl.types.LayerGraph`**
-: Graph position of one Layer, read as `layer.graph`. `LayerGraph.buffer_pass`: sequential number of this buffer write among the writes to the same buffer address, starting at 1, or `None` for non-writes; `LayerGraph.buffer_source`: the label of the op that wrote this buffer value, or `None` for static buffers; `LayerGraph.buffer_source_func_name`: name of the function that produced this buffer write, or `None` when this layer is not a buffer write; `LayerGraph.child_ops_per_layer`: mapping from each child layer label to the pass numbers of this layer's ops that connect to it; `LayerGraph.children_per_pass`: mapping from pass number to the child layer labels (without pass suffixes) of that pass; `LayerGraph.equivalence_class`: fingerprint string that groups ops repeating the same operation, used for loop detection; `LayerGraph.equivalent_ops`: labels of the ops that share this layer's equivalence class; `LayerGraph.has_children`: whether any pass of this layer has child layers; `LayerGraph.has_co_parents`: whether this layer has any co-parent layers besides itself; `LayerGraph.has_input_ancestor`: whether any model input is an ancestor of this layer; `LayerGraph.has_parents`: whether any pass of this layer has parent layers; `LayerGraph.has_siblings`: whether this layer has any sibling layers besides itself; `LayerGraph.io_role`: input or output address this boundary layer stands for, or `None` for an interior layer; `LayerGraph.is_buffer`: whether this layer is a registered-buffer version node, the flag `is_buffer_source` reports; `LayerGraph.is_compute`: whether this layer's representative op is a compute op; `LayerGraph.is_final_output`: whether this layer is one of the model's final outputs; `LayerGraph.is_internal_sink`: whether this layer's value ends inside the model without reaching any output; `LayerGraph.is_internal_source`: whether this layer creates a tensor inside the model instead of receiving it from a model input; `LayerGraph.is_orphan`: whether any op in this layer is disconnected from the main graph; `LayerGraph.parent_ops_per_layer`: mapping from each parent layer label to the pass numbers of this layer's ops that connect from it; `LayerGraph.parents_per_pass`: mapping from pass number to the parent layer labels (without pass suffixes) of that pass; `LayerGraph.site_peers`: layers sharing any of this layer's site keys (live index).
+: Graph position of one Layer, read as `layer.graph`.
+  - `LayerGraph.buffer_pass`: sequential number of this buffer write among the writes to the same
+    buffer address, starting at 1, or `None` for non-writes.
+  - `LayerGraph.buffer_source`: the label of the op that wrote this buffer value, or `None` for
+    static buffers.
+  - `LayerGraph.buffer_source_func_name`: name of the function that produced this buffer write, or
+    `None` when this layer is not a buffer write.
+  - `LayerGraph.child_ops_per_layer`: mapping from each child layer label to the pass numbers of
+    this layer's ops that connect to it.
+  - `LayerGraph.children_per_pass`: mapping from pass number to the child layer labels (without pass
+    suffixes) of that pass.
+  - `LayerGraph.equivalence_class`: fingerprint string that groups ops repeating the same operation,
+    used for loop detection.
+  - `LayerGraph.equivalent_ops`: labels of the ops that share this layer's equivalence class.
+  - `LayerGraph.has_children`: whether any pass of this layer has child layers.
+  - `LayerGraph.has_co_parents`: whether this layer has any co-parent layers besides itself.
+  - `LayerGraph.has_input_ancestor`: whether any model input is an ancestor of this layer.
+  - `LayerGraph.has_parents`: whether any pass of this layer has parent layers.
+  - `LayerGraph.has_siblings`: whether this layer has any sibling layers besides itself.
+  - `LayerGraph.io_role`: input or output address this boundary layer stands for, or `None` for an
+    interior layer.
+  - `LayerGraph.is_buffer`: whether this layer is a registered-buffer version node, the flag
+    `is_buffer_source` reports.
+  - `LayerGraph.is_compute`: whether this layer's representative op is a compute op.
+  - `LayerGraph.is_final_output`: whether this layer is one of the model's final outputs.
+  - `LayerGraph.is_internal_sink`: whether this layer's value ends inside the model without reaching
+    any output.
+  - `LayerGraph.is_internal_source`: whether this layer creates a tensor inside the model instead of
+    receiving it from a model input.
+  - `LayerGraph.is_orphan`: whether any op in this layer is disconnected from the main graph.
+  - `LayerGraph.parent_ops_per_layer`: mapping from each parent layer label to the pass numbers of
+    this layer's ops that connect from it.
+  - `LayerGraph.parents_per_pass`: mapping from pass number to the parent layer labels (without pass
+    suffixes) of that pass.
+  - `LayerGraph.site_peers`: layers sharing any of this layer's site keys (live index).
 
 **`tl.types.OpGraph`**
-: Graph position of one Op, read as `op.graph`. `OpGraph.buffer_sink_ops`: accessor over the buffer-write Ops that directly consume this Op; `OpGraph.buffer_source`: label of the Op that wrote this buffer value, or `None` for a static buffer; `OpGraph.buffer_source_func_name`: name of the function that produced this buffer value; `OpGraph.buffer_source_ops`: accessor over the buffer-source Ops that feed this Op; `OpGraph.co_parents`: labels of other Ops that share at least one child with this Op; `OpGraph.edge_substitutions`: recorded parent-edge substitutions for this Op, keyed by argument slot; `OpGraph.equivalence_class`: key of the equivalence class that loop detection assigned to this Op; `OpGraph.equivalent_ops`: labels of other Ops in the same equivalence class (same function and arguments); `OpGraph.has_children`: whether this Op has any child Ops; `OpGraph.has_co_parents`: whether this Op shares children with other Ops; `OpGraph.has_input_ancestor`: whether any model input is an ancestor of this Op; `OpGraph.has_internal_source_ancestor`: whether any internally initialized source Op is an ancestor of this Op; `OpGraph.has_output_descendant`: whether any model output is a descendant of this Op; `OpGraph.has_parents`: whether this Op has any parent Ops; `OpGraph.has_siblings`: whether this Op shares parents with other Ops; `OpGraph.internal_source_ancestors`: labels of the internally initialized source Ops that are ancestors of this Op; `OpGraph.internal_source_parents`: labels of the internally initialized source Ops that are direct parents of this Op; `OpGraph.io_role`: input or output address this boundary Op stands for, or `None` for an interior Op; `OpGraph.is_buffer`: stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it; `OpGraph.is_compute`: whether this Op executed a torch function rather than being a boundary sentinel; `OpGraph.is_final_output`: whether this Op is a final model output; `OpGraph.is_internal_source`: whether this Op was created inside the model, such as by a factory call, rather than fed from an input; `OpGraph.is_orphan`: whether this Op is disconnected from both the input and output flows; `OpGraph.is_output_parent`: whether this Op is directly returned from `forward`; `OpGraph.max_distance_from_input`: longest graph distance from any model input to this Op; `OpGraph.max_distance_to_output`: longest graph distance from this Op to any model output; `OpGraph.min_distance_from_input`: shortest graph distance from any model input to this Op; `OpGraph.min_distance_to_output`: shortest graph distance from this Op to any model output; `OpGraph.num_inputs`: number of parent Ops of this Op; `OpGraph.parent_param_ops`: mapping from each consumed parameter's identifying barcode to its pass number; `OpGraph.parent_params`: the `nn.Parameter` objects consumed by this Op; `OpGraph.recurrent_ops`: labels of the Ops in the same recurrent group: equivalent and at a structurally corresponding position; `OpGraph.root_ancestors`: labels of the root Ops at the start of the graph that this Op descends from; `OpGraph.siblings`: labels of other Ops that share at least one parent with this Op; `OpGraph.site_key`: portable structural-position identity of this Op (`site_key_v1`, a `"s1|"`-prefixed string), or `None` on a keyless artifact.
+: Graph position of one Op, read as `op.graph`.
+  - `OpGraph.buffer_sink_ops`: accessor over the buffer-write Ops that directly consume this Op.
+  - `OpGraph.buffer_source`: label of the Op that wrote this buffer value, or `None` for a static
+    buffer.
+  - `OpGraph.buffer_source_func_name`: name of the function that produced this buffer value.
+  - `OpGraph.buffer_source_ops`: accessor over the buffer-source Ops that feed this Op.
+  - `OpGraph.co_parents`: labels of other Ops that share at least one child with this Op.
+  - `OpGraph.edge_substitutions`: recorded parent-edge substitutions for this Op, keyed by argument
+    slot.
+  - `OpGraph.equivalence_class`: key of the equivalence class that loop detection assigned to this
+    Op.
+  - `OpGraph.equivalent_ops`: labels of other Ops in the same equivalence class (same function and
+    arguments).
+  - `OpGraph.has_children`: whether this Op has any child Ops.
+  - `OpGraph.has_co_parents`: whether this Op shares children with other Ops.
+  - `OpGraph.has_input_ancestor`: whether any model input is an ancestor of this Op.
+  - `OpGraph.has_internal_source_ancestor`: whether any internally initialized source Op is an
+    ancestor of this Op.
+  - `OpGraph.has_output_descendant`: whether any model output is a descendant of this Op.
+  - `OpGraph.has_parents`: whether this Op has any parent Ops.
+  - `OpGraph.has_siblings`: whether this Op shares parents with other Ops.
+  - `OpGraph.internal_source_ancestors`: labels of the internally initialized source Ops that are
+    ancestors of this Op.
+  - `OpGraph.internal_source_parents`: labels of the internally initialized source Ops that are
+    direct parents of this Op.
+  - `OpGraph.io_role`: input or output address this boundary Op stands for, or `None` for an
+    interior Op.
+  - `OpGraph.is_buffer`: stored flag marking this Op as a buffer boundary; `is_buffer_source`
+    exposes it.
+  - `OpGraph.is_compute`: whether this Op executed a torch function rather than being a boundary
+    sentinel.
+  - `OpGraph.is_final_output`: whether this Op is a final model output.
+  - `OpGraph.is_internal_source`: whether this Op was created inside the model, such as by a factory
+    call, rather than fed from an input.
+  - `OpGraph.is_orphan`: whether this Op is disconnected from both the input and output flows.
+  - `OpGraph.is_output_parent`: whether this Op is directly returned from `forward`.
+  - `OpGraph.max_distance_from_input`: longest graph distance from any model input to this Op.
+  - `OpGraph.max_distance_to_output`: longest graph distance from this Op to any model output.
+  - `OpGraph.min_distance_from_input`: shortest graph distance from any model input to this Op.
+  - `OpGraph.min_distance_to_output`: shortest graph distance from this Op to any model output.
+  - `OpGraph.num_inputs`: number of parent Ops of this Op.
+  - `OpGraph.parent_param_ops`: mapping from each consumed parameter's identifying barcode to its
+    pass number.
+  - `OpGraph.parent_params`: the `nn.Parameter` objects consumed by this Op.
+  - `OpGraph.recurrent_ops`: labels of the Ops in the same recurrent group: equivalent and at a
+    structurally corresponding position.
+  - `OpGraph.root_ancestors`: labels of the root Ops at the start of the graph that this Op descends
+    from.
+  - `OpGraph.siblings`: labels of other Ops that share at least one parent with this Op.
+  - `OpGraph.site_key`: portable structural-position identity of this Op (`site_key_v1`, a
+    `"s1|"`-prefixed string), or `None` on a keyless artifact.
 
 **`tl.types.LayerControlFlow`**
-: Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.
+: Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves.
+  - `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`,
+    `elif_N`, `else`) and the labels of this layer's child ops inside each arm.
+  - `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None`
+    otherwise.
+  - `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the
+    sorted pass numbers of this layer that ran under it.
+  - `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on
+    read from `in_conditionals`.
+  - `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this
+    layer's children that sit in that arm.
+  - `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else`
+    arm of a conditional.
+  - `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it
+    enters a conditional arm.
+  - `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test
+    or inside an arm.
+  - `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role.
+  - `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional
+    arm.
+  - `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a
+    conditional arm.
+  - `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean.
+  - `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the
+    model, such as a branch condition.
+  - `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per
+    different nesting, that this layer's passes ran under.
+  - `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or
+    `None`.
+  - `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then`
+    arm of a conditional.
 
 **`tl.types.OpControlFlow`**
-: Conditional-branch facts of one Op; `op.control_flow` is the instance an Op serves. `OpControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm; `OpControlFlow.bool_value`: the Python value of this Op's output when it is a scalar bool; `OpControlFlow.branch_depth`: number of conditional branches this Op is nested inside; 0 when it is not in a conditional body; `OpControlFlow.branch_stack`: stack of `(conditional_id, arm_kind)` pairs for the conditional branches this Op is nested inside, outermost first; `OpControlFlow.context_kind`: kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None`; `OpControlFlow.depth`: number of distinct conditionals this Op takes part in, derived on read from `in_conditionals`; `OpControlFlow.elif_children`: dict mapping each elif arm index to the labels of this Op's children in that arm; `OpControlFlow.else_children`: labels of this Op's children that sit in an else arm of a conditional; `OpControlFlow.entry_children`: labels of this Op's children whose edge from it enters a conditional arm; `OpControlFlow.in_conditionals`: ids of the conditionals this Op takes part in, as a test or inside an arm; `OpControlFlow.is_in_conditional`: whether this Op participates in any conditional role; `OpControlFlow.is_in_conditional_body`: whether this Op sits inside the body of a conditional arm; `OpControlFlow.is_in_conditional_evaluation`: whether this Op computes a conditional arm's condition; `OpControlFlow.is_scalar_bool`: whether this Op's output is a scalar bool; `OpControlFlow.is_terminal_bool`: whether this Op is a scalar bool that ends a chain of operations and decides control flow; `OpControlFlow.is_terminal_conditional_bool`: whether this terminal bool is the test of a recorded conditional; `OpControlFlow.terminal_bool_for`: `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm; `OpControlFlow.then_children`: labels of this Op's children that sit in a then arm of a conditional; `OpControlFlow.wrapper_kind`: wrapper kind of the conditional that owns this terminal bool, or `None`.
+: Conditional-branch facts of one Op; `op.control_flow` is the instance an Op serves.
+  - `OpControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (then, elif_N,
+    else) and the labels of this Op's children inside each arm.
+  - `OpControlFlow.bool_value`: the Python value of this Op's output when it is a scalar bool.
+  - `OpControlFlow.branch_depth`: number of conditional branches this Op is nested inside; 0 when it
+    is not in a conditional body.
+  - `OpControlFlow.branch_stack`: stack of `(conditional_id, arm_kind)` pairs for the conditional
+    branches this Op is nested inside, outermost first.
+  - `OpControlFlow.context_kind`: kind of context (`"if"` or `"while"`) of the conditional that owns
+    this terminal bool, or `None`.
+  - `OpControlFlow.depth`: number of distinct conditionals this Op takes part in, derived on read
+    from `in_conditionals`.
+  - `OpControlFlow.elif_children`: dict mapping each elif arm index to the labels of this Op's
+    children in that arm.
+  - `OpControlFlow.else_children`: labels of this Op's children that sit in an else arm of a
+    conditional.
+  - `OpControlFlow.entry_children`: labels of this Op's children whose edge from it enters a
+    conditional arm.
+  - `OpControlFlow.in_conditionals`: ids of the conditionals this Op takes part in, as a test or
+    inside an arm.
+  - `OpControlFlow.is_in_conditional`: whether this Op participates in any conditional role.
+  - `OpControlFlow.is_in_conditional_body`: whether this Op sits inside the body of a conditional
+    arm.
+  - `OpControlFlow.is_in_conditional_evaluation`: whether this Op computes a conditional arm's
+    condition.
+  - `OpControlFlow.is_scalar_bool`: whether this Op's output is a scalar bool.
+  - `OpControlFlow.is_terminal_bool`: whether this Op is a scalar bool that ends a chain of
+    operations and decides control flow.
+  - `OpControlFlow.is_terminal_conditional_bool`: whether this terminal bool is the test of a
+    recorded conditional.
+  - `OpControlFlow.terminal_bool_for`: `(conditional_id, arm_index)` when this Op is the terminal
+    bool of a conditional arm.
+  - `OpControlFlow.then_children`: labels of this Op's children that sit in a then arm of a
+    conditional.
+  - `OpControlFlow.wrapper_kind`: wrapper kind of the conditional that owns this terminal bool, or
+    `None`.
 
 **`tl.types.OpCost`**
-: Compute, memory and timing facts of one Op; `op.cost` is the instance an Op serves. `OpCost.activation_memory`: bytes of this Op's output activation; `OpCost.arithmetic_intensity`: theoretical forward FLOPs per byte of ideal memory traffic, or `None`; `OpCost.autograd_memory`: bytes of the tensors autograd saved for backward at this Op; `OpCost.bytes_delta_at_call`: change in allocated bytes at the time of this Op's function call; `OpCost.bytes_peak_at_call`: peak allocated bytes at the time of this Op's function call; `OpCost.bytes_read`: theoretical ideal read-once memory traffic for this operation, in bytes; `OpCost.bytes_written`: theoretical ideal write-once memory traffic for this operation, in bytes; `OpCost.compute_record`: two-term compute record (`fma_macs` and `other_flops`), derived on read; `OpCost.duration`: time spent in this Op's function call, as a `Duration`; `OpCost.flops_backward`: approximate backward FLOPs for this Op; `OpCost.flops_forward`: approximate forward FLOPs for this Op; `OpCost.flops_total`: approximate total FLOPs for this Op; `OpCost.input_memory`: sum of saved activation bytes across this Op's parent Ops; `OpCost.macs_forward`: true forward multiply-accumulate count for this Op, or `None`; `OpCost.param_memory`: bytes used by the parameters consumed by this Op; `OpCost.transformed_activation_memory`: bytes of this Op's transformed output activation, if one was kept.
+: Compute, memory and timing facts of one Op; `op.cost` is the instance an Op serves.
+  - `OpCost.activation_memory`: bytes of this Op's output activation.
+  - `OpCost.arithmetic_intensity`: theoretical forward FLOPs per byte of ideal memory traffic, or
+    `None`.
+  - `OpCost.autograd_memory`: bytes of the tensors autograd saved for backward at this Op.
+  - `OpCost.bytes_delta_at_call`: change in allocated bytes at the time of this Op's function call.
+  - `OpCost.bytes_peak_at_call`: peak allocated bytes at the time of this Op's function call.
+  - `OpCost.bytes_read`: theoretical ideal read-once memory traffic for this operation, in bytes.
+  - `OpCost.bytes_written`: theoretical ideal write-once memory traffic for this operation, in
+    bytes.
+  - `OpCost.compute_record`: two-term compute record (`fma_macs` and `other_flops`), derived on
+    read.
+  - `OpCost.duration`: time spent in this Op's function call, as a `Duration`.
+  - `OpCost.flops_backward`: approximate backward FLOPs for this Op.
+  - `OpCost.flops_forward`: approximate forward FLOPs for this Op.
+  - `OpCost.flops_total`: approximate total FLOPs for this Op.
+  - `OpCost.input_memory`: sum of saved activation bytes across this Op's parent Ops.
+  - `OpCost.macs_forward`: true forward multiply-accumulate count for this Op, or `None`.
+  - `OpCost.param_memory`: bytes used by the parameters consumed by this Op.
+  - `OpCost.transformed_activation_memory`: bytes of this Op's transformed output activation, if one
+    was kept.
 
 **`tl.types.LayerCost`**
-: Compute, memory and timing facts of one Layer; single-value members describe the representative (first) pass and `total_*` members sum over every pass; `layer.cost` is the instance a Layer serves. `LayerCost.activation_memory`: bytes of the representative pass's output activation; `LayerCost.autograd_memory`: bytes autograd saved for backward at the representative pass; `LayerCost.duration`: execution time of this layer's function call, for single-pass layers; `LayerCost.flops_backward`: backward FLOPs of this layer's representative (first) pass; `LayerCost.flops_forward`: forward FLOPs of this layer's representative (first) pass; `LayerCost.flops_total`: representative total FLOPs for this layer; `LayerCost.macs_forward`: true forward multiply-accumulate count of the representative pass, or `None` when unknown; `LayerCost.total_activation_memory`: sum of activation memory in bytes across all ops of this layer; `LayerCost.total_autograd_memory`: bytes autograd saved for backward, as carried by this layer; `LayerCost.total_flops`: sum of forward and backward FLOPs across all ops of this layer; `LayerCost.total_flops_backward`: sum of backward FLOPs across all ops of this layer; `LayerCost.total_flops_forward`: sum of forward FLOPs across all ops of this layer; `LayerCost.total_func_duration`: sum of function-call durations across all ops of this layer; `LayerCost.total_macs`: always `None`, because total MACs are not derivable; `LayerCost.total_macs_forward`: sum of true forward MACs across all ops of this layer, or `None` when any pass's split is unknown; `LayerCost.total_param_memory`: bytes used by this layer's parameters; `LayerCost.transformed_activation_memory`: bytes of the representative pass's transformed output activation.
+: Compute, memory and timing facts of one Layer; single-value members describe the representative
+  (first) pass and `total_*` members sum over every pass; `layer.cost` is the instance a Layer
+  serves.
+  - `LayerCost.activation_memory`: bytes of the representative pass's output activation.
+  - `LayerCost.autograd_memory`: bytes autograd saved for backward at the representative pass.
+  - `LayerCost.duration`: execution time of this layer's function call, for single-pass layers.
+  - `LayerCost.flops_backward`: backward FLOPs of this layer's representative (first) pass.
+  - `LayerCost.flops_forward`: forward FLOPs of this layer's representative (first) pass.
+  - `LayerCost.flops_total`: representative total FLOPs for this layer.
+  - `LayerCost.macs_forward`: true forward multiply-accumulate count of the representative pass, or
+    `None` when unknown.
+  - `LayerCost.total_activation_memory`: sum of activation memory in bytes across all ops of this
+    layer.
+  - `LayerCost.total_autograd_memory`: bytes autograd saved for backward, as carried by this layer.
+  - `LayerCost.total_flops`: sum of forward and backward FLOPs across all ops of this layer.
+  - `LayerCost.total_flops_backward`: sum of backward FLOPs across all ops of this layer.
+  - `LayerCost.total_flops_forward`: sum of forward FLOPs across all ops of this layer.
+  - `LayerCost.total_func_duration`: sum of function-call durations across all ops of this layer.
+  - `LayerCost.total_macs`: always `None`, because total MACs are not derivable.
+  - `LayerCost.total_macs_forward`: sum of true forward MACs across all ops of this layer, or `None`
+    when any pass's split is unknown.
+  - `LayerCost.total_param_memory`: bytes used by this layer's parameters.
+  - `LayerCost.transformed_activation_memory`: bytes of the representative pass's transformed output
+    activation.
 <!-- end record group views -->
 
 ### Keywords
 Every parameter a caller can pass by name to a public callable has a row here (or in the
 keyword table above) naming that callable after "keyword of", with its kind, default and
-| `lr=` | keyword of `tl.mechinterp.visualize_feature` (keyword-only; default `0.05`): Finite positive Adam learning rate for unconstrained input ascent |
-meaning; `tests/test_glossary_params.py` fails on a public parameter no row names. Constructor
-keywords of the records built by TorchLens (the table above) are not public and have no row.
+meaning. Constructor keywords of the records built by TorchLens (the table above) are not public
+and have no row.
 
 | Spelling | Meaning |
 | --- | --- |
@@ -6378,7 +7487,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `above=` | keyword of `tl.changed`, `tl.pass_variance`, `tl.threshold` (keyword-only; default `None`) |
 | `absolute=` | keyword of `tl.attribution.deconvolution`, `tl.attribution.guided_backprop` (keyword-only; default `False`): Whether to absolute-value the result (default `False`) |
 | `accumulation_steps=` | constructor keyword of `tl.debug.ChecksSession` (keyword-only; default `None`): Declared static accumulation factor K (watchdog threshold + exact boundary grouping); constructor keyword of `tl.debug.Watchdog` (required) |
-| `acknowledge_step_cost=` | constructor keyword of `tl.options.EpisodeOptions` (default `False`): Explicit override for the declared-step cost ceiling (placeholder spelling, [UI-SPRINT]). `True` accepts a declaration beyond the ceiling with the diagnostic-tier cost acknowledged; the default refuses typed so hundreds-of-steps wrapped captures are a decision, never an accident |
+| `acknowledge_step_cost=` | constructor keyword of `tl.options.EpisodeOptions` (default `False`): Explicit override for the declared-step cost ceiling (placeholder spelling). `True` accepts a declaration beyond the ceiling with the diagnostic-tier cost acknowledged; the default refuses typed so hundreds-of-steps wrapped captures are a decision, never an accident |
 | `action=` | keyword of `ChecksSession.register_change_check` (keyword-only; default `'warn'`); keyword of `ChecksSession.register_frozen_check`, `ChecksSession.register_nonfinite_grad_check`, `ChecksSession.register_nonfinite_param_check` (keyword-only; default `'raise'`); keyword of `ChecksSession.register_magnitude_check`, `ChecksSession.register_update_ratio_check` (keyword-only; default `'collect'`); keyword of `tl.when` (required): Helper spec (`tl.scale`, `tl.add_noise`, ...), callable transform, or `InterventionDecision`. The condition decides which tensor it edits: `tl.when(tl.grad("relu_3"), tl.scale(0))` edits the gradient |
 | `activation_transform=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
 | `activations=` | keyword of `tl.repgeom.activation_distance_matrix` (required): Activation array or tensor with shape `[N, ...]`; keyword of `tl.repgeom.effective_dimensionality`, `tl.repgeom.scree` (required): Activation representation with leading stimulus dimension, or a square precomputed distance matrix; keyword of `tl.repgeom.rdm` (required): Activation array or tensor with shape `[N, ...]` -- or, with `input_kind="batched"`, `[B, N, ...]` for one RDM per batch element (3-D input already MEANS one flattened stimulus set today, so the batched reading is explicit, never guessed) |
@@ -6417,7 +7526,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `as_summary=` | keyword of `ProfileReport.evidence_labels` (keyword-only; default `False`): Return the one-line disclosure string that feeds the report's evidence line instead of the frame |
 | `ascending=` | keyword of `Trace.profile` (keyword-only; default `False`): Whether to sort the selected metric ascending; keyword of `Trace.projective_fields` (keyword-only; default `True`); keyword of `Trace.receptive_fields` (keyword-only; default `True`): Whether an explicit `sort_by` sorts ascending; keyword of `tl.report.profile` (keyword-only; default `False`): Whether to reverse the default descending order |
 | `assume_no_padding=` | keyword of `tl.positions` (keyword-only; default `False`): Assert that every position is real, licensing physical first/last without a mask (recorded in the edit's identity); keyword of `tl.transforms.cls_token` (default `False`): Recorded caller assertion licensing physical position 0; keyword of `tl.transforms.pool_tokens` (default `False`): Recorded caller assertion that every position is valid; the only licence for mask-free pooling (three-valued policy, decision 12) |
-| `async_writes=` | constructor keyword of `tl.options.StorageOptions` (keyword-only; optional): Whether `trace(..., storage=...)` blob writes overlap forward capture through a bounded single-worker pipeline instead of pausing capture for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means the consumer default — async for `trace` ..; keyword of `tl.to_disk` (keyword-only; default `None`): Whether `trace(..., storage=...)` blob writes overlap capture on a bounded single-worker pipeline instead of pausing the forward for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means async for `trace` captures and synchronous for .. |
+| `async_writes=` | constructor keyword of `tl.options.StorageOptions` (keyword-only; optional): Whether `trace(..., storage=...)` blob writes overlap forward capture through a bounded single-worker pipeline instead of pausing capture for each write (documented-unstable spelling). Tri-state: `None` (default) means the consumer default — async for `trace` ..; keyword of `tl.to_disk` (keyword-only; default `None`): Whether `trace(..., storage=...)` blob writes overlap capture on a bounded single-worker pipeline instead of pausing the forward for each write (documented-unstable spelling). Tri-state: `None` (default) means async for `trace` captures and synchronous for .. |
 | `at=` | constructor keyword of `tl.types.UnencodableValue` (required) |
 | `aten_ops=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
 | `atol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.dead`, `tl.saturated`, `tl.sign`, `tl.stable_across_passes`, `tl.subspace` (keyword-only; default `0.0`); keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed absolute tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional absolute tolerance; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-08`): Absolute tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only absolute tolerance. `None` (default) derives per gradient dtype in `validate_backward_pass`; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Absolute allclose tolerance. `None` (default) derives the tolerance per gradient dtype; the historical fp32 decimal pair applied to every dtype was ~4.5e11 fp64 ULPs loose and false-failed fp16 grads |
@@ -6924,6 +8033,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on; keyword of `Recorder.backward` (required); keyword of `Recording.backward` (required): Loss tensor whose autograd graph should be walked; keyword of `Trace.backward` (required): Tensor whose `grad_fn_handle` roots the backward graph; keyword of `Recording.do` (keyword-only; default `None`) |
 | `loss_fn=` | keyword of `tl.stats.aggregate` (keyword-only; default `None`): Callable building a loss from `(output, *batch_tail)`; required when any key is a gradient site (`aggregate_loss_fn_required`); keyword of `tl.validate` (keyword-only; default `None`): Backward-only loss function; keyword of `tl.validation.validate_backward_pass` (default `None`): Optional callable mapping model outputs to a scalar loss. Defaults to summing all returned tensors |
 | `low=` | keyword of `tl.clamp` (keyword-only; default `None`): Optional lower bound; keyword of `tl.saturated` (keyword-only; default `None`) |
+| `lr=` | keyword of `tl.mechinterp.visualize_feature` (keyword-only; default `0.05`): Finite positive Adam learning rate for unconstrained input ascent |
 | `main_input_numel=` | keyword of `tl.report.flops` (keyword-only; default `None`): Explicit 6ND `D` for the trace door (the comparator's HF applicability cannot be established from a trace alone; the line is OMITTED without it, never guessed) |
 | `map_location=` | keyword of `Op.payload.materialize_grad`, `Op.payload.materialize_out` (keyword-only; default `'cpu'`): Target device for the materialized tensor; keyword of `tl.io.materialize_nested` (keyword-only; default `'cpu'`): Target device for the materialized nested tensors; keyword of `tl.load` (keyword-only; default `'cpu'`): Target device for eager tensor materialization |
 | `mapping=` | keyword of `Bundle.vary` (required): `{member: InterventionSpec \| (selection, edit) \| None}` |
@@ -7365,7 +8475,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `site=` | keyword of `Bundle.at` (required): Label from any Bundle accessor family, or a selector-like site; keyword of `CaptureBackend.apply_live_hooks` (required); keyword of `Container.reconstruct_at` (keyword-only; default `None`): Optional boundary site. Site aliases are considered matches; keyword of `LoreftArtifact.subspace` (required): The TorchLens site of the value pyreft edits (for `block_output` of layer `n`, the output of decoder layer `n`): its label, or the site itself from a trace (`trace[label]`). Given the site, its shape is checked here: the trailing axis must be the artifact's feature axis, `d` wide, and ..; keyword of `Trace.animate` (required): A site label, pass-qualified label or record (anything with a `layer_label`). The picture is the HTML animation of the repeated ops at that site: `str(drawing)` is the HTML, `drawing.show()` plays it and `drawing.save(path)` writes it; keyword of `Trace.clear_edits` (default `None`): Optional selector-like target. When provided, all sticky hooks for that target are removed; keyword of `Trace.reconstruct_container` (keyword-only; default `None`): Optional boundary site selector; keyword of `tl.attribution.seed` (required): Site address (pass-qualified label, Op, or Layer); keyword of `tl.bridge.captum.layer` (required): Module address, module pass label, layer selector, or layer object; keyword of `tl.bridge.pytorch_grad_cam.cam` (required): Module address, module pass label, op label, layer selector, or layer object; resolved by `layer`; keyword of `tl.bridge.pytorch_grad_cam.layer` (required): Site or module lookup; keyword of `tl.bridge.rsatoolbox.dataset` (default `None`): Site selector: Trace lookup (qualified module address, pass-qualified label) or extraction output key. `None` selects the final tensor output (the historical behavior; Trace route only); keyword of `tl.bridge.sae.register` (keyword-only; required): Where the SAE reads: a layer label or module address (must name one op of each trace), or a selector (every match is a home); keyword of `tl.bridge.sae.splice` (keyword-only; required): Layer label, selector, or layer object naming the splice site; keyword of `tl.bridge.sae.write_delphi` (keyword-only; required): The site the latents were read at; it names the cache folder and is the module name delphi lists (`modules=[site]`); keyword of `tl.bridge.sae_lens.encode` (required): Layer label, selector, or layer object to encode; keyword of `tl.bridge.sae_lens.reconstruct` (required): Layer label, selector, or layer object to reconstruct; keyword of `tl.bridge.xarray.data_array` (required): Site selector (qualified module address, pass-qualified label) or extraction output key; keyword of `tl.bridge.xarray.neuroid_assembly` (required): Site selector or extraction output key; keyword of `tl.experimental.stop_after` (required): Module-address or function-name string, live selector (`tl.func`/`tl.module`), or callable halt predicate; keyword of `tl.features.site_matrix` (required): Site selector: a Trace lookup (module address, label) or an extraction output key; constructor keyword of `tl.intervention.Direction` (required): Label of the site the rows were read at; keyword of `tl.intervention.fit_direction` (required): Site label (or a layer record, whose label is resolved in every trace) whose saved out holds `[n_prompts, n_tokens, hidden]` activations, or `[n_prompts, hidden]` with `read_token_index=None`; keyword of `tl.mechinterp.patch_query_heads_grid` (keyword-only; default `'v'`): `"v"` (default) patches the expanded value copy, `"k"` the expanded key copy; constructor keyword of `tl.observers.TapObserver` (required): Selector-like site where this tap should be registered; keyword of `tl.observers.tap` (required): Selector-like site to observe. `tl.grad(site)` observes the gradient of the site's output on each backward pass; `tl.grad(site) \| site` observes both passes; constructor keyword of `tl.stats.NarrationObserver` (default `None`); keyword of `tl.stats.narrate` (required): Selector-like site to observe (any `tap()`-accepted selector); `tl.grad(site)` narrates the gradient of the site's output; keyword of `tl.sweep` (optional): Intervention site target. Strings match either an exact TorchLens label or a function name; selectors and predicate callables are used directly; keyword of `tl.trackers.assert_tag_safe` (keyword-only; default `None`); keyword of `tl.units` (required): Site spelling: a pass-qualified op label (`'relu_1_2:1'`), a bare layer label (single-pass layers only — a bare label naming a multi-pass layer refuses `selection_unresolvable` / `multipass_bare_label`), or an input io role; keyword of `tl.mechinterp.ablation_controls` (required): Selector of the ablated tensor; it must fire exactly once; keyword of `tl.mechinterp.visualize_feature` (required): One module address, op label or structural selector accepted by the binding |
 | `site_id=` | keyword of `HistoryReader.observations` (keyword-only; default `None`); keyword of `HistoryView.series`, `HistoryView.site_streams`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
 | `site_key=` | constructor keyword of `tl.mechinterp.Coordinate` (default `None`): Live structural site key for the op (recapture-stable identity) |
-| `sites=` | keyword of `HistoryView.from_blocks`, `tl.trackers.architecture_fingerprint`, `tl.trackers.build_manifest`, `tl.trackers.emission_from_block` (required); keyword of `tl.attribution.deconvolution` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only); keyword of `tl.attribution.guided_backprop` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only -- the module-hook coverage class for reference-implementation parity); keyword of `tl.bridge.brain_score.per_layer` (keyword-only; default `None`): Optional iterable of sites to score: layer labels, selectors, or module dotted paths (the spelling Brain-Score users already write). Defaults to every STIMULUS-INDEXED saved tensor layer except input placeholders, through the core eligibility gate -- a partially saved trace scores its saved sites ..; keyword of `tl.bridge.lit.model` (keyword-only; default `None`): Which activations to expose as LIT `Embeddings` fields: the gate-passed `"blocks"` preset, explicit module addresses (optionally pass-qualified `"address:N"`), or `` for none. Required -- the bridge refuses rather than guesses ([UI-SPRINT] item 4); constructor keyword of `tl.debug.LivenessProbe`, `tl.mechinterp.SavePlan` (required); keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'resid_pre'`): Facet to patch (`resid_pre` / `attn_out` / `z` / ...); keyword of `tl.neuro.compare` (keyword-only; default `None`): Sites to score (default: every stimulus-indexed saved site, or every mapping key); keyword of `tl.neuro.plan_extraction` (keyword-only; default `'all'`): `"all"` (every saved-activation site on the observed path) or an iterable of layer labels to include; constructor keyword of `tl.options.NarrationOptions` (optional): Narration scope: `True` (every completed tensor-output event plus module structure lines), `"modules"` (structure lines only -- a cheap flight recorder), or any LIVE-evaluable selector/callable (`tl.func`, `tl.in_module`, boolean combinations, bounded `followed_by`). Selectors needing ..; keyword of `tl.mechinterp.ablation_controls` (keyword-only; default `None`): Optional `name -> selector` of neighbouring sites; runs the site family |
+| `sites=` | keyword of `HistoryView.from_blocks`, `tl.trackers.architecture_fingerprint`, `tl.trackers.build_manifest`, `tl.trackers.emission_from_block` (required); keyword of `tl.attribution.deconvolution` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only); keyword of `tl.attribution.guided_backprop` (keyword-only; default `'all'`): `"all"` (op-level coverage, default) or `"module"` (`nn.ReLU`-dispatched firings only -- the module-hook coverage class for reference-implementation parity); keyword of `tl.bridge.brain_score.per_layer` (keyword-only; default `None`): Optional iterable of sites to score: layer labels, selectors, or module dotted paths (the spelling Brain-Score users already write). Defaults to every STIMULUS-INDEXED saved tensor layer except input placeholders, through the core eligibility gate -- a partially saved trace scores its saved sites ..; keyword of `tl.bridge.lit.model` (keyword-only; default `None`): Which activations to expose as LIT `Embeddings` fields: the gate-passed `"blocks"` preset, explicit module addresses (optionally pass-qualified `"address:N"`), or `` for none. Required -- the bridge refuses rather than guesses; constructor keyword of `tl.debug.LivenessProbe`, `tl.mechinterp.SavePlan` (required); keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'resid_pre'`): Facet to patch (`resid_pre` / `attn_out` / `z` / ...); keyword of `tl.neuro.compare` (keyword-only; default `None`): Sites to score (default: every stimulus-indexed saved site, or every mapping key); keyword of `tl.neuro.plan_extraction` (keyword-only; default `'all'`): `"all"` (every saved-activation site on the observed path) or an iterable of layer labels to include; constructor keyword of `tl.options.NarrationOptions` (optional): Narration scope: `True` (every completed tensor-output event plus module structure lines), `"modules"` (structure lines only -- a cheap flight recorder), or any LIVE-evaluable selector/callable (`tl.func`, `tl.in_module`, boolean combinations, bounded `followed_by`). Selectors needing ..; keyword of `tl.mechinterp.ablation_controls` (keyword-only; default `None`): Optional `name -> selector` of neighbouring sites; runs the site family |
 | `size_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Size encoding channel (keyword-only; unstable): a Layer/Op field name, the `"dims"` shape token, or a callable `node -> scalar`. Encoded nodes get width/height minimums (labels are never truncated), clamped to 2x the typical node area. A rolled multi-pass layer whose source cannot be certified ..; constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE size-channel value source (field, `"dims"`, or callable); see `Trace.draw` |
 | `sketch=` | keyword of `tl.trackers.correct_histogram`, `tl.trackers.histogram_points` (required) |
 | `skip_fn=` | keyword of `Trace.draw` (keyword-only; default `None`): Per-node styling and selection callbacks (see `tl.viz.nodes`); constructor keyword of `tl.options.VisualizationOptions` (optional): Optional layer skip predicate |
@@ -7430,7 +8540,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `strings=` | keyword of `tl.viz.nodes.text_table` (required): Text items to render |
 | `structural_site_key=` | constructor keyword of `tl.types.Site` (default `None`) |
 | `structure_only=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
-| `structure_only_capture=` | constructor keyword of `tl.backends.BackendCapabilities` (default `False`): Whether structure-only capture (`structure_only=True`) is supported. DOCUMENTED-UNSTABLE surface pending naming-session/ ratification |
+| `structure_only_capture=` | constructor keyword of `tl.backends.BackendCapabilities` (default `False`): Whether structure-only capture (`structure_only=True`) is supported. Documented-unstable: may rename without a deprecation shim |
 | `style=` | keyword of `SummaryReport.print` (default `'auto'`); keyword of `SummaryReport.render` (default `'ascii'`); keyword of `Trace.decode_output` (keyword-only; default `None`): Decode style: `"classification"`, `"imagenet"`, `"imagenet1k"`, `"hf_text"` or a registered custom style. `None` lets the registered detectors pick one; keyword of `Trace.output_table` (keyword-only; default `None`): Optional decode style for a decode on demand (see `decode_output`); keyword of `Trace.summary` (keyword-only; default `None`): `"auto"` \| `"ascii"` \| `"unicode"` for display helpers; `str(result)` is ALWAYS the canonical ASCII payload; constructor keyword of `tl.stats.NarrationObserver` (default `'ascii'`); keyword of `tl.stats.glance` (keyword-only; default `'ascii'`): `"ascii"` (canonical) or `"unicode"` -- the two byte-checked renderings of identical content (`ascii == degrade(unicode)`); keyword of `tl.stats.narrate` (keyword-only; default `'ascii'`): Rendering style for the echoed cores; constructor keyword of `tl.postprocessing.ResolvedPostprocessing` (default `None`): Resolved output decoding style |
 | `subject=` | keyword of `tl.debug.nonfinite_origin` (required): A completed `Trace` (post-hoc, free) or a model (live tripwire); keyword of `tl.report.diff` (required): The capture whose perspective the delta takes (`subject - reference`); keyword of `tl.report.flops` (required): A finished `Trace` (the retroactive door), or an `nn.Module` (the model door -- runs ONE capture under the summary execution contract: eval mode, `torch.no_grad()`, module training flags and RNG state restored bit-identically afterwards). Model-door inputs; ..; keyword of `tl.viz.intervention_diff` (required) |
 | `subnormal_fraction_threshold=` | keyword of `tl.debug.dtype_range` (keyword-only; default `0.1`): Minimum fraction of all tensor elements in the subnormal interval to flag. Defaults to `0.1`; keyword of `tl.debug.param_health` (keyword-only; default `0.1`): Minimum subnormal fraction that warns |
@@ -7530,7 +8640,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `width=` | keyword of `tl.viz.contact_sheet` (keyword-only; default `900`); keyword of `tl.viz.heatmap` (keyword-only; default `240`): Output image width in pixels; keyword of `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan` (keyword-only; default `640`); keyword of `tl.viz.lineplot` (keyword-only; default `320`): Output image width in pixels; keyword of `tl.viz.nodes.histogram` (default `240`): Rendered image width; keyword of `tl.viz.nodes.scree` (keyword-only; default `320`): Width of the rendered scree image in pixels; keyword of `tl.viz.site_detail` (keyword-only; default `720`) |
 | `window=` | keyword of `ChecksSession.register_change_check` (keyword-only; default `None`); keyword of `tl.attribution.occlusion_map` (keyword-only; required): Window extents over the trailing swept axes of the occluded leaf (axes between the batch axis and the swept tail are fully occluded by every window -- a `(15, 15)` window on an image occludes all channels of each patch) |
 | `windowed_axes=` | constructor keyword of `tl.receptive_field.GridLayout` (required) |
-| `within=` | keyword of `ReceptiveFieldView.of`: the region or list of regions the influence answer lands in (label, module address, `Op`, `Layer`, `Module`, `ModuleCall` or selector); `None` means the model outputs (projective) or inputs (receptive); keyword of `ChecksSession.register_change_check`, `ChecksSession.register_update_ratio_check`, `tl.dead`, `tl.low_variance`, `tl.saturated` (keyword-only; default `None`); keyword of `tl.attribution.read` (keyword-only; default `None`): Population scoping (same seam as every value producer): `None` = implicit eligible population; a site label / Selection = explicit contract population; keyword of `tl.changed`, `tl.pass_variance`, `tl.sign`, `tl.stable_across_passes`, `tl.threshold`, `tl.top_changed`, `tl.top_fraction`, `tl.top_k` (default `None`); keyword of `tl.debug.param_health` (keyword-only; default `None`): Optional iterable of EXACT qualified names to audit (day-1 spelling; selector sugar is a UI-sprint handoff). Unknown names refuse typed; keyword of `tl.random_like` (keyword-only; required); keyword of `tl.subspace` (required) |
+| `within=` | keyword of `ReceptiveFieldView.of`: the region or list of regions the influence answer lands in (label, module address, `Op`, `Layer`, `Module`, `ModuleCall` or selector); `None` means the model outputs (projective) or inputs (receptive); keyword of `ChecksSession.register_change_check`, `ChecksSession.register_update_ratio_check`, `tl.dead`, `tl.low_variance`, `tl.saturated` (keyword-only; default `None`); keyword of `tl.attribution.read` (keyword-only; default `None`): Population scoping (same seam as every value producer): `None` = implicit eligible population; a site label / Selection = explicit contract population; keyword of `tl.changed`, `tl.pass_variance`, `tl.sign`, `tl.stable_across_passes`, `tl.threshold`, `tl.top_changed`, `tl.top_fraction`, `tl.top_k` (default `None`); keyword of `tl.debug.param_health` (keyword-only; default `None`): Optional iterable of EXACT qualified names to audit (spelling documented-unstable). Unknown names refuse typed; keyword of `tl.random_like` (keyword-only; required); keyword of `tl.subspace` (required) |
 | `writer=` | keyword of `tl.export.tensorboard` (required): Existing writer object, for example `SummaryWriter` |
 | `writer_or_logdir=` | constructor keyword of `tl.trackers.TensorBoardSink` (required) |
 | `x_label=` | keyword of `tl.viz.lineplot` (keyword-only; default `None`): Optional x-axis label |
