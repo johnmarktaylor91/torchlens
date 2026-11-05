@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1603 modules, 682944 lines, 0 modules without a docstring.
+83 packages, 1603 modules, 682963 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3064 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4507 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18506 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 56 | 18525 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46767 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1153 |
@@ -867,7 +867,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (56 modules, 18506 lines)
+Shared helpers used by two or more TorchLens packages. (56 modules, 18525 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -888,7 +888,7 @@ Shared helpers used by two or more TorchLens packages. (56 modules, 18506 lines)
 | `_display_text` | Tensor, dtype, shape and device spellings shared by every printout. | 52 |
 | `_exception_notes` | The guarded PEP 678 exception-note helper, shared by every crash-note site. | 84 |
 | `_foreign_data_replay` | Replay of a resolved foreign data round trip (the ''foreigndata'' op). | 85 |
-| `_kernel_probes` | Capability probes that run one real tensor op each (a torch-only leaf). | 281 |
+| `_kernel_probes` | Capability probes that run one real tensor op each (a torch-only leaf). | 397 |
 | `_lazy_import_warm` | Import the modules a process's first capture would otherwise load in-window. | 59 |
 | `_module_call_dispatch` | Tell ''module(x)'' from a direct ''module.forward(x)'' by the caller frame. | 127 |
 | `_mps_memory` | MPS headroom query behind the ''HAS_MPS_MEMORY_QUERY'' capability flag. | 27 |
@@ -906,7 +906,7 @@ Shared helpers used by two or more TorchLens packages. (56 modules, 18506 lines)
 | `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
 | `_tensor_layout` | Capture-time argument layouts for saved-DAG replay. | 98 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4382 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4285 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 258 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 429 |
