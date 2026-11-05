@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.validation._replay_storage_context import replayed_storage_alias
 
 
 def _base_read(y: torch.Tensor) -> torch.Tensor:
@@ -132,3 +133,35 @@ def test_grad_region_gradient_matches_eager(write: str) -> None:
     logged = [trace[label].out for label in trace.output_layers]
     assert torch.allclose(logged[0], eager_energy.detach())
     assert torch.allclose(logged[1], eager_grad)
+
+
+def test_alias_search_prefers_the_receiver_lineage() -> None:
+    """A lineage match wins over an equal-geometry tensor elsewhere in the replay."""
+
+    base = torch.zeros(3, 8)
+    written = base[:, 5:6]
+    other = base.view(3, 8)
+    found = replayed_storage_alias(written, ((3, 8), None), [written, base], [other])
+    assert found is base
+
+
+def test_alias_search_refuses_an_ambiguous_read() -> None:
+    """Two contiguous aliases of one shape at different offsets cannot be told apart."""
+
+    flat = torch.zeros(16, requires_grad=True).clone()
+    written = flat[5:7]
+    first, second = flat[0:8], flat[4:12]
+    with pytest.raises(ValueError, match="ambiguous"):
+        replayed_storage_alias(written, ((8,), None), [written], [first, second])
+
+
+def test_alias_search_ignores_other_storage_and_geometry() -> None:
+    """Only a tensor on the written storage with exactly the read geometry matches."""
+
+    base = torch.zeros(3, 8)
+    written = base[:, 5:6]
+    foreign = torch.zeros(3, 8)
+    strided = base[:, 4:7]
+    assert replayed_storage_alias(written, ((3, 8), None), [written], [foreign]) is None
+    assert replayed_storage_alias(written, ((3, 3), ((3, 3), (8, 1), 2)), [], [strided]) is None
+    assert replayed_storage_alias(written, ((3, 3), ((3, 3), (8, 1), 4)), [], [strided]) is strided
