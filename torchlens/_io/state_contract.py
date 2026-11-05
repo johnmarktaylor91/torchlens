@@ -317,6 +317,8 @@ def _load_inventory_skeleton(metadata_path: Any) -> Any:
     import pickle
 
     def refuse(reason: str) -> NoReturn:
+        """Raise the inventory's one coded refusal for this metadata file."""
+
         refuse_unreadable_file(
             metadata_path,
             code=_format3_contract.REFUSAL_CODES["record_file_corrupt"],
@@ -327,6 +329,8 @@ def _load_inventory_skeleton(metadata_path: Any) -> Any:
     classes: dict[str, type] = {}
 
     def surrogate_class(qualname: str) -> type:
+        """Return this scan's surrogate type for ``qualname``, refusing past the class cap."""
+
         cls = classes.get(qualname)
         if cls is None:
             if len(classes) >= _MAX_SURROGATE_CLASSES:
