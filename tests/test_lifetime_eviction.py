@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import RecordBindingError
+from torchlens._utils._record_group_table import record_member
 
 
 class _StackNet(nn.Module):
@@ -48,7 +49,7 @@ def _nested_arg_tensor_refs(trace) -> list[weakref.ref]:
 
     for op in trace.ops.values():
         for field_name in ("saved_args", "input_activations"):
-            _collect(getattr(op, field_name, None))
+            _collect(record_member(op, field_name, None))
     return refs
 
 

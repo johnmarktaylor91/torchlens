@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._postprocess import _column_passes_graph, control_flow, graph_traversal
+from torchlens._utils._record_group_table import record_member
 
 #: Module functions holding the per-op loops of steps 3 and 5.
 _STEP3_LOOPS = ("flood_orphan_reachability",)
@@ -114,7 +115,7 @@ def _snapshot(trace: Any) -> dict[str, str]:
     """Return ``repr`` of every pass-written field of every raw op, keyed by label."""
 
     return {
-        label: repr({name: getattr(op, name, None) for name in _OP_FIELDS})
+        label: repr({name: record_member(op, name, None) for name in _OP_FIELDS})
         for label, op in trace._raw_graph_ws.raw_layer_dict.items()
     }
 
@@ -227,8 +228,8 @@ def test_column_and_facade_bodies_store_the_same_result(
     )  # record-groups: flat
     for column_op, facade_op in zip(column_ops, facade_ops, strict=True):
         for name in _OP_FIELDS:
-            left = getattr(column_op, name, None)
-            right = getattr(facade_op, name, None)
+            left = record_member(column_op, name, None)
+            right = record_member(facade_op, name, None)
             assert left == right, f"{column_op.label}.{name}: {left!r} != {right!r}"
     for name in _TRACE_FIELDS:
         left = getattr(column_trace, name)
