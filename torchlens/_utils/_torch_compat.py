@@ -3222,29 +3222,25 @@ def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     Returns
     -------
     bool
-        True while a ``torch.compile`` region is being traced. False, without
-        an import, while ``torch._dynamo`` is not imported. False when the
-        capability is structurally ABSENT (no probe resolved), so an absent
+        True while a ``torch.compile`` region is being traced. False, without an
+        import, while ``torch._dynamo`` is not imported (torch 2.1 has no
+        ``torch.compiler.is_compiling``) or when no probe resolved, so an absent
         probe degrades to "not compiling" rather than disabling capture. True
-        when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated
-        as possibly-compiling so the wrapper takes the disclosed dynamo-region
+        when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated as
+        possibly-compiling so the wrapper takes the disclosed dynamo-region
         bypass (``capture_verified=False`` + ``dynamo_region_not_logged``)
-        instead of silently logging data-free FakeTensors -- the documented
-        crash class the guard exists to prevent. Both degraded paths flip
-        ``HAS_DYNAMO_IS_COMPILING``.
+        instead of silently logging data-free FakeTensors, the crash class the
+        guard exists to prevent. Both degraded paths flip ``HAS_DYNAMO_IS_COMPILING``.
 
     Notes
     -----
-    Probed once and cached as a bound callable, because this is consulted on the
-    capture logging path once per operation. Measured at ~0.5 us per call, which
-    is under 1% of the per-op logging cost.
+    Probed once and cached as a bound callable: it runs once per logged operation,
+    ~0.5 us per call, under 1% of the per-op logging cost.
     """
 
     global HAS_DYNAMO_IS_COMPILING, _DYNAMO_IS_COMPILING_FN, _DYNAMO_IS_COMPILING_PROBED
 
     if not _DYNAMO_IS_COMPILING_PROBED:
-        # Loaded modules only: torch 2.1 has no torch.compiler.is_compiling, and
-        # importing torch._dynamo mid-capture breaks; unloaded Dynamo compiles nothing.
         candidates = _DYNAMO_IS_COMPILING_CANDIDATES
         loaded = [pair for pair in candidates if force_probe or pair[0] in sys.modules]
         for module_name, attr_name in loaded:
