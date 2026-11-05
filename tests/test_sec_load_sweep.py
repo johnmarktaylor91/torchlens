@@ -399,27 +399,59 @@ def test_registry_resolver_refuses_unchecked_kernels(qualname: str, trust: bool)
     assert info.value.fields["code"] == "custom_callable_not_pure"
 
 
+def _walk(path: str) -> Any:
+    """Resolve a dotted ``torch...`` path, or ``None`` when torch lacks it."""
+
+    value: Any = torch
+    for part in path.split(".")[1:]:
+        try:
+            value = getattr(value, part)
+        except (AttributeError, RuntimeError):
+            return None
+    return value
+
+
 @pytest.mark.parametrize(
     "path",
     [
         "torch.ops.aten.segment_reduce.default",
         "torch.ops.aten._index_put_impl_.default",
         "torch.ops.aten._unsafe_index.Tensor",
-        "torch._sparse_coo_tensor_unsafe",
-        "torch._sparse_csr_tensor_unsafe",
-        "torch._sparse_compressed_tensor_unsafe",
     ],
 )
-def test_overloads_and_unsafe_suffix_kernels_are_denied(path: str) -> None:
-    """Op overloads match on their op packet, and the ``*_unsafe`` sparse constructors deny."""
+def test_op_overloads_match_on_their_op_packet(path: str) -> None:
+    """``torch.ops.aten.<op>.<overload>`` reports ``<op>.<overload>``; it still denies."""
 
-    value: Any = torch
-    for part in path.split(".")[1:]:
-        value = getattr(value, part, None)
-        if value is None:
-            pytest.skip(f"{path} is absent on this torch")
+    value = _walk(path)
+    assert value is not None, f"{path} is absent on this torch"
     assert is_unchecked_memory_kernel(value), path
     assert not is_pure_forward_callable(value), f"{path} admitted"
+
+
+def test_unsafe_suffix_sparse_constructors_are_denied() -> None:
+    """The private ``*_unsafe`` sparse constructors skip index validation; each denies."""
+
+    candidates = [
+        f"{root}.{name}"
+        for root in ("torch", "torch._C._VariableFunctions")
+        for name in (
+            "_sparse_coo_tensor_unsafe",
+            "_sparse_csr_tensor_unsafe",
+            "_sparse_compressed_tensor_unsafe",
+        )
+    ] + [
+        f"torch.ops.aten.{name}.default"
+        for name in (
+            "_sparse_coo_tensor_unsafe",
+            "_sparse_csr_tensor_unsafe",
+            "_sparse_compressed_tensor_unsafe",
+        )
+    ]
+    present = {path: value for path in candidates if (value := _walk(path)) is not None}
+    assert present, "no *_unsafe sparse constructor found on this torch"
+    for path, value in present.items():
+        assert is_unchecked_memory_kernel(value), path
+        assert not is_pure_forward_callable(value), f"{path} admitted"
 
 
 # --------------------------------------------------------------------------- #
