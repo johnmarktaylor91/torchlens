@@ -153,6 +153,10 @@ _NATIVE_INDEX_SLOTS: dict[str, dict[int, _Builder | str]] = {
         2: _INDEX,
     },
     **dict.fromkeys(("spmm_min", "spmm_max"), {0: _CSR, 1: _INDEX, 2: _VALUE, 3: _VALUE}),
+    # torch_sparse conversions: ind2ptr(ind, M) reads a sorted row index in [0, M);
+    # ptr2ind(ptr, E) reads a CSR pointer whose last entry is E.
+    "ind2ptr": {0: _INDEX},
+    "ptr2ind": {0: _CSR},
 }
 """Recorded operator name -> {positional slot: in-domain builder or ``_VALUE``}. An integer
 slot with no entry has no proven-safe perturbation and fails closed."""
