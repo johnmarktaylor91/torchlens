@@ -21,7 +21,7 @@ from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
 from ._input_tree import INPUT_TREE_MAX_DEPTH
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
-from ._quiet_property import _QuietPropertyLogs, read_attr_quietly
+from ._quiet_property import _QuietPropertyLogs, class_crawl_names, read_attr_quietly
 
 # Attributes to skip when crawling an object's namespace looking for tensors.
 # Two groups, matched by EXACT name:
@@ -611,7 +611,7 @@ def _crawl_attr_names(item: Any, obj_type: type) -> list[str] | None:
     class_names = _state._dir_cache.get(obj_type)
     if class_names is None:
         try:
-            attrs = dir(obj_type)
+            attrs = class_crawl_names(obj_type)
         except Exception:
             attrs = []
         class_names = [name for name in attrs if _passes_attr_filter(name)]
