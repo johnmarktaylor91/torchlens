@@ -332,11 +332,9 @@ def _reconstruct_checked(
     # each z element is sum_k pattern[..,k] * V[..,k,:] with pattern >= 0, so
     # the accumulated-|addend| bound is exactly pattern @ |V|.
     z_magnitude = torch.matmul(pattern.float(), expanded_v.abs().float())
-    if not _allclose_sdpa(
-        z,
-        saved_output(sdpa_op),
-        magnitude=z_magnitude,
-        reduction_length=int(expanded_v.shape[-2]),
+    target = saved_output(sdpa_op)
+    if target is None or not _allclose_sdpa(
+        z, target, magnitude=z_magnitude, reduction_length=int(expanded_v.shape[-2])
     ):
         return MissingFacet(
             f"{facet} reconstruction validation failed: recomputed z did not match "
