@@ -366,8 +366,8 @@ def saved_for_backward_line(layer_log: Any, vis_mode: str) -> str | None:
     noun = "tensor" if count == 1 else "tensors"
     memory = record_member(layer_log, "autograd_memory", None)
     if memory is not None:
-        return f"saved for backward: {count} {noun}, {format_memory(memory)}{suffix}"
-    return f"saved for backward: {count} {noun}{suffix}"
+        return f"saved for backward: {count:,} {noun}, {format_memory(memory)}{suffix}"
+    return f"saved for backward: {count:,} {noun}{suffix}"
 
 
 def format_memory(bytes_or_quantity: Any) -> str:
@@ -382,40 +382,41 @@ def format_memory(bytes_or_quantity: Any) -> str:
     Returns
     -------
     str
-        Human-readable memory such as ``"156 KB"``: the divisor is 1024 and
-        the unit names are the released drawings' (B, KB, MB, GB, TB).
+        Human-readable memory such as ``"156 KB"``: decimal units, each 1000
+        times the one before (B, KB, MB, GB, TB), so the name matches the divisor.
     """
 
     if isinstance(bytes_or_quantity, bool) or not isinstance(bytes_or_quantity, int | float):
         return str(bytes_or_quantity)
-    return binary_size(float(bytes_or_quantity))
+    return decimal_size(float(bytes_or_quantity))
 
 
-#: Unit names for the drawing's sizes, each 1024 times the one before. The
-#: drawings keep the released look (``"60 KB"``), not the IEC names
-#: (``KiB``) that card and repr byte quantities use.
-_BINARY_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
+#: Unit names for the drawing's sizes, each 1000 times the one before. Drawings
+#: keep the released names (``"60 KB"``) with the decimal divisor those names
+#: mean; card and repr byte quantities print IEC units (``KiB``, divisor 1024).
+_DECIMAL_UNITS: Final = ("B", "KB", "MB", "GB", "TB", "PB")
 
 
-def binary_size(size: float) -> str:
+def decimal_size(size: float) -> str:
     """Return a byte count for a drawing, for example ``"60 KB"`` or ``"1.9 KB"``.
 
-    The divisor is 1024. Whole bytes print without a decimal (``"48 B"``);
-    larger values print one decimal under the largest unit the value reaches,
-    dropped when it is zero (``"588 KB"``, not ``"588.0 KB"``).
+    The divisor is 1000, the one the unit names mean. Whole bytes print without
+    a decimal (``"48 B"``); larger values print one decimal under the largest
+    unit the rounded value reaches, dropped when it is zero (``"588 KB"``, not
+    ``"588.0 KB"``), so ``999_999`` bytes is ``"1 MB"``, never ``"1000 KB"``.
     """
 
     if size < 0:
         raise ValueError("size must be non-negative.")
-    if size < 1024:
+    if size < 1000:
         return f"{int(size)} B"
     value = size
-    unit = _BINARY_UNITS[0]
-    for unit in _BINARY_UNITS[1:]:
-        value /= 1024.0
-        if value < 1024 or unit == _BINARY_UNITS[-1]:
+    unit = _DECIMAL_UNITS[0]
+    for unit in _DECIMAL_UNITS[1:]:
+        value /= 1000.0
+        if round(value, 1) < 1000 or unit == _DECIMAL_UNITS[-1]:
             break
-    text = f"{value:.1f}"
+    text = f"{value:,.1f}"
     return f"{text.removesuffix('.0')} {unit}"
 
 
@@ -427,14 +428,14 @@ _COUNT_UNITS: Final = ((1e9, "B"), (1e6, "M"), (1e3, "K"))
 def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
     """Return a count for a drawing: in full below ``full_below``, else 3 significant figures.
 
-    ``9999`` stays ``"9999"``; ``147968`` is ``"148K"``, ``85798656`` is
+    A full count carries thousands separators: ``9999`` is ``"9,999"``; ``147968`` is ``"148K"``, ``85798656`` is
     ``"85.8M"`` and ``1_500_000_000`` is ``"1.5B"``. The exact count stays in
     the data and the node tooltip. The header's parameter count passes
     ``full_below=1000`` (``1024`` is ``"1.02K"``).
     """
 
     if count < full_below:
-        return str(count)
+        return f"{count:,}"
     for index, (divisor, suffix) in enumerate(_COUNT_UNITS):
         if count >= divisor or index == len(_COUNT_UNITS) - 1:
             text = f"{count / divisor:.3g}"
@@ -442,7 +443,7 @@ def compact_count(count: int, full_below: int = COMPACT_COUNT_FROM) -> str:
                 divisor, suffix = _COUNT_UNITS[index - 1]
                 text = f"{count / divisor:.3g}"
             return f"{text}{suffix}"
-    return str(count)
+    return f"{count:,}"
 
 
 def header_count(count: int) -> str:

@@ -10,8 +10,8 @@
 <title>SmallCNN</title>
 <polygon fill="white" stroke="none" points="-4,4 -4,-1370.06 307.5,-1370.06 307.5,4 -4,4"/>
 <text xml:space="preserve" text-anchor="start" x="10" y="-1347.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">SmallCNN</text>
-<text xml:space="preserve" text-anchor="start" x="10" y="-1333.76" font-family="Helvetica,sans-Serif" font-size="14.00">11 ops (31.3 KB)</text>
-<text xml:space="preserve" text-anchor="start" x="10" y="-1319.76" font-family="Helvetica,sans-Serif" font-size="14.00">6.36K params (24.9 KB, all trainable)</text>
+<text xml:space="preserve" text-anchor="start" x="10" y="-1333.76" font-family="Helvetica,sans-Serif" font-size="14.00">11 ops (32.1 KB)</text>
+<text xml:space="preserve" text-anchor="start" x="10" y="-1319.76" font-family="Helvetica,sans-Serif" font-size="14.00">6.36K params (25.4 KB, all trainable)</text>
 <polygon fill="none" stroke="black" points="10,-1287.06 10,-1314.06 232,-1314.06 232,-1287.06 10,-1287.06"/>
 <text xml:space="preserve" text-anchor="start" x="17" y="-1297.94" font-family="Helvetica,sans-Serif" font-size="10.00">time: 0 ms</text>
 <polygon fill="none" stroke="black" points="71,-1294.06 71,-1307.06 153,-1307.06 153,-1294.06 71,-1294.06"/>
@@ -31,13 +31,13 @@
 <polygon fill="#472f7c" stroke="none" points="137,-1295.56 137,-1305.56 142,-1305.56 142,-1295.56 137,-1295.56"/>
 <polygon fill="#471b68" stroke="none" points="142,-1295.56 142,-1305.56 147,-1305.56 147,-1295.56 142,-1295.56"/>
 <polygon fill="#440154" stroke="none" points="147,-1295.56 147,-1305.56 152,-1305.56 152,-1295.56 147,-1295.56"/>
-<text xml:space="preserve" text-anchor="start" x="156" y="-1297.94" font-family="Helvetica,sans-Serif" font-size="10.00">0.0691 ms</text>
+<text xml:space="preserve" text-anchor="start" x="156" y="-1297.94" font-family="Helvetica,sans-Serif" font-size="10.00">0.071 ms</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#fde725" stroke="black" cx="151.75" cy="-45.96" rx="94.22" ry="45.96"/>
+<ellipse fill="#fde725" stroke="#98fb98" stroke-width="2.5" cx="151.75" cy="-45.96" rx="102.18" ry="45.96"/>
 <text xml:space="preserve" text-anchor="start" x="127.75" y="-60.16" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
-<text xml:space="preserve" text-anchor="start" x="95.12" y="-42.21" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 16, 16), 3 KB</text>
+<text xml:space="preserve" text-anchor="start" x="89.5" y="-42.21" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 16, 16), 3.1 KB</text>
 <text xml:space="preserve" text-anchor="start" x="124.75" y="-23.21" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
 </g>
 <!-- conv2d_1_1pass1 -->
@@ -45,7 +45,7 @@
 <title>conv2d_1_1pass1</title>
 <polygon fill="#440154" stroke="black" points="270.5,-230.92 33,-230.92 33,-127.92 270.5,-127.92 270.5,-230.92"/>
 <text xml:space="preserve" text-anchor="start" x="113.12" y="-212.62" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#ffffff">conv2d_1_1</text>
-<text xml:space="preserve" text-anchor="start" x="95.12" y="-194.67" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">(1, 8, 16, 16), 8 KB</text>
+<text xml:space="preserve" text-anchor="start" x="89.5" y="-194.67" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">(1, 8, 16, 16), 8.2 KB</text>
 <text xml:space="preserve" text-anchor="start" x="50.12" y="-175.67" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="43" y="-156.67" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">params: weight (8, 3, 3, 3) · bias (8,)</text>
 <text xml:space="preserve" text-anchor="start" x="126.62" y="-137.67" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">@conv1</text>
@@ -53,15 +53,15 @@
 <!-- input_1pass1&#45;&gt;conv2d_1_1pass1 -->
 <g id="edge1" class="edge">
 <title>input_1pass1&#45;&gt;conv2d_1_1pass1</title>
-<path fill="none" stroke="black" d="M151.75,-92.2C151.75,-100.96 151.75,-110.26 151.75,-119.38"/>
-<polygon fill="black" stroke="black" points="149.3,-119.17 151.75,-126.17 154.2,-119.17 149.3,-119.17"/>
+<path fill="none" stroke="black" d="M151.75,-92.94C151.75,-101.47 151.75,-110.49 151.75,-119.34"/>
+<polygon fill="black" stroke="black" points="149.3,-119.25 151.75,-126.25 154.2,-119.25 149.3,-119.25"/>
 </g>
 <!-- relu_1_2pass1 -->
 <g id="node3" class="node">
 <title>relu_1_2pass1</title>
-<ellipse fill="#b2dd30" stroke="black" cx="151.75" cy="-299.45" rx="94.22" ry="32.53"/>
+<ellipse fill="#b2dd30" stroke="black" cx="151.75" cy="-299.45" rx="102.18" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="124.38" y="-304.15" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_1_2</text>
-<text xml:space="preserve" text-anchor="start" x="95.12" y="-286.2" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8 KB</text>
+<text xml:space="preserve" text-anchor="start" x="89.5" y="-286.2" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8.2 KB</text>
 </g>
 <!-- conv2d_1_1pass1&#45;&gt;relu_1_2pass1 -->
 <g id="edge2" class="edge">
@@ -72,9 +72,9 @@
 <!-- conv2d_2_3pass1 -->
 <g id="node4" class="node">
 <title>conv2d_2_3pass1</title>
-<polygon fill="#239e87" stroke="black" points="303.5,-470.98 0,-470.98 0,-367.98 303.5,-367.98 303.5,-470.98"/>
+<polygon fill="#25898d" stroke="black" points="303.5,-470.98 0,-470.98 0,-367.98 303.5,-367.98 303.5,-470.98"/>
 <text xml:space="preserve" text-anchor="start" x="113.12" y="-452.68" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_2_3</text>
-<text xml:space="preserve" text-anchor="start" x="98.88" y="-434.73" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4 KB</text>
+<text xml:space="preserve" text-anchor="start" x="93.25" y="-434.73" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4.1 KB</text>
 <text xml:space="preserve" text-anchor="start" x="10" y="-415.73" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="35.5" y="-396.73" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (16, 8, 3, 3) · bias (16,)</text>
 <text xml:space="preserve" text-anchor="start" x="126.62" y="-377.73" font-family="Helvetica,sans-Serif" font-size="14.00">@conv2</text>
@@ -88,9 +88,9 @@
 <!-- relu_2_4pass1 -->
 <g id="node5" class="node">
 <title>relu_2_4pass1</title>
-<ellipse fill="#dde32b" stroke="black" cx="151.75" cy="-539.5" rx="88.92" ry="32.53"/>
+<ellipse fill="#cee12c" stroke="black" cx="151.75" cy="-539.5" rx="96.87" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="124.38" y="-544.2" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_2_4</text>
-<text xml:space="preserve" text-anchor="start" x="98.88" y="-526.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4 KB</text>
+<text xml:space="preserve" text-anchor="start" x="93.25" y="-526.25" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4.1 KB</text>
 </g>
 <!-- conv2d_2_3pass1&#45;&gt;relu_2_4pass1 -->
 <g id="edge4" class="edge">
@@ -101,7 +101,7 @@
 <!-- conv2d_3_5pass1 -->
 <g id="node6" class="node">
 <title>conv2d_3_5pass1</title>
-<polygon fill="#40b976" stroke="black" points="303.5,-711.03 0,-711.03 0,-608.03 303.5,-608.03 303.5,-711.03"/>
+<polygon fill="#25a584" stroke="black" points="303.5,-711.03 0,-711.03 0,-608.03 303.5,-608.03 303.5,-711.03"/>
 <text xml:space="preserve" text-anchor="start" x="113.12" y="-692.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_3_5</text>
 <text xml:space="preserve" text-anchor="start" x="98.88" y="-674.78" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32, 4, 4), 2 KB</text>
 <text xml:space="preserve" text-anchor="start" x="10" y="-655.78" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
@@ -117,7 +117,7 @@
 <!-- relu_3_6pass1 -->
 <g id="node7" class="node">
 <title>relu_3_6pass1</title>
-<ellipse fill="#dde32b" stroke="black" cx="151.75" cy="-779.56" rx="88.92" ry="32.53"/>
+<ellipse fill="#dee32a" stroke="black" cx="151.75" cy="-779.56" rx="88.92" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="124.38" y="-784.26" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_3_6</text>
 <text xml:space="preserve" text-anchor="start" x="98.88" y="-766.31" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32, 4, 4), 2 KB</text>
 </g>
@@ -130,7 +130,7 @@
 <!-- adaptiveavgpool2d_1_7pass1 -->
 <g id="node8" class="node">
 <title>adaptiveavgpool2d_1_7pass1</title>
-<polygon fill="#414585" stroke="black" points="237.88,-932.09 65.62,-932.09 65.62,-848.09 237.88,-848.09 237.88,-932.09"/>
+<polygon fill="#433f83" stroke="black" points="237.88,-932.09 65.62,-932.09 65.62,-848.09 237.88,-848.09 237.88,-932.09"/>
 <text xml:space="preserve" text-anchor="start" x="75.62" y="-913.79" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00" fill="#ffffff">adaptiveavgpool2d_1_7</text>
 <text xml:space="preserve" text-anchor="start" x="95.88" y="-895.84" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">(1, 32, 1, 1), 128 B</text>
 <text xml:space="preserve" text-anchor="start" x="109.38" y="-876.84" font-family="Helvetica,sans-Serif" font-size="14.00" fill="#ffffff">output_size=1</text>
@@ -145,7 +145,7 @@
 <!-- flatten_1_8pass1 -->
 <g id="node9" class="node">
 <title>flatten_1_8pass1</title>
-<ellipse fill="#c5df2e" stroke="black" cx="151.75" cy="-1000.61" rx="71.95" ry="32.53"/>
+<ellipse fill="#c4df2e" stroke="black" cx="151.75" cy="-1000.61" rx="71.95" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="116.5" y="-1005.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_8</text>
 <text xml:space="preserve" text-anchor="start" x="110.88" y="-987.36" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32), 128 B</text>
 </g>
@@ -158,7 +158,7 @@
 <!-- linear_1_9pass1 -->
 <g id="node10" class="node">
 <title>linear_1_9pass1</title>
-<polygon fill="#77ce58" stroke="black" points="266.75,-1153.14 36.75,-1153.14 36.75,-1069.14 266.75,-1069.14 266.75,-1153.14"/>
+<polygon fill="#77ce59" stroke="black" points="266.75,-1153.14 36.75,-1153.14 36.75,-1069.14 266.75,-1069.14 266.75,-1153.14"/>
 <text xml:space="preserve" text-anchor="start" x="118.75" y="-1134.84" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_9</text>
 <text xml:space="preserve" text-anchor="start" x="114.62" y="-1116.89" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 10), 40 B</text>
 <text xml:space="preserve" text-anchor="start" x="46.75" y="-1097.89" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (10, 32) · bias (10,)</text>
@@ -173,7 +173,7 @@
 <!-- output_1pass1 -->
 <g id="node11" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#fde725" stroke="black" cx="151.75" cy="-1235.1" rx="66.64" ry="45.96"/>
+<ellipse fill="#fde725" stroke="#ff9999" stroke-width="2.5" cx="151.75" cy="-1235.1" rx="66.64" ry="45.96"/>
 <text xml:space="preserve" text-anchor="start" x="123.25" y="-1249.3" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text xml:space="preserve" text-anchor="start" x="114.62" y="-1231.35" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 10), 40 B</text>
 <text xml:space="preserve" text-anchor="start" x="125.88" y="-1212.35" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>
@@ -181,8 +181,8 @@
 <!-- linear_1_9pass1&#45;&gt;output_1pass1 -->
 <g id="edge10" class="edge">
 <title>linear_1_9pass1&#45;&gt;output_1pass1</title>
-<path fill="none" stroke="black" d="M151.75,-1153.43C151.75,-1162.02 151.75,-1171.19 151.75,-1180.16"/>
-<polygon fill="black" stroke="black" points="149.3,-1180.15 151.75,-1187.15 154.2,-1180.15 149.3,-1180.15"/>
+<path fill="none" stroke="black" d="M151.75,-1153.43C151.75,-1161.91 151.75,-1170.97 151.75,-1179.83"/>
+<polygon fill="black" stroke="black" points="149.3,-1179.73 151.75,-1186.73 154.2,-1179.73 149.3,-1179.73"/>
 </g>
 </g>
 </svg>
