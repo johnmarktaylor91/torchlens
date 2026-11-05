@@ -28,9 +28,8 @@ from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     _PLAIN_ATTR_IGNORED_NAMES,
     _module_plain_attr_names,
-    assert_copy_kept_instance_attrs,
+    align_validation_copy,
     is_registered_tensor_alias,
-    restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
 from ._utils._package_frames import is_torchlens_code
@@ -1293,7 +1292,7 @@ def _model_for_ground_truth_validation(
 
     try:
         copied_model = copy.deepcopy(model)
-        assert_copy_kept_instance_attrs(model, copied_model)
+        align_validation_copy(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
         return copied_model, None
     except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
@@ -1360,9 +1359,8 @@ def _model_for_validation_replay(
 
     try:
         copied_model = copy.deepcopy(model)
-        assert_copy_kept_instance_attrs(model, copied_model)
+        align_validation_copy(model, copied_model)
         _strip_copied_forward_decorations(copied_model)
-        restore_simple_plain_attrs_on_copy(model, copied_model)
         return copied_model, None, True
     except Exception as exc:  # noqa: BLE001 - any copy failure falls back; the warning names it
         copy_failure = describe_copy_failure(exc)

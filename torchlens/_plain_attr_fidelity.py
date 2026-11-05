@@ -1,12 +1,14 @@
 """Plain-attribute fidelity facts for the validation deepcopy and fallback paths.
 
 Validation runs its ground truth and its replay on deep copies of the model so the
-caller's model state is untouched. Two facts decide whether that is sound:
+caller's model state is untouched. Three facts decide whether that is sound:
 
 * whether ``copy.deepcopy`` reproduced every plain attribute's instance namespace
   (:func:`assert_copy_kept_instance_attrs`); the ``self.__dict__ = self`` AttrDict
   idiom used by HiFi-GAN-family configs copies its items but leaves the copy's
   attribute namespace empty, so the copy's forward raises where the source's does not;
+* whether the copy runs in its source's train/eval mode and simple attribute values
+  (:func:`align_validation_copy`);
 * whether a plain attribute merely aliases the module's own registered tensors
   (:func:`is_registered_tensor_alias`), as ``nn.RNNBase._flat_weights`` does; such
   values are restored by the state_dict restore, so only their identity is plain state.
@@ -332,3 +334,39 @@ def restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> 
                 continue
             if source_value != copied_value:
                 setattr(copied_module, name, source_value)
+
+
+def align_validation_copy(source: nn.Module, copied: nn.Module) -> None:
+    """Make a validation deepcopy behave like its source at validation entry.
+
+    Parameters
+    ----------
+    source:
+        Original module tree.
+    copied:
+        ``copy.deepcopy(source)``, about to run the ground truth or the replay.
+
+    Raises
+    ------
+    ValueError
+        From :func:`assert_copy_kept_instance_attrs`; callers take the disclosed
+        live-model fallback.
+
+    Notes
+    -----
+    A deepcopy can re-run ``__init__``: ``torch.fx.GraphModule.__deepcopy__``
+    does, and torchvision's feature-extractor graph module puts itself back in
+    train mode there, so the copy's batch norm used batch statistics and its
+    ground truth disagreed with the eval-mode capture. Every module's mode is
+    restored through ``train()`` (pre-order, so a parent's recursion is then
+    corrected per child), which also lets a module that swaps behaviour on a
+    mode change (that graph module swaps its train and eval graphs) follow.
+    The remaining simple plain attributes are aligned afterwards.
+    """
+
+    assert_copy_kept_instance_attrs(source, copied)
+    for source_module, copied_module in zip(source.modules(), copied.modules(), strict=True):
+        mode = source_module.training
+        if isinstance(mode, bool) and copied_module.training is not mode:
+            copied_module.train(mode)
+    restore_simple_plain_attrs_on_copy(source, copied)
