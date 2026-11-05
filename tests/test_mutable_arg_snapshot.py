@@ -9,6 +9,10 @@ value the op never ran with.
 
 from __future__ import annotations
 
+import sys
+from collections.abc import Callable
+from types import FrameType
+
 import pytest
 import torch
 import torch.nn as nn
@@ -175,3 +179,73 @@ def test_snapshot_handles_self_referencing_list() -> None:
     snap = snapshot_mutable_arg(loop)
     assert snap is not loop
     assert snap[1] is snap
+
+
+def _snapshot_module_calls(run: Callable[[], object]) -> list[str]:
+    """Return the names of the snapshot-module functions entered while ``run`` runs."""
+    from torchlens._capture import _arg_snapshot
+
+    module_file = _arg_snapshot.__file__
+    calls: list[str] = []
+
+    def profile(frame: FrameType, event: str, _arg: object) -> None:
+        """Record each Python-level call into the snapshot module."""
+        if event == "call" and frame.f_code.co_filename == module_file:
+            calls.append(frame.f_code.co_name)
+
+    previous = sys.getprofile()
+    sys.setprofile(profile)
+    try:
+        run()
+    finally:
+        sys.setprofile(previous)
+    return calls
+
+
+def test_common_arguments_cost_no_snapshot_calls() -> None:
+    """Scalars, flat tuples, strings and empty kwargs are kept with no call past the split."""
+    from torchlens._capture._arg_snapshot import split_non_tensor_args
+
+    shape = (2, 3, 4)
+    args = (torch.ones(1), shape, 1, 2.5, "mean", None, slice(None), Ellipsis)
+    result: list[tuple[list[object], dict[str, object]]] = []
+    calls = _snapshot_module_calls(
+        lambda: result.append(
+            split_non_tensor_args(args, {}, lambda arg: isinstance(arg, torch.Tensor))
+        )
+    )
+    assert calls == ["split_non_tensor_args"]
+    ((positional, keyword),) = result
+    assert positional == [shape, 1, 2.5, "mean", None, slice(None), Ellipsis]
+    assert positional[0] is shape
+    assert keyword == {}
+
+
+def test_capture_of_scalar_and_tuple_args_only_splits_once_per_op() -> None:
+    """Ops with no mutable argument and no transform config enter only the split."""
+
+    class M(nn.Module):
+        """Reshape, permute and softmax with scalar, tuple and keyword-scalar arguments."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Run three ops whose non-tensor arguments are all immutable."""
+            return F.softmax(x.reshape(2, 12).permute((1, 0)), dim=-1).sum()
+
+    x = torch.randn(4, 6)
+    tl.trace(M(), x)  # warm one-time instrumentation
+    calls = _snapshot_module_calls(lambda: tl.trace(M(), x))
+    assert calls
+    assert set(calls) == {"split_non_tensor_args"}
+
+
+def test_snapshot_keeps_shared_inner_lists_shared() -> None:
+    """One inner list reached twice is copied once and stays shared in the copy."""
+    from torchlens._capture._arg_snapshot import snapshot_mutable_arg
+
+    inner = [1, 2]
+    outer = [inner, inner, (inner,), {"k": inner}]
+    snap = snapshot_mutable_arg(outer)
+    inner.append(3)
+    assert snap == [[1, 2], [1, 2], ([1, 2],), {"k": [1, 2]}]
+    assert snap[0] is snap[1] is snap[2][0] is snap[3]["k"]
+    assert snap[0] is not inner
