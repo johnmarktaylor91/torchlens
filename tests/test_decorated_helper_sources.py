@@ -32,7 +32,7 @@ walk now reads a distribution's instance state only.
 
 Planted-bug tests keep the checks' teeth: a cache refilled mid-forward by a hidden
 op behind a decorator still fails validation, and a distribution parameter made by
-a hidden op still fails validation.
+a hidden op still fails output attribution in validation.
 """
 
 from __future__ import annotations
@@ -40,11 +40,13 @@ from __future__ import annotations
 import functools
 import warnings
 
+import pytest
 import torch
 from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import OutputAttributionError
 
 
 def _passthrough_decorator(func):  # type: ignore[no-untyped-def]
@@ -315,11 +317,11 @@ class _HiddenRateModel(nn.Module):
         return [_PoissonHolder(_STALE_MUL[0](h, 2.0)), h]
 
 
-def test_hidden_op_distribution_parameter_still_fails_validation() -> None:
+def test_hidden_op_distribution_parameter_still_fails_output_attribution() -> None:
     _install_stale_mul()
     torch.manual_seed(0)
     x = torch.randn(2, 4)
     model = _HiddenRateModel().eval()
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), pytest.raises(OutputAttributionError, match="'0.rate'"):
         warnings.simplefilter("ignore")  # the capture-gap warnings are not under test
-        assert tl.validate(model, x, scope="forward") is False
+        tl.validate(model, x, scope="forward")
