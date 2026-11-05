@@ -204,9 +204,8 @@ def drawn_legend_roles(
 def encoding_sections(state: Any) -> tuple[LegendSection, ...]:
     """Build the untitled channel key section from an ``EncodingState``.
 
-    The drawn key is plain (a labelled colour bar and one line per other
-    channel); the method details live in the graph comment
-    (:func:`~torchlens._visualization._encoding_key.record_encoding_method`).
+    The drawn key is plain: a labelled colour bar and one line per other
+    channel, nothing else.
     """
 
     from ._encoding_key import RampKey, color_key, size_key_line, stack_key_line

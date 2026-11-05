@@ -5,12 +5,9 @@ A drawing carries no explanation lines, so the key for ``color_by`` /
 quantity and units at both ends (``time: 0.098 ms [bar] 1.46 ms``) and one
 line per other channel (``size: output bytes, 15 KB ... 60 KB``).
 
-The method details the key used to print (the transform, how many nodes were
-encoded, cross-pass and module-box aggregation, unencoded-node notes, the size
-scale) are kept as text in the graph's ``comment`` attribute: it rides in the
-DOT source ``draw()`` returns and in a written SVG, and is never drawn
-(:func:`record_encoding_method`). The live ``EncodingState`` keeps the same
-facts as fields.
+The key prints nothing else: no transform, coverage or scale wording (JMT,
+4 Nov 2026: a drawing carries no method details). The live ``EncodingState``
+keeps those facts as fields.
 """
 
 from __future__ import annotations
@@ -18,7 +15,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ._render_utils import html_escape
 
@@ -37,8 +34,6 @@ KEY_BAR_SEGMENTS = 16
 KEY_BAR_SEGMENT_PT = (5, 10)
 #: Spacing between the key row's three cells, in points.
 _ROW_SPACING = 3
-#: Prefix of the graph comment that holds the method record.
-METHOD_COMMENT_PREFIX = "encoding method: "
 
 #: Builtin source tokens whose key name says more than the token.
 _KEY_QUANTITY_NAMES = {
@@ -46,12 +41,6 @@ _KEY_QUANTITY_NAMES = {
     "dims": "output elements",
     "grad_norm": "gradient norm",
     "device_time": "device time",
-}
-
-_TRANSFORM_WORDING = {
-    "linear": "linear min-max",
-    "rank": "rank mapping (ordinal, not ratio)",
-    "log": "log scale (scale-invariant; values <= 0 unencoded)",
 }
 
 
@@ -234,82 +223,3 @@ def ramp_row_html(
         f'WIDTH="{table_width}" HEIGHT="{row_height + 2 * _ROW_SPACING}">'
         f"<TR>{cells[0]}{bar}{cells[1]}</TR></TABLE></TD></TR>"
     )
-
-
-def _color_method_lines(state: EncodingState, value_text: ValueText) -> list[str]:
-    """Return the colour channel's method details."""
-
-    spec = state.spec
-    if spec is None:
-        return []
-    lines = [
-        f"color_by: {spec.display_name}",
-        _TRANSFORM_WORDING[spec.transform],
-        f"encoded {len(state.colors)} of {state.eligible_count} eligible nodes",
-        *state.aggregation_lines,
-        *state.notes,
-    ]
-    if state.domain is not None and state.colors:
-        low, high = state.domain
-        lines.append(f"min {value_text(spec, low)}, max {value_text(spec, high)}")
-        lines.append(f"ramp {' '.join(state.ramp)} (OKLab)")
-    return lines
-
-
-def encoding_method_lines(state: EncodingState, value_text: ValueText) -> list[str]:
-    """Return every method detail for the active channels, one fact per line.
-
-    Parameters
-    ----------
-    state:
-        The populated per-draw encoding state.
-    value_text:
-        Formats one value with its units.
-
-    Returns
-    -------
-    list[str]
-        The transform, coverage, aggregation, notes and size-scale lines.
-    """
-
-    lines = _color_method_lines(state, value_text)
-    size_spec = state.size_spec
-    if size_spec is not None:
-        lines += [
-            f"size_by: {size_spec.display_name}",
-            f"size ~ {state.size_scale}({size_spec.display_name}), min-max, clamped",
-            *state.size_aggregation_lines,
-            *state.size_notes,
-        ]
-        if state.size_domain is not None:
-            low, high = state.size_domain
-            lines.append(
-                f"size min {value_text(size_spec, low)}, max {value_text(size_spec, high)}"
-            )
-    if state.stack_spec is not None:
-        lines += [
-            f"stack_by: {state.stack_spec.display_name}",
-            "same rank = same annotation value",
-            *state.stack_notes,
-        ]
-    return lines
-
-
-def record_encoding_method(dot: Any, state: EncodingState, value_text: ValueText) -> None:
-    """Write the method details into ``dot``'s graph comment (never drawn).
-
-    Parameters
-    ----------
-    dot:
-        The Graphviz graph under construction.
-    state:
-        The populated per-draw encoding state.
-    value_text:
-        Formats one value with its units.
-    """
-
-    lines = encoding_method_lines(state, value_text)
-    if lines:
-        # An SVG carries the comment as an XML comment, where "--" is illegal.
-        text = " | ".join(line.replace(" -- ", ": ") for line in lines)
-        dot.graph_attr["comment"] = METHOD_COMMENT_PREFIX + text

@@ -7,7 +7,8 @@ carries one stop list per page: on a light page a high value is dark, on the
 dark page a high value is bright, so the highest value is always the colour
 farthest from the page.
 
-The shipped family is :data:`DEFAULT_RAMP_FAMILY`; changing that one
+The shipped family is :data:`DEFAULT_RAMP_FAMILY`, viridis (JMT, 4 Nov 2026
+9:48 PM PT: "try viridis man"); YlOrBr stays a named alternative. Changing that one
 constant switches every skin that uses the default ramp. Blue is allowed in a
 data-encoded ramp; only the grey parameter nodes are kept free of it.
 """
@@ -56,6 +57,6 @@ RAMP_FAMILIES: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]] = MappingPr
 )
 
 #: The shipped default family: ``"ylorbr"`` or ``"viridis"``.
-DEFAULT_RAMP_FAMILY = "ylorbr"
+DEFAULT_RAMP_FAMILY = "viridis"
 
 LIGHT_SEQUENTIAL_RAMP, DARK_SEQUENTIAL_RAMP = RAMP_FAMILIES[DEFAULT_RAMP_FAMILY]

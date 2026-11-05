@@ -1318,19 +1318,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **color_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(color_by=...)` fills eligible operation nodes from a colorblind-safe sequential ramp,
   normalized linear min-max over the visible nodes. The drawn key is a colour bar labelled with
-  the quantity and its units at both ends; the transform, coverage and notes go to the method
-  record, the graph `comment` (prefix `encoding method:`) carried in the returned DOT source and
-  a written SVG, never drawn. The ramp is a stop list blended in OKLab at even perceptual speed
-  (default YlOrBr). Missing,
-  non-finite, or rolled-ambiguous values leave nodes unencoded with a method-record note. On rolled
+  the quantity and its units at both ends, and nothing else (no transform, coverage or notes).
+  The ramp is a stop list blended in OKLab at even perceptual speed (default viridis, dark =
+  high on a light page). Missing,
+  non-finite, or rolled-ambiguous values leave nodes unencoded. On rolled
   multi-pass layers, field sources resolve through a name-keyed rolled-aggregate allowlist:
   per-pass-varying and first-pass-only sources are never painted as if uniform, exact cross-pass
-  totals encode with a mandatory aggregation line in the method record, and unclassified sources refuse
+  totals encode (the aggregation is kept on the encoding state, not drawn), and unclassified sources refuse
   (`encoding_source_invalid`). Wrong-typed values refuse (`encoding_value_invalid`); a raising
   callable refuses with the original exception chained (`encoding_callable_error`). On a
   collapsed draw, module boxes and segments take the exact sum of their member ops for additive
   sources (`"time"`, `"bytes"`, `"flops"`, `"device_time"`, additive fields) with an aggregation
-  method-record line; other sources leave them unencoded with a method-record note.
+  line on the encoding state; other sources leave them unencoded with a note on the encoding state.
 
 **size_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(size_by=...)` sizes eligible operation nodes from a scalar field, the `color_by`
@@ -1344,15 +1343,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   uniform boxes. On rolled multi-pass layers size REFUSES where color degrades
   (`size_by_rolled_varying`): a size source that cannot be certified single-valued
   (marker-varying, first-pass projection, varying shape under `"dims"`) has no honest "n/a"
-  rendering. Exact cross-pass totals (`total_*`) encode with a mandatory aggregation line in the
-  method record; callables bypass the rolled table with a method-record disclosure. The drawn key
+  rendering. Exact cross-pass totals (`total_*`) encode with a mandatory aggregation line on the
+  encoding state; callables bypass the rolled table with a note on the encoding state. The drawn key
   is one line, for example `size: output bytes, 15 KB ... 60 KB`.
 
 **scale (size channel)** *(unstable — no deprecation shim owed; keyword-only)*
 : The size-channel scale transform: `"sqrt"` (default; compresses dynamic range) or `"linear"`
   (the literal area motif). Log is rejected by design (flattens 512-vs-4096). Supplied without
   `size_by` it refuses (`scale_requires_size_by`); an unknown token refuses
-  (`encoding_scale_invalid`). The method record (graph `comment`) states the active scale.
+  (`encoding_scale_invalid`).
 
 **stack_by** *(unstable — no deprecation shim owed; keyword-only)*
 : `draw(stack_by=...)` pins nodes sharing an annotation value to one Graphviz rank (the classic
@@ -1384,7 +1383,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module, hidden buffers, buffer, true/false test, mutated parameter or intervention only when the
   picture has one -- plus
   the channel key when active), and `False` (no legend, honored even with channels active — the
-  key is then not drawn; the method record stays in the graph `comment`). On `Trace.draw` the key sits in the top-left block under the
+  key is then not drawn). On `Trace.draw` the key sits in the top-left block under the
   header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
 **show_containers / container_max_inline (Trace.draw kwargs)**

@@ -24,7 +24,7 @@ INPUT_PHOTO_MAX_EDGE = 160
 #: File name of the thumbnail inside the trace's raw-input scratch folder.
 INPUT_PHOTO_FILE = "input_photo.png"
 
-__all__ = ["INPUT_PHOTO_FILE", "INPUT_PHOTO_MAX_EDGE", "input_photo_attrs", "single_photo"]
+__all__ = ("INPUT_PHOTO_FILE", "INPUT_PHOTO_MAX_EDGE", "input_photo_attrs", "single_photo")
 
 
 def _raw_input_visualizer_dir(trace: Trace) -> Path:

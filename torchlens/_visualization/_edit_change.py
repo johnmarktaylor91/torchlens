@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.trace import Trace
 
-__all__ = [
+__all__ = (
     "CHANGED_INK",
     "CHANGED_NODE_CLASS",
     "ChangeReport",
@@ -46,7 +46,7 @@ __all__ = [
     "change_report",
     "make_change_box_spec_fn",
     "make_change_spec_fn",
-]
+)
 
 #: Light purple (the edit ink's family: purple 300 beside the edit's purple 700).
 CHANGED_INK = "#BA68C8"

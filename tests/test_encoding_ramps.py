@@ -66,17 +66,18 @@ def test_ramps_step_evenly_and_monotonically(family: str) -> None:
 
 
 def test_default_family_feeds_the_skins() -> None:
-    """The warm default skins take the default family; viridis is a one-constant flip."""
+    """The default skins take viridis (JMT, 4 Nov 2026); YlOrBr stays a named family."""
 
-    assert DEFAULT_RAMP_FAMILY == "ylorbr"
+    assert DEFAULT_RAMP_FAMILY == "viridis"
     light, dark = RAMP_FAMILIES[DEFAULT_RAMP_FAMILY]
     for name in ("torchlens", "colorblind"):
         assert THEME_PRESETS[name].ramp == light
     assert THEME_PRESETS["dark"].ramp == dark
+    # Viridis on the light page: slow (high) is dark purple; on the dark page, bright yellow.
+    assert light[-1] == "#440154" and light[0] == "#FDE725"
+    assert dark[-1] == "#FDE725"
     # The light YlOrBr list drops the near-white first class (white-on-white).
-    assert light == YLORBR_9[1:]
-    # Viridis on the light page: slow (high) is dark purple.
-    assert RAMP_FAMILIES["viridis"][0][-1] == "#440154"
+    assert RAMP_FAMILIES["ylorbr"][0] == YLORBR_9[1:]
 
 
 class _Tiny(nn.Module):
@@ -107,7 +108,7 @@ def test_plain_key_draws_bar_and_size_line(tiny_log: tl.Trace, tmp_path: Path) -
         color_by="bytes", size_by="bytes", path=str(tmp_path / "g"), file_format="svg"
     ).dot
     graph_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
-    comment, drawn = graph_line.split(" label=", 1)
+    drawn = graph_line.split(" label=", 1)[1]
     state = tiny_log._last_encoding_state
     assert drawn.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
     assert f'BGCOLOR="{state.ramp_color(0.0)}"' in drawn
@@ -116,21 +117,17 @@ def test_plain_key_draws_bar_and_size_line(tiny_log: tl.Trace, tmp_path: Path) -
     assert "size: output bytes, " in drawn and " ... " in drawn
     for jargon in ("min-max", "eligible", "clamped", "size_by:", "color_by:", "sqrt("):
         assert jargon not in drawn, jargon
-    # The method record: every former key line, in the graph comment.
-    assert "encoding method: color_by: bytes | linear min-max | encoded " in comment
-    assert "size ~ sqrt(bytes), min-max, clamped" in comment
+    # No method record anywhere (JMT, 4 Nov 2026): not in the source, not in the SVG.
     svg = (tmp_path / "g.svg").read_text(encoding="utf-8")
-    assert "size ~ sqrt(bytes)" in svg  # the SVG keeps it as an XML comment
-    assert "<!-- encoding method" in svg
+    for text in (dot, svg):
+        assert "encoding method" not in text and "sqrt(" not in text
 
 
-def test_show_legend_false_draws_no_key_but_keeps_the_record(
-    tiny_log: tl.Trace, tmp_path: Path
-) -> None:
-    """show_legend=False hides the key; the method record stays in the source."""
+def test_show_legend_false_draws_no_key(tiny_log: tl.Trace, tmp_path: Path) -> None:
+    """show_legend=False hides the key, and no method record appears either."""
 
     dot = tiny_log.draw(
         color_by="bytes", show_legend=False, path=str(tmp_path / "g"), file_format="svg"
     ).dot
     assert 'WIDTH="5" HEIGHT="10" BGCOLOR=' not in dot
-    assert "encoding method: color_by: bytes" in dot
+    assert "encoding method" not in dot

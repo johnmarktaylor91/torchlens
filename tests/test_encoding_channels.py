@@ -276,11 +276,11 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     # The plain key: "output bytes: <low>", a 16-segment colour bar, "<high>".
     assert "output bytes: " in label
     assert label.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
-    # No method wording is drawn; it rides in the graph comment instead.
-    drawn_label = label.split(" label=", 1)[1]
+    # No method wording anywhere: not drawn and not kept in the source
+    # (JMT, 4 Nov 2026: a drawing carries no method details).
     for jargon in ("linear min-max", "eligible", "color_by:", "TorchLens encoding"):
-        assert jargon not in drawn_label, jargon
-    assert "encoding method: color_by: bytes | linear min-max" in label
+        assert jargon not in dot, jargon
+    assert "encoding method" not in dot
     # One block: the key and the channel section share the header label;
     # there is no second legend topology.
     assert "tl_legend" not in dot
@@ -415,9 +415,9 @@ def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     total_state = _state(varying_log)
     assert layer.layer_label in total_state.colors
     assert any("total_flops_forward" in line for line in total_state.aggregation_lines)
-    # Mandatory aggregation line, kept in the method record (graph comment).
-    comment = next(line for line in dot.splitlines() if "encoding method: " in line)
-    assert "total across passes" in comment.split("encoding method: ", 1)[1]
+    # The aggregation stays on the encoding state; the drawing prints none of it.
+    assert any("total across passes" in line for line in total_state.aggregation_lines)
+    assert "total across passes" not in dot
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.

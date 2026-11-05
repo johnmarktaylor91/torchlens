@@ -35,7 +35,7 @@ _OVERLAY_ATTRS = frozenset({"image", "imagescale", "imagepos", "labelloc", "fixe
 _SIZE_ATTRS = frozenset({"width", "height"})
 _TABLE_OPEN = "<<TABLE"
 
-__all__ = ["BOX_MARGIN", "IMAGE_MAX_POINTS", "image_box_args", "list_box_attrs"]
+__all__ = ("BOX_MARGIN", "IMAGE_MAX_POINTS", "image_box_args", "list_box_attrs")
 
 
 def _rounded_style(node_args: Mapping[str, str]) -> str:

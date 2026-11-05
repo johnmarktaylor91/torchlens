@@ -23,7 +23,7 @@ from torchlens._visualization._encoding import (
     _normalize_color_values,
     resolve_color_by,
 )
-from torchlens._visualization._encoding_key import RampKey, color_key, encoding_method_lines
+from torchlens._visualization._encoding_key import RampKey, color_key
 from torchlens._visualization.overlays import legend_domain_text
 
 
@@ -56,7 +56,7 @@ def test_degenerate_domain_unencodes_never_midramp() -> None:
     # The key draws NO colour bar over zero encoded nodes, only a plain line.
     key = color_key(state, legend_domain_text)
     assert isinstance(key, str) and key.startswith("func_duration: all ")
-    assert "encoded 0 of 0 eligible nodes" in encoding_method_lines(state, legend_domain_text)
+    assert state.eligible_count == 0
 
 
 def test_log_legend_labels_match_their_swatches() -> None:

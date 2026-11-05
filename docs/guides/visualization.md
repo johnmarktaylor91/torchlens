@@ -325,9 +325,8 @@ value. Both take a built-in name (`"time"`, `"bytes"`, `"flops"`, `"magnitude"`,
 `"grad_norm"`, and for `size_by` also `"dims"`), the name of a field on the node records, or
 a function from a node to a number. The key shows a colour bar labelled with the quantity and
 its units at both ends (`time: 0.098 ms ... 1.46 ms`) and, with `size_by`, one line such as
-`size: output bytes, 15 KB ... 60 KB`. How the values were mapped (the scale, how many nodes were
-encoded, any notes) is kept out of the picture, in the `encoding method:` comment of the DOT
-source `draw()` returns and of a written SVG.
+`size: output bytes, 15 KB ... 60 KB`, and nothing else. The colour scale is viridis, dark for
+high values (slow, big) on a light page.
 
 [![Nodes colored by execution time and sized by output bytes](../images/visualization/color_size.png)](../images/visualization/color_size.png)
 
