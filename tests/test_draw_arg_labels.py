@@ -74,7 +74,13 @@ def test_empty_lines_node_spec_renders_an_empty_label(cat_trace: tl.Trace, tmp_p
             str(tmp_path / "g"), file_format="gv", node_spec_fn=dots, show_arg_labels=False
         ).dot
     )
-    node_lines = [line for line in dot.splitlines() if "label=" in line and "->" not in line]
+    node_lines = [
+        line
+        for line in dot.splitlines()
+        if "label=" in line
+        and "->" not in line
+        and not line.strip().startswith(("graph ", "node ", "edge "))
+    ]
     assert node_lines and all('label=""' in line for line in node_lines), node_lines
     assert "<TABLE" not in dot
     if shutil.which("dot") is None:
