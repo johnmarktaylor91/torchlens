@@ -58,20 +58,23 @@ _BUILD_OPCODES = frozenset(
 # pin is the printed two-decimal value plus 0.01 (the print rounds).
 # The container-builds test measures in a fresh interpreter with a fixed hash
 # seed, so earlier tests in the same worker cannot move it: a worker that has
-# imported a ``torch.distributed`` namespace (the capability snapshot's forced
-# probes do) runs the capture's sharded-tensor scan, which an ordinary process
-# skips. A second fresh measurement imports those namespaces first and has its
+# imported the tensor-parallel or pipelining namespaces (the capability
+# snapshot's forced probes do) runs per-module checks of the capture's
+# distributed guard that an ordinary process skips. A second fresh measurement imports those namespaces first and has its
 # own pin, so a regression in that state still fails.
 _MAX_TRACE_CALLS_PER_OP = 3337.07
 _MAX_TRACE_BUILDS_PER_OP = 984.05
 _MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 984.05
 _MAX_COMMIT_CALLS_PER_OP = 35.72
 _MAX_COMMIT_BUILDS_PER_OP = 30.91
-#: The namespaces a worker held when the capability snapshot had run before the pin.
+#: The distributed namespaces the capture's distributed guard checks, as a worker
+#: holds them after the capability snapshot's forced probes (``tl.report.doctor()``).
 _DISTRIBUTED_NAMESPACES = (
     "torch.distributed._shard",
     "torch.distributed.device_mesh",
     "torch.distributed.tensor",
+    "torch.distributed.tensor.parallel",
+    "torch.distributed.pipelining",
 )
 _FRESH_MARK = "[row-commit-fresh]"
 
