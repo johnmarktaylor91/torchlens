@@ -7,10 +7,15 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .. import errors as _public_errors
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report, at_source
 from .._io.payload_codec import get_payload_codec
-from ..backends.torch.rescue import _defer_capture_failed_warnings, _flush_deferred_warnings
+from .._utils._deferred_warnings import (
+    DeferredWarnings,
+    defer_warning_category,
+    flush_deferred_warnings,
+)
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -25,8 +30,8 @@ from ._common import (
     _ordered_ops,
     _runs_on_torch,
     _source_line,
+    _unsaved_ancestors,
 )
-from ._nan_labels import _op_label, _unsaved_ancestors
 
 
 @dataclass(frozen=True)
@@ -219,6 +224,35 @@ class FindNanReport(FoundReport):
         )
 
 
+def _op_label(op: Op) -> str:
+    """Return the canonical public label for an op.
+
+    Routes through the ONE resolver convention (observe item 1): the step-8
+    final LOOKUP spelling -- bare ``layer_label`` for single-pass layers,
+    pass-qualified ``label`` for multi-pass layers (an unqualified spelling on
+    a recurrent block would name every pass at once). A record with no
+    finalized label renders ``"unknown"``; a raw spelling is NEVER stripped
+    into a public one, because the raw-to-final ordinal offset is not a
+    constant and stripping fabricates a name that may belong to a different
+    op.
+
+    Parameters
+    ----------
+    op:
+        Operation whose label should be rendered.
+
+    Returns
+    -------
+    str
+        Canonical public label, or ``"unknown"`` when none exists.
+    """
+
+    from .._capture._nonfinite_prefix import canonical_public_label
+
+    label = canonical_public_label(op)
+    return label if label else "unknown"
+
+
 def _result_from_op(
     op: Op,
     *,
@@ -349,50 +383,35 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
         trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
     else:
         trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
-    # The stop at the first non-finite output IS a CaptureError by design, and the
-    # failed-capture teardown routes a CaptureAttemptFailedWarning pointing at the
-    # error's ``.partial_trace``. That advisory is only truthful when the error
-    # reaches the user: park it, drop it when the stop becomes a report, and
+    # The stop IS a CaptureError by design; its CaptureAttemptFailedWarning points at an
+    # error the user never receives. Park it, drop it when the stop becomes a report,
     # re-emit it on every path that re-raises.
-    deferred: list[tuple[Any, Any, tuple[Any, ...], dict[str, Any]]] = []
+    deferred: DeferredWarnings = []
     try:
-        with _defer_capture_failed_warnings(deferred):
+        with defer_warning_category(_public_errors.CaptureAttemptFailedWarning, deferred):
             trace(model, inputs, **trace_kwargs)
     except CaptureError as exc:
         try:
             report = _report_from_nonfinite_stop(exc)
         except BaseException:
-            _flush_deferred_warnings(deferred)
+            flush_deferred_warnings(deferred)
             raise
         if report is None:  # not a non-finite stop: the failure is the user's to see
-            _flush_deferred_warnings(deferred)
+            flush_deferred_warnings(deferred)
             raise
         return report
     except BaseException:
-        _flush_deferred_warnings(deferred)
+        flush_deferred_warnings(deferred)
         raise
-    _flush_deferred_warnings(deferred)
+    flush_deferred_warnings(deferred)
     return _no_finding_result(scope="live operation outputs")
 
 
 def _report_from_nonfinite_stop(exc: CaptureError) -> FindNanReport | None:
     """Turn the live ``on_nonfinite="raise"`` stop into a :class:`FindNanReport`.
 
-    Parameters
-    ----------
-    exc:
-        Capture error raised while :func:`find_nan` ran its stopping capture.
-
-    Returns
-    -------
-    FindNanReport | None
-        The first non-finite op, or ``None`` when ``exc`` carries no
-        non-finite payload (an unrelated capture failure the caller re-raises).
-
-    Raises
-    ------
-    ValueError
-        When the non-finite payload carries a malformed ``shape`` field.
+    Returns ``None`` when ``exc`` carries no non-finite payload (an unrelated
+    capture failure the caller re-raises).
     """
 
     fields = exc.fields
@@ -427,31 +446,10 @@ def _report_from_nonfinite_stop(exc: CaptureError) -> FindNanReport | None:
 def _structured_stop_report(
     exc: CaptureError, partial: Any, label: str | None, label_status: str
 ) -> FindNanReport:
-    """Build the non-finite report from the stop's structured payload alone.
+    """Build the non-finite report from the stop's payload fields alone.
 
-    Used when the partial trace has no finalized op for the stopping label.
-
-    Parameters
-    ----------
-    exc:
-        Capture error carrying the non-finite payload (``op``, ``layer``,
-        ``dtype``, ``shape`` and optional ``layer_raw``).
-    partial:
-        The error's partial capture, searched for the raw-named stopping op.
-    label:
-        Final label of the stopping op, or ``None`` when it was never final.
-    label_status:
-        Whether ``label`` is final or why it is unavailable.
-
-    Returns
-    -------
-    FindNanReport
-        Found report naming the stopping op from the payload fields.
-
-    Raises
-    ------
-    ValueError
-        When the payload's ``shape`` field is not a tuple of ints.
+    Used when the partial trace has no finalized op for the stopping label;
+    raises ``ValueError`` when the payload's ``shape`` is not a tuple of ints.
     """
 
     fields = exc.fields
@@ -534,7 +532,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanReport:
             continue
         kind = _nonfinite_kind_of(out, codec)
         if kind != "none":
-            uncertainty_zone = _unsaved_ancestors(trace, op)
+            uncertainty_zone = _unsaved_ancestors(trace, op, _op_label)
             scope = "first among saved tensors" if any_unsaved else "first non-finite tensor"
             return _result_from_op(op, kind=kind, scope=scope, uncertainty_zone=uncertainty_zone)
     return _no_finding_result(
