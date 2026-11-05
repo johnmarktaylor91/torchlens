@@ -1374,7 +1374,7 @@ torchlens/validation/_backward.py::validate_backward_pass	282
 torchlens/validation/_completeness_backstop.py::completeness_backstop_counts	177
 torchlens/validation/_consolidated.py::_intervention_report	69
 torchlens/validation/_consolidated.py::validate	195
-torchlens/validation/_core.py	3684
+torchlens/validation/_core.py	3683
 torchlens/validation/_core.py::_check_arglocs_correct_for_arg	126
 torchlens/validation/_core.py::_check_layer_arguments_logged_correctly	80
 torchlens/validation/_core.py::_check_unattributed_arg_slots	174

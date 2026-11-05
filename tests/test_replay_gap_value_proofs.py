@@ -350,18 +350,46 @@ class _ZeroImageGrid(nn.Module):
 
 
 class _ZeroInputConv(nn.Module):
-    """``conv1d`` of an input built from ``zeros_like`` plus ``fill``, with a traced weight."""
+    """``conv1d`` (or ``conv_transpose1d``) of an input built from ``zeros_like`` plus ``fill``.
 
-    def __init__(self, fill: float = 0.0) -> None:
+    The weight passes through a traced multiply, so it is a perturbable parent.
+    """
+
+    def __init__(self, fill: float = 0.0, transposed: bool = False) -> None:
         super().__init__()
         self.fill = fill
-        self.weight = nn.Parameter(torch.randn(3, 2, 3))
+        self.transposed = transposed
+        # conv weight is (out, in, k); conv_transpose weight is (in, out, k).
+        self.weight = nn.Parameter(torch.randn((2, 3, 3) if transposed else (3, 2, 3)))
         self.bias = nn.Parameter(torch.randn(3))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         signal = torch.zeros_like(x) + self.fill
         weight = self.weight * 1.0
+        if self.transposed:
+            return F.conv_transpose1d(signal, weight, self.bias, stride=2)
         return F.conv1d(signal, weight, self.bias)
+
+
+class _ZeroHighBandSynthesis(nn.Module):
+    """Inverse-wavelet stand-in: a ``cat``-built filter transposed-convolved over a zero band.
+
+    Wavelet neural operators and learned image codecs zero a band (or a whole decoder
+    input) and synthesize it with ``conv_transpose2d``; the filter edge then cannot reach
+    the output, while the live band's filter edge must still validate.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("g_lo", torch.randn(1, 1, 2, 2))
+        self.register_buffer("g_hi", torch.randn(1, 1, 2, 2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        w_lo = torch.cat([self.g_lo] * 3, dim=0)
+        w_hi = torch.cat([self.g_hi] * 3, dim=0)
+        hi = torch.zeros_like(x)
+        lo = F.conv_transpose2d(x, w_lo, stride=2, groups=3)
+        return lo + F.conv_transpose2d(hi, w_hi, stride=2, groups=3)
 
 
 GRID_SAMPLER = ("grid_sampler", "grid_sample")
@@ -378,21 +406,44 @@ def test_dead_grid_edge_on_a_near_zero_image_still_fails() -> None:
     _assert_dead_edge_fails(trace, _op(trace, *GRID_SAMPLER), 1)
 
 
-def test_conv_weight_edge_on_a_zero_input_is_exempted() -> None:
+CONV_KINDS = pytest.mark.parametrize(
+    ("transposed", "func_name"), [(False, "conv1d"), (True, "conv_transpose1d")]
+)
+
+
+@CONV_KINDS
+def test_conv_weight_edge_on_a_zero_input_is_exempted(transposed: bool, func_name: str) -> None:
     torch.manual_seed(0)
-    trace = _capture(_ZeroInputConv(), torch.randn(1, 2, 8))
-    result = _edge(trace, _op(trace, "conv1d"), 1)
+    trace = _capture(_ZeroInputConv(transposed=transposed), torch.randn(1, 2, 8))
+    result = _edge(trace, _op(trace, func_name), 1)
     _assert_exempted(result, "conv_zero_input_output_is_bias")
 
 
-def test_dead_conv_weight_edge_on_a_near_zero_input_still_fails() -> None:
+@CONV_KINDS
+def test_dead_conv_weight_edge_on_a_near_zero_input_still_fails(
+    transposed: bool, func_name: str
+) -> None:
     """The near-zero input moves the output by less than the bias resolution: still refused."""
 
     torch.manual_seed(0)
-    trace = _capture(_ZeroInputConv(fill=TINY), torch.randn(1, 2, 8))
-    op = _op(trace, "conv1d")
+    trace = _capture(_ZeroInputConv(fill=TINY, transposed=transposed), torch.randn(1, 2, 8))
+    op = _op(trace, func_name)
     assert torch.equal(op.out, op.call.saved_args[2].view(1, -1, 1).expand_as(op.out))
     _assert_dead_edge_fails(trace, op, 1)
+
+
+def test_zero_band_transposed_synthesis_validates() -> None:
+    """The zero band's filter edge is proved irrelevant; the live band's still validates."""
+
+    torch.manual_seed(0)
+    model = _ZeroHighBandSynthesis()
+    x = torch.randn(1, 3, 4, 4)
+    trace = _capture(model, x)
+    live_band, zero_band = [op for op in trace._layer_list if op.func_name == "conv_transpose2d"]
+    _assert_exempted(_edge(trace, zero_band, 1), "conv_zero_input_output_is_bias")
+    live = _edge(trace, live_band, 1)
+    assert live.decision == "validated", (live.decision, live.reason)
+    assert _validates(model, x)
 
 
 # ------------------------------------------------------------------ proofs.9: absorbing operand

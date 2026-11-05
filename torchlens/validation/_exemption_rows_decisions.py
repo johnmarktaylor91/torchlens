@@ -450,7 +450,8 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         "conv_zero_input_output_is_bias",
         ("posthoc", _C2),
         _OPERAND + "conv_zero_input_output_is_bias",
-        "the weight edge of a convolution over an exactly zero input, so the output is bias",
+        "the weight edge of a convolution or transposed convolution over an exactly zero input, "
+        "so the output is bias",
         (
             _GAP + "test_conv_weight_edge_on_a_zero_input_is_exempted",
             _GAP + "test_dead_conv_weight_edge_on_a_near_zero_input_still_fails",
