@@ -921,6 +921,8 @@ def _raw_input_sequence(value: Any) -> Sequence[Any] | None:
 
     if isinstance(value, str | bytes | bytearray | Mapping):
         return None
+    if isinstance(value, Image.Image):
+        return (value,)  # one photo is a batch of one
     if isinstance(value, Sequence):
         return value
     if isinstance(value, Iterable) and hasattr(value, "__len__"):
