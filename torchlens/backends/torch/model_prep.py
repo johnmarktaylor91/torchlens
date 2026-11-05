@@ -57,7 +57,7 @@ from ._model_prep_containers import (
 from ._module_aliases import _add_shared_module_aliases, shared_module_addresses
 from ._module_arg_stubs import stub_module_arg_payloads
 from ._module_boundary_adoption import (
-    collect_pre_forward_tensor_ids,
+    pre_forward_snapshot_build_data,
     record_module_boundary_adoption,
 )
 from ._module_class_metadata import (
@@ -504,12 +504,9 @@ def _prepare_model_session(
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
     # disclosure: tensors reachable NOW (nested caches, forward globals) are
-    # model-owned known sources; anything first seen mid-forward is not.
-    owned_at_entry, forward_outside_ids = collect_pre_forward_tensor_ids(model)
-    trace._module_capture_ws.module_build_data["model_owned_tensor_ids_at_entry"] = owned_at_entry
-    trace._module_capture_ws.module_build_data["forward_outside_tensor_ids_at_entry"] = (
-        forward_outside_ids
-    )
+    # model-owned known sources; anything first seen mid-forward is not. An
+    # unstamped one is late-indexed as a buffer at first use (_held_late_index).
+    trace._module_capture_ws.module_build_data.update(pre_forward_snapshot_build_data(model))
     if trace._options_mode == "exhaustive":
         from .buffer_writes import install_buffer_write_tracker
 

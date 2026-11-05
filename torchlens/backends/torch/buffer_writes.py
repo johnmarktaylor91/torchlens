@@ -1737,10 +1737,9 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     The first-encounter registration ladder used by the wrapper hot path
     (hoisted from ``wrappers.py`` under the R43 file-size ratchet): the
     session-validated stamp first (r81 -- never trust a raw static stamp),
-    the storage-anchored tracker resolution second, and the F20 lazy-buffer
-    late-index third (a no-op unless the pre-forward scan recorded pending
-    lazy buffers). Pending (still storage-less) tensors resolve to ``None``
-    without any geometry read.
+    the storage-anchored tracker resolution second, the F20 lazy-buffer late-index
+    third (a no-op unless pending lazy buffers were recorded), and an unstamped
+    pre-forward model-owned tensor last (``_held_late_index``).
 
     Parameters
     ----------
@@ -1763,8 +1762,9 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     address = session_validated_buffer_address(trace, tensor)
     if address is None:
         address = resolve_registered_buffer_address(trace, tensor)
-    if address is None:
-        tracker = peek_buffer_write_tracker(trace)
-        if tracker is not None:
-            address = tracker.index_materialized_buffer(tensor)
-    return address
+    tracker = peek_buffer_write_tracker(trace) if address is None else None
+    if tracker is not None:
+        address = tracker.index_materialized_buffer(tensor)
+    from ._held_late_index import late_index_model_owned_tensor
+
+    return address if address is not None else late_index_model_owned_tensor(trace, tensor)
