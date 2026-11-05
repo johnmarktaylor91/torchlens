@@ -57,6 +57,17 @@ class _AddBaseAndFullViewWrittenElsewhere(nn.Module):
         return y + z
 
 
+class _AddBaseAndDetachedAliasWrittenElsewhere(nn.Module):
+    """``y + d`` after ``a.add_``: ``d = y.detach()`` is taken before the write."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = x * 2
+        d = y.detach()
+        a = y[:, 0:4]
+        a.add_(1.0)
+        return y + d
+
+
 class _AddBaseAndDetachAfterTheWrite(nn.Module):
     """``y + y.detach()`` after ``a.add_``: the detached alias is taken after the write."""
 
@@ -72,8 +83,9 @@ class _AddBaseAndDetachAfterTheWrite(nn.Module):
     [
         (_CatBaseAndOverlappingViewWrittenElsewhere, "cat", [(0, 0), (0, 1)]),
         (_AddBaseAndFullViewWrittenElsewhere, "__add__", [0, 1]),
+        (_AddBaseAndDetachedAliasWrittenElsewhere, "__add__", [0, 1]),
     ],
-    ids=["cat_base_and_overlapping_view", "add_base_and_full_view"],
+    ids=["cat_base_and_overlapping_view", "add_base_and_full_view", "add_base_and_detached"],
 )
 def test_no_written_view_in_the_call_keeps_the_mutation_edge(
     model_cls: type[nn.Module], func_name: str, positions: list[Any]
@@ -155,23 +167,22 @@ class _Boom(RuntimeError):
     """Raised by the planted failure inside the call's field build."""
 
 
+_LABELS: list[str | None] = []
+
+
 class _RaiseMidCall(nn.Module):
     """Reads ``y``'s label before and after a call that raises while it is bound."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.labels: list[str | None] = []
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x * 2
         col = y[:, 1:2]
         col.add_(1.0)
-        self.labels.append(get_tensor_label(y))
+        _LABELS.append(get_tensor_label(y))
         try:
             _ = y + col
         except _Boom:
             pass
-        self.labels.append(get_tensor_label(y))
+        _LABELS.append(get_tensor_label(y))
         return y * 1
 
 
@@ -188,42 +199,39 @@ def test_a_call_that_raises_while_bound_leaves_labels_as_before(
         return real(layer_type, func_name, *rest)
 
     monkeypatch.setattr(_ops_shared_fields, "extract_salient_args", boom)
-    model = _RaiseMidCall()
+    _LABELS.clear()
     try:
-        tl.trace(model, torch.randn(3, 8))
+        tl.trace(_RaiseMidCall(), torch.randn(3, 8))
     except _Boom:
         pass
     assert raised == ["__add__"]
-    assert len(model.labels) == 2
-    assert model.labels[0] is not None
-    assert model.labels[1] == model.labels[0]
+    assert len(_LABELS) == 2
+    assert _LABELS[0] is not None
+    assert _LABELS[1] == _LABELS[0]
 
 
 _KEEP: list[torch.Tensor] = []
+_RELABELS_DURING_CAPTURE: list[int] = []
 
 
 class _KeepsTheBaseAlive(nn.Module):
     """Writes through a view of a tensor that outlives the capture."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.relabels_during_capture = 0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = x * 2
         _KEEP.append(y)
         col = y[:, 1:2]
         col.add_(1.0)
-        self.relabels_during_capture = len(torch_ops._VIEW_MUTATION_RELABELS)
+        _RELABELS_DURING_CAPTURE.append(len(torch_ops._VIEW_MUTATION_RELABELS))
         return y + col
 
 
 def test_relabel_record_is_cleared_at_session_end() -> None:
     _KEEP.clear()
-    model = _KeepsTheBaseAlive()
+    _RELABELS_DURING_CAPTURE.clear()
     try:
-        tl.trace(model, torch.randn(3, 8))
-        assert model.relabels_during_capture > 0
+        tl.trace(_KeepsTheBaseAlive(), torch.randn(3, 8))
+        assert _RELABELS_DURING_CAPTURE and _RELABELS_DURING_CAPTURE[0] > 0
         assert _KEEP[0] is not None
         assert len(torch_ops._VIEW_MUTATION_RELABELS) == 0
     finally:
