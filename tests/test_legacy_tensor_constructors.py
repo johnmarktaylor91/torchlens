@@ -536,8 +536,15 @@ def test_legacy_sparse_constructor_is_one_logged_op_with_parents_and_validates()
     no owning op, ``bfs_completeness`` failed, and the adjacency reached
     ``sparse.mm`` with no provenance. The op records the indices and the
     input-dependent values as its parents, and the dense class stays distinct.
+    Like the dense classes, the op never becomes runnable from a bundle: the
+    sparse classes carry the same hidden ``cdata=`` overload.
     """
 
+    from torchlens._io.runnable import (
+        build_sparse_run_descriptor,
+        preflight_sparse_run_descriptor,
+    )
+    from torchlens._runnable import ResolverStatus
     from torchlens.backends.torch import legacy_ctors
 
     x = torch.randn(3, 4)
@@ -550,3 +557,11 @@ def test_legacy_sparse_constructor_is_one_logged_op_with_parents_and_validates()
     assert installed["sparse_FloatTensor"] is torch.sparse.FloatTensor
     assert installed["FloatTensor"] is torch.FloatTensor
     assert _validate(SparseAdjacency(), x)
+    options = tl.options.CaptureOptions(
+        replayable=True, capture_container_structure=True, cache=False
+    )
+    runnable = tl.trace(SparseAdjacency().eval(), x, capture=options)
+    report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(runnable))
+    assert attachments is None
+    statuses = {rec.recorded_key.qualname: rec.status for rec in report.resolver_records}
+    assert statuses["FloatTensor"] is ResolverStatus.UNAVAILABLE
