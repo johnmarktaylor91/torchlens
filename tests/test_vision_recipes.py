@@ -263,7 +263,7 @@ def test_clip_text_tower_attention_is_classified_too() -> None:
 
 
 def test_clip_sdpa_serves_projections_and_reconstructs_on_request() -> None:
-    """Under sdpa, q/k/v/attn_out are real; pattern needs reconstruction_ready."""
+    """Under sdpa, q/k/v/attn_out are real; pattern is reconstructed on any capture."""
 
     model, trace = _capture("clip", "sdpa")
     address = "vision_model.encoder.layers.0.self_attn"
@@ -271,7 +271,11 @@ def test_clip_sdpa_serves_projections_and_reconstructs_on_request() -> None:
     menu = view.declared()
     for facet in ("q", "k", "v", "attn_out"):
         assert menu[facet].status == "available_now", facet
-    assert menu["pattern"].status == "needs_capture"
+    assert menu["pattern"].status == "available_now"
+    plain_reference = _clip_vision_reference(
+        model.vision_model.encoder.layers[0].self_attn, view["input"].value
+    )
+    assert torch.allclose(view["pattern"].value, plain_reference["pattern"], atol=1e-5)
     ready_model, ready = _capture(
         "clip", "sdpa", capture=tl.options.CaptureOptions(reconstruction_ready=True)
     )

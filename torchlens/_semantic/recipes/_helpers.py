@@ -607,8 +607,9 @@ def fused_sdpa_pattern(module: Any) -> Any:
         return value
     return needs_capture(
         f"attention pattern not captured: model uses a fused attention kernel "
-        f"(SDPA/FlashAttention) at {label}. "
-        f"{value.detail} To READ pattern/scores/z, re-run as "
+        f"(SDPA/FlashAttention) at {label}, and this capture did not record every input "
+        f"the exact reconstruction needs. {value.detail} A default capture (save every op) "
+        "records them; to READ pattern/scores/z under a selective save=, re-run as "
         "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) (or "
         "capture=tl.options.CaptureOptions(save_args=True)). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "

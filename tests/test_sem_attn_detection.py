@@ -132,7 +132,7 @@ def test_flash_attention_absence_teaches_both_remedies():
     reason = _no_attention_evidence(module)
     assert reason.status == "needs_capture"
     assert "flash_attention_2" in reason.detail
-    assert "reconstruction_ready=True" in reason.detail
+    assert "attn_implementation='sdpa'" in reason.detail
     assert "eager" in reason.detail
 
 

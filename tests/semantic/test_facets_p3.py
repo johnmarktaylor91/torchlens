@@ -180,6 +180,128 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     assert torch.allclose(view.z, op.out, atol=1e-5, rtol=1e-4)
 
 
+class MistralAttention(nn.Module):
+    """SDPA attention reading a boolean key mask passed in by its caller.
+
+    The class name selects the built-in Llama-family attention recipe.
+    """
+
+    def __init__(self, dropout_p: float = 0.0) -> None:
+        """Initialize projections and the train-mode dropout probability."""
+
+        super().__init__()
+        self.num_heads = 2
+        self.num_key_value_heads = 2
+        self.head_dim = 4
+        self.q_proj = nn.Linear(8, 8)
+        self.k_proj = nn.Linear(8, 8)
+        self.v_proj = nn.Linear(8, 8)
+        self.dropout_p = dropout_p
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Run masked fused attention over two heads."""
+
+        batch, seq, _hidden = x.shape
+        q = self.q_proj(x).view(batch, seq, 2, 4).transpose(1, 2)
+        k = self.k_proj(x).view(batch, seq, 2, 4).transpose(1, 2)
+        v = self.v_proj(x).view(batch, seq, 2, 4).transpose(1, 2)
+        dropout_p = self.dropout_p if self.training else 0.0
+        z = F.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=dropout_p)
+        return z.transpose(1, 2).reshape(batch, seq, 8)
+
+
+class _MaskBuildingWrapper(nn.Module):
+    """Build the padding mask OUTSIDE the attention module, then attend."""
+
+    def __init__(self, dropout_p: float = 0.0) -> None:
+        """Initialize the attention child."""
+
+        super().__init__()
+        self.attn = MistralAttention(dropout_p)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Mark rows whose features sum below -1 as padding keys."""
+
+        keep = x.sum(dim=-1) > -1.0
+        return self.attn(x, keep[:, None, None, :])
+
+
+def _padded_input() -> torch.Tensor:
+    """Return a batch whose second row ends in two padding positions."""
+
+    x = torch.rand(2, 5, 8, generator=torch.Generator().manual_seed(0))
+    x[1, 3:] = -5.0
+    return x
+
+
+def _manual_masked_pattern(model: _MaskBuildingWrapper, x: torch.Tensor) -> torch.Tensor:
+    """Return the masked softmax map computed directly from the live modules."""
+
+    attn = model.attn
+    with torch.no_grad():
+        q = attn.q_proj(x).view(2, 5, 2, 4).transpose(1, 2)
+        k = attn.k_proj(x).view(2, 5, 2, 4).transpose(1, 2)
+        keep = (x.sum(dim=-1) > -1.0)[:, None, None, :]
+        scores = (q @ k.transpose(-2, -1)) / 2.0
+        return torch.softmax(scores.masked_fill(~keep, float("-inf")), dim=-1)
+
+
+def test_default_capture_reconstructs_sdpa_facets_without_capture_options() -> None:
+    """A default capture serves the checked pattern from its recorded SDPA inputs."""
+
+    model = _AttentionWrapper(LlamaSdpaAttention(n_heads=4, n_kv_heads=2, causal=True))
+    x = torch.randn(1, 4, 8)
+    plain = tl.trace(model, x)
+    ready = tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True))
+    op = _sdpa_op(plain)
+    assert op.saved_args is None, "premise: a default capture saves no argument copies"
+
+    view = plain.modules["attn"].facets
+    assert view.declared()["pattern"].status == "available_now"
+    assert view["pattern"].spec.capability_flags.reconstructed is True
+    assert view["pattern"].spec.capability_flags.write is False
+    ready_pattern = ready.modules["attn"].facets.pattern.value
+    assert torch.allclose(view.pattern.value, ready_pattern, atol=1e-7, rtol=0.0)
+    assert torch.allclose(view.z, op.out, atol=1e-5, rtol=1e-4)
+
+
+def test_default_capture_reconstructs_a_recorded_padding_mask() -> None:
+    """A mask produced by captured ops rebuilds from its producer's saved output."""
+
+    model = _MaskBuildingWrapper().eval()
+    x = _padded_input()
+    log = tl.trace(model, x)  # held: a module record's facets read through its live trace
+    view = log.modules["attn"].facets
+
+    pattern = view.pattern.value
+    assert torch.allclose(pattern, _manual_masked_pattern(model, x), atol=1e-6)
+    assert torch.all(pattern[1, :, :, 3:] == 0)
+
+
+def test_unsaved_mask_producer_fails_closed() -> None:
+    """A selective save that skips the mask producer refuses instead of guessing."""
+
+    model = _MaskBuildingWrapper().eval()
+    log = tl.trace(model, _padded_input(), save=tl.in_module("attn"))
+    view = log.modules["attn"].facets
+
+    assert view.declared()["pattern"].status == "needs_capture"
+    with pytest.raises(MissingFacetError, match="attn_mask") as caught:
+        view.pattern
+    assert "reconstruction_ready=True" in str(caught.value)
+
+
+def test_train_mode_sdpa_dropout_fails_closed_on_default_capture() -> None:
+    """Active SDPA dropout keeps the reconstruction refused on a default capture."""
+
+    model = _MaskBuildingWrapper(dropout_p=0.5).train()
+    log = tl.trace(model, _padded_input())
+    view = log.modules["attn"].facets
+
+    with pytest.raises(MissingFacetError, match="dropout"):
+        view.pattern
+
+
 def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     """Read-only reconstructed pattern facets cannot be scatter-back edited."""
 
@@ -203,7 +325,9 @@ def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
 
     facets_mod.enable_transformer_lens_aliases(True)
     try:
-        log = tl.trace(model, x, save="all")
+        # Saving only the fused op leaves its Q/K inputs unrecorded, so the
+        # native pattern (and its alias) cannot be reconstructed.
+        log = tl.trace(model, x, save=tl.func("scaled_dot_product_attention"))
         view = log.modules["attn"].facets
         menu = view.declared()
 

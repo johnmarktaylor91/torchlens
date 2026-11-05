@@ -73,9 +73,11 @@ FALSE_CLAIM_OWNERS = {
 # available on BOTH implementations, and the remaining diff is the honest
 # read-vs-reconstruct boundary -- eager serves scores/pattern/z as REAL
 # captured ops (plus the computed per-head result where the output projection
-# lives inside the module), while a plain SDPA capture reports them
-# needs_capture until reconstruction_ready=True saves the SDPA arguments.
-# A silent change in either direction still fails here.
+# lives inside the module). A plain SDPA capture also serves them, as checked
+# read-only reconstructions from the recorded SDPA inputs; the floors list only
+# what each implementation must serve as captured or computed facets, so the
+# reconstructed ones stay out of the sdpa floors and the diff below is unchanged.
+# A silent change in either direction of the floors still fails here.
 _EAGER_REAL_OPS = {"sdpa_only": (), "eager_only": ("pattern", "result", "scores", "z")}
 EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "gpt2": {"gpt2_attention": dict(_EAGER_REAL_OPS)},
