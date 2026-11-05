@@ -24,6 +24,7 @@ from ._crossing_perturbations import (
     integer_clamp_crossing_values,
     integer_extrema_crossing_values,
     isclose_tolerance_crossing_values,
+    sdpa_mask_crossing_values,
 )
 from ._ctc_lengths_perturbation import CTC_LOSS_FUNCS, ctc_length_rotation_values
 from ._masked_scatter_perturbation import MASKED_SCATTER_FUNCS, masked_scatter_mask_values
@@ -116,7 +117,7 @@ _SATURATION_LEVELS: dict[str, tuple[float, float]] = {
 def _early_crossing_values(
     layer: Op, parent_label: str, parent_values: torch.Tensor
 ) -> torch.Tensor | None:
-    """Return set-test values, a moved tensor clamp bound, or a fully saturated activation's input.
+    """Return set-test values, a moved clamp bound or sdpa mask, or a saturated activation's input.
 
     The set and tolerance tests (``_SET_TEST_CROSSING_VALUES``) answer for their ops
     outright; no later rule names those ops, so a ``None`` from them ends the same way.
@@ -145,9 +146,9 @@ def _early_crossing_values(
 
     if layer.func_name in _SET_TEST_CROSSING_VALUES:
         return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
-    clamp_bound = clamp_bound_crossing_values(layer, parent_label, parent_values)
-    if clamp_bound is not None:
-        return clamp_bound
+    for crossing in (clamp_bound_crossing_values, sdpa_mask_crossing_values):
+        if (values := crossing(layer, parent_label, parent_values)) is not None:
+            return values
     levels = _SATURATION_LEVELS.get(layer.func_name)
     if levels is None or not parent_values.is_floating_point():
         return None
