@@ -263,11 +263,11 @@
     },
     {
       "section": "live",
-      "text": "| LSTM tagger, CPU, plain forward with TorchLens imported and torch wrapped, n=2 processes of 20 samples | wrapped, not capturing | 1.50 ms |"
+      "text": "| LSTM tagger, CPU, plain forward after a trace with TorchLens's torch wrappers still installed, n=2 processes of 20 samples | plain forward after a trace, nothing recorded | 1.50 ms |"
     },
     {
       "section": "live",
-      "text": "| LSTM tagger, CPU, plain forward with TorchLens imported and torch wrapped, n=2 processes of 20 samples | plain forward | 1.47 ms |"
+      "text": "| LSTM tagger, CPU, plain forward after a trace with TorchLens's torch wrappers still installed, n=2 processes of 20 samples | plain forward | 1.47 ms |"
     },
     {
       "section": "slower",
@@ -291,7 +291,7 @@
     },
     {
       "section": "slower",
-      "text": "| LSTM tagger, CPU, eight steering strengths through a trace and rerun, n=3 processes of 20 samples | `tl.trace` then `fork().do(...)` | 640.23 ms |"
+      "text": "| LSTM tagger, CPU, eight steering strengths, n=3 processes of 20 samples | `tl.trace(..., intervene=...)` per strength | 640.23 ms |"
     },
     {
       "section": "slower",
