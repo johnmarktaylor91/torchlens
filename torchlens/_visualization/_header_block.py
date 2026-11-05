@@ -128,9 +128,12 @@ def params_caption_detail(trace: Trace) -> str:
 
 
 def _all_ops(trace: Trace) -> list[Any]:
-    """Return every recorded op plus the input and output tensors, each once."""
+    """Return every recorded op plus the input and output tensors, each once.
 
-    ops = list(trace.ops.values())
+    Buffer sources are left out: like parameters, they are model state, not ops.
+    """
+
+    ops = [op for op in trace.ops.values() if not getattr(op, "is_buffer", False)]
     seen = {id(op) for op in ops}
     for label in (*trace.input_layers, *trace.output_layers):
         op = trace.ops[label]

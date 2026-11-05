@@ -281,6 +281,8 @@ def test_focus_count_line_counts_the_module_ops_only() -> None:
     trace = _fake_trace(ops, inputs=("x",))
     assert network_count_line(trace, "enc.mlp", "unrolled") == "2 ops (16 B)"  # type: ignore[arg-type]
     assert network_count_line(trace, None, "unrolled") == "4 ops (40 B)"  # type: ignore[arg-type]
+    ops["buffer"] = SimpleNamespace(activation_memory=99, layer_label="buffer", is_buffer=True)
+    assert network_count_line(trace, None, "unrolled") == "4 ops (40 B)"  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("module", [None, _FOCUS])
