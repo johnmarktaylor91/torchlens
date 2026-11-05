@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import argparse
 import gc
+import json
+import os
 import statistics
+import subprocess
+import sys
 import time
 from collections import OrderedDict, deque
 from pathlib import Path
@@ -179,28 +183,91 @@ def _interleaved_median_capture_ms(models: list[nn.Module], value: torch.Tensor)
     return [statistics.median(rows) / 1_000_000 for rows in samples]
 
 
+def _pinned_small_capture_medians() -> list[float]:
+    """Measure the pinned chain workload with torch pinned to one thread.
+
+    Returns
+    -------
+    list[float]
+        Median process-CPU capture milliseconds for the pinned chain depths, shortest first.
+    """
+
+    original_threads = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        return _interleaved_median_capture_ms(
+            [
+                _PinnedSmallCaptureChain(1),
+                _PinnedSmallCaptureChain(16),
+                _PinnedSmallCaptureChain(64),
+            ],
+            torch.ones(8),
+        )
+    finally:
+        torch.set_num_threads(original_threads)
+
+
+_CLEAN_PROCESS_MEDIANS_CODE = """
+import importlib.util
+import json
+import sys
+
+spec = importlib.util.spec_from_file_location("_perf_gate_clean_process", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+print("MEDIANS " + json.dumps(module._pinned_small_capture_medians()))
+"""
+
+
+def _clean_process_small_capture_medians() -> list[float]:
+    """Run :func:`_pinned_small_capture_medians` in a fresh interpreter and return its medians.
+
+    The model classes stay defined in this file (loaded by path in the child), so the
+    capture sees the same forward source as an in-process run.
+
+    Returns
+    -------
+    list[float]
+        Median process-CPU capture milliseconds for the pinned chain depths, shortest first.
+    """
+
+    env = {**os.environ, "OMP_NUM_THREADS": "1"}
+    proc = subprocess.run(
+        [sys.executable, "-c", _CLEAN_PROCESS_MEDIANS_CODE, str(Path(__file__).resolve())],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    lines = [line for line in proc.stdout.splitlines() if line.startswith("MEDIANS ")]
+    if proc.returncode != 0 or not lines:
+        pytest.fail(
+            f"clean-process measurement failed (rc={proc.returncode}):\n{proc.stderr[-4000:]}"
+        )
+    return [float(value) for value in json.loads(lines[-1].removeprefix("MEDIANS "))]
+
+
 @pytest.mark.heavy
 @pytest.mark.serial
 def test_pinned_small_capture_fixed_cost_ratio_gate() -> None:
     # heavy, not unmarked (b2 R41 round 5): the moment serial stopped being a
     # budget exemption, this 27-capture ratio gate measured 13.8s CPU in a
     # loaded session — squarely in the 5-20s heavy band the tier docs define.
-    """A doubled fixed capture floor cannot hide behind large-model timings."""
+    """A doubled fixed capture floor cannot hide behind large-model timings.
 
-    original_threads = torch.get_num_threads()
-    torch.set_num_threads(1)
-    try:
-        value = torch.ones(8)
-        one_op_ms, sixteen_op_ms, sixty_four_op_ms = _interleaved_median_capture_ms(
-            [
-                _PinnedSmallCaptureChain(1),
-                _PinnedSmallCaptureChain(16),
-                _PinnedSmallCaptureChain(64),
-            ],
-            value,
-        )
-    finally:
-        torch.set_num_threads(original_threads)
+    The gate measures the capture's fixed cost in a clean process: the pinned
+    workload runs in a fresh interpreter, so the ratio does not depend on how
+    many modules, loggers or objects the hosting test session has accumulated.
+    """
+
+    # Clean process, not in-session (nfr-perf, 2026-11-05): per-capture work that
+    # scales with the host process (the belt pre-filter over sys.modules, logger
+    # cache clears) raised the 1-op fixed cost by 1-6 ms late in a single-process
+    # nightly shard, which read 0.563 on a tree whose clean-process ratio is ~0.43.
+    one_op_ms, sixteen_op_ms, sixty_four_op_ms = _clean_process_small_capture_medians()
 
     fixed_cost_ratio = one_op_ms / sixteen_op_ms
     early_slope = (sixteen_op_ms - one_op_ms) / 15
