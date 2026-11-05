@@ -18,13 +18,14 @@ second cleanup and leaves no first one out.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
-from contextlib import ExitStack, contextmanager, nullcontext
+from contextlib import ExitStack, nullcontext
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._capture.stages import InstrumentedModel
 from ..._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
 from ..._utils._tensor_label import active_label_session_token
+from ...errors._base import transparent_contextmanager
 from .wrappers import unwrap_torch
 
 if TYPE_CHECKING:
@@ -115,7 +116,7 @@ def _unwrap_after_success() -> None:
     unwrap_torch()
 
 
-@contextmanager
+@transparent_contextmanager
 def instrumented(
     backend: TorchBackend,
     trace: Any,

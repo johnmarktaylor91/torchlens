@@ -68,7 +68,8 @@ python benchmarks/live_index_append_counters.py --out live_index_counters.json
 `save_path_counters.py` counts the work one `trace.save` of the `tinynet` capture
 does on the default portable path (saved format 3): record-table write passes and
 encoder calls, verifying re-reads of the record tables, `fsync` calls, Python-level
-opens, and the files and bytes written (split into manifest, metadata and blobs).
+opens (direct opens, and opens routed through `pathlib` counted apart, so the
+split is the same on every Python), and the files and bytes written (split into manifest, metadata and blobs).
 Byte counts hold each wall-clock timing float (`TIMING_FLOAT_PATHS`) at a fixed
 width, since format 3 writes floats by exact repr; every other byte counts as
 written, and the raw size is information only. The pinned values

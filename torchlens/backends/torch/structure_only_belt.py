@@ -56,7 +56,7 @@ from ..._capture.structure_only import ValueDependentBranchError
 from ..._utils._exception_notes import defer_failure_note
 from ..._utils._tensor_label import DescriptorCompatProperty, get_tensor_label
 from ..._utils._torch_symbols import torch_attr
-from ...errors._base import TorchLensError
+from ...errors._base import TorchLensError, transparent_contextmanager
 from ._completeness_cross_thread import _internal_read_active
 from ._consumer_kind import _classify_consumer_kind
 from .completeness_witness import (
@@ -329,7 +329,7 @@ def _install_property_belt(
         property_restores[name] = (shadowed, descriptor)
 
 
-@contextmanager
+@transparent_contextmanager
 def structure_only_escape_belt(trace: Any) -> Iterator[None]:
     """LAYER 1: install the escalated escape belt for one capture.
 
