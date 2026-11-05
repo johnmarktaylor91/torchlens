@@ -9,7 +9,8 @@ recomputes from the record (parameter totals and memory, the parent-param map,
 ``equivalent_ops``, ``grad_fn_object_id``, ``internal_source_parents``). These
 tests pin, on a tiny GPT-2 ``generate`` and on toy models that reach the
 parameter, in-place, multi-output and internal-source paths, that no such key is
-built, the number of keys built per op, and the Python calls capture makes per op.
+built, the number of keys built per op, the Python calls capture makes per op,
+and the Python calls dropping the returned trace makes per op.
 Source tensors and module-boundary outputs have their own builders (no function
 call: ``func_call_id`` is None) and are not counted.
 """
@@ -118,10 +119,16 @@ _UNREAD_KEYS = frozenset(
 # generate: 91 (it was 167 while the unread keys were built).
 _MAX_KEYS_PER_OP = 91
 # Python calls into TorchLens code per function-call op while capture runs
-# (postprocess excluded). Measured 1074.2 (1090.9 while the unread keys were built);
-# the pin sits between the two, leaving margin for call-count drift between torch
-# versions while still failing if the unread-key work returns.
+# (postprocess and the returned trace's teardown excluded). Measured 1074.2 (1090.9
+# while the unread keys were built); the pin sits between the two, leaving margin
+# for call-count drift between torch versions while still failing if the unread-key
+# work returns.
 _MAX_TORCHLENS_CALLS_PER_OP = 1082.0
+# Python calls into TorchLens code per function-call op while the returned trace
+# is dropped (it dies by refcount; the payload eviction walk dominates). Pinned at
+# the value measured on CI's pinned environment (torch 2.13.0+cpu): 36163 calls over
+# 416 ops, 86.93, the same on two hosts. A new pin, not a raised one.
+_MAX_TEARDOWN_CALLS_PER_OP = 36163 / 416
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
 
 
@@ -184,13 +191,17 @@ def _frozen_key_sets(
     return seen
 
 
-def _capture_calls_per_op(
+def _capture_and_teardown_calls_per_op(
     monkeypatch: pytest.MonkeyPatch, fn: Callable[..., Any], x: Any, kw: dict[str, Any]
-) -> float:
-    """Python calls into TorchLens code during capture per function-call op frozen."""
+) -> tuple[float, float]:
+    """Python calls into TorchLens code per function-call op frozen, capture then teardown.
+
+    Capture is ``tl.trace`` minus postprocess. Teardown is dropping the returned
+    trace: it dies by refcount, and its payload eviction runs then.
+    """
 
     owner = threading.get_ident()
-    state = {"capture": True, "calls": 0, "ops": 0}
+    state: dict[str, Any] = {"phase": "capture", "capture": 0, "teardown": 0, "ops": 0}
     real_freeze = torch_ops._op_record_from_log
     real_postprocess = postprocess_pkg.postprocess
 
@@ -199,11 +210,11 @@ def _capture_calls_per_op(
 
         if (
             event == "call"
-            and state["capture"]
+            and state["phase"] != "paused"
             and frame.f_code.co_filename.startswith(_TORCHLENS_ROOT)
             and threading.get_ident() == owner
         ):
-            state["calls"] += 1
+            state[state["phase"]] += 1
 
     def freeze(trace: Any, fields_dict: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
         """Count one function-call op, then freeze it."""
@@ -215,11 +226,11 @@ def _capture_calls_per_op(
     def postprocess(*args: Any, **kwargs: Any) -> Any:
         """Run postprocess with counting paused."""
 
-        state["capture"] = False
+        state["phase"] = "paused"
         try:
             return real_postprocess(*args, **kwargs)
         finally:
-            state["capture"] = True
+            state["phase"] = "capture"
 
     previous = sys.getprofile()
     monkeypatch.setattr(torch_ops, "_op_record_from_log", freeze)
@@ -227,13 +238,15 @@ def _capture_calls_per_op(
     with quiet_gc():
         sys.setprofile(profile)
         try:
-            tl.trace(fn, x, input_kwargs=kw or None)
+            traced = tl.trace(fn, x, input_kwargs=kw or None)
+            state["phase"] = "teardown"
+            del traced
         finally:
             sys.setprofile(previous)
             monkeypatch.setattr(torch_ops, "_op_record_from_log", real_freeze)
             monkeypatch.setattr(postprocess_pkg, "postprocess", real_postprocess)
     assert state["ops"] > 0
-    return state["calls"] / state["ops"]
+    return state["capture"] / state["ops"], state["teardown"] / state["ops"]
 
 
 def test_toy_model_fields_dicts_build_no_unread_key(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -266,6 +279,16 @@ def test_gpt2_generate_capture_python_calls_per_op(monkeypatch: pytest.MonkeyPat
 
     fn, ids, kw = _tiny_gpt2_generate()
     tl.trace(fn, ids, input_kwargs=kw)  # warm one-time instrumentation
-    per_op = _capture_calls_per_op(monkeypatch, fn, ids, kw)
+    per_op, _teardown = _capture_and_teardown_calls_per_op(monkeypatch, fn, ids, kw)
     print(f"[fields-dict] torchlens_calls_per_op={per_op:.2f}")
     assert per_op <= _MAX_TORCHLENS_CALLS_PER_OP
+
+
+def test_gpt2_generate_trace_teardown_python_calls_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dropping a GPT-2 generate trace makes at most the pinned Python calls per op."""
+
+    fn, ids, kw = _tiny_gpt2_generate()
+    tl.trace(fn, ids, input_kwargs=kw)  # warm one-time instrumentation
+    _capture, per_op = _capture_and_teardown_calls_per_op(monkeypatch, fn, ids, kw)
+    print(f"[fields-dict] torchlens_teardown_calls_per_op={per_op:.2f}")
+    assert per_op <= _MAX_TEARDOWN_CALLS_PER_OP
