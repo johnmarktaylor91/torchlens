@@ -258,3 +258,76 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     assert isinstance(second, Image.Image)
     # A final non-retaining probe consumes the graph and still succeeds.
     op.receptive_field.probe_grad(unit, retain_graph=False)
+
+
+class _StemStage(nn.Module):
+    """Conv stem followed by a once-called stage module, like a ResNet ``layer3``."""
+
+    def __init__(self) -> None:
+        """Build the stem convolution and the stage block."""
+
+        super().__init__()
+        self.stem = nn.Conv2d(3, 4, kernel_size=3, padding=1)
+        self.stage = nn.Sequential(nn.Conv2d(4, 4, kernel_size=3, padding=1), nn.ReLU())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, then the stage."""
+
+        return self.stage(torch.relu(self.stem(x)))
+
+
+@pytest.mark.parametrize("as_list", [False, True], ids=["single_image", "list_of_one"])
+def test_show_draws_the_captured_pil_photo_not_the_tensor(as_list: bool) -> None:
+    """``show(unit)`` draws a captured PIL stimulus whether the input was one image or a list.
+
+    An image-path capture stores ``trace.input`` as one PIL image; that must count as a batch
+    of one rather than falling back to the normalized-tensor heatmap.
+    """
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    photo_color = (12, 200, 34)
+    photo = Image.new("RGB", (8, 8), photo_color)
+    trace.input = [photo] if as_list else photo
+    target = trace.ops["stem"]
+    unit = target.receptive_field.center_unit(batch_index=0)
+
+    rendered = target.receptive_field.show(unit)
+
+    assert rendered.convert("RGB").getpixel((0, 0)) == photo_color
+
+
+def test_node_spec_resolves_layer_call_and_module_handles_like_the_op(tmp_path: Any) -> None:
+    """``node_spec`` takes an Op, Layer, ModuleCall or Module and styles the same cone."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    target = trace.ops["stage"]
+    handles = {
+        "layer": trace.layers[target.layer_label],
+        "module_call": trace["stage:1"],
+        "module": trace["stage"],
+    }
+
+    def _dot(handle: Any) -> str:
+        """Render the graph with the node-spec callback built from ``handle``."""
+
+        drawing = trace.draw(
+            node_spec_fn=node_spec(handle), path=str(tmp_path / "rf_cone"), file_format="dot"
+        )
+        return str(drawing.dot)
+
+    expected = _dot(target)
+    assert "#ffd8a8" in expected.lower()
+    for kind, handle in handles.items():
+        assert _dot(handle) == expected, kind
+
+
+def test_node_spec_refuses_a_bare_label_with_the_typed_error() -> None:
+    """A label string carries no trace to resolve against and refuses typed."""
+
+    trace = tl.trace(_StemStage().eval(), torch.rand(1, 3, 8, 8))
+    label = trace.ops["stem"].label
+
+    with pytest.raises(ReceptiveFieldError, match="Graph point must be"):
+        node_spec(label)
