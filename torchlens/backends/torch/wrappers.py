@@ -75,7 +75,7 @@ from ..._utils.tensor_utils import (
     materialize_deferred_for_call,
     print_override,
 )
-from . import _tracing_pass
+from . import _storage_exports, _tracing_pass
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -92,6 +92,7 @@ from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     BOUNDARY_NOTE_FUNC_NAMES,
     funcs_not_to_log,
+    inside_function_apply,
     note_function_boundary,
     print_funcs,
     unlogged_wrapper_name,
@@ -1132,6 +1133,7 @@ def torch_func_decorator(
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
     writes_args = mutates_receiver or reconstructs_receiver_output or is_mutating_property_setter
+    exports_storage = func_name in _storage_exports.STORAGE_EXPORT_FUNC_NAMES
     has_inplace_signature = (
         mutates_first_arg
         or func_name.endswith("_")
@@ -1200,13 +1202,9 @@ def torch_func_decorator(
         fingerprint = _state._call_fingerprint
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
-        # ---- Fast path ----
-        # When logging is off, pass through with minimal overhead; DeviceContext injection
-        # is still needed, because the user's model may rely on torch.device('meta') context.
-        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread's torch ops during a
-        # capture (``str(tensor)`` in a worker, a DataLoader thread) are never logged into the
-        # owner's Trace (false cross-thread ceiling, corrupt owner-op attribution, a crash);
-        # cross-thread tensor->host escapes are still seen by the tensor-method belt.
+        # ---- Fast path ---- (logging off: pass through; DeviceContext injection still runs for
+        # torch.device('meta') contexts). r43 hon2_4: op-logging is OWNER-thread-scoped, so a
+        # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
             # so the fast path carries the SAME pre-execution interception as the logging path:
@@ -1255,6 +1253,8 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
+        if exports_storage and _COW_PENDING and not inside_function_apply():
+            _storage_exports.materialize_deferred_for_export(args)
         if has_inplace_signature and not args:
             # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
             args, kwargs = _receiver_kwarg_as_positional(args, kwargs)

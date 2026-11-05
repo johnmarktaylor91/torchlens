@@ -3290,7 +3290,7 @@ def test_full_is_not_exempt_and_skip_perturbation_registry_is_pinned() -> None:
     # b1p2 D2 narrowing: torchvision ops skip ONLY the coordinate/offset arg
     # (native-kernel OOB segfault safety); everything else stays tested.
     assert STRUCTURAL_ARG_POSITIONS["nms"] == {0}
-    assert STRUCTURAL_ARG_POSITIONS["deform_conv2d"] == {1}
+    assert "deform_conv2d" not in STRUCTURAL_ARG_POSITIONS  # arg 1 is the weight: still tested
     for tv_op in ("roi_align", "roi_pool", "ps_roi_align", "ps_roi_pool"):
         assert STRUCTURAL_ARG_POSITIONS[tv_op] == {1}
 
