@@ -86,6 +86,24 @@ def _annotated_trace(model: nn.Module, save: Any) -> tl.Trace:
     return trace
 
 
+def _per_call_output_trace() -> tl.Trace:
+    """Capture the shared block and annotate each call's output pass separately.
+
+    ``tl.module("block")`` on a module called twice names the whole multi-pass
+    output layer, which ``mds_evolution`` refuses; each call's output pass is
+    selected by its pass-qualified label instead.
+    """
+
+    torch.manual_seed(1105)
+    trace = tl.trace(_SharedStage().eval(), _stimuli(), save=tl.module("block"))
+    calls = trace.modules["block"].calls
+    outputs = [str(label) for index in range(len(calls)) for label in calls[index].output_ops]
+    assert len(outputs) == 2
+    selection = tl.label(outputs[0]) | tl.label(outputs[1])
+    repgeom.mds_evolution(trace, save=selection, min_stimuli=_N_STIMULI)
+    return trace
+
+
 def _node_images(svg_text: str) -> dict[str, str]:
     """Return node title to embedded image href for every image-bearing node."""
 
@@ -167,7 +185,7 @@ def test_collapsed_boxes_draw_their_call_output_scatter(tmp_path: Path) -> None:
 def test_unrolled_multicall_boxes_each_draw_their_own_call(tmp_path: Path) -> None:
     """Each unrolled call box of a reused module shows the scatter of its own call."""
 
-    trace = _annotated_trace(_SharedStage(), tl.module("block"))
+    trace = _per_call_output_trace()
     output_path = tmp_path / "multicall.svg"
 
     trace.draw(
@@ -185,7 +203,7 @@ def test_unrolled_multicall_boxes_each_draw_their_own_call(tmp_path: Path) -> No
 def test_rolled_multicall_box_has_no_single_output(tmp_path: Path) -> None:
     """A rolled box standing for two calls is ambiguous, like a rolled multi-pass layer."""
 
-    trace = _annotated_trace(_SharedStage(), tl.module("block"))
+    trace = _per_call_output_trace()
     output_path = tmp_path / "rolled.svg"
 
     trace.draw(
