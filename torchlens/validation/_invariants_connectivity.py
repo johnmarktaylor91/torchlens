@@ -55,47 +55,8 @@ def _check_distance_invariants(ml: Trace) -> None:
     for lpl in ml._layer_list:
         label = lpl.layer_label
 
-        # min <= max for input distances
-        if (
-            lpl.graph.min_distance_from_input is not None
-            and lpl.graph.max_distance_from_input is not None
-        ):
-            if lpl.graph.min_distance_from_input > lpl.graph.max_distance_from_input:
-                raise MetadataInvariantError(
-                    name,
-                    f"Layer '{label}': min_distance_from_input="
-                    f"{lpl.graph.min_distance_from_input} > max={lpl.graph.max_distance_from_input}",
-                )
-
-        # min <= max for output distances
-        if (
-            lpl.graph.min_distance_to_output is not None
-            and lpl.graph.max_distance_to_output is not None
-        ):
-            if lpl.graph.min_distance_to_output > lpl.graph.max_distance_to_output:
-                raise MetadataInvariantError(
-                    name,
-                    f"Layer '{label}': min_distance_to_output="
-                    f"{lpl.graph.min_distance_to_output} > max={lpl.graph.max_distance_to_output}",
-                )
-
-        # Input layers: distance from input == 0
-        if label in input_set:
-            if lpl.graph.min_distance_from_input != 0 or lpl.graph.max_distance_from_input != 0:
-                raise MetadataInvariantError(
-                    name,
-                    f"Input layer '{label}': distance_from_input should be 0, got "
-                    f"min={lpl.graph.min_distance_from_input}, max={lpl.graph.max_distance_from_input}",
-                )
-
-        # Output layers: distance from output == 0
-        if label in output_set:
-            if lpl.graph.min_distance_to_output != 0 or lpl.graph.max_distance_to_output != 0:
-                raise MetadataInvariantError(
-                    name,
-                    f"Output layer '{label}': distance_from_output should be 0, got "
-                    f"min={lpl.graph.min_distance_to_output}, max={lpl.graph.max_distance_to_output}",
-                )
+        _check_distance_order(name, lpl, label)
+        _check_terminal_distances(name, lpl, label, input_set, output_set)
 
         # has_input_ancestor ↔ input_ancestors non-empty
         has_ancestors = len(lpl.input_ancestors) > 0
@@ -847,6 +808,10 @@ from . import _invariants as _invariants_hub  # noqa: E402
 from ._invariants import (  # noqa: E402
     MetadataInvariantContract,
     MetadataInvariantError,
+)
+from ._invariants_distance_bounds import (  # noqa: E402
+    _check_distance_order,
+    _check_terminal_distances,
 )
 from ._invariants_topology import (  # noqa: E402
     _retained_orphan_layer_labels,
