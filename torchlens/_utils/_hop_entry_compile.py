@@ -37,9 +37,16 @@ from ._torch_symbols import torch_attr
 __all__ = ("compile_disabled", "hop_compile_stance_lift_scope")
 
 
+_OwnModes = Callable[[], "tuple[Any, ...] | None"]
+"""Returns the dispatch-mode stack when it holds only TorchLens's own modes, else ``None``."""
+
+
 @contextlib.contextmanager
 def hop_compile_stance_lift_scope(
-    around: Callable[[bool], contextlib.AbstractContextManager[Any]], *, enabled: bool
+    around: Callable[[bool], contextlib.AbstractContextManager[Any]],
+    *,
+    enabled: bool,
+    own_modes: _OwnModes | None = None,
 ) -> Iterator[bool]:
     """Let torch's higher-order-operator entry compiles run inside a forced-eager scope.
 
@@ -56,6 +63,12 @@ def hop_compile_stance_lift_scope(
         Context factory entered for each lifted compile, given ``cond_branches``.
     enabled:
         Whether torch has ``set_stance``; ``False`` leaves the entry untouched.
+    own_modes:
+        Returns the dispatch-mode stack, bottom first, when it holds only
+        TorchLens's own modes, else ``None``. A ``cond`` entry steps those modes
+        aside while Dynamo compiles and re-enters them for the compiled run
+        (:func:`_stepped_aside`); without it, a ``cond`` entry under any mode
+        runs as before.
 
     Yields
     ------
@@ -70,7 +83,9 @@ def hop_compile_stance_lift_scope(
         return
     original, original_env = entries
     cond_calls: list[_CondCall | None] = []
-    lifted = _lifted_entry(original, around, cond_calls, cond_branches=original_env is not None)
+    lifted = _lifted_entry(
+        original, around, cond_calls, cond_branches=original_env is not None, own_modes=own_modes
+    )
     env = None if original_env is None else _branch_callback_env(original_env, cond_calls)
     swap_hop_entry_compile(lifted, env)
     try:
@@ -85,6 +100,7 @@ def _lifted_entry(
     cond_calls: list[_CondCall | None],
     *,
     cond_branches: bool,
+    own_modes: _OwnModes | None,
 ) -> Callable[..., Any]:
     """Return the replacement for torch's operator entry compile in one lift scope.
 
@@ -98,6 +114,8 @@ def _lifted_entry(
         The scope's stack of active entries; a ``cond`` entry pushes its call.
     cond_branches:
         Whether a ``cond`` entry's real run may call the user's own branches.
+    own_modes:
+        See :func:`hop_compile_stance_lift_scope`.
 
     Returns
     -------
@@ -108,31 +126,20 @@ def _lifted_entry(
     copies: dict[Any, Any] = {}
 
     def _lifted(fn: Any, args: Any, kwargs: Any = None) -> Any:
-        """Run one operator entry compile under the default stance inside ``around()``.
+        """Run entry compile ``fn(*args, **kwargs)`` under the default stance inside ``around()``.
 
-        Parameters
-        ----------
-        fn:
-            Function the entry compiles.
-        args:
-            Its positional arguments.
-        kwargs:
-            Its keyword arguments, if any.
-
-        Returns
-        -------
-        Any
-            The compiled call's result.
+        Returns the compiled call's result; a ``cond`` call's own modes step aside for it.
         """
 
         target = copies.get(fn)
         if target is None:
             target = copies[fn] = _with_fresh_code(fn)
-        call = _cond_call(fn, args) if cond_branches else None
+        call = _cond_call(fn, args, own_modes) if cond_branches else None
         cond_calls.append(call)
         try:
             with around(call is not None), torch.compiler.set_stance("default"):
-                return original(target, args, kwargs)
+                with _stepped_aside(call):
+                    return original(target, args, kwargs)
         finally:
             cond_calls.pop()
 
@@ -153,6 +160,7 @@ class _CondCall:
 
     branches: tuple[Callable[..., Any], Callable[..., Any]]
     operands: Any
+    modes: tuple[Any, ...] = ()
 
 
 def _cond_operator() -> Any:
@@ -167,7 +175,7 @@ def _cond_operator() -> Any:
     return getattr(getattr(torch.ops, "higher_order", None), "cond", None)
 
 
-def _cond_call(fn: Any, args: Any) -> _CondCall | None:
+def _cond_call(fn: Any, args: Any, own_modes: _OwnModes | None) -> _CondCall | None:
     """Return the ``cond`` call an entry compile runs, or ``None`` for any other entry.
 
     The entry is ``cond``'s when ``fn`` calls the ``cond`` operator by a global
@@ -180,11 +188,15 @@ def _cond_call(fn: Any, args: Any) -> _CondCall | None:
         Function the entry compiles.
     args:
         Its positional arguments.
+    own_modes:
+        See :func:`hop_compile_stance_lift_scope`.
 
     Returns
     -------
     _CondCall | None
-        The user's branches and operands, or ``None``.
+        The user's branches, operands and the modes to step aside, or ``None``
+        (also when a dispatch mode other than TorchLens's own is active: Dynamo
+        then does not compile, and the entry runs as before).
     """
 
     cond_op = _cond_operator()
@@ -194,7 +206,40 @@ def _cond_call(fn: Any, args: Any) -> _CondCall | None:
         return None
     if not any(namespace.get(name) is cond_op for name in code.co_names):
         return None
-    return _CondCall(branches=(args[1], args[2]), operands=args[3])
+    modes = own_modes() if own_modes is not None else ()
+    if modes is None or (own_modes is None and get_current_dispatch_mode_stack()):
+        return None
+    return _CondCall(branches=(args[1], args[2]), operands=args[3], modes=modes)
+
+
+@contextlib.contextmanager
+def _stepped_aside(call: _CondCall | None) -> Iterator[None]:
+    """Take ``call``'s modes off the dispatch stack for its entry compile, restoring them after.
+
+    Dynamo does not compile a frame while a dispatch mode is on the stack. The
+    modes leave the stack while Dynamo traces the entry (fake tensors only) and
+    are re-entered around the compiled graph's run (:func:`_rejoining`), so they
+    still see every real op, the predicate read and the branch run included.
+
+    Parameters
+    ----------
+    call:
+        The active ``cond`` call, or ``None``.
+
+    Yields
+    ------
+    None
+        While the modes are off the stack.
+    """
+
+    modes = call.modes if call is not None else ()
+    for mode in reversed(modes):
+        mode.__exit__(None, None, None)
+    try:
+        yield
+    finally:
+        for mode in modes:
+            mode.__enter__()
 
 
 def _branch_callback_env(
@@ -259,7 +304,7 @@ def _with_branch_callbacks(
         The wrapping backend.
     """
 
-    def _backend(graph_module: Any, example_inputs: Any) -> Any:
+    def _backend(graph_module: Any, example_inputs: Any, **kwargs: Any) -> Any:
         """Install branch callbacks on ``graph_module``, then compile it with torch's backend.
 
         Parameters
@@ -283,9 +328,52 @@ def _with_branch_callbacks(
                 graph = getattr(graph_module, graph_node.target)
                 callback = _CondBranchCallback(graph, branch, cond_calls)
                 setattr(graph_module, graph_node.target, callback)
-        return backend(graph_module, example_inputs)
+        return _rejoining(backend(graph_module, example_inputs, **kwargs), cond_calls)
 
     return _backend
+
+
+def _rejoining(
+    compiled: Callable[..., Any], cond_calls: list[_CondCall | None]
+) -> Callable[..., Any]:
+    """Wrap a compiled graph so it runs with the innermost ``cond`` call's modes re-entered.
+
+    Parameters
+    ----------
+    compiled:
+        The callable the backend returned.
+    cond_calls:
+        The scope's stack of active entries.
+
+    Returns
+    -------
+    Callable[..., Any]
+        A runner with ``compiled``'s calling convention.
+    """
+
+    def _run(*args: Any, **kwargs: Any) -> Any:
+        """Run the compiled graph under the stepped-aside modes, bottom first.
+
+        Parameters
+        ----------
+        *args, **kwargs:
+            The graph's inputs.
+
+        Returns
+        -------
+        Any
+            The graph's outputs.
+        """
+
+        call = cond_calls[-1] if cond_calls else None
+        with contextlib.ExitStack() as stack:
+            for mode in call.modes if call is not None else ():
+                stack.enter_context(mode)
+            return compiled(*args, **kwargs)
+
+    if getattr(compiled, "_boxed_call", False):
+        _run._boxed_call = True  # type: ignore[attr-defined]
+    return _run
 
 
 class _CondBranchCallback(torch.nn.Module):
@@ -350,11 +438,13 @@ def _dense_run_of(call: _CondCall, args: tuple[Any, ...]) -> bool:
     Returns
     -------
     bool
-        ``True`` with no dispatch mode active, no tracing tensor argument, and
-        the call's own operand tensors leading ``args``.
+        ``True`` with no dispatch mode active but the call's re-entered own
+        modes, no tracing tensor argument, and the call's own operand tensors
+        leading ``args``.
     """
 
-    if get_current_dispatch_mode_stack():
+    stack = get_current_dispatch_mode_stack() or []
+    if any(all(mode is not own for own in call.modes) for mode in stack):
         return False
     tracing_types = get_tracing_tensor_types()
     if tracing_types and any(isinstance(arg, tracing_types) for arg in args):

@@ -44,6 +44,7 @@ from ..._utils._torch_compat import (
     get_fake_tensor_mode_class,
     get_tracing_tensor_types,
 )
+from ._modes import _TorchLensDispatchMode
 
 __all__ = (
     "call_inside_tracing_pass",
@@ -179,8 +180,24 @@ def lift_hop_entry_compiles() -> AbstractContextManager[bool]:
     """
 
     return hop_compile_stance_lift_scope(
-        hop_internal_compile_scope, enabled=_torch_compat.HAS_SET_STANCE
+        hop_internal_compile_scope, enabled=_torch_compat.HAS_SET_STANCE, own_modes=_own_mode_stack
     )
+
+
+def _own_mode_stack() -> tuple[Any, ...] | None:
+    """Return the dispatch-mode stack, bottom first, when every mode on it is TorchLens's own.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        The stack (empty when no mode is active), or ``None`` when a mode that
+        is not TorchLens's own is active.
+    """
+
+    stack = tuple(get_current_dispatch_mode_stack() or ())
+    if all(isinstance(mode, _TorchLensDispatchMode) for mode in stack):
+        return stack
+    return None
 
 
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
