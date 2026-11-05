@@ -108,6 +108,7 @@ __all__ = [
     "HAS_TRACING_TENSOR_TYPES",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
     "HAS_GENERATOR_CLONE_STATE",
@@ -191,6 +192,7 @@ __all__ = [
     "get_dynamo_optimized_module_type",
     "get_dynamo_explain",
     "get_functorch_maybe_current_level",
+    "get_functorch_transform_probe",
     "get_functorch_wrapped_tensor_checker",
     "get_fsdp_wrapper_type",
     "get_fx_graph_module_type",
@@ -327,6 +329,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_TORCH_VF": ("torch:_VF",),
     "HAS_TORCH_FUNC": ("torch:func",),
     "HAS_FUNCTORCH_LEVEL_API": ("torch:_C._functorch.maybe_current_level",),
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API": ("torch:_C._functorch.peek_interpreter_stack",),
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API": ("torch:_C._functorch.is_functorch_wrapped_tensor",),
     "HAS_JIT_BUILTIN_TABLE": ("torch.jit._builtins:_builtin_table",),
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE": ("torch._jit_internal:boolean_dispatched",),
@@ -1390,6 +1393,9 @@ HAS_TORCH_VF: bool = _probe_attribute_paths("HAS_TORCH_VF")
 HAS_TORCH_FUNC: bool = _probe_attribute_paths("HAS_TORCH_FUNC")
 HAS_FUNCTORCH_APIS: bool = _probe_functorch_apis()
 HAS_FUNCTORCH_LEVEL_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_LEVEL_API")
+HAS_FUNCTORCH_INTERPRETER_STACK_API: bool = _probe_attribute_paths(
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API"
+)
 HAS_FUNCTORCH_WRAPPED_TENSOR_API: bool = _probe_attribute_paths("HAS_FUNCTORCH_WRAPPED_TENSOR_API")
 HAS_JIT_BUILTIN_TABLE: bool = _probe_attribute_paths("HAS_JIT_BUILTIN_TABLE")
 HAS_JIT_BOOLEAN_DISPATCH_TABLE: bool = _probe_attribute_paths("HAS_JIT_BOOLEAN_DISPATCH_TABLE")
@@ -1588,6 +1594,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TORCH_FUNC",
     "HAS_FUNCTORCH_APIS",
     "HAS_FUNCTORCH_LEVEL_API",
+    "HAS_FUNCTORCH_INTERPRETER_STACK_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_JIT_BUILTIN_TABLE",
     "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
@@ -2177,7 +2184,30 @@ def get_functorch_maybe_current_level() -> Callable[[], Any] | None:
     """
 
     return _resolve_or_mark_missing(
-        "HAS_FUNCTORCH_LEVEL_API", "functorch transform-boundary detection is disabled"
+        "HAS_FUNCTORCH_LEVEL_API",
+        "functorch transform-boundary detection falls back to the interpreter stack",
+    )
+
+
+def get_functorch_transform_probe() -> Callable[[], Any] | None:
+    """Return a zero-argument probe that is not ``None`` inside a functorch transform.
+
+    ``torch._C._functorch.maybe_current_level`` when present; otherwise (torch
+    2.1 and 2.2) ``torch._C._functorch.peek_interpreter_stack``, which reads the
+    same dynamic-layer stack and returns ``None`` when it is empty.
+
+    Returns
+    -------
+    Callable[[], Any] | None
+        The probe, or ``None`` when neither surface exists (detection disabled).
+    """
+
+    level = get_functorch_maybe_current_level()
+    if level is not None:
+        return level
+    return _resolve_or_mark_missing(
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
+        "functorch transform-boundary detection is disabled",
     )
 
 

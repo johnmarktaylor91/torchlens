@@ -256,6 +256,34 @@ def test_nested_private_helper_absence_marks_capability(
     assert getattr(tc, flag_name) is False
 
 
+def test_functorch_transform_probe_falls_back_to_the_interpreter_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``maybe_current_level`` (torch 2.1, 2.2) the probe reads the interpreter stack."""
+
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_LEVEL_API")
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_INTERPRETER_STACK_API")
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_FUNCTORCH_LEVEL_API", ("torch:_C._functorch.absent_level_api",)
+    )
+    monkeypatch.setenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", "1")
+    probe = tc.get_functorch_transform_probe()
+    assert probe is not None
+    assert probe() is None
+    inside: list[object] = []
+
+    def row_fn(row: torch.Tensor) -> torch.Tensor:
+        """Record the probe's answer inside the transform."""
+
+        inside.append(probe())
+        return row
+
+    torch.func.vmap(row_fn)(torch.ones(2, 3))
+    assert inside and all(level is not None for level in inside)
+    assert tc.HAS_FUNCTORCH_LEVEL_API is False
+    assert tc.HAS_FUNCTORCH_INTERPRETER_STACK_API is True
+
+
 @pytest.mark.parametrize(
     ("helper_name", "flag_name", "expected"),
     [
@@ -314,6 +342,7 @@ def test_private_torch_capability_flags_present_on_supported_range() -> None:
         "HAS_TORCH_FUNC",
         "HAS_FUNCTORCH_APIS",
         "HAS_FUNCTORCH_LEVEL_API",
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
         "HAS_JIT_BUILTIN_TABLE",
         "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
@@ -362,6 +391,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TORCH_FUNC": True,
         "HAS_FUNCTORCH_APIS": True,
         "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API": True,
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API": True,
         "HAS_JIT_BUILTIN_TABLE": True,
         # fix-capture-r3 R56: TorchScript compatibility while wrapped needs the
