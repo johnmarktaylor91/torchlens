@@ -142,9 +142,10 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> None:
     if handles is None or not isinstance(receiver, torch.Tensor):
         return
     with pause_logging(), internal_scalar_read():
-        if not receiver.requires_grad or not receiver._is_view():
+        base = receiver._base if receiver.requires_grad and receiver._is_view() else None
+        if base is None:
             return
-        copy_slices = receiver._base.grad_fn
+        copy_slices = base.grad_fn
         view_node = receiver.grad_fn
         label = get_tensor_label(receiver)
     if (
