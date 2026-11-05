@@ -439,7 +439,7 @@ def test_zero_band_transposed_synthesis_validates() -> None:
     model = _ZeroHighBandSynthesis()
     x = torch.randn(1, 3, 4, 4)
     trace = _capture(model, x)
-    zero_band, live_band = [op for op in trace._layer_list if op.func_name == "conv_transpose2d"]
+    live_band, zero_band = [op for op in trace._layer_list if op.func_name == "conv_transpose2d"]
     _assert_exempted(_edge(trace, zero_band, 1), "conv_zero_input_output_is_bias")
     live = _edge(trace, live_band, 1)
     assert live.decision == "validated", (live.decision, live.reason)

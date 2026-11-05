@@ -27,6 +27,9 @@ what that helper does with it), never from a name:
 
 A proof is reported as its own exemption reason (:data:`SCRIPT_METADATA_ONLY_REASON`) with
 the function, the proven arguments and the node kinds read; it is never a silent skip.
+
+:func:`script_body_thresholds_tensor` (below) is not a proof: it only makes a scripted body
+that thresholds a tensor eligible for the perturbation retry's geometric magnitude ladder.
 """
 
 from __future__ import annotations
@@ -268,3 +271,87 @@ def script_metadata_only_proof(layer: Any, layers_to_perturb: list[str]) -> str 
         f"{', '.join(sorted(slots))} only through {', '.join(kinds)} (graph proof), so the "
         "call's value cannot depend on their elements"
     )
+
+
+# ---------------------------------------------------------------------------
+# Threshold test (geometric ladder eligibility, not an exemption).
+#
+# Graph test that a TorchScript boundary call quantizes a tensor value with a threshold.
+#
+# A ``jitscript`` boundary op (``backends/torch/_script_boundary.py``) replays a whole scripted
+# function as one op. When that body thresholds a tensor (a spiking neuron's
+# ``(v >= v_threshold).to(x)``, a ``floor``/``round`` quantizer), its output has the same
+# finite dead zone as an explicit ``floor`` or comparison child: a parent step smaller than the
+# distance to the threshold leaves every output element unchanged even though the edge is real.
+# The perturbation retry then needs the geometric magnitude ladder that explicit quantizers get
+# (``core._op_is_value_discretizing``). The ladder only collects evidence: a perturbation that
+# changes the output proves the edge, and a parent the body never reads stays unchanged under
+# every rung, so it still fails.
+#
+# Membership is read from the scripted function's own graph with nested scripted calls inlined
+# (``function.inlined_graph``), never from a name: some node whose kind is in
+# :data:`THRESHOLD_NODE_KINDS` must take a ``Tensor``-typed value as input 0. Integer
+# comparisons on sizes (``if x.dim() > 2``) take ``int`` inputs and do not count. An unreadable
+# graph counts as no threshold, so the op keeps the plain unit steps.
+# ---------------------------------------------------------------------------
+
+THRESHOLD_NODE_KINDS: frozenset[str] = frozenset(
+    {
+        "aten::ge",
+        "aten::gt",
+        "aten::le",
+        "aten::lt",
+        "aten::heaviside",
+        "aten::sign",
+        "aten::floor",
+        "aten::ceil",
+        "aten::round",
+        "aten::trunc",
+        "aten::floor_divide",
+    }
+)
+"""TorchScript node kinds that map a continuous tensor input onto a discrete grid."""
+
+
+def _is_tensor_value(value: Any) -> bool:
+    """Return whether a graph value is typed as a plain ``Tensor``."""
+
+    try:
+        return str(value.type().kind()) == "TensorType"
+    except (AttributeError, RuntimeError):
+        return False
+
+
+def script_body_thresholds_tensor(layer: Any) -> bool:
+    """Return whether ``layer`` replays a scripted function that thresholds a tensor value.
+
+    Parameters
+    ----------
+    layer:
+        Child op whose perturbed replay output stayed unchanged.
+
+    Returns
+    -------
+    bool
+        True when the op's recorded callable is a TorchScript boundary replay callable and its
+        inlined graph has a :data:`THRESHOLD_NODE_KINDS` node whose input 0 is a tensor.
+    """
+
+    function = script_function_of(getattr(layer, "func", None))
+    if function is None:
+        return False
+    try:
+        pending = list(function.inlined_graph.nodes())
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    while pending:
+        node = pending.pop()
+        # Bodies of ``prim::If`` / ``prim::Loop`` live in nested blocks.
+        for block in node.blocks():
+            pending.extend(block.nodes())
+        if node.kind() not in THRESHOLD_NODE_KINDS:
+            continue
+        inputs = list(node.inputs())
+        if inputs and _is_tensor_value(inputs[0]):
+            return True
+    return False

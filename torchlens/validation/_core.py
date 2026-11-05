@@ -128,7 +128,7 @@ from ._saved_outs_steps import (
     _record_dispatch_census_decision,
     _reset_run_diagnostics,
 )
-from ._script_metadata_proof import script_metadata_only_proof
+from ._script_metadata_proof import script_body_thresholds_tensor, script_metadata_only_proof
 from ._shift_probe import NON_UNIFORM_STRATEGIES, non_uniform_probe_values, value_step_strategies
 from ._source_provenance import check_source_provenance
 from ._status import ValidationStatus
@@ -3353,16 +3353,15 @@ def _op_is_value_discretizing(layer: Op) -> bool:
     Returns
     -------
     bool
-        True for explicit quantizers (``floor``/``ceil``/``round``/``trunc``/
-        ``bucketize``/``searchsorted`` and kin, including in-place variants)
-        and for ops with a non-bool integer output (integer casts such as
-        ``.long()``/``.int()``). False otherwise -- in particular for float
-        arithmetic whose insensitivity is fp swamping, which must keep
-        routing to the ``ulp_swamped_perturbation`` exemption.
+        True for explicit quantizers (``floor``/``round``/``bucketize`` and kin,
+        in-place variants included), a TorchScript region whose graph thresholds
+        a tensor (``_script_metadata_proof``), and ops with a non-bool integer output
+        (integer casts such as ``.long()``). False otherwise -- in particular for
+        fp-swamped float arithmetic, which keeps ``ulp_swamped_perturbation``.
     """
 
     func_name = str(getattr(layer, "func_name", "") or "").rstrip("_")
-    if func_name in _VALUE_DISCRETIZING_FUNC_NAMES:
+    if func_name in _VALUE_DISCRETIZING_FUNC_NAMES or script_body_thresholds_tensor(layer):
         return True
     out = getattr(layer, "out", None)
     return (
