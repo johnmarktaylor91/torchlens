@@ -303,6 +303,14 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
                     f'<TD FIXEDSIZE="TRUE" WIDTH="16" HEIGHT="10" '
                     f'BGCOLOR="{row.swatch_fill}" BORDER="1" COLOR="{swatch_border}"></TD>'
                 )
+            elif not section.title:
+                # An untitled section (the encoding key) has no swatch column: the
+                # line spans the table, so a stretched table cannot push it right.
+                cells.append(
+                    f'<TR><TD COLSPAN="2" ALIGN="LEFT"><FONT POINT-SIZE="{size}" '
+                    f'COLOR="{font_color}">{text}</FONT></TD></TR>'
+                )
+                continue
             else:
                 swatch = "<TD></TD>"
             cells.append(
