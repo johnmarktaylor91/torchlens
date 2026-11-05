@@ -1119,11 +1119,11 @@ torchlens/intervention/helpers.py::patch_from	110
 torchlens/intervention/helpers.py::scramble_elements	88
 torchlens/intervention/helpers.py::splice_module	81
 torchlens/intervention/helpers.py::swap_with	69
-torchlens/intervention/hooks.py	1709
+torchlens/intervention/hooks.py	1706
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63
-torchlens/intervention/hooks.py::expand_facet_hook_entries	70
+torchlens/intervention/hooks.py::expand_facet_hook_entries	68
 torchlens/intervention/hooks.py::normalize_hook_plan	69
 torchlens/intervention/injection.py	858
 torchlens/intervention/injection.py::injection_recorder._record_call	63
@@ -1158,7 +1158,7 @@ torchlens/intervention/runtime.py::_apply_live_hooks	155
 torchlens/intervention/runtime.py::_execute_hook	80
 torchlens/intervention/runtime.py::_validate_grad_tuple	66
 torchlens/intervention/runtime.py::validate_hook_output	70
-torchlens/intervention/save.py	851
+torchlens/intervention/save.py	844
 torchlens/intervention/save.py::_build_target_manifest	73
 torchlens/intervention/save.py::save_intervention	131
 torchlens/intervention/stochastic.py	1374
