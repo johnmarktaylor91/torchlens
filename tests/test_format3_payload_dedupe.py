@@ -115,10 +115,10 @@ _MODELS = {"gpt2": _gpt2, "resnet18": _resnet, "transposed": _transposed, "twins
 
 #: Counters measured at the writer that stores each payload identity once.
 _PINNED = {
-    "gpt2": {"references": 0, "entries": 0, "stored_bytes": 0},
-    "resnet18": {"references": 0, "entries": 0, "stored_bytes": 0},
-    "transposed": {"references": 0, "entries": 0, "stored_bytes": 0},
-    "twins": {"references": 0, "entries": 0, "stored_bytes": 0},
+    "gpt2": {"references": 107, "entries": 80, "stored_bytes": 155776},
+    "resnet18": {"references": 171, "entries": 86, "stored_bytes": 705448},
+    "transposed": {"references": 6, "entries": 4, "stored_bytes": 128},
+    "twins": {"references": 6, "entries": 3, "stored_bytes": 96},
 }
 
 
@@ -165,7 +165,8 @@ def test_shared_entry_loads_as_independent_tensors(tmp_path: Path) -> None:
     ops = list(trace.ops)
     equal = [index for index, op in enumerate(ops) if op.func_name in {"linear", "clone"}]
     assert len(equal) == 3
-    loaded_ops = list(tl.load(root).ops)
+    loaded = tl.load(root)
+    loaded_ops = list(loaded.ops)
     first, second, third = (loaded_ops[index].out for index in equal)
     assert len({tensor.untyped_storage().data_ptr() for tensor in (first, second, third)}) == 3
     expected = ops[equal[2]].out.detach().clone()
@@ -182,7 +183,8 @@ def test_transposed_view_shares_its_contiguous_copy(tmp_path: Path) -> None:
     trace = save_model("transposed", root)
     assert len(_entries_of(root, {"t", "contiguous"})) == 1
     ops = list(trace.ops)
-    loaded_ops = list(tl.load(root).ops)
+    loaded = tl.load(root)
+    loaded_ops = list(loaded.ops)
     pair = [index for index, op in enumerate(ops) if op.func_name in {"t", "contiguous"}]
     assert len(pair) == 2
     assert ops[pair[0]].out.stride() != ops[pair[1]].out.stride()
