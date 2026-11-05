@@ -12,20 +12,22 @@ consumer (or the model output) with no producing op.
 output with no TorchLens label that is a same-geometry view of a labeled input
 argument is recorded as the ``view_as`` call torch made, with the input as its
 parent. Where torch already routed the view through Python the output carries a
-label and nothing is recorded, so no capability flag is needed.
+label and nothing is recorded, so no capability flag is needed. The op itself is logged
+by the caller's ``log_view`` (``_function_boundary`` owns the op logger and the census
+token), so this module stays outside the capture import cycle.
 """
 
 from __future__ import annotations
 
-import threading
+import dataclasses
+from collections.abc import Callable
 from typing import Any
 
 import torch
 
 from ... import _state
-from ..._data_classes.internal_types import FuncExecutionContext
 from ..._utils import _torch_compat
-from ..._utils.rng import log_current_autocast_state
+from ._tl import get_tensor_label
 
 
 def _same_view(output: torch.Tensor, source: torch.Tensor) -> bool:
@@ -54,7 +56,7 @@ def _same_view(output: torch.Tensor, source: torch.Tensor) -> bool:
     )
 
 
-def _own_view_dispatch(witness_state: Any, start: int, view_as: Any, func_call_id: int) -> None:
+def own_view_dispatch(witness_state: Any, start: int, token: Any) -> None:
     """Hand the last unowned aten view of the ``apply`` call to the recorded ``view_as`` op.
 
     The C++ ``view_as`` ran outside every torch wrapper, so the completeness census saw
@@ -67,36 +69,33 @@ def _own_view_dispatch(witness_state: Any, start: int, view_as: Any, func_call_i
         The armed completeness-witness state, or ``None`` when no census runs.
     start:
         Index of the first witness event of the ``apply`` call.
-    view_as:
-        The ``view_as`` callable the recorded op names.
-    func_call_id:
-        The recorded op's call id.
+    token:
+        The recorded op's capture-accounted owner token; it is re-scoped as an
+        ordinary owned wrapper edge, which is what a Python ``view_as`` would get.
     """
-
-    from .escape_detection import _OUTPUT_SCOPED_CREDIT_PREFIX, ExpectedOriginalToken
 
     if witness_state is None:
         return
+    owned = dataclasses.replace(token, census_scope="owned")
     for event in reversed(witness_state.events[start:]):
         # No owner, or only the enclosing module's forward (no torch wrapper between).
-        owner_wrapper = getattr(event.owner, "wrapper_name", None)
-        unowned = event.owner is None or str(owner_wrapper).startswith(_OUTPUT_SCOPED_CREDIT_PREFIX)
+        module_only = getattr(event.owner, "boundary_credit_is_output_scoped", False)
+        unowned = event.owner is None or module_only
         if unowned and event.operator.split(".")[:2] in (["aten", "view"], ["aten", "alias"]):
-            event.owner = ExpectedOriginalToken(
-                raw_id=id(view_as),
-                original=view_as,
-                wrapper_name="view_as",
-                wrapper_frame_id=0,
-                owner_thread_id=threading.get_ident(),
-                pending=False,
-                func_name="view_as",
-                func_call_id=func_call_id,
-                capture_accounted=True,
-            )
+            event.owner = owned
             return
 
 
-def log_native_input_views(trace: Any, args: tuple[Any, ...], out: Any, marks: Any) -> None:
+def _function_outputs(out: Any) -> list[torch.Tensor]:
+    """Return the tensors ``Function.apply`` returned (it returns a tensor or a flat tuple)."""
+
+    outputs = out if isinstance(out, (tuple, list)) else (out,)
+    return [output for output in outputs if isinstance(output, torch.Tensor)]
+
+
+def log_native_input_views(
+    trace: Any, args: tuple[Any, ...], out: Any, marks: Any, log_view: Callable[..., None]
+) -> None:
     """Record ``view_as`` for each ``apply`` output torch aliased to an input in C++.
 
     Parameters
@@ -109,11 +108,9 @@ def log_native_input_views(trace: Any, args: tuple[Any, ...], out: Any, marks: A
         What ``apply`` returned.
     marks:
         The call's ``BoundaryMarks`` (its completeness-witness state and start index).
+    log_view:
+        ``log_view(trace, view_as, source, output, marks)`` logs one such view as an op.
     """
-
-    from ._ops_emission import log_function_output_tensors
-    from ._tl import get_tensor_label
-    from .wrappers import _collect_output_tensors
 
     sources = [arg for arg in args if isinstance(arg, torch.Tensor) and get_tensor_label(arg)]
     if not sources:
@@ -124,33 +121,10 @@ def log_native_input_views(trace: Any, args: tuple[Any, ...], out: Any, marks: A
         return
     with _state.pause_logging():
         views = []
-        for output in _collect_output_tensors(out):
+        for output in _function_outputs(out):
             if get_tensor_label(output) is None and output._is_view():
                 source = next((arg for arg in sources if _same_view(output, arg)), None)
                 if source is not None:
                     views.append((output, source))
     for output, source in views:
-        exec_ctx = FuncExecutionContext(
-            time_elapsed=0.0, rng_states={}, autocast_state=log_current_autocast_state()
-        )
-        func_call_id = _state.next_func_call_id()
-        call: tuple[Any, ...] = (
-            trace,
-            view_as,
-            "view_as",
-            (source, source),
-            {},
-            (source, source),
-            {},
-            output,
-            exec_ctx,
-            True,
-            func_call_id,
-        )
-        # Hide this bookkeeping from the opt-in user-op census, as the boundary op does.
-        if _state.completeness_witness_is_shadow():
-            with _state.pause_logging():
-                log_function_output_tensors(*call)
-        else:
-            log_function_output_tensors(*call)
-        _own_view_dispatch(marks.witness_state, marks.witness_mark, view_as, func_call_id)
+        log_view(trace, view_as, source, output, marks)
