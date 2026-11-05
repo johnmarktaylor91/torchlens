@@ -9156,7 +9156,7 @@
   "field": "parents",
   "file": "torchlens/receptive_field/_builtin_rules/transforms.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
