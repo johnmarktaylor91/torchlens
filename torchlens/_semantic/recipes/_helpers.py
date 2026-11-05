@@ -20,12 +20,17 @@ def child_module(module: Any, child_name: str) -> Any | None:
     module:
         Parent TorchLens Module record.
     child_name:
-        Child attribute name.
+        Child attribute name, or a dotted path to a deeper descendant.
     """
 
     trace = getattr(module, "_source_trace", None)
     if trace is None:
         return None
+    if isinstance(module, CallBoundModule) and "." in child_name:
+        # A call records only its direct child calls: walk the path one level at a time.
+        head, rest = child_name.split(".", 1)
+        parent = child_module(module, head)
+        return None if parent is None else child_module(parent, rest)
     child_address = child_name if module.address == "self" else f"{module.address}.{child_name}"
     try:
         child = trace.modules[child_address]
