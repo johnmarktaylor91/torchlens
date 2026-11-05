@@ -113,6 +113,26 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     )
 
 
+def _refuse_gradient_module_focus(graph: str, module: Any) -> None:
+    """Refuse ``module=`` on a backward or combined graph instead of ignoring it.
+
+    Module focus is a forward-graph view; the backward and combined renderers
+    draw every grad_fn, so honouring the call silently drew the whole model.
+    """
+
+    if module is None or graph == "forward":
+        return
+    raise InvalidArgumentError(
+        f"module= focuses the forward graph only; graph={graph!r} draws the whole backward graph",
+        code="visualization_mode_invalid",
+        remedy=(
+            f"drop module= to draw graph={graph!r}, or draw graph='forward' with "
+            "module= to focus one module"
+        ),
+        argument="module",
+    )
+
+
 def _draw_policy(
     graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
 ) -> dict[str, Any]:
@@ -129,9 +149,12 @@ def _draw_policy(
 
 
 def _require_graph_kind(
-    graph: str, show_containers: ShowContainersLiteral, show_edge_shapes: bool
+    graph: str, show_containers: ShowContainersLiteral, show_edge_shapes: bool, module: Any
 ) -> None:
-    """Refuse a ``graph=`` value other than forward, backward or combined."""
+    """Refuse a ``graph=`` value other than forward, backward or combined.
+
+    Also refuses ``module=`` on a backward or combined graph.
+    """
 
     _validate_draw_flag_options(show_containers, show_edge_shapes=show_edge_shapes)
     if graph not in ("forward", "backward", "combined"):
@@ -141,6 +164,7 @@ def _require_graph_kind(
             remedy="pass graph='forward', 'backward', or 'combined'",
             argument="graph",
         )
+    _refuse_gradient_module_focus(graph, module)
 
 
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
@@ -203,7 +227,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
 
         return draw_view(trace, view, explicit_draw_kwargs(draw, locals()), honesty_banner_lines)
 
-    _require_graph_kind(graph, show_containers, show_edge_shapes)
+    _require_graph_kind(graph, show_containers, show_edge_shapes, module)
     num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     target = resolve_draw_target(path, file_format, _KNOWN_EXTS)

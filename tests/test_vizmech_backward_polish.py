@@ -1,8 +1,8 @@
 """Vizmech wave-2 item 17: backward-view polish (D30).
 
 Pins:
-- uniform constant rows are suppressed: ``grad N/A`` on every node (the
-  memo's x36), ``order 1`` when no node exceeds order 1, ``bwd 1`` on
+- uniform constant rows are suppressed: a node with no stored gradient
+  prints no ``grad`` row, ``order 1`` when no node exceeds order 1, ``bwd 1`` on
   single-pass captures -- ink, not information;
 - a mixed render KEEPS its rows (order rows return the moment a second-order
   node exists);

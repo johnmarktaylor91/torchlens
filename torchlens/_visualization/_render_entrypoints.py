@@ -60,6 +60,10 @@ def _emit_backward_key(
             has_custom=inventory.has_custom,
             num_backward_passes=inventory.num_backward_passes,
         ),
+        # Measured cell widths with margin: the key's tight cells let the
+        # longest row run past the border in a viewer face wider than the
+        # layout measurement.
+        fit=True,
     )
 
 
