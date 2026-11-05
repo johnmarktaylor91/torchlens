@@ -69,12 +69,16 @@ def test_empty_lines_node_spec_renders_an_empty_label(cat_trace: tl.Trace, tmp_p
         spec.shape = "circle"
         return spec
 
-    dot = str(cat_trace.draw(str(tmp_path / "g"), file_format="gv", node_spec_fn=dots).dot)
+    dot = str(
+        cat_trace.draw(
+            str(tmp_path / "g"), file_format="gv", node_spec_fn=dots, show_arg_labels=False
+        ).dot
+    )
+    node_lines = [line for line in dot.splitlines() if "label=" in line and "->" not in line]
+    assert node_lines and all('label=""' in line for line in node_lines), node_lines
     assert "<TABLE" not in dot
-    assert 'label=""' in dot
     if shutil.which("dot") is None:
         pytest.skip("Graphviz is not installed")
     # Graphviz accepts the source: an empty HTML table used to be a syntax error.
-    out = cat_trace.draw(str(tmp_path / "g.svg"), node_spec_fn=dots)
-    assert Path(str(tmp_path / "g.svg")).exists()
-    assert "<TABLE" not in str(out.dot)
+    cat_trace.draw(str(tmp_path / "g.svg"), node_spec_fn=dots, show_arg_labels=False)
+    assert (tmp_path / "g.svg").exists()
