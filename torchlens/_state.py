@@ -594,10 +594,9 @@ Read/written only through the helpers below during ``_prepare_model_once``.
 _stale_prepared_roots: "weakref.WeakSet[Any]" = weakref.WeakSet()
 """Prepared root models whose cached role metadata is known to be stale.
 
-A root lands here when some module in its subtree is later re-prepared under a
-DIFFERENT root (role swap). ``_prepare_model_once`` treats a stale root as
-un-prepared for the fast-path check and re-establishes its tree's addresses
-before clearing the staleness flag.
+A root lands here when some module in its subtree is later re-prepared under a DIFFERENT root (role
+swap). ``_prepare_model_once`` treats a stale root as un-prepared for the fast-path check and
+re-establishes its tree's addresses before clearing the staleness flag.
 """
 
 
@@ -779,37 +778,34 @@ class ReentrantTraceError(CaptureError, RuntimeError):
 _capture_reserved_by: int | None = None
 """Thread ident holding the pre-admission capture RESERVATION, or ``None``.
 
-The admission lock makes ``active_logging`` publication atomic, but a capture's
-GLOBAL side effects start earlier: model preparation swaps the per-capture label
-session and ``tl.record`` installs the fastlog ``RecordingState`` BEFORE the
-forward reaches admission. A concurrent capture that is ultimately REFUSED
-therefore used to degrade the admitted winner's data quality (runtime-probed:
-orphaned label stamps, ``capture_verified=False``). ``capture_reservation()``
-moves the typed refusal in front of those side effects: the reservation is
-claimed under ``_capture_admission_lock`` before any capture-global mutation,
-``active_logging`` admits only the reserving thread (or an unreserved caller),
-and the loser's ``ReentrantTraceError`` fires before it can touch shared state.
+The admission lock makes ``active_logging`` publication atomic, but a capture's GLOBAL side effects
+start earlier: model preparation swaps the per-capture label session and ``tl.record`` installs the
+fastlog ``RecordingState`` BEFORE the forward reaches admission. A concurrent capture that is
+ultimately REFUSED therefore used to degrade the admitted winner's data quality (runtime-probed:
+orphaned label stamps, ``capture_verified=False``). ``capture_reservation()`` moves the typed
+refusal in front of those side effects: the reservation is claimed under ``_capture_admission_lock``
+before any capture-global mutation, ``active_logging`` admits only the reserving thread (or an
+unreserved caller), and the loser's ``ReentrantTraceError`` fires before it can touch shared state.
 Written only under the admission lock; never read on the wrapper hot path.
 """
 
 _capture_admission_lock = threading.Lock()
 """Serializes capture ADMISSION and teardown bookkeeping (never the forward).
 
-``active_logging`` reads the "is a capture already running?" predicate and then
-publishes ``_active_trace`` / ``_active_owner_thread_id`` / ``_logging_enabled``.
-Those are separate bytecodes: without a lock two threads entering together can
-both pass the check, and the loser overwrites the winner's owner id -- after
-which the winner's ops are dropped by the owner-thread fast path and its Trace
-is silently short. Holding this lock across check-then-publish makes admission
-atomic, so exactly one of N racing captures is admitted and the rest get the
-documented ``ReentrantTraceError``. It is held for a handful of assignments
-once per capture (never for the forward pass, never around user code), so it
-costs nothing measurable and cannot deadlock: no other lock is acquired under
-it, and it is never re-entered (a nested capture is refused before publishing).
+``active_logging`` reads the "is a capture already running?" predicate and then publishes
+``_active_trace`` / ``_active_owner_thread_id`` / ``_logging_enabled``. Those are separate
+bytecodes: without a lock two threads entering together can both pass the check, and the loser
+overwrites the winner's owner id -- after which the winner's ops are dropped by the owner-thread
+fast path and its Trace is silently short. Holding this lock across check-then-publish makes
+admission atomic, so exactly one of N racing captures is admitted and the rest get the documented
+``ReentrantTraceError``. It is held for a handful of assignments once per capture (never for the
+forward pass, never around user code), so it costs nothing measurable and cannot deadlock: no other
+lock is acquired under it, and it is never re-entered (a nested capture is refused before
+publishing).
 
-The wrapper hot path deliberately does NOT take this lock -- it reads the
-published globals unsynchronized, exactly as before. The lock closes the
-admission race, not the (documented, unsupported) concurrent-capture case.
+The wrapper hot path deliberately does NOT take this lock -- it reads the published globals
+unsynchronized, exactly as before. The lock closes the admission race, not the (documented,
+unsupported) concurrent-capture case.
 """
 
 
@@ -856,14 +852,12 @@ def _capture_conflict_is_live() -> bool:
 _capture_reservation_token: object | None = None
 """Opaque continuation token minted with the live reservation claim.
 
-Same-thread re-entry into ``capture_reservation`` is sanctioned for exactly
-one caller: the capture orchestration invoked BY the reserving recorder pass,
-which receives this token from the recorder and presents it back. A nested
-PUBLIC capture entered from user code running inside the reserved window
-(input-walk container protocols, model-prep hooks, tensor-subclass
-``__torch_function__`` during input setup) holds no token, so the thread-ident
-check alone must never admit it (R55: both captures used to COMPLETE).
-Written only under the admission lock.
+Same-thread re-entry into ``capture_reservation`` is sanctioned for exactly one caller: the capture
+orchestration invoked BY the reserving recorder pass, which receives this token from the recorder
+and presents it back. A nested PUBLIC capture entered from user code running inside the reserved
+window (input-walk container protocols, model-prep hooks, tensor-subclass ``__torch_function__``
+during input setup) holds no token, so the thread-ident check alone must never admit it (R55: both
+captures used to COMPLETE). Written only under the admission lock.
 """
 
 
@@ -1406,3 +1400,9 @@ def wrap_epoch_ledgers() -> "tuple[dict[int, Callable[..., Any]], dict[int, Call
     """
 
     return _decorated_to_orig, _orig_to_decorated
+
+
+def internal_reads_pass_through() -> bool:
+    """Whether a wrapped pure tensor read would only pass through its wrapper right now."""
+    off = not _logging_enabled and _active_fast_run_collector is None
+    return off and (_call_fingerprint is None or _pause_depth > 0)
