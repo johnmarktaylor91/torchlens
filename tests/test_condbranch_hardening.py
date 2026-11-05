@@ -226,15 +226,22 @@ class PredicateReuseModel(nn.Module):
 
 
 def test_predicate_reuse_materializes_every_branch_consumer() -> None:
-    """Both ifs gated by one bool are recorded, each with its own arm roles."""
+    """Both ifs gated by one bool are recorded, each with its own arm roles.
+
+    The second ``if`` tests the bool through its own capture record (a ``clone``
+    logged at the test), so each conditional owns one terminal bool (validation.10).
+    """
 
     trace = _log_model(PredicateReuseModel(), torch.ones(2, 2))
 
     assert len(trace.graph.conditional_records) == 2
     events = sorted(trace.graph.conditional_records, key=lambda event: event.id)
     bool_layer = _find_only_layer(trace, "all")
-    for event in events:
-        assert event.bool_layers == [bool_layer.layer_label]
+    second_test = _find_only_layer(trace, "clone")
+    assert events[0].bool_layers == [bool_layer.layer_label]
+    assert events[1].bool_layers == [second_test.layer_label]
+    assert list(second_test.parent_layers) == [bool_layer.layer_label]
+    assert second_test.terminal_conditional_id == events[1].id
 
     relu_layer = _find_only_layer(trace, "relu")
     sigmoid_layer = _find_only_layer(trace, "sigmoid")
@@ -242,11 +249,13 @@ def test_predicate_reuse_materializes_every_branch_consumer() -> None:
     assert list(sigmoid_layer.control_flow.branch_stack) == [(events[1].id, "then")]
     assert {conditional.fired_arm_kind for conditional in trace.graph.conditionals} == {"then"}
 
-    # The shared bool keeps a deterministic primary conditional id.
     assert bool_layer.terminal_conditional_id == events[0].id
     assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert second_test.control_flow.is_terminal_conditional_bool is True
 
-    _assert_no_false_fired(trace, {"relu", "sigmoid", "all", "__gt__", "mul", "add"}, set())
+    _assert_no_false_fired(
+        trace, {"relu", "sigmoid", "all", "clone", "__gt__", "mul", "add"}, set()
+    )
     _assert_bool_value_never_contradicts_fired(trace)
 
 
