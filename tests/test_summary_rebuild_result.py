@@ -108,3 +108,47 @@ def test_to_pandas_scope_all_serves_op_grain() -> None:
     assert len(frame) == len(report.rows)
     with pytest.raises(InvalidArgumentError):
         report.to_pandas(scope="everything")
+
+
+def test_parent_compute_row_uses_subtree_macs_like_flops() -> None:
+    """A container's MAC cell describes the same population as its FLOP cell."""
+
+    model = nn.Sequential(
+        nn.Sequential(nn.Linear(4, 8, bias=False), nn.ReLU()),
+        nn.Linear(8, 2, bias=False),
+    )
+    trace = tl.trace(model, torch.ones(2, 4))
+    report = trace.summary(view="compute", units="raw", level="module", fold_repeats=False)
+    parent = next(row for row in report._rebuilt.visible_rows if row.class_name == "Sequential")
+    assert parent.macs_display == 64
+    assert parent.macs_owned == 0
+    line = next(line for line in str(report).splitlines() if line.startswith("0 (Sequential)"))
+    cells = re.split(r"\s{2,}", line)
+    assert cells[4] == "64"
+    trace.cleanup()
+
+
+def test_compute_footer_does_not_upgrade_estimated_evidence() -> None:
+    """Known compute counts can include estimates; coverage is not exactness."""
+
+    model = nn.Sequential(nn.Conv2d(3, 4, 1), nn.BatchNorm2d(4), nn.AdaptiveAvgPool2d(1))
+    trace = tl.trace(model.eval(), torch.ones(1, 3, 4, 4))
+    report = trace.summary(view="compute")
+    assert any(row.evidence == "estimated" for row in report._rebuilt.visible_rows)
+    footer = next(line for line in str(report).splitlines() if line.startswith("Compute"))
+    assert "3/3 ops known" in footer
+    assert "formula-exact" not in footer
+    assert "formula-exact" not in report.render("html")
+    trace.cleanup()
+
+
+def test_compute_pointer_shows_only_when_macs_are_absent() -> None:
+    """The footer points to view='compute' only while the table lacks a macs column."""
+
+    trace = tl.trace(_Toy(), torch.ones(2, 8))
+    overview = str(trace.summary()).splitlines()[-1]
+    compute = trace.summary(view="compute")
+    assert "view='compute' for per-row MACs" in overview
+    assert str(compute).splitlines()[-1] == "more     result.details() | docs/reference/summary.md"
+    assert "per-row MACs" not in compute.render("html")
+    trace.cleanup()

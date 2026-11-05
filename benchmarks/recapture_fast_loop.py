@@ -137,14 +137,14 @@ def _benchmark_model(
             cache=False,
         ),
     )
-    trace.run(inputs=inputs, fast=True)
+    trace.run_transaction(inputs=inputs, fast=True)
 
     with tempfile.TemporaryDirectory(prefix=f"torchlens-{name}-fast-") as directory:
         artifact = Path(directory) / "model.tlspec"
         trace.save(artifact, level="runnable")
         loaded = tl.load(artifact)
         loaded.load_state_dict(live_model.state_dict())
-        verified = loaded.run(inputs=inputs, fast=True)
+        verified = loaded.run_transaction(inputs=inputs, fast=True)
         if verified.report.path_faithfulness.value != "verified":
             raise RuntimeError(
                 f"{name} verify-once run settled {verified.report.path_faithfulness.value!r}."
@@ -153,8 +153,8 @@ def _benchmark_model(
             {
                 "raw": lambda: raw_model(inputs),
                 "hooks": lambda: hook_model(inputs),
-                "live": lambda: trace.run(inputs=inputs, fast=True),
-                "sparse": lambda: loaded.run(inputs=inputs, fast=True),
+                "live": lambda: trace.run_transaction(inputs=inputs, fast=True),
+                "sparse": lambda: loaded.run_transaction(inputs=inputs, fast=True),
             },
             warmup=warmup,
             repeats=repeats,

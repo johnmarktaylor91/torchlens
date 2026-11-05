@@ -8,6 +8,7 @@ torch.
 
 from __future__ import annotations
 
+import json
 import sys
 import textwrap
 from pathlib import Path
@@ -280,6 +281,22 @@ def test_an_assignment_target_is_not_a_gone_keyword(tmp_path: Path) -> None:
     assert _stale_locations(findings) == set()
 
 
+def test_an_unpacking_target_or_a_semicolon_statement_is_not_a_gone_keyword(tmp_path: Path) -> None:
+    """``model, log = ...`` and ``seed(0); log = ...`` assign; nothing is passed."""
+
+    base, head = _inventory(TRACE, LOG_PARAM), _inventory(TRACE)
+    notebook = '{"cells": [{"source": [\n    "import torch\\n",\n    "    model, log = ZOO[\\"tiny\\"]()\\n"\n]}]}\n'
+    (tmp_path / "notebooks/audit").mkdir(parents=True)
+    (tmp_path / "notebooks/audit/a.ipynb").write_text(notebook, encoding="utf-8")
+    corpus = _corpus(
+        tmp_path,
+        glossary="Seed it via `torch.manual_seed(0); log = tl.trace(model)`.\n",
+        example="m, log = factory()\nfor m, log in pairs:\n    pass\n",
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == set()
+
+
 def test_a_keyword_argument_still_reports_on_one_line_split_or_in_prose(tmp_path: Path) -> None:
     """``log=True`` inside a call, on a continuation line, in a notebook or in backticks."""
 
@@ -541,3 +558,70 @@ def test_notebook_code_strings_are_text_but_code_and_markdown_still_report(
         "notebooks/audit/a.ipynb:8",
         "notebooks/audit/a.ipynb:15",
     }
+
+
+# --- notebook stored outputs are not spellings ---------------------------------------
+
+X_PARAM = _row("param:x", "param", "x", "x=", "f-x", uses=["tl.trace"])
+
+
+def _notebook_with_svg_output(code: list[str]) -> str:
+    """Return an nbformat notebook: one code cell with ``code`` and an SVG figure output."""
+
+    output = {
+        "data": {
+            "image/svg+xml": [
+                '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40">\n',
+                ' <text x="12.5" y="20">loss</text>\n',
+                ' <use x="59.384" y="202.84"/>\n',
+                "</svg>\n",
+            ],
+            "text/plain": ["<Figure size 80x40>"],
+        },
+        "metadata": {},
+        "output_type": "display_data",
+    }
+    cell = {
+        "cell_type": "code",
+        "execution_count": 1,
+        "id": "c1",
+        "metadata": {},
+        "outputs": [output],
+        "source": code,
+    }
+    notebook = {"cells": [cell], "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    return json.dumps(notebook, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def _svg_corpus(root: Path, code: list[str]) -> tuple[check.Corpus, list[str]]:
+    """Write the SVG notebook into ``examples/`` and return the corpus and its lines."""
+
+    text = _notebook_with_svg_output(code)
+    path = root / "examples/figure.ipynb"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    corpus = _corpus(root, glossary="Nothing.\n", example="y = 1\n")
+    return corpus, text.splitlines()
+
+
+def test_a_gone_keyword_in_a_notebook_output_cell_is_not_residue(tmp_path: Path) -> None:
+    """An SVG ``x="..."`` attribute in a stored output is not the gone ``x=`` keyword."""
+
+    base, head = _inventory(TRACE, X_PARAM), _inventory(TRACE)
+    corpus, lines = _svg_corpus(tmp_path, ["import torchlens as tl\n", "fig = plot(trace)\n"])
+    assert any('x=\\"59.384\\"' in line for line in lines)
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == set()
+
+
+def test_a_gone_keyword_in_a_notebook_code_cell_still_reports_beside_an_output(
+    tmp_path: Path,
+) -> None:
+    """``tl.trace(model, x=...)`` in cell source reports; the SVG output beside it does not."""
+
+    base, head = _inventory(TRACE, X_PARAM), _inventory(TRACE)
+    code = ["import torchlens as tl\n", "log = tl.trace(model, x=batch)\n"]
+    corpus, lines = _svg_corpus(tmp_path, code)
+    call = next(n for n, line in enumerate(lines, start=1) if "tl.trace(model, x=batch)" in line)
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {f"examples/figure.ipynb:{call}"}

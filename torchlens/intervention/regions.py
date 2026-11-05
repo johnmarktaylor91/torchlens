@@ -1039,7 +1039,7 @@ def apply_region_do(
             )
         execution_order = {label: index for index, label in enumerate(graph.order)}
         for child_label in sorted(by_child, key=execution_order.__getitem__):
-            replay_module.push_from(trace, graph.ops[child_label])
+            replay_module.replay_from_op(trace, graph.ops[child_label])
     except BaseException:
         for child_op, store_key in committed:
             store = dict(getattr(child_op, "edge_substitutions", None) or {})

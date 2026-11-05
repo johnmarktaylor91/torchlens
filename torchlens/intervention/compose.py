@@ -81,8 +81,8 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "declared helper specs only (a bare callable's kind, flags, and "
                 "seed posture are undeclarable)",
                 code="compose_leaf_invalid",
-                remedy="wrap the transform as a helper (or attach the callable "
-                "separately through attach_hooks)",
+                remedy="wrap the transform as a helper (or stage the callable "
+                "separately, one do call per callable on the same site)",
                 argument="edits",
             )
         if leaf.factory is None:

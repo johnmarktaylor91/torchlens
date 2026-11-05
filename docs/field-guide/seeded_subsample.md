@@ -2,7 +2,7 @@
 task: Draw a reproducible subsample before extracting features
 one_liner: Draw the subsample yourself with a seeded generator and pass the original ids, so the artifact names the items it holds.
 canonical: tl.extract_dataset(model, stimuli[chosen], sites, path="subsample", stimulus_ids=ids)
-avoid: "Looking for sample_size= or seed= on tl.extract_dataset: it has neither, and the manifest records ids, not seeds."
+avoid: "sample_size= or seed=: neither exists; the manifest records ids."
 tier: kit
 doors: [neuroai, vision]
 related: []
@@ -22,7 +22,7 @@ seed it cannot see.
 ## Minimal example on the running model
 
 This page uses [ResNet-18 on one
-image](running_examples.md#resnet-18-on-one-image). A subsample is a seeded
+image](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/running_examples.md#resnet-18-on-one-image). A subsample is a seeded
 choice of stimuli handed to `tl.extract_dataset`; here four of eight images go through the
 running CNN. The recipe below builds its own model for the method.
 

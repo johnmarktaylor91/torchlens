@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..._record_type import record_type
-from ..._utils.display import format_flops, human_readable_size
+from ..._utils.display import format_flops
+from ..._visualization._label_format import binary_size
 
 __tl_layer__ = "L8"
 
@@ -205,7 +206,7 @@ def _bytes_string(value: Any) -> str | None:
 
     if value is None:
         return None
-    return human_readable_size(int(value))
+    return binary_size(int(value))
 
 
 def _params_string(entry: Any) -> str | None:
@@ -217,7 +218,7 @@ def _params_string(entry: Any) -> str | None:
     param_memory = getattr(entry, "param_memory", None)
     if param_memory is None:
         return str(num_params)
-    return f"{num_params} ({human_readable_size(int(param_memory))})"
+    return f"{num_params} ({binary_size(int(param_memory))})"
 
 
 def _flops_string(value: Any) -> str | None:

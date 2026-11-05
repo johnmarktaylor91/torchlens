@@ -12,10 +12,14 @@ from __future__ import annotations
 
 from typing import NoReturn
 
-from ..errors._base import CompatibilityError
+from ..errors._base import CompatibilityError, ConfigurationError
 
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
+
+#: Remedy for a tensor with no saved-format payload codec (a sparse or other
+#: non-strided layout): the ``metadata_value_unportable`` save refusal carries it.
+DENSE_REMEDY = 'make the tensor dense and strided before the save, or save at level="audit"'
 
 
 class ArtifactError(CompatibilityError, RuntimeError):
@@ -31,9 +35,9 @@ class ArtifactError(CompatibilityError, RuntimeError):
 
 
 class ArtifactTooOldError(ArtifactError):
-    """Raised when an artifact was saved by torchlens 2.x, which this release does not read.
+    """Raised when an artifact was saved by torchlens 2.37 and earlier, which this release does not read.
 
-    Any stamp older than the current ``tlspec_version``, any pickled 2.x module path and the
+    Any stamp older than the current ``tlspec_version``, any pickled pre-2.38 module path and the
     2.16 ModelLog format refuse with this error rather than being partially reconstructed;
     the remedy is to load the file with torchlens 2.36.x or capture the model again.
 
@@ -154,11 +158,27 @@ def refuse_bundle_exists(path: object, *, overwritable: bool = False) -> NoRetur
     )
 
 
-def refuse_missing_blobs(blob_ids: list[str]) -> NoReturn:
+def refuse_missing_blobs(blob_ids: list[str], *, file_path: str | None = None) -> NoReturn:
     """Raise the ``bundle_blob_missing`` refusal for a manifest whose blob files are gone."""
 
     raise ArtifactError(
         f"Bundle manifest references missing blob files for blob_id(s): {', '.join(blob_ids)}.",
         code="bundle_blob_missing",
         remedy="restore the missing blob files, or re-save the bundle from its source capture",
+        file_path=file_path,
     )
+
+
+class OpaqueCallableError(ConfigurationError, ValueError):
+    """Raised when an executable intervention save would require opaque code.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.OpaqueCallableError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(tl.errors.OpaqueCallableError, ValueError)
+    True
+    """
+
+
+OpaqueCallableError.__module__ = "torchlens.intervention.errors"

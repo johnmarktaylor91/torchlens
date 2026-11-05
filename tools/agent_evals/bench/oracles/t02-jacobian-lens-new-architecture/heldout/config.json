@@ -1,0 +1,18 @@
+{
+  "weight_seed": 20261029,
+  "vocab_size": 256,
+  "width": 64,
+  "n_blocks": 6,
+  "max_seq_len": 64,
+  "skip_first_positions": 8,
+  "source_layers": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "target_layer": 5,
+  "readout_top_k": 10,
+  "dtype": "float32"
+}

@@ -3,7 +3,11 @@
 `tl.debug` inspects a completed trace when the graph itself is the diagnostic: it can
 locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
 recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
-with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
+with the normal `tl.trace(...)` API, then pass the resulting trace to a helper. A helper that
+takes `inputs` itself (`bisect_precision`, `check_determinism`, `find_nan`, `graph_breaks`,
+`isolated_capture`, `nonfinite_origin`, `tl.report.flops_vs_dispatch`) takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL
+image or modality dict, resolved as the trace resolves it.
 
 ## The report object (`Report`)
 
@@ -335,7 +339,7 @@ print(report.columns.tolist())
 Output:
 
 ```text
-['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
+['op', 'module', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
 ```
 
 ## `dtype_range`
@@ -381,9 +385,8 @@ sync per device (replacing the historical per-op `.item()`), `stage` +
 stamps. Under AMP the saved gradients are SCALED: pass `grad_scale=` (one
 factor) or `grad_scales=` (per-backward mapping); unknown provenance yields
 `unknown` magnitude verdicts in the `verdict` column, never a silent
-pass-as-1.0. `basis="total_norm"` keeps the legacy classification for one
-deprecation cycle; the `basis="rms"` flip is announced in `report.attrs` and
-gated on the multi-model calibration runs.
+pass-as-1.0. `basis="total_norm"` (the default) classifies on each gradient's
+total norm; `basis="rms"` classifies on `norm/sqrt(numel)`.
 
 ```python
 import torch

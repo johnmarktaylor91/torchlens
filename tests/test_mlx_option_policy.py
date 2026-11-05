@@ -19,7 +19,7 @@ def _valid_mlx_options() -> dict[str, Any]:
     """Return default MLX options accepted by the central policy helper."""
 
     return {
-        "layers_to_save": "all",
+        "save": "all",
         "activation_transform": None,
         "detach_saved_activations": False,
         "save_args": False,
@@ -38,7 +38,7 @@ def _valid_mlx_options() -> dict[str, Any]:
 @pytest.mark.parametrize(
     ("option_name", "value"),
     [
-        ("layers_to_save", ["linear_1_1"]),
+        ("save", ["linear_1_1"]),
         ("activation_transform", lambda value: value),
         ("output_device", "cpu"),
     ],

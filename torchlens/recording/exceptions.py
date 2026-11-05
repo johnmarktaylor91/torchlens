@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from ..errors._base import CaptureError, ConfigurationError
 
@@ -44,6 +44,18 @@ class RecorderStateError(CaptureError, RuntimeError):
     >>> issubclass(RecorderStateError, tl.errors.TorchLensError)
     True
     """
+
+
+def refuse_recorder_uninitialized(problem: str) -> NoReturn:
+    """Raise ``recorder_state_uninitialized`` for a recorder read before it was entered."""
+
+    remedy = (
+        "enter the recorder context (with tl.Recorder(...) as recorder) before reading it; "
+        "if dry_run built the recorder, report it as a TorchLens bug"
+    )
+    raise RecorderStateError(
+        f"{problem}. Remedy: {remedy}.", code="recorder_state_uninitialized", remedy=remedy
+    )
 
 
 class RecoveryError(CaptureError, RuntimeError):

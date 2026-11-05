@@ -1,6 +1,6 @@
 """Early stop (``until=``) for the guarded fast live run.
 
-``trace.run(inputs=x, until=site, fast=True)`` runs the native forward only as
+``trace.run_transaction(inputs=x, until=site, fast=True)`` runs the native forward only as
 far as ``site``: the collection hook of the stop site raises
 :class:`FastUntilReached` once the site's output is collected, which cuts the
 forward there, so nothing downstream executes. Every saved site before the stop

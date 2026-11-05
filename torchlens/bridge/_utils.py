@@ -8,6 +8,7 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from .._data_classes._lookup_kinds import op_at
 from .._errors import InvalidArgumentError
 
 
@@ -71,9 +72,10 @@ def resolve_one_site(log: Any, site: Any) -> Any:
         return resolved.first()
     except SiteResolutionError:
         if isinstance(site, str):
-            # Module dotted paths and other getitem-only spellings: the
-            # trace lookup teaches its own error when this also misses.
-            return log[site]
+            # Module dotted paths and other getitem-only spellings: the output
+            # Op of the record the key names; the trace lookup teaches its own
+            # error when this also misses.
+            return op_at(log, site)
         raise
 
 

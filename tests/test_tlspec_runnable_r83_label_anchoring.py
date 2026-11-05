@@ -118,7 +118,7 @@ def _run_artifact(
     with _allow_break_marker():
         trace = tl.trace(model, capture_input, capture=_CAPTURE)
     trace.save(path, level="runnable", include_weights=True)
-    return tl.load(path).run(inputs=run_input)
+    return tl.load(path).run_transaction(inputs=run_input)
 
 
 def _assert_not_falsely_verified(result: Any, oracle: torch.Tensor) -> None:

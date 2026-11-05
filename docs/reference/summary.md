@@ -121,6 +121,10 @@ column names (`name`, `state`, `n`, `mean`, `sd`, `min`, `max`, `zero_count`, `n
 
 ## Columns
 
+Percentage cells use numbers without glyph bars. A single footer explains any
+markers present: `*` for tied weights, `^` for SDPA full-square FLOPs, and `×N`
+for repeated modules, passes, or output shapes.
+
 `columns=` takes a bundle name (`"overview"`, `"compute"`, `"stats"`), an exact
 ordered list, or `+name` / `-name` deltas on the view's bundle. A `+name`
 lands at its registry position (`+input` before `output`, `+flops_pct`
@@ -138,7 +142,7 @@ beside `fwd flops`).
 | `params_trainable` | `trainable` | trainable parameters per module path (a count) |
 | `flops` | `fwd flops` | forward FLOPs under `flop_convention` |
 | `flops_pct` | `(%)` | share of the whole-model known forward FLOPs |
-| `macs` | `macs` | MACs the row owns |
+| `macs` | `macs` | MACs in the displayed row and its descendants |
 | `train` | `train` | `yes` / `no` / `partial` over `requires_grad` (auto-shown when trainability is mixed) |
 | `mode` | `mode` | `train` / `eval` from `module.training` as captured; `mixed` when the row's modules disagree |
 | `passes` | `passes` | call count |
@@ -212,13 +216,13 @@ shared honesty chokepoint, and the footer's five subjects (Params /
 Compute / Memory / Graph / Capture) carry coverage, both payload scopes
 (`at capture` vs `retained now`), and the health verdict.
 
-The Params footer also carries the parameter storage (`size 5.6 KB`); on
+The Params footer also carries the parameter storage (`size 5.42 KiB`); on
 a model pruned with `torch.nn.utils.prune` it names the pruned tensors
 with raw and effective nonzero counts (`pruned: 3,016 effective nonzero
 of 3,124 raw (108 masked in conv.weight)`); and when the capture was
 given an optimizer (`tl.trace(model, x,
 capture=tl.options.CaptureOptions(optimizer=opt))`) it adds
-`optimizer state N params, X KB`, read from the optimizer's live state
+`optimizer state N params, X KiB`, read from the optimizer's live state
 (zero before the first `step()`).
 
 ## Performance

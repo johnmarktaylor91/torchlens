@@ -111,7 +111,7 @@ def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
     }
     assert "bn.num_batches_tracked" in slot_names
 
-    result = loaded.run(inputs=x.clone())
+    result = loaded.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
 

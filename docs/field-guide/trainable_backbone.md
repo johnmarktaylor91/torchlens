@@ -2,7 +2,7 @@
 
 Feature-extractor libraries let you cut a pretrained network at a stage and
 fine-tune the prefix. TorchLens does the same from one trace: trace the model
-once, then call `trace.run(inputs=x, until=site, fast=True)` inside the
+once, then call `trace.run_transaction(inputs=x, until=site, fast=True)` inside the
 training loop. The native forward stops right after `site`, nothing
 downstream runs, and the site's output comes back graph-connected, so the
 loss backpropagates into every parameter upstream of the cut.
@@ -10,7 +10,7 @@ loss backpropagates into every parameter upstream of the cut.
 ## Minimal example on the running model
 
 This page uses [ResNet-18 on one
-image](running_examples.md#resnet-18-on-one-image). `trace.run(..., until=site)`
+image](running_examples.md#resnet-18-on-one-image). `trace.run_transaction(inputs=..., until=site)`
 reruns the forward only up to a site; this stops the running CNN at `layer2`. The recipe below
 builds its own model for the method.
 
@@ -27,7 +27,7 @@ x = torch.rand(1, 3, 224, 224)
 
 trace = tl.trace(model, x)
 
-result = trace.run(inputs=x, until="layer2", fast=True)
+result = trace.run_transaction(inputs=x, until="layer2", fast=True)
 RESULT = torch.equal(result.trace["layer2"].out, trace["layer2"].out)
 ```
 
@@ -53,7 +53,7 @@ optimizer = torch.optim.SGD([*backbone.parameters(), *head.parameters()], lr=0.0
 losses = []
 for step in range(15):
     optimizer.zero_grad()
-    result = trace.run(inputs=images, until="layer2", fast=True)
+    result = trace.run_transaction(inputs=images, until="layer2", fast=True)
     features = result.trace["layer2"].out.mean(dim=(2, 3))  # global average pool
     loss = nn.functional.cross_entropy(head(features), labels)
     loss.backward()

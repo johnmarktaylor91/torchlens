@@ -1,0 +1,14 @@
+[
+  {
+    "text": "The capital city of Italy is",
+    "subject_start": 20,
+    "subject_end": 25,
+    "correct_token": " Rome"
+  },
+  {
+    "text": "The country whose capital is Berlin is",
+    "subject_start": 29,
+    "subject_end": 35,
+    "correct_token": " Germany"
+  }
+]

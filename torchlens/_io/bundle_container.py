@@ -26,8 +26,11 @@ from .bundle_metadata import (
     _load_lineage_sections,
     _partition_bundle_sections,
 )
+from .format3 import contract as format3_contract
+from .format3.container import verify_member_reference
 
 _CEILING_CODE = _bundle_module._OPCODE_CEILING_CODE
+_MANIFEST_SCHEMA_CODE = format3_contract.REFUSAL_CODES["manifest_invalid"]
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
@@ -223,6 +226,7 @@ def _load_bundle_member_traces(
                 f"Unified bundle member {name!r} forms a load cycle: its path "
                 f"{relative_path!r} re-enters an in-progress bundle directory."
             )
+        verify_member_reference(member_path, entry, required=False)
         loaded = _bundle_module.load(
             member_path, _bundle_visited=next_visited, **(member_load_options or {})
         )
@@ -303,14 +307,40 @@ def _load_unified_bundle_directory(
         bundle_path, raw_members, next_visited, context.member_load_options
     )
 
+    return assemble_bundle(
+        members,
+        metadata,
+        tlspec_version=context.tlspec_version,
+        unknown_relations=unknown_relations,
+    )
+
+
+def assemble_bundle(
+    members: dict[str, Trace],
+    metadata: dict[str, Any],
+    *,
+    tlspec_version: Any,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
+) -> Bundle:
+    """Build a ``Bundle`` from its loaded members and the sections of its metadata object.
+
+    Writer-owned keys are bare; an unknown bare key refuses (``bundle_section_unknown``),
+    namespaced keys load opaque and re-save verbatim, member relations are checked against
+    the loaded member names, and the lineage sections restore verbatim (a pre-F03 artifact
+    reads as origin ``loaded``).
+    """
+
     from ..bundle import Bundle
 
     baseline_name = metadata.get("baseline_name")
     if baseline_name is not None and not isinstance(baseline_name, str):
-        raise ArtifactError("Unified bundle baseline_name must be a string or null.")
+        raise ArtifactError(
+            "Unified bundle baseline_name must be a string or null.",
+            code=_MANIFEST_SCHEMA_CODE,
+        )
     preserved_sections = _partition_bundle_sections(metadata)
     member_relations = _load_gated_member_relations(
-        metadata, unknown_relations=unknown_relations, tlspec_version=context.tlspec_version
+        metadata, unknown_relations=unknown_relations, tlspec_version=tlspec_version
     )
     lineage = _load_lineage_sections(metadata, member_names=list(members))
     loaded_bundle = Bundle(
@@ -321,8 +351,6 @@ def _load_unified_bundle_directory(
         bundle_id=lineage["bundle_id"],
     )
     loaded_bundle._forked_from_bundle_id = lineage["forked_from_bundle_id"]
-    # Anchors restore verbatim when persisted; a pre-F03 artifact carries no
-    # construction evidence, which reads honestly as origin="loaded".
     anchors = lineage["member_construction"]
     if anchors is None:
         anchors = {name: {"origin": "loaded"} for name in members}

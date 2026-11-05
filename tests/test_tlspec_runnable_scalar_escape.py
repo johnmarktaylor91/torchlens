@@ -90,7 +90,7 @@ def _assert_not_blessed(report) -> None:
 def test_item_scale_changed_input_is_unverifiable_not_attested(tmp_path: Path) -> None:
     path = _save_runnable(DDScale(), torch.tensor([2.0, 2.0]), tmp_path / "dd.tlspec")
 
-    result = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]))
+    result = tl.load(path).run_transaction(inputs=torch.tensor([10.0, 10.0]))
 
     _assert_not_blessed(result.report)
     # The stale baked literal (s=2) yields [20, 20]; the honest report refuses to
@@ -101,7 +101,7 @@ def test_item_scale_changed_input_is_unverifiable_not_attested(tmp_path: Path) -
 def test_scalar_free_model_changed_input_unchanged(tmp_path: Path) -> None:
     path = _save_runnable(ScalarFree(), torch.tensor([1.0, -2.0]), tmp_path / "sf.tlspec")
 
-    result = tl.load(path).run(inputs=torch.tensor([3.0, -5.0]))
+    result = tl.load(path).run_transaction(inputs=torch.tensor([3.0, -5.0]))
 
     # No tensor-derived-scalar dependency: a deterministic scalar-free model stays
     # VERIFIED on a changed input (the taken path is faithful).
@@ -129,7 +129,7 @@ def test_dead_scalar_sink_not_over_triggered(tmp_path: Path) -> None:
     )
 
     path = _save_runnable(DeadScalarSink(), torch.tensor([1.0, 2.0]), tmp_path / "dead.tlspec")
-    result = tl.load(path).run(inputs=torch.tensor([7.0, 8.0]))
+    result = tl.load(path).run_transaction(inputs=torch.tensor([7.0, 8.0]))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not result.report.is_poisoned
     live = DeadScalarSink()(torch.tensor([7.0, 8.0]))

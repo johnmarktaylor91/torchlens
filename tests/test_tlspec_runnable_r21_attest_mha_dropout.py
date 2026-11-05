@@ -83,7 +83,7 @@ def _run(path: Path, x: torch.Tensor) -> tl.RunResult:
         Sparse replay result.
     """
 
-    return tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
+    return tl.load(path).run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
 
 
 class DropNet(nn.Module):
@@ -241,4 +241,4 @@ def test_large_blas_slot_corruption_is_not_masked_by_fallback(tmp_path: Path) ->
     archive[linear_keys[0]] = dataclasses.replace(record, value=record.value + 0.5)
 
     with pytest.raises(ReplayValueMismatchError):
-        loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
+        loaded.run_transaction(inputs=x.clone(), seed=0, on_divergence="return")

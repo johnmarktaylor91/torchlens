@@ -14,7 +14,7 @@ binding's `.generate(...)`); which intervention path to use for speed is in
 The package's PRIMARY surface lives in flat modules this layout previously
 omitted entirely: `selectors.py` (site selectors incl. `without_op`),
 `sites.py`, `resolver.py` (trusted-callable resolution), `hooks.py`,
-`predicates.py`, `replay.py` (`push`/`push_from`), `rerun.py` (`run`),
+`predicates.py`, `replay.py` (the `do` propagation), `rerun.py` (`run`),
 `save.py` (intervention specs), `runtime.py`, `sweep.py`, `types.py`,
 `handles.py`, `helpers.py`, and `errors.py`.
 - `_facet_writes.py` holds the facet-write internals `hooks.py` uses (scoped
@@ -24,7 +24,12 @@ omitted entirely: `selectors.py` (site selectors incl. `without_op`),
   bare `FacetSelector` in `resolver.resolve_sites` (and so `trace[selector]`)
   resolves through `hooks._resolve_facet_specs`, the same resolution the write
   doors use, and returns `Facet` entries (`SiteTable.labels()` names their home
-  ops); composites and `find_sites` still refuse. `tl.trace(save=<facet
+  ops); composites and `find_sites` still refuse there. At the write doors
+  (`do`, `_attach_hooks`, `do(tensor)`) `_facet_union.py` splits a `|` union of
+  facet selectors (and `(module_a | module_b) & facet`) into one entry per
+  facet branch before `expand_facet_hook_entries`; non-facet branches stay one
+  ordinary entry (`do(tensor)` takes facet-only unions), and a facet mixed into any
+  other composite keeps refusing. `tl.trace(save=<facet
   selector>)` goes through `_facet_save._facet_save_predicate`, a save-only
   predicate wired in `_trace_selector_helpers._split_save_options_and_predicate`;
   `intervene=`, `bind` and capture `hooks=` evaluate the selector itself and keep

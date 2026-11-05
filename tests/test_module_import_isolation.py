@@ -31,6 +31,7 @@ import traceback
 from pathlib import Path
 
 import pytest
+from _import_sim import PackageIndex, simulate_cold_import, simulate_every_module
 
 import torchlens as tl
 
@@ -47,6 +48,19 @@ FIXED_IMPORT_CYCLES = (
     # of-file import, so a cold import of _episode_fold first no longer
     # catches _episode_ledger still mid-initialization.
     "torchlens._capture._episode_fold",
+    # The selector-evaluation entry points: ``_ir._selector_universe`` imported a
+    # ``_data_classes`` leaf at module level, which ran that package's init,
+    # whose ``op`` module imports the ``intervention`` package, whose ``spec``
+    # imports back into the still-loading ``selector_eval``. Every module whose
+    # cold import reached ``selector_eval`` first (the selection resolver, the
+    # capture predicates, the torch ops facade, recording) failed with it; the
+    # guard import is deferred now and these entries pin it.
+    "torchlens._ir.selector_eval",
+    "torchlens._ir._selector_universe",
+    "torchlens._selection.resolver",
+    "torchlens._capture.predicates",
+    "torchlens.backends.torch.ops",
+    "torchlens.recording._generation",
 )
 
 #: Modules whose standalone import legitimately requires a THIRD-PARTY package
@@ -277,6 +291,61 @@ def test_every_package_module_imports_standalone() -> None:
         "modules that cannot be imported standalone (fix the cycle, or disclose it in "
         f"PENDING_IMPORT_CYCLES with a reason): {failures}"
     )
+
+
+@pytest.mark.heavy
+def test_cold_import_simulation_flags_only_the_ledger() -> None:
+    """Static arm: replay a fresh interpreter importing each module FIRST.
+
+    The forked exhaustive walk above is the ``slow`` tier, so a cycle that only
+    shows when a selector module is the first import reached the integration
+    branch unseen (``import torchlens._ir.selector_eval`` failed cold while
+    the whole suite, which imports ``torchlens.intervention`` early, stayed
+    green). This arm needs no torch and no fork: it parses the package once
+    and replays Python's module-level import order from every module as the
+    entry, so it runs per step. The forked walk stays the ground truth; this
+    is the cheap tripwire in front of it.
+    """
+
+    index = PackageIndex.build(_PACKAGE_ROOT)
+    failing = simulate_every_module(index)
+    unexpected = {
+        entry: [str(failure) for failure in failures[:3]]
+        for entry, failures in failing.items()
+        if entry not in PENDING_IMPORT_CYCLES
+    }
+    assert not unexpected, (
+        "a cold import of these modules would hit a partially initialised module "
+        "(fix the cycle, or disclose it in PENDING_IMPORT_CYCLES with a reason): "
+        f"{unexpected}"
+    )
+
+
+def test_cold_import_simulation_detects_a_planted_cycle(tmp_path: Path) -> None:
+    """The static arm is a live instrument: a planted cycle is flagged, a clean tree is not."""
+
+    package = tmp_path / "torchlens"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "a.py").write_text("from .b import helper\n\ndef shared():\n    return 1\n")
+    (package / "b.py").write_text("from .a import shared\n\ndef helper():\n    return shared()\n")
+    index = PackageIndex.build(package)
+
+    flagged = simulate_cold_import(index, "torchlens.a")
+    assert [(f.module, f.target, f.name) for f in flagged] == [
+        ("torchlens.b", "torchlens.a", "shared")
+    ]
+    assert flagged[0].cycle == ("torchlens.a", "torchlens.b")
+    # Entered from ``b`` the same cycle fails at the other edge: ``a`` asks the
+    # still-loading ``b`` for ``helper`` before ``b`` has defined it.
+    assert [(f.module, f.target, f.name) for f in simulate_cold_import(index, "torchlens.b")] == [
+        ("torchlens.a", "torchlens.b", "helper")
+    ]
+
+    (package / "b.py").write_text(
+        "def helper():\n    from .a import shared\n\n    return shared()\n"
+    )
+    assert simulate_every_module(PackageIndex.build(package)) == {}
 
 
 def _is_sys_modules_target(node: ast.expr) -> bool:

@@ -60,6 +60,144 @@ def _input() -> mx.array:
     return mx.ones((1, 4))
 
 
+def test_mlx_module_exit_changes_output_and_validates() -> None:
+    """A module site edits its output before the downstream layer consumes it."""
+
+    model = _TwoLayerMLP()
+    trace = tl.trace(
+        model, _input(), backend="mlx", intervene=tl.when(tl.module("l1"), tl.zero_ablate())
+    )
+    producer = next(op for op in trace._layer_list if op.type == "linear")
+    assert producer.is_edited
+    assert producer.edits[0]["backend"] == "mlx"
+    assert producer.edits[0]["site_label"] == producer._label_raw
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), np.asarray(model.l2.bias))
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("dtype", [mx.bool_, mx.int32, mx.float32])
+def test_mlx_module_identity_output_preserves_dtype(dtype: Any) -> None:
+    """The boundary copy preserves boolean and numeric identity outputs."""
+
+    class Block(nn.Module):
+        def __call__(self, x: Any) -> Any:
+            return x
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Block()
+
+        def __call__(self, x: Any) -> Any:
+            return self.block(x)
+
+    trace = tl.trace(
+        Model(),
+        mx.array([1, 0], dtype=dtype),
+        backend="mlx",
+        intervene=tl.when(tl.module("block"), tl.zero_ablate()),
+    )
+    out = trace._layer_list[-1].out
+    assert out.dtype == dtype
+    assert np.array_equal(np.asarray(out), np.zeros(2))
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("second, factor", [("l1", 1.0), ("l2", 0.5)])
+def test_mlx_module_union_fires_once_per_call(second: str, factor: float) -> None:
+    """An overlapping union applies a non-idempotent action only once."""
+
+    model = _TwoLayerMLP()
+    trace = tl.trace(
+        model,
+        _input(),
+        backend="mlx",
+        intervene=tl.when(tl.module("l1") | tl.module(second), tl.scale(0.5)),
+    )
+    expected = np.full((1, 2), (2.1 * 0.5 * 3 * 0.25 - 0.2) * factor)
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("address, expected", [("block", 9.0), ("block:2", 13.5)])
+def test_mlx_module_exit_nested_leaves_aliases_and_repeated_calls(
+    address: str, expected: float
+) -> None:
+    """Edit boundary leaves, preserving earlier consumers and call-qualified sites."""
+
+    class Leaves(nn.Module):
+        def __call__(self, x: Any) -> Any:
+            first = x + 1
+            return {"main": first, "alias": first, "other": [first * 2, x], "tag": "kept"}
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Leaves()
+
+        def __call__(self, x: Any) -> Any:
+            a, b = self.block(x), self.block(x)
+            assert a["tag"] == b["tag"] == "kept"
+            return (
+                a["main"] + a["alias"] + sum(a["other"]) + b["main"] + b["alias"] + sum(b["other"])
+            )
+
+    trace = tl.trace(
+        Model(), _input(), backend="mlx", intervene=tl.when(tl.module(address), tl.scale(0.5))
+    )
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("root", [False, True])
+def test_mlx_module_exit_inside_opaque_parent_validates(root: bool) -> None:
+    """A selected attention projection remains editable through its parent."""
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attn = nn.MultiHeadAttention(4, 2, bias=False)
+            for name in ("query_proj", "key_proj", "value_proj", "out_proj"):
+                getattr(self.attn, name).weight = mx.full((4, 4), 0.25)
+
+        def __call__(self, x: Any) -> Any:
+            return self.attn(x, x, x)
+
+    x = mx.arange(8).reshape(1, 2, 4).astype(mx.float32) / 8
+    model = Model()
+    expected = np.asarray(model(x)) * 0.5
+    address = "value_proj" if root else "attn.value_proj"
+    trace = tl.trace(
+        model.attn if root else model,
+        (x, x, x) if root else x,
+        backend="mlx",
+        intervene=tl.when(tl.module(address), tl.scale(0.5)),
+    )
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("kind", ["and", "or", "not"])
+def test_mlx_mixed_module_selector_refuses_before_forward(kind: str) -> None:
+    """Unsupported module trees fail preflight rather than silently matching nothing."""
+
+    calls = []
+    module = tl.module("l1")
+    selector = {
+        "and": module & tl.func("linear"),
+        "or": module | tl.func("linear"),
+        "not": ~module,
+    }[kind]
+
+    def forward(x: Any) -> Any:
+        calls.append(True)
+        return x + 1
+
+    with pytest.raises(BackendUnsupportedError, match="(?i)mlx"):
+        tl.trace(forward, _input(), backend="mlx", intervene=tl.when(selector, tl.zero_ablate()))
+    assert calls == []
+
+
 def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     """Ablating the relu changes downstream values; validation still passes."""
 

@@ -1,0 +1,54 @@
+[
+  {
+    "source": "The article described North Korea in detail.",
+    "source_span": [
+      22,
+      33
+    ],
+    "target": "The capital of North Korea is",
+    "target_span": [
+      15,
+      26
+    ],
+    "entity": "North Korea"
+  },
+  {
+    "source": "Our friends visited San Marino last spring.",
+    "source_span": [
+      20,
+      30
+    ],
+    "target": "The capital of San Marino is",
+    "target_span": [
+      15,
+      25
+    ],
+    "entity": "San Marino"
+  },
+  {
+    "source": "The guide recommended Sri Lanka for the next trip.",
+    "source_span": [
+      22,
+      31
+    ],
+    "target": "The capital of Sri Lanka is",
+    "target_span": [
+      15,
+      24
+    ],
+    "entity": "Sri Lanka"
+  },
+  {
+    "source": "The expedition reached New Caledonia after a long voyage.",
+    "source_span": [
+      23,
+      36
+    ],
+    "target": "The capital of New Caledonia is",
+    "target_span": [
+      15,
+      28
+    ],
+    "entity": "New Caledonia"
+  }
+]

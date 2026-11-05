@@ -21,6 +21,20 @@ _RNG = np.random.default_rng(0)
 _X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
 _W44 = (_RNG.standard_normal((4, 4)) * 0.5).astype(np.float32)
 _B4 = _RNG.standard_normal((4,)).astype(np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+_LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+_LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+_LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 _IMG = _RNG.standard_normal((1, 6, 6, 1)).astype(np.float32)
 
 
@@ -83,8 +97,8 @@ def _build_loop() -> tuple[Any, Any]:
     """Build three repeated affine/ReLU steps with closure constants."""
     import tensorflow as tf
 
-    weights = tf.constant(_W44)
-    bias = tf.constant(_B4)
+    weights = tf.constant(_LOOP_W)
+    bias = tf.constant(_LOOP_B)
 
     def loop(v: Any) -> Any:
         """Apply the same fixed affine transform three times."""
@@ -92,7 +106,7 @@ def _build_loop() -> tuple[Any, Any]:
             v = tf.nn.relu(tf.matmul(v, weights) + bias)
         return v
 
-    return loop, tf.constant(_X24)
+    return loop, tf.constant(_LOOP_X)
 
 
 def _build_norm() -> tuple[Any, Any]:
@@ -255,14 +269,14 @@ def _build_bert_tiny() -> tuple[Any, Any]:
 
 def _loop_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
     """Compute every repeated affine/ReLU value with NumPy."""
-    h = _X24
+    h = _LOOP_X
     matmuls, additions, relus = [], [], []
     for _ in range(3):
-        matmuls.append(h @ _W44)
-        additions.append(matmuls[-1] + _B4)
+        matmuls.append(h @ _LOOP_W)
+        additions.append(matmuls[-1] + _LOOP_B)
         h = np.maximum(additions[-1], 0)
         relus.append(h)
-    return {"input": _X24, "MatMul": matmuls, "AddV2": additions, "Relu": relus}
+    return {"input": _LOOP_X, "MatMul": matmuls, "AddV2": additions, "Relu": relus}
 
 
 def _norm_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:

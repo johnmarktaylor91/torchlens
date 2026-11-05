@@ -1,0 +1,45 @@
+# Reproduction Gallery
+
+Each entry reproduces one published claim with TorchLens and checks the result against an
+independent implementation (an oracle) whose rule was fixed before the first run. Every entry
+also runs controls that must fail, saves a portable artifact that reloads and replays, and
+records a stamp (TorchLens version, commit, libraries, machine, date). The entry's "Vary it"
+section has small examples that run in seconds and are executed by the test suite on every
+change.
+
+An entry whose oracle does not pass is not shown here; it moves to the next batch with the
+reason recorded below.
+
+## Entries
+
+| Entry | Claim | Result |
+|---|---|---|
+| [Causal tracing of MLP outputs](causal_tracing.md) | Meng et al. 2022: restoring MLP outputs at the last subject token recovers the most answer probability | passed: TorchLens and plain hooks agree exactly over 72 cells; the peak is at the last subject token, at layer 0 on GPT-2 small |
+| [CNN fields as an intervention site](cnn_fields.md) | Araujo et al. 2019: a CNN unit's receptive field bounds what can influence it | passed: the ResNet-18 field matches the analytic box exactly, gradient and projective support IoU 1.0, zeroing outside the field changes the unit by exactly 0 |
+| [Neuro extraction with an order-error control](neuro_rdms.md) | Per-layer RDMs from TorchLens agree with independent extraction and rsatoolbox | passed on ResNet-18 and ViT-B/16: Pearson at least 0.99999999999 at every site; a one-sided shuffle drops agreement below 0.5 and is flagged |
+| [IOI circuit recovery with EAP-IG](ioi_circuit.md) | Wang et al. 2023: a 26-head circuit in GPT-2 small performs indirect-object identification | passed: on 1,000 examples the EAP-IG head ranking recovers the circuit with ROC AUC 0.926; scrambled names give 0.404 and reversed inputs a correlation of -0.996 |
+
+## Basis grid
+
+The line counts are load-bearing lines (no blanks, comments or docstrings) of each script's
+marked regions. "Shared" is setup used by both implementations.
+
+| Entry | Verbs | TorchLens lines | Plain lines | Shared | Architectures | Cost |
+|---|---|---|---|---|---|---|
+| Causal tracing | capture, select, read, do, compare, save | 37 | 30 | 76 | GPT-2 small | 16 min 52 s, 2 CPU cores, 5.4 GiB |
+| CNN fields | capture, select, read, do, compare, save | 233 | 37 | in TorchLens count | ResNet-18 | 21 s, 2 CPU threads, 743 MiB |
+| Neuro RDMs | capture, select, read, compare, save | 252 | 56 | in TorchLens count | ResNet-18, ViT-B/16 | 31 s and 61 s, 2 CPU threads, 1.1 and 2.6 GiB |
+| IOI circuit | capture, read, save | 55 | 19 | not separated | GPT-2 small | 1 h 41 min, 2 CPU cores, 6.5 GiB |
+
+## Next batch
+
+- **Bundles and a two-model harness.** Every check passed except one: on a fork of a GPT-2
+  trace, zeroing the layer-6 MLP also zeroed the output recorded for the MLP's inner dropout
+  module, which a plain-hooks run leaves unchanged (largest difference 57.9). This is a TorchLens
+  defect in how a fork edit is written onto a module whose last operation is shared with a
+  submodule; the entry returns once it is fixed.
+- **Jacobian lens.** The pipeline ran on GPT-2 small and Mamba-130m, but the saved Mamba trace
+  (a 461 MB portable artifact with 123 MB of metadata) does not reload: `tl.load` refuses it
+  because its metadata exceeds the loader's 24,000,000-opcode allocation ceiling. The script
+  records its measurements only after both architectures replay, so the full per-layer numbers
+  were never written. The entry returns once portable artifacts of this size reload.

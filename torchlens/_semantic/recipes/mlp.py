@@ -6,7 +6,6 @@ from typing import Any
 
 from ..facets import register
 from ._helpers import (
-    activation_gelu,
     activation_silu,
     add_if_present,
     child_output_spec,
@@ -14,6 +13,7 @@ from ._helpers import (
     config_object_value,
     first_input_spec,
     module_output_spec,
+    projection_input_spec,
     structural,
 )
 
@@ -62,7 +62,10 @@ def gpt2_mlp(module: Any) -> dict[str, Any]:
     result: dict[str, Any] = {}
     up_out = child_output_spec(module, "c_fc", "gpt2_mlp")
     add_if_present(result, "up_out", up_out)
-    add_if_present(result, "intermediate", activation_gelu(up_out))
+    # The down projection's input: the activation as the forward ran it (GPT-2
+    # declares the tanh GELU, which a recompute with the exact GELU would miss).
+    intermediate = projection_input_spec(module, "c_proj", "gpt2_mlp")
+    add_if_present(result, "intermediate", intermediate)
     add_if_present(result, "down_out", child_output_spec(module, "c_proj", "gpt2_mlp"))
     add_if_present(result, "input", first_input_spec(module, "gpt2_mlp"))
     add_if_present(result, "output", module_output_spec(module, "gpt2_mlp"))
@@ -80,7 +83,8 @@ def distilbert_ffn(module: Any) -> dict[str, Any]:
     result: dict[str, Any] = {}
     up_out = child_output_spec(module, "lin1", "distilbert_ffn")
     add_if_present(result, "up_out", up_out)
-    add_if_present(result, "intermediate", activation_gelu(up_out))
+    intermediate = projection_input_spec(module, "lin2", "distilbert_ffn")
+    add_if_present(result, "intermediate", intermediate)
     add_if_present(result, "down_out", child_output_spec(module, "lin2", "distilbert_ffn"))
     add_if_present(result, "input", first_input_spec(module, "distilbert_ffn"))
     add_if_present(result, "output", module_output_spec(module, "distilbert_ffn"))

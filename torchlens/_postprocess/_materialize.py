@@ -29,6 +29,7 @@ from .._data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from .._ir.workspaces import _init_module_hierarchy_data
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.display import _record_phase_timing
@@ -55,7 +56,6 @@ _EMPTY_INGEST_EXTRAS = _IngestExtras()
 
 def materialize_log_from_fields(fields_dict: dict[str, object], store: object | None = None) -> Op:
     """Construct the live log object for one captured operation.
-
     Parameters
     ----------
     fields_dict
@@ -64,7 +64,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
         The owning trace's ``OpRowStore`` (the M5 builder ingress): the op is
         appended as a shared columnar row. ``None`` constructs a detached
         single-row op (legacy/preview callers).
-
     Returns
     -------
     Op
@@ -97,7 +96,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
 
 def _pop_pending_blob_ids(fields_dict: dict[str, object]) -> dict[str, object]:
     """Remove streaming-only pending blob ids before Op construction.
-
     Parameters
     ----------
     fields_dict
@@ -144,6 +142,8 @@ class _ModuleSideChannel:
     Built LOCALLY by ingest from journal lanes; the orchestrator applies it
     onto the trace's ``ModuleCaptureWorkspace`` after ingest returns.
     """
+
+    __repr__ = short_dataclass_repr
 
     module_build_data: dict[str, Any]
     module_metadata: dict[str, Any]
@@ -370,7 +370,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         )
         start = time.perf_counter()
         op_log = materialize_log_from_fields(fields_dict, op_store)
-        inputs.timing_sink("object_construction:op", time.perf_counter() - start)
+        inputs.timing_sink("object_construction_op", time.perf_counter() - start)
         local_registrations[event.label_raw] = op_log
     _drop_missing_buffer_sources(local_registrations)
     return Step0Result(
@@ -1040,13 +1040,13 @@ def _fill_module_call_stacks_from_op_events(
     ``module_hierarchy`` invariant's call-tree-link check (e.g. "ModuleCall
     'block.0:1' module_call_stack=[] does not start with ['block:1']").
 
-    Each predicate ``OpEvent`` carries its full capture-time ``module_stack``
-    (``tuple[ModuleFrame, ...]`` of ``(address, call_index)`` from root ``self`` down
-    to the innermost module). For a frame at position ``i`` the module call's
-    ancestor stack is ``module_stack[:i]`` with the reserved root ``self`` dropped --
-    reproducing exactly the exhaustive ``stack[:-1]`` value (which also excludes the
-    never-pushed root). Fill only missing entries so this stays a faithful
-    reconstruction, never an override of any authoritative enter-event value.
+    Each predicate ``OpEvent`` carries its capture-time ``module_stack``
+    (``tuple[ModuleFrame, ...]`` of ``(address, call_index)``, outermost to innermost;
+    the projection drops the root frame, and the ``self`` guards below keep journals
+    that still carry it faithful). For a frame at position ``i`` the module call's
+    ancestor stack is ``module_stack[:i]`` -- exactly the exhaustive ``stack[:-1]``
+    value (which also excludes the never-pushed root). Fill only missing entries so
+    this stays a faithful reconstruction, never an override of an enter-event value.
     """
 
     stacks = side_channel.module_build_data["module_call_stacks"]

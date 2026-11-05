@@ -87,25 +87,25 @@ def test_layers_accessor_always_returns_layer_for_pass_label() -> None:
     assert trace.layers["linear_1_1:1"] is trace.layers["linear_1_1"]
 
 
-def test_trace_getitem_never_returns_a_layer() -> None:
-    """``trace[...]`` returns Ops; Layers come only from ``trace.layers[...]`` (walk access RC-260)."""
+def test_trace_getitem_bare_layer_label_returns_the_layer() -> None:
+    """A bare layer label at ``trace[...]`` is the Layer; ``label:N`` is the Op (lanes.1, 3 Nov 2026)."""
 
     trace = _strict_trace()
 
-    assert isinstance(trace["mul_1_2"], Op)
-    assert trace["mul_1_2"] is trace.ops["mul_1_2"]
+    assert trace["mul_1_2"] is trace.layers["mul_1_2"]
     assert isinstance(trace["linear_1_1:1"], Op)
+    assert trace["linear_1_1:1"] is trace.ops["linear_1_1:1"]
     assert isinstance(trace["MUL_1_2"], Op)
     for label in trace.layer_labels:
-        if trace.layers[label].num_passes == 1:
-            assert not isinstance(trace[label], Layer)
+        assert trace[label] is trace.layers[label]
+    assert trace["linear_1_1"] is trace.layers["linear_1_1"]
     with pytest.raises(AmbiguousSiteError) as info:
-        trace["linear_1_1"]
+        trace[tl.label("linear_1_1")]
     assert info.value.fields["code"] == "multipass_bare_label_ambiguous"
     message = str(info.value)
-    assert "trace.layers['linear_1_1']" in message
-    assert "'linear_1_1:last'" in message and "'linear_1_1:all'" in message
-    assert "'linear_1_1:1'" in message and "'linear_1_1:2'" in message
+    assert "trace.layers['linear_1']" in message
+    assert "'linear_1:last'" in message and "'linear_1:all'" in message
+    assert "'linear_1:1'" in message and "'linear_1:2'" in message
     assert isinstance(trace.layers["linear_1_1"], Layer)
 
 
@@ -219,7 +219,7 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier") as excinfo:
         first.__setstate__(_legacy_param_state("left.weight"))
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 

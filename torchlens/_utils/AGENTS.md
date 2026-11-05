@@ -13,6 +13,7 @@ this package mostly stateless and free of high-level TorchLens business logic.
 | `display.py` | Human-readable formatting, verbosity, identity helper |
 | `hashing.py` | Barcodes, short hashes, graph-shape hash |
 | `introspection.py` | Recursive object search and nested getattr/assign |
+| `_quiet_property.py` | `read_attr_quietly`: the tensor search's attribute read; a property getter runs with log records below ERROR muted (a library's logged deprecation notice would otherwise look like the user's read) |
 | `rng/` | Package: `streams.py` (Python, NumPy, torch, CUDA stream snapshot/restore), `seeding.py`, `restore.py` (the one restore door `RngStreamsRestore`, used by `tl.trace`, replay and `tl.validate`), `autocast.py`; the host-nondeterminism monitor in `monitor.py` with its `registry.py`, `channels.py`, `engine_state.py`, `inventory_types.py`, `call_sites.py`, `monitor_state.py`, and the method groups it calls through class aliases: `inventory_walk.py`, `deep_inventory.py`, `generator_sweep.py`, `numpy_frames.py`, `digest.py` |
 | `tensor_utils.py` | `safe_copy`, `safe_to`, `tensor_nanequal`, tensor memory helpers |
 | `_tensor_layout.py` | Capture-time tensor layouts for saved-DAG replay: `layout_of` (what capture records on a `ParentRef`) and `relay_to_layout` (replay re-lays a compact saved value into it); torch-only leaf |
