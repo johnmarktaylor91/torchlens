@@ -31,11 +31,16 @@ class _TrilScatter(nn.Module):
         return factor.masked_scatter(mask, self.off(x))
 
 
-class _AllTrueScatter(nn.Module):
-    """``masked_scatter`` under a mask whose entries are all true (a roll is the identity)."""
+class _SparseMaskScatter(nn.Module):
+    """``masked_scatter`` under a computed one-hot row mask with a source of exactly one per row.
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        return torch.zeros_like(x).masked_scatter(mask, x * 2.0)
+    Any draw with more than one true entry needs more source elements than exist, so the
+    generic boolean perturbation raises here on every seed.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        mask = torch.arange(16) == 3
+        return torch.zeros(x.shape[0], 16).masked_scatter(mask, x[:, :1] * 2.0)
 
 
 def _layer(mask_label: str = "mask", source: torch.Tensor | None = None) -> SimpleNamespace:
@@ -56,11 +61,18 @@ def test_broadcast_tril_mask_edge_validates() -> None:
     assert validate_forward_pass(_TrilScatter(), torch.randn(5, 2, 4), seed=0) is True
 
 
-def test_all_true_mask_edge_validates() -> None:
-    """An all-true mask gets a mask with one entry cleared, which keeps the call valid."""
+def test_sparse_mask_edge_validates() -> None:
+    """A mask whose true count equals the source size validates instead of staying unverified."""
 
-    inputs = (torch.randn(2, 3), torch.ones(2, 3, dtype=torch.bool))
-    assert validate_forward_pass(_AllTrueScatter(), inputs, seed=0) is True
+    assert validate_forward_pass(_SparseMaskScatter(), torch.randn(3, 4), seed=0) is True
+
+
+def test_all_true_mask_clears_one_entry() -> None:
+    """An all-true mask (a roll is the identity) gets one entry cleared, which stays valid."""
+
+    mask = torch.ones(2, 3, dtype=torch.bool)
+    perturbed = masked_scatter_mask_values(_layer(), "mask", mask)
+    assert perturbed is not None and int(perturbed.sum()) == mask.numel() - 1
 
 
 def test_rolled_mask_keeps_true_count_and_moves() -> None:
