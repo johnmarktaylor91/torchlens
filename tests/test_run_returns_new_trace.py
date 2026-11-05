@@ -1,6 +1,6 @@
 """The positional run door returns a new Trace and leaves its source untouched.
 
-Contract pinned here (names.9, ruled 3 Nov 2026): ``trace.run(model, x)`` and
+Contract pinned here (ruled 3 Nov 2026): ``trace.run(model, x)`` and
 ``trace.run(x)`` run on a fork of the source, the way the ``fast=True`` door's
 result fork does, and return that fork. The source keeps its saved values,
 ``last_run``, input and name on every engine the door routes to: the capture
@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens._runnable.verification import running_result
 from torchlens.options import ReplayOptions
 
 _SITE = "0"
@@ -103,6 +104,7 @@ def test_capture_rerun_returns_new_trace_and_leaves_source(one_argument: bool) -
     assert result.input is new_x
     assert torch.equal(result.output, model(new_x))
     assert not torch.equal(result.output, before["output"])
+    assert running_result(source) is None
     _assert_untouched(source, before)
 
 
@@ -118,7 +120,8 @@ def test_chunked_rerun_returns_new_trace_and_leaves_source() -> None:
     result = source.run(model, new_x, replay=ReplayOptions(chunk_size=2))
 
     assert result is not source
-    assert torch.allclose(result.output, model(new_x))
+    # A chunked run concatenates its chunks, so it reads the output op, not ``.output``.
+    torch.testing.assert_close(result[result.output_layers[0]].out, model(new_x))
     _assert_untouched(source, before)
 
 
@@ -178,6 +181,7 @@ def test_failed_run_leaves_source_untouched_and_registers_nothing() -> None:
 
     gc.collect()
     assert {id(log) for log in _state.list_logs()} <= registered
+    assert running_result(source) is None
     _assert_untouched(source, before)
 
 

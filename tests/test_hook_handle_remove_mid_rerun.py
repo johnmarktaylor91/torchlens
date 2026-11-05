@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable.verification import running_result
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
 
@@ -74,10 +75,15 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
         return out
 
     _attach(trace, tl.func("linear"), remover)
+    source = trace
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         trace = trace.run(model, x)
 
+    # The run wrote a new Trace; its link from the source ends with the run.
+    assert trace is not source
+    assert running_result(source) is None
+    assert relu_handle[0] not in _recipe_handles(source)
     assert events == ["removed", "linear", "linear"], events
     assert trace.last_run["hooks"] == 1
     assert trace.last_run["hooks_fired"] == 2
