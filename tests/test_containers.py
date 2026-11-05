@@ -381,6 +381,58 @@ def test_post_load_reconstruct_output_round_trips(tmp_path: Path) -> None:
     assert torch.equal(rebuilt["past_key_values"][0][0], torch.tensor([3.0]))
 
 
+def _relu_mlp() -> nn.Module:
+    """Return a small MLP whose bare-tensor output is not a ReLU op.
+
+    Returns
+    -------
+    nn.Module
+        Linear, ReLU, Linear stack with a fixed seed.
+    """
+
+    torch.manual_seed(0)
+    return nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 3))
+
+
+def test_reconstruct_output_refuses_after_load_when_output_op_unsaved(tmp_path: Path) -> None:
+    """A ReLU-only save reloads with no output payload: refuse typed, never answer ``None``."""
+
+    model = _relu_mlp()
+    trace = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
+    path = tmp_path / "relus_only.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+
+    with pytest.raises(tl.errors.PayloadUnavailableError) as excinfo:
+        loaded.reconstruct_output()
+    assert excinfo.value.code == "activation_not_saved"
+    assert loaded.output_layers[0] in str(excinfo.value)
+
+
+def test_reconstruct_output_full_save_round_trip_unchanged(tmp_path: Path) -> None:
+    """A full save still rebuilds the bare-tensor model output after load."""
+
+    model = _relu_mlp()
+    x = torch.randn(2, 4)
+    trace = tl.trace(model, x)
+    path = tmp_path / "full.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+
+    assert torch.equal(trace.reconstruct_output(), model(x))
+    assert torch.equal(loaded.reconstruct_output(), model(x))
+
+
+def test_reconstruct_output_in_memory_relu_only_refusal_unchanged() -> None:
+    """The unsaved ReLU-only trace keeps its existing typed refusal for the output."""
+
+    trace = tl.trace(_relu_mlp(), torch.randn(2, 4), save=tl.func("relu"))
+
+    with pytest.raises(tl.errors.PayloadUnavailableError) as excinfo:
+        trace.reconstruct_output()
+    assert excinfo.value.code == "activation_not_saved"
+
+
 def test_path_only_container_view_degrades_without_reconstruction() -> None:
     """An op with only path metadata exposes a non-reconstructable view."""
 
