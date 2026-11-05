@@ -32,7 +32,6 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from ._transparent_context import transparent_contextmanager
 from ._utils._package_frames import is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
@@ -44,6 +43,7 @@ from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
+from .errors._base import transparent_contextmanager
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
 # under the R43 file-size ratchet. Re-exported here because the historical import

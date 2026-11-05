@@ -798,6 +798,10 @@ _PROCESS_CACHES = frozenset(
         # the version counter it was hashed at, so a dead or edited tensor
         # never hits.
         ("torchlens/intervention/_content_identity.py", "_TENSOR_TOKEN_MEMO"),
+        # Intervention fire results of tensors that reject dynamic attributes,
+        # keyed by id(tensor); each entry's tensor weakref callback evicts it and
+        # readers check the referent, so a dead or recycled id never hits.
+        ("torchlens/backends/torch/_ops_interventions.py", "_OUT_OF_BAND_FIRE_RESULTS"),
         # Weightsfree (F33) process-lifetime memos: the per-code-object
         # decomposition-frame classification (bounded by loaded code) and the
         # one-per-process D20 meta identity self-test verdict.

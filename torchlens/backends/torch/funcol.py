@@ -65,8 +65,7 @@ from typing import Any
 
 import torch
 
-from ..._transparent_context import transparent_contextmanager
-from ...errors._base import CompatibilityError
+from ...errors._base import CompatibilityError, transparent_contextmanager
 from .collectives import (
     COLLECTIVE_BOUNDARY_FASTLOG_UNSUPPORTED,
     _BoundaryScope,

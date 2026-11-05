@@ -15,12 +15,12 @@ from typing import Any
 
 from torch import nn
 
-from .._transparent_context import transparent_contextmanager
 from .._utils._torch_compat import (
     get_mha_fastpath_enabled,
     get_mha_fastpath_switch_support,
     set_mha_fastpath_enabled,
 )
+from ..errors._base import transparent_contextmanager
 
 _FUSED_ATTENTION_FASTPATH_MODULES: tuple[type[nn.Module], ...] = (
     nn.MultiheadAttention,

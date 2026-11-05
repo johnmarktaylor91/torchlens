@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from .._capture_state_helpers import CompiledCapturePrep
     from .._data_classes.trace import Trace
     from ._lazy_contexts import LazyContextHistory
-from .._transparent_context import transparent_contextmanager
 from .._utils.display import _timed_phase
+from ..errors._base import transparent_contextmanager
 
 
 def _cleanup_forward_memory_once(

@@ -52,10 +52,9 @@ from typing import Any, Final
 import torch
 
 from ... import _state
-from ..._transparent_context import transparent_contextmanager
 from ..._utils._exception_notes import defer_failure_note
 from ..._utils._torch_symbols import torch_attr
-from ...errors._base import TorchLensError
+from ...errors._base import TorchLensError, transparent_contextmanager
 from ._completeness_cross_thread import _internal_read_active
 from ._consumer_kind import _classify_consumer_kind
 from ._tl import DescriptorCompatProperty, get_tensor_label

@@ -14,9 +14,9 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._transparent_context import transparent_contextmanager
 from ..._utils import _exception_notes
 from ...errors import ScalarEscapeWarning
+from ...errors._base import transparent_contextmanager
 from ._tl import (
     DescriptorCompatProperty,
     get_tensor_label,

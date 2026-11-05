@@ -12,9 +12,9 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import CaptureGapWarning
-from ..._transparent_context import transparent_contextmanager
 from ..._utils._package_frames import external_warning_stacklevel
 from ..._utils._torch_symbols import torch_attr
+from ...errors._base import transparent_contextmanager
 from ._completeness_hop import register_witness_hop_rules
 from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (

@@ -20,13 +20,13 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ..._transparent_context import transparent_contextmanager
 from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ..._utils.input_leaves import flatten_input_tensor_addresses
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
+from ...errors._base import transparent_contextmanager
 from ...recording.types import ModuleStackFrame
 from . import _tl
 from ._completeness_finalize import capture_completeness_witness

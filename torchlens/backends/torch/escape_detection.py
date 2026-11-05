@@ -23,8 +23,8 @@ import torch
 from ... import _state
 from ..._entry_refusals import refuse_if_exemptions_over_budget
 from ..._errors import CaptureGapWarning
-from ..._transparent_context import transparent_contextmanager
 from ..._utils._display_bounded import short_dataclass_repr
+from ...errors._base import transparent_contextmanager
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
 EscapeDetectorMode = Literal["off", "shadow"]

@@ -488,7 +488,7 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4299
+torchlens/_utils/_torch_compat.py	4298
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -528,7 +528,7 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1821
+torchlens/_utils/tensor_utils.py	1817
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	72
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	179
@@ -921,7 +921,7 @@ torchlens/backends/torch/completeness_witness.py::_CompletenessDispatchMode.__to
 torchlens/backends/torch/completeness_witness.py::_storage_disposition_rows	79
 torchlens/backends/torch/escape_detection.py	946
 torchlens/backends/torch/escape_detection.py::capture_escape_guard	120
-torchlens/backends/torch/funcol.py	1016
+torchlens/backends/torch/funcol.py	1015
 torchlens/backends/torch/funcol.py::_build_funcol_payload	130
 torchlens/backends/torch/funcol.py::_make_funcol_wrap	178
 torchlens/backends/torch/funcol.py::_make_funcol_wrap.wrapped_funcol	155

@@ -124,7 +124,7 @@ def test_bracket_never_writes_onto_the_forward_exception() -> None:
 def test_transparent_contextmanager_keeps_contextlib_exit_semantics() -> None:
     """Suppression, re-raise and clean exit match ``contextlib``; nothing is written."""
 
-    from torchlens._transparent_context import transparent_contextmanager
+    from torchlens.errors._base import transparent_contextmanager
 
     events: list[str] = []
 

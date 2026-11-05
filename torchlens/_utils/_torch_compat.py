@@ -51,8 +51,7 @@ from typing import Any, cast
 import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from .._transparent_context import transparent_contextmanager
-from ..errors._base import TorchLensWarning
+from ..errors._base import TorchLensWarning, transparent_contextmanager
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr

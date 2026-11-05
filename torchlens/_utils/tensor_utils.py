@@ -27,10 +27,6 @@ import torch
 
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._sparse_parts import sparse_component_tensors
-from ._subclass_mode_pause import (
-    _pause_dispatch_modes_for_subclass_clone,
-    _subclass_compare_pause,
-)
 from ._torch_compat import (
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
@@ -541,6 +537,8 @@ def tensor_nanequal(
     if tensor_a.is_meta or tensor_b.is_meta:
         return tensor_a.is_meta and tensor_b.is_meta
 
+    from ._subclass_mode_pause import _subclass_compare_pause  # deferred: vocabulary closure
+
     with _state_module().pause_logging(), _subclass_compare_pause(tensor_a, tensor_b):
         if tensor_a.device != tensor_b.device:
             # Equality is device-independent: an output_device capture keeps
@@ -549,11 +547,10 @@ def tensor_nanequal(
         if tensor_a.is_quantized or tensor_b.is_quantized:
             return _quantized_tensor_equal(tensor_a, tensor_b)
 
-        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every
-        # comparison below used to escape tl.trace() as a raw torch-internal
-        # NotImplementedError naming the SparseCPU dispatcher (R65; the layout
-        # sibling of the fp8 class documented below). Compare the canonical
-        # structure exactly and recurse on the strided values tensor so
+        # Sparse layouts have no aten::equal / isinf / nan_to_num kernels: every comparison
+        # below used to escape tl.trace() as a raw torch-internal NotImplementedError naming
+        # the SparseCPU dispatcher (R65; the layout sibling of the fp8 class documented below).
+        # Compare the canonical structure exactly and recurse on the strided values tensor so
         # NaN/Inf/tolerance semantics match the dense path.
         if tensor_a.layout != tensor_b.layout:
             return False
@@ -588,10 +585,9 @@ def tensor_nanequal(
                 tensor_a.values(), tensor_b.values(), allow_tolerance=allow_tolerance
             )
 
-        # Validation overwhelmingly compares identical ordinary floating-point
-        # payloads. Avoid constructing the Inf/NaN masks and substituted tensors
-        # in that common case; non-exact comparisons and non-floating dtypes
-        # retain the full comparison below.
+        # Validation overwhelmingly compares identical ordinary floating-point payloads. Avoid
+        # constructing the Inf/NaN masks and substituted tensors in that common case;
+        # non-exact comparisons and non-floating dtypes retain the full comparison below.
         # IEEE equality hides -0.0 vs +0.0; only certify EXACT when zero sign
         # bits agree too (fp8 widens first: no signbit kernel). A flip falls
         # through -- the tolerance band below may still legitimately accept it.
@@ -1550,10 +1546,9 @@ def _copy_tensor_payload(
         return result
 
     if target_device is not None:
-        # Single-transport clone: ``.to(device, copy=True)`` materializes the
-        # retained payload directly on the retention device (one allocation,
-        # one copy) with the same autograd semantics as clone-then-move (the
-        # move is differentiable when not detached).
+        # Single-transport clone: ``.to(device, copy=True)`` materializes the retained payload
+        # directly on the retention device (one allocation, one copy) with the same autograd
+        # semantics as clone-then-move (the move is differentiable when not detached).
         source = x.detach() if detach_tensor else x
         try:
             return source.to(device=target_device, memory_format=_PAYLOAD_MEMORY_FORMAT, copy=True)
@@ -1561,10 +1556,12 @@ def _copy_tensor_payload(
             try:
                 return source.to(device=target_device, copy=True)
             except (TypeError, RuntimeError):
-                # Fall through to the same-device ladder; the caller's
-                # follow-up move preserves the historical behavior.
+                # Fall through to the same-device ladder; the caller's follow-up move
+                # preserves the historical behavior.
                 pass
     if not detach_tensor:
+        from ._subclass_mode_pause import _pause_dispatch_modes_for_subclass_clone
+
         with _pause_dispatch_modes_for_subclass_clone(x):
             try:
                 return x.clone(memory_format=_PAYLOAD_MEMORY_FORMAT)
@@ -1580,13 +1577,12 @@ def _copy_tensor_payload(
                 return x.data.cpu().clone()
             except Exception as exc:
                 # Fail loud rather than fabricate a payload. The former
-                # ``torch.zeros(x.shape, dtype=torch.float32)`` last resort
-                # silently returned a WRONG value AND a WRONG dtype (float32
-                # regardless of the source) with no marker, corrupting the
-                # captured activation invisibly. A tensor that survives none of
-                # the three clone strategies cannot be copied; surfacing that is
-                # the only honest outcome, and it mirrors the non-detached path
-                # above, which already propagates a clone failure.
+                # ``torch.zeros(x.shape, dtype=torch.float32)`` last resort silently
+                # returned a WRONG value AND a WRONG dtype (float32 regardless of the
+                # source) with no marker, corrupting the captured activation invisibly.
+                # A tensor that survives none of the three clone strategies cannot be
+                # copied; surfacing that is the only honest outcome, and it mirrors the
+                # non-detached path above, which already propagates a clone failure.
                 raise RuntimeError(
                     "torchlens could not copy a tensor payload: every clone "
                     "strategy failed. Refusing to fabricate a placeholder tensor "

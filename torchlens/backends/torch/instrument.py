@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._capture.stages import InstrumentedModel
-from ..._transparent_context import transparent_contextmanager
+from ...errors._base import transparent_contextmanager
 from ._tl import active_label_session_token
 
 if TYPE_CHECKING:
