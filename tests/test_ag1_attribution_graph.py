@@ -26,6 +26,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
 
 #: Pre-registered node counts: (features, errors, tokens, logits).
 F1_COUNTS = {"feature": 12, "error": 6, "token": 3, "logit": 2}
@@ -174,6 +175,7 @@ def _assert_against_key(graph, model, transcoders, counts):
 class TestErrorNodeFixture:
     """F2: transcoders that reconstruct imperfectly."""
 
+    @requires_gradient_edge
     def test_logit_totals_need_the_error_nodes(self) -> None:
         model = fx.build_model(2)
         transcoders = fx.lossy_transcoders(model)
@@ -202,6 +204,7 @@ class TestRefusals:
         assert self._code(excinfo) == "attribution_graph_frozen_required"
         assert "frozen=()" in str(excinfo.value)
 
+    @requires_gradient_edge
     def test_unknown_site(self) -> None:
         model = fx.build_model(2)
         with pytest.raises(tl.errors.AttributionError) as excinfo:
@@ -218,6 +221,7 @@ class TestRefusals:
             )
         assert self._code(excinfo) == "attribution_graph_transcoder_invalid"
 
+    @requires_gradient_edge
     def test_batch_of_two_is_unsupported(self) -> None:
         model = fx.build_model(2)
         trace = tl.trace(model, torch.tensor([fx.TOKENS, fx.TOKENS]))
@@ -227,12 +231,14 @@ class TestRefusals:
             )
         assert self._code(excinfo) == "attribution_graph_input_unsupported"
 
+    @requires_gradient_edge
     def test_bad_target(self) -> None:
         model = fx.build_model(2)
         with pytest.raises(tl.errors.AttributionError) as excinfo:
             _build(model, fx.exact_transcoders(model), 2, target=[99])
         assert self._code(excinfo) == "attribution_graph_target_invalid"
 
+    @requires_gradient_edge
     def test_op_label_is_not_a_module_name(self) -> None:
         # trace.modules[op_label] gives the Module the op ran in; the graph's
         # module-named sites still take module names only.
@@ -248,6 +254,7 @@ class TestRefusals:
             )
         assert self._code(excinfo) == "attribution_graph_site_not_found"
 
+    @requires_gradient_edge
     def test_frozen_name_of_no_site_names_both_readings(self) -> None:
         # An op label taken from another capture (other op counts before it) is
         # neither a module nor an op here: the refusal says so, not "missing module".
@@ -268,6 +275,7 @@ class TestRefusals:
 class TestSiteKinds:
     """A frozen op label holds that op, not the output of the module it ran in."""
 
+    @requires_gradient_edge
     def test_frozen_op_label_inside_a_module_holds_that_op(self) -> None:
         model = fx.build_model(2)
         trace = _trace(model)

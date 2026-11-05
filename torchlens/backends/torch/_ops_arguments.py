@@ -18,7 +18,7 @@ from ..._storage_bindings import (
     storage_context_arg_index,
 )
 from ..._utils._tensor_layout import CaptureLayout, layout_of
-from ..._utils._torch_compat import get_force_original_view_tracking
+from ..._utils._torch_compat import get_force_original_view_tracking, get_view_func_replay
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     safe_copy,
@@ -575,7 +575,9 @@ def _context_copiers(func_name: str) -> dict[int, Callable[[torch.Tensor], torch
 
 def _copy_receiver_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
     """Copy a view-function receiver with its view context, under original-view tracking."""
-    return copy_with_view_context(tensor, get_force_original_view_tracking())
+    return copy_with_view_context(
+        tensor, get_force_original_view_tracking(), get_view_func_replay()
+    )
 
 
 def _copy_saved_arg_tree(

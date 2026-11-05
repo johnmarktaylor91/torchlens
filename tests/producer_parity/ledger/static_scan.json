@@ -5004,7 +5004,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_edges.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -5172,7 +5172,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_segment_descriptors.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": false
  },
  {
