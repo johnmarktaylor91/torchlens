@@ -8,9 +8,12 @@ container builds (``BUILD_*`` opcodes executed in TorchLens code plus Python
 ``__init__`` runs TorchLens code starts): once for the whole trace (capture and
 postprocess; dropping the trace is excluded) and once for the commit alone
 (``ExhaustiveOpDraft.freeze``). The pins are the values measured on CI's pinned
-environment after the commit cost cut; each one is below the eager freeze path
-it replaced (the train before the series: 3417.51 calls and 914.51 builds per
-op for the trace, 64.69 calls and 31.42 builds per op for the freeze).
+environment after the commit cost cut. The trace pins are below the train's
+eager freeze path on the same measure (3380.13 calls and 1003.71 builds per
+op). The commit pins are above that path's freeze alone (33.79 calls and 28.21
+builds per op) because the commit now writes the op's cells, which the eager
+path wrote at ingest; they are below the row commit before the cut (68.41
+calls and 56.47 builds per op).
 
 Source tensors and module-boundary outputs have their own builders (no function
 call: ``func_call_id`` is None) and are not counted as ops.
@@ -48,11 +51,13 @@ _BUILD_OPCODES = frozenset(
     if name in dis.opmap
 )
 # Per function-call op on the tiny GPT-2 generate (416 ops), CI's pinned
-# environment (torch 2.13.0+cpu). Trace = capture plus postprocess.
-_MAX_TRACE_CALLS_PER_OP = 3417.51
-_MAX_TRACE_BUILDS_PER_OP = 914.51
-_MAX_COMMIT_CALLS_PER_OP = 64.69
-_MAX_COMMIT_BUILDS_PER_OP = 31.42
+# environment (torch 2.13.0+cpu). Trace = capture plus postprocess. The trace
+# builds pin is the higher of the serial (989.46) and xdist (991.00) runs; each
+# pin is the printed two-decimal value plus 0.01 (the print rounds).
+_MAX_TRACE_CALLS_PER_OP = 3363.14
+_MAX_TRACE_BUILDS_PER_OP = 991.01
+_MAX_COMMIT_CALLS_PER_OP = 35.72
+_MAX_COMMIT_BUILDS_PER_OP = 30.91
 
 
 def _tiny_gpt2_generate() -> tuple[Callable[..., Any], torch.Tensor, dict[str, Any]]:
