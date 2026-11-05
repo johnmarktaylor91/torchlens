@@ -1682,7 +1682,9 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
     `fields["site_count"]`; 36 on a 12-layer GPT-2: q, k and v in each layer).
   - Scoping: `.in_module(address)` scopes it to one module, and so does composition:
     `tl.module(address) & tl.head(i)` (either order) is that same scoped facet selector,
-    accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`). A facet already scoped to
+    accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`). A scoped head is one
+    module's head, so `do` writes its `q`, `k` and `v` (one write each) silently; the fan-out
+    warning is the unscoped broadcast's. A facet already scoped to
     another module refuses `selector_module_facet_scope_conflict`.
   - Facet unions: in `do`, a `|` union of facet selectors
     (`tl.module(a) & tl.head(i) | tl.module(b) & tl.head(j)`, or

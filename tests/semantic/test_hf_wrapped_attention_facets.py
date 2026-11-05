@@ -10,6 +10,7 @@ of the installed transformers version.
 from __future__ import annotations
 
 import math
+import warnings
 from typing import Any
 
 import pytest
@@ -23,6 +24,17 @@ from torchlens.errors import InvalidArgumentError, TorchLensWarning
 from torchlens.mechinterp._heads import _attention_modules
 
 pytestmark = pytest.mark.usefixtures("root_edits_in_place")
+
+
+def _fanout_codes(caught: list[warnings.WarningMessage]) -> list[str]:
+    """Return the facet fan-out disclosure codes among recorded warnings."""
+
+    return [
+        code
+        for w in caught
+        if (code := getattr(w.message, "fields", {}).get("code")) == "facet_selector_fanout"
+    ]
+
 
 _HEADS = 2
 _D_HEAD = 4
@@ -211,8 +223,11 @@ def test_wrapper_serves_core_head_facets_and_module_head_edit(
     assert torch.equal(wrapper.pattern, inner.pattern)
 
     site = tl.module("attn") & tl.head(1)
-    with pytest.warns(TorchLensWarning, match=r"writes 3 sites"):
+    # One module's head is its q, k and v: the scoped write is silent.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         ablated = clean.fork().do(site, tl.zero_ablate())
+    assert not _fanout_codes(caught)
     edited_q = ablated.modules["attn"].facets.q
     assert torch.count_nonzero(edited_q[..., 1, :]) == 0
     assert torch.equal(edited_q[..., 0, :], wrapper.q[..., 0, :])
@@ -339,7 +354,9 @@ def test_bert_core_alone_keeps_its_head_edit() -> None:
     _model, _x, clean = _trace(BertAttention(), seed=13)
     keys = set(clean.modules["attn.self"].facets.keys())
     assert {"q", "k", "v", "pattern", "scores", "z", "attn_out", "input"} <= keys
-    with pytest.warns(TorchLensWarning, match=r"writes 3 sites"):
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         ablated = clean.fork().do(tl.module("attn.self") & tl.head(0), tl.zero_ablate())
+    assert not _fanout_codes(caught)
     assert torch.count_nonzero(ablated.modules["attn.self"].facets.head(0).q) == 0
     assert not torch.allclose(_output(ablated), _output(clean))

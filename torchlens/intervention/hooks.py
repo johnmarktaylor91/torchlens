@@ -896,12 +896,13 @@ def expand_facet_hook_entries(
 def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[str, str]]) -> None:
     """Say how many sites a facet selector writes when it writes more than one.
 
-    Coded ``facet_selector_fanout``; ``fields["site_count"]`` carries the number.
-
-    ``tl.head(5)`` keeps its broadcast meaning: it writes head 5 of every
-    matching facet in every module. The count is the number of installed
-    facet writes (one per home op and facet slice, after de-duplication), so it
-    equals the slices the run edits.
+    Coded ``facet_selector_fanout``; ``fields["site_count"]`` is the number of
+    installed facet writes (one per home op and facet slice, de-duplicated).
+    ``tl.head(5)`` keeps its broadcast meaning, head 5 of every matching facet
+    in every module, and that is what the warning discloses. Scoped to one
+    module (``tl.module(address) & tl.head(5)``), a head is that module's
+    ``q``, ``k`` and ``v`` rows, the meaning asked for, so writing each once is
+    silent; the same facet written twice under a scope is a surprise and warns.
 
     Parameters
     ----------
@@ -913,23 +914,22 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
         ``(home op label, facet name)`` for every installed write.
     """
 
-    if len(written) <= 1:
+    names = [name for _, name in written]
+    one_module_head = selector.module_address is not None and len(set(names)) == len(names)
+    if len(written) <= 1 or one_module_head:
         return
     import warnings
 
     homes = list(dict.fromkeys(_display_label(log, home) for home, _ in written))
-    facet_names = ", ".join(dict.fromkeys(name for _, name in written))
+    facet_names = ", ".join(dict.fromkeys(names))
     shown = ", ".join(homes[:4]) + (f" and {len(homes) - 4} more" if len(homes) > 4 else "")
     scope = _facet_owner_address(log, selector, homes[0], written[0][1])
-    narrower = (
-        f"{selector!r}.in_module({scope!r})"
-        if scope is not None and selector.module_address is None
-        else "a narrower facet selector"
-    )
+    unscoped = scope is not None and selector.module_address is None
+    narrower = f"{selector!r}.in_module({scope!r})" if unscoped else "a narrower facet selector"
     warnings.warn(
         TorchLensWarning(
             f"selector {selector!r} writes {len(written)} sites ({facet_names} at "
-            f"{len(homes)} home ops: {shown}). Remedy: to write fewer, scope it, "
+            f"{len(homes)} home ops: {shown}). Remedy: to edit one module's head, scope it, "
             f"e.g. {narrower}",
             code="facet_selector_fanout",
             site_count=len(written),
