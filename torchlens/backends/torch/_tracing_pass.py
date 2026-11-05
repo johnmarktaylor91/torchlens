@@ -18,7 +18,10 @@ operands and gives ``map`` its stacked output). That compile is let through
 (``_hop_entry_compile.hop_compile_stance_lift_scope``) inside
 :func:`hop_internal_compile_scope`; while Dynamo traces it, the wrappers call
 the original unlogged (:func:`inside_hop_internal_compile`), and the compiled
-wrapper's eager run is captured as usual.
+wrapper's eager run is captured as usual. During a witnessed capture,
+``map``'s entry with a grad operand steps TorchLens's dispatch modes aside for
+Dynamo and runs its compiled graph under them (:func:`_map_grad_entry_modes`):
+torch's eager ``map`` grad path would return one tensor per row.
 
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
 tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class) or
@@ -32,6 +35,8 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
+import torch
+
 from ... import _state
 from ..._utils import _torch_compat
 from ..._utils._hop_entry_compile import hop_compile_stance_lift_scope
@@ -39,8 +44,10 @@ from ..._utils._torch_compat import (
     dynamo_is_compiling,
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
+    get_higher_order_operator,
     get_tracing_tensor_types,
 )
+from ._modes import _TorchLensDispatchMode
 
 __all__ = (
     "call_inside_tracing_pass",
@@ -145,8 +152,48 @@ def lift_hop_entry_compiles() -> AbstractContextManager[bool]:
     """
 
     return hop_compile_stance_lift_scope(
-        hop_internal_compile_scope, enabled=_torch_compat.HAS_SET_STANCE
+        hop_internal_compile_scope,
+        enabled=_torch_compat.HAS_SET_STANCE,
+        steps_aside=_map_grad_entry_modes,
     )
+
+
+def _map_grad_entry_modes(fn: Any, args: Any) -> tuple[Any, ...]:
+    """Return the dispatch modes ``map``'s grad entry compile runs its graph under.
+
+    Only ``map``'s entry, with grad on and a grad-requiring operand, and only when
+    every mode on the stack is TorchLens's own: torch's eager ``map`` grad path
+    unpacks the stacked output per row, so the witness must see the compiled
+    graph's run. Every other entry keeps its modes in place (eager under them).
+
+    Parameters
+    ----------
+    fn:
+        The function the entry compiles (``map``'s is defined in the module of
+        ``map_impl``'s class).
+    args:
+        Its positional arguments; ``map`` passes the body and two tensor lists.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        The whole dispatch-mode stack, bottom first, or ``()``.
+    """
+
+    map_impl = get_higher_order_operator("map", "map_impl")
+    if map_impl is None or getattr(fn, "__module__", None) != type(map_impl).__module__:
+        return ()
+    if not torch.is_grad_enabled() or not any(
+        isinstance(value, torch.Tensor) and value.requires_grad
+        for group in args
+        if isinstance(group, (list, tuple))
+        for value in group
+    ):
+        return ()
+    stack = get_current_dispatch_mode_stack()
+    if not stack or not all(isinstance(mode, _TorchLensDispatchMode) for mode in stack):
+        return ()
+    return tuple(stack)
 
 
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:
