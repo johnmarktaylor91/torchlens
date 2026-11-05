@@ -5654,6 +5654,14 @@ recorded: 2026-11-05T11:47:02.903316+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: autograd.grad replay reads op order and parents in the validation subgraph replay
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8374d352d0d9cfd6cbb6ff5c8447861d5c39d54d (dirty)
+recorded: 2026-11-05T12:29:09.257886+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: B29S ledger currency on e8e0c1aa79
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
@@ -5723,14 +5731,6 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7c5a8ccae64354b20f996ea30fd3c09e395ee89b (dirty)
 recorded: 2026-11-05T11:21:02.339820+00:00
----
-generator: producer_parity/test_ledger.py (full closure)
-flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
-reason: autograd.grad replay reads op order and parents in the validation subgraph replay
-env: py3.10-torch2.13.0
-torch: 2.13.0+cpu
-source: 8374d352d0d9cfd6cbb6ff5c8447861d5c39d54d (dirty)
-recorded: 2026-11-05T12:29:09.257886+00:00
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1

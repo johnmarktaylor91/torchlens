@@ -5336,7 +5336,7 @@ alphabetical order.
 | `Op.get_children` | Return the child `Op` objects of this Op |
 | `Op.get_parents` | Return the parent `Op` objects of this Op |
 | `Op.autograd.grad_dtype` | Dtype of this Op's saved output gradient |
-| `Op.autograd.grad_fn` | The autograd `grad_fn` node of this Op's output tensor, or `None` |
+| `Op.autograd.grad_fn` | The autograd `grad_fn` node of this Op's output tensor, or `None`; for an in-place write through a view, the base's `CopySlices` node (it runs the write's backward), not the view's regenerated node |
 | `Op.autograd.grad_fn_class_name` | Class name of this Op's autograd node |
 | `Op.autograd.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
 | `Op.autograd.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
@@ -5528,7 +5528,7 @@ alphabetical order.
 | `Layer.source.fx_path` | The FX-style qualified path of a single-op layer, or `None` |
 | `Layer.get_children` | Return the child `Layer` objects of this layer |
 | `Layer.get_parents` | Return the parent `Layer` objects of this layer |
-| `Layer.autograd.grad_fn` | The autograd `grad_fn` node of this layer's output tensor, or `None` |
+| `Layer.autograd.grad_fn` | The autograd `grad_fn` node of this layer's output tensor, or `None`; for an in-place write through a view, the base's `CopySlices` node (it runs the write's backward), not the view's regenerated node |
 | `Layer.autograd.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
 | `Layer.autograd.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
 | `Layer.autograd.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |

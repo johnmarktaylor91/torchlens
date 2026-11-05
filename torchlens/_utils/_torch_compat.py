@@ -421,12 +421,6 @@ def _real_op_probe_leaf() -> types.ModuleType:
     return _kernel_probes
 
 
-def _probe_cached_untyped_storage_wrapper() -> bool:
-    """Return whether repeated ``Tensor.untyped_storage()`` calls return one wrapper."""
-
-    return bool(_real_op_probe_leaf().probe_cached_untyped_storage_wrapper())
-
-
 def _probe_cpu_half_kernels() -> bool:
     """Return whether CPU Half kernels exist (``False`` on torch 2.1-2.2; see the leaf)."""
 
@@ -1232,7 +1226,9 @@ HAS_SDPA_EMPTY_ROW_ZERO: bool = _real_op_probe_leaf().probe_sdpa_empty_row_zero(
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_HOP_COMPILATION_ENV: bool = _probe_attribute_paths("HAS_HOP_COMPILATION_ENV")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
-HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
+HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = bool(
+    _real_op_probe_leaf().probe_cached_untyped_storage_wrapper()
+)
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
 HAS_DYNAMO_ORIG_CALLABLE_MARKER: bool = False
 HAS_DYNAMO_EXPLAIN: bool = _probe_dynamo_explain_module()
@@ -1275,6 +1271,7 @@ HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_attribute_paths("HAS_NODE_PREHOOK")
+HAS_NODE_SEQUENCE_NR: bool = bool(_real_op_probe_leaf().probe_node_sequence_nr())
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_FP32_PRECISION_CONTROLS: bool = _probe_attribute_paths("HAS_FP32_PRECISION_CONTROLS")
 HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
@@ -1500,6 +1497,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_LAZY_MODULE_ALLOWED_METHODS",
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
+    "HAS_NODE_SEQUENCE_NR",
     "HAS_DETERMINISTIC_FILL_FLAG",
     "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",

@@ -9,13 +9,12 @@ recorded as the operation's autograd handle.
 An in-place write through a view also rebases the view's autograd history:
 ``rebase_history`` gives the base a fresh ``CopySlices`` node that takes the
 place of the view's own node in the graph. ``rebind_rebased_view_producers``
-moves the ops whose recorded node autograd discarded onto that ``CopySlices``.
+records ``CopySlices`` as the in-place op's node and moves the ops whose
+recorded node autograd discarded onto it.
 """
 
 from __future__ import annotations
 
-import functools
-import re
 from collections.abc import Mapping
 from contextlib import suppress
 from typing import Any
@@ -23,6 +22,10 @@ from typing import Any
 import torch
 
 from ..._state import pause_logging
+from ..._utils._autograd_view_nodes import (
+    autograd_node_sequence_nr,
+    is_view_backward_class as _is_view_backward_class,
+)
 from ..._utils._internal_read import internal_scalar_read
 from ..._utils._tensor_label import get_tensor_label
 
@@ -93,68 +96,15 @@ def _first_input_node(node: Any) -> Any:
     return edges[0][0] if edges else None
 
 
-_BACKWARD_CLASS = re.compile(r"([A-Z][A-Za-z0-9]*?)Backward\d+")
+def _view_chain_to_prior(start: Any, copy_slices: Any) -> list[Any]:
+    """Return the view nodes from ``start`` down to ``CopySlices``'s first input, or ``[]``.
 
-
-@functools.cache
-def _is_view_backward_class(class_name: str) -> bool:
-    """Return whether ``class_name`` is the backward node of an aten view op.
-
-    The class name (``SliceBackward0``) names its forward op (``aten::slice``); the
-    op is a view when one of its schemas takes an argument that its result
-    aliases without writing it (``Tensor(a) self``). Read from torch's own
-    schemas, so new view ops need no list here; any name that does not resolve
-    is not a view (the caller then refuses to rebind).
-    """
-
-    match = _BACKWARD_CLASS.fullmatch(class_name)
-    if match is None:
-        return False
-    snake = re.sub(r"(?<!^)(?=[A-Z])", "_", match.group(1)).lower()
-    return _aten_op_is_view(snake) or _aten_op_is_view(f"_{snake}")
-
-
-def _aten_op_is_view(op_name: str) -> bool:
-    """Return whether ``aten::<op_name>`` has a schema whose result aliases an input unwritten."""
-
-    try:
-        packet = getattr(torch.ops.aten, op_name)
-        schemas = [getattr(packet, overload)._schema for overload in packet.overloads()]
-    except (AttributeError, RuntimeError):
-        return False
-    return any(
-        arg.alias_info is not None and not arg.alias_info.is_write
-        for schema in schemas
-        for arg in schema.arguments
-    )
-
-
-def _sequence_nr(node: Any) -> int | None:
-    """Return an autograd node's creation sequence number, or ``None``."""
-
-    read = getattr(node, "_sequence_nr", None)
-    return read() if callable(read) else None
-
-
-def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -> list[Any]:
-    """Return the view nodes a view write's ``CopySlices`` provably cut out of the graph.
-
-    ``rebase_history`` points ``CopySlices``'s first edge at the base's prior node
-    and drops the written view's node (for a view of a view, every intermediate
-    view node) from the graph. The chain from the receiver's recorded node is
-    returned only when all of this is proven:
-
-    - every node on it is a view backward node, walked by first-input edges, and
-      the last one's first input IS ``CopySlices``'s first input (the base's node
-      at the write). A view taken before an earlier write of the same base meets
-      the base lineage further back and is refused;
-    - no other recorded op's node has an edge into the chain (a reader of the
-      view before the write keeps the view's node alive in the graph);
-    - ``CopySlices`` was created after every recorded op's node, so it is this
-      write's node and not one an unlogged earlier write left behind.
-
-    Anything else (the walk reaches ``CopySlices`` or a non-view node, passes the
-    bound, or a check fails) proves nothing and returns ``[]``.
+    ``rebase_history`` points ``CopySlices``'s first edge at the base's prior node.
+    The chain is walked by first-input edges from the receiver's recorded node;
+    every node on it must be a view backward node, and the walk must land exactly
+    on that prior node (a view taken before an earlier write of the same base
+    meets the base lineage further back and is refused). Reaching
+    ``CopySlices``, a non-view node or the depth bound returns ``[]``.
     """
 
     prior = _first_input_node(copy_slices)
@@ -166,74 +116,99 @@ def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any
         chain.append(node)
         node = _first_input_node(node)
         if node is prior:
-            return chain if _chain_owned_by_this_write(chain, copy_slices, handles) else []
+            return chain
     return []
 
 
-def _chain_owned_by_this_write(
-    chain: list[Any], copy_slices: Any, handles: Mapping[str, Any]
-) -> bool:
-    """Return whether no other recorded node reads ``chain`` and ``CopySlices`` is newest.
+def _copy_slices_is_newest(copy_slices: Any, handles: Mapping[str, Any], skip: set[int]) -> bool:
+    """Return whether ``CopySlices`` was created after every recorded node outside ``skip``.
 
-    Parameters
-    ----------
-    chain:
-        Candidate dropped view nodes, receiver's node first.
-    copy_slices:
-        The base's ``CopySlices`` node after the write.
-    handles:
-        The capture's recorded node per op label.
+    A node without a sequence number (or a torch without ``_sequence_nr``) proves
+    nothing, so the answer is ``False``.
     """
 
-    newest = _sequence_nr(copy_slices)
+    newest = autograd_node_sequence_nr(copy_slices)
     if newest is None:
         return False
-    chain_ids = {id(node) for node in chain}
     for handle in handles.values():
-        if handle is None or id(handle) in chain_ids:
+        if handle is None or id(handle) in skip:
             continue
-        handle_nr = _sequence_nr(handle)
+        handle_nr = autograd_node_sequence_nr(handle)
         if handle_nr is None or handle_nr >= newest:
-            return False
-        edges = getattr(handle, "next_functions", None) or ()
-        if any(id(edge[0]) in chain_ids for edge in edges if edge[0] is not None):
             return False
     return True
 
 
-def rebind_rebased_view_producers(trace: Any, receiver: Any) -> None:
-    """Point ops whose node an in-place view write discarded at its ``CopySlices``.
+def _chain_has_recorded_reader(chain: list[Any], handles: Mapping[str, Any]) -> bool:
+    """Return whether a recorded node outside ``chain`` has an edge into it."""
 
-    Called during capture only, after an in-place op ran and before the receiver
-    takes the op's label; postprocess reads the handle index and never writes it.
-    When the receiver is a view, autograd's ``rebase_history`` gave the base a new
-    ``CopySlices`` node that takes the place of the view's node: the op that
-    produced the view (and any intermediate view op) recorded a node that no
-    backward pass can reach. Each such op's recorded handle moves to the
-    ``CopySlices`` node, so the recorded backward graph keeps the forward
-    topology (the node between the view's consumers and the base's producer).
-    For a view of a view, every view op on the chain shares that node.
+    chain_ids = {id(node) for node in chain}
+    for handle in handles.values():
+        if handle is None or id(handle) in chain_ids:
+            continue
+        edges = getattr(handle, "next_functions", None) or ()
+        if any(id(edge[0]) in chain_ids for edge in edges if edge[0] is not None):
+            return True
+    return False
 
-    The rebind is fail-closed: it happens only under grad mode, for a fresh
-    ``CopySlices`` (no op records it yet) that the receiver's regenerated node
-    reads from, and when ``_orphaned_view_nodes`` proves the chain. Anything else
-    leaves the records unchanged, so the backward-graph invariant still decides.
 
-    Parameters
-    ----------
-    trace:
-        Active capture trace.
-    receiver:
-        The live tensor the in-place op wrote through.
+def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -> list[Any]:
+    """Return the view nodes a view write's ``CopySlices`` provably cut out of the graph.
+
+    ``rebase_history`` drops the written view's node (for a view of a view, every
+    intermediate view node) from the graph. The chain from the receiver's
+    recorded node is returned only when all of this is proven:
+
+    - ``_view_chain_to_prior`` walks it to ``CopySlices``'s first input;
+    - no other recorded op's node has an edge into the chain (a reader of the
+      view before the write keeps the view's node alive in the graph). Only
+      recorded nodes are seen: a consumer whose op was not recorded is outside
+      this proof;
+    - ``CopySlices`` was created after every recorded op's node, so it is this
+      write's node and not one an unlogged earlier write left behind.
+
+    Anything else proves nothing and returns ``[]``.
+    """
+
+    chain = _view_chain_to_prior(start, copy_slices)
+    if not chain or _chain_has_recorded_reader(chain, handles):
+        return []
+    skip = {id(node) for node in chain}
+    return chain if _copy_slices_is_newest(copy_slices, handles, skip) else []
+
+
+def _view_write_node(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -> Any | None:
+    """Return ``CopySlices`` as the in-place op's node when the view write is proven.
+
+    The view's chain is proven (``_view_chain_to_prior``) and ``CopySlices`` is
+    this write's node (created after every recorded node). ``CopySlices`` runs
+    the write's backward for the base, so every gradient of the write passes
+    through it; the receiver's regenerated view node is only a view OF it, which
+    backward visits only when the written view is read again. ``None`` when any
+    of this is unproven.
+    """
+
+    chain = _view_chain_to_prior(start, copy_slices)
+    if not chain or not _copy_slices_is_newest(copy_slices, handles, set()):
+        return None
+    return copy_slices
+
+
+def _fresh_view_write(trace: Any, receiver: Any) -> tuple[dict[str, Any], Any, Any] | None:
+    """Return ``(handles, receiver's recorded node, CopySlices)`` for a fresh view write.
+
+    Only under grad mode, for a grad-requiring view whose base now holds a
+    ``CopySlices`` that no op records yet and that the receiver's regenerated
+    node reads from; ``None`` otherwise.
     """
 
     handles = getattr(getattr(trace, "capture_events", None), "grad_fn_handles_by_label_raw", None)
     if handles is None or not isinstance(receiver, torch.Tensor) or not torch.is_grad_enabled():
-        return
+        return None
     with pause_logging(), internal_scalar_read():
         base = receiver._base if receiver.requires_grad and receiver._is_view() else None
         if base is None:
-            return
+            return None
         copy_slices = base.grad_fn
         view_node = receiver.grad_fn
         label = get_tensor_label(receiver)
@@ -243,13 +218,58 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> None:
         or _first_input_node(view_node) is not copy_slices
         or any(handle is copy_slices for handle in handles.values())
     ):
-        return
-    orphaned = _orphaned_view_nodes(handles.get(label), copy_slices, handles)
-    if not orphaned:
-        return
+        return None
+    return handles, handles.get(label), copy_slices
+
+
+def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
+    """Bind an in-place view write to the base's ``CopySlices``; return the writer's node.
+
+    Called during capture only, after an in-place op ran and before the receiver
+    takes the op's label; postprocess reads the handle index and never writes it.
+    When the receiver is a view, autograd's ``rebase_history`` gave the base a new
+    ``CopySlices`` node that runs the write's backward. The in-place op owns it:
+    it is returned and recorded as the op's node, whichever of the base, the view
+    or another alias is read afterwards (a later read of the view goes through a
+    regenerated view node that reads ``CopySlices``).
+
+    When no recorded op reads the view's nodes, the op that produced the view
+    (and any intermediate view op) also recorded a node no backward pass can
+    reach; each such op's handle moves to ``CopySlices`` too (for a view of a
+    view, every view op on the chain shares it), since its backward is folded
+    into the write's. A recorded reader of the view before the write keeps the
+    view producers on their own nodes.
+
+    The binding is fail-closed: ``_fresh_view_write`` and the proof helpers must
+    establish the shape. Anything else returns ``None`` and leaves the records
+    unchanged, so the backward-graph invariant decides.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    receiver:
+        The live tensor the in-place op wrote through.
+
+    Returns
+    -------
+    Any | None
+        The node to record for the in-place op instead of the receiver's
+        ``grad_fn``, or ``None`` to keep the receiver's ``grad_fn``.
+    """
+
+    found = _fresh_view_write(trace, receiver)
+    if found is None:
+        return None
+    handles, start, copy_slices = found
+    writer_node = _view_write_node(start, copy_slices, handles)
+    if writer_node is None:
+        return None
+    orphaned = _orphaned_view_nodes(start, copy_slices, handles)
     for raw_label, handle in list(handles.items()):
         if any(handle is node for node in orphaned):
             handles[raw_label] = copy_slices
     # Pin the node for the trace's lifetime, as ``backward._strong_grad_fn_refs``
     # pins every recorded node, so its ``id()`` (the GradFn key) is never reused.
     trace.__dict__.setdefault("_backward_gradfn_refs", []).append(copy_slices)
+    return writer_node
