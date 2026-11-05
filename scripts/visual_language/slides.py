@@ -1291,7 +1291,7 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The input images as a montage", "node(shape=none)"),
+            Key("The input images as a montage", "node(name=input_1pass1, shape=box)"),
             Key(
                 "preprocess names the transform, UNVERIFIED here",
                 "node(text~preprocess)",
@@ -1438,7 +1438,7 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 #: Unencoded reasons: the exact legend line and when TorchLens writes it.
 UNENCODED: tuple[tuple[str, str], ...] = (
-    ("n/a = unencoded", "a node has no value for the source; the legend counts them"),
+    ("n/a = unencoded", "a node has no value for the source; it stays white"),
     ("rank mapping (ordinal, not ratio)", 'transform="rank": the fill shows order only'),
     ("log scale (scale-invariant; values <= 0 unencoded)", 'transform="log"'),
     ("values <= 0 -- unencoded under the log transform", "a value at or below zero under log"),

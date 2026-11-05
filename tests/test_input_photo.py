@@ -143,9 +143,8 @@ def test_photo_drawing_renders_from_another_working_directory(
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
-    drawing = tl.trace(_TinyVision(), _photo()).draw(
-        path=str(tmp_path / "graph"), file_format="svg"
-    )
+    trace = tl.trace(_TinyVision(), _photo())
+    drawing = trace.draw(path=str(tmp_path / "graph"), file_format="svg")
     assert _IMG_ROW.search(_input_node(drawing.dot)), drawing.dot
     assert "data:image/png;base64" in (tmp_path / "graph.svg").read_text()
     shown = drawing._repr_svg_()
