@@ -30,7 +30,7 @@ import importlib
 import inspect
 import io
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -97,9 +97,10 @@ class ExampleResult:
     path
         The symbol's public path.
     status
-        ``ok``, ``missing``, ``skipped`` or ``failed``.
+        ``ok``, ``missing``, ``skipped``, ``refused`` or ``failed``.
     detail
-        The doctest report on failure, or the module a skip waited on.
+        The doctest report on failure, the module a skip waited on, or the
+        exception a ``refused`` example stopped at.
 
     Examples
     --------
@@ -274,7 +275,11 @@ def ambient_namespace() -> dict[str, Any]:
     }
 
 
-def run_example(symbol: PublicSymbol, namespace: dict[str, Any] | None = None) -> ExampleResult:
+def run_example(
+    symbol: PublicSymbol,
+    namespace: dict[str, Any] | None = None,
+    accept: Callable[[BaseException], bool] | None = None,
+) -> ExampleResult:
     """Execute one symbol's example and report the outcome.
 
     Parameters
@@ -283,12 +288,18 @@ def run_example(symbol: PublicSymbol, namespace: dict[str, Any] | None = None) -
         The public symbol.
     namespace
         Ambient names; a fresh :func:`ambient_namespace` copy when omitted.
+    accept
+        Optional predicate over an exception a line raised unexpectedly. When it
+        returns True the example stops there (later lines build on the refused one
+        and are not run) and reports ``refused``; the caller owns the capability rule
+        that makes the exception acceptable.
 
     Returns
     -------
     ExampleResult
         ``missing`` when there is no example, ``skipped`` when its declared optional
-        module does not import, ``failed`` with the doctest report, else ``ok``.
+        module does not import, ``refused`` when it stopped at an accepted exception
+        with no earlier failure, ``failed`` with the doctest report, else ``ok``.
 
     Examples
     --------
@@ -310,11 +321,43 @@ def run_example(symbol: PublicSymbol, namespace: dict[str, Any] | None = None) -
     globs.setdefault(symbol.path.rsplit(".", 1)[-1], symbol.obj)
     test = doctest.DocTest(examples, globs, symbol.path, None, None, None)
     report = io.StringIO()
-    runner = doctest.DocTestRunner(optionflags=OPTION_FLAGS, verbose=False)
+    runner = _AcceptingRunner(accept, optionflags=OPTION_FLAGS, verbose=False)
     runner.run(test, out=report.write, clear_globs=True)
+    if runner.accepted is not None and runner.failures == 1:
+        return ExampleResult(symbol.path, "refused", repr(runner.accepted))
     if runner.failures:
         return ExampleResult(symbol.path, "failed", report.getvalue())
     return ExampleResult(symbol.path, "ok", "")
+
+
+class _AcceptingRunner(doctest.DocTestRunner):
+    """A doctest runner that stops an example at the first exception ``accept`` admits.
+
+    doctest counts the stopping line as a failure; :func:`run_example` reads a run
+    whose only failure is the accepted line as ``refused``. The lines after it are
+    marked ``SKIP`` (doctest reads each line's options as it reaches it), because
+    they build on names the refused line would have bound.
+    """
+
+    def __init__(self, accept: Callable[[BaseException], bool] | None, **kwargs: Any) -> None:
+        """Keep the predicate; every other argument goes to ``DocTestRunner``."""
+
+        super().__init__(**kwargs)
+        self._accept = accept
+        self.accepted: BaseException | None = None
+
+    def report_unexpected_exception(
+        self, out: Any, test: doctest.DocTest, example: doctest.Example, exc_info: Any
+    ) -> None:
+        """Stop the example at an accepted exception; report any other one as doctest does."""
+
+        if self._accept is None or self.accepted is not None or not self._accept(exc_info[1]):
+            super().report_unexpected_exception(out, test, example, exc_info)
+            return
+        self.accepted = exc_info[1]
+        position = next(index for index, line in enumerate(test.examples) if line is example)
+        for later in test.examples[position + 1 :]:
+            later.options[doctest.SKIP] = True
 
 
 def census_rows(symbols: list[PublicSymbol]) -> list[tuple[str, int, int]]:

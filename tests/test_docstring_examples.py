@@ -12,7 +12,10 @@ not written yet, each with a reason. It is checked both ways: an unledgered symb
 without an example fails, and a ledger entry whose symbol now carries an example (or no
 longer exists) ALSO fails, so the ledger cannot rot into a permanent exemption. An
 example that needs an optional dependency starts with ``>>> # requires: <module>`` and
-is skipped, not failed, when that module is absent.
+is skipped, not failed, when that module is absent. An example that needs a torch surface
+the running build lacks (one-backward reads without GradientEdge) stops, as ``refused``, at
+that capability's named refusal (``tests/support/capability_routes.py``); where the surface
+exists the same refusal fails like any other exception.
 
 Each example captures a small model, so the family is ``heavy`` (worker and backstop
 tiers, never smoke); one cell per package (the packages the committed census lists, read
@@ -36,6 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
 import docstring_examples  # noqa: E402
+
+from tests.support.capability_routes import accepts_capability_refusal  # noqa: E402
 
 pytestmark = pytest.mark.heavy
 
@@ -187,7 +192,9 @@ def test_every_example_runs(package: str) -> None:
     for symbol in symbols:
         if symbol.path in PENDING:
             continue
-        result = docstring_examples.run_example(symbol, namespace)
+        result = docstring_examples.run_example(
+            symbol, namespace, accept=accepts_capability_refusal
+        )
         if result.status == "failed":
             failures.append(f"{result.path}:\n{result.detail}")
     assert not failures, f"{len(failures)} examples failed:\n" + "\n".join(failures)
@@ -232,6 +239,66 @@ def test_requires_marker_runs_when_module_is_present() -> None:
         "tl.present_optional", __name__, "function", _present_optional
     )
     assert docstring_examples.run_example(symbol, {}).status == "ok"
+
+
+def _refusing_read() -> None:
+    """Stand-in whose example stops at the typed one-backward refusal.
+
+    Examples
+    --------
+    >>> from torchlens.attribution.onebackward import ReadError
+    >>> raise ReadError("no GradientEdge here", code="onebackward_torch_unsupported")
+    >>> name_only_the_refused_read_would_bind
+    1
+    """
+
+
+def _fails_before_refusing() -> None:
+    """Stand-in whose example prints the wrong value before the refusal.
+
+    Examples
+    --------
+    >>> 1 + 1
+    3
+    >>> from torchlens.attribution.onebackward import ReadError
+    >>> raise ReadError("no GradientEdge here", code="onebackward_torch_unsupported")
+    """
+
+
+def _accept_refusal(exc: BaseException) -> bool:
+    """Accept the typed one-backward refusal regardless of the running torch."""
+
+    from torchlens.attribution.onebackward import ReadError
+
+    return isinstance(exc, ReadError) and exc.fields.get("code") == "onebackward_torch_unsupported"
+
+
+def test_accepted_exception_stops_the_example_as_refused() -> None:
+    """An exception the caller accepts ends the example: later lines do not run or fail."""
+
+    symbol = docstring_examples.PublicSymbol("tl.refusing", __name__, "function", _refusing_read)
+    result = docstring_examples.run_example(symbol, {}, accept=_accept_refusal)
+    assert result.status == "refused"
+    assert "onebackward_torch_unsupported" in result.detail
+
+
+def test_unaccepted_exception_still_fails() -> None:
+    """Without an accepting predicate (or with one that declines) the refusal fails."""
+
+    symbol = docstring_examples.PublicSymbol("tl.refusing", __name__, "function", _refusing_read)
+    assert docstring_examples.run_example(symbol, {}).status == "failed"
+    declined = docstring_examples.run_example(symbol, {}, accept=lambda _exc: False)
+    assert declined.status == "failed"
+
+
+def test_failure_before_an_accepted_refusal_still_fails() -> None:
+    """A wrong output earlier in the example is never excused by a later refusal."""
+
+    symbol = docstring_examples.PublicSymbol(
+        "tl.fails_first", __name__, "function", _fails_before_refusing
+    )
+    result = docstring_examples.run_example(symbol, {}, accept=_accept_refusal)
+    assert result.status == "failed"
 
 
 #: Optional modules the enforcing CI environment installs (``scripts/smoke_ci_parity.py``):
@@ -307,7 +374,9 @@ def test_optional_examples_run(module: str) -> None:
     namespace = docstring_examples.ambient_namespace()
     failures = []
     for symbol in symbols:
-        result = docstring_examples.run_example(symbol, namespace)
-        if result.status != "ok":
+        result = docstring_examples.run_example(
+            symbol, namespace, accept=accepts_capability_refusal
+        )
+        if result.status not in {"ok", "refused"}:
             failures.append(f"{result.path} ({result.status}):\n{result.detail}")
     assert not failures, f"{len(failures)} examples did not run:\n" + "\n".join(failures)
