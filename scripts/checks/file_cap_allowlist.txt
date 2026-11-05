@@ -100,7 +100,7 @@ torchlens/_data_classes/module.py	2569
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3326
+torchlens/_data_classes/op.py	3324
 torchlens/_data_classes/op.py::Op.__getattribute__	77
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
@@ -343,7 +343,7 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1555
+torchlens/_postprocess/finalization.py	1484
 torchlens/_postprocess/finalization.py::_build_conditional_records	154
 torchlens/_postprocess/finalization.py::_build_module_logs	206
 torchlens/_postprocess/finalization.py::_build_root_module_log	102
@@ -1386,7 +1386,7 @@ torchlens/validation/_backward.py	821
 torchlens/validation/_backward.py::_clone_inputs_with_grad	64
 torchlens/validation/_backward.py::_sum_tensors	73
 torchlens/validation/_backward.py::validate_backward_pass	283
-torchlens/validation/_completeness_backstop.py::completeness_backstop_counts	179
+torchlens/validation/_completeness_backstop.py::completeness_backstop_counts	177
 torchlens/validation/_consolidated.py::_intervention_report	69
 torchlens/validation/_consolidated.py::validate	233
 torchlens/validation/_core.py	3689
