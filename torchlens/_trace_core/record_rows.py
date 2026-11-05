@@ -1,13 +1,13 @@
-"""Generic store-backed record facades for the non-Op record kinds (M8).
+"""Generic store-backed record facades for the non-Op record kinds.
 
 Converts a dict-backed record class (``Param``, ``Buffer``,
 ``FuncCallLocation``, ``ModuleCall``, ``Module``) into a row facade over the
 columnar row stores: every declared stored field becomes a class-level data
 descriptor reading and writing one row cell, so the per-record ``__dict__``
 survives only for the two store-binding keys and undeclared user attributes
-(FORK-7 default: arbitrary user attributes stay supported).
+(arbitrary user attributes stay supported).
 
-Storage reuses the M5 machinery verbatim: ``OpRowStore`` (layout-agnostic row
+Storage reuses the machinery verbatim: ``OpRowStore`` (layout-agnostic row
 store, row-major while building, sealed after postprocess) holds the
 per-trace kind tables registered in ``TraceCore.kind_rows``; a record built
 outside a captured run (direct construction, pickle restore, fork shells)
@@ -55,10 +55,10 @@ class RecordCellField:
     def __get__(self, record: Any, objtype: Any = None) -> Any:
         """Return the row cell value; unset cells raise ``AttributeError``.
 
-        A ``PooledCell`` (M14 duplicate/empty-container pooling) hydrates a
+        A ``PooledCell`` (duplicate/empty-container pooling) hydrates a
         fresh exact-type container on first read and caches it back, so
         identity is stable across reads and per-row in-place mutation stays
-        isolated. A compacted singleton-label cell (M14 slice 2: the exact
+        isolated. A compacted singleton-label cell (the exact
         str object registered by the freeze-seam pass) decodes to a fresh
         one-element list the same way — identity-stable after the first
         read, per-row mutation isolated, uninspected rows retain no list.
@@ -150,7 +150,7 @@ def record_state_items(record: Any) -> Iterator[tuple[str, Any]]:
     if store is not None:
         row = instance_dict[ROW_KEY]
         for name, value in store.items(row):
-            # Decode the M14 storage encodings exactly like the cell
+            # Decode the storage encodings exactly like the cell
             # descriptor does: pickle state must carry real containers, never
             # a raw PooledCell (restore refuses it as corrupted state) or a
             # compacted singleton-label str (restore would coerce it to a
@@ -208,7 +208,7 @@ def adopt_rows(store_registry: dict, kind: str, records: Any) -> None:
     """Adopt detached facade records into ``store_registry[kind]``.
 
     The registry-level twin of ``adopt_records`` used by owners other than
-    the forward core's kind tables (the M9 backward epochs).
+    the forward core's kind tables (the backward epochs).
     """
 
     records = list(records)
@@ -238,7 +238,7 @@ def adopt_rows(store_registry: dict, kind: str, records: Any) -> None:
 
 
 class BackwardEpoch:
-    """One atomic backward-projection generation (M9).
+    """One atomic backward-projection generation.
 
     Bound by the projection materializer AFTER a successful projection: a
     full rebuild atomically replaces the core's epoch list with one fresh

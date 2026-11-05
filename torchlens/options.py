@@ -417,7 +417,7 @@ class CaptureOptions(_OptionsDisplay):
             captured autograd graph alongside the payloads: measured ~1.48x the
             saved-payload bytes live on a resnet18 capture, vs ~1.01x with
             ``True``. Pass ``True`` for forward-only analysis when that
-            multiplier matters (R33).
+            multiplier matters.
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
         replayable:
@@ -554,7 +554,7 @@ class CaptureOptions(_OptionsDisplay):
             per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
         structure_only:
             Whether this capture runs under the structure-only contract
-            (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
+            (DOCUMENTED-UNSTABLE surface, pending naming-session ratification;
             no deprecation shim owed on rename). Structure-only capture records
             the op graph, module hierarchy, parameter geometry, and per-op
             shape/dtype as HYPOTHESES while every value-bearing claim is refused
@@ -564,7 +564,7 @@ class CaptureOptions(_OptionsDisplay):
         log_injections:
             Whether computation inside intervention hooks is recorded as anchored
             injected-op records served by ``Trace.injected_ops`` / ``Trace.model_ops``
-            (F01 stage 0-1, DOCUMENTED-UNSTABLE; stage-1 saves refuse typed -- F44).
+            (DOCUMENTED-UNSTABLE; stage-1 saves refuse typed).
         measure_host_peak_memory:
             Whether CPU captures measure ``Trace.cost.forward_peak_memory`` and
             ``Trace.cost.backward_peak_memory`` (a session-time knob).

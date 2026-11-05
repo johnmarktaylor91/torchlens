@@ -151,7 +151,7 @@ _QUANTIZED_MODULE_NAME_PREFIXES: tuple[str, ...] = (
     "torch.ao.nn.intrinsic.quantized",
     "torch.ao.nn.qat",
     "torch.nn.qat",
-    # bitsandbytes 8/4-bit modules (lane F37): same disclosed-degradation
+    # bitsandbytes 8/4-bit modules: same disclosed-degradation
     # class -- capture works with value parity, but quantization-state reads
     # (state.CB/SCB, packed uint8 payloads) sit outside the dense-tensor
     # contract and FLOPs/out-dtype handling is best-effort.
@@ -257,7 +257,7 @@ def _iter_tensors_with_paths(
     ------
     tuple[str, torch.Tensor]
         Reachable tensor values with the path that reaches them, so refusals
-        can name WHERE the offending tensor sits (R67).
+        can name WHERE the offending tensor sits.
 
     Notes
     -----
@@ -376,11 +376,11 @@ def check_model_and_input_variants(
         input_args: Positional arguments that will be passed to
             ``model.forward`` (may contain nested containers of tensors).
         input_kwargs: Keyword arguments to ``model.forward``.
-        admit_meta: Scoped weights-free admission (W2, weightsfree memo D2):
+        admit_meta: Scoped weights-free admission:
             ``True`` exactly when resolved ``CaptureOptions.structure_only``
             is in force at a CAPTURE entry. Meta tensors are then admitted
             IFF the capability table's ``meta_admission`` row is flipped
-            (D8) AND the substrate is uniform (all-meta inputs and state;
+            AND the substrate is uniform (all-meta inputs and state;
             mixed cells refuse typed with
             ``structure_only_substrate_mismatch``). The rerun, backward, and
             fastlog gate sites thread the default — a permanently closed
@@ -399,15 +399,13 @@ def check_model_and_input_variants(
     # Assignment-redirecting wrappers (transformer_lens TransformerBridge) are
     # refused before anything else: instrumentation assignments would silently
     # land on the wrapped components and capture would die with an internal
-    # AttributeError (mikit F10).
+    # AttributeError (mikit).
     from ._model_wrappers import check_model_wrapper
 
     check_model_wrapper(model)
 
-    # Un-materialized lazy state does not refuse capture entry. Lazy
-    # PARAMETERS flipped off with the numbers-truth completion unit
-    # (quickstart memo wave 1c); lazy BUFFERS flipped off with the F20
-    # buffer-side completion (A10-fix2 remainder): the buffer-write tracker
+    # Un-materialized lazy state does not refuse capture entry (lazy PARAMETERS
+    # and lazy BUFFERS alike): the buffer-write tracker
     # skips storage-less pending buffers at index time, torch's lazy
     # pre-hook materialization plumbing passes through the wrapper unlogged,
     # and the materialized buffer registers at the module-entry gate. The
@@ -501,8 +499,8 @@ def check_model_and_input_variants(
             offenses.append(_offense_entry(f"{tracing_kind} in keyword input", "", path, t))
 
     # Model params + buffers (dedupe across both generators).
-    # Accelerate-offload-backed meta state is admitted with evidence (lane
-    # F37 / R5 deployment envelope): the hook's weights_map materializes the
+    # Accelerate-offload-backed meta state is admitted with evidence
+    # (deployment envelope): the hook's weights_map materializes the
     # real values onto the execution device for the duration of each module
     # call, so the captured forward sees real tensors. The set is computed
     # lazily on the FIRST meta tensor found -- zero cost on the default path.
@@ -558,8 +556,7 @@ def check_model_and_input_variants(
             + (f": {offense['reason']}" if offense["reason"] else "")
             for offense in unique
         )
-        # L7a default-path teaching enrichment (memo 1.4-B item 3, ships regardless
-        # of D8): name the USER callsite and point meta-init holders at the
+        # Default-path teaching enrichment: name the USER callsite and point meta-init holders at the
         # structure-only mode's contract. No new code, same offense payload shape.
         caller_file, caller_line = _first_user_frame()
         callsite_note = ""
@@ -573,7 +570,7 @@ def check_model_and_input_variants(
             if _meta_admission_row_open():
                 meta_pointer = (
                     "\nMeta-initialized models are admitted ONLY under the "
-                    "structure-only contract (decision point D8): pass "
+                    "structure-only contract: pass "
                     "capture=CaptureOptions(structure_only=True) with an "
                     "all-meta model and all-meta inputs to record the op "
                     "graph, module nesting, and shape/dtype HYPOTHESES with "
@@ -582,8 +579,8 @@ def check_model_and_input_variants(
                 )
             else:
                 meta_pointer = (
-                    "\nMeta-initialized models stay refused at this gate "
-                    "(decision point D8); structure-only capture "
+                    "\nMeta-initialized models stay refused at this gate; "
+                    "structure-only capture "
                     "(structure_only=True) records graph structure and shape "
                     "hypotheses for supported substrates -- see "
                     "docs/reference/structure_only_capabilities.md."
@@ -619,11 +616,9 @@ def check_model_and_input_variants(
 
 
 def _meta_admission_row_open() -> bool:
-    """Whether the capability table's ``meta_admission`` row is D8-flipped.
+    """Whether the capability table's ``meta_admission`` row is flipped open.
 
-    The capability table is the ONE code authority for the flip (weightsfree
-    memo build item 16): admission plumbing lands first with the row still
-    refusing, and THE FLIP is the last merge — the row state is read through
+    The capability table is the ONE code authority for the flip: the row state is read through
     the table module's own accessor, never duplicated.
     """
 
@@ -633,18 +628,18 @@ def _meta_admission_row_open() -> bool:
 
 
 def _maybe_admit_meta(model: nn.Module, input_args: Any, input_kwargs: dict[str, Any]) -> Any:
-    """Classify substrates and admit a uniform meta capture entry (W2/D2).
+    """Classify substrates and admit a uniform meta capture entry.
 
     Returns ``None`` when no meta tensor is present (the ordinary real-path
-    scan proceeds) or when the D8 flip has not landed (the historical meta
+    scan proceeds) or when the flip has not landed (the historical meta
     refusal proceeds unchanged). Raises typed on a mixed substrate. On
-    admission, runs the D20 identity self-test and returns the
+    admission, runs the identity self-test and returns the
     ``MetaAdmissionRecord`` consumed at settlement.
 
     Substrate uniformity is judged over the complete registered
     parameter/buffer scan (tied objects deduplicated by identity) plus the
     normalized input tensor leaves — never a walk of arbitrary Python object
-    graphs (memo D11). Tracing variants (fake/functional) are never
+    graphs. Tracing variants (fake/functional) are never
     classified as meta; their own refusals run in the main scan.
     """
 
@@ -724,7 +719,7 @@ def _classify_state_substrates(model: nn.Module) -> tuple[list[str], list[str]]:
     """Partition registered parameters/buffers into (meta names, real names).
 
     The complete registered scan with tied objects deduplicated by identity
-    (weightsfree memo D11) — never a walk of arbitrary Python object graphs.
+    — never a walk of arbitrary Python object graphs.
     """
 
     meta_state: list[str] = []
@@ -743,7 +738,7 @@ def _classify_state_substrates(model: nn.Module) -> tuple[list[str], list[str]]:
 def _ambient_device_context_present() -> bool:
     """Whether a caller-active torch ``DeviceContext`` mode is on the stack.
 
-    Recorded as evidence-envelope provenance (D19). The admitted capture
+    Recorded as evidence-envelope provenance. The admitted capture
     scope absorbs or refuses the mode at forward time; entry only observes.
     """
 

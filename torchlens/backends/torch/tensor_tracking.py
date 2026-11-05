@@ -198,43 +198,43 @@ def _add_tensor_backward_hook(
 ) -> None:
     """Register a backward hook on ``t`` that captures its grad into Trace.
 
-    The hook closure captures a ``weakref`` to Trace (not a strong reference)
-    so that the hook doesn't prevent GC of the Trace after the user drops it
-    (GC-8).  The closure also captures ``tensor_label`` (a string) rather than
-    the tensor itself, avoiding circular references.
+        The hook closure captures a ``weakref`` to Trace (not a strong reference)
+        so that the hook doesn't prevent GC of the Trace after the user drops it
+    . The closure also captures ``tensor_label`` (a string) rather than
+        the tensor itself, avoiding circular references.
 
-    Only tensors that participate in autograd (have grad_fn_handle or require_grad)
-    get hooks — others would never receive grads.
+        Only tensors that participate in autograd (have grad_fn_handle or require_grad)
+        get hooks — others would never receive grads.
 
-    One label, one gradient OWNER: a raw label names exactly one logical op
-    output, so exactly one hooked tensor may emit ``OpGradObserved`` for it —
-    otherwise aliased registrations (an identity module's relabeled live
-    tensor, an in-place op's live result) double-emit the same logical fact
-    and trip the events<->projection multiplicity reconciliation. The first
-    registration owns the label; a later registration with
-    ``take_ownership=True`` (the live-tensor path, whose premise is that the
-    logged object is a graph dead end) transfers ownership. Non-owner hooks
-    stay registered but drop their fire.
+        One label, one gradient OWNER: a raw label names exactly one logical op
+        output, so exactly one hooked tensor may emit ``OpGradObserved`` for it —
+        otherwise aliased registrations (an identity module's relabeled live
+        tensor, an in-place op's live result) double-emit the same logical fact
+        and trip the events<->projection multiplicity reconciliation. The first
+        registration owns the label; a later registration with
+        ``take_ownership=True`` (the live-tensor path, whose premise is that the
+        logged object is a graph dead end) transfers ownership. Non-owner hooks
+        stay registered but drop their fire.
 
-    Args:
-        t: The tensor to hook.
-        tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
-            look up the corresponding log entry when the grad arrives.
-        take_ownership: Transfer gradient-emission ownership of
-            ``tensor_label`` to this tensor even if another tensor already
-            holds it.
-        owning_backward_only: The hook sits on MODEL STATE (a mutated
-            prepared Parameter's autograd history), which later forwards on
-            the same model chain onto, so every later backward reaches it and
-            the op hooks upstream of it. The trace becomes state-entangled:
-            its hooks record only inside its own managed backward
-            (``_owning_backward_is_running``), the node is a root-matching
-            boundary rather than a trigger (``_register_state_boundary_grad_fn``),
-            and ``cleanup()`` removes this hook. Plain traces keep the
-            historical implicit-pass recording.
+        Args:
+            t: The tensor to hook.
+            tensor_label: Raw tensor label (e.g. ``"conv2d_3_47_raw"``) used to
+                look up the corresponding log entry when the grad arrives.
+            take_ownership: Transfer gradient-emission ownership of
+                ``tensor_label`` to this tensor even if another tensor already
+                holds it.
+            owning_backward_only: The hook sits on MODEL STATE (a mutated
+                prepared Parameter's autograd history), which later forwards on
+                the same model chain onto, so every later backward reaches it and
+                the op hooks upstream of it. The trace becomes state-entangled:
+                its hooks record only inside its own managed backward
+                (``_owning_backward_is_running``), the node is a root-matching
+                boundary rather than a trigger (``_register_state_boundary_grad_fn``),
+                and ``cleanup()`` removes this hook. Plain traces keep the
+                historical implicit-pass recording.
     """
-    # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
-    # under the explicit internal-read marker so the r65 state-metadata property observer
+    # TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
+    # under the explicit internal-read marker so the state-metadata property observer
     # never mistakes them for user autograd reads on a registered buffer/param receiver.
     from ._completeness_origins import internal_scalar_read
 
@@ -555,14 +555,14 @@ def _install_tensor_grad_hook(
         # The event-sidecar payloads are handed down for REUSE: the
         # legacy layer-slot write used to mint a second independent
         # clone and run grad_transform a second time, uncharged by the
-        # save budget (grind-r6 b5 R34-N1/R35-N1, fable+opus probe).
+        # save budget.
         if _active_save_grads_policy(active_trace) not in (None, False, "none", []):
             _log_tensor_grad(active_trace, grad, tensor_label, prebuilt=prebuilt)
         return grad
 
     # TorchLens bookkeeping: torch's ``register_hook`` reads ``self.grad_fn``
     # internally, and ``t`` can be the user's registered state receiver (an
-    # in-place op output), so the read is marked internal (r65 unread-bit).
+    # in-place op output), so the read is marked internal.
     # Paused like every TorchLens-internal torch call (Critical Invariant 2):
     # the user's forward never makes this call, so it must not count as one.
     from ._completeness_origins import internal_scalar_read
@@ -689,7 +689,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:
         _IMPLICIT_BACKWARD_TASK_IDS[trace] = current_task_id
-        # Engine-drain close (L9 memo 1.2): opening inside a tensor hook is
+        # Engine-drain close: opening inside a tensor hook is
         # provably in-backward, so queue the drain callback for THIS graph
         # task now. Opportunistic -- the sync-point backstop stays armed.
         from .backward import _enqueue_implicit_pass_drain_callback
@@ -757,8 +757,7 @@ def _emit_tensor_grad_event(
         ``(raw_payload, transformed_payload, built)`` — the payloads this
         event retained and whether the build actually ran past the policy
         gate. The legacy layer-slot writer REUSES these instead of minting a
-        second uncharged clone and re-running ``grad_transform`` (grind-r6
-        b5 R34-N1/R35-N1).
+        second uncharged clone and re-running ``grad_transform``.
     """
 
     if getattr(trace, "_tl_backward_triggers_disarmed", False):
@@ -1193,7 +1192,7 @@ def _log_tensor_grad(
             built)`` triple from ``_emit_tensor_grad_event``. When built, the
             layer slots REUSE those exact (budget-charged) objects instead of
             minting a second uncharged clone and running ``grad_transform``
-            a second time (grind-r6 b5 R34-N1/R35-N1); output-layer children
+            a second time; output-layer children
             share the parent's payloads, matching their identity-wrapper
             contract. When the event build did not run (narrower event
             selection, disarmed sidecar), the slot's payloads are built and
@@ -1206,7 +1205,7 @@ def _log_tensor_grad(
         # A fastlog/raw runtime trace never builds the legacy layer surface
         # (postprocess is skipped), so the layer-slot write is structurally
         # inapplicable there -- its gradients ride the backward event stream.
-        # The per-call save_grads policy gate (b9937876) armed this write on
+        # The per-call save_grads policy gate armed this write on
         # recording backward, where every lookup would KeyError. Full traces
         # keep the populated dict, so a genuinely missing individual key
         # still raises below (mapping/dict divergence stays a tripwire).
@@ -1498,7 +1497,7 @@ def _tensor_hash_token(prefix: str, arg: torch.Tensor) -> str:
 
     Uses shape/dtype only — formatting a tensor can trigger wrapped methods
     (item, __format__) which re-enter logging and cause infinite recursion.
-    F20 lazy-buffer completion: a pending UninitializedBuffer is a plain
+    Lazy-buffer completion: a pending UninitializedBuffer is a plain
     Tensor subclass (unlike UninitializedParameter, which rides the
     Parameter carve-out at the caller) and raises on any shape read until
     torch's lazy pre-hook materializes it, so it hashes as a fixed token.
@@ -1554,7 +1553,7 @@ def _append_arg_hash(arg: Any, prefix: str, args_to_hash: list[Any], _depth: int
 def _leaf_arg_token(arg: Any, prefix: str) -> str:
     """Return the fingerprint token for one non-container leaf argument.
 
-    grind-r5 b7 R21-C (P4): the default object repr IS the memory address,
+    The default object repr IS the memory address,
     so ``str(arg)`` here persisted a process-local address into
     ``equivalence_class`` -- cross-process keys diverged for any op holding
     an object arg (``torch.randn(..., generator=g)``), the SAME key could
@@ -1584,7 +1583,7 @@ def _append_set_arg_hash(
 ) -> None:
     """Fingerprint one set/frozenset arg in seed-independent member order.
 
-    grind-r5 b7 R21/P4 rider: sets iterate in hash order, so the old
+    Sets iterate in hash order, so the old
     position-encoded ``_i{i}`` prefixes made the persisted fingerprint
     PYTHONHASHSEED-dependent (and frozenset fell to the str() tail).
     Fingerprint each member independently, then fold the members in sorted

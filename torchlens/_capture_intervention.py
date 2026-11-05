@@ -1,8 +1,8 @@
 """Capture-door intervention glue for ``tl.trace(intervene=...)``.
 
-Split out of ``user_funcs.py`` (C03 fix cycle): the backward sticky-spec
+Split out of ``user_funcs.py``: the backward sticky-spec
 builder for backward-only selectors and the capture-door fire-evidence
-envelope (ledger memo 3.1) are intervention machinery, not trace-entry
+envelope are intervention machinery, not trace-entry
 resolution; ``user_funcs`` imports them from here. The live hook-plan
 spec builder and its non-mutating merge into an existing spec followed
 for the same reason.

@@ -1459,8 +1459,7 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     ``shared_graph_same_input`` / ``shared_graph_diff_input`` relationship
     vocabulary). It is deliberately NOT accepted as proof of input equality
     by the Bundle comparison gate, which requires the value-level
-    :func:`_hash_input_tensor_value` evidence instead (A-GATE, foldB D6
-    path 2: a shape/dtype/device hash is value-blind).
+    :func:`_hash_input_tensor_value` evidence instead (a shape/dtype/device hash is value-blind).
     """
 
     tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
@@ -1562,7 +1561,7 @@ def _iter_plain_instance_attributes(module: nn.Module) -> Iterator[tuple[str, An
     A blanket leading-underscore skip is WRONG here: user underscore
     attributes (``self._num_layers``) routinely determine the traced program,
     and skipping them served the wrong cached trace across a changed
-    ``self._n`` (r3 b4-opus-R39-1, reopened through the bfcdde2d fix's own
+    ``self._n`` (reopened through the bfcdde2d fix's own
     filter). Only the exact bare-``nn.Module`` baseline names are excluded;
     class-specific torch-internal extras (RNN ``_flat_weights``,
     MultiheadAttention ``_qkv_same_embed_dim``) participate harmlessly --
@@ -1703,7 +1702,7 @@ def _capture_cache_key(
         # so the FULL forward-input structure participates -- non-tensor
         # inputs, kwarg names, and container shape. The tensor-leaf-only
         # input hash let ``trace(model, x, use_relu=False)`` hit the cached
-        # ``use_relu=True`` capture and serve the WRONG trace (r8 b4 R39).
+        # ``use_relu=True`` capture and serve the WRONG trace.
         "schema": 5,
         "torchlens": __import__("torchlens").__version__,
         "torch": torch.__version__,
@@ -2036,7 +2035,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
     is returned as well -- leaving a tensor on its own device is a loud, ordinary device
     error, while silently substituting a different container class is not.
 
-    r2-B3 sweep (the walker was the ONE input walker without the shared guards):
+    sweep (the walker was the ONE input walker without the shared guards):
 
     * cycle/depth bounded through the shared input-boundary ceiling -- this walker
       runs FIRST for dataclass/non-``dict``-Mapping trees (the ``_simple_leaves``
@@ -2048,7 +2047,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
       field values -- counters incremented, RNG drawn, derived tensors recomputed --
       and the post-move snapshot honestly witnessed the substituted program), and
       field presence reads through the raw-MRO channel, never ``hasattr`` (a live
-      hook the r71-C inertness contract promises never runs);
+      hook the inertness contract promises never runs);
     * registered containers -- the kind that WINS every other walker's dispatch --
       descend through their own ``flatten``/``unflatten`` instead of silently
       falling through unmoved;
@@ -2114,7 +2113,7 @@ def _move_tensors_to_device_inner(
     if registration is None and not (is_dataclass_instance or is_mapping or is_sequence):
         return _UNMOVED
 
-    # The shared input-boundary guards (r-b4 R27-1): this walker runs BEFORE the
+    # The shared input-boundary guards: this walker runs BEFORE the
     # guarded walkers for dataclass / non-``dict``-Mapping / registered trees, so
     # it must refuse typed on cycles and over-depth itself.
     if _depth >= INPUT_TREE_MAX_DEPTH:
@@ -2123,7 +2122,7 @@ def _move_tensors_to_device_inner(
         _in_progress = set()
     obj_id = id(obj)
     if obj_id in _in_progress:
-        # B3R4-R12-2: report the REAL closed-vocabulary kind the descent
+        # report the REAL closed-vocabulary kind the descent
         # gated on -- the old mapping/sequence binary reported a cyclic
         # dataclass or registered container as kind="sequence".
         if registration is not None:
@@ -2227,7 +2226,7 @@ def _move_tensors_to_device_inner(
         if is_mapping:
             # Handles dict, UserDict, BatchEncoding, OrderedDict, MappingProxyType, and
             # any read-only custom Mapping (the last three used to be skipped entirely).
-            # Every arm is INERT (b3-opus-R12-2): the historical
+            # Every arm is INERT: the historical
             # ``type(obj)(moved_mapping)`` re-ran the user's constructor (whose
             # side effects entered the captured program) and RESET same-class
             # instance state, which the instance-state witness then honestly

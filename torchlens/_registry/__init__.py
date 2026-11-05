@@ -1,4 +1,4 @@
-"""Private registry kernel package (architecture memo 6.1; never public API).
+"""Private registry kernel package (never public API).
 
 One private kernel; many typed public domain doors; no public universal
 registry. Domain doors import from here; users import the doors.

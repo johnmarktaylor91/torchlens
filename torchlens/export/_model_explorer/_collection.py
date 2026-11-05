@@ -1,4 +1,4 @@
-"""The pure collection builder: ``to_model_explorer_dict`` (memo H-1, D10).
+"""The pure collection builder: ``to_model_explorer_dict``.
 
 Deterministic ``trace -> Model Explorer graph-collection dict`` with no
 server, no browser, no GPU; the file/embed/serve writers all wrap this one
@@ -9,7 +9,7 @@ zero-padded per-step graphs. The top-level payload carries ONLY the vendor
 ``GraphCollection`` keys (``label``/``graphs``/``graphSorting``) -- extra
 top-level keys are MEASURED to fail Model Explorer's strict parse, so
 visible facts ride the ``""`` group row and machine provenance rides the
-manifest sidecar (memo D7).
+manifest sidecar.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from ._options import ModelExplorerOptions
 
 __tl_layer__ = "L8"
 
-#: Closed privacy-profile vocabulary (memo D14): ONE mechanism for tokens,
+#: Closed privacy-profile vocabulary: ONE mechanism for tokens,
 #: source paths, code lines, and value-derived attrs.
 PRIVACY_PROFILES = frozenset({"local", "public"})
 
@@ -68,9 +68,9 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
             Episode captures only: deterministic boundary-proxy nodes for
             cross-step edges (default) versus drop-plus-disclose.
         ``step_budget_bytes``
-            Serialized-payload budget for the episode collection (memo D13).
+            Serialized-payload budget for the episode collection.
         ``max_step_graphs``
-            Step-graph count guard, whichever binds first (memo D13).
+            Step-graph count guard, whichever binds first.
 
     Returns
     -------
@@ -180,7 +180,7 @@ def _episode_ledger(log: Any) -> dict[str, Any] | None:
 
 
 def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
-    """Build the shared ``""`` provenance facts (memo D7 disclosure block)."""
+    """Build the shared ``""`` provenance facts (the disclosure block)."""
 
     from ..._vocab._package_version import __version__
 

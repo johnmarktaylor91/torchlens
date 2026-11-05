@@ -1,11 +1,11 @@
-"""Surgery visuals (lane F43): ONE mark family over C03's audit entries.
+"""Surgery visuals: ONE mark family over the intervention audit entries.
 
-The surgery memo's rendering half (foldA s5 item 11 + D17: F01 writes, F38
-lints, F43 renders): every visual claim here is READ from the canonical
-intervention record C03 landed -- per-fire :class:`FireRecord` rows on ops,
+The rendering half of surgery (the intervention engine writes and lints,
+this module renders): every visual claim here is READ from the canonical
+intervention record landed -- per-fire :class:`FireRecord` rows on ops,
 the ``intervention_event_v2`` transaction envelopes and ``region_do`` fact
 rows on the free-form ``state_history`` stream, the closed ACT/EVENT rows in
-``trace.intervention_audit``, and F01's stage-1 injected-op records. This
+``trace.intervention_audit``, and the stage-1 injected-op records. This
 module never writes an engine file and never mints a fact: a mark either
 cites a recorded audit entry (FACT, solid border) or a declared-but-unfired
 target attribution (HEURISTIC, dashed border), and the two are never drawn
@@ -14,13 +14,13 @@ in the same style.
 Shape rules (normative, from the fold):
 
 - **One mark family, never a new view kind**: the marks ride the standard
-  ``Trace.draw`` node-spec funnel through C05's lens registry (the
+  ``Trace.draw`` node-spec funnel through the lens registry (the
   ``"interventions"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
   row registered below); there is no separate surgery picture type.
 - **Per-lane splice-box disclosure**: each transaction's disclosure box
   carries the wording of ITS recorded lane -- a recorded
   ``execution_effect`` verbatim when the engine wrote one, else the closed
-  D17 lane law (replay substitutes exits without re-executing the interior;
+  lane law (replay substitutes exits without re-executing the interior;
   live/bound lanes run the original op and replace values after execution).
   The two texts are mutually false across lanes by design; neither is ever
   emitted for the other lane.
@@ -32,7 +32,7 @@ Shape rules (normative, from the fold):
   (one line per edit, in its own lane's wording) renders under the figure's
   header, and ``Trace.draw(view="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
-- **CREDIT rows** ride the full census text (D01's acknowledgment list), not
+- **CREDIT rows** ride the full census text (the acknowledgment list), not
   the figure.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
@@ -102,7 +102,7 @@ MARK_KINDS: frozenset[str] = frozenset(
 #: this: fact = solid border, heuristic = dashed border.
 MARK_BASES: frozenset[str] = frozenset({"fact", "heuristic"})
 
-#: The two closed execution-effect glosses (D17 vocabulary, rendered form).
+#: The two closed execution-effect glosses (rendered form).
 _EFFECT_WORDING: Mapping[str, str] = {
     "values_replaced_after_execution": (
         "the original op ran; edited values replaced its output after execution"
@@ -112,7 +112,7 @@ _EFFECT_WORDING: Mapping[str, str] = {
     ),
 }
 
-#: The D17 lane law: which effect gloss each recorded lane implies when the
+#: The lane law: which effect gloss each recorded lane implies when the
 #: engine did not write ``execution_effect`` itself. ``set_only`` stages
 #: without executing, so it carries its own (third) truthful text.
 _LANE_LAW: Mapping[str, str] = {
@@ -124,7 +124,7 @@ _LANE_LAW: Mapping[str, str] = {
     "set_only": "staged only; nothing has executed",
 }
 
-#: D01 acknowledgment rows; they ride every census verbatim.
+#: acknowledgment rows; they ride every census verbatim.
 CREDIT_ROWS: tuple[str, ...] = (
     "CREDIT: pyvene -- serializable intervention vocabulary",
     "CREDIT: nnsight -- persistent model.edit / scan experience",
@@ -199,7 +199,7 @@ class RegionFact:
 
 @dataclass(frozen=True)
 class SurgeryFacts:
-    """Everything the mark family may cite, derived from C03's record."""
+    """Everything the mark family may cite, derived from the intervention audit record."""
 
     transactions: tuple[SurgeryTransaction, ...]
     regions: tuple[RegionFact, ...]
@@ -223,7 +223,7 @@ def effect_wording(lane: str, execution_effect: str | None) -> tuple[str, str]:
 
     ``source`` is ``"recorded"`` when the engine wrote a closed
     ``execution_effect`` value (used verbatim), ``"lane_law"`` when the
-    wording follows the D17 lane law from the recorded lane, and
+    wording follows the lane law from the recorded lane, and
     ``"unrecorded"`` when neither authority applies (the honest fallback --
     never a guess borrowed from the other lane).
     """
@@ -247,7 +247,7 @@ def _envelope_rows(trace: Any) -> list[dict[str, Any]]:
 
 
 def _region_rows(trace: Any) -> list[dict[str, Any]]:
-    """The renderer-neutral region fact rows (F01 writes, F43 reads)."""
+    """The renderer-neutral region fact rows."""
 
     return [
         row
@@ -342,7 +342,7 @@ def _region_marks(trace: Any, regions: tuple[RegionFact, ...]) -> list[SurgeryMa
 
 
 def _injection_marks(trace: Any) -> tuple[list[SurgeryMark], dict[str, int]]:
-    """FACT marks for hosts of F01 stage-1 injected ops, plus host counts."""
+    """FACT marks for hosts of stage-1 injected ops, plus host counts."""
 
     host_counts: dict[str, int] = {}
     for injected in getattr(trace, "injected_ops", None) or ():
@@ -434,10 +434,10 @@ def _declared_target_marks(
 
 
 def surgery_facts(trace: Trace) -> SurgeryFacts:
-    """Derive everything the mark family may cite from C03's audit record.
+    """Derive everything the mark family may cite from the intervention audit record.
 
     Pure read of the canonical substrate: transaction envelopes and
-    ``region_do`` rows on ``state_history``, per-op FireRecords, and F01
+    ``region_do`` rows on ``state_history``, per-op FireRecords
     stage-1 injected-op records. Nothing here resolves selectors or re-runs
     engines; a claim with no recorded entry simply does not appear.
     """
@@ -468,7 +468,7 @@ def splice_box_lines(facts: SurgeryFacts) -> tuple[str, ...]:
 
     One box line per recorded transaction and per region row, each carrying
     ITS OWN lane's wording (recorded ``execution_effect`` verbatim, else the
-    D17 lane law). The replay text and the live text are mutually false
+    lane law). The replay text and the live text are mutually false
     across lanes; a line never borrows the other lane's wording.
     """
 
@@ -696,7 +696,7 @@ def surgery_stage(
 ) -> tuple[NodeSpecFn, CollapsedNodeSpecFn | None, tuple[str, ...]]:
     """Resolve the surgery lens stage: op marks, collapsed-box marks, census caption.
 
-    Refuses typed when the headline evidence (C03 audit entries) is absent:
+    Refuses typed when the headline evidence (intervention audit entries) is absent:
     with nothing recorded, the picture would answer a different question.
     """
 
@@ -778,8 +778,8 @@ def draw_interventions(
     return result
 
 
-#: The C05 registry row: the surgery mark family IS a lens over the standard
-#: draw surface. Headline evidence = C03's audit entries (checked by
+#: The registry row: the surgery mark family IS a lens over the standard
+#: draw surface. Headline evidence = the intervention audit entries (checked by
 #: :func:`surgery_stage`; absence refuses ``surgery_evidence_missing``).
 SURGERY_LENS = register_lens(
     LensPreset(

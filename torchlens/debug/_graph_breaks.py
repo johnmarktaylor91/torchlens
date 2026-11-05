@@ -215,7 +215,7 @@ def _snapshot_model_state(model: nn.Module) -> tuple[dict[str, torch.Tensor], An
     with torch.no_grad():
         params = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     cpu_rng = torch.default_generator.get_state()
-    # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
+    # Initialized-CUDA-only, latch-guarded: the bare is_available
     # gate allocated a CUDA context per visible device on CPU-only runs.
 
     cuda_rng = _snapshot_cuda_rng_states() or None

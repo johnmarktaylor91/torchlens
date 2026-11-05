@@ -1,30 +1,29 @@
-"""Percent columns and the cost tree view (F09; costreport items 7-8).
+"""Percent columns and the cost tree view.
 
-D5: additivity is a property of the (row, column) PAIR. One row per
+Additivity is a property of the (row, column) PAIR. One row per
 accounting unit; two column families -- ``self`` (exclusive, additive,
 sums to the partition total) and ``subtree`` (inclusive, non-additive,
 marked) -- each column declares ``additive: bool`` and every row carries
 its role (OWNER / SUBTOTAL / REMAINDER) into every export so nobody sums
-both. The root row carries self=0, subtree=partition total (T-ROOT; the
+both. The root row carries self=0, subtree=partition total (the
 measured 3.878x naive module sum is the forbidden regression).
 
-D4: exclusive percents sum to 100% OF THE KNOWN TOTAL; the unknown
+Exclusive percents sum to 100% OF THE KNOWN TOTAL; the unknown
 disclosure is an EVENT count plus the named ledger, never a FLOP
 percentage.
 
-D6: sort/filter/top_k/depth are VIEW operations -- the denominator stays
+Sort/filter/top_k/depth are VIEW operations -- the denominator stays
 the whole-capture partition total, invariant, with a display receipt
 naming the hidden share.
 
-D8: the tree is a LAYOUT over the same row graph, never a second
+The tree is a LAYOUT over the same row graph, never a second
 traversal: recorded call-parent identity, named model root, strict
 sibling folding, pass annotation, top-k owners with ancestors as
 uncounted context and deterministic remainder rows, exact conservation
 under depth cutoff.
 
-Live-only derivations over the C02 aggregation face (fence chain
-A07 -> C02 -> F09); spellings DOCUMENTED-UNSTABLE pending naming-session
-ratification.
+Live-only derivations over the aggregation face; spellings
+DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
 from __future__ import annotations
@@ -48,12 +47,12 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
-#: Row roles (D5, closed): an OWNER row's self family is additive mass; a
+#: Row roles (closed): an OWNER row's self family is additive mass; a
 #: SUBTOTAL row aggregates owners below it; a REMAINDER row is synthesized
 #: to conserve totals under a view (top_k / depth cutoff / root-direct ops).
 COST_ROW_ROLES: tuple[str, ...] = ("OWNER", "SUBTOTAL", "REMAINDER")
 
-#: Column additivity declarations (D5): the metadata every export carries.
+#: Column additivity declarations: the metadata every export carries.
 COST_COLUMN_ADDITIVITY: dict[str, bool] = {
     "self_flops": True,
     "self_pct": True,
@@ -85,7 +84,7 @@ COST_COLUMN_CONVENTIONS: dict[str, str] = {
 
 @dataclass(frozen=True)
 class CostTreeRow:
-    """One accounting-unit row of the cost tree (D5/D8).
+    """One accounting-unit row of the cost tree.
 
     Parameters
     ----------
@@ -108,11 +107,11 @@ class CostTreeRow:
         (NON-additive; never sum this column).
     self_pct / subtree_pct:
         The same families as percents of the whole-capture KNOWN partition
-        total (D4/D6) -- never of a visible-row sum.
+        total -- never of a visible-row sum.
     num_ops:
         Compute ops owned directly (self scope).
     num_unknown_ops:
-        Directly-owned ops with no cost rule (an EVENT count, D4).
+        Directly-owned ops with no cost rule (an EVENT count).
     passes:
         Distinct pass count over directly-owned ops (annotated, never
         conflated with op count).
@@ -167,7 +166,7 @@ class CostTree:
     """The cost tree: rows in render order plus the invariant denominators.
 
     ``partition_total`` is the whole-capture known-FLOPs partition total
-    (D6: invariant under every view operation); ``hidden_flops`` is the
+    (invariant under every view operation); ``hidden_flops`` is the
     display receipt -- the known mass folded into REMAINDER rows by the
     current view (already INCLUDED in the conservation identity through
     those rows, disclosed so a truncated view never reads as complete).
@@ -198,7 +197,7 @@ class CostTree:
     column_conventions: dict[str, str] = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         return (
             f"CostTree({len(self.rows)} rows, partition_total={self.partition_total}, "
@@ -226,7 +225,7 @@ def build_cost_tree(
     fold_repeats: bool = True,
     aggregation: ComputeAggregation | None = None,
 ) -> CostTree:
-    """Build the module-call cost tree from the ONE aggregation (D8).
+    """Build the module-call cost tree from the ONE aggregation.
 
     Parameters
     ----------
@@ -235,7 +234,7 @@ def build_cost_tree(
     k:
         Keep the ``k`` largest OWNER/SUBTOTAL rows per parent (by
         subtree mass); hidden siblings collapse into one deterministic
-        REMAINDER row per parent. Denominators are unaffected (D6).
+        REMAINDER row per parent. Denominators are unaffected.
     max_depth:
         Fold rows deeper than this depth into their ancestor's REMAINDER
         row; conservation stays exact.
@@ -287,7 +286,7 @@ def build_cost_tree(
 
 
 class _TreeBuilder:
-    """Stateful assembly of one cost tree (D8's phases as named steps).
+    """Stateful assembly of one cost tree (phases as named steps).
 
     The phases are genuinely sequential -- ownership accumulation, the
     call forest, bottom-up inclusive totals, then the view-shaped emit
@@ -403,7 +402,7 @@ class _TreeBuilder:
     # -- phase 2: the call forest + inclusive totals -----------------------
 
     def _forest(self) -> None:
-        """Build children/roots from recorded call-parent identity (D8)."""
+        """Build children/roots from recorded call-parent identity."""
 
         self.children: dict[str, list[str]] = {label: [] for label in self.calls}
         self.roots: list[str] = []
@@ -641,7 +640,7 @@ class _TreeBuilder:
     def _select_top_k(
         self, groups: list[tuple[str, int]]
     ) -> tuple[list[tuple[str, int]], list[tuple[str, int]]]:
-        """Split sibling groups into visible and top-k-hidden (D6 view op)."""
+        """Split sibling groups into visible and top-k-hidden (a view operation)."""
 
         if self.top_k is None or len(groups) <= self.top_k:
             return groups, []
@@ -796,8 +795,8 @@ def format_cost_tree(tree: CostTree) -> str:
 
     The header names both column families and their additivity; the
     footer prints the invariant denominator, the unknown EVENT count
-    (never a FLOP percentage, D4), and the hidden-share display receipt
-    when a view dropped rows (D6). When an executed backward was counted,
+    (never a FLOP percentage), and the hidden-share display receipt
+    when a view dropped rows. When an executed backward was counted,
     three self columns follow: forward MAC work, executed backward, and
     their total (one convention); otherwise the footer states the backward
     as not run or unknown, never 0.

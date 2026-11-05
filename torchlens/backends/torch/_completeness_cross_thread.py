@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-import torch._ops as _torch_ops  # r47 hon2_1: enumerate the ``torch.ops.*`` __call__ classes
+import torch._ops as _torch_ops  # enumerate the ``torch.ops.*`` __call__ classes
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
@@ -41,7 +41,7 @@ __all__ = (
 
 
 def _nonowner_ptr_is_captured(state: _WitnessState, ptr: int) -> bool:
-    """Return whether a storage pointer belongs to a captured input / param / activation (r43)."""
+    """Return whether a storage pointer belongs to a captured input / param / activation."""
 
     trace = state.trace
     param_addresses = getattr(trace, "_param_storage_addresses", None)
@@ -64,7 +64,7 @@ def _nonowner_ptr_is_captured(state: _WitnessState, ptr: int) -> bool:
 
 
 def _nonowner_touch_is_captured(state: _WitnessState, tensor: Any) -> bool:
-    """Return whether a non-owner thread's touched tensor is a CAPTURED tensor (r43).
+    """Return whether a non-owner thread's touched tensor is a CAPTURED tensor.
 
     Captured membership (all reads GIL-atomic; NO torch op, NO ``pause_logging``, NO observer
     recursion): a capture label OR a registered param/buffer state address OR a dispatch-origin
@@ -98,7 +98,7 @@ def _nonowner_touch_is_captured(state: _WitnessState, tensor: Any) -> bool:
 
 
 def _nonowner_escape_observe(state: _WitnessState, tensor: Any) -> None:
-    """Ceiling the capture if a non-owner thread touched a captured tensor (r43).
+    """Ceiling the capture if a non-owner thread touched a captured tensor.
 
     The ONE non-owner belt action: NO origin resolution, NO ``pause_logging``, NO precise
     witness -- a captured-tensor touch off-owner is outside the single-owner-thread replay
@@ -111,16 +111,16 @@ def _nonowner_escape_observe(state: _WitnessState, tensor: Any) -> None:
 
 
 def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | None) -> None:
-    """Ceiling the runnable capture when a NON-owner thread CONSUMES a captured operand (r45 hon2_1).
+    """Ceiling the runnable capture when a NON-owner thread CONSUMES a captured operand.
 
-    The r43 cross-thread belt patches tensor METHODS, so it only recognizes a non-owner thread's
+    The cross-thread belt patches tensor METHODS, so it only recognizes a non-owner thread's
     tensor->host escape when the escaped tensor's OBJECT IDENTITY is captured / owner-registered
     (a capture label, a registered state address, a dispatch-origin ledger hit, or captured
     storage identity). A tensor DERIVED on the worker from a captured input (``(gate * 2).sum()``,
     ``gate.clone()``, ``gate + 0``, ``gate @ w``, ``torch.cat([gate], 0)`` ...) has FRESH storage
     that the OWNER-thread-only census / dispatch-origin ledger never registered, so its later value
     escape was unwitnessed -> false ``VERIFIED`` on a changed input a fresh live run would branch
-    differently on (the r44 hon2_1 finding).
+    differently on.
 
     Every Python-visible torch/Tensor op flows through the GLOBAL torch-function wrapper (a
     process-wide monkeypatch, unlike the thread-local aten census / dispatch mode). This observer
@@ -130,7 +130,7 @@ def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | No
     at the first consumption makes deeper-chain and escape-time provenance moot; the derived tensor
     does not even exist yet).
 
-    Fail-CLOSED (r45 Fork C): any operand-inspection error during an armed capture ceilings the
+    Fail-CLOSED: any operand-inspection error during an armed capture ceilings the
     trace -- an inspection failure on a non-owner op cannot be read as "no captured touch"
     (validation is a tripwire). Benign-worker-safe: a non-owner thread operating only on tensors it
     created INDEPENDENTLY of the capture matches no captured-membership signal and stays
@@ -167,15 +167,15 @@ def observe_nonowner_operands(args: tuple[Any, ...], kwargs: dict[str, Any] | No
 
 
 def _torch_ops_call_classes() -> tuple[type, ...]:
-    """Feature-detect every ``torch._ops`` class that defines its OWN ``__call__`` (r47 hon2_1).
+    """Feature-detect every ``torch._ops`` class that defines its OWN ``__call__``.
 
-    The r45 hon2_1 non-owner operand observer runs on the GLOBAL torch-FUNCTION wrapper, but the
+    The non-owner operand observer runs on the GLOBAL torch-FUNCTION wrapper, but the
     ``torch.ops.*`` (aten / higher-order / TorchBind) surface bypasses that wrapper entirely: a
     worker thread deriving from / reading a captured tensor via ``torch.ops.aten.mul.Tensor(...)``,
     ``torch.ops.aten.sum.default(...)``, ``torch.ops.aten._local_scalar_dense(...)``, ... never
     hits the wrapper and the aten dispatch census is thread-LOCAL (a ``TorchDispatchMode`` cannot
     see a non-owner thread), so its captured-operand consumption went unwitnessed -> false
-    ``VERIFIED`` on a diverging changed input (the r46 hon2_1 finding).
+    ``VERIFIED`` on a diverging changed input.
 
     Every Python-visible ``torch.ops.*`` call flows through the ``__call__`` of a small set of
     ``torch._ops`` classes (``OpOverloadPacket`` / ``OpOverload`` / ``TorchBindOpOverload`` /
@@ -200,7 +200,7 @@ def _torch_ops_call_classes() -> tuple[type, ...]:
 
 
 def _make_nonowner_ops_call(original: Any) -> Any:
-    """Wrap a ``torch._ops`` class ``__call__`` with the non-owner captured-operand observer (r47).
+    """Wrap a ``torch._ops`` class ``__call__`` with the non-owner captured-operand observer.
 
     The patched ``__call__`` short-circuits on a SINGLE bool read (``_nonowner_belt_armed``) so the
     disarmed steady state pays ~nothing, and a real eager OWNER forward hits the Python
@@ -242,7 +242,7 @@ def _make_nonowner_ops_call(original: Any) -> Any:
 
 
 def _private_c_forward_op_modules() -> tuple[Any, ...]:
-    """Resolve the patchable module-typed private-C forward-op modules (r49 hon2_1).
+    """Resolve the patchable module-typed private-C forward-op modules.
 
     Structurally enumerated from the canonical forward-op module authority
     (:func:`torchlens._utils._callable_safety.private_c_forward_op_module_names` -> the
@@ -274,7 +274,7 @@ def _private_c_forward_op_modules() -> tuple[Any, ...]:
 
 def _private_c_module_callables() -> tuple[tuple[Any, str, Any], ...]:
     """Return ``(module, attr, original)`` for every module-level callable of the patchable
-    private-C forward-op modules (r49 hon2_1).
+    private-C forward-op modules.
 
     Dunder module metadata (``__loader__`` / ``__spec__`` / ...) is skipped; every remaining
     module-level callable (the ~225 ``torch._C._{nn,special,fft,linalg,sparse,nested}`` free
@@ -294,15 +294,15 @@ def _private_c_module_callables() -> tuple[tuple[Any, str, Any], ...]:
 
 
 def _make_nonowner_private_c_callable(original: Any) -> Any:
-    """Wrap a private-C module FREE function with the non-owner captured-operand observer (r49).
+    """Wrap a private-C module FREE function with the non-owner captured-operand observer.
 
     Twin of :func:`_make_nonowner_ops_call` for MODULE-level free functions (no ``self``
     receiver): private-C ops (``torch._C._nn.gelu(gate)``) are a THIRD op surface -- they bypass
     BOTH the global torch-FUNCTION wrapper (no ``__torch_function__``) AND the ``torch._ops.*``
     class patch (they dispatch their inner aten op down in C++), so a non-owner worker consuming
-    a captured operand through one went unwitnessed -> false ``VERIFIED`` (the r48 hon2_1
-    finding). Same three-term armed/owner short-circuit (disarmed steady state pays one bool
-    read; an OWNER-thread forward never reaches ``observe_nonowner_operands``) and the same
+    a captured operand through one went unwitnessed -> false ``VERIFIED``. Same
+    three-term armed/owner short-circuit (disarmed steady state pays one bool read; an
+    OWNER-thread forward never reaches ``observe_nonowner_operands``) and the same
     fail-closed operand test.
     """
 
@@ -335,11 +335,11 @@ def _make_nonowner_private_c_callable(original: Any) -> Any:
 
 
 def string_escape_is_owner_thread(trace: Any) -> bool:
-    """Return whether the current thread is the capture owner for the string hook (r43).
+    """Return whether the current thread is the capture owner for the string hook.
 
     Consumed by the wrappers.py ``__repr__``/``__str__``/``_str`` interception: the OWNER
     thread keeps ``print_override`` (which formats under a global ``pause_logging``); a
-    NON-OWNER thread must NEVER flip that global toggle mid-forward (the hon2_4 crash), so it
+    NON-OWNER thread must NEVER flip that global toggle mid-forward (it would crash), so it
     calls the original torch string function unchanged. With no active runnable witness state
     the legacy owner behavior is preserved (``True``).
     """
@@ -351,13 +351,13 @@ def string_escape_is_owner_thread(trace: Any) -> bool:
 
 
 def host_escape_observer_install_failed(trace: Any) -> bool:
-    """Return whether a required tensor->host value observer failed to install/restore (r39)."""
+    """Return whether a required tensor->host value observer failed to install/restore."""
 
     return trace in _HOST_ESCAPE_OBSERVER_FAILED
 
 
 def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
-    """Record a tensor->host VALUE escape via string formatting (r39 hon2_1).
+    """Record a tensor->host VALUE escape via string formatting.
 
     TorchLens intercepts ``__repr__`` / ``__str__`` / ``_str`` on a captured tensor and formats
     it internally under ``pause_logging()`` (``print_override`` -> ``.detach().cpu().numpy()``),
@@ -367,7 +367,7 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
     observers are blind to it (they gate on ``_state._logging_enabled``), so the print
     interception records the SOURCE tensor here through the SAME attribution ladder.
 
-    NOTE (r39): the reconciled plan's E6 measurement of str/repr transitivity was taken on RAW
+    NOTE: the reconciled plan's E6 measurement of str/repr transitivity was taken on RAW
     torch, where ``str()`` crosses patched ``item``/``tolist``. Inside a live capture TorchLens
     intercepts the string path itself, so the fix lives at the interception, not in a
     ``__repr__``/``__str__`` patch -- the escape still lands UNVERIFIABLE, consistently with how
@@ -383,10 +383,10 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
         return
     if _internal_read_active():
         return
-    # r43 hon2_4: route the string hook through the SAME owner-vs-non-owner rule as every
+    # Route the string hook through the SAME owner-vs-non-owner rule as every
     # other belt observer. The OWNER thread keeps the precise attribution ladder. A NON-OWNER
     # thread applies the captured-tensor predicate (never origin resolution -- that flips the
-    # global ``pause_logging`` toggle, the hon2_4 crash path): a captured-tensor stringification
+    # global ``pause_logging`` toggle, which crashes): a captured-tensor stringification
     # ceilings, a benign OWN-tensor ``str()`` records nothing (no over-trigger).
     state = _hub._ACTIVE_WITNESS_STATE
     if (
@@ -401,7 +401,7 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
 
 
 def audit_disable_current_modes_sites() -> dict[str, tuple[str, ...]]:
-    """Snapshot-audit torch's ``_disable_current_modes`` sites (r39 advisory-but-armed immunizer).
+    """Snapshot-audit torch's ``_disable_current_modes`` sites (an advisory-but-armed immunizer).
 
     The mode-independent method/module belt (:data:`HOST_VALUE_ESCAPE_METHODS` /
     :data:`HOST_VALUE_ESCAPE_MODULE_FUNCS`) closes the census blind spot regardless of WHICH

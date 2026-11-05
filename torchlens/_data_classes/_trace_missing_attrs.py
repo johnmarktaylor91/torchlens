@@ -121,7 +121,7 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
     if getattr(trace, "__dict__", {}).get("_tl_cleaned_up", False):
         # One typed refusal for every reader of a husked trace, instead of a
         # raw AttributeError naming whichever private field the reader hit
-        # first (b6-opus R25: summary/iteration/getitem/draw/receptive_fields
+        # first (summary/iteration/getitem/draw/receptive_fields
         # each leaked a different private name).
         from .._errors import refuse_cleaned_up
 

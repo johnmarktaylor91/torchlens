@@ -163,7 +163,7 @@ def feature_maps(
         shape_text = "; ".join(non_spatial_shapes) if non_spatial_shapes else "no saved activations"
         refuse_feature_maps_not_spatial(shape_text)
     # Annotations commit only after the WHOLE sweep succeeds; a failed site
-    # leaves zero blobs behind (gated ATOMIC write, neuro MEMO D4).
+    # leaves zero blobs behind (gated ATOMIC write).
     _commit_annotation_tensors(trace, staged)
     return maps_by_key
 

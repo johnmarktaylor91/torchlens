@@ -1,4 +1,4 @@
-"""``narrate=`` normalization and the entry-time typed refusals (snoop D1/D3).
+"""``narrate=`` normalization and the entry-time typed refusals.
 
 One normalizer serves every mount (``tl.trace``, ``tl.record``,
 ``fastlog.Recorder``): the accepted spellings are ``True`` (everything plus

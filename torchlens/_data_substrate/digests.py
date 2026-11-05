@@ -3,12 +3,12 @@
 Two primitives with PINNED algorithm ids + versions (they are manifest fields
 any third party can recompute from):
 
-* :func:`merkle_digest` — the threaded Merkle CRYPTO digest (extract D6):
+* :func:`merkle_digest` — the threaded Merkle CRYPTO digest:
   per-entry leaf digests hashed in a thread pool, folded in canonical input
   order — deterministic across thread counts by construction. blake2b
   default, sha256 selectable. Measured 5.4x faster than the serial fold on a
   real 3.55 GB model (827 ms vs 4478 ms).
-* :func:`value_reduction` — the order-sensitive VALUE reduction (extract D7):
+* :func:`value_reduction` — the order-sensitive VALUE reduction:
   int64 Horner over the flattened byte view with a single BLOCK-length
   position-weight vector built once and SLICED (a per-size cache measured
   50x slower on many-small-tensor vision models), 0-dim-safe flatten before
@@ -260,7 +260,7 @@ def _to_unsigned(value: int) -> int:
 
 
 def value_reduction(name: str, tensor: torch.Tensor) -> str:
-    """Compute the order-sensitive int64 Horner value reduction (extract D7).
+    """Compute the order-sensitive int64 Horner value reduction.
 
     Runs with torch ops ON the tensor's device (computable before any host
     copy) and re-verifiable after load. Covers tensor VALUES in order plus a

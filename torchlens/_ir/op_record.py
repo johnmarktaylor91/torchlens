@@ -173,7 +173,7 @@ class InterventionFacet:
     """Interventions that touched this op.
     ``intervention_template_ref`` is deliberately ABSENT: verified dead in P2
     (every producer writes None; no consumer reads it), it stays on the compat
-    ``OpEvent`` only and dies with it in S15.
+    ``OpEvent`` only and dies with it.
     """
 
     __repr__ = _bounded_record_repr
@@ -210,7 +210,7 @@ def _default_graph_facet() -> GraphFacet:
 
 
 # Checked-in absent-facet defaults: ingest materializes an absent facet from
-# THIS table (S5: absent facet != fabricated empty facet — the reducer and the
+# THIS table (absent facet != fabricated empty facet — the reducer and the
 # scatter both read these, and a patch against an absent facet without a
 # defaults entry is a planted-battery violation).
 FACET_DEFAULTS: dict[str, Any] = {
@@ -649,7 +649,7 @@ AMENDMENT_FAMILIES: dict[str, tuple[tuple[str, tuple[type, ...]], ...]] = {
         ("recording.capture_spec", (object,)),
     ),
     "late_buffer_output_parent": (("graph.is_output_parent", (bool,)),),
-    # the six preview promotion sites (review C6): two families because the
+    # the six preview promotion sites: two families because the
     # registry is exact-set — jax/tinygrad also rebind the output.
     "preview_output_parent_mark": (("graph.is_output_parent", (bool,)),),
     "preview_output_parent_rebind": (
@@ -660,7 +660,7 @@ AMENDMENT_FAMILIES: dict[str, tuple[tuple[str, tuple[type, ...]], ...]] = {
 
 # 1:1 legacy fold table: registry path -> flat OpEvent field name. Covers the
 # exact union of family paths; outlives P7 only as the preview-journal fold
-# guard and dies in S15 with OpEvent.
+# guard and dies in with OpEvent.
 PATH_TO_FLAT: dict[str, str] = {
     "core.output": "output",
     "core.parents": "parents",
@@ -704,7 +704,7 @@ def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]])
 def apply_patch_items(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
     """Apply ordered ``(facet path, value)`` pairs to any journal shape (DoR 4.4).
     ``OpRecord``s fold via :func:`record_with_path_updates`, row handles via their
-    overlay (``with_patch``), compat ``OpEvent``s via ``PATH_TO_FLAT`` (dies in S15).
+    overlay (``with_patch``), compat ``OpEvent``s via ``PATH_TO_FLAT`` (dies).
     """
 
     if isinstance(event, OpRecord):

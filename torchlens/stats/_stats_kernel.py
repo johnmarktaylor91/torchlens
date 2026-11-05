@@ -1,21 +1,20 @@
-"""The sound tensor-stats kernel (C02; lovely memo section 5).
+"""The sound tensor-stats kernel.
 
-Kernel CONTRACT (D24), not one primitive:
+Kernel CONTRACT, not one primitive:
 
 - SOUND: the naive ``E[x^2] - E[x]^2`` variance is banned in every floating
-  form, including float64 accumulation (D23; measured 2.1e7 relative error at
+  form, including float64 accumulation (measured 2.1e7 relative error at
   offset 1e6, silent, sign-flipping). Floating routes use ``var_mean`` or
   exact-mean + squared-deviation accumulation; the integer route uses EXACT
   int64 (Python arbitrary-precision) sum / sum-of-squares under a declared
-  overflow guard (D27) -- exact rationals carry no cancellation.
+  overflow guard -- exact rationals carry no cancellation.
 - ALLOCATION-BOUNDED: no full-size cast, boolean mask, gather, ``t*t``,
   ``abs``, or flatten copy on the clean path; O(k) seeded sample, O(bins)
   histogram, and the declared fixed-size widening chunk only. The poisoned
   (nonfinite-contaminated) slow path scans in fixed-size chunks.
 - SINGLE-SYNC-SHAPED: scalar reductions are batched into one device-to-host
   transfer on the clean path. (Constants and the sync count are CPU-derived
-  policy until the deferred CUDA re-derivation; see the lovely memo's CUDA
-  leg note.)
+  policy until the deferred CUDA re-derivation.)
 - NUMERICALLY PINNED: the N(1e6, 1) anti-regression golden, the fp16
   underflow pin, and the offset-cancellation golden live in
   ``tests/test_factcore_tensor_stats.py`` and are blocking.
@@ -35,26 +34,26 @@ import torch
 
 #: Declared per-record interactive budget the gates derive from (ms).
 INTERACTIVE_BUDGET_MS = 100
-#: sd is EXACT through this element count; sampled above (D19).
+#: sd is EXACT through this element count; sampled above.
 SD_EXACT_MAX = 2**26
-#: Histogram is exact through this element count; sampled above (D20).
+#: Histogram is exact through this element count; sampled above.
 HIST_EXACT_MAX = 2**22
-#: Seeded gathered-sample cap for every sampled family (D19-D21).
+#: Seeded gathered-sample cap for every sampled family.
 SAMPLE_CAP = 2**20
 #: The mean stays exact through this declared backstop; above it the mean is
-#: OMITTED with a reason, never sampled (D18).
+#: OMITTED with a reason, never sampled.
 MEAN_EXACT_MAX = 2**30
-#: Histogram bin count (D4).
+#: Histogram bin count.
 HIST_BINS = 10
-#: No sparkline/histogram below 2 x bins elements (D13).
+#: No sparkline/histogram below 2 x bins elements.
 HIST_MIN_N = 2 * HIST_BINS
-#: Fixed widening-accumulator chunk for fp16/bf16 and poisoned scans (D25).
+#: Fixed widening-accumulator chunk for fp16/bf16 and poisoned scans.
 WIDEN_CHUNK = 2**22
 #: int64 sum-of-squares overflow guard: numel * max_abs^2 must stay under
-#: this bound for the exact integer route (D27).
+#: this bound for the exact integer route.
 INT64_GUARD = 2**62
 
-#: Dense f32/f64 route selection (D24): ``var_mean`` and the exact-mean +
+#: Dense f32/f64 route selection: ``var_mean`` and the exact-mean +
 #: mse_loss route are BOTH sound and swap winner by ~1.6x depending on
 #: regime, so the shipped default is chosen by the benchmark harness below,
 #: recorded as policy -- never assumed.
@@ -73,7 +72,7 @@ class MomentAccumulator:
     """Pairwise-mergeable (count, mean, M2, M4-ish) accumulator state.
 
     ``m4_sum`` accumulates raw fourth central-moment mass for the
-    kurtosis-aware precision law (D22); it is merged with the same pairwise
+    kurtosis-aware precision law; it is merged with the same pairwise
     update as ``m2_sum`` (adequate for the se(sd) insurance bound -- the
     cross terms it drops are second-order for the sample sizes involved).
     """
@@ -113,7 +112,7 @@ def _chunk_moments(chunk: torch.Tensor) -> MomentAccumulator:
 
 
 def seeded_sample(flat: torch.Tensor, k: int, seed: int) -> torch.Tensor:
-    """Return a SEEDED GATHERED sample of ``k`` elements (D21).
+    """Return a SEEDED GATHERED sample of ``k`` elements.
 
     A strided slice is BANNED from the semantics: it aliases against channel
     structure (occupied bins rendered blank on 105/156 real batched-gpt2
@@ -129,7 +128,7 @@ def seeded_sample(flat: torch.Tensor, k: int, seed: int) -> torch.Tensor:
 
 
 def identity_seed(identity: str | None, shape: tuple[int, ...], dtype: str) -> int:
-    """Derive the sampler seed from record identity (D21).
+    """Derive the sampler seed from record identity.
 
     Falls back to a geometry-derived seed when no identity is supplied, so
     the sample stays deterministic either way.
@@ -203,7 +202,7 @@ def _histogram(
     seed: int,
     contaminated: bool,
 ) -> tuple[tuple[int, ...] | None, tuple[float, ...] | None, str, int | None]:
-    """Histogram family: exact through the gate, sampled above (D20).
+    """Histogram family: exact through the gate, sampled above.
 
     Bin edges always come from the EXACT extremes; the end-bin repair keeps
     the invariant that no bin the extremes prove occupied renders blank.
@@ -234,7 +233,7 @@ def _histogram(
         max=float(finite_max),
     )
     count_list = [int(value) for value in counts.tolist()]
-    # End-bin repair (D20): the exact extremes PROVE the first and last bins
+    # End-bin repair: the exact extremes PROVE the first and last bins
     # are occupied; a sampled histogram may have missed them.
     if count_list[0] == 0:
         count_list[0] = 1
@@ -246,7 +245,7 @@ def _histogram(
 def _sd_from_accumulator(
     moments: MomentAccumulator, policy: str, sample_size: int | None
 ) -> tuple[float | None, str, int | None, float | None, float | None]:
-    """Finalize sd + the kurtosis-aware precision-law errors (D22)."""
+    """Finalize sd + the kurtosis-aware precision-law errors."""
 
     if moments.count == 0:
         return None, "unavailable", None, None, None
@@ -268,7 +267,7 @@ def _float_kernel(tensor: torch.Tensor, seed: int, magnitude: bool) -> KernelRes
     flat = tensor.reshape(-1)
     numel = flat.numel()
     # ONE batched reduction pass; the aminmax pair doubles as the exact
-    # nonfinite PROOF (D17): NaN/Inf propagate, so two finite bounds prove
+    # nonfinite PROOF: NaN/Inf propagate, so two finite bounds prove
     # zero NaN and zero Inf with no allocation.
     amin, amax = torch.aminmax(flat)
     nonzero = torch.count_nonzero(flat)
@@ -293,7 +292,7 @@ def _float_kernel(tensor: torch.Tensor, seed: int, magnitude: bool) -> KernelRes
         finite_min, finite_max = amin_value, amax_value
         if numel <= SD_EXACT_MAX:
             if flat.dtype in _WIDEN_DTYPES:
-                # Chunked widening accumulator (D25): native low-precision
+                # Chunked widening accumulator: native low-precision
                 # accumulation corrupts the fourth printed digit on real
                 # autocast records; the chunk is fixed-size and declared.
                 moments = MomentAccumulator(0, 0.0, 0.0, 0.0)
@@ -320,7 +319,7 @@ def _float_kernel(tensor: torch.Tensor, seed: int, magnitude: bool) -> KernelRes
         else:
             # Above the sd gate: mean stays EXACT through the 2^30 backstop
             # (a sampled mean printed the WRONG SIGN with four confident
-            # digits; D18); sd rides the seeded gathered sample.
+            # digits); sd rides the seeded gathered sample.
             if numel <= MEAN_EXACT_MAX:
                 mean = float(flat.sum(dtype=torch.float64) / numel)
                 mean_policy, mean_reason = "exact", None
@@ -397,7 +396,7 @@ def _float_kernel(tensor: torch.Tensor, seed: int, magnitude: bool) -> KernelRes
 
 
 def _int_kernel(tensor: torch.Tensor) -> KernelResult:
-    """Exact integer route (D27): int64 sum / sum-of-squares, overflow-guarded.
+    """Exact integer route: int64 sum / sum-of-squares, overflow-guarded.
 
     Exact integer arithmetic carries NO floating cancellation, so the
     sum-of-squares form is sound here (and only here); the variance is an
@@ -459,7 +458,7 @@ def _int_kernel(tensor: torch.Tensor) -> KernelResult:
 
 
 def _bool_kernel(tensor: torch.Tensor) -> KernelResult:
-    """bool family: exact truth rate; moments of a mask are noise (D12)."""
+    """bool family: exact truth rate; moments of a mask are noise."""
 
     import dataclasses
 
@@ -476,11 +475,10 @@ def _bool_kernel(tensor: torch.Tensor) -> KernelResult:
 
 
 def _complex_kernel(tensor: torch.Tensor, seed: int) -> KernelResult:
-    """Complex family: chunk-bounded MAGNITUDE stats, explicitly labeled (D12).
+    """Complex family: chunk-bounded MAGNITUDE stats, explicitly labeled.
 
     The result's ``magnitude_basis`` flag is what renderers use to label
-    every moment as a |z| statistic (lovely bug 3: complex stats were
-    presented as value stats).
+    every moment as a |z| statistic (complex stats are not value stats).
     """
 
     flat = tensor.reshape(-1)
@@ -584,7 +582,7 @@ def run_kernel(tensor: torch.Tensor, *, identity: str | None = None) -> KernelRe
 
 
 def benchmark_dense_routes(tensor: torch.Tensor, repeats: int = 3) -> dict[str, float]:
-    """Time both sound dense routes on one tensor (the D24 harness).
+    """Time both sound dense routes on one tensor (the harness).
 
     Returns wall seconds per route; the shipped ``DENSE_ROUTE`` constant is
     re-derived from this harness (recorded with ``os.getloadavg()`` by the

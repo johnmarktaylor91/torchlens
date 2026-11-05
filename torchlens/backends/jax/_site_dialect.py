@@ -51,7 +51,7 @@ def jax_site_keys(trace: Trace) -> dict[str, str]:
     -------
     dict[str, str]
         Rendered site key per retained raw label (orphans excluded -- they
-        consume no ordinals and carry no keys, the SF-63 ruling).
+        consume no ordinals and carry no keys, the ruling).
     """
 
     minter = SiteKeyMinter()

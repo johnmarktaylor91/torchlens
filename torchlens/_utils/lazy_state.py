@@ -128,7 +128,7 @@ def pending_lazy_state(model: nn.Module) -> PendingLazyState:
 def raise_if_pending_state_slots(state: Mapping[str, object]) -> None:
     """Refuse typed when a capture-boundary state mapping holds pending slots.
 
-    Quickstart memo 4.5: a pending parameter has no bytes at the capture
+    A pending parameter has no bytes at the capture
     boundary, so no replayable byte baseline can exist for it -- and an
     ``UninitializedParameter`` IS a ``torch.Tensor``, so it sails past
     tensor-only mapping checks and historically exploded inside the baseline

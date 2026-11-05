@@ -220,7 +220,7 @@ def episode_facts(log: Any) -> dict[str, Any] | None:
 
 
 def _step_join_fact(header: dict[str, Any]) -> str:
-    """Summarize THIS artifact's cross-step join evidence (lane F40c).
+    """Summarize THIS artifact's cross-step join evidence.
 
     Per-artifact, never the build switch: an absent ``step_join`` envelope
     (pre-measurement artifact, failed live measurement) reads
@@ -344,7 +344,7 @@ def capture_advisories(log: Any) -> list[dict[str, Any]]:
 def intervention_facts(log: Any) -> dict[str, Any] | None:
     """Return the intervention disclosure for a log, or ``None`` when untouched.
 
-    AUD-HONESTY M5: a capture-time ``intervene=`` (or a fork-side ``do()``) leaves
+    A capture-time ``intervene=`` (or a fork-side ``do()``) leaves
     the outcome ``complete`` while the retained values at the fired sites are
     COUNTERFACTUAL. Every honesty surface that reads
     :func:`capture_honesty_facts` must therefore carry the intervention evidence,
@@ -406,7 +406,7 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     dict[str, Any]
         Schema-stamped facts: verification quartet, ``structure_only``,
         poison disclosure, episode disclosure (when present), intervention
-        disclosure (when present, M5), and advisories (when present).
+        disclosure (when present), and advisories (when present).
     """
 
     facts: dict[str, Any] = {

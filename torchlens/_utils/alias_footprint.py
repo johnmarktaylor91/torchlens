@@ -1,4 +1,4 @@
-"""THE one absolute-byte three-valued alias/overlap engine (r37 INV-2).
+"""THE one absolute-byte three-valued alias/overlap engine.
 
 Every disjointness / overlap / identity / containment proof over tensor memory in the
 runnable witness/execution surface routes through these helpers. Local pointer-equality
@@ -17,7 +17,7 @@ from typing import Literal
 import torch
 
 AliasRelation = Literal["overlap", "disjoint", "unknown"]
-"""Three-valued alias-proof vocabulary (INV-2). ``unknown`` is a first-class verdict."""
+"""Three-valued alias-proof vocabulary. ``unknown`` is a first-class verdict."""
 
 ALIAS_ENUMERATION_ELEMENT_CAP = 65536
 """Exact-enumeration bound (inclusive, per view) for the alias proof engine."""
@@ -70,8 +70,8 @@ def tensor_byte_footprint(value: torch.Tensor) -> TensorByteFootprint | None:
     ``None`` (the caller must treat the relation as ``unknown``) covers exotic
     layouts that refuse geometry reads AND any tensor whose storage base pointer is
     ``0`` with nonzero elements -- every meta tensor reports ``data_ptr() == 0``, so
-    absolute-address math on it would collide unrelated tensors (pre-closed r38
-    adjacent: meta ``data_ptr==0``).
+    absolute-address math on it would collide unrelated tensors (meta
+    ``data_ptr==0``).
     """
 
     try:
@@ -113,9 +113,9 @@ def tensor_byte_footprint(value: torch.Tensor) -> TensorByteFootprint | None:
 
 
 def _footprint_is_dense_interval(footprint: TensorByteFootprint) -> bool:
-    """Return whether a footprint's element starts cover ONE canonical dense byte interval (r39).
+    """Return whether a footprint's element starts cover ONE canonical dense byte interval.
 
-    Pure-integer proof (corr2_6): the touched element addresses form a contiguous no-hole,
+    Pure-integer proof: the touched element addresses form a contiguous no-hole,
     no-overlap grid -- so the WHOLE ``[start_byte, end_byte)`` byte span is fully covered -- iff,
     after dropping singleton dims and sorting the rest by absolute element stride, the smallest
     absolute stride is ``1`` and each next equals the running product of the preceding dimension
@@ -167,7 +167,7 @@ def _footprint_stride_gcd(footprint: TensorByteFootprint) -> int:
 def footprint_touched_element_addresses(footprint: TensorByteFootprint) -> set[int]:
     """Enumerate the ABSOLUTE byte address of every element start a view touches.
 
-    Pure Python integer arithmetic ONLY (r37 corr2-2): no torch factory may appear
+    Pure Python integer arithmetic ONLY: no torch factory may appear
     here, so the proof is identical under an implicit CPU default, a process-global
     meta default device, and nested ``torch.device(...)`` modes. Bounded by
     :data:`ALIAS_ENUMERATION_ELEMENT_CAP` at the call site.
@@ -188,7 +188,7 @@ def footprint_touched_element_addresses(footprint: TensorByteFootprint) -> set[i
 def touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> AliasRelation:
     """Three-valued exact touched-byte relation on absolute, device-scoped addresses.
 
-    Proof layers, in order (INV-2): repeated object identity proves ``overlap``;
+    Proof layers, in order: repeated object identity proves ``overlap``;
     unprovable footprints are ``unknown``; empty views, distinct device address
     spaces, and disjoint absolute byte intervals prove ``disjoint``; identical
     absolute geometry proves ``overlap``; an element-grid residue/GCD argument on
@@ -253,7 +253,7 @@ def touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> AliasRela
                 )
             if (delta_bytes // esize) % combined != 0:
                 return "disjoint"
-    # r39 corr2_6 (the sole relaxation, sequenced after all fail-closed work): when BOTH
+    # The sole relaxation, sequenced after all fail-closed work: when BOTH
     # footprints are proven canonical dense byte intervals, each fully covers its own
     # ``[start_byte, end_byte)`` span, so their device-scoped byte intervals already passed the
     # disjointness check above => the overlapping region is touched by both => ``overlap``,

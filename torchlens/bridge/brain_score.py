@@ -18,7 +18,7 @@ The wiring matches brainscore-vision 2.3.22's ``PytorchWrapper`` source
 preprocessed numpy arrays or tensors, are stacked, moved to the model's
 device, dtype-matched to the model parameters, and run under ``eval()`` +
 ``no_grad()``; the special layer name ``"logits"`` resolves to the model
-output. VERIFIED END TO END (the neuro-memo 4.3 live gate, 2026-08-29): a
+output. VERIFIED END TO END (live check, 2026-08-29): a
 real resnet18 IMAGENET1K_V1 checkpoint ran through a real
 ``ActivationsExtractorHelper`` and ``StimulusSet`` against a live
 brainscore-vision 2.3.22 install on Python 3.12 -- values, presentation

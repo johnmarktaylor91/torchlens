@@ -106,10 +106,10 @@ def set_random_seed(seed: int) -> None:
     # failure (busy device, momentary OOM) degrades only the capture that hit
     # it instead of latching the whole process to "no CUDA RNG snapshots".
     streams.rearm_cuda_rng_latch()
-    # r65 CLUSTER Z: TorchLens-OWNED seeding is never model host nondeterminism.
+    # TorchLens-OWNED seeding is never model host nondeterminism.
     # Normally this runs pre-forward (outside any monitor window), but the bracket
     # keeps any in-window TorchLens-initiated reseed from marking the torch RNG
-    # mutation channels the r65 registry rows monitor.
+    # mutation channels the registry rows monitor.
     with _suppress_active_monitor_marks():
         random.seed(seed)
         np.random.seed(seed)

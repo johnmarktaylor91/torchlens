@@ -1,4 +1,4 @@
-"""The summary configuration grammar (F08; summary memo item 13, 3.10).
+"""The summary configuration grammar.
 
 Orthogonal axes, one column registry, nothing silent: granularity
 (level/depth/fold_repeats/buffers) x presentation (view/columns) x
@@ -22,7 +22,7 @@ from .._utils._display_errors import lookup_message
 from ._stats_view import resolve_stats_columns
 from ._summary_ladder import DEFAULT_ROW_BUDGET
 
-#: New-grammar level vocabulary (row grain; memo 3.10).
+#: New-grammar level vocabulary (row grain).
 LEVELS: tuple[str, ...] = ("auto", "module", "op")
 
 #: View presets implemented natively by the rebuilt renderer.
@@ -70,13 +70,13 @@ REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
     ),
 }
 
-#: Style vocabulary (charset contract, memo 3.9).
+#: Style vocabulary (charset contract).
 STYLES: tuple[str, ...] = ("auto", "ascii", "unicode")
 
 #: Units vocabulary for rendered numerics (raw data is ALWAYS plain ints).
 UNITS: tuple[str, ...] = ("human", "raw")
 
-#: Buffers tri-value (rows are gated on qualified-name plumbing; memo 3.10).
+#: Buffers tri-value (rows are gated on qualified-name plumbing).
 BUFFER_MODES: tuple[str, ...] = ("hide", "summary")
 
 #: FLOP display conventions (the stored capture convention is fma=2).
@@ -95,7 +95,7 @@ class ColumnSpec:
     export_dtype: str
 
 
-#: The one column registry (memo 3.10): applicability, semantic type,
+#: The one column registry: applicability, semantic type,
 #: formatter routing (by semantic_type), alignment, and export dtype.
 COLUMN_REGISTRY: dict[str, ColumnSpec] = {
     "name": ColumnSpec("name", "name (type)", "text", "left", "always", "object"),

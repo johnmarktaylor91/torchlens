@@ -85,7 +85,7 @@ def _dataclass_defines_post_init(container_type: type[Any]) -> bool:
 
 
 def _generated_dataclass_init_marker() -> str | None:
-    """Feature-detect the ``co_filename`` marker of a dataclasses-GENERATED ``__init__`` (r47 secB_1).
+    """Feature-detect the ``co_filename`` marker of a dataclasses-GENERATED ``__init__``.
 
     ``dataclasses`` builds a generated ``__init__`` via ``exec`` -- on CPython 3.11 / 3.12 its
     ``__code__.co_filename`` is the literal ``"<string>"`` (a USER-authored ``__init__`` reads the
@@ -114,7 +114,7 @@ _GENERATED_DC_INIT_MARKER: str | None = _generated_dataclass_init_marker()
 
 
 def _dataclass_has_foreign_init(container_type: type[Any]) -> bool:
-    """Return whether a dataclass's winning ``__init__`` is NOT the dataclasses-generated one (r47 secB_1).
+    """Return whether a dataclass's winning ``__init__`` is NOT the dataclasses-generated one.
 
     Sparse reconstruction sets only captured fields and never invokes ``__init__`` (that would be the
     SEC1 construction-gadget RCE surface), so a USER-authored ``__init__`` that computes a dropped
@@ -149,7 +149,7 @@ def _dataclass_has_foreign_init(container_type: type[Any]) -> bool:
 
 
 def _metaclass_defines_foreign_call(container_type: type[Any]) -> bool:
-    """Return whether ``container_type``'s METACLASS defines a non-``type`` ``__call__`` (r51 secB_1).
+    """Return whether ``container_type``'s METACLASS defines a non-``type`` ``__call__``.
 
     A custom metaclass ``__call__`` runs at construction and can compute a dropped tensor-derived
     non-field/non-key instance attribute that non-invoking reconstruction (``cls.__new__(cls)`` +
@@ -391,7 +391,7 @@ def _is_hf_model_output_type(container_type: type[Any]) -> bool:
 def _is_trusted_transformers_output_type(container_type: type[Any], spec: Any | None) -> bool:
     """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
 
-    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
+    mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
     resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
     class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
     (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine

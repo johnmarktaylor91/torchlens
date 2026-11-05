@@ -1,4 +1,4 @@
-"""Frozen linear projection + PCA-apply (memo B8; decision 16).
+"""Frozen linear projection + PCA-apply.
 
 ``project(basis, center)`` is the unconditional primitive: a DIGEST-ADDRESSED
 basis (the spec params carry the content digest and geometry, never tensor
@@ -7,7 +7,7 @@ staged in a bounded process-level store. A spec rehydrated from an artifact
 whose digest is not staged REFUSES with the restaging remedies; artifact
 loading never imports or executes code.
 
-``pca_apply(fitted)`` is thin validation over ``project`` consuming the P6
+``pca_apply(fitted)`` is thin validation over ``project`` consuming the
 ``tl.stats`` fitted payload: centered apply (uncentered apply leaves
 Euclidean RDMs exact at ~1e-7 but damages corr-RDMs, r ~ 0.77 measured —
 the docs scope the claim instead of moralizing), with the fit scope and
@@ -234,7 +234,7 @@ def _project_apply(
     Returns
     -------
     torch.Tensor
-        Projected tensor (fp32 for half inputs, T-C7).
+        Projected tensor (fp32 for half inputs).
 
     Raises
     ------

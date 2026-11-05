@@ -1,6 +1,6 @@
 # The single-file offline HTML report
 
-*(F16, treescope memo decision 4. Option spellings are [UI-SPRINT] /
+*(treescope memo decision 4. Option spellings are [UI-SPRINT] /
 DOCUMENTED-UNSTABLE.)*
 
 ```python

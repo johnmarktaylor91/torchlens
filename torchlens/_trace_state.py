@@ -1,7 +1,6 @@
 """Trace-state vocabulary and the capture-state predicates shared across layers.
 
-``TraceState`` moved to :mod:`torchlens._vocab.trace_state` (ratified V2 relocation,
-architecture memo 3.3, C01 item 6); every historical spelling and the pickle-visible
+``TraceState`` moved to :mod:`torchlens._vocab.trace_state` (ratified V2 relocation); every historical spelling and the pickle-visible
 identity stay unchanged, and new lower-layer consumers import from the vocabulary home.
 
 This basis module also holds the predicate that recognises a reduce-and-discard

@@ -1,4 +1,4 @@
-"""CircuitsVis bridge + BertViz tuple adapter (memo D18).
+"""CircuitsVis bridge + BertViz tuple adapter.
 
 CircuitsVis is the ONE supported bridge: the payload is built from the same
 typed records the static renderers read (identical coordinates and values,
@@ -27,7 +27,7 @@ from ._records import AttentionView
 
 __all__ = ["bertviz_tuple", "circuitsvis_attention", "circuitsvis_payload"]
 
-#: Payload ceiling for the bridge handoff in bytes (R0 tuning candidate;
+#: Payload ceiling for the bridge handoff in bytes (a tuning candidate;
 #: a notebook embedding tens of MB of JSON stalls the kernel).
 PAYLOAD_MAX_BYTES = 32 * 1024 * 1024
 
@@ -167,7 +167,7 @@ def circuitsvis_attention(views: list[AttentionView], *, max_bytes: int | None =
 def bertviz_tuple(views: list[AttentionView], *, batch: bool = True) -> tuple[torch.Tensor, ...]:
     """Return attention in the BertViz/HF ``output_attentions`` tuple format.
 
-    The BERT numeric parity ORACLE (memo D18/R4): one ``[1, n_heads, n_dst,
+    The BERT numeric parity ORACLE: one ``[1, n_heads, n_dst,
     n_src]`` tensor per layer, elementwise comparable against
     ``model(..., output_attentions=True).attentions``. Documented as a
     recipe, not a supported bridge; no compatibility promise.

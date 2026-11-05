@@ -1,4 +1,4 @@
-"""Node labels, kinds, and curated attrs (memo D3, D5, D6).
+"""Node labels, kinds, and curated attrs.
 
 Labels are short op types so Model Explorer's identical-group ("twin")
 detection works -- TorchLens' globally unique labels killed it on every v2
@@ -29,7 +29,7 @@ class AttrContext:
     ``nonfinite_labels`` holds the trace's pass-qualified nonfinite op
     labels; ``nonfinite_basis`` the coverage basis (an unexamined op gets NO
     nonfinite row -- an attr must never assert an all-clear it cannot
-    prove). ``public`` applies the D14 public privacy profile BY
+    prove). ``public`` applies the public privacy profile BY
     CONSTRUCTION: source paths, code lines, and value-derived attrs drop
     regardless of what the capture retained.
     """
@@ -41,7 +41,7 @@ class AttrContext:
 
 
 def node_kind(entry: Any) -> str:
-    """Return the semantic kind attr (the v2 six-bucket type, memo D1)."""
+    """Return the semantic kind attr (the v2 six-bucket type)."""
 
     if getattr(entry, "is_input", False):
         return "input"
@@ -82,7 +82,7 @@ def _real_func_name(entry: Any) -> str | None:
 
 
 def curated_attrs(entry: Any, context: AttrContext) -> list[dict[str, str]]:
-    """Build the ordered curated attr rows for one unrolled node (D6)."""
+    """Build the ordered curated attr rows for one unrolled node."""
 
     rows: list[tuple[str, str | None]] = [
         ("kind", node_kind(entry)),
@@ -139,8 +139,8 @@ def output_metadata(entry: Any) -> list[dict[str, Any]]:
     """Build ``outputsMetadata`` slot ``"0"`` with keys ``shape``/``dtype``.
 
     The vendor's shipped bundle resolves its "Tensor shape" edge-label mode
-    by reading metadata key ``shape`` -- NOT ``tensor_shape`` (memo D5,
-    pinned by the contract harness).
+    by reading metadata key ``shape`` -- NOT ``tensor_shape`` (pinned by
+    the contract harness).
     """
 
     attrs = []
@@ -253,7 +253,7 @@ def _nonfinite_string(entry: Any, context: AttrContext) -> str | None:
     ``yes`` when the op is in the trace's nonfinite record; ``no`` only when
     the coverage basis provably examined this op; otherwise omitted -- an
     unexamined op must never carry a false all-clear. Public profiles drop
-    the row entirely (value-derived, memo D14).
+    the row entirely (value-derived).
     """
 
     if context.public:

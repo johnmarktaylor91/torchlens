@@ -1,23 +1,6 @@
-"""torchlens.mechinterp -- the mech-interp analysis kit (mikit memo).
+"""The mechanistic-interpretability analysis kit: residual decomposition, direct logit attribution, patching grids, head and neuron scores, and circuit edge graphs, all derived from a captured trace.
 
-TransformerLens's daily-driver analysis tools rebuilt on torchlens: residual
-decomposition, direct logit attribution, per-head results, patching grids,
-head-taxonomy scores, per-neuron MLP rows, the component edge graph (heads
-and MLPs as nodes, q/k/v split receivers) with edge attribution patching
-scores (EAP, EAP-IG) and circuit faithfulness areas (CPR, CMD), QK/OV circuits (``FactoredMatrix``,
-vendored from TransformerLens with credit), prompt utilities, an alias layer, and
-retention plans
--- derived from the captured graph on ANY architecture with a certifiable
-additive residual topology, with verification built in (identities run IN
-the API, not only in CI).
-
-Axis disambiguation (mikit D1): ``torchlens.attribution`` attributes model
-OUTPUTS to INPUTS; this kit attributes logits to internal WRITERS. No kit
-name contains the word "attribution".
-
-The facade name (and every spelling below) is a PLACEHOLDER, DOCUMENTED-
-UNSTABLE pending the naming sprint.
-"""
+It attributes logits to internal writers; ``torchlens.attribution`` attributes model outputs to inputs."""
 
 from __future__ import annotations
 

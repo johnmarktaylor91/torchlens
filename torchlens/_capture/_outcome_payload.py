@@ -26,7 +26,7 @@ from ._outcome_types import (
 # Persistence codec + load derivation
 # ---------------------------------------------------------------------------
 
-#: The closed persisted-payload key set (B1-07b). DERIVED from the writer
+#: The closed persisted-payload key set. DERIVED from the writer
 #: (``CaptureOutcome.to_payload``) rather than hand-listed, so reader and writer
 #: cannot drift: adding a persisted field automatically widens the accepted set,
 #: and a field this reader does not know about refuses.
@@ -34,7 +34,7 @@ _OUTCOME_PAYLOAD_KEYS: frozenset[str] = frozenset(
     CaptureOutcome(status=CaptureStatus.UNKNOWN).to_payload()
 )
 
-#: Fields that only a FAILED attestation may carry (B1-07a). Every settle path
+#: Fields that only a FAILED attestation may carry. Every settle path
 #: was enumerated to derive this: ``phase``/``origin``/``error_type`` are
 #: written by ``settle_failed``'s FAILED arm, ``demote_outcome``, and the
 #: fastlog failed-partial stamps -- and by nothing else. A record claiming
@@ -63,7 +63,7 @@ def _refuse_unknown_keys(data: dict[Any, Any]) -> None:
         If ``data`` has a field the writer-derived key set does not know.
     """
 
-    # B1-07(b): UNKNOWN KEYS REFUSE. The codec used to copy the dict and read
+    # UNKNOWN KEYS REFUSE. The codec used to copy the dict and read
     # only the keys it knew, so a verdict-steering field added in a later
     # torchlens without a tlspec bump was invisible to this reader and no
     # warning fired -- the reader would bless an attestation it could not fully
@@ -216,7 +216,7 @@ def parse_outcome_payload(payload: object) -> CaptureOutcome:
 
 
 def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
-    """Return the first internal-contradiction rule one attestation violates (B1-07a).
+    """Return the first internal-contradiction rule one attestation violates.
 
     Parameters
     ----------
@@ -229,7 +229,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
         A description of the violated cross-field rule, or ``None`` when the
         record is internally self-consistent. The description names the ACTUAL
         rule so the load-time refusal never misattributes an internal
-        contradiction to the artifact's structural evidence (b8-sol).
+        contradiction to the artifact's structural evidence.
     """
 
     if outcome.status is not CaptureStatus.FAILED:
@@ -243,7 +243,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
     # ``derived`` is provenance only the derivation lattices write, and they
     # emit HALTED / UNATTESTED / UNKNOWN exclusively; every settle stamp
     # writes ``derived=False``. A derived COMPLETE / ABORTED_NONFINITE /
-    # FAILED payload is therefore internally contradictory (R06).
+    # FAILED payload is therefore internally contradictory.
     if outcome.is_derived and outcome.status in (
         CaptureStatus.COMPLETE,
         CaptureStatus.ABORTED_NONFINITE,
@@ -252,7 +252,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
         return "claims derived=True for a status no derivation lattice emits"
     # ``settle_completed`` writes neither a reason nor the fastlog
     # disk-recovery marker; a COMPLETE payload carrying either forges
-    # provenance no writer can produce (R06).
+    # provenance no writer can produce.
     if outcome.status is CaptureStatus.COMPLETE and (
         outcome.reason is not None or outcome.is_recovered
     ):
@@ -268,7 +268,7 @@ def _cross_field_incoherence(outcome: CaptureOutcome) -> str | None:
 
 
 def _cross_field_coherent(outcome: CaptureOutcome) -> bool:
-    """Return whether one attestation is internally self-consistent (B1-07a)."""
+    """Return whether one attestation is internally self-consistent."""
 
     return _cross_field_incoherence(outcome) is None
 
@@ -285,7 +285,7 @@ def attestation_coherent(
     is adopted only when its status is possible given the artifact's
     structural fields, all read by TRUTHINESS.
 
-    Two layers, both required (B1-07a). The structural layer below asks
+    Two layers, both required. The structural layer below asks
     "is this status possible for these structural fields?". The CROSS-FIELD
     layer asks "is this record internally consistent?" -- it used to be
     missing entirely, so a payload could claim COMPLETE while carrying
@@ -389,7 +389,7 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
         return _unknown_attestation_outcome(f"attestation_parse_failed: {exc}")
     halted = bool(state.get("is_stopped"))
     finished = bool(state.get("_tracing_finished"))
-    # b8-sol: the refusal names the rule that ACTUALLY failed. An internally
+    # The refusal names the rule that ACTUALLY failed. An internally
     # contradictory record (cross-field layer) used to be blamed on the
     # artifact's structural evidence even when halted/finished were perfectly
     # consistent with the claimed status -- the wrong rule for the operator

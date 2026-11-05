@@ -43,7 +43,7 @@ if _HAS_PROCESS_GROUPS:
         _PRCTL = None
 
 _PR_SET_PDEATHSIG = 1
-# Pre-resolved as plain ints (r8 R40, opus b6): the hook runs between fork
+# Pre-resolved as plain ints: the hook runs between fork
 # and exec, where object allocation (a ``contextlib.suppress`` instance, an
 # enum ``int()`` coercion) can touch interpreter state that is not
 # fork-safe under an allocator lock held by another thread at fork time.
@@ -66,7 +66,7 @@ def _arm_parent_death_signal() -> None:
             pass
 
 
-# Group-reaper watchdog (r8 R40 arm 2, sol probe): PDEATHSIG protects only
+# Group-reaper watchdog: PDEATHSIG protects only
 # the DIRECT child -- a plain non-detached grandchild (``sh -c 'sleep &'``,
 # a forking dot plugin) survived a hard parent SIGKILL because the group
 # teardown runs in the (now dead) parent and the leader's own PDEATHSIG

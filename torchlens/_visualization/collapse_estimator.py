@@ -1,4 +1,4 @@
-"""Deterministic collapse work estimator and admission policy (memo D5/F5).
+"""Deterministic collapse work estimator and admission policy.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
@@ -7,7 +7,7 @@ The compute gate for smart collapse used to be one raw-op-count ceiling
 directions on real models (vit_l_16: 852 ops, 4.1 s; maxvit_t: 1,307 ops,
 0.48 s) and is not even mode-stable (train-mode densenet201 was REFUSED while
 eval mode was admitted at the same rendered universe). This module implements
-the panel's replacement (collapse memo D5):
+the panel's replacement (collapse):
 
 - the gate variable becomes ``U`` — the rendered-universe node count of the
   FULL plan (what would actually be drawn after focus/depth/rolled
@@ -48,33 +48,33 @@ from .._utils.env_flags import closed_bool_env
 #: attributable to the formula that produced each record (memo item 14).
 ESTIMATOR_FORMULA_VERSION = "uw_power_v1"
 
-#: Fitted coefficients of the measured work model (collapse memo D5(ii)):
+#: Fitted coefficients of the measured work model:
 #: ``predicted_ms = COEFF * U**U_EXP * W**W_EXP``, fitted at max-mode on the
 #: 13-model corpus and held-out-validated within 2.05x on 7 unseen
-#: checkpoints. The W exponent is the B2 de-quadratic proof handle: after
-#: item 7 the refit must drive it toward zero.
+#: checkpoints. The W exponent is the de-quadratic proof handle: the
+#: refit must drive it toward zero.
 ESTIMATOR_COEFFICIENT = 0.0095
 ESTIMATOR_U_EXPONENT = 1.43
 ESTIMATOR_W_EXPONENT = 1.02
 
 #: Predicted-cost admission budget for the quality (frontier) planner, in
-#: estimator milliseconds. The 2-3x measurement margin of D5(ii) is baked
+#: estimator milliseconds. The 2-3x measurement margin is baked
 #: into the constant: densenet201 (U=713, W=48) predicts ~5.9 s and must
 #: stay admitted; gpt2-large bare cache=True (U~1,669, W~81) predicts ~34 s
 #: and degrades to the deterministic fallback; Qwen3.5-4B predicts ~475 s.
 QUALITY_PLANNER_BUDGET_MS = 30_000.0
 
-#: Measured envelope bound for published admission numbers (memo D5(ii)):
+#: Measured envelope bound for published admission numbers:
 #: above this U the power law is extrapolation and only its conservative
 #: direction is trusted.
 MEASURED_ENVELOPE_MAX_U = 1_500
 
 #: Pathological-input pre-gate multiplier over the retained defensive
-#: constant (memo D5(i)): traces above ``20 x COLLAPSE_OPTIMIZER_MAX_OPS``
+#: constant: traces above ``20 x COLLAPSE_OPTIMIZER_MAX_OPS``
 #: raw ops decline smart collapse outright before any universe build.
 PATHOLOGICAL_OP_MULTIPLIER = 20
 
-#: Frontier-record allocation cap (memo D5(iii)): the budget unit the review
+#: Frontier-record allocation cap: the budget unit the review
 #: proposed as a clock is measured to be an ALLOCATION meter (98x per-record
 #: cost spread, tiering backwards on exactly the two models the ceiling
 #: exists for), so it survives as memory defence only. The constant is
@@ -109,7 +109,7 @@ def predicted_select_ms(universe_count: int, max_sibling_width: int) -> float:
 def watchdog_enabled() -> bool:
     """Return whether the wall-clock watchdog may arm for this process.
 
-    OFF in CI and in explicitly requested deterministic runs (memo D5(v)):
+    OFF in CI and in explicitly requested deterministic runs:
     a wall clock must never change results where reproducibility is the
     contract, so both ``CI`` and ``TORCHLENS_DETERMINISTIC`` disable it, as
     does ``TORCHLENS_COLLAPSE_WATCHDOG=0``.

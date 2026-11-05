@@ -1,4 +1,4 @@
-"""The overhead-measurement harness (torchnative W0.9; section-5 protocol).
+"""The overhead-measurement harness (torchnative.9; section-5 protocol).
 
 Every published overhead figure -- TorchLens's and competitors' -- goes
 through this harness. The protocol is memo law, written in the panel's own

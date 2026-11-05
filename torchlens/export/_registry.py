@@ -1,7 +1,7 @@
-"""The export-target registry: ONE L7 door for every exporter (C01 item 17).
+"""The export-target registry: ONE L7 door for every exporter.
 
 Four panels were queued to add flat functions to a single-module package;
-this door (architecture memo 6.3 seam 3) is where they register instead.
+this door is where they register instead.
 Members carry PER-MEMBER tier rows -- ``tl.export.netron``'s writer is
 bridge-tier, ``tl.export.csv`` present-tier -- one namespace, one door, the
 capability row is authoritative (namespace shape is necessary but

@@ -68,7 +68,7 @@ def _docs_pointer(section: str | None = None) -> str:
 def _first_user_frame() -> tuple[str | None, int | None]:
     """Return the first non-torchlens frame (the user's capture callsite).
 
-    Teaching-enrichment helper (L7a): names WHERE the refused capture was
+    Teaching-enrichment helper: names WHERE the refused capture was
     requested. Best-effort; ``(None, None)`` when no external frame is
     visible.
     """

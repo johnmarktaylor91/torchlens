@@ -1,7 +1,6 @@
 """Shared five-step lazy-facade resolution for TorchLens namespaces.
 
-THE one PEP-562 ``__getattr__`` mechanism (architecture memo section 5.4,
-five-step testable spec, D15): the root package, every appliance namespace
+THE one PEP-562 ``__getattr__`` mechanism: the root package, every appliance namespace
 (``torchlens.neuro``, ``torchlens.report._notebook``), and the integration namespaces
 (``torchlens.bridge``, ``torchlens.callbacks``) resolve attributes through the
 same ordered steps, so ``hasattr``/``getattr``-with-default can never explode,
@@ -94,8 +93,7 @@ def _plain_missing(
 
     Step 5 stays a PLAIN ``AttributeError`` by contract (the five-step type
     promise), but the MESSAGE may teach: when ``known`` names are supplied,
-    close matches ride a did-you-mean suffix (agent memo 3.10 item 3 -- the
-    package's one bare-AttributeError hole).
+    close matches ride a did-you-mean suffix.
 
     Parameters
     ----------

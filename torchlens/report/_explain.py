@@ -253,9 +253,9 @@ def _capture_verification(log: Any) -> dict[str, Any]:
 
     The report layer's honesty contract (report/AGENTS.md) requires a rescued
     or ceilinged capture (``capture_verified=False``) to stay visible in every
-    report surface. ``capture_status`` used to be HARDCODED ``"complete"`` for
-    every non-partial log (round-7 R67/R88 HIGH), so a HALTED or rescued
-    capture explained as clean.
+    report surface. ``capture_status`` is read from the log, never hardcoded
+    ``"complete"`` for every non-partial log, which would explain a HALTED
+    or rescued capture as clean.
 
     Parameters
     ----------
@@ -345,7 +345,7 @@ def _capture_status_lines(log: Any) -> list[str]:
 
     facts = _capture_verification(log)
     lines = [f"- Capture outcome: {facts['capture_status']}."]
-    # L7a G3 render honesty (memo sec 3.4).
+    # Render honesty: say so when shapes/dtypes are hypotheses.
     if bool(log._options_structure_only if is_live_trace(log) else False):
         lines.append(
             "- Structure-only capture: shapes/dtypes are HYPOTHESES, not "
@@ -361,7 +361,7 @@ def _capture_status_lines(log: Any) -> list[str]:
     elif facts["capture_verified"] is True:
         lines.append("- Capture verification: verified.")
     else:
-        # H4/L10: the default capture never arms the completeness witness, so an
+        # The default capture never arms the completeness witness, so an
         # absent verdict must not read as a clean bill -- host escapes the
         # wrappers cannot see (from_numpy/as_tensor/from_dlpack round-trips,
         # numpy-backed autograd.Functions, storage writes) leave no ceiling here.
@@ -408,7 +408,7 @@ def _first_nonfinite_detail(log: Any, saved_label: str) -> str:
 
     ``log.first_nonfinite()`` re-asks the trace under its own scan contract and can
     itself raise ``ValueError`` on a selective-save trace (it reads unsaved ``.out``
-    payloads, saved or not, and revalidating a memo reads them too). explain() must
+    payloads, saved or not, and revalidating its scan reads them too). explain() must
     not propagate that: fall back to the scoped saved-output statement so the
     report always honors its ``unknown``/clean contract.
 
@@ -455,7 +455,7 @@ def _model_summary_lines(log: Any) -> list[str]:
     from ._factcore import factcore  # deferred: cycle report
 
     model_class_name = log._source_class_name if is_live_trace(log) else type(log).__name__
-    # Single-source law (sumfam D1/item 11): headline facts come from
+    # Single-source law: headline facts come from
     # FactCore, never raw trace attributes. A husked/foreign log that cannot
     # serve the substrate degrades to the legacy zero-shape (explain is the
     # one member that never refuses).
@@ -512,7 +512,7 @@ def _capture_summary_lines(log: Any) -> list[str]:
 
     from ._factcore import factcore  # deferred: cycle report
 
-    # Counts come from the explicit grain vocabulary (sumfam D3): the bare
+    # Counts come from the explicit grain vocabulary: the bare
     # word "operations" cannot denote both the compute ops and the tracked
     # tensor rows, so both grains print under their names. Husked/foreign
     # logs degrade to the legacy zero-shape.
@@ -597,7 +597,7 @@ def _anomaly_lines(log: Any) -> list[str]:
 
     from ._health import health_facts  # deferred: cycle report
 
-    # D14 (sumfam item 11): bare explain renders the THREE health states
+    # Bare explain renders the THREE health states
     # from whatever basis is in hand and NEVER scans -- and it says "not
     # audited" with the spelling. The false negative this kills: a
     # payload-stripped all-NaN artifact reading as clean.

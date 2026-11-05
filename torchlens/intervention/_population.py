@@ -1,4 +1,4 @@
-"""The public population noun for stochastic/population edits (F02, edits memo D2).
+"""The public population noun for stochastic/population edits.
 
 One provenance-stamped population constructor (:func:`reference`; the NAME is a
 placeholder pending naming-session ratification -- every spelling here is
@@ -6,28 +6,27 @@ DOCUMENTED-UNSTABLE). The noun is the ONE home for the origin contract, the
 content digest, per-member datums, privacy rules, and the tensor-returning
 reducers -- the design borrows the shipped ``tl.subspace`` contract verbatim:
 "a direction without a recorded origin is an unreproducible result" applies to
-populations word for word (edits memo D2), so ``origin=`` is REQUIRED and
+populations word for word, so ``origin=`` is REQUIRED and
 non-empty (memo DIS-3: explicit required in v1; auto-derivation is a recorded
 ergonomic follow-up).
 
 Population laws implemented here:
 
-- D2: one public noun, ``origin=`` required.
-- D3: reductions are not draws -- :meth:`Population.mean` / :meth:`Population.std`
+- one public noun, ``origin=`` required.
+- reductions are not draws -- :meth:`Population.mean` / :meth:`Population.std`
   return TENSORS, never invent a seed, and accumulate reduced-precision
   members in float32.
-- D10: populations are PREPARED at construction; hooks only index, cast,
+- populations are PREPARED at construction; hooks only index, cast,
   move, and combine (no loader iteration or model run at fire time).
-- D11: external tensor populations carry a mandatory sha256 content digest
+- external tensor populations carry a mandatory sha256 content digest
   paid once at preparation; trace-backed populations record an ADDRESS
   identity by default (``digest_kind="address"``) with ``digest_population=True``
   opting into the value hash. BOTH identities are built from PERSISTED capture
   facts and retained payload bytes only -- never ``id()``, never a construction
-  ordinal: the derived-seed law (stochastic.py D5/D6) folds
+  ordinal: the derived-seed law (see ``stochastic.py``) folds
   ``population_identity`` into every draw, so a process-salted identity would
-  silently break rerun reproducibility for every trace-backed population
-  (fable51 audit AUD-CODE 2.1; the F02 uuid defect's sibling).
-- D13: persisted records store digests and counts; ephemeral refusal messages
+  silently break rerun reproducibility for every trace-backed population.
+- persisted records store digests and counts; ephemeral refusal messages
   may print agreement keys and class sizes (they teach without persisting).
 """
 
@@ -76,7 +75,7 @@ class PerRowDatums:
 
 
 def _tensor_content_digest(members: Sequence[torch.Tensor]) -> str:
-    """Compute the mandatory sha256 content digest over tensor members (D11).
+    """Compute the mandatory sha256 content digest over tensor members.
 
     Parameters
     ----------
@@ -96,7 +95,7 @@ def _tensor_content_digest(members: Sequence[torch.Tensor]) -> str:
 
 
 def _update_tensor_hash(hasher: hashlib._Hash, tensor: torch.Tensor) -> None:
-    """Fold one tensor's shape, dtype, and bytes into ``hasher`` (D11)."""
+    """Fold one tensor's shape, dtype, and bytes into ``hasher``."""
 
     hasher.update(str(tuple(tensor.shape)).encode())
     hasher.update(str(tensor.dtype).encode())
@@ -138,7 +137,7 @@ _TRACE_ADDRESS_FACTS = (
 
 
 def _trace_address_digest(members: Sequence[Any]) -> str:
-    """Compute the ADDRESS identity digest for trace-backed members (D11).
+    """Compute the ADDRESS identity digest for trace-backed members.
 
     The address -- PERSISTED capture facts plus the per-op label/shape/dtype
     geometry, in member order -- identifies the population without hashing
@@ -283,7 +282,7 @@ class Population:
     def identity(self) -> str:
         """Stable identity string for seed derivation and audit records.
 
-        Digest-first (privacy rule D13: identity travels, payloads never);
+        Digest-first (privacy rule: identity travels, payloads never);
         the origin string participates so two same-bytes populations with
         different declared provenance stay distinguishable in the audit.
         """
@@ -319,7 +318,7 @@ class Population:
         InvalidArgumentError
             ``population_agreement_empty`` when no member matches -- the
             EPHEMERAL message names the requested key and the available keys
-            with their class sizes (privacy rule D13: refusals teach without
+            with their class sizes (privacy rule: refusals teach without
             persisting; persisted records carry digests and counts only).
         """
 
@@ -353,7 +352,7 @@ class Population:
         return tuple(eligible)
 
     # ------------------------------------------------------------------
-    # reducers (D3: reductions are not draws)
+    # reducers (reductions are not draws)
     # ------------------------------------------------------------------
     def _tensor_members(self, verb: str) -> tuple[torch.Tensor, ...]:
         """Return tensor members or refuse for trace-backed populations."""
@@ -430,7 +429,7 @@ class Population:
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
     ) -> torch.Tensor:
-        """Return the deterministic member mean (a TENSOR, never a draw; D3).
+        """Return the deterministic member mean (a TENSOR, never a draw).
 
         Parameters
         ----------
@@ -439,7 +438,7 @@ class Population:
             member-shape axes (int or tuple of ints) to reduce further with
             ``keepdim=True``. Named axis tokens resolve through the axis
             ladder and refuse ``axis_semantics_unknown`` until axis-role
-            evidence exists (never guessed from rank; edits memo D25).
+            evidence exists (never guessed from rank).
         group_by:
             Optional agreement key callable over member datums.
         matching:
@@ -473,7 +472,7 @@ class Population:
         group_by: Callable[[Any], Any] | None = None,
         matching: Any = None,
     ) -> torch.Tensor:
-        """Return the deterministic member std (a TENSOR, never a draw; D3).
+        """Return the deterministic member std (a TENSOR, never a draw).
 
         Parameters mirror :meth:`mean`; at least two eligible members are
         required (a single-member standard deviation is undefined under the
@@ -545,7 +544,7 @@ def population(
         time, pass-qualified).
     origin:
         REQUIRED non-empty provenance string -- whence and why (the
-        ``tl.subspace`` precedent, edits memo D2/DIS-3).
+        ``tl.subspace`` precedent).
     data:
         Optional per-member agreement datums, aligned with member order.
     digest_population:
@@ -554,7 +553,7 @@ def population(
         is ~310 ms). The default records the ADDRESS identity -- persisted
         capture facts plus per-op geometry, never object addresses -- which
         already identifies the draw completely together with the realized
-        permutation (edits memo D11). Members that retain no payload at all
+        permutation. Members that retain no payload at all
         refuse ``population_digest_unavailable`` under the opt-in.
 
     Returns
@@ -626,7 +625,7 @@ def population(
         digest = _trace_address_digest(members)
         if digest_population:
             # Value-hash opt-in: every retained payload of every member is
-            # hashed NOW (paid once at preparation, D10), so the "content"
+            # hashed NOW (paid once at preparation), so the "content"
             # stamp is earned rather than asserted.
             digest = _trace_payload_digest(members, digest)
             digest_kind = "content"

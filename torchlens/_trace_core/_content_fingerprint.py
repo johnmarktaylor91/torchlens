@@ -49,7 +49,7 @@ def _value_fingerprint(value: Any) -> int:
     try:
         return hash((0, repr(value)))
     except Exception:
-        # Fail CLOSED (R22-8): a shared sentinel here made every pair of
+        # Fail CLOSED: a shared sentinel here made every pair of
         # fingerprint-refusing values compare EQUAL, collapsing a real write
         # to "no effective write" and laundering the downstream read. The
         # object id keeps same-object comparisons stable within the audit

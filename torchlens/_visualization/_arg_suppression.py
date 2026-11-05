@@ -1,4 +1,4 @@
-"""Checked suppression of redundant constructor-arg label rows (L5 M4).
+"""Checked suppression of redundant constructor-arg label rows.
 
 DEFAULT-ON: node labels omit a constructor arg (``in_features=4``) exactly
 when the CHECK licenses it — the arg value provably equals the captured

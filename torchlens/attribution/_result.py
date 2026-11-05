@@ -29,7 +29,7 @@ class AttributionError(ConfigurationError, ValueError):
     Historically a bare ``ValueError`` subclass; the ``TorchLensError`` base is
     additive (``except ValueError`` still catches it) and supplies the shared
     structured-payload contract: new raise sites pass ``code=`` and end their
-    message with a ``Remedy:`` sentence per the S-17 refusal-site contract.
+    message with a ``Remedy:`` sentence per the refusal-site contract.
 
     Examples
     --------
@@ -41,7 +41,7 @@ class AttributionError(ConfigurationError, ValueError):
 
 
 class AttributionWarning(TorchLensWarning):
-    """Coded disclosure warning for attribution methods and metrics (S-18)."""
+    """Coded disclosure warning for attribution methods and metrics."""
 
 
 def _summarize_attribution_tree(value: Any) -> str:

@@ -313,7 +313,7 @@ class RunnableErrorCode(str, Enum):
     COLLECTIVE_BOUNDARY_RUNNABLE_UNSUPPORTED = "collective_boundary_unsupported"
     HALTED_CAPTURE_NOT_RUNNABLE = "stopped_capture_unsupported"
     USER_INTERVENTION_NOT_REPLAYABLE = "user_intervention_unsupported"
-    #: PROVISIONAL SPELLING (D18, ships documented-unstable pending naming
+    #: PROVISIONAL SPELLING (ships documented-unstable pending naming
     #: ratification): the live refresh projector refused buffer-sink routing --
     #: a train-mode (value-changing) buffer writer, unproven (``None``) write
     #: evidence, a claim/evidence contradiction, or a refreshed rerun that
@@ -433,10 +433,10 @@ class InputSlotBinding:
 class StateSlotBinding:
     """Name, ownership, role, alias, and declared-fact metadata for one state slot.
 
-    r71 A owner-record obligations (REQUIRED, never defaulted):
+    A owner-record obligations (REQUIRED, never defaulted):
 
     * ``captured_requires_grad`` / ``captured_grad_fn`` -- the TOTALIZED declared
-      state-metadata facts (r65 F-1, E1-settled): the capture-time autograd trainable
+      state-metadata facts (E1-settled): the capture-time autograd trainable
       bit recorded for EVERY declared state name (staging applies it -- capture truth
       always wins) and grad_fn presence (``True`` refuses at save: no staged leaf can
       carry a grad_fn, so every admitted artifact records ``False``).
@@ -464,7 +464,7 @@ class StateSlotBinding:
 class TensorSlotDescriptor:
     """Value-free allocation and binding contract for one tensor slot.
 
-    r71 A owner-record obligations (REQUIRED, never defaulted):
+    A owner-record obligations (REQUIRED, never defaulted):
 
     * ``host_escape`` -- this slot's value escaped to the Python host (or was baked
       verbatim into a downstream literal): an exact ``tensor_derived_scalar_literal``
@@ -584,7 +584,7 @@ class AmbientExecutionContext:
     ``cudnn.benchmark=True``): such a capture can replay and verify its path
     but never claims byte-exact numeric attestation.
 
-    ``grad_enabled`` and ``inference_mode`` (r53 hon_1) record the capture-scoped
+    ``grad_enabled`` and ``inference_mode`` record the capture-scoped
     GLOBAL autograd/inference mode as REQUIRED strict booleans: a Python branch
     on ``torch.is_grad_enabled()`` / ``torch.is_inference_mode_enabled()`` is
     steered by this global, so replay must re-enter the recorded mode (as scoped
@@ -594,7 +594,7 @@ class AmbientExecutionContext:
     bless a different-context comparison as ``verified``.
     ``fill_uninitialized_memory`` is feature-detected (``None`` when the runtime
     does not expose ``torch.utils.deterministic.fill_uninitialized_memory``) and
-    governs the hon_2 deterministic-fill refinement for the ``empty`` op family.
+    governs the deterministic-fill refinement for the ``empty`` op family.
     """
 
     default_dtype: str
@@ -659,7 +659,7 @@ class ControlWitnessKind(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class FamilySpec:
-    """One closed registry-v2 row: the typed presence policy for one witness family (r71 A).
+    """One closed registry-v2 row: the typed presence policy for one witness family.
 
     Every verdict-steering witness family declares IN CODE (never prose):
 
@@ -694,7 +694,7 @@ class FamilySpec:
 
 WITNESS_FAMILY_REGISTRY: Final[Mapping[str, FamilySpec]] = MappingProxyType(
     {
-        # ---- direct control kinds (the r70 corr2recover-H1 perimeter closure) ----
+        # ---- direct control kinds (the corr2recover-H1 perimeter closure) ----
         "scalar_bool": FamilySpec(
             family="scalar_bool",
             witness_kind=ControlWitnessKind.SCALAR_BOOL,
@@ -732,7 +732,7 @@ WITNESS_FAMILY_REGISTRY: Final[Mapping[str, FamilySpec]] = MappingProxyType(
             discharge="witness_or_gap",
             runtime_consumer="_tensor_derived_scalar_stale",
         ),
-        # ---- SHAPE_STRUCTURE_FACT prefix families (r69 A rows, re-expressed) ----
+        # ---- SHAPE_STRUCTURE_FACT prefix families (re-expressed) ----
         "input_structure": FamilySpec(
             family="input_structure",
             witness_kind=ControlWitnessKind.SHAPE_STRUCTURE_FACT,
@@ -817,7 +817,7 @@ WITNESS_FAMILY_REGISTRY: Final[Mapping[str, FamilySpec]] = MappingProxyType(
         ),
     }
 )
-"""THE closed replay-critical witness-family registry v2 (r71 A).
+"""THE closed replay-critical witness-family registry v2.
 
 One typed :class:`FamilySpec` row per verdict-steering witness family -- the four
 direct control kinds (``scalar_bool`` / ``loop_predicate`` / ``conditional_arm_entry``
@@ -827,7 +827,7 @@ families -- and the two explicit claim-only families (``inert_sink`` /
 totality without witnesses. This registry is the ONLY dispatch authority for producer
 authoring, parser validation, and the generated mutation matrix.
 
-The agreed r71 invariant (deletion-closure): every replay-structure item that can
+The agreed invariant (deletion-closure): every replay-structure item that can
 affect a faithfulness verdict creates a typed, independently derived OBLIGATION,
 anchored to structure the replay itself consumes. Each obligation is discharged
 exactly once, by an exact witness XOR an explicit, source-linked
@@ -848,10 +848,10 @@ _VERDICT_STEERING_WITNESS_FAMILIES: Final[frozenset[str]] = frozenset(
 
 
 class WitnessGapKind(str, Enum):
-    """Closed vocabulary of explicit witness-coverage gap causes (r71 A3).
+    """Closed vocabulary of explicit witness-coverage gap causes.
 
     Every producer-side completeness downgrade is one of these typed, source-linked
-    causes; a new gap constructor without a registered row REDs the r71 meta-test.
+    causes; a new gap constructor without a registered row REDs the meta-test.
     """
 
     OPAQUE_INPUT_LEAF = "opaque_input_leaf"
@@ -963,7 +963,7 @@ coherent-reauthoring boundary (documented in the contract's threat-model subsect
 
 @dataclass(frozen=True, slots=True)
 class WitnessCoverageGap:
-    """One ordered, typed, source-linked witness-coverage gap record (r71 A3).
+    """One ordered, typed, source-linked witness-coverage gap record.
 
     Replaces the producer's former direct ``witness_completeness`` enum assignments:
     every downgrade cause persists as an explicit gap carrying its closed
@@ -984,7 +984,7 @@ class WitnessCoverageGap:
 def derived_witness_completeness(
     gaps: tuple[WitnessCoverageGap, ...],
 ) -> WitnessCompleteness:
-    """Derive the completeness FLOOR from the ordered gap ledger (r71 A3).
+    """Derive the completeness FLOOR from the ordered gap ledger.
 
     THE single derivation authority: the producer's persisted summary, the parser's
     floor check, readiness, and the ``_path_faithfulness`` VERIFIED gate all consult
@@ -1004,7 +1004,7 @@ def derived_witness_completeness(
 
 @dataclass(frozen=True, slots=True)
 class CallControlObligation:
-    """Owner-record scalar-bool / loop-predicate obligation on one call (r71 A2).
+    """Owner-record scalar-bool / loop-predicate obligation on one call.
 
     Stamped on the OWNING :class:`RunnableCallDescriptor` (the call producing the
     predicate slot) and consumed by the runtime check builder
@@ -1021,7 +1021,7 @@ class CallControlObligation:
 
 @dataclass(frozen=True, slots=True)
 class ControlDependencyEdge:
-    """Owner-record conditional arm-entry edge on the CHILD call (r71 A2).
+    """Owner-record conditional arm-entry edge on the CHILD call.
 
     Consumed by scheduling/topological validation (parent call precedes child call;
     labels resolve against descriptor slots) and by the runtime arm check domain.
@@ -1056,7 +1056,7 @@ class ControlWitness:
 
 @dataclass(frozen=True, slots=True)
 class RequiredWitnessFamily:
-    """One required-witness inventory row: family, disposition, exact member IDs (r69 A)."""
+    """One required-witness inventory row: family, disposition, exact member IDs."""
 
     family: str
     disposition: str
@@ -1086,7 +1086,7 @@ class RequiredWitnessInventory:
 
 @dataclass(frozen=True, slots=True)
 class InputBoundaryTensorSite:
-    """One tensor leaf of the REQUIRED input-boundary record (r71 A2).
+    """One tensor leaf of the REQUIRED input-boundary record.
 
     ``metadata_reads`` is the EXPLICIT (possibly empty) closed-vocabulary set of
     metadata-predicate names the captured forward read on this leaf: the totalized
@@ -1103,7 +1103,7 @@ class InputBoundaryTensorSite:
 
 @dataclass(frozen=True, slots=True)
 class InputBoundarySite:
-    """One REQUIRED top-level input-boundary site record (r71 A2).
+    """One REQUIRED top-level input-boundary site record.
 
     THE runtime site/arity and tree-binding authority (one exact record per captured
     arg/kwarg, canonical ``arg:<i>`` / ``kwarg:<name>`` position). Replaces the
@@ -1290,7 +1290,7 @@ def is_mode_sensitive_qualname(qualname: str | None) -> bool:
     """Return whether a qualname is a train/eval mode-sensitive op (BatchNorm family).
 
     BatchNorm / InstanceNorm produce numerically different results in eval (running
-    statistics) vs train (batch statistics) mode. Single-sourced here (r71 A) so the
+    statistics) vs train (batch statistics) mode. Single-sourced here so the
     parse-time ``module_training_mode`` domain derivation and the runtime
     ``_mode_sensitive_op_unwitnessed`` belt can never disagree. Dropout is intentionally
     excluded: its train arm is already RNG-tainted (``not_applicable``) and its eval arm
@@ -1307,14 +1307,14 @@ def is_mode_sensitive_qualname(qualname: str | None) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class ReplayWitnessStructure:
-    """The frozen WITNESS-FREE replay-structure view (r71 A2).
+    """The frozen WITNESS-FREE replay-structure view.
 
     Built ONLY from replay-essential structures -- calls, tensor slots, the required
     input-boundary record, and the callable registry (plus, when the container source
     is available, the container-record snapshot identities). By construction it cannot
     contain or expose ``control_witnesses``, ``coverage_gaps``,
     ``required_witness_inventory``, or ``witness_completeness``: the typed input makes
-    accidental self-referential coverage derivation impossible (r70 free-F1 root).
+    accidental self-referential coverage derivation impossible.
 
     ``container_members`` is ``None`` when the container source (the rehydrated
     ``Trace._containers`` records) is not in scope -- the pure-parse stage; the
@@ -1349,7 +1349,7 @@ class ReplayWitnessStructure:
 def derive_required_witness_members(
     structure: ReplayWitnessStructure,
 ) -> dict[str, list[str]]:
-    """Derive every family's REQUIRED member identities from replay structure (r71 A2).
+    """Derive every family's REQUIRED member identities from replay structure.
 
     THE independent required-coverage authority: iterates the closed
     :data:`WITNESS_FAMILY_REGISTRY` anchors over the witness-free
@@ -1357,9 +1357,9 @@ def derive_required_witness_members(
     the inventory mirror FROM this output (structure before witnesses); the parser
     independently rebuilds the structure, re-derives, and requires exact discharge.
     Deleting or replacing the witness stream, the inventory, or the persisted summary
-    cannot change this output (the r71 independence meta-test).
+    cannot change this output (the independence meta-test).
 
-    Per-family anchor sources (the merged r71 anchor table):
+    Per-family anchor sources (the merged anchor table):
 
     * ``scalar_bool`` / ``loop_predicate`` -- ``CallControlObligation`` owner records.
     * ``conditional_arm_entry`` -- ``ControlDependencyEdge`` owner records on the
@@ -1374,7 +1374,7 @@ def derive_required_witness_members(
       registry / call DAG (a REQUIRED-minimum: honest artifacts may declare the mode
       without any mode-sensitive op).
     * ``state_metadata`` -- the declared state-name universe x the closed two-fact
-      vocabulary (totalized, E1).
+      vocabulary (totalized).
     * ``unbound_state_escape`` / ``unbound_state_inert`` --
       ``StateSlotBinding.host_escape_disposition`` claims.
     * ``container`` -- the container-record snapshot identities when in scope.
@@ -1500,19 +1500,19 @@ class ContractCheck:
 NONDETERMINISTIC_SOURCE_VOCABULARY: Final[frozenset[str]] = frozenset(
     {"seeded_rng", "host_rng", "uninitialized_alloc"}
 )
-"""Closed vocabulary for ``RunReport.nondeterministic_sources`` (r53 F4)."""
+"""Closed vocabulary for ``RunReport.nondeterministic_sources``."""
 
 
 RUN_TRUNCATION_REGIME_VOCABULARY: Final[frozenset[str]] = frozenset(
     {"closure", "sequential_prefix", "live_stop_after"}
 )
-"""Closed vocabulary for ``RunTruncation.regime`` (L4 until=; [S2-PROV])."""
+"""Closed vocabulary for ``RunTruncation.regime`` (``until=``)."""
 
 
 RUN_TRUNCATION_CAUSE_VOCABULARY: Final[frozenset[str]] = frozenset(
     {"unprovable_independence", "coverage_gap", "ancestry_break"}
 )
-"""Closed cause vocabulary for the sequential-prefix fallback disclosure ([S2-PROV])."""
+"""Closed cause vocabulary for the sequential-prefix fallback disclosure."""
 
 
 @dataclass(slots=True)
@@ -1540,7 +1540,7 @@ class _RunUntilPlan:
 
 @dataclass(frozen=True, slots=True)
 class RunTruncation:
-    """Run-result truncation disclosure for ``until=`` (L4 sec 3; [S2-PROV]).
+    """Run-result truncation disclosure for ``until=``.
 
     Truncation is a RESULT/REPORT term, NEVER a capture outcome: the source
     trace's ``CaptureOutcome`` is untouched by any run, and no N-gate row
@@ -1570,7 +1570,7 @@ class RunTruncation:
 class RunReport:
     """Honesty, state, resolution, and contract metadata for one run.
 
-    ``nondeterministic_sources`` (r53 F4) is the closed, sorted, deduplicated
+    ``nondeterministic_sources`` is the closed, sorted, deduplicated
     declared-source vocabulary (``NONDETERMINISTIC_SOURCE_VOCABULARY``), derived
     ONLY by the single report finalizer. It distinguishes a
     declared-nondeterministic path-only ``verified`` (an unseeded ``torch.rand``
@@ -1596,16 +1596,16 @@ class RunReport:
     numeric_attestation: NumericAttestationStatus
     is_poisoned: bool
     nondeterministic_sources: tuple[str, ...]
-    #: PROVISIONAL (documented-unstable, rides naming/S2): ``True`` when the
+    #: PROVISIONAL (documented-unstable, rides naming): ``True`` when the
     #: live run was invoked with ``carry_state=True`` and declared-state
     #: mutations were deliberately left on the live model (the default run
     #: snapshot-restores declared state and reports ``False``).
     has_carried_state: bool = False
-    #: Truncation disclosure ([S2-PROV], L4 until=): ``None`` for a full run.
+    #: Truncation disclosure (``until=``): ``None`` for a full run.
     truncation: RunTruncation | None = None
-    #: Ratified flat reading surface (S2 sec 2): ``truncation is not None``.
+    #: Ratified flat reading surface: ``truncation is not None``.
     truncated: bool = False
-    #: Ratified flat reading surface (S2 sec 2): the stop-frontier site label.
+    #: Ratified flat reading surface: the stop-frontier site label.
     stopped_at: str | None = None
 
     def __repr__(self) -> str:

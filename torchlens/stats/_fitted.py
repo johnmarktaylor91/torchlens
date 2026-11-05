@@ -1,4 +1,4 @@
-"""Fitted-PCA payload + digest-checked persisted sidecar (transforms memo P6).
+"""Fitted-PCA payload + digest-checked persisted sidecar.
 
 ``save_fitted`` / ``load_fitted`` are also the one persistence path for
 streaming accumulators: a ``tl.stats`` accumulator saves its whole state to a
@@ -117,7 +117,7 @@ def fitted_digest(
 
 @dataclass(frozen=True, eq=False)
 class FittedPCA:
-    """The frozen fitted-PCA payload (memo P6 result upgrade).
+    """The frozen fitted-PCA payload.
 
     Attributes
     ----------
@@ -160,7 +160,7 @@ class FittedPCA:
     digest: str
 
     def __repr__(self) -> str:
-        """Bounded identity line: geometry, scope, digest -- never the arrays (D31)."""
+        """Bounded identity line: geometry, scope, digest -- never the arrays."""
 
         k = int(self.components.shape[0]) if self.components.dim() >= 1 else 0
         return (

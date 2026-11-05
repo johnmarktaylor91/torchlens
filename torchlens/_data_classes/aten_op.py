@@ -211,7 +211,7 @@ class AtenOp(RemovedMemberMixin):
 _PRIMITIVE_OP_STORE_LAYOUT = _install_record_facade(AtenOp, tuple(PRIMITIVE_OP_FIELD_ORDER))
 
 
-# The tlspec v8 coordinated bump retired the primitive-profile S3 pre-release
+# The tlspec v8 coordinated bump retired the primitive-profile pre-release
 # registrations: every profile record class above declares FieldPolicy.KEEP
 # directly, and loaded profiles validate through
 # validate_loaded_primitive_profile whenever present.

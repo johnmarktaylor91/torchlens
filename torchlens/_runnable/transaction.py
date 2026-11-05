@@ -94,7 +94,7 @@ def _execute_loaded_sparse_transaction(
     if until_plan is not None:
         executed_calls, until_regime, until_cause = _loaded_until_cut(descriptor, until_plan)
 
-    # r59/r61: the one aggregate resource ceiling for this transaction (built by
+    # the one aggregate resource ceiling for this transaction (built by
     # ``run_loaded_sparse_trace`` before input binding) bounds realized output count and
     # re-materialization clone bytes at every snapshot site; the run-prep retention floor
     # already refused a guaranteed-OOM retained population.
@@ -152,7 +152,7 @@ def _execute_loaded_sparse_transaction(
         _raise_failed_contract_as_divergence(failed, fork=fork)
 
     raise_first_divergence_incremental()
-    # r35 corr2_5: PRE-EXECUTION state digests -- eligibility compares each
+    # PRE-EXECUTION state digests -- eligibility compares each
     # state slot's capture-start bytes, not whatever a mutating call left
     # behind. Computed only when an activation archive exists to attest.
     state_byte_digests: dict[str, str] = {}
@@ -171,7 +171,7 @@ def _execute_loaded_sparse_transaction(
     call_outputs: dict[str, Any] = {}
     attestation_slot_ids = _raw_activation_slot_ids(descriptor)
     attestation_slot_values: dict[str, torch.Tensor] = {}
-    # r55 C3: registry lookup for the per-call allocation preflight (namespace /
+    # Registry lookup for the per-call allocation preflight (namespace /
     # qualname drive the size-driving classification).
     registry_by_id = {entry.registry_id: entry for entry in descriptor.callable_registry}
     # Run-invariant ``descriptor.tensor_slots`` indexes for the per-call output bind.
@@ -195,7 +195,7 @@ def _execute_loaded_sparse_transaction(
                 slot.slot_id,
             )
 
-    # r35 corr2_4: the fork/restore set follows the seeding primitive, never the bound-input
+    # the fork/restore set follows the seeding primitive, never the bound-input
     # overlay: every visible CUDA device is forked when CUDA is initialized or the capture
     # metadata names a CUDA device, and the executor seeds only the CPU generator plus each
     # forked CUDA generator, so no unforked generator (MPS/XPU) is touched by a seeded run.
@@ -247,7 +247,7 @@ def _execute_loaded_sparse_transaction(
                             ceiling=ceiling,
                         )
                 except RuntimeSignatureDriftError:
-                    # r39 corr2_4: under ``return_diverged`` an admitted-but-INEXECUTABLE
+                    # under ``return_diverged`` an admitted-but-INEXECUTABLE
                     # divergent input (wrong feature shape/dtype/device) reaches the resolved
                     # callable and throws. If an input contract check ALREADY failed, this is
                     # input DIVERGENCE, not resolved-callable signature drift -- roll back and
@@ -280,7 +280,7 @@ def _execute_loaded_sparse_transaction(
 
             _walk_call_cone(executed_calls, execute_call)
     except BaseException:
-        # R36-7: an escaping call loop pins this frame inside the exception traceback, so a
+        # an escaping call loop pins this frame inside the exception traceback, so a
         # retained exception would pin every staged device copy. Clear the staging
         # containers in place before propagating; the caller's rollback unregisters the fork.
         slot_values.clear()
@@ -298,7 +298,7 @@ def _execute_loaded_sparse_transaction(
         and torch.cuda.is_available()
         and torch.cuda.is_initialized() != bool(cuda_initialized_before)
     ):
-        # r35 corr2_4 tripwire: CUDA initialized DURING a seeded run whose fork
+        # tripwire: CUDA initialized DURING a seeded run whose fork
         # set excluded it -- the descriptor's capture device summary missed a
         # CUDA consumer, so run-local RNG isolation cannot be guaranteed. This
         # is an internal summary bug, never silently ignored.
@@ -342,13 +342,13 @@ def _execute_loaded_sparse_transaction(
             descriptor, slot_values, witness_source_snapshots
         )
         unbound_state_escape_stale = _unbound_state_escape_stale(descriptor, slot_values)
-        # r73 F1: compared against the RAW user input tree (pre-clone leaves; the run
+        # Compared against the RAW user input tree (pre-clone leaves; the run
         # executed on defensive clones, so runtime strides are unchanged here).
         input_derived_layout_stale = _input_derived_layout_stale(descriptor, inputs)
     mode_sensitive_op_unwitnessed = _mode_sensitive_op_unwitnessed(descriptor)
-    # r53 hon_2: ONE load-side classifier settles declared nondeterministic value
+    # ONE load-side classifier settles declared nondeterministic value
     # sources; the branch ceiling, the attestation gate, and the report signal
-    # all consult it (the r52 raise-vs-not_applicable inconsistency is
+    # all consult it (the raise-vs-not_applicable inconsistency is
     # structurally unrepresentable).
     value_source_taint = _nondeterministic_value_sources(descriptor)
     nondeterministic_control_source = _uninit_taint_reaches(
@@ -361,7 +361,7 @@ def _execute_loaded_sparse_transaction(
         output_container_spec = _output_container_spec(fork)
         container_reconstruction_lossy = _container_spec_reconstruction_lossy(output_container_spec)
         output_not_reproduced = _output_not_reproduced(descriptor, output_container_spec)
-    # r35 I3 (corr2_7): settle the provisional path verdict from all non-numeric contract
+    # Settle the provisional path verdict from all non-numeric contract
     # checks and ceilings first; numeric attestation is downstream of it. A verdict that is
     # not VERIFIED (including one inherited from a prior poisoned run) makes attestation
     # NOT_APPLICABLE before any archive byte is read, so ATTESTED never coexists with
@@ -433,7 +433,7 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
     Accepts the static site-selection forms (final layer labels, module
     addresses, the literal ``"saved"``, or a list of those); the selection is
     INCLUSIVE (``until=x`` computes ``x`` and stops). Predicate/selector forms
-    refuse typed until the S4 contract merge; other non-string forms refuse
+    refuse typed until the contract merge; other non-string forms refuse
     typed. Unknown labels surface the standard typed lookup refusal.
     """
 
@@ -466,8 +466,8 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
     """
 
     # Reuse the static-form resolver: same accepted family (labels,
-    # module addresses, 'saved'), same typed refusals (pre-S4
-    # predicate gate, junk forms, unknown-site lookup feedback).
+    # module addresses, 'saved'), same typed refusals (predicate
+    # gate, junk forms, unknown-site lookup feedback).
     save_plan = _resolve_run_until_plan(trace, save)
     run_save_labels = frozenset(save_plan.requested_layer_labels)
     if until is not None:
@@ -574,15 +574,15 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
 def _loaded_until_cut(
     descriptor: SparseRunDescriptor, plan: _RunUntilPlan
 ) -> tuple[tuple[RunnableCallDescriptor, ...], str, str | None]:
-    """Compute the until= scheduler cut over one recorded call schedule (L4 2.1).
+    """Compute the until= scheduler cut over one recorded call schedule.
 
     The EXECUTED set is always the sequential prefix of the recorded schedule
     through the last call producing a requested site -- a strict superset of
     any dependency closure, parent-closed by the schedule's topological order,
     so the cut is sound by construction. The REGIME label is ``"closure"`` only
-    when that prefix IS the widened dependency closure (C1 tensor deps union C3
-    declared-state deps union C5 control-witness deps leave no candidate skip);
-    any candidate skip is unproven independent this release (the C4
+    when that prefix IS the widened dependency closure (tensor deps union
+    declared-state deps union control-witness deps leave no candidate skip);
+    any candidate skip is unproven independent this release (the
     certified-fresh vocabulary is not yet shipped) and the run discloses the
     ``sequential_prefix`` regime with the ``unprovable_independence`` cause tag.
     """
@@ -670,7 +670,7 @@ def _attempt_live_forward(
 ) -> tuple[ContractCheck, BaseException] | None:
     """Run the refresh forward with the soft input-contract classifier.
 
-    r41 hon1_3 (corr2_4 parity): the soft input-contract checks are precomputed
+    the soft input-contract checks are precomputed
     before the forward (a failing forward may in-place-mutate an input leaf before
     the failing op). The precompute has no admission power: a divergent-but-executable
     input still runs and may settle VERIFIED; classification happens only at
@@ -681,7 +681,7 @@ def _attempt_live_forward(
     executed graph no longer matches the captured one), returns the failed
     ``call_structure_mismatch`` contract check paired with the projector error, for
     :func:`_settle_live_graph_change` to enforce ``on_divergence`` through the shared
-    spine (AUD-HONESTY H3). The typed D18 buffer-sink refusal and native model
+    spine (AUD-HONESTY H3). The typed buffer-sink refusal and native model
     failures re-raise raw.
     """
 
@@ -691,7 +691,7 @@ def _attempt_live_forward(
         # This consumer is SOFT (consulted only at native-failure time): an
         # unavailable classifier means the failure cannot be classified as
         # input divergence, so the native error re-raises raw -- the old
-        # ``None`` behavior, now explicit (R22-2).
+        # ``None`` behavior, now explicit.
         first_failed = None
 
     try:
@@ -708,7 +708,7 @@ def _attempt_live_forward(
         if first_failed is not None:
             # An admitted-but-inexecutable DIVERGENT input surfaces as the typed
             # PathDivergenceError carrying the first failed input check, with the
-            # native error chained as ``__cause__`` (corr2_4 on both providers).
+            # native error chained as ``__cause__`` (on both providers).
             # A native failure on a NON-divergent input re-raises raw below -- a
             # genuinely failing model is not a divergence.
             _raise_failed_contract_as_divergence(first_failed, fork=None, cause=exc)
@@ -723,7 +723,7 @@ def _attempt_live_forward(
 
 
 def _live_graph_change_check(error: BaseException, detail: str) -> ContractCheck:
-    """Build the failed live-provider contract check for a refresh graph change (H3).
+    """Build the failed live-provider contract check for a refresh graph change.
 
     Code ``call_structure_mismatch`` (the executed op sequence differs from the
     recorded one), stage ``refresh_graph_signature``; the message keeps the pinned
@@ -757,7 +757,7 @@ def _settle_live_graph_change(
     error: BaseException,
     ctx: _LiveFinalizeContext,
 ) -> RunResult:
-    """Enforce ``on_divergence`` for a live refresh whose graph changed (H3).
+    """Enforce ``on_divergence`` for a live refresh whose graph changed.
 
     ``RAISE`` (default) raises the typed ``PathDivergenceError`` carrying the
     failed check with the projector error chained, exactly like the sparse
@@ -874,7 +874,7 @@ def _finalize_truncated_live_run(
     until_plan: _RunUntilPlan,
     ctx: _LiveFinalizeContext,
 ) -> RunResult:
-    """Finalize the truncated-success live path (L4 3.2).
+    """Finalize the truncated-success live path.
 
     The internal refresh capture settled HALTED -- honestly, on the
     throwaway -- and must never be enumerable through a public surface:
@@ -941,7 +941,7 @@ def _finalize_full_live_run(fork: Any, ctx: _LiveFinalizeContext) -> RunResult:
             ("detail", diagnosis.detail),
             ("remedy", remedy),
         )
-    # Deephunt F2: the live report declares the capture-side host-RNG evidence (two
+    # The live report declares the capture-side host-RNG evidence (two
     # successive live runs of a host-RNG model can legitimately differ).
     return _finalize_provider_run(
         fork=fork,
@@ -1017,7 +1017,7 @@ def run_live_trace(
 ) -> RunResult:
     """Run the live-model refresh provider on a transactional fork.
 
-    r37 corr2-5: the live provider finalizes through the SAME spine as the sparse
+    The live provider finalizes through the SAME spine as the sparse
     provider -- ``mark_trace_path_status`` (monotonic Trace poison), the shared
     divergence-policy enforcement, and the one ``_run_report`` finalizer (poison
     derived solely from the faithfulness lattice). A lossy live reconstruction

@@ -1183,7 +1183,7 @@ def _add_edges_for_node(
             edge_dict["minlen"] = "2"
         edge_dict.update(loop_edge_attrs(edge_is_self_loop, edge_is_back_edge, rankdir))
         if occurrence_key and occurrence_key[0] == "skipped":
-            # Bridged-edge disclosure (N9): dashed, with the midpoint
+            # Bridged-edge disclosure: dashed, with the midpoint
             # ``label=`` spelling -- measured zero node penetrations at 100%
             # density, where xlabel penetrates 3.7% and headlabel 50%.
             edge_dict["style"] = "dashed"
@@ -1261,7 +1261,7 @@ def _add_edges_for_node(
             )
         # Same-pair parallel arg edges under high-fan-in midpoint mode fold
         # into ONE rendered edge whose midpoint label lists every argument
-        # row (D03-R4): N edges between the same two boxes carry no
+        # row: N edges between the same two boxes carry no
         # distinguishing per-edge geometry, so the merged row list is the
         # exact same information without the N-way parallel band.
         # CC note: the merge gate must sit inline in this per-edge decision
@@ -1346,7 +1346,7 @@ def _add_edges_for_node(
                 vis_call_depth,
                 module_edge_dict,
             )
-        # r-b6 R19-4: input-connectivity marks EVERY module containing a
+        # Input-connectivity marks EVERY module containing a
         # connected endpoint, for every edge. The historical loop broke after
         # the first entry (its guard compared a name to itself, so it was
         # tautologically true in unrolled mode) and only ran when the edge
@@ -1592,7 +1592,7 @@ def _label_node_arguments_if_needed(
     # High-fan-in children route their argument labels to a midpoint
     # ``label`` (reserved layout space) instead of a ``headlabel`` (painted
     # post-layout at one shared radius, where they smear into one band --
-    # D03-R4; sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
+    # sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
     fan_in = _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
     midpoint = fan_in >= _ARG_LABEL_MIDPOINT_FANIN
     rolled = isinstance(child_node, Layer)  # rolled draws hand Layers here, unrolled ones Ops

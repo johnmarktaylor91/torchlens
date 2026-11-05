@@ -638,7 +638,7 @@ def refresh_appended_tensor_metadata(trace: Trace, layer: Any) -> None:
 def discharge_against(trace: Trace, real_trace: Trace) -> Any:
     """Discharge this structure-only trace's hypotheses against a real run.
 
-    DOCUMENTED-UNSTABLE surface (L7a; no deprecation shim owed on
+    DOCUMENTED-UNSTABLE surface (no deprecation shim owed on
     rename). Only defined on a structure-only capture; ``real_trace``
     must be an ordinary settled COMPLETE capture of the same graph.
     Returns a frozen ``StructureDischarge`` record (per-claim table +

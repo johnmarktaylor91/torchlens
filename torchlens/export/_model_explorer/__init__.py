@@ -1,21 +1,6 @@
-"""Google Model Explorer export family (F15; modelexplorer memo B0-B12).
+"""Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported edges, shapes, node-data overlays, rolled and unrolled graph collections, per-step episode collections and bundle diffs, plus a serve helper over the pinned vendor API.
 
-The panel-converged schema v3 writer for Model Explorer's file-ingest
-contract: module-hierarchy namespaces (D1), the universal site-key+ordinal
-node-id rule (D2), short op-type labels (D3), occurrence-preserving ported
-edges through an explicit two-spelling map (D4), shapes on edges (D5),
-curated attrs (D6), group rows with the ``""`` provenance/disclosure block
-(D7), node-data overlays over the existing overlay vocabulary (D8),
-rolled/unrolled multi-graph collections with the recurrent-feedback overlay
-(D10), EPISODE per-step collections (D11-D14), bundle value diff (D15), and
-the serve one-liner over the public pinned vendor API (D18).
-
-Every public spelling here is DOCUMENTED-UNSTABLE pending naming-session
-ratification. The vendor schema of record is ``model_explorer.graph_builder``
-/ ``node_data_builder`` from ``ai-edge-model-explorer`` 0.1.33; the executed
-oracle is the pinned ``dist/worker.js`` from
-``ai-edge-model-explorer-visualizer`` 0.1.2 (tests/test_modelexplorer_assets).
-"""
+The vendor schema of record is ``model_explorer.graph_builder`` / ``node_data_builder`` from ``ai-edge-model-explorer`` 0.1.33; the executed oracle is the pinned ``dist/worker.js`` from ``ai-edge-model-explorer-visualizer`` (version 0.1.2)."""
 
 from __future__ import annotations
 

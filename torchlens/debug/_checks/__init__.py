@@ -1,15 +1,15 @@
-"""Training sanity checks -- the torcheck niche, honestly redefined (F23).
+"""Training sanity checks -- the torcheck niche, honestly redefined.
 
 A standalone, CAPTURE-FREE check registry on one shared loop-session
-chassis (checks memo D1): the chassis owns the step axis, the three hook
+chassis: the chassis owns the step axis, the three hook
 sites (S-A per-parameter counting hooks, S-B optimizer pre-step, S-C
 post-step), the skip/scale/clip ledgers, and the batched tensor scan;
-trackers subscribe to its bounded event stream (the C06
+trackers subscribe to its bounded event stream (the
 ``torchlens._observability`` chassis). The registry constructs and runs with
 TorchLens capture entirely off, and the step-check family runs on
 ``torch.compile``'d models.
 
-The honestly-redefined flagship checks (memo section 1, all measured):
+The honestly-redefined flagship checks (all measured):
 
 - "Params changing" ships as a FACT vocabulary whose primary detector is
   the GRADIENT FACT -- under default AdamW a dead network "changes" every

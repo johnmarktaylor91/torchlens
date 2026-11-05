@@ -5,10 +5,10 @@ GRADIENT FACT (``grad is None`` / ``grad_norm == 0``), never a movement
 statistic: under torch's default AdamW a DEAD network "changes" every step
 (decoupled weight decay is a rescale applied regardless of the gradient) and
 the decay-band rescue lags a real death by 22 to >32 steps of Adam momentum
-bleed-out -- both measured (memo D2). Movement statistics are recorded as
+bleed-out -- both measured. Movement statistics are recorded as
 corroborating facts carrying their measured latency; no finding ever
 contains the word "learning" or "dead" (``tl.dead`` keeps the only
-dead-unit verdict, memo D14).
+dead-unit verdict).
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from ._records import ACTIONS, CheckFinding
 
 __tl_layer__ = "L5"
 
-#: Follow-up spelling every gradient-cone finding must point at (memo D3):
+#: Follow-up spelling every gradient-cone finding must point at:
 #: the finding names a cone; the repaired frontier names the culprit.
 FRONTIER_FOLLOW_UP = "tl.debug.grad_health(trace)  # module + is_frontier columns"
 
@@ -69,10 +69,10 @@ def validate_window(window: tuple[int, int] | None) -> tuple[int, int]:
 class MofNWindow:
     """One M-of-N sustained-evidence window with dedup and re-arm.
 
-    The registry gates emission itself: one warn per (check, site), re-armed
-    only after a FULL healthy window, with a warmup grace of one window
-    (memo D16) -- the flood is impossible by construction, not by Python's
-    warning filters.
+       The registry gates emission itself: one warn per (check, site), re-armed
+       only after a FULL healthy window, with a warmup grace of one window
+    -- the flood is impossible by construction, not by Python's
+       warning filters.
     """
 
     def __init__(self, m: int, n: int) -> None:
@@ -106,7 +106,7 @@ class MofNWindow:
 
 @dataclass
 class ChangeCheck:
-    """The params-change fact vocabulary registration (memo D2/D3)."""
+    """The params-change fact vocabulary registration."""
 
     within: tuple[str, ...] | None
     window: tuple[int, int]
@@ -123,7 +123,7 @@ class ChangeCheck:
 
 @dataclass
 class FrozenCheck:
-    """The declared-frozen invariant registration (memo D5).
+    """The declared-frozen invariant registration.
 
     ``evidence="clone"`` is the default (exact, can SHOW the offending
     delta); ``evidence="digest"`` is the labeled opt-in whose findings
@@ -138,7 +138,7 @@ class FrozenCheck:
 
 @dataclass
 class UpdateRatioCheck:
-    """The Karpathy update-ratio registration (memo D13).
+    """The Karpathy update-ratio registration.
 
     Reports the RAW ratio and the lr-normalized companion; NO default band
     ships before the calibration matrix (a single healthy model measured a
@@ -160,14 +160,14 @@ class UpdateRatioCheck:
 
 @dataclass
 class NonfiniteGradientCheck:
-    """Site-conditional live parameter-gradient nonfinite check (memo D6)."""
+    """Site-conditional live parameter-gradient nonfinite check."""
 
     action: str
 
 
 @dataclass
 class NonfiniteParamCheck:
-    """Scheduled parameter/buffer-space nonfinite scan (memo D7)."""
+    """Scheduled parameter/buffer-space nonfinite scan."""
 
     every: int
     include_buffers: bool
@@ -176,7 +176,7 @@ class NonfiniteParamCheck:
 
 @dataclass
 class MagnitudeCheck:
-    """The S-A pre-clip magnitude registration (memo D8/D9).
+    """The S-A pre-clip magnitude registration.
 
     Registering it IS the explicit arming: the pass stays OFF by default
     until the canonical gate set (idle-box + CUDA + multi-rank DDP +
@@ -198,7 +198,7 @@ def no_gradient_finding(  # noqa: PLR0913 -- the args ARE the finding's evidence
     step_provenance: str,
     action: str,
 ) -> CheckFinding:
-    """Build the primary gradient-fact finding (memo D2).
+    """Build the primary gradient-fact finding.
 
     ``kind`` distinguishes ``grad is None`` (disconnection, also the
     reentrant-checkpoint detached-input footgun) from an exact zero tensor;
@@ -244,7 +244,7 @@ def decay_only_movement_fact(  # noqa: PLR0913 -- the args ARE the corroborating
     beta2: float | None,
     accepted_step_id: int,
 ) -> CheckFinding:
-    """Build the corroborating decay-band movement fact (memo D2).
+    """Build the corroborating decay-band movement fact.
 
     A CORROBORATING fact, never a detector: it carries its measured latency
     (momentum bleed-out goldens 22 / >32 / >32 steps) and the adapter's

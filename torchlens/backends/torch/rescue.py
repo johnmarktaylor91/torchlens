@@ -62,8 +62,8 @@ class CaptureAttemptFailedWarning(RuntimeWarning, TorchLensWarning):
 
     A dedicated category (still a ``RuntimeWarning``, so user filters keep
     matching; also a ``TorchLensWarning`` so the documented root category
-    covers it -- R64-1) lets the rescue driver DEFER the advisory while a rescue re-run
-    is still possible: the warning tells the user diagnostics ride the
+    covers it) lets the rescue driver DEFER the advisory while a rescue
+    re-run is still possible: the warning tells the user diagnostics ride the
     exception (``exc.partial_trace``), which is only truthful when that
     exception actually propagates. A successful rescue swallows the failure,
     so the deferred advisory is dropped; every path that re-raises flushes it
@@ -318,7 +318,7 @@ def _op_name_counts(trace: Trace) -> Counter[str]:
     rescue replaces the primary's minted orphan-source with the real op, so
     counting them made the rescued trace read one ``none`` short —
     ``lost_ops=('none',)`` — and the two-sided oracle refused the recovery
-    (the R16-1 false negative).
+    (the false negative).
     """
 
     return Counter(
@@ -437,7 +437,7 @@ def _snapshot_declared_state(model: Any) -> dict[str, Any] | None:
     BY the escaped op itself (an escaped call leaves no journal record), so
     journal emptiness is not proof of state-neutrality. The transient
     O(model-state) copy is confined to the rare escape path — the plain
-    capture path pays nothing (the W6 arming contract).
+    capture path pays nothing (the arming contract).
 
     Returns
     -------
@@ -490,16 +490,15 @@ def _restore_changed_state(model: Any, snapshot: dict[str, Any]) -> tuple[str, .
                 changed.append(key)
                 continue
             try:
-                # W1-FAB (weightsfree memo D6, defect L5): on a storage-less
-                # substrate the byte comparison is not an observation — the
-                # historical except-means-changed reading claimed the forward
-                # wrote parameters it never touched, discarded every valid
-                # meta rescue, and kept the degraded primary
+                # On a storage-less substrate the byte comparison is not an
+                # observation: reading an exception as "changed" would claim the
+                # forward wrote parameters it never touched, discard every valid
+                # meta rescue, and keep the degraded primary
                 # (substrate-asymmetric). Weights-free the verdict is
                 # UNKNOWN: no state-change claim, no restore copy.
                 if current.is_meta or baseline.is_meta:
                     continue
-                # NaN-aware oracle (r8 R16): ``torch.equal`` answers False for
+                # NaN-aware oracle: ``torch.equal`` answers False for
                 # bitwise-identical NaNs, so a state slot legitimately holding
                 # NaN (a running stat poisoned upstream, a sentinel buffer)
                 # read as "changed by the rescue" every run -- a false
@@ -521,9 +520,9 @@ def _restore_changed_state(model: Any, snapshot: dict[str, Any]) -> tuple[str, .
 
 # Verification reasons carrying MORE-SPECIFIC diagnostic content than the
 # generic rescue stamps: a recovered rescue must not demote any of these to
-# ``mode_rescue_rerun`` (b6-fable/b3-fable: only dynamo was protected, so an
-# armed detector/witness verdict on the rescued run -- or a teardown failure
-# -- was clobbered into the generic reason).
+# ``mode_rescue_rerun`` (otherwise an armed detector/witness verdict on the
+# rescued run -- or a teardown failure -- would be clobbered into the generic
+# reason).
 _SPECIFIC_VERIFICATION_REASONS = frozenset(
     {
         "dynamo_region_not_logged",
@@ -583,7 +582,7 @@ def _mark(trace: Trace, reason: str, info: dict[str, Any]) -> None:
     if getattr(trace, "_raw_dynamo_region_detected", False) or (
         existing_reason in _SPECIFIC_VERIFICATION_REASONS
     ):
-        # R16-3 generalized: a specific verdict (dynamo top precedence, an
+        # A specific verdict (dynamo top precedence, an
         # armed detector/witness report, the thread tripwire) outranks both
         # generic rescue stamps. The rescue attempt stays disclosed through
         # ``rescue_rerun`` below.
@@ -630,7 +629,7 @@ def capture_with_rescue(
     if _rescue_is_active():
         return run_capture()
     if not eligible:
-        # R16-1: ineligibility skips the RE-RUN, never the DISCLOSURE. This
+        # ineligibility skips the RE-RUN, never the DISCLOSURE. This
         # path formerly returned the primary with clean-capture fields
         # (verified=None / reason=None) even when an escape signal fired --
         # bit-indistinguishable from a genuinely clean capture across all
@@ -651,7 +650,7 @@ def capture_with_rescue(
                 # honesty category like the sibling escape-detection
                 # disclosures, never bare UserWarning -- users filtering or
                 # promoting torchlens advisories via TorchLensWarning must
-                # see it (R66 / grind-r5 b8 fixwave-4 drift instance).
+                # see it.
                 CaptureGapWarning,
                 stacklevel=user_stacklevel(),
             )
@@ -691,7 +690,7 @@ def capture_with_rescue(
 
     if primary_error is not None:
         trigger = "output_attribution_failed"
-        # R16-2 applies to EVERY trigger: an attribution-failed rescue also
+        # This applies to EVERY trigger: an attribution-failed rescue also
         # runs the forward a second time, so a primary that WROTE buffer
         # state (train-mode BatchNorm counters and running stats) refuses the
         # re-run here too — the failed capture's journal is the write record.
@@ -729,7 +728,7 @@ def capture_with_rescue(
         if signal is None:
             return primary
         trigger = signal
-        # R16-2: a rescue re-run executes the user's forward a SECOND time.
+        # a rescue re-run executes the user's forward a SECOND time.
         # When the primary forward WROTE buffer state (train-mode BatchNorm
         # counters and running stats, in-forward buffer counters), the re-run
         # double-applies those writes (RNG is restored, module state is not),
@@ -761,7 +760,7 @@ def capture_with_rescue(
             )
             return primary
 
-    # R02-1/R02-2: the journal-based refusals above prove nothing about
+    # the journal-based refusals above prove nothing about
     # PARAMETER writes (the write index covers registered buffers only) or
     # about writes performed BY the escaped op (which leaves no journal
     # record). Snapshot the declared state now — post-primary, escape path
@@ -780,7 +779,7 @@ def capture_with_rescue(
         set_rng_from_saved_states(rng_snapshot)
         # The re-run starts from the plain-attribute state the first forward
         # started from (the capture observer's snapshot), never from what the
-        # first forward left; buffers keep the R16-2 refusal above.
+        # first forward left; buffers keep the refusal above.
         _state.rewind_capture_attributes()
         # The rescue run's own capture-failed advisory is deferred too: its exception
         # never propagates, so an advisory pointing at ITS exc.partial_trace would be untrue.
@@ -889,7 +888,7 @@ def capture_with_rescue(
         return rescued
 
     assert primary is not None
-    # R16-1: the recovery oracle is TWO-SIDED. ``Counter.__sub__`` alone drops
+    # the recovery oracle is TWO-SIDED. ``Counter.__sub__`` alone drops
     # losses, so mode-induced de-fusion (eval MHA: 3 fused ops -> 27 small
     # ops) read as pure gains and a benign false alarm silently swapped the
     # user's canonical fused trace for a structurally different

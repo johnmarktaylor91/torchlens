@@ -259,7 +259,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # None of the three may flow through the capability-gated reject helper:
     # with interventions=True that would raise the never-dispatches
     # conformance error instead of running or refusing them properly.
-    # ``capture`` itself is NOT checked here (N5 fix): it is a grouped
+    # ``capture`` itself is NOT checked here: it is a grouped
     # CaptureOptions object, almost never strictly None/MISSING in practice,
     # and MLX supports many of its fields (layers_to_save, output_device,
     # ...). Blanket-rejecting the whole object made every
@@ -626,10 +626,10 @@ def _refuse_trace_entry_shapes(
     """Entry-time refusals that fire before any backend or capture work."""
 
     if grouping is not MISSING:
-        # grouping= (UNSTABLE, keyword-only; L1 wave 0): closed-vocabulary knob.
+        # grouping= (UNSTABLE, keyword-only): closed-vocabulary knob.
         # Only "structural" (today's grouping, the default) is entry-legal;
         # "strict_shapes" waits on its own reviewed design and "fold_sites" on
-        # an affirmative D1 ruling (the flip PR) / the episode capture kind.
+        # an affirmative ruling (the flip PR) / the episode capture kind.
         validate_grouping_knob(grouping)
     if narrate is not None and narrate is not False:
         # Entry-time echo refusals (bad spellings, finalized-label selectors)

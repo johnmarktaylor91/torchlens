@@ -69,7 +69,7 @@ def _is_isinstance_hostile_deprecation_shim(value: Any) -> bool:
     ``__getattribute__`` emits a ``FutureWarning`` on ANY attribute access --
     including the ``__class__`` read every ``isinstance()`` performs -- so an
     initialized distributed process running under ``-W error`` had its capture
-    CLEANUP aborted by the namespace walks below (SF-45). ``type()`` bypasses
+    CLEANUP aborted by the namespace walks below. ``type`` bypasses
     the instance's ``__getattribute__``, so this exact-name check is silent;
     structural matching (not an import of the private class) follows the
     ``_distributed.py`` fallback convention.
@@ -99,7 +99,7 @@ def _clear_module_attribute_tensor_metadata(
     the sweep found). An empty container is also never memoised in ``seen``:
     revisiting it is the same no-op. EXACT ``type()`` membership on purpose,
     as in the walker (the reduce_op shim answers ``isinstance`` with a
-    FutureWarning, SF-45); subclasses take the guarded walker call.
+    FutureWarning); subclasses take the guarded walker call.
 
     Parameters
     ----------
@@ -190,11 +190,10 @@ def _clear_module_namespace_tensor_metadata(
 ) -> None:
     """Clear stamps on tensors and plain containers stored directly in a module namespace."""
 
-    # r81 (r80 F1 root B): a stamped tensor stashed as a DIRECT attribute of
-    # a ``types.ModuleType`` escaped the belt entirely (this walk returned
-    # immediately for modules). r33/r83: a stamp nested inside a plain
-    # CONTAINER in the module namespace escaped the shallow sweep too and
-    # laundered provenance across sessions, so namespace containers now get
+    # A stamped tensor stashed as a DIRECT attribute of a ``types.ModuleType``
+    # must be reached by this walk, and a stamp nested inside a plain
+    # CONTAINER in the module namespace would escape a shallow sweep and
+    # launder provenance across sessions, so namespace containers get
     # a dedicated PURE container-tree descent (tensors + plain containers
     # only). The descent deliberately never enters objects or nested
     # modules: this walk reaches broadly-imported modules (``torch``,
@@ -209,11 +208,11 @@ def _clear_module_namespace_tensor_metadata(
     seen.add(obj_id)
     namespace = getattr(value, "__dict__", None)
     if isinstance(namespace, dict):
-        # No slot memo (r8 b4 R39, sol probe): the memo invalidated on
-        # ``len(namespace)`` only, so REPLACING a value at a constant
-        # length (``mod.stash = 5`` becoming ``mod.stash = tensor``) kept
-        # the stale slot list and the stamped tensor escaped the session
-        # clear -- provenance laundering across sessions. No cheaper
+        # No slot memo: a memo invalidated on ``len(namespace)`` only would
+        # miss REPLACING a value at a constant length (``mod.stash = 5``
+        # becoming ``mod.stash = tensor``), keep the stale slot list, and let
+        # the stamped tensor escape the session clear -- provenance laundering across
+        # sessions. No cheaper
         # invalidation is sound: detecting a new tensor/container slot
         # requires type-inspecting every item, which IS the rebuild, so
         # the filter runs fresh each walk (one isinstance pass per
@@ -246,11 +245,11 @@ def _clear_reachable_tensor_metadata(
 
     # Scalar leaves cannot carry tl_* stamps; skipping them INLINE (instead of
     # paying a full call that immediately returns) halves the cost of walking
-    # broadly-imported module namespaces like ``torch`` (round-3 b4 F1: the
-    # pre-forward ownership snapshot made every capture pay this walk twice).
+    # broadly-imported module namespaces like ``torch`` (the pre-forward
+    # ownership snapshot makes every capture pay this walk twice).
     # EXACT type() membership on purpose: isinstance() falls back to reading
     # ``__class__`` on a non-matching type, which the reduce_op deprecation
-    # shim answers with a FutureWarning (SF-45) -- the recursion's entry guard
+    # shim answers with a FutureWarning -- the recursion's entry guard
     # never runs for inline-skipped items, so this check must stay hostile-safe.
     # Non-exact scalar subclasses fall through to the guarded recursive call.
     _scalar_leaves = (str, bytes, int, float, bool)
@@ -333,10 +332,10 @@ def _clear_container_tree_tensor_metadata(
         items = list(value)
     # Inline scalar-leaf skip: module-namespace container trees are dominated
     # by strings (``torch.__all__`` alone is ~1400), and each full call here
-    # costs more than the check (round-3 b4 F1 walk-cost finding). EXACT
+    # costs more than the check (a measured walk cost). EXACT
     # type() membership on purpose: isinstance() reads ``__class__`` on a
     # non-matching type, which the reduce_op deprecation shim answers with a
-    # FutureWarning (SF-45); subclasses fall through to the guarded recursion.
+    # FutureWarning; subclasses fall through to the guarded recursion.
     for item in items:
         if item is None or type(item) in (str, bytes, int, float, bool):
             continue

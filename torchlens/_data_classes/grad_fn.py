@@ -380,14 +380,14 @@ class GradFn:
         return state
 
     def __tl_state_items__(self) -> Any:
-        """Yield live state pairs from the backing row (M9 facade hook)."""
+        """Yield live state pairs from the backing row (facade hook)."""
 
         from .._trace_core.record_rows import record_state_items
 
         return record_state_items(self)
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
-        """Install a state mapping through the cell descriptors (M9 hook)."""
+        """Install a state mapping through the cell descriptors (hook)."""
 
         from .._trace_core.record_rows import record_state_restore
 
@@ -523,7 +523,7 @@ class GradFn:
         if handle is not None:
             return handle
 
-        # L1 narrowing (r3): a lookup miss/ambiguity or a collected owner means
+        # L1 narrowing: a lookup miss/ambiguity or a collected owner means
         # "no live handle" (None); any other exception is a bug and propagates.
         try:
             op = _pass_op_for_grad_fn(self.op, self.grad_fn_object_id)
@@ -701,7 +701,7 @@ class GradFn:
         return pd.DataFrame([row], columns=GRAD_FN_LOG_FIELD_ORDER)
 
 
-# The M9 facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
+# The facade: the declared stored fields (the literal _PORTABLE_STATE_SPEC
 # keys) become row-cell descriptors; dataclass defaults are baked into the
 # generated __init__, so replacing the class-attribute defaults is
 # behavior-preserving. Rows adopt into the owning backward epoch's stores.

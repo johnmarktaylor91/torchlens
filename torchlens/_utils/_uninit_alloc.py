@@ -1,6 +1,6 @@
-"""Uninitialized-memory value-source family (r53 hon_2): ONE closed table.
+"""Uninitialized-memory value-source family: ONE closed table.
 
-Split out of ``utils/rng.py`` under the R43 file-size ratchet. The historical
+Split out of ``utils/rng.py``. The
 import surface (``torchlens._utils.rng``) re-exports every name here, so all
 existing consumers and the aten-namespace drift meta-test keep their spelling.
 """
@@ -13,7 +13,7 @@ import torch
 
 _SEEDED_RNG_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functional"})
 
-# --- r53 hon_2: uninitialized-memory value-source family (ONE closed table) --------
+# --- uninitialized-memory value-source family (ONE closed table) --------
 #
 # The ``empty`` factory family and a GROWING ``resize_``/``resize_as_`` produce bytes
 # that are not a function of the recorded computation (allocator garbage). PyTorch
@@ -51,7 +51,7 @@ _UNINIT_ALLOC_FACTORY_TAILS = frozenset(
 _UNINIT_ALLOC_SIZE_GATED_TAILS = frozenset({"new"})
 """Python-level ``torch.Tensor`` allocators whose UNINIT semantics depend on ARG FORM.
 
-r55 hon_1: the legacy ``Tensor.new(*sizes)`` allocator returns byte-identical
+The legacy ``Tensor.new(*sizes)`` allocator returns byte-identical
 uninitialized memory to ``new_empty`` (probed: distinct ``.sum()`` across
 allocations; redispatches ``aten.empty.memory_format``), but the SAME name
 called with DATA (``Tensor.new([values])`` / ``Tensor.new(tensor)``) is a
@@ -123,7 +123,7 @@ def qualname_is_uninitialized_alloc(namespace: str | None, qualname: str | None)
 def qualname_is_uninit_size_gated_alloc(namespace: str | None, qualname: str | None) -> bool:
     """Return whether a captured callable is an ARG-FORM-GATED uninit allocator.
 
-    r55 hon_1: matches the ``Tensor.new`` legacy allocator family
+    Matches the ``Tensor.new`` legacy allocator family
     (:data:`_UNINIT_ALLOC_SIZE_GATED_TAILS`). A ``True`` here means the call is
     uninitialized-memory-producing ONLY in its size-argument form; the caller
     OWNS the form refinement via :func:`uninit_new_call_is_size_form` and must

@@ -1,4 +1,4 @@
-"""The enriched netron exporter entry (lane F14, netron memo B1-B6).
+"""The enriched netron exporter entry.
 
 ``tl.export.netron`` writes an honest custom-domain ONNX-JSON artifact netron
 lights up fully: typed values and native graph I/O (netron's oldest open ask,
@@ -8,8 +8,8 @@ the existing tri-state policy, the ``netron:attachment`` metrics companion,
 and a serve/notebook one-liner. Every kwarg spelling here is a placeholder
 for the naming sprint (DOCUMENTED-UNSTABLE).
 
-The file-export default granularity is ``"module"`` (ruling N2); colour
-re-domaining is not built (ruling N1) -- structure replaces colour.
+The file-export default granularity is ``"module"``; colour
+re-domaining is not built -- structure replaces colour.
 """
 
 from __future__ import annotations
@@ -47,11 +47,11 @@ NETRON_DISCLAIMER = (
     "domain and carry no standard-ONNX execution semantics."
 )
 
-#: Closed granularity vocabulary (memo D-11/D-13; spellings [UI-SPRINT]).
+#: Closed granularity vocabulary (spellings are provisional).
 _GRANULARITIES = frozenset({"op", "module", "rolled"})
 
 #: Extent budget in netron ranks: ~27 ranks keeps node labels >= 7 px at fit
-#: zoom in a 1600x1000 viewport at netron's ~55 px/rank (memo D-12). The
+#: zoom in a 1600x1000 viewport at netron's ~55 px/rank. The
 #: 7 px legibility floor is a judgment constant; a different floor re-derives
 #: this budget in one line.
 NETRON_EXTENT_RANK_BUDGET = 27
@@ -82,7 +82,7 @@ def _validate_options(granularity: str, depth: int, show_buffers: BufferVisibili
 
 
 def _assert_function_dag(projection: NetronProjection) -> bool:
-    """Explicit DAG check over the function-call graph (memo D-11).
+    """Explicit DAG check over the function-call graph.
 
     Per-call keying makes cycles structurally impossible, but a cycle is not
     a degraded render -- it kills netron (stack overflow, dead file, zero
@@ -143,7 +143,7 @@ def _build_projection(
 
 
 def _warn_extent(projection: NetronProjection) -> None:
-    """Warn-plus-remedy when the root graph exceeds the extent budget (D-12)."""
+    """Warn-plus-remedy when the root graph exceeds the extent budget."""
 
     if projection.extent_ranks <= NETRON_EXTENT_RANK_BUDGET:
         return
@@ -166,7 +166,7 @@ def _warn_extent(projection: NetronProjection) -> None:
 
 
 def _capture_outcome_marker(log: Any) -> str:
-    """Return the capture-outcome status string, best-effort (memo D-19).
+    """Return the capture-outcome status string, best-effort.
 
     The exporters sit OUTSIDE the capture-outcome gates by design, so this
     marker is the only place a halted or unverified trace can say so.
@@ -184,7 +184,7 @@ def _capture_outcome_marker(log: Any) -> str:
 def _metadata_props(
     log: Any, projection: NetronProjection, show_buffers: str, baseline: str | None
 ) -> list[tuple[str, str]]:
-    """Assemble the ordered honesty metadata rows (memo D-19)."""
+    """Assemble the ordered honesty metadata rows."""
 
     rows: list[tuple[str, str]] = [
         ("torchlens.lossy_export", "true"),
@@ -212,7 +212,7 @@ def _metadata_props(
     if getattr(log, "intervention_audit", None):
         rows.append(("torchlens.intervened", "true"))
     if baseline is not None:
-        # The diff slot (netron #1544; compo row C4): the diff summary
+        # The diff slot (netron #1544): the diff summary
         # JSON for a baseline Trace, or the caller's identifier string.
         rows.append(("torchlens.baseline", baseline))
     if projection.fallback_reason:
@@ -255,7 +255,7 @@ def _baseline_slot(
 
 
 def _serve(name: str, payload: bytes, *, browse: bool) -> tuple[str, int]:
-    """Serve the artifact through the netron package (memo D-20).
+    """Serve the artifact through the netron package.
 
     Gotchas locked by execution: ``bytearray`` not ``bytes`` (bytes falls
     into an experimental sniffing branch), the served route is
@@ -281,7 +281,7 @@ def _serve(name: str, payload: bytes, *, browse: bool) -> tuple[str, int]:
 
 
 def _maybe_widget(netron_package: Any, address: tuple[str, int]) -> None:
-    """Render the notebook widget when IPython is displaying (memo D-20)."""
+    """Render the notebook widget when IPython is displaying."""
 
     try:
         from IPython import get_ipython
@@ -327,8 +327,8 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         repeated passes merged by rolled identity, variance-gated types.
     depth:
         Module level shown in the root graph (module granularity only);
-        the interim default 1 is the shallow architecture diagram (memo
-        DISSENT D1), recorded in metadata.
+        the interim default 1 is the shallow architecture diagram,
+        recorded in metadata.
     show_buffers:
         The existing tri-state buffer policy (``never|meaningful|always``);
         ``meaningful`` also drops counter-update chains and disclosed

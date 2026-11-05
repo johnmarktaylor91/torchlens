@@ -1,4 +1,4 @@
-"""The measurable cost tiers of the overhead measurer and their validation (D25, D27).
+"""The measurable cost tiers of the overhead measurer and their validation.
 
 A tier is a public callable, never a harness rung name; ``raw_forward`` is the
 baseline every ratio is derived against, so it is always required. Ladder tiers
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from .._errors import InvalidArgumentError
 
-#: The measurable tiers: public callables, never harness rung names (D25).
+#: The measurable tiers: public callables, never harness rung names.
 COST_REPORT_TIERS: tuple[str, ...] = ("raw_forward", "trace")
 
 #: Ladder tiers that have no shipped callable yet, printed as words only

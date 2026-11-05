@@ -3,18 +3,18 @@
 ONE immutable envelope, computed once at settlement, consumed by every
 renderer, serializer, agent surface, slice, and persisted artifact. The
 closed key set, claim vocabularies, and coherence rules were adjudicated at
-C07 (tlspec v9, entry-dark until this writer) and are load-validated
+(tlspec v9, entry-dark until this writer) and are load-validated
 fail-closed by ``torchlens/_io/forgery_validation.py``
 (``artifact_structure_evidence_invalid``) — this writer and that validator
 must stay in lockstep.
 
 The PERSISTED claim statuses are the capture-time facts: hypotheses stay
-hypotheses (D21 — the discharge registry is session-only, so a loaded trace
+hypotheses (the discharge registry is session-only, so a loaded trace
 is HYPOTHESIS again and the persisted ``discharge`` field is ``"absent"``
 in v1; the reserved attestation object is a named future, never
 opportunistically serialized).
 
-Every spelling is DOCUMENTED-UNSTABLE pending naming-session/S2 ratification.
+Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
 from __future__ import annotations
@@ -34,9 +34,9 @@ __all__ = ["build_structure_evidence", "settle_weightsfree_capture"]
 def settle_weightsfree_capture(trace: Any, admission: MetaAdmissionRecord | None) -> None:
     """Settlement seam: stamp session facts and the evidence envelope.
 
-    Runs on EVERY finished torch capture: the wrap-generation stamp (W1-ORD)
+    Runs on EVERY finished torch capture: the wrap-generation stamp
     feeds the discharge preflight for both twins, real oracles included.
-    Structure-only captures additionally pass the D22 invariant net and
+    Structure-only captures additionally pass the invariant net and
     receive the persisted evidence envelope; an admitted meta offense whose
     trace lost the structure-only marker fails closed inside the invariants.
 
@@ -69,7 +69,7 @@ def build_structure_evidence(trace: Any) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        The envelope, exactly the C07 closed key set; validates fail-closed
+        The envelope, exactly the closed key set; validates fail-closed
         under the tlspec v9 load rules.
     """
 
@@ -120,7 +120,7 @@ def _input_plan_facts(trace: Any) -> dict[str, Any]:
     """Input-plan provenance facts (quickstart rung where present).
 
     A gold-rung user-supplied input has no synthesized/omitted members; the
-    quickstart resolver's ``InputProvenance`` payload (F17) supplies the
+    quickstart resolver's ``InputProvenance`` payload supplies the
     synthesized-rung disclosure when the capture came through the ladder.
     """
 

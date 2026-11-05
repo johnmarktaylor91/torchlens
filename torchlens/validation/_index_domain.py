@@ -19,13 +19,13 @@ from .._utils._record_group_table import record_member
 from ._setitem_index_probe import layer_has_setitem_index_parent, setitem_index_probe_values
 
 # ---------------------------------------------------------------------------
-# Index-domain perturbation standard (F2 tightening).
+# Index-domain perturbation standard.
 #
 # The ops below consume an integer index/target arg whose VALUES genuinely
 # determine the output, but whose valid domain is bounded by a sibling arg's
-# shape (random draws can go out of bounds and crash the kernel). The legacy
-# treatment blanket-skipped perturbing those args, which could excuse a
-# genuinely-missed dependency. The tightened standard perturbs them IN-DOMAIN:
+# shape (random draws can go out of bounds and crash the kernel). Blanket-skipping
+# perturbation of those args could excuse a genuinely-missed dependency, so
+# the standard perturbs them IN-DOMAIN:
 # every in-range entry is rotated by one position (``(v + 1) % n``, a bijection
 # on ``[0, n)``), out-of-range sentinels (e.g. ``cross_entropy`` ignore_index)
 # are preserved, and only the provably degenerate domain (``n <= 1`` or no

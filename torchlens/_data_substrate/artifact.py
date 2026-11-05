@@ -1,4 +1,4 @@
-"""Extraction ARTIFACT v2: bounded manifest + append-only fsynced ledger (extract D1).
+"""Extraction ARTIFACT v2: bounded manifest + append-only fsynced ledger.
 
 Layout: ``manifest.json`` (bounded header: schema/tool versions, status, the
 run signature, per-key logical metadata, terminal totals, ledger digest) +
@@ -15,8 +15,7 @@ The manifest is written at creation, once when batch zero freezes the plan,
 and at terminal status — never per shard (whole-manifest rewriting was the
 measured quadratic: 44 s / 597 MB at 4,000 shards vs a flat append).
 
-Signature compare is FIELD BY FIELD against the KNOWN-FIELDS list (extract
-D16): mismatch refuses typed naming the exact fields; missing semantic
+Signature compare is FIELD BY FIELD against the KNOWN-FIELDS list: mismatch refuses typed naming the exact fields; missing semantic
 fields never degrade to warnings.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
@@ -99,7 +98,7 @@ def shard_filename(index: int, extension: str = ".pt") -> str:
 #: Sidecar schema id.
 _STIMULUS_IDS_SCHEMA = "tl_extract_stimulus_ids_v1"
 
-#: The D16 KNOWN-FIELDS list: every signature field compared individually on
+#: The KNOWN-FIELDS list: every signature field compared individually on
 #: resume. Every entry is SEMANTIC — a missing one refuses, never warns.
 SIGNATURE_SEMANTIC_FIELDS: tuple[str, ...] = (
     "schema_version",
@@ -118,9 +117,9 @@ SIGNATURE_SEMANTIC_FIELDS: tuple[str, ...] = (
     "dtype_policy",
     "ragged",
     "integrity",
-    # F18 extraction-runtime fields (extract D16's remaining KNOWN-FIELDS;
-    # absent on pre-F18 v2 artifacts, where a missing semantic field
-    # refuses — the fail-closed direction D16 mandates).
+    # extraction-runtime fields (the remaining KNOWN-FIELDS;
+    # absent on earlier v2 artifacts, where a missing semantic field
+    # refuses — the fail-closed direction mandates).
     "collate",
     "callable_identity",
     "selector_plan",
@@ -189,7 +188,7 @@ def _atomic_write_json_fsync(path: Path, payload: Mapping[str, Any]) -> None:
 
 
 def stimulus_ids_digest(ids: list[str] | None) -> str | None:
-    """Digest an ordered stimulus-id list for the signature (extract D2).
+    """Digest an ordered stimulus-id list for the signature.
 
     Parameters
     ----------
@@ -208,7 +207,7 @@ def stimulus_ids_digest(ids: list[str] | None) -> str | None:
 
 
 def _crc32_file(path: Path) -> int:
-    """Stream a file's CRC-32 (the D7 'fast' accidental-corruption fact).
+    """Stream a file's CRC-32 (the 'fast' accidental-corruption fact).
 
     Parameters
     ----------
@@ -231,7 +230,7 @@ def _crc32_file(path: Path) -> int:
 
 
 def compare_signatures(existing: Mapping[str, Any], current: Mapping[str, Any]) -> list[str]:
-    """Compare two v2 signatures FIELD BY FIELD (extract D16).
+    """Compare two v2 signatures FIELD BY FIELD.
 
     Parameters
     ----------
@@ -263,7 +262,7 @@ def compare_signatures(existing: Mapping[str, Any], current: Mapping[str, Any]) 
 
 
 def compare_model_identity(recorded: Any, current: Any) -> str | None:
-    """Compare two model-identity records at the recorded level (extract D6).
+    """Compare two model-identity records at the recorded level.
 
     Parameters
     ----------
@@ -436,7 +435,7 @@ def read_trusted_rows(container: Path) -> list[dict[str, Any]]:
 def repair_ledger_tail(container: Path) -> None:
     """Clear torn crash debris from the ledger tail before appends resume.
 
-    A torn FINAL line is never trusted (D1) — but leaving its bytes in place
+    A torn FINAL line is never trusted — but leaving its bytes in place
     would corrupt the next append by concatenation. Exactly two repairs are
     legal, both consistent with :func:`read_trusted_rows`'s trust decisions:
     an UNPARSEABLE final line is truncated away (its commit never completed),
@@ -488,7 +487,7 @@ def repair_ledger_tail(container: Path) -> None:
 
 
 class ArtifactWriter:
-    """The v2 artifact writer implementing the commit protocol (extract D1).
+    """The v2 artifact writer implementing the commit protocol.
 
     Parameters
     ----------
@@ -518,7 +517,7 @@ class ArtifactWriter:
         shard_extension:
             Filename extension for the artifact's shard format.
         checksums:
-            The D7 integrity level (``"fast"`` / ``"crypto"`` / ``"none"``).
+            The integrity level (``"fast"`` / ``"crypto"`` / ``"none"``).
         """
 
         self.container = container
@@ -533,7 +532,7 @@ class ArtifactWriter:
         _atomic_write_json_fsync(self.container / "manifest.json", self.manifest)
 
     def write_stimulus_ids_sidecar(self, ids: list[str]) -> None:
-        """Write the ordered write-once stimulus-id sidecar (extract D2).
+        """Write the ordered write-once stimulus-id sidecar.
 
         Parameters
         ----------
@@ -608,7 +607,7 @@ class ArtifactWriter:
             Additional per-shard ledger facts (per-key shapes/dtypes, value
             reductions, id-range digest, ...). The writer's construction-time
             ``shard_extension`` and ``checksums`` policies govern the shard
-            filename and the D7 integrity facts.
+            filename and the integrity facts.
 
         Returns
         -------

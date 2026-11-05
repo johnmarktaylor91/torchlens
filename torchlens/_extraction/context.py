@@ -7,7 +7,7 @@ sinks). It carries identity and geometry facts — batch/global row ranges,
 the ID slice, mask and true extents, position-ID source, device — and NEVER
 retains raw examples after commit.
 
-Row validation is the D13 rule: every selected output and auxiliary row
+Row validation is the rule: every selected output and auxiliary row
 carrier must retain the INPUT batch's row count after postprocessing, or
 refuse typed (the motivating regression: a transform's feature axis
 reinterpreted as stimuli, completing with the wrong count).
@@ -50,7 +50,7 @@ _BANNED_KEY_CHARS = ("/", "\\", "\x00")
 
 @dataclasses.dataclass(frozen=True)
 class BatchContext:
-    """Per-batch fact carrier for the store pipeline (extract D13).
+    """Per-batch fact carrier for the store pipeline.
 
     Attributes
     ----------
@@ -72,7 +72,7 @@ class BatchContext:
         ``"mixed"`` / ``"none"``; ``None`` without a mask.
     position_ids_source:
         ``"derived"`` / ``"caller"`` / ``"model_default"`` — how this
-        batch's positions reached the model (extract D5 rule 4).
+        batch's positions reached the model (extract rule 4).
     device:
         Device the batch was moved to, as a string, when one was requested.
     collate_disclosure:
@@ -198,7 +198,7 @@ def sanitize_key(key: str) -> str:
 
 
 def validate_row_counts(context: BatchContext, processed: Mapping[str, torch.Tensor | Any]) -> None:
-    """Enforce the D13 row-truth rule on one batch's stored payloads.
+    """Enforce the row-truth rule on one batch's stored payloads.
 
     Every selected output must retain the INPUT batch's row count after
     pooling and postprocessing. The historical engine derived ``n_rows``

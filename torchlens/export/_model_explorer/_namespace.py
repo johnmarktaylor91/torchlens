@@ -1,4 +1,4 @@
-"""Namespace derivation from ``module_call_stack`` (memo D1, D19).
+"""Namespace derivation from ``module_call_stack``.
 
 The hierarchy is the product: namespaces come from the captured module call
 stack, dot-split so unexecuted containers reappear as collapsible levels
@@ -21,12 +21,12 @@ from ._ids import escape_component
 
 __tl_layer__ = "L8"
 
-#: Synthetic boundary group namespaces (memo D19): only true graph
+#: Synthetic boundary group namespaces: only true graph
 #: inputs/outputs get synthetic groups; buffers follow their module stack.
 INPUTS_NAMESPACE = "Inputs"
 OUTPUTS_NAMESPACE = "Outputs"
 
-#: Episode-only namespace segment for stackless driver ops (memo D11).
+#: Episode-only namespace segment for stackless driver ops.
 DRIVER_NAMESPACE = "driver"
 
 
@@ -34,7 +34,7 @@ def address_call_counts(entries: list[Any]) -> dict[str, set[int]]:
     """Collect the distinct call indices seen per module address in a graph.
 
     An address with more than one distinct call index in THIS graph is
-    pass-qualified on every call (memo D1 "consistent siblings").
+    pass-qualified on every call (so sibling calls stay consistent).
     """
 
     counts: dict[str, set[int]] = {}
@@ -143,7 +143,7 @@ def namespace_for_entry(
 
 
 def _split_stack_entry(stack_entry: str) -> tuple[str | None, int | None]:
-    """Split one root-first stack entry ``address:call`` (memo D1 rsplit)."""
+    """Split one root-first stack entry ``address:call`` (split on the last colon)."""
 
     address, separator, call_text = stack_entry.rpartition(":")
     if not separator or not call_text.isdigit():

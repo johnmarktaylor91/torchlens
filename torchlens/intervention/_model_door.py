@@ -1,11 +1,11 @@
-"""The ONE audited model-argument funnel (F01; surgery memo 3.3 item 10, OP2).
+"""The ONE audited model-argument funnel.
 
 TorchLens's own model doors (``tl.trace``, ``tl.record``, ``tl.validate``,
 ``tl.release_model``, and ``spec.bind`` itself) never silently treat a bound
 intervention executor as a plain model. Whether they refuse with the canonical
 spelling printed (arm a), or normalize through this one shared audited funnel
-(arm b), is open parameter OP2 (FORK-2, unruled): BOTH arms are built behind
-ONE switch and both stay tested until it is ruled. Under either arm the outcome
+(arm b), is an open design parameter: BOTH arms are built behind
+ONE switch and both stay tested until it is decided. Under either arm the outcome
 is identical audit and artifact identity, and no door can quietly capture the
 UNMODIFIED model.
 
@@ -27,7 +27,7 @@ DoorPolicy = Literal["refuse", "normalize"]
 
 #: The complete inventory of public TorchLens doors that accept a model
 #: operand. ``True`` marks doors wired through :func:`resolve_model_operand`
-#: today; ``False`` marks doors whose modules sit outside lane F01's fence
+#: today; ``False`` marks doors whose modules sit outside the funnel's scope
 #: (their wiring is a declared remainder, not a silent gap). The
 #: funnel-coverage test (``tests/test_surgery_live_bind.py``) asserts every
 #: wired door routes its model operand through this one funnel.
@@ -48,14 +48,14 @@ _POLICIES: frozenset[str] = frozenset({"refuse", "normalize"})
 
 
 def model_door_policy() -> DoorPolicy:
-    """Return the active OP2 model-door policy (``"refuse"`` is the default)."""
+    """Return the active model-door policy (``"refuse"`` is the default)."""
 
     return _DOOR_POLICY.get()
 
 
 @contextmanager
 def door_policy(policy: str) -> Iterator[None]:
-    """Scoped OP2 door-policy switch (both arms tested until ruled).
+    """Scoped door-policy switch (both arms tested until decided).
 
     Parameters
     ----------
@@ -124,7 +124,7 @@ def resolve_model_operand(model: Any, *, door: str, intervene: Any = None) -> Do
 
     Every wired door calls this before touching its model operand. Plain
     models pass through untouched. A bound intervention executor resolves by
-    the active OP2 policy: arm (a) refuses with the canonical spelling
+    the active policy: arm (a) refuses with the canonical spelling
     printed; arm (b) returns the base model plus the binding's spec so the
     door composes ``intervene=spec`` -- producing audit and artifact identity
     identical to the canonical spelling.

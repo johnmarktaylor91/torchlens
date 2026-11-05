@@ -1,4 +1,4 @@
-"""Post-hoc ``grad_fn`` walker (lane F37; approved diagnostic, R grad_fn ruling).
+"""Post-hoc ``grad_fn`` walker.
 
 ``make_dot(y)``-class capability: draw the autograd graph of a tensor you
 ALREADY HAVE -- computed in an earlier notebook cell, inside someone else's

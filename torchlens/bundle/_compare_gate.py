@@ -1,7 +1,7 @@
 """The Bundle comparison gate: two predicates, operand-scoped, topology-aware.
 
-Split from ``torchlens/bundle/__init__.py`` under the R43 file-size ratchet
-(A-GATE lane). The measured defect this module exists to kill (foldB D6): the
+Split from ``torchlens/bundle/__init__.py`` to keep that file small. The
+defect this module exists to prevent: the
 old ``_RELATIONSHIP_RANK`` lattice collapsed the model axis and the input axis
 into one rank, so an identity relationship was accepted as proof of input
 equality and the reachable input check hashed shape/dtype/device only — the
@@ -19,7 +19,7 @@ with its counterpart one to one. Different inputs are comparable by design
 input digest still guards is graph divergence: with the same model object
 the model-axis floor passes even when data-dependent control flow took
 different branches, and only same-input pairs may differ by edits alone.
-The persisted digest carrier is the A-GATE/digest slice (after C07-X);
+The persisted digest carrier is the digest slice;
 :func:`_input_value_digest` is that carrier's live derivation.
 """
 
@@ -42,8 +42,8 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ._relations import MemberRelationTable
 
-# MODEL-AXIS projection of the reported ``Relationship`` vocabulary (A-GATE,
-# foldB D6): this table ranks the MODEL axis only; input identity is a
+# MODEL-AXIS projection of the reported ``Relationship`` vocabulary: this
+# table ranks the MODEL axis only; input identity is a
 # separate, value-level predicate (``_input_value_digest``) that no identity
 # relationship ever satisfies, and it feeds the site line-up check only.
 # ``shared_graph_same_input`` and ``shared_graph_diff_input`` carry identical model-axis evidence: their
@@ -77,9 +77,9 @@ class _GateRequirement:
         check: proven-equal input values, or, when the inputs differ or are
         unproven, equal graph-shape hashes. An identity relationship
         (``same_object`` / ``same_model_at_capture``) is never accepted as
-        proof of input equality or of line-up (foldB D6 path 1), and the
+        proof of input equality or of line-up, and the
         shape-level ``input_signature_hash`` is never consulted
-        (foldB D6 path 2: it is value-blind).
+        (it is value-blind).
     """
 
     model_floor_rank: int
@@ -114,9 +114,9 @@ _GATE_REQUIREMENTS: dict[str, _GateRequirement] = {
     "compare": _SHARED_GRAPH_LINED_UP,
 }
 
-#: S6 PAIR-row kinds that order members in time/causality. Members joined by
-#: a directed path of these rows are NOT comparison operands (A-GATE item 4:
-#: the refusal keys on topology, never on relationship rank). ``alternative_of``
+#: PAIR-row kinds that order members in time/causality. Members joined by
+#: a directed path of these rows are NOT comparison operands (the refusal keys
+#: on topology, never on relationship rank). ``alternative_of``
 #: is deliberately absent — counterfactual peers stay comparable. ``fed_by``
 #: (tlspec v10) orders a reader after its source: their inputs differ by design.
 #: ``selected_by`` (tlspec v10) orders a selected call after its decider.
@@ -140,9 +140,9 @@ def _input_value_digest(trace: Trace) -> str | None:
     (shape + logical dtype + bytes; device- and grad-flag-free). ``None``
     means UNPROVEN — an input payload is unsaved, non-tensor, unreadable,
     or the trace records no input ops — and the comparison gate refuses
-    fail-closed rather than guessing. The persisted carrier that survives
-    payload-free artifacts is the A-GATE/digest slice (after C07-X); this
-    live derivation is the same digest law.
+    fail-closed rather than guessing. A persisted carrier that survives
+    payload-free artifacts is not available yet; this live derivation is the
+    same digest law.
 
     Parameters
     ----------
@@ -207,7 +207,7 @@ def _derive_input_value_digest(trace: Trace) -> str | None:
 def ordering_path(relations: MemberRelationTable, start: str, goal: str) -> tuple[str, ...] | None:
     """Return the ordering-relation kinds along a directed path, if any.
 
-    Walks only :data:`_ORDERING_RELATION_KINDS` rows of the S6 member
+    Walks only:data:`_ORDERING_RELATION_KINDS` rows of the member
     relation table, from each row's ``from_member`` to its ``to_member``.
     Sibling members (two rows pointing at one common predecessor) are NOT
     joined: only a directed path orders two members.
@@ -215,7 +215,7 @@ def ordering_path(relations: MemberRelationTable, start: str, goal: str) -> tupl
     Parameters
     ----------
     relations:
-        The Bundle's S6 member-relation table.
+        The Bundle's member-relation table.
     start:
         Candidate origin member name.
     goal:
@@ -255,7 +255,7 @@ def require_comparable(
 ) -> None:
     """Run the two-predicate comparison gate over the operand pairs.
 
-    Per pair, three ordered checks (A-GATE, foldB D6/D18):
+    Per pair, three ordered checks:
 
     1. TOPOLOGY (comparison-grade operations only): operands joined by a
        directed path of ordering relations (``successor_of`` /
@@ -274,7 +274,7 @@ def require_comparable(
     members:
         The Bundle's ordered member mapping.
     relations:
-        The Bundle's S6 member-relation table.
+        The Bundle's member-relation table.
     operation:
         Gated operation name (a ``_GATE_REQUIREMENTS`` key).
     pairs:

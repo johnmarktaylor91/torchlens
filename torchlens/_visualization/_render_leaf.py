@@ -209,7 +209,7 @@ def _backward_edge_attrs(
         Edge head GradFn.
     trace:
         Optional trace for accumulation-target resolution (accum-identity
-        groundwork, vizmech item 17/D30: the WGAN-GP render carried twelve
+        groundwork: the WGAN-GP render carried twelve
         IDENTICAL bare ``accum`` labels; each edge now carries its target's
         identity in SVG metadata until the annotation plan can place it).
 
@@ -358,7 +358,7 @@ def _add_combined_correspondence_edges(
 def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
     """Return the forward endpoint for a combined correspondence edge.
 
-    Scoped to the MULTI-PASS case only (r18j gate rework): for a recurrent
+    Scoped to the MULTI-PASS case only for a recurrent
     aggregate ``Layer`` the specific forward *pass* a grad_fn maps to is not
     recoverable from current metadata (all passes share ``op_label`` and
     ``backward_pass_number``), so historically every grad_fn attached to ONE
@@ -535,7 +535,7 @@ def _infer_intervening_module_bfs(
         Prebuilt reverse-edge map for ``reverse=True`` callers. The downstream
         caller already builds this exact map to seed ``start_ids``; rebuilding
         it here doubled the O(E) sweep per intervening grad_fn
-        (hunt-6 R52-3).
+        .
 
     Returns
     -------
@@ -544,7 +544,7 @@ def _infer_intervening_module_bfs(
     """
 
     # deque: list.pop(0) shifted the whole queue per node, Theta(V^2) on
-    # wide backward graphs for a linear BFS (R29, b4 sol MED).
+    # wide backward graphs for a linear BFS.
     queue = deque(start_ids)
     seen: set[int] = set()
     if reverse and reverse_edges is None:
@@ -1112,7 +1112,7 @@ def _same_layer_reachability(layer_log: "Layer") -> dict[int, set[int]]:
     label_to_pass = {op.label: pass_index for pass_index, op in layer_log.ops.items()}
     reachability: dict[int, set[int]] = {
         pass_index: set()
-        # OpAccessor iteration yields Ops (C02); .keys() IS the pass-index
+        # OpAccessor iteration yields Ops; .keys() IS the pass-index
         # view here, not a dict redundancy.
         for pass_index in layer_log.ops.keys()  # noqa: SIM118
     }
@@ -1505,11 +1505,11 @@ def _node_spec_to_graphviz_args(spec: NodeSpec) -> dict[str, str]:
         "color": spec.color,
         "penwidth": spec.penwidth,
         "tooltip": spec.tooltip,
-        # r-b6 R19-6: relative to the visualizer root (graph-level imagepath).
+        # Relative to the visualizer root (graph-level imagepath).
         "image": relativize_visualizer_image(spec.image) if spec.image else spec.image,
         "fixedsize": spec.fixedsize,
     }
-    # 2.4(ii) funnel rule (L5): DROP NodeSpec width/height when an image is
+    # 2.4(ii) funnel rule: DROP NodeSpec width/height when an image is
     # set -- an image node's size is pixel-derived, and a channel-set width
     # under fixedsize=false would otherwise become a live MINIMUM the image
     # is scaled into. ``extra_attrs`` (merged last, below) stays the

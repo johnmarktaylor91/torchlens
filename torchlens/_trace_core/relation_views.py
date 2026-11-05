@@ -1,7 +1,6 @@
 """Freeze-time conversion of relation staging containers to immutable views.
 
-The M6 relations wave (trace_core_design.md sections 3.2/3.5, FORK-1
-decided 2026-08-12). During postprocess (steps 0-20) relation fields are real
+During postprocess (steps 0-20) relation fields are real
 mutable builtins — the staging plane. At the core freeze point each family
 converts exactly once:
 
@@ -63,7 +62,7 @@ OP_TUPLE_VIEW_FIELDS: tuple[str, ...] = (
 )
 
 #: Op label-set relation fields normalized to interned frozenset views at
-#: freeze. Since r8 R60-2 these are ALSO bitset-compacted right before the
+#: freeze. These are ALSO bitset-compacted right before the
 #: seal (see ``OP_BITSET_VIEW_FIELDS``); this conversion is the belt for any
 #: cell still holding a raw staging set at freeze time (bitset cells are
 #: skipped by the exact-type check).
@@ -77,9 +76,9 @@ OP_DATAFLOW_FIELDS: tuple[str, ...] = ("parents", "children")
 
 #: The bitset-backed ancestor closures (frozen materialization lives with the
 #: bitset machinery in ``backends/torch/ops.py``; listed here so the view
-#: universe is declared in one place). r8 R60-2 widened the pair to all four
-#: label-set closures: per-op frozensets kept ``input_ancestors``/
-#: ``output_descendants`` as the dominant O(N*L) retained-memory term.
+#: universe is declared in one place). All four
+#: label-set closures are covered, since per-op frozensets of ``input_ancestors``/
+#: ``output_descendants`` would be the dominant O(N*L) retained-memory term.
 OP_BITSET_VIEW_FIELDS: tuple[str, ...] = (
     "root_ancestors",
     "internal_source_ancestors",
@@ -90,7 +89,7 @@ OP_BITSET_VIEW_FIELDS: tuple[str, ...] = (
 #: Edge family name in ``TraceCore.edges`` for forward dataflow.
 DATAFLOW_FAMILY = "dataflow"
 
-#: Group-membership relation fields (M7): each cell becomes THE one shared
+#: Group-membership relation fields: each cell becomes THE one shared
 #: ``GroupRef`` of its group; reads resolve to the group's cached immutable
 #: view (LIVE through removal scrub, which rebinds the group row once).
 OP_GROUP_VIEW_FIELDS: dict[str, type] = {
@@ -485,22 +484,22 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
         if label is not None:
             label_rows[label] = entry._row
 
-    # Bind the canonical label -> row index on the core (M8): the freeze-time
+    # Bind the canonical label -> row index on the core: the freeze-time
     # resolver IS the core-side lookup index the Trace-side label maps
-    # progressively delegate to (M10 decomposition).
+    # progressively delegate to.
     core.label_rows = label_rows
 
     pool: dict[Any, Any] = {}
     stats = freeze_op_relation_views(core, store, label_rows.get, pool)
 
-    # M7 group families: one shared GroupRef per membership group. The
+    # Group families: one shared GroupRef per membership group. The
     # keepalive list pins the raw containers so the id-keyed map stays sound
     # through the Layer pass below.
     group_refs: dict[int, GroupRef] = {}
     group_keepalive: list[Any] = []
     convert_group_cells(core, store, pool, group_refs, group_keepalive)
 
-    # M7 shared-fact blocks: call-level facts once per FunctionCall group,
+    # Shared-fact blocks: call-level facts once per FunctionCall group,
     # param facts once per distinct value (the ParamAlias block).
     from .fact_blocks import convert_fact_cells
 
@@ -517,7 +516,7 @@ def freeze_trace_relation_views(trace: Any) -> RelationFreezeStats | None:
             frozenset_fields=LAYER_FROZENSET_VIEW_FIELDS,
         )
         # Layer aggregates share the ops' canonical equivalence containers;
-        # store the group's ONE cached view (Layer is dict-backed until M8,
+        # store the group's ONE cached view (Layer is dict-backed,
         # so the value itself is the public read).
         group_value = record_dict.get("equivalent_ops")
         if group_value.__class__ is set:

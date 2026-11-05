@@ -1,4 +1,4 @@
-"""Per-fire backward timing helpers (L9 memo 1.3; split under the size ratchet).
+"""Per-fire backward timing helpers.
 
 The keyed per-node start-stamp LIFOs (weak-keyed by the owning trace,
 cleared at every pass boundary), the lightweight timing prehook, and its
@@ -19,7 +19,7 @@ _FIRE_TIMING_STAMPS: weakref.WeakKeyDictionary[Any, dict[int, list[tuple[int, fl
 _FIRE_TIMING_STAMPS = weakref.WeakKeyDictionary()
 """Per-trace ``grad_fn_object_id -> keyed start-stamp LIFO`` for per-fire timing.
 
-Each list is the per-node keyed LIFO (L9 memo 1.3) shared by that node's
+Each list is the per-node keyed LIFO shared by that node's
 timing prehook and its posthook: the prehook appends ``(call_index,
 time.perf_counter())`` and the posthook pops entries until it finds a
 ``call_index`` match, discarding stale entries above the match. Per-node
@@ -76,15 +76,14 @@ def _make_timing_grad_fn_prehook(
     fire_start_stamps: list[tuple[int, float]],
     gradfn_marker_tokens: list[Any] | None = None,
 ) -> Callable[..., None]:
-    """Build the lightweight per-fire timing prehook (L9 memo 1.3).
+    """Build the lightweight per-fire timing prehook.
 
     The prehook dispatches no tensor ops -- one ``perf_counter`` call and one
     list append -- so its registration order can never sweep a foreign aten
     dispatch into the marker bracket; it is registered BEFORE the aten marker
-    prehook only so the measured span covers the whole fire. FLIP-2 (F27):
-    when a profiler session is active, a ``torchlens::gradfn::`` marker
-    opens AT this start-stamp line, so the marker span and the recorded host
-    span are the same interval by construction.
+    prehook only so the measured span covers the whole fire. When a profiler session is active, a
+    ``torchlens::gradfn::`` marker opens AT this start-stamp line, so the marker span
+    and the recorded host span are the same interval by construction.
     """
 
     trace_ref = weakref.ref(trace)
@@ -122,9 +121,8 @@ def _register_fire_timing_prehook(
     The timing registration gets ITS OWN try/except, separate from the
     shipped registration block whose ``except RuntimeError`` converts a node
     into a fail-closed ``BackwardCoverageGap``: an optional measurement must
-    never turn a complete-coverage node into a coverage gap (L9 memo 1.3,
-    opus m2-r2). Failure returns ``None`` and the node's fires stay untimed
-    (the posthook's keyed LIFO simply never matches).
+    never turn a complete-coverage node into a coverage gap. Failure returns ``None``
+    and the node's fires stay untimed (the posthook's keyed LIFO simply never matches).
     """
 
     try:

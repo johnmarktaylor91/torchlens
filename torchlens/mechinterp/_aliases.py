@@ -1,4 +1,4 @@
-"""The alias layer: a RESOLVER, not a dict (mikit D16).
+"""The alias layer: a RESOLVER, not a dict.
 
 Trace-scoped resolution from TransformerLens spellings to native torchlens
 addresses, independent of the process-wide compatibility flag. Resolution
@@ -45,7 +45,7 @@ from ._heads import _attention_modules
 
 __all__ = ["AliasResolution", "alias_report", "resolve_alias", "translation_table"]
 
-#: Resolver status vocabulary (mikit D16).
+#: Resolver status vocabulary.
 _STATUSES = ("real", "reconstructed_read_only", "needs_capture", "structurally_absent", "ambiguous")
 
 _COMPACT_PATTERN = re.compile(
@@ -399,7 +399,7 @@ def _resolve_on(module: Any, query: _Query, facet: str) -> AliasResolution:
 
 
 def resolve_alias(trace: Any, name: Any) -> AliasResolution:
-    """Resolve one TLens spelling against a trace (mikit D16).
+    """Resolve one TLens spelling against a trace.
 
     Parameters
     ----------

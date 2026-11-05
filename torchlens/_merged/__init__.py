@@ -1,11 +1,11 @@
-"""Cross-rank trace merging (merge-ranks tier (c), rung C1).
+"""Cross-rank trace merging.
 
 ``torchlens._merged`` stitches N rank-local captures -- live traces or saved
 rank cores -- into one :class:`MergedTrace` at their explicit collective
-boundaries. The rank cores remain the single truth (P1: the merge never
+boundaries. The rank cores remain the single truth (the merge never
 rewrites a per-rank claim); correlation is by counting, verified by value
-(P3: witness digests only ever DEMOTE); every ambiguity is a typed finding or
-refusal (P4).
+(witness digests only ever DEMOTE); every ambiguity is a typed finding or
+refusal.
 
 Entry points::
 
@@ -14,9 +14,9 @@ Entry points::
     merged.save("run.merged.tlspec")
     merged = torchlens.load("run.merged.tlspec")  # full rederivation
 
-C1 scope: explicit in-forward c10d python collectives, SPMD, symmetric-issue
-channels. Point-to-point/pipeline pairing is rung C3 and DTensor topologies
-are rung C2; both refuse typed here. Merged replay does not exist.
+Scope: explicit in-forward c10d python collectives, SPMD, symmetric-issue
+channels. Point-to-point/pipeline pairing and DTensor topologies are out of
+scope; both refuse typed here. Merged replay does not exist.
 
 The frozen enums, error codes, and finding kinds are documented exhaustively
 in ``docs/reference/merged_trace_contract.md`` under the ordered-list-equality

@@ -1,6 +1,6 @@
 """Built-in activation transforms: one contract, declared not sniffed.
 
-The data-substrate half of the transforms library (transforms memo B1-B4):
+The data-substrate half of the transforms library:
 frozen :class:`TransformSpec` steps with a validated ``plan``/pure ``apply``
 protocol, ordered chains with ONE canonical numeric record (the resume
 identity), a versioned registry behind :func:`register_transform`, the single
@@ -8,7 +8,7 @@ identity), a versioned registry behind :func:`register_transform`, the single
 roles with the frozen :class:`TransformContext`.
 
 Semantic pooling (``pool_tokens``), SRP, and the fitted-projection family land
-in the feature wave (memo B5+). Every spelling here is DOCUMENTED-UNSTABLE
+in a later release. Every spelling here is DOCUMENTED-UNSTABLE
 pending the naming sprint; ``tl.transforms`` is the placeholder home (the
 collision with the input-side ``transform=`` slot is a named naming-sprint
 item).
@@ -44,7 +44,7 @@ from ._srp import srp, srp_realized_facts, srp_verify_matrix
 __tl_layer__ = "L4"
 
 # Every builtin module above has registered through the one door; the builtin
-# name set is a CLOSED SET from here on (memo s7).
+# name set is a CLOSED SET from here on.
 _seal_builtins()
 
 __all__ = [

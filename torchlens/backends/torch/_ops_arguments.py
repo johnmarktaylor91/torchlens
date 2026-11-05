@@ -254,7 +254,7 @@ def _unlabeled_tensor_literal(value: torch.Tensor) -> LiteralTensor:
     """Template a tensor argument that has no live parent label as a literal."""
 
     if isinstance(value, torch.nn.Parameter):
-        # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
+        # snapshot the model-prep barcode NOW (model provably alive) --
         # session cleanup strips the weak registry meta before a deferred save,
         # so the template itself must carry the capture-time identity.
         param_meta = get_param_meta(value)
@@ -350,7 +350,7 @@ def _build_edge_use_records(
 ) -> list[EdgeUseRecord]:
     """Build edge provenance records from existing parent arg locations.
 
-    F10 (lovely item 8): ``view_or_copy`` populates from the closed
+    ``view_or_copy`` populates from the closed
     function-semantics table (``intervention.edge_semantics``) -- the
     positional slot-0 edge of a documented always-view/always-copy call
     gets its verdict, everything else stays the honest ``unknown``.
@@ -414,7 +414,7 @@ def _build_edge_use_records(
 def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
     """Return whether ``value`` is a CURRENT-SESSION prep-stamped model Parameter.
 
-    The r77/r79 param provenance rung, factored for reuse: a non-empty prep
+    The param provenance rung, factored for reuse: a non-empty prep
     :class:`ParamMeta` address that resolves in THIS capture's ``param_logs``
     with EXACT object identity. A fresh in-forward ``nn.Parameter``, a foreign
     model's parameter, or a stale leaked stamp never validates here.
@@ -441,14 +441,14 @@ def _session_validated_parameter(trace: "Trace", value: torch.Tensor) -> bool:
         return False
     if getattr(param_logs[addr], "_param_ref", None) is value:
         return True
-    # Offload rebind rung (lane F37): accelerate offload hooks REPLACE the
+    # Offload rebind rung: accelerate offload hooks REPLACE the
     # prep-stamped meta parameter with a fresh real-valued object at every
     # forward. The offload shim (backends/torch/offload_hooks.py) registers
     # exactly that materialization -- the object it found in
     # ``module._parameters`` at the prep-recorded address, during THIS
     # session's forward -- in a session-scoped weak-valued registry. Exact
     # object identity against that registry is the same per-object belt the
-    # r79 ``_param_ref`` rung provides; anything not rebound by the shim this
+    # ``_param_ref`` rung provides; anything not rebound by the shim this
     # session (foreign params, stale leaked stamps, fresh in-forward
     # Parameters) still fails closed.
     try:
@@ -476,12 +476,12 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 
     Notes
     -----
-    r77 F1: the Parameter rung requires ACTUAL TorchLens provenance -- the
+    the Parameter rung requires ACTUAL TorchLens provenance -- the
     prep-stamped :class:`ParamMeta` address written by model preparation
     (``_create_session_param_logs``) -- not bare ``isinstance``. A fresh
     in-forward ``torch.nn.Parameter(...)`` or a foreign model's parameter has no
     prep stamp; exempting it suppressed the ``unattributed_tensor_args`` break
-    marker, so the r75 layout ancestry-integrity rung judged the chain CLEAN and
+    marker, so the layout ancestry-integrity rung judged the chain CLEAN and
     a layout twin replayed as false VERIFIED. The lazy op-time barcode stamp
     (``_process_parent_param_ops``, which runs BEFORE this check for the same
     call) writes ``param_address=""``, so registry presence or a barcode alone
@@ -489,16 +489,16 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     Parameters fall through to the tensor-meta rung like any other tensor and
     leave the break marker when unlabeled.
 
-    r79 session-leak defense in depth: a non-empty prep address counts ONLY when
+    Session-leak defense in depth: a non-empty prep address counts ONLY when
     it resolves in THIS capture's session -- the address maps in
     ``trace._param_logs`` AND the recorded log's live object IS this value (exact
-    identity). A stamp that leaked from a PRIOR session (r78: a param popped
-    from ``_parameters`` mid-forward escaped the old re-traversal cleanup) can
+    identity). A stamp that leaked from a PRIOR session (e.g. a param popped
+    from ``_parameters`` mid-forward) can
     therefore never be accepted, even if some future path escapes the
     inventory-driven cleanup again. Stale/foreign stamps fall through to the
     tensor-meta rung and leave the break marker.
 
-    r81 buffer-rung parity (r80 F1+F2): the tensor-meta rung now requires
+    Buffer-rung parity: the tensor-meta rung requires
     CURRENT-SESSION provenance component-wise, exactly like the param rung:
 
     * ``label_raw`` counts only when it resolves in THIS capture's live event
@@ -513,14 +513,14 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     * ``buffer_source`` (a promoted pre-buffer producer label) counts only
       when that producer label resolves in THIS capture's live event index.
 
-    r83 C1 label-rung parity: live-index membership is TEXT, and label text is
+    Label-rung parity: live-index membership is TEXT, and label text is
     deterministic per op-kind + ordinal, so an ordinary op in a later unrelated
-    capture regenerates the same string and r81's text-only check accepted a
-    foreign tensor as current-session state. Both label components now
+    capture regenerates the same string and a text-only check would accept a
+    foreign tensor as current-session state. Both label components
     additionally require :func:`session_meta_is_anchored` -- the object itself
     must have been stamped with that exact string during the ACTIVE session --
-    giving the label rung the same per-object belt the param (r79) and buffer
-    ``address`` (r81) rungs already had. Fail-closed: with no session installed,
+    giving the label rung the same per-object belt the param and buffer
+    ``address`` rungs already had. Fail-closed: with no session installed,
     or with an object the session never stamped, the component is not
     provenance and the break marker stands.
     """
@@ -531,7 +531,7 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
     act_inner = _async_collective_elem(value)
     if act_inner is not None:
         # AsyncCollectiveTensor is a transparent async view of its inner
-        # ``.elem`` (merge-ranks C2 recording): the funcol boundary labeled the
+        # ``.elem``: the funcol boundary labeled the
         # inner tensor, and user code passes the wrapper onward. Provenance is
         # the inner tensor's -- same delegation as the get_tensor_label
         # chokepoint, same no-wait ``.elem`` attribute read.
@@ -544,16 +544,16 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
         capture_events.live_index.by_raw_label if capture_events is not None else {}
     )
     label_anchored = session_meta_is_anchored(meta)
-    # r85 label-rung STORAGE parity: an anchored label proves current-session
-    # IDENTITY (r83); it counts as provenance only when the object's live storage
-    # is ALSO still the storage it held when labeled (r85). A state-derived
+    # Label-rung STORAGE parity: an anchored label proves current-session
+    # IDENTITY; it counts as provenance only when the object's live storage
+    # is ALSO still the storage it held when labeled. A state-derived
     # activation whose storage was ``.data=``/``set_``-rebound to input-derived
-    # data after labeling (SOL-1) fails the storage check and leaves the break
+    # data after labeling fails the storage check and leaves the break
     # marker, instead of replaying the pre-rebind value as a false VERIFIED. An
     # in-place write into the object's OWN storage keeps the pointer and passes,
     # so honest journaled/tracked mutation is untouched. The buffer ``address``
     # rung already carries this storage belt via ``session_validated_buffer_address``
-    # (r81); this closes the same cell on the label/``buffer_source`` rung.
+    # ; this closes the same cell on the label/``buffer_source`` rung.
     label_storage_intact = label_anchored and session_label_storage_intact(meta, value)
     if label_storage_intact and meta.label_raw is not None and meta.label_raw in live_labels:
         return True

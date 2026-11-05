@@ -1,4 +1,4 @@
-"""AMP grad-scale observation and the closed-form correction (memo 3.11).
+"""AMP grad-scale observation and the closed-form correction.
 
 The tracker NEVER calls ``GradScaler.unscale_`` -- it mutates ``p.grad`` in
 place and changes what the user's own clipping sees. Instead the scale is
@@ -13,12 +13,12 @@ of two, so the correction is BIT-exact against the ``unscale_`` oracle (the
 tests assert equality, never allclose).
 
 Evidence labels never default: ``unknown`` never masquerades as a factor of
-one (C06 D7). The vocabulary here is the trackers-memo spelling; the C06
+one. The vocabulary here is the tracker's own spelling; the
 record stamp (``scaled | unscaled | unknown``) is derived from it.
 
-Seam note (F23): the checks memo homes the one shared scale read in the
-checks package; F23's shipped surface carries a ``ScaleLedger`` but not the
-``observed_grad_scale()`` primitive, so this module owns the read for now.
+Seam note: the checks package is the natural home for the one shared scale
+read; its ``ScaleLedger`` does not carry an ``observed_grad_scale()``
+primitive, so this module owns the read for now.
 When checks grows the shared primitive, this becomes a delegating consumer
 (two implementations would diverge and one would be wrong).
 """
@@ -36,7 +36,7 @@ from ._errors import TrackersError
 
 __tl_layer__ = "L8"
 
-#: Scale-evidence vocabulary (memo 3.11, the review's field). ``unscaled_observed``
+#: Scale-evidence vocabulary. ``unscaled_observed``
 #: = the value was reduced after the scaler's own unscale (the optimizer
 #: pre-step site); ``unscaled_derived`` = the tracker applied the closed-form
 #: correction; ``scaled_unknown_factor`` = known scaled, factor unobserved;
@@ -108,8 +108,8 @@ def unscale_stage(scaler: Any, optimizer: Any) -> str:
     unrecognized shape). ``scaler.step(optimizer)`` unscales before it calls
     ``optimizer.step()``; a plain ``optimizer.step()`` after
     ``scaler.scale(loss).backward()`` does NOT, and the boundary sees grads
-    still multiplied by the scale. Before this read the engine asserted
-    ``unscaled="yes"`` whenever ``get_scale()`` merely worked (AUD-CODE 2.14b).
+    still multiplied by the scale. Asserting ``unscaled="yes"`` merely because
+    ``get_scale()`` works would be wrong.
 
     Returns
     -------
@@ -250,14 +250,14 @@ def correct_running_stats(running_stats: RunningStatsResult, scale: float) -> Ru
 def correct_histogram(sketch: HistogramResult, scale: float) -> HistogramResult:
     """Shift a signed-log2 histogram by the exact bin offset of ``scale``.
 
-    On the C06 grid, dividing every population element by a power-of-two
+    On the grid, dividing every population element by a power-of-two
     scale ``s`` moves each magnitude bin DOWN by exactly
     ``bins_per_octave * log2(s)`` bins -- an integer for power-of-two scales,
     so the correction is an exact count shift, never a rebinning. Counts
     shifted below the grid fold into the per-side underflow specials (their
     corrected magnitudes genuinely lie below ``2**lo_exp``); zero / NaN /
     +-inf specials are invariant. Non-power-of-two scales refuse: they have
-    no exact shift and rebinning is banned (C06 D9).
+    no exact shift and rebinning is banned.
 
     Examples
     --------

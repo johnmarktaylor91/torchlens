@@ -140,7 +140,7 @@ def _restrict_mode(path: Path, mode: int) -> None:
 
     Shared by the eager and streaming writers: ``mkdir``/``open`` honor the
     ambient umask, so under umask 002 a bundle's directories and metadata
-    sidecars were left group-writable (B8-10). Best-effort: a filesystem that
+    sidecars were left group-writable. Best-effort: a filesystem that
     ignores mode bits is not a save failure.
 
     Parameters

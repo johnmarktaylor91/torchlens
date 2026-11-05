@@ -73,9 +73,8 @@ def _resolve_conditional_bool_op(
     Any | None
         The exact evaluating op. The raw label is preferred because it is
         unique per pass: a rolled multi-pass bool layer renames every pass to
-        ONE base label, and an unqualified ``layer_dict_all_keys`` lookup
-        resolves last-writer-wins to an arbitrary pass (round-24 condbranch
-        seal, S3). Falls back to the renamed label for legacy events.
+        ONE base label, and an unqualified ``layer_dict_all_keys`` lookup resolves last-writer-wins
+        to an arbitrary pass. Falls back to the renamed label for legacy events.
     """
 
     if (
@@ -162,7 +161,7 @@ def _roles_by_label(
 ) -> dict[str, list[ConditionalRoleRef]]:
     """Return each layer label's conditional roles (``role_ref`` instances) per arm bucket.
 
-    Inverted role index (r8 R60-7): the per-layer triple loop with an innermost
+    Inverted role index: the per-layer triple loop with an innermost
     list-membership check was O(N_layers x Sum|role lists|) whenever a
     conditional's entry-edge children were numerous (an ``if`` in a hot unrolled
     loop). One pass over the role buckets builds the same per-layer role lists in

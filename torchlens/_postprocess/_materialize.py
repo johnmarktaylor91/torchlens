@@ -72,7 +72,7 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
     fields_dict
         Raw field mapping populated by the backend hot path.
     store
-        The owning trace's ``OpRowStore`` (the M5 builder ingress): the op is
+        The owning trace's ``OpRowStore`` (the builder ingress): the op is
         appended as a shared columnar row. ``None`` constructs a detached
         single-row op (legacy/preview callers).
     Returns
@@ -82,17 +82,15 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
     """
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
-    # r83 C2: the display ``address`` and the backend-native ``backend_address``
+    # the display ``address`` and the backend-native ``backend_address``
     # are resolved SEPARATELY for buffers (a plain-attribute constant has a
     # display address but is not backend-native state, so its backend_address
     # stays None). ``Op.__init__`` otherwise defaults ``backend_address`` from
     # ``address`` whenever it is None, which would recouple them; the resolved
     # value is stashed under an extra key by ``_fields_from_event`` and applied
-    # here after construction so the default cannot override it. r85: the extra
+    # here after construction so the default cannot override it. The extra
     # key is set ONLY for a BUFFER-addressed record (see ``_fields_from_event``);
-    # an op/input node carries no override and keeps the coupled default, so it
-    # is genuinely unaffected -- the r83 comment claiming EVERY record was popped
-    # (forcing op nodes to None) was FALSE and is corrected there.
+    # an op/input node carries no override and keeps the coupled default.
     has_backend_override = "_materialized_backend_address" in fields_dict
     backend_address_override = fields_dict.pop("_materialized_backend_address", None)
     op_log = Op(fields_dict, _store=store)
@@ -214,7 +212,7 @@ def build_ingest_inputs(
         timing_sink=timing_sink,
         # Orchestrator-side option read (contract I7: ingest itself never
         # touches the trace): structure-only captures strip buffer-write
-        # payloads to declared geometry (W3, weightsfree memo defect L6).
+        # payloads to declared geometry.
         scatter_options={"structure_only": bool(trace._options_structure_only)},
         capture_rows=capture_rows or {},
     )
@@ -311,11 +309,11 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
     equivalence_class_map, equivalent_ops_by_label = _equivalent_ops_by_label(
         journal.buffer_write_events, op_events, buffer_addresses_by_label
     )
-    # W3 (weightsfree memo defect L6): the aliased-buffer payload backfill
+    # The aliased-buffer payload backfill
     # hydrates every unwritten registered buffer's value into its source
     # node — a VALUE payload a structure-only capture must never retain
-    # (declared geometry only; the leak made every buffer-holding
-    # structure-only artifact fail its own load at M-C2).
+    # (declared geometry only; retaining it would make every buffer-holding
+    # structure-only artifact fail its own load).
     if inputs.scatter_options.get("structure_only", False):
         buffer_alias_snapshots: dict[str, torch.Tensor] = {}
     else:
@@ -507,9 +505,9 @@ def _apply_join_cells(
     parent_params = resolved_parent_params
     grad_fn_handle = journal.grad_fn_handles_by_label_raw.get(event.label_raw)
     # Index-first single ownership; the adapter-carried compat channel keeps
-    # detached legacy streams whole until the OpEvent field dies in S15.
+    # detached legacy streams whole until the OpEvent field is removed.
     grad_handle = grad_fn_handle if grad_fn_handle is not None else extras.grad_fn_handle
-    # r83 C2: resolve the DISPLAY address and the backend-native address
+    # resolve the DISPLAY address and the backend-native address
     # SEPARATELY.
     #
     # ``buffer_address`` (from ``_buffer_addresses_by_label``) is REGISTERED-only
@@ -571,23 +569,22 @@ def _apply_join_cells(
     _restamp_swapped_reference_out(fields_dict, buffer_write_fields)
     fields_dict.update(module_input_fields)
     fields_dict.update(module_output_fields)
-    # r83 C2 / r85 (free FINDING-1): the registered-only backend-native address,
+    # The registered-only backend-native address,
     # decoupled from the display ``address`` above -- but ONLY for a BUFFER-addressed
     # node. ``materialize_log_from_fields`` pops this extra key before construction
     # and applies it afterwards, so ``Op.__init__``'s ``backend_address <- address``
     # default cannot recouple them. A registered buffer keeps its registered address;
     # a plain-attribute / list-element buffer (recorded display address but NOT
-    # declared state) is pinned to ``None``, which is the whole C2 intent.
+    # declared state) is pinned to ``None``.
     #
     # A regular op / activation / input node is NOT a buffer, so it gets NO override
-    # and keeps the ``Op.__init__`` default (``backend_address == address``). The
-    # original r83 code set this key UNCONDITIONALLY, which forced EVERY op node to
-    # ``None`` -- contradicting its own commit message ("an op/input ... is
-    # unaffected") and leaving the model-output layer (built by copying the last op
-    # through a path that keeps the default) reporting the coupled address while the
-    # aliasing op node reported ``None``. Gating on buffer-addressedness makes the
-    # commit's claim TRUE, restores intra-trace consistency (op node and output layer
-    # for the same module agree), and matches every other backend, where an op node
+    # and keeps the ``Op.__init__`` default (``backend_address == address``). Setting
+    # the key unconditionally would force EVERY op node to ``None`` and leave the
+    # model-output layer (built by copying the last op through a path that keeps the
+    # default) reporting the coupled address while the aliasing op node reported
+    # ``None``. Gating on buffer-addressedness keeps intra-trace consistency (op node
+    # and output layer for the same module agree), and matches every other backend,
+    # where an op node
     # carries a backend-native handle (``jaxpr:``/``uop:``) that the output layer
     # inherits. Verdicts and replay fingerprints are byte-unchanged: no runnable-load
     # / param_source / resolver consumer reads an op node's ``backend_address`` (the
@@ -607,10 +604,10 @@ def _apply_join_cells(
         #   2. a plain-attribute / list-element buffer that is not declared state at
         #      all (its recorded address is its own display path, e.g. ``child.q``).
         #
-        # r87: kind 1 must report the SAME registered ``backend_address`` as its
-        # read-side node -- r85's Option-a rule is "a registered buffer keeps its
-        # registered address" and intra-trace consistency was the fix's stated goal;
-        # previously the write node fell through to ``buffer_address`` (None). The
+        # kind 1 must report the SAME registered ``backend_address`` as its
+        # read-side node -- a registered buffer keeps its registered address, which
+        # keeps the trace internally consistent (without this the write node would
+        # fall through to ``buffer_address``, which is None). The
         # discriminator is REGISTERED-ness -- does the recorded address genuinely
         # name a buffer in the model's declared-state universe
         # (``trace._buffer_initial_values``, the SAME set the runnable preflight
@@ -618,16 +615,16 @@ def _apply_join_cells(
         # never a heuristic borrow: the address used is the node's OWN recorded
         # address, and only when it is registered.
         #
-        # kind 2 stays None -- the whole r83 C2 intent (a non-registered tensor is
+        # kind 2 stays None (a non-registered tensor is
         # outside the declared state universe, so it has a display address but no
         # backend-native one). A foreign tensor whose recorded display address is
         # not in the registered universe therefore never receives a registered
-        # ``backend_address``, so C2's silent wrong-bind cannot be re-opened; and
+        # ``backend_address``, so a silent wrong-bind cannot occur; and
         # because ``backend_address`` is verdict-neutral (no runnable-load /
         # param_source / resolver consumer reads it -- only the string-when-present
         # metadata invariant does), this clause moves no verdict and no replay
         # fingerprint. The display ``address`` and the save binding that DRIVE the
-        # C2 refusal are resolved above and are untouched here.
+        # refusal are resolved above and are untouched here.
         if recorded_buffer_address in registered_buffer_names:
             fields_dict["_materialized_backend_address"] = recorded_buffer_address
         else:
@@ -732,7 +729,7 @@ def _normalize_edge_use_record(
     if not isinstance(parent_label, str) or not isinstance(edge_use, str):
         return None
     source_event = op_events_by_label.get(parent_label)
-    # F10 (lovely item 8): the storage verdict populates from the closed
+    # The storage verdict populates from the closed
     # function-semantics table when this event carries a function name;
     # keyword edges and unknown functions stay the honest "unknown".
     from ..intervention._edge_semantics import classify_view_or_copy
@@ -1259,8 +1256,8 @@ def _module_input_fields(
                 for tensor in input_tensors
                 if (label_raw := get_tensor_label(tensor)) is not None
             ]
-        # B3R7-R05-1: this enter lane must NOT touch ``module_call_stack``.
-        # It used to append the entered call's address here, which stamped the
+        # This enter lane must NOT touch ``module_call_stack``.
+        # Appending the entered call's address here would stamp the
         # FED call's stack onto ops that never ran inside it (the model input,
         # top-level producers) -- the fed-call fact is ``input_to_module_calls``;
         # containment comes from the op's own modules facet at ingest.
@@ -1331,8 +1328,8 @@ def _module_output_fields(
                     role_hints,
                     output_index,
                 )
-        # B3R7-R05-1: the exit lane no longer overwrites ``module_call_stack``
-        # (its containment value now comes uniformly from the op's own modules
+        # The exit lane does not overwrite ``module_call_stack``
+        # (its containment value comes uniformly from the op's own modules
         # facet at ingest); this loop keeps only the atomic-leaf detection.
         for label_raw, stack, _is_atomic, _atomic_call in event.per_output_atomic:
             fields = by_label.setdefault(label_raw, _empty_module_output_fields())
@@ -1403,11 +1400,11 @@ def _buffer_write_fields(
     op_event_labels
         Raw labels present in the materialized event stream.
     structure_only
-        W3 (weightsfree memo defect L6): under the structure-only contract a
+        Under the structure-only contract a
         buffer version node keeps its DECLARED geometry (shape / dtype /
         byte estimate) but never a value payload — retaining the write
-        journal's copied value made every buffer-holding structure-only
-        artifact save-then-fail-to-load at the M-C2 coherence gate, and BN
+        journal's copied value would make every buffer-holding structure-only
+        artifact save but fail to load at the coherence gate, and BN
         running stats are training-derived state a weights-free artifact
         must not carry.
 

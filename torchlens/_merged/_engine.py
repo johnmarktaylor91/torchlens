@@ -1,4 +1,4 @@
-"""The C1 merge derivation: audit-first joining, delta alignment, witnesses.
+"""The merge derivation: audit-first joining, delta alignment, witnesses.
 
 ONE pure function (:func:`derive_merge`) produces the complete merge
 derivation from per-rank evidence. It runs at merge time and again, verbatim,
@@ -10,7 +10,7 @@ audit runs BEFORE any correlation-key joining or presence-gap derivation; a
 conflicted membership refuses structurally -- no uid of it joins and no
 unmatched key of it becomes a presence gap.
 
-Correlation alignment is by counting (P3): per ``(group_uid, channel)`` each
+Correlation alignment is by counting: per ``(group_uid, channel)`` each
 rank's recorded boundaries align as seq DELTAS from that rank's first recorded
 key -- a SEEDED rank's absolute seq base is a rank-local fact (arm-time
 histories differ) and is never compared. Ranks armed BEFORE any group are the
@@ -77,7 +77,7 @@ JoinKey = tuple[str, int, str, int]
 
 @dataclass(frozen=True)
 class PerRankRef:
-    """One rank's contribution to a join: references, never copies (P1)."""
+    """One rank's contribution to a join: references, never copies."""
 
     rank: int
     boundary_index: int

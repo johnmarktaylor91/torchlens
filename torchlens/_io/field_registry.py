@@ -9,7 +9,7 @@ truth -- the per-class ``_FIELD_POLICY`` tables (built from ``*_FIELD_ORDER``
 + ``_PORTABLE_STATE_SPEC``) and the raw ``_PORTABLE_STATE_SPEC`` dicts on
 nested value classes -- so the registry can never drift from the code that
 actually serializes state. It declares NO new fields and moves NONE: field-set
-changes land only at the coordinated schema write (C07), through the
+changes land only at the coordinated schema write, through the
 the field-intent ledger intake.
 
 Tier partition (WALKTHROUGH section 3 field triage; DIGEST-AUDIT 4b):
@@ -25,7 +25,7 @@ Tier partition (WALKTHROUGH section 3 field triage; DIGEST-AUDIT 4b):
   analysis integrity; the lazification candidates for the tlspec 8->9 bump.
 
 The partition below is the ENVELOPE default: every persisted field is FACT
-unless the census evidence already classifies it, and C07 amends tiers
+unless the census evidence already classifies it, and amends tiers
 through the field-intent intake, never by editing consumers.
 """
 
@@ -102,15 +102,15 @@ _PERSISTED_MODULE_NAMES: dict[str, str] = {
 #: The reverse map: persisted module path to the module that now holds the classes.
 _RUNTIME_MODULE_NAMES: dict[str, str] = {v: k for k, v in _PERSISTED_MODULE_NAMES.items()}
 
-#: Tier overrides for persisted fields with census evidence (DIGEST-AUDIT 4b,
-#: r2-corrected). Everything not listed is FACT by conservative default:
+#: Tier overrides for persisted fields with census evidence (digest
+#: audit, corrected). Everything not listed is FACT by conservative default:
 #: treating a derived field as fact never loses truth, while the reverse
-#: launders evidence into "recomputable". RATIFIED at the C07 v9 write
+#: launders evidence into "recomputable". RATIFIED at the v9 write
 #: (2026-08-27) with ZERO persistence-policy flips: every enrichment-tier
 #: candidate has live readers (code_context -> code panels/convert-25,
-#: func_config -> replay context, bytes_* -> 8+ pinning surfaces per r2 C3),
-#: so the DIGEST-AUDIT-4b lazification is an EMISSION-side move owned by the
-#: capture fence (A05->A06->F20) consuming this table -- persisted policies
+#: func_config -> replay context, bytes_* -> 8+ pinning surfaces),
+#: so the lazification is an EMISSION-side move owned by the
+#: capture fence consuming this table -- persisted policies
 #: do not move until an emission design rules which fields defer. Later
 #: amendments route through the field-intent ledger, never ad-hoc edits.
 _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
@@ -120,7 +120,7 @@ _FIELD_TIER_OVERRIDES: dict[str, dict[str, FieldTier]] = {
         "input_ancestors": FieldTier.DERIVED,
         "internal_source_ancestors": FieldTier.DERIVED,
         "output_descendants": FieldTier.DERIVED,
-        # P4c label projections (derivation caveats r2 C7 -- still derived).
+        # Label projections (still derived).
         "short_label": FieldTier.DERIVED,
         "short_layer_label": FieldTier.DERIVED,
         "lookup_keys": FieldTier.DERIVED,

@@ -150,7 +150,7 @@ class ContainerSnapshot:
         ``site_aliases`` / ``site_alias_event_indices`` are positionally
         parallel persisted fields; a length mismatch is corrupt parallel
         state and must be NAMED here, not surface later as a silently
-        dropped alias in ``observed_index_for_site`` (R23-4).
+        dropped alias in ``observed_index_for_site``.
         """
 
         if len(self.site_aliases) != len(self.site_alias_event_indices):
@@ -325,7 +325,7 @@ class ContainerRegistry:
     next_ordinal: int = 0
     # Capture-only: ``new_label -> root_label`` for value-PRESERVING relabels
     # (module-boundary identity mints advance a live tensor's label without
-    # changing its value — W3 F6). Snapshot dedup resolves producer labels
+    # changing its value). Snapshot dedup resolves producer labels
     # through this map so an unchanged container threaded across module
     # boundaries still collapses to one snapshot body plus site aliases, while
     # a genuine mutation (whose label advance is never reported here) still
@@ -461,7 +461,7 @@ class ContainerRegistry:
 
 
 OUTPUT_TREE_MAX_DEPTH: int = 200
-"""The model-OUTPUT boundary nesting ceiling (r-b4 R27-4).
+"""The model-OUTPUT boundary nesting ceiling.
 
 Mirrors the input-boundary ceiling (``torchlens._input_walk.INPUT_TREE_MAX_DEPTH``)
 and the artifact-side decode bound. The output walkers cannot raise mid-capture
@@ -616,7 +616,7 @@ def _container_has_tensor_leaf(value: Any, *, memo: set[int], depth: int = 0) ->
     """Return whether ``value`` contains a tensor leaf at any nesting depth.
 
     Beyond the output nesting ceiling the answer is conservatively ``True``
-    (r-b4 R27-4): the spec build then runs and degrades the over-deep subtree to
+    : the spec build then runs and degrades the over-deep subtree to
     the honest ``opaque`` lane. Answering ``False`` there would forge a
     "no tensor leaves" witness for a subtree that was never actually scanned.
     """
@@ -681,7 +681,7 @@ def _build_container_spec(
     """Build a portable spec for a supported container value.
 
     Over-deep and self-referential subtrees degrade to the honest ``opaque``
-    lane (r-b4 R27-4); the cycle guard is path-scoped so DAG-shaped outputs
+    lane; the cycle guard is path-scoped so DAG-shaped outputs
     keep one spec per occurrence.
     """
 
@@ -833,7 +833,7 @@ def _walk_tensor_occurrences(
     """Yield tensor leaf occurrences with stable container paths.
 
     Bounded by the SAME ceiling/cycle policy as ``_build_container_spec``
-    (r-b4 R27-4): a subtree the spec degraded to ``opaque`` yields no
+    : a subtree the spec degraded to ``opaque`` yields no
     occurrences here, so the two walks can never disagree about a path.
     """
 
@@ -875,7 +875,7 @@ def _iter_tensor_leaves(
         Object identities already visited while breaking container cycles.
     _depth:
         Internal recursion depth; descent stops at ``OUTPUT_TREE_MAX_DEPTH``
-        (r-b4 R27-4) instead of exhausting the interpreter stack.
+        instead of exhausting the interpreter stack.
 
     Yields
     ------

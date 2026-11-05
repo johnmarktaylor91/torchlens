@@ -518,7 +518,7 @@ class BindingRuntimeError(InterventionError, RuntimeError):
 class RegionError(ConfigurationError, ValueError):
     """Raised by the region admissibility derivation or the region lowering.
 
-    Regions (F01, surgery memo 3.4) derive admissibility -- complete exits,
+    Regions derive admissibility -- complete exits,
     convexity, pass closure, replay-lane effect closure -- rather than trust
     user assertions; every refusal here names the derived violation. Branch
     on ``exc.fields["code"]``, never message text.

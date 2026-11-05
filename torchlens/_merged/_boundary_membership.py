@@ -137,7 +137,7 @@ def _check_group_rank(
     # ``get_process_group_ranks`` list it records. A permuted or out-of-range
     # value rebinds this rank's slice pairings in the gather/scatter/all_to_all
     # witness derivation (and used to reach the engine's list indexing as a raw
-    # IndexError), so incoherence is tamper, never honest evidence (R18-2).
+    # IndexError), so incoherence is tamper, never honest evidence.
     if my_group_rank is not None and my_group_rank != global_ranks.index(group["my_global_rank"]):
         raise _refuse(
             f"{where} my_group_rank {my_group_rank} does not equal the position "
@@ -191,7 +191,7 @@ def check_roles(entry: dict[str, Any], kind: Any, where: str, source: str) -> No
     roles = entry.get("roles")
     if not isinstance(roles, list):
         raise _refuse(f"{where} has no roles list", source=source)
-    # Role cardinality vs boundary kind (b6-opus-R18-1): deleting the roles
+    # Role cardinality vs boundary kind: deleting the roles
     # record from EVERY member of a join used to vacuously satisfy the
     # set-of-shapes agreement checks (asymmetric deletion was caught; uniform
     # corruption -- the merge threat model -- was the escape). Every
@@ -289,7 +289,7 @@ def _check_role_index(
     # destination). Positions are unique per exact role name; they are NOT
     # required dense 0..n-1 because a tensor serving as both contribution
     # and destination keeps its input position and leaves a hole in the
-    # destination positions -- an honest recorder shape (R18-1 ii).
+    # destination positions -- an honest recorder shape.
     index_value = role.get("index")
     if not is_strict_int(index_value) or index_value < 0:
         raise _refuse(

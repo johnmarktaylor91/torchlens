@@ -1,10 +1,10 @@
-"""Sink-neutral payload conversion for watch observations (D24; lane F25).
+"""Sink-neutral payload conversion for watch observations.
 
 The explorer owns the record and the CONVERSION; tracker sinks own the
-native emission call (D26). The completed dashboard histogram payload is
+native emission call. The completed dashboard histogram payload is
 the spine's five verbatim ``add_histogram_raw`` fields plus the canonical
 ``bucket_limits`` / ``bucket_counts`` derived from the immutable signed
-log2 grid (review r3's correction to D8's "zero translation" shorthand).
+log2 grid.
 
 Nonfinite counts (NaN, +/-inf) are NOT representable in a dashboard
 bucket axis: they are excluded from the buckets, ``num`` counts the
@@ -37,7 +37,7 @@ def _require_observed_sketch(
         raise WatchRenderError(
             f"Cannot build a histogram payload from presence="
             f"{observation.presence!r}: a non-observed observation has no "
-            "numbers, and missing must never render as zero (D6).",
+            "numbers, and missing must never render as zero.",
             code="watch_payload_not_observed",
             presence=observation.presence,
             remedy="Convert only observations with presence='observed'.",
@@ -62,7 +62,7 @@ def histogram_payload(observation: ObservationRecord) -> dict[str, Any]:
     ``min, max, num, sum, sum_squares, bucket_limits, bucket_counts`` --
     plus the disclosure keys ``excluded_nonfinite`` (exact NaN/inf counts)
     and ``grid`` (the immutable descriptor tuple). The caller supplies tag
-    and step; the sink owns the native call (D26).
+    and step; the sink owns the native call.
 
     Buckets ascend the signed real line: one below-window bucket per side
     (the exact overflow forensics band), the mirrored magnitude bins, and

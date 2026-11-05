@@ -287,7 +287,7 @@ def _rescue_eligible(state: _DoorState) -> bool:
     disclosure. That covers intervention transforms, pre-attached hooks,
     AND the in-capture transform callables -- ``activation_transform``,
     ``grad_transform``, and ``output_transform`` run inside ``run_capture``
-    and measurably fired twice on a recovered rescue (b6-opus-R16-1 reopen).
+    and measurably fired twice on a recovered rescue.
     Channels applied OUTSIDE the rescue boundary stay eligible: ``save=``
     selector predicates (pure by contract), the input ``transform=``
     (applied before the re-run boundary; fires once), and

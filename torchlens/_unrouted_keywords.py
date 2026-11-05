@@ -21,7 +21,7 @@ def reject_unrouted_forward_kwargs(
 ) -> None:
     """Refuse unknown ``trace()`` keywords with a typed routing remedy.
 
-    Typed recovery on the natural HF spelling (agent memo 3.10 item 5):
+    Typed recovery on the natural HF spelling (agent memo):
     ``tl.trace(model, input_ids=...)`` used to die with a bare CPython
     TypeError. Unknown keywords are NEVER silently absorbed as forward
     kwargs (a typo'd option must not become a model input); the refusal

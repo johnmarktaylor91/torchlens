@@ -119,10 +119,10 @@ class _ScrubOptions:
     include_custom_attributes: bool = True
     include_buffer_values: bool = True
     sparse_runnable: bool = False
-    # W3 (weightsfree): the scrubbed trace carries the structure-only marker,
+    # (weightsfree): the scrubbed trace carries the structure-only marker,
     # so buffer-op value payloads and pre-forward buffer values strip to
     # declared geometry on EVERY scrub caller (unified save + streamed
-    # finalize), never reaching an artifact the M-C2 load gate would refuse.
+    # finalize), never reaching an artifact the load gate would refuse.
     structure_only: bool = False
     backend_name: str = "torch"
     payload_materialization: bool = True
@@ -452,7 +452,7 @@ def _type_is_load_reconstructible(value_type: type) -> bool:
     """Return whether the safe unpickler can rebuild instances of this type.
 
     Consults the loader's ACTUAL type authority rather than a namespace prefix
-    test (R10-4): the safe unpickler admits a ``torchlens`` type ONLY if its
+    test: the safe unpickler admits a ``torchlens`` type ONLY if its
     exact ``(module, qualname)`` is on the vetted-inert ``_SAFE_TORCHLENS_TYPES``
     allowlist and it is not an extras-gated appliance module. The prefix test
     preserved off-allowlist / appliance torchlens types by TYPE into
@@ -726,7 +726,7 @@ def _scrub_mutable_collection(
     The empty rebuilt container is memoized BEFORE its items are scrubbed, so
     a self-referencing list/set rebuilds as a self-referencing copy instead
     of recursing until the depth cap. Only the metadata walk discloses a
-    flattened subclass (R10-9 symmetry with tuples); the payload walk never
+    flattened subclass (symmetry with tuples); the payload walk never
     did, and this keeps its warning surface unchanged.
 
     Items are appended in a plain loop rather than through a generator: a
@@ -1015,7 +1015,7 @@ def _stamp_trace_portable_rows(
 ) -> None:
     """Add the Trace-only portable rows and apply the Trace source policies."""
 
-    # B8-20: a functools.partial repr embeds its bound argument VALUES, so the
+    # a functools.partial repr embeds its bound argument VALUES, so the
     # scrubbed persistence repr redacts them.
     scrubbed_state["_activation_transform_repr"] = _scrubbed_transform_repr(
         trace._options_activation_transform
@@ -1183,7 +1183,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site); unenrolled, one draw() broke saves.
         "_last_encoding_state",
-        # Layout-execution geometry record (vizmech D24), same write site class.
+        # Layout-execution geometry record (vizmech), same write site class.
         "_last_render_geometry",
         "_pending_container_collapse_nodes",
         "_defer_streaming_bundle_finalization",
@@ -1200,7 +1200,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_validation_replay_status",
         "_capture_parent_edge_truth",
         "_orphan_pruned_func_call_ids",
-        # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
+        # `_tl_predicate_intervention_{spec,target}_keys`,
         # `_source_bundle_{path,manifest_sha256}` and the output-parent retention
         # flag (now inside `_rerun_save_request`) moved out of this allowance into
         # declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is consulted
@@ -1212,7 +1212,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "jax_capture_index_to_final_op_label",
         "jax_outvar_key_to_capture_index",
         "_selective_save_hidden_payloads",
-        # B1-02: the four semantic-output scratch names moved OUT of this
+        # the four semantic-output scratch names moved OUT of this
         # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared
         # `FieldPolicy.DROP` rows. This allowance is consulted BEFORE the spec,
         # so an entry here makes the declared policy dead code -- a policy
@@ -1226,7 +1226,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
 
 
 def _structure_only_buffer_payload_field(owner: Any, field_name: str) -> bool:
-    """Whether ``field_name`` is buffer-value state a weights-free save drops (W3)."""
+    """Whether ``field_name`` is buffer-value state a weights-free save drops."""
 
     if field_name == "_buffer_initial_values":
         return True
@@ -1278,22 +1278,22 @@ def _effective_policy(
         return FieldPolicy.DROP
 
     if options.structure_only and _structure_only_buffer_payload_field(owner, field_name):
-        # W3 (weightsfree L6): buffer registration writes buffer VALUE
+        # buffer registration writes buffer VALUE
         # payloads under the structure-only marker (BatchNorm running stats --
         # training-derived state a weights-free artifact must not carry), so
         # every structure-only save of a buffer-holding model wrote an
-        # artifact the M-C2 load coherence gate refused (save-then-cannot-
+        # artifact the load coherence gate refused (save-then-cannot-
         # load). Strip buffer payloads to declared geometry (shape/dtype
-        # metadata fields are untouched); M-C2/M-C3 stay strict at load.
+        # metadata fields are untouched); load-side coherence checks stay strict.
         return FieldPolicy.DROP
     if field_name == "_buffer_initial_values" and not options.include_buffer_values:
-        # R62 buffer extension: pre-forward buffer values shipped at EVERY
+        # Pre-forward buffer values shipped at EVERY
         # save level (audit included) with no opt-out. Same whole-channel
         # shape as custom_attributes below: drop entirely, never rewrite.
         return FieldPolicy.DROP
     if field_name == "custom_attributes" and not options.include_custom_attributes:
         # Ungated the harvested module instance attributes were a silent
-        # portable-privacy channel (disputed-r2 b8/R62). The gate is
+        # portable-privacy channel. The gate is
         # whole-channel: drop entirely, never rewrite user values.
         return FieldPolicy.DROP
     if field_name in {"out", "transformed_out"} and not options.include_outs:
@@ -1333,7 +1333,7 @@ def _scrub_field(
     """Scrub one object field according to its effective field policy.
 
     An effective ``DROP``/``WEAKREF_STRIP`` wins before every field-specific
-    serializer (r69 E): the sparse-runnable effective policy drops ``input`` and
+    serializer: the sparse-runnable effective policy drops ``input`` and
     ``transformed_output``, so a runnable save scrubs both to ``None`` whatever the
     ``save_raw_input``/``save_transformed_output`` policy says, and no nested tensor
     reaches the sparse core (``assert_sparse_core_has_no_tensor_payload``). Otherwise

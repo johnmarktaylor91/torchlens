@@ -1,4 +1,4 @@
-"""Edge substitution (L6 stage 3): replace the value CONSUMED on one edge.
+"""Edge substitution: replace the value CONSUMED on one edge.
 
 Replaces the value consumed on edge ``(parent -> child, occurrence k)``:
 only the child's consumption changes; the parent's stored output remains

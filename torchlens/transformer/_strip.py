@@ -1,6 +1,6 @@
 """Colored-token strips: matplotlib paper path + zero-dependency emitters.
 
-The memo's D3 split: matplotlib lays out the proportional-width,
+Split of duties: matplotlib lays out the proportional-width,
 token-boundary-wrapped PAPER strip (real font metrics; measured 0.090 s at
 66 tokens; SVG with zero ``<image>`` elements; PDF text extracts in token
 order), while the small zero-dependency SVG/HTML emitter here keeps notebook
@@ -25,7 +25,7 @@ from ._records import SavedFigure, TokenScoreRow, TokenScores
 
 __all__ = ["render_token_strip", "token_strip_html", "token_strip_svg"]
 
-#: Tokens per wrapped line in the paper strip (R0 tuning candidate).
+#: Tokens per wrapped line in the paper strip (a tuning candidate).
 TOKENS_PER_LINE = 16
 
 #: Positive/negative/neutral fills for the zero-dependency emitter
@@ -185,7 +185,7 @@ def render_token_strip(
     *,
     svg_fonttype: str = "path",
 ) -> SavedFigure:
-    """Render the paper-format token strip via matplotlib (memo D3).
+    """Render the paper-format token strip via matplotlib.
 
     Proportional-width tokens with real font metrics, wrapped at token
     boundaries, one band per score row, every footer line rendered.

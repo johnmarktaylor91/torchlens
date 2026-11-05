@@ -201,7 +201,7 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         # access (``batch.some_field``) keeps working downstream instead of
         # silently degrading to a plain ``tuple`` (issue: interatomic-potential
         # GNN inputs like orb-models' ``AtomGraphs``). Reconstruction routes
-        # through the verified constructor ladder (T11.7): ``_fields`` presence
+        # through the verified constructor ladder: ``_fields`` presence
         # is NOT proof of an *args constructor, and the historical inference
         # crashed plain ``tl.trace`` untyped on a tuple subclass carrying a
         # malformed ``_fields``.

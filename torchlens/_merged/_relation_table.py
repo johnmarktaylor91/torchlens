@@ -33,7 +33,7 @@ _SYMMETRIC_SHAPE_KINDS: Final = frozenset(
 _DISTINCT_SHAPE_KINDS: Final = frozenset(
     {"all_gather", "gather", "scatter", "reduce", "reduce_scatter", "reduce_scatter_tensor"}
 )
-"""Kinds whose SET of distinct role shapes agrees on every rank (R18-1 iii).
+"""Kinds whose SET of distinct role shapes agrees on every rank.
 
 Every role of these kinds shares one element geometry across the group
 (all_gather/gather/scatter slots equal the contribution shape; reduce inputs
@@ -93,7 +93,7 @@ def _relation_violations(kind: str, group_size: int, entries: Entries) -> list[s
 def _role_presence_violations(kind: str, entries: Entries) -> list[str]:
     """Name each rank presenting zero tensor roles for a tensor-carrying kind.
 
-    Role cardinality vs kind (b6-opus-R18-1 belt): the set-of-shapes agreement
+    Role cardinality vs kind (belt): the set-of-shapes agreement
     is vacuously satisfied when EVERY presenting rank holds zero roles, so
     uniform roles deletion rendered the TOP verdict. Evidence parse refuses
     that shape outright through the same rule; this belt keeps direct engine

@@ -82,7 +82,7 @@ def run_loaded_sparse_trace(
     # settled labels BEFORE anything binds or executes; the scheduler cut is
     # computed pre-transaction from descriptor facts only.
     until_plan = None if until is None else _resolve_run_until_plan(trace, until)
-    # r71 A4 defense-in-depth: run preparation RE-ASSERTS the parser-derived
+    # A4 defense-in-depth: run preparation RE-ASSERTS the parser-derived
     # completeness floor before anything executes. Parse already refused a summary
     # differing from the floor; a descriptor that somehow reaches execution with the
     # contradiction fails typed here (never a silently trusted summary).
@@ -98,7 +98,7 @@ def run_loaded_sparse_trace(
                 "hand-editing witness_completeness or coverage_gaps in the descriptor"
             ),
         )
-    # r61 corr_2: ONE aggregate resource ceiling per transaction, constructed BEFORE
+    # corr_2: ONE aggregate resource ceiling per transaction, constructed BEFORE
     # any TorchLens-owned re-materialization clone runs (input mirror, run-time state
     # clone, transaction snapshots) so every clone site shares one byte-guarded
     # boundary. Construction only sums recorded counts, so building it pre-bind
@@ -150,7 +150,7 @@ def run_loaded_sparse_trace(
 
 
 def _seeded_fork_devices(descriptor: SparseRunDescriptor, seed: int | None) -> list[int]:
-    """Return the CUDA device fork set for one seeded run (r35 corr2_4).
+    """Return the CUDA device fork set for one seeded run.
 
     The set follows the seeding primitive, never the bound-input overlay: ALL
     visible CUDA devices are forked when CUDA is already initialized, or when
@@ -174,7 +174,7 @@ def _seeded_fork_devices(descriptor: SparseRunDescriptor, seed: int | None) -> l
 
 
 def _seed_run_generators(seed: int, forked_cuda_devices: list[int], *, reseed_host: bool) -> None:
-    """Seed exactly the generators this run forked (r35 corr2_4).
+    """Seed exactly the generators this run forked.
 
     Never ``torch.manual_seed``: the global primitive seeds every CUDA device
     (queuing a LAZY seed on an uninitialized runtime that would apply to the
@@ -184,7 +184,7 @@ def _seed_run_generators(seed: int, forked_cuda_devices: list[int], *, reseed_ho
     -- Python/NumPy (whose prior state the caller snapshot-restores).
     """
 
-    # r79 seed-door mirror: no path may reach raw ``manual_seed`` with a
+    # seed-door mirror: no path may reach raw ``manual_seed`` with a
     # bool/out-of-range seed even if it bypassed the run door.
     validate_run_seed(seed)
     if reseed_host:
@@ -248,7 +248,7 @@ def _finalize_provider_run(
     state_carried: bool = False,
     truncation: Any = None,
 ) -> RunResult:
-    """THE single provider settlement finalizer (r39 CLASS B sparse<->live parity immunizer).
+    """THE single provider settlement finalizer (sparse<->live parity immunizer).
 
     Both providers -- loaded sparse and live refresh -- settle EXCLUSIVELY here: the monotonic
     Trace-poison mark (``mark_trace_path_status``), divergence-policy enforcement
@@ -272,7 +272,7 @@ def _finalize_provider_run(
         divergence_policy,
         unregister_fork=unregister_fork_on_divergence,
     )
-    # Annotations TRAVEL POLICY (foldA D6, lane F40a): every settled product
+    # Annotations TRAVEL POLICY: every settled product
     # presents a re-executed forward, so capture-evidence sub-keys (episode
     # ledger, observer values) are dropped here -- VERIFIED must never coexist
     # with foreign step evidence. Runs after divergence enforcement so a

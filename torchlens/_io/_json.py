@@ -40,7 +40,7 @@ _MAX_JSON_DEPTH = 200
 # worst-case cost and rejects an absurd artifact before it is read into memory.
 _MAX_JSON_BYTES = 512 * 1024 * 1024
 
-# Object-count ceiling (R60-1). The byte + depth ceilings do NOT bound the number
+# Object-count ceiling. The byte + depth ceilings do NOT bound the number
 # of Python objects ``json.loads`` allocates: a manifest well under the byte cap
 # but packed with tiny values (``[0,0,0,...]`` / ``{}`` runs) expands ~16x into RSS
 # BEFORE any downstream body-index cross-check can refuse it (an 81 MiB such
@@ -142,7 +142,7 @@ def _bounded_read_bytes(handle: IO[bytes], max_bytes: int) -> bytes:
 
     ``handle.read(max_bytes + 1)`` pre-allocates a ``max_bytes + 1`` buffer whatever
     the real file size is, so a tiny manifest under the 512-MiB ceiling still
-    transiently requested ~512 MiB (R33-1). We stat the open fd first: a file already
+    transiently requested ~512 MiB. We stat the open fd first: a file already
     over the ceiling is refused before any allocation, and a file within it reads
     exactly its own size plus one sentinel byte (to still catch a file that grew after
     the stat). When the size cannot be determined (a pipe/non-seekable handle) we fall
@@ -191,7 +191,7 @@ def _prescan_depth(text: str, *, max_depth: int, max_nodes: int = _MAX_JSON_NODE
         return _refuse(f"manifest JSON node count exceeds the maximum of {max_nodes}", text)
 
     if "\\" not in text:
-        # R60 fast refusal (b8): establish the node count at C speed FIRST --
+        # R60 fast refusal: establish the node count at C speed FIRST --
         # ``str.split('"')`` alternates outside/inside-string segments (no
         # backslash means no escaped quotes), so counting separators/opens over
         # the outside segments is exactly the loop's node accounting, at ~GB/s
@@ -295,7 +295,7 @@ def loads_bounded(
     """
 
     # ``len(text.encode("utf-8"))`` allocates a full extra copy of the payload just
-    # to measure it -- ~1.5x the 512-MiB ceiling before json even parses (B8-14).
+    # to measure it -- ~1.5x the 512-MiB ceiling before json even parses.
     # UTF-8 uses >= 1 byte per code point, so ``len(text) <= byte length`` always:
     # a character count over the ceiling is a byte count over the ceiling (refuse
     # without encoding), and only when the character count is within the ceiling can
@@ -420,7 +420,7 @@ def read_bounded(
     try:
         text = data.decode(_JSON_FILE_ENCODING)
     except UnicodeDecodeError as exc:
-        # Same does-not-parse class as broken JSON (R73): route through the
+        # Same does-not-parse class as broken JSON: route through the
         # one channel every JSON-boundary handler already catches.
         raise _refuse(f"manifest bytes are not valid {_JSON_FILE_ENCODING}: {exc}", "") from exc
     return loads_bounded(text, max_depth=max_depth, max_bytes=max_bytes, max_nodes=max_nodes)

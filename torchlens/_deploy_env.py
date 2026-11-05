@@ -1,4 +1,4 @@
-"""Deployment-envelope detection helpers (lane F37, R5).
+"""Deployment-envelope detection helpers.
 
 The population TorchLens is aimed at loads large models through Hugging Face
 Accelerate: ``device_map="auto"`` dispatch, CPU/disk offload, and 4/8-bit

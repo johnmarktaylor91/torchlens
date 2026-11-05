@@ -1,4 +1,4 @@
-"""The report-family SurfaceRegistry (F09; sumfam D22-D24, item 16).
+"""The report-family SurfaceRegistry.
 
 ONE registry; everything is a projection of it: the "which do I use"
 docs page, the More: cross-links, agent guidance, and the capability
@@ -6,7 +6,7 @@ card are all GENERATED from these rows -- the hand-written map had
 already rotted (seven unconditional entries, eight omissions, one entry
 unexecutable by its own reader).
 
-Row vocabulary (D12): subjects are MODEL / RUN-RESOURCES / RUN-VALUES /
+Row vocabulary: subjects are MODEL / RUN-RESOURCES / RUN-VALUES /
 RUN-HEALTH / CAPTURE / ENVIRONMENT; registers are the artifact's KIND
 (SHAPE conserving table, RANK, VERDICT findings, NARRATIVE, ADDRESS
 machine map, LOG); the honesty obligation is an invariant SET
@@ -14,12 +14,12 @@ machine map, LOG); the honesty obligation is an invariant SET
 ``checks_and_skips_complete``, ``mints_no_facts``, ``stable_addressing``,
 ``instrumented_time_labeled``).
 
-Cross-links are TYPED records (D23): trigger reason, the unanswered
+Cross-links are TYPED records: trigger reason, the unanswered
 question, a copyable command, one-line reason, cost class, requires --
 rendered only when THIS report holds the triggering evidence, never a
 standing menu.
 
-The capability card (D24) is the registry filtered by the object in
+The capability card is the registry filtered by the object in
 hand: which members work, which refuse and why, and what each costs on
 THIS object. Metadata-only -- building the card never scans, captures,
 or executes anything.
@@ -36,7 +36,7 @@ from typing import Any
 
 from .._errors import InvalidArgumentError
 
-#: Closed subject vocabulary (D12).
+#: Closed subject vocabulary.
 SUBJECTS: tuple[str, ...] = (
     "MODEL",
     "RUN-RESOURCES",
@@ -46,11 +46,11 @@ SUBJECTS: tuple[str, ...] = (
     "ENVIRONMENT",
 )
 
-#: Closed register vocabulary (D12): the artifact's KIND, never its
+#: Closed register vocabulary: the artifact's KIND, never its
 #: rendering medium.
 REGISTERS: tuple[str, ...] = ("SHAPE", "RANK", "VERDICT", "NARRATIVE", "ADDRESS", "LOG")
 
-#: Closed invariant vocabulary (D12).
+#: Closed invariant vocabulary.
 INVARIANTS: tuple[str, ...] = (
     "conserves_totals",
     "truncation_disclosed",
@@ -60,7 +60,7 @@ INVARIANTS: tuple[str, ...] = (
     "instrumented_time_labeled",
 )
 
-#: Closed cost-class vocabulary (D4).
+#: Closed cost-class vocabulary.
 COST_CLASSES: tuple[str, ...] = (
     "metadata_only",
     "payload_scan",
@@ -70,7 +70,7 @@ COST_CLASSES: tuple[str, ...] = (
 )
 
 #: Closed requirement tokens the capability card can evaluate on an
-#: object WITHOUT running anything (D24: metadata-only).
+#: object WITHOUT running anything (metadata-only).
 REQUIREMENT_TOKENS: tuple[str, ...] = (
     "finished_trace",
     "live_model",
@@ -80,7 +80,7 @@ REQUIREMENT_TOKENS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class SurfaceEntry:
-    """One registry row (D22)."""
+    """One registry row."""
 
     key: str
     spelling: str
@@ -335,7 +335,7 @@ class CapabilityRow:
 
 @dataclass(frozen=True)
 class CapabilityCard:
-    """The registry filtered by the object in hand (D24): metadata-only.
+    """The registry filtered by the object in hand: metadata-only.
 
     Examples
     --------
@@ -350,7 +350,7 @@ class CapabilityCard:
     rows: tuple[CapabilityRow, ...]
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): rows point, never dump."""
+        """Bounded identity card: rows point, never dump."""
 
         available = sum(1 for row in self.rows if row.is_available)
         return (
@@ -380,7 +380,7 @@ def _object_kind(trace_like: Any) -> str:
 
 
 def capability_card(trace: Any) -> CapabilityCard:
-    """Build the capability card for one trace-like object (D24).
+    """Build the capability card for one trace-like object.
 
     Metadata-only by construction: requirement tokens are evaluated
     against facts the object already holds; nothing scans, captures, or
@@ -414,7 +414,7 @@ def capability_card(trace: Any) -> CapabilityCard:
 
 
 def which_do_i_use() -> str:
-    """Render the "which do I use" docs page from the registry (item 20).
+    """Render the "which do I use" docs page from the registry.
 
     The docs page file (docs/reference/report_family.md) is this
     function's output, pinned by a lockstep test -- the page can never

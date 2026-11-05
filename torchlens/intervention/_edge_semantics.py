@@ -1,4 +1,4 @@
-"""Edge storage/distribution semantics (F10; lovely item 8 / D28).
+"""Edge storage/distribution semantics.
 
 Two INDEPENDENT axes over one parent->child dataflow edge:
 
@@ -101,7 +101,7 @@ SAME_MULTISET_FUNCS: frozenset[str] = frozenset(
 
 @dataclass(frozen=True)
 class EdgeDistributionRelation:
-    """One derived distribution verdict with its proof provenance (D28).
+    """One derived distribution verdict with its proof provenance.
 
     ``relation`` is currently the single value ``same_multiset``;
     ``basis`` names the function-semantics table row; ``corroboration``
@@ -160,7 +160,7 @@ def _numel(shape: Any) -> int | None:
 
 
 def distribution_relation(trace: Any, record: Any) -> EdgeDistributionRelation | None:
-    """Derive one edge's distribution verdict from persisted facts (D28).
+    """Derive one edge's distribution verdict from persisted facts.
 
     Fail-closed: the verdict exists only when the child call's function is
     in the closed same-multiset table, the edge is the positional slot-0

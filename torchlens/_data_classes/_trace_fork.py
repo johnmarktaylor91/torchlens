@@ -1,4 +1,4 @@
-"""COW Trace fork (M11): fresh facades over shared frozen storage.
+"""COW Trace fork: fresh facades over shared frozen storage.
 
 ``build_fork`` replaces the object-graph forkcopier: instead of one
 structural ``copy.deepcopy`` of the whole record graph, the fork receives
@@ -176,7 +176,7 @@ def _memoized_deep_copy(
         # those entries are discarded rather than handed to the next field.
         if fork_memo is not None and mark is not None:
             fork_memo.rollback(mark)
-        # Closed parse (round-7 b7 R47): the raw-truthiness spelling made
+        # Closed parse: the raw-truthiness spelling made
         # ``TORCHLENS_DEBUG_FORK_COPY=0`` ENABLE the debug re-raise it names
         # off, and a typo silently selected a state.
         if closed_bool_env("TORCHLENS_DEBUG_FORK_COPY"):
@@ -365,7 +365,7 @@ def _fork_model_field(parent: Trace, field_name: str, value: Any, memo: dict[Any
         # A plain fork is NOT a fresh execution: its records still hold the
         # capture's own values, so every annotations sub-key (episode ledger,
         # observer values) travels here verbatim. The per-sub-key travel
-        # policy (_capture/_annotations_travel.py, foldA D6) fires at the
+        # policy (_capture/_annotations_travel.py) fires at the
         # provider settlement finalizer the moment an engine RE-EXECUTES on
         # a fork; the fork builder never decides per key.
         return _copy_fork_value(value, memo)
@@ -463,7 +463,7 @@ def _fill_detached_record(parent_record: Any, shell: Any, translator: _RecordTra
     cells = [_MISSING] * layout.n_fields
     for fid in range(layout.n_fields):
         value = store.cell_get(row, fid)
-        # Decode BOTH internal cell encodings (M14) while copying: a detached
+        # Decode BOTH internal cell encodings while copying: a detached
         # shell has no pool/registry to decode them later, and
         # ``DetachedOpStore.items`` streams cells verbatim — a leaked
         # ``PooledCell`` would poison the record's pickle state and make every
@@ -541,7 +541,7 @@ def _fill_layer_shells(
     """Fill the fork's Layer shells from the parent's per-layer shadow dicts.
 
     Only the per-layer ``__dict__`` is copied (shadows, tombstones, staging
-    snapshots); the M8 mirror fields keep reading through ``ops[0]``, which on
+    snapshots); the mirror fields keep reading through ``ops[0]``, which on
     the fork resolves through the COW view — so the fork preserves the mirror
     memory win the deepcopy fork used to lose.
     """
@@ -550,7 +550,7 @@ def _fill_layer_shells(
     consumed_shells: set[int] = set()
     fork_equivalent_ops = fork._graph_op_equivalence_classes
     # One normalized relation view per equivalence class: the finished-Layer
-    # write normalization (F5) converts each assigned staging set to an
+    # write normalization converts each assigned staging set to an
     # immutable view, and materializing a fresh one PER MEMBER layer is
     # quadratic on single-class traces (32 MB/fork measured on a 2002-op
     # stack). Equal views are documented as shareable across records.

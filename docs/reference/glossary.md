@@ -645,7 +645,7 @@ shape `[num_q_heads, d_model, d_model]` built from `head_weight_views` (Transfor
 `model.QK` / `model.OV` convention; biases excluded; under grouped-query attention each query head
 pairs with the KV head that serves it). `mlp_neuron_contributions` returns a `ComponentStack` with
 one row per hidden neuron (`hidden[n] * W_out[n]`, read from the output projection's captured
-input), a verified bias constant, and the D7 grading; unselected neurons under `neurons=` fold into
+input), a verified bias constant, and the grading; unselected neurons under `neurons=` fold into
 one exact `other_neurons` row.
 
 `patch_query_heads_grid(model, clean_input, corrupted_input, metric, site="v", heads=None,
@@ -2168,7 +2168,7 @@ routing-table read without saved router weights or expert indices. Its
   [the merged-trace contract](merged_trace_contract.md).
 
 **Trace.provenance.distributed_scope** — *unstable — no deprecation shim owed*
-: The persisted shard-local capture marker (L8/F6): `None` for ordinary captures,
+: The persisted shard-local capture marker: `None` for ordinary captures,
   `"rank_local_shard"` when any parameter or input the capture saw was one rank's local
   shard — the trace is a rank-local recording, never whole-model truth. Persists as of
   tlspec v8 with closed-vocabulary load validation; the bundle-save chokepoint refuses
@@ -2616,8 +2616,8 @@ shims, by declared contract. Each carries the same tag at its definition.
 shim owed; S2-gated vocabulary*
 : Closed-vocabulary grouping-policy knob: `"structural"` (default — call-site
   grouping, `docs/guides/grouping.md`), `"strict_shapes"` (reserved; refuses typed until its
-  own reviewed design lands), `"fold_sites"` (the D1 within-capture folding
-  axis; refuses typed on plain captures until an affirmative D1 ruling).
+  own reviewed design lands), `"fold_sites"` (the within-capture folding
+  axis; refuses typed on plain captures until an affirmative ruling).
   Unknown values refuse `grouping_invalid`; legal-but-not-entry-legal values
   refuse `grouping_policy_unavailable`. The mirror field `trace.options.grouping`
   records the requested value. Distinct from the display-only `fold_repeats`
@@ -2682,7 +2682,7 @@ S2-gated*
   `structure_only_type_invalid`.
 
 **Selector / Selection / `__selection__`** — *unstable — no
-deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
+deprecation shim owed (do/Selection spellings slate-ratified)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
   terms (selector / receptive-field box / gradient-RF / facet / param / unit)
   and boolean combinators, trace-independent; `trace[selector]` (the one
@@ -2957,7 +2957,7 @@ shim owed; S2-gated*
   every pass-qualified spelling, `:last`, `:all` and `trace[label]`, which gives the
   aggregate Layer; spellings DOCUMENTED-UNSTABLE).
 
-**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
+**tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5,
 default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
@@ -2986,7 +2986,7 @@ default-keep); mask-application semantics documented-unstable*
   `selection_apply_invalid` (closed reason set
   `shape | dtype | device | broadcast | not_maskable`). Learned-parameter
   edits route through PARAMETER SUBSTITUTION on the replay engine (see the
-  entry below; the 2026-08-17 decision supersedes the D3 typed-refusal
+  entry below; the 2026-08-17 decision supersedes the typed-refusal
   default there — rerun/set_only keep refusing typed). Each
   Selection-targeted do() appends an audit record (query repr + resolve
   digest + per-site relations) to `trace.intervention_audit` (persisted as
@@ -3453,7 +3453,7 @@ deprecation shim owed*
 **Trace.grad_fn_timing_provenance** — *unstable — no deprecation shim owed*
 : The per-fire timing clock-provenance marker: `"unmeasured"` until a timing
   prehook arms, `"perf_counter"` on the universal path
-  (`"perf_counter_grad_saved_only"` reserved for the D15 fallback mode).
+  (`"perf_counter_grad_saved_only"` reserved for the fallback mode).
   Persists as of tlspec v8, where the persisted `GradFnCall` stamps carry
   the per-fire `perf_counter` pair this marker discriminates; an untimed
   fire persists `(None, None)` and reads a `None` duration.
@@ -3850,7 +3850,7 @@ deprecation shim owed*
   `CaptureOptions(measure_host_peak_memory=True)` records `None` with a reason naming that
   opt-in. A CPU forward that measured zero (resident high-water growth,
   end-of-forward RSS delta and, when opted in, the Python-allocation peak all 0) is recorded as
-  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)` (forks.13).
+  `None` with a reason naming `CaptureOptions(measure_python_peak_memory=True)`.
   `None` when a value was measured, and on artifacts that predate the field. Persisted
   (KEEP); a loaded reason beside a number refuses
   `artifact_forward_peak_memory_invalid`. CUDA and MPS keep their numeric semantics.
@@ -4097,14 +4097,14 @@ describe each surface in depth.
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
 | `tl.mechinterp.LogitLensPredictions` | Result of a streaming :func:`logit_lens_predictions` sweep |
 | `tl.mechinterp.PatchedRun` | The receipted product of one lowered counterfactual |
-| `tl.mechinterp.SavePlan` | A priced, composable retention plan (mikit D15) |
+| `tl.mechinterp.SavePlan` | A priced, composable retention plan (mikit) |
 | `tl.mechinterp.ablation_controls` | Rerun an ablation claim under the baseline, direction and site controls; returns an `AblationControlsReport` |
 | `tl.mechinterp.patch_head` | Patch one head (or its pattern) on a fused model via exact lowering |
 | `tl.mechinterp.patching` | Prebuilt activation and attribution patching helpers for facets |
 | `tl.neuro.ExtractionPlan` | Immutable measured plan for one whole-model extraction sweep |
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
-| `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
-| `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
+| `tl.neuro.export_npz` | Export extracted features as npz interchange |
+| `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures |
 | `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `registration_order`, `func`) |
 | `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`); fields `source`, `identifier`, `verified`, `config`, `description`, `style`, `selected_output_head`, `label_source`, `label_source_version`, `confidence`, `top_n_captured`, `ambiguous`, filled by keyword (`identifier=`, `description=`, `selected_output_head=`, `label_source=`, `label_source_version=`, `top_n_captured=`) |
 | `tl.postprocessing.info` | Describe one registered output detector by name |
@@ -4116,7 +4116,7 @@ describe each surface in depth.
 | `tl.recording.cleanup_partial` | Remove partial recording bundles and sibling temp directories |
 | `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |
 | `tl.recording.recover` | Recover a finalized or partial recording bundle |
-| `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
+| `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat) |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.viz.Drawing` | The picture every draw returns: DOT source (or animation HTML), format, written path; `save(path, editable=)`, `show()`, `close()` (releases a retained trace; idempotent; the `with` block exit calls it); a forward drawing also carries `collapse_plan` and `collapse_schedule` |
@@ -4269,7 +4269,7 @@ describe each surface in depth.
 | `PlanSite.exclusion_reason` | Actionable reason when excluded; never silently dropped |
 | `PlanSite.is_batch_invariant` | Whether the site's bytes did NOT scale with batch |
 | `PlanSite.is_included` | Whether the site is in the run's save set |
-| `PlanSite.transform_seconds` | Measured live transform time at the probe batch (D-15: the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
+| `PlanSite.transform_seconds` | Measured live transform time at the probe batch (the probe executes the transform chain; post-transform bytes and time are measured, never derived) |
 | `PlanSite.transformed_bytes` | Post-transform bytes at the probe batch, when a transform ran |
 | `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
 | `Population.__len__` | The number of members in the population |
@@ -6420,7 +6420,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `async_writes=` | constructor keyword of `tl.options.StorageOptions` (keyword-only; optional): Whether `trace(..., storage=...)` blob writes overlap forward capture through a bounded single-worker pipeline instead of pausing capture for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means the consumer default — async for `trace` ..; keyword of `tl.to_disk` (keyword-only; default `None`): Whether `trace(..., storage=...)` blob writes overlap capture on a bounded single-worker pipeline instead of pausing the forward for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means async for `trace` captures and synchronous for .. |
 | `at=` | constructor keyword of `tl.types.UnencodableValue` (required) |
 | `aten_ops=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
-| `atol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.dead`, `tl.saturated`, `tl.sign`, `tl.stable_across_passes`, `tl.subspace` (keyword-only; default `0.0`); keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed absolute tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional absolute tolerance; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-08`): Absolute tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only absolute tolerance. `None` (default) derives per gradient dtype in `validate_backward_pass`; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Absolute allclose tolerance. `None` (default) derives the tolerance per gradient dtype (R13); the historical fp32 decimal pair applied to every dtype was ~4.5e11 fp64 ULPs loose and false-failed fp16 grads |
+| `atol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.dead`, `tl.saturated`, `tl.sign`, `tl.stable_across_passes`, `tl.subspace` (keyword-only; default `0.0`); keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed absolute tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional absolute tolerance; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-08`): Absolute tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only absolute tolerance. `None` (default) derives per gradient dtype in `validate_backward_pass`; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Absolute allclose tolerance. `None` (default) derives the tolerance per gradient dtype; the historical fp32 decimal pair applied to every dtype was ~4.5e11 fp64 ULPs loose and false-failed fp16 grads |
 | `attachment=` | keyword of `tl.export.netron` (keyword-only; default `None`): The `<stem>.attachment.json` metrics companion (netron's own sidecar channel; drop it onto the open model). `None` (the default) writes it beside every file export and skips it for the memory-only serve, which has no file for it to sit beside; `True` demands it (and refuses `path=None`); .. |
 | `attempts=` | constructor keyword of `tl.types.InputProvenance` (default `None`): Bounded probe diary (rung 3): `(shape-or-None, outcome)` rows. Inference evidence (rung 3), when known |
 | `attention=` | keyword of `tl.bridge.lit.model` (keyword-only; default `None`): REFUSED: LIT deleted its attention panel upstream; the type serializes into a void; keyword of `tl.mechinterp.head_weight_views` (required): Attention module record or address (a module exposing the attention facet vocabulary: `q`/`k`/`v`, head geometry); keyword of `tl.mechinterp.ov_circuit`, `tl.mechinterp.qk_circuit` (required): Attention module record or address, or an already-derived `HeadWeightViews` |
@@ -6689,7 +6689,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `fastlog=` | constructor keyword of `tl.backends.BackendCapabilities` (required): Whether sparse `tl.record` capture is supported |
 | `feature_axis=` | keyword of `tl.mechinterp.ablation_controls` (keyword-only; default `None`): The site axis `direction=` lives on; required with `direction=` |
 | `features=` | keyword of `tl.attribution.deletion_curve` (keyword-only; default `'auto'`): Feature grouping: `"auto"` (default: `"pixels"` for `(N, C, H, W)` inputs, `"tokens"` for `(N, T, D)` inputs, else `"elements"`), `"elements"` (every scalar), `"pixels"` (all channels at one position), `"patches"` (square patches of `patch_size`) or `"tokens"` (all values of ..; keyword of `tl.attribution.insertion_curve` (keyword-only; default `'auto'`): As in `deletion_curve`; `baseline` is the starting input; keyword of `tl.attribution.road_curve` (keyword-only; default `'auto'`): Feature grouping as in `deletion_curve` (default `"auto"`: pixels for images); keyword of `tl.transforms.srp_fidelity_probe` (required): Pilot activations, `(n, ...)` with the stimulus axis leading (flattened per row); `n >= 4` so the RDMs have enough pairs |
-| `feed=` | constructor keyword of `tl.options.EpisodeOptions` (default `'open'`): Join-arm strictness (lane F40c). `"open"` (default) captures across cross-step feed breaks and grades every join in the measured `step_join` envelope; episode-dependent claims refuse across a broken join, everything else stays usable. `"closed"` is the opt-in STRICT arm: the feed is declared .. |
+| `feed=` | constructor keyword of `tl.options.EpisodeOptions` (default `'open'`): Join-arm strictness. `"open"` (default) captures across cross-step feed breaks and grades every join in the measured `step_join` envelope; episode-dependent claims refuse across a broken join, everything else stays usable. `"closed"` is the opt-in STRICT arm: the feed is declared .. |
 | `fetch=` | keyword of `tl.preprocessing.unknown_resolution` (keyword-only; default `None`): Optional fetch disclosure block (attempted / performed / policy / error) from a network-gated adapter |
 | `field_name=` | keyword of `NarrationOptions.is_field_explicit`, `ReplayOptions.is_field_explicit`, `StorageOptions.is_field_explicit`, `VisualizationOptions.is_field_explicit` (required) |
 | `file=` | keyword of `Module.show_call_tree`, `ModuleCall.show_call_tree`, `Trace.show_call_tree` (default `None`): Optional output stream. `None` prints to stdout; keyword of `SummaryReport.print` (default `None`) |
@@ -6709,7 +6709,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `fold_repeats=` | keyword of `Trace.draw` (keyword-only; default `None`): Repeat-fold policy. `None` keeps the default (off for `collapse="none"`, band-pressure folding otherwise), `True` folds every eligible repeated run, `False` disables folding; keyword of `Trace.summary` (keyword-only; default `None`): `"auto"`/`True` fold repeated sibling runs; `False` restores every member; constructor keyword of `tl.options.VisualizationOptions` (optional): Repeat-fold policy. `None` preserves the collapse mode default, `True` folds every eligible run, and `False` disables run folding; keyword of `tl.report.cost_tree` (keyword-only; default `True`): Fold structurally identical sibling subtrees under a strict byte-equal signature, annotated `(xN)` |
 | `font_size=` | keyword of `Trace.draw` (keyword-only; default `None`): Typography and raster resolution overrides; constructor keyword of `tl.options.VisualizationOptions` (optional): Optional Graphviz font size |
 | `force=` | keyword of `tl.io.cleanup_tmp` (keyword-only; default `False`): Whether temp dirs without a `PARTIAL` sentinel, and backup dirs that are not provably redundant, should also be removed; keyword of `tl.recording.cleanup_partial` (keyword-only; default `False`): Whether candidates without `PARTIAL` sentinels may be removed |
-| `forced_tokens=` | constructor keyword of `tl.options.EpisodeOptions` (default `None`): Optional teacher-forced feed declaration: the token sequence the driver feeds instead of model emissions. Declaring it stamps `token_feed="forced"` and `fidelity_basis="forced"` on the ledger header — an explicitly NON-VERIFYING disclosed mode; token fidelity obligations (E-A3) never verify a .. |
+| `forced_tokens=` | constructor keyword of `tl.options.EpisodeOptions` (default `None`): Optional teacher-forced feed declaration: the token sequence the driver feeds instead of model emissions. Declaring it stamps `token_feed="forced"` and `fidelity_basis="forced"` on the ledger header — an explicitly NON-VERIFYING disclosed mode; token fidelity obligations never verify a .. |
 | `formula=` | constructor keyword of `tl.transforms.SrpSizing` (required): Formula id (`"dense_jl_l2_heuristic"`) |
 | `fraction=` | keyword of `tl.top_changed` (keyword-only; default `None`); keyword of `tl.top_fraction` (default `0.01`) |
 | `fractions=` | keyword of `tl.mechinterp.circuit_model_difference`, `tl.mechinterp.circuit_performance_ratio` (keyword-only; default `None`): Keyword-only. The edge fractions of a sequence; `None` means the ten MIB fractions (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1) |
@@ -6737,7 +6737,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `grain=` | keyword of `tl.trackers.watch` (keyword-only; default `None`): `None` (module grain) or `"op"`: per-op activations through the Route-B op-tier collector, behind `allow_forward_wrap=True`. Only `signals=("activations",)`; `inputs=` and `select=` required; only the first forward of a sampled step is observed |
 | `grains=` | keyword of `tl.trackers.build_manifest` (keyword-only; default `None`) |
 | `grammar=` | constructor keyword of `tl.trackers.WatchSession` (required); keyword of `tl.trackers.build_manifest`, `tl.trackers.emission_from_block` (required) |
-| `granularity=` | keyword of `tl.export.netron` (keyword-only; default `'module'`): `"module"` (default, ruling N2): per-call FunctionProto hierarchy, one-click drill-down. `"op"`: every leaf op flat. `"rolled"`: repeated passes merged by rolled identity, variance-gated types |
+| `granularity=` | keyword of `tl.export.netron` (keyword-only; default `'module'`): `"module"` (default): per-call FunctionProto hierarchy, one-click drill-down. `"op"`: every leaf op flat. `"rolled"`: repeated passes merged by rolled identity, variance-gated types |
 | `graph_module=` | keyword of `tl.compat.from_fx` (required): `torch.fx.GraphModule` or graph-module-like object |
 | `graph_overrides=` | keyword of `Bundle.draw` (keyword-only; default `None`); keyword of `Trace.draw` (keyword-only; default `None`): Graphviz attribute overrides for the graph, forward edges, gradient edges and module boxes; constructor keyword of `tl.options.VisualizationOptions` (optional): Graphviz graph-level style overrides |
 | `grid=` | keyword of `tl.transformer.receipt_from_patch_grid` (required): A `PatchGrid` with a `head` axis. Each effect is the row's patched metric minus the grid's `receipts["corrupted_metric"]`: the grid patches clean values into corrupted reruns, so the unpatched corrupted run is the baseline and a cell that changes nothing reads .. |
@@ -7187,7 +7187,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `prepare=` | keyword of `tl.debug.isolated_capture` (keyword-only; default `None`): Optional callable applied to the fresh copy AFTER release and BEFORE tracing (e.g. `lambda m: m.to(torch.float64)` for a reference-dtype run). May return the model or `None` for in-place preparation |
 | `prepared_model=` | keyword of `CaptureBackend.cleanup_failed_forward_session`, `CaptureBackend.cleanup_stopped_forward_session` (required): Backend-prepared model object, or a backend-specific cleanup tuple; keyword of `CaptureBackend.cleanup_model_session` (required) |
 | `preprocessing=` | keyword of `tl.bridge.brain_score.activations_extractor` (required): Brain-Score preprocessing callable mapping stimulus paths to model inputs (for images, typically `load_preprocess_images`); `None` passes stimuli through unchanged; constructor keyword of `tl.types.InputProvenance` (default `None`): Nested preprocessing provenance (e.g. the HF tokenizer record when a prompt string was the gold input). Reserved slots (memo section 7). Unused in wave 1 |
-| `preserved_sections=` | constructor keyword of `tl.Bundle` (keyword-only; default `None`): Load-side carriage for unknown NAMESPACED top-level `bundle.json` sections (loader doctrine leg (c), the C07X amendment): preserved verbatim, disclosed through `preserved_sections`, never executed, and re-emitted on save. User construction normally leaves this `None` |
+| `preserved_sections=` | constructor keyword of `tl.Bundle` (keyword-only; default `None`): Load-side carriage for unknown NAMESPACED top-level `bundle.json` sections (loader doctrine leg (c), the amendment): preserved verbatim, disclosed through `preserved_sections`, never executed, and re-emitted on save. User construction normally leaves this `None` |
 | `pretrained=` | keyword of `tl.compat.from_timm` (keyword-only; default `False`): Whether timm should load pretrained weights |
 | `print_fn=` | constructor keyword of `tl.trackers.HFTrainerWatchCallback`, `tl.trackers.LightningWatchCallback` (keyword-only; optional) |
 | `priority=` | constructor keyword of `tl.backends.BackendSpec` (default `0`): Auto-resolution priority. Equal-priority matches are ambiguous; constructor keyword of `tl.postprocessing.Detector` (required): Sort key. Lower values run first; keyword of `tl.postprocessing.register`, `tl.preprocessing.register` (keyword-only; default `100`): Sort key. Lower values run first |
@@ -7390,7 +7390,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `square=` | keyword of `tl.debug.guess_input_shape` (keyword-only; default `True`): Whether spatial search should use equal side lengths. Non-square exact inference is intentionally not attempted without a future aspect-ratio hint |
 | `stack_by=` | keyword of `Trace.draw` (keyword-only; default `None`): Rank encoding channel (keyword-only; unstable): nodes sharing an annotation value pin to one Graphviz rank, the unrolled-RNN timestep diagram. `True` derives the pass index (unrolled multi-pass ops only); rolled graphs refuse (`stack_by_requires_unrolled`); constructor keyword of `tl.options.VisualizationOptions` (optional): UNSTABLE rank-channel annotation source (`True`/`"auto"`, field, or callable); see `Trace.draw` |
 | `start_axis=` | keyword of `tl.transforms.flatten` (default `1`): First axis to fold; must be `>= 1` (the stimulus axis never folds) |
-| `state=` | keyword of `HFTrainerWatchCallback.on_train_begin`, `HFTrainerWatchCallback.on_train_end` (required); constructor keyword of `tl.options.EpisodeOptions` (default `()`): Declared episode-carried state items beyond the built-in scope (token prefix, KV cache, RNG streams). EVERY declared item is preflighted at DECLARATION time, unconditionally: an item without snapshot/restore support refuses typed (`episode_state_unsnapshotable`) before execution (E-A4) |
+| `state=` | keyword of `HFTrainerWatchCallback.on_train_begin`, `HFTrainerWatchCallback.on_train_end` (required); constructor keyword of `tl.options.EpisodeOptions` (default `()`): Declared episode-carried state items beyond the built-in scope (token prefix, KV cache, RNG streams). EVERY declared item is preflighted at DECLARATION time, unconditionally: an item without snapshot/restore support refuses typed (`episode_state_unsnapshotable`) before execution |
 | `state_complete=` | keyword of `tl.types.register_container` (keyword-only; default `False`): Trusted declaration that the hook pair round-trips ALL per-instance state; without it, runnable saves refuse instances carrying extra `__dict__` state instead of dropping it silently on replay |
 | `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
 | `statistic=` | keyword of `SuperOp.aggregate` (default `'mean'`): Reduction to apply; keyword of `TagGrammar.data`, `TrajectoryStats.compute_stats` (required) |
@@ -7493,7 +7493,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `unit_axis=` | constructor keyword of `tl.stats.Quantile`, `tl.stats.TopK` (keyword-only; default `None`): Axis of each batch that indexes units (axis 0 is the example axis); `None` pools every value; constructor keyword of `tl.stats.UnitTopK` (required): The unit axis the accumulator was built with |
 | `unit_shape=` | constructor keyword of `tl.receptive_field.GradReceptiveField` (keyword-only; default `()`) |
 | `units=` | keyword of `ReceptiveFieldView.of` (required): What `tl.units(site, indices)` takes as `indices`, over this operation's FULL output shape (batch and channel included, unlike `.at()`'s windowed-axis coordinates): a bool mask, or an iterable of coordinate tuples; keyword of `Trace.summary` (keyword-only; default `None`): `"human"` (K/M/G) \| `"raw"` (full digits) in rendered text; keyword of `tl.receptive_field.cross_validate` (keyword-only; default `'center'`): `"center"`, `"corners"`, one complete index, or complete indices |
-| `unknown_relations=` | keyword of `tl.load` (keyword-only; default `'opaque'`): Bundle loader-doctrine policy for member-relation rows of unknown NAMESPACED kinds (the C07X preserve-and-disclose amendment): `"opaque"` (default) loads them preserved, disclosed, unchecked, and never executed; `"refuse"` restores the strict typed refusal. Bare unknown kinds refuse under both .. |
+| `unknown_relations=` | keyword of `tl.load` (keyword-only; default `'opaque'`): Bundle loader-doctrine policy for member-relation rows of unknown NAMESPACED kinds (the preserve-and-disclose amendment): `"opaque"` (default) loads them preserved, disclosed, unchecked, and never executed; `"refuse"` restores the strict typed refusal. Bare unknown kinds refuse under both .. |
 | `unmentioned=` | keyword of `Bundle.vary` (keyword-only; default `None`): `None` (default) demands COMPLETE coverage — a member absent from the mapping refuses typed before any mutation. The explicit `"unchanged"` opts a subset call in; unmentioned members are recorded as unmentioned (distinguishable from explicit `None` identity after load) |
 | `until=` | keyword of `Trace.run_transaction` (keyword-only; default `None`) |
 | `unverified_reason_counts=` | keyword of `ValidationStatus.from_replay_counts`, `ValidationStatus.result`, `ValidationStatus.unverified` (keyword-only; default `None`): Stable reason-code counts for unverified replay decisions |

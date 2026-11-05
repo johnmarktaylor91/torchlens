@@ -1,6 +1,6 @@
 """LIT (Google PAIR Language Interpretability Tool) bridge.
 
-The real two-task bridge (LIT-panel memo, 2026-08-26): ``model()`` wraps a
+The real two-task bridge: ``model()`` wraps a
 LIVE torch model + tokenizer as a genuine ``lit_nlp.api.model.Model`` so LIT's
 editor, projector, metrics, and side-by-side panels drive it over real HTTP.
 TorchLens differentiation: LIT users hand-write per-model wrappers to expose
@@ -8,10 +8,10 @@ one or two fields; this factory generates the wrapper for any torch model
 exposing any traced site, with no ``output_hidden_states`` plumbing and no
 model-code changes.
 
-Import-inert without the peer (the L8 rule): ``import torchlens.bridge.lit``
+Import-inert without the peer: ``import torchlens.bridge.lit``
 never imports ``lit_nlp``; the factory gates at call time. Every public
-spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification
-(memo section 11). The bridge is EXPERIMENTAL: upstream lit-nlp has been
+spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+The bridge is EXPERIMENTAL: upstream lit-nlp has been
 dormant externally since 2024-12 (its typed Model API is exactly why the
 bridge is safe to code against).
 """
@@ -66,7 +66,7 @@ def _validate_net(net: Any) -> nn.Module:
     Raises
     ------
     torchlens._errors.ArgumentTypeError
-        Code ``lit_trace_not_executable`` (memo D2).
+        Code ``lit_trace_not_executable``.
     """
 
     if not isinstance(net, nn.Module):
@@ -75,7 +75,7 @@ def _validate_net(net: Any) -> nn.Module:
 
 
 def _resolve_labels(net: nn.Module, labels: Iterable[str] | None) -> tuple[str, ...]:
-    """Resolve and validate the classifier label vocabulary (memo D19).
+    """Resolve and validate the classifier label vocabulary.
 
     Parameters
     ----------
@@ -147,7 +147,7 @@ def _resolve_salience_layer(net: nn.Module) -> str:
 
 
 def _pin_sites(probe: Any, sites: Any) -> list[_sites.SiteSpec]:
-    """Pin the requested sites on the probe trace (memo D7).
+    """Pin the requested sites on the probe trace.
 
     Parameters
     ----------
@@ -193,7 +193,7 @@ def _candidate_stack(probe: Any) -> tuple[str, ...]:
 
 
 def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
-    """Build the predict-time selective ``save=`` selection (memo D18).
+    """Build the predict-time selective ``save=`` selection.
 
     Saves the pinned sites' modules plus the modules feeding the model output
     (so ``reconstruct_output()`` stays serviceable). Falls back to the
@@ -249,43 +249,43 @@ def model(
     k: int = 10,
     attention: Any = None,
 ) -> Any:
-    """Wrap a live torch model as a real LIT ``Model`` (memo D1-D11, D18-D19).
+    """Wrap a live torch model as a real LIT ``Model``.
 
     Parameters
     ----------
     net:
         The LIVE torch model. A finished Trace refuses: LIT calls ``predict()``
         on NEW inputs (edited text, counterfactuals), which a historical trace
-        cannot execute (memo D2).
+        cannot execute.
     tokenizer:
         The checkpoint's tokenizer. Never mutated; batches are padded manually
         with ``pad_token_id`` (falling back to ``eos_token_id``).
     task:
-        ``"classification"`` or ``"causal_lm"`` (memo D3).
+        ``"classification"`` or ``"causal_lm"``.
     sites:
         Which activations to expose as LIT ``Embeddings`` fields: the
         gate-passed ``"blocks"`` preset, explicit module addresses (optionally
         pass-qualified ``"address:N"``), or ``()`` for none. Required -- the
-        bridge refuses rather than guesses (memo D7; [UI-SPRINT] item 4).
+        bridge refuses rather than guesses.
     pooling:
         ``"mean_masked"`` / ``"first_token"`` / ``"last_unmasked"`` or a
-        callable ``(tensor, attention_mask) -> [batch, features]`` (memo D10).
+        callable ``(tensor, attention_mask) -> [batch, features]``.
     labels:
         Classifier vocabulary override, validated against ``config.id2label``
-        (memo D19; the textattack SST-2 checkpoint ships useless LABEL_0/1).
+        (the textattack SST-2 checkpoint ships useless LABEL_0/1).
     salience:
         Opt-in model-provided ``TokenSalience`` from the torchlens attribution
-        kit (memo D11; ``autorun=False`` is fixed cost semantics).
+        kit (``autorun=False`` is fixed cost semantics).
     name:
         Display name; defaults to the model class name.
     max_minibatch_size:
-        LIT minibatch bound (memo D9: batching is what makes warm_start fast).
+        LIT minibatch bound (batching is what makes warm_start fast).
     max_new_tokens:
         Fixed deterministic-generation length (causal LM only).
     k:
         Next-token candidates per row (causal LM only).
     attention:
-        REFUSED (memo D12): LIT deleted its attention panel upstream; the type
+        REFUSED: LIT deleted its attention panel upstream; the type
         serializes into a void.
 
     Returns
@@ -359,7 +359,7 @@ def dataset(
     labels: Iterable[str] | None = None,
     description: str = "TorchLens LIT bridge dataset.",
 ) -> Any:
-    """Build a tiny native LIT dataset (memo D19).
+    """Build a tiny native LIT dataset.
 
     Parameters
     ----------
@@ -402,7 +402,7 @@ def layout() -> Any:
     Returns
     -------
     Any
-        A ``lit_nlp.api.layout.LitCanonicalLayout`` (memo D16).
+        A ``lit_nlp.api.layout.LitCanonicalLayout``.
 
     Raises
     ------

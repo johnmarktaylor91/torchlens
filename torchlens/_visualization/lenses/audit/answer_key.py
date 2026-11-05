@@ -31,8 +31,7 @@ class KeyQuestion:
     ``channel_semantics``); ``honesty_class`` names the zero-tolerance
     class the question guards, when it guards one. ``accepted`` lists
     ADDITIONAL correct answers -- a tied extremum names every tied label
-    here (a key that demands one label on a tie is battery ambiguity,
-    D03-R7), and naming the complete tie as a collection also scores.
+    here (a key that demands one label on a tie is battery ambiguity), and naming the complete tie as a collection also scores.
     """
 
     id: str
@@ -78,7 +77,7 @@ def _canonical_display_labels(labels: Any) -> list[str]:
 
     The nonfinite channel keys BOTH the pass-qualified ``label:N`` and the
     bare layer label per op; a key packing both spellings into one
-    set-equality list is unanswerable -- the image prints one (D03-R7).
+    set-equality list is unanswerable -- the image prints one.
     The bare spelling wins where both are present; a genuinely distinct
     pass spelling (bare stem absent) is kept as-is.
     """
@@ -96,7 +95,7 @@ def _canonical_display_labels(labels: Any) -> list[str]:
 def _extrema_questions(values: dict[str, float]) -> list[KeyQuestion]:
     """The extrema/ordinal probe family over the resolved channel values.
 
-    A tied extremum accepts EVERY tied label (D03-R7: a key that demands
+    A tied extremum accepts EVERY tied label (a key that demands
     one label on a tie is battery ambiguity, not an evaluator error);
     distractors never name a tied label.
     """
@@ -140,7 +139,7 @@ def _extrema_questions(values: dict[str, float]) -> list[KeyQuestion]:
 
 
 def _sentinel_probe() -> KeyQuestion:
-    """The channel-semantics probe (D03-R6).
+    """The channel-semantics probe.
 
     The ONE question a known-bad control can fail: the fill of a sentinel
     render is dishonest by construction, so the machine answer is the
@@ -246,7 +245,7 @@ def generate_answer_key(
     colour channel is dishonest BY CONSTRUCTION) and mints the
     channel-semantics probe that lets the control FAIL: without it the
     sentinel's only scoreable probes never touch the bad channel and the
-    battery cannot separate its own anchors (D03-R6). The probe is still
+    battery cannot separate its own anchors. The probe is still
     machine-generated -- the flag states how the artifact was constructed,
     never a hand-authored answer.
     """

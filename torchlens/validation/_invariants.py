@@ -204,7 +204,7 @@ _RAW_LABEL_BEARING_SCALAR_FIELDS = ("buffer_source", "module", "atomic_module_ca
 # ``parent_arg_positions`` holds labels as KEYS. Both are persisted KEEP and
 # relabeled, but the list-field scan iterates dict keys only and neither was
 # rostered, so they were structurally unscanned -- the exact class the roster
-# was built to stop (p2 #13 / R08). The scan checks keys AND value strings.
+# was built to stop. The scan checks keys AND value strings.
 _RAW_LABEL_BEARING_DICT_FIELDS = ("conditional_elif_children", "parent_arg_positions")
 
 
@@ -359,7 +359,7 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
         _check_loop_detection_invariants,
         "torch",
     ),
-    # Site-key tripwires I-S1/I-S2/I-S3' (L1 grouping core). All backends:
+    # Site-key tripwires I-S1/I-S2/I-S3' (grouping core). All backends:
     # every producer mints keys; legacy keyless artifacts are out of the
     # declared domain (presence guard at the invariant's birth).
     MetadataInvariantContract(

@@ -7,7 +7,7 @@ on rolled views (``total_func_duration``), with the aggregation line
 ("total across N passes") mandatory in the rolled case and a typed refusal
 when the resolved member has zero coverage (themes memo section 2 item 7).
 
-Measured necessity (themes memo M11): the naive pairing ships a 0%-coverage
+Measured necessity (themes): the naive pairing ships a 0%-coverage
 graph under a populated legend in one direction and a silent unit drop in
 the other; two of the four view x member cells were wrong before this
 module existed.

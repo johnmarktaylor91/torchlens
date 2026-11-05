@@ -3,7 +3,7 @@
 Extracted from ``user_funcs`` by the wave-0 governance sweep (file-size
 ratchet): the ONE entry chokepoint that refuses option combinations and
 value-payload requests a structure-only capture cannot honor. All codes
-here are DOCUMENTED-UNSTABLE pending naming-session/S2 ratification.
+here are DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _enforce_structure_only_entry_contract(
     payloads, by contract, so the non-explicit ``layers_to_save`` default
     degrades to metadata-only rather than silently recording values.
 
-    All codes here are DOCUMENTED-UNSTABLE pending naming-session/S2
+    All codes here are DOCUMENTED-UNSTABLE pending naming-session
     ratification.
 
     Returns

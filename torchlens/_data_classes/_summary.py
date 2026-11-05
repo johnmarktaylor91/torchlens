@@ -5,7 +5,7 @@ from typing import Any
 import torch
 
 DISPLAY_MAX_DEPTH = 50
-"""Display-walk nesting ceiling (r-b4 R27-5).
+"""Display-walk nesting ceiling.
 
 Display paths must be TOTAL on arbitrary user-shaped data: a self-referential
 or absurdly deep captured argument renders a bounded ``<cycle>`` /
@@ -39,7 +39,7 @@ def format_call_arg(value: Any, _depth: int = 0, _in_progress: set[int] | None =
     from .._ir.workspaces import ReleasedTensorStub  # deferred: layer lint (no eager upward import)
 
     if isinstance(value, ReleasedTensorStub):
-        # F20 W1a: a released module-arg payload renders exactly like the
+        # W1a: a released module-arg payload renders exactly like the
         # live tensor it replaced -- the summary is shape/dtype-only.
         return f"Tensor(shape={tuple(value.shape)}, dtype={value.dtype})"
     if isinstance(value, (bool, int, float, str)) or value is None:

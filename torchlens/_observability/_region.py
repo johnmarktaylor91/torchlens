@@ -1,4 +1,4 @@
-"""``region()``: user regions on the one span stack (torchnative W1.2).
+"""``region()``: user regions on the one span stack (torchnative.2).
 
 A region is a named user bracket riding the SAME span registry as every
 other altitude -- never a parallel stack. It carries occurrence and parent

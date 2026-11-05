@@ -466,7 +466,7 @@ def _store_authenticated_capture_cache(trace: Trace, cache_path: Path, secret: b
         return False
     except (pickle.PickleError, TypeError, AttributeError, OSError) as exc:
         # A performance cache must degrade to "not cached", never annihilate a
-        # capture that already succeeded (b6 R25, 3rd round): an unpicklable
+        # capture that already succeeded (3rd round): an unpicklable
         # Op.func -- e.g. a python-level Tensor method captured from a stock
         # nn.MultiheadAttention -- raised the bare PicklingError out of
         # tl.trace(..., cache=True) itself. Disk failures (ENOSPC) degrade

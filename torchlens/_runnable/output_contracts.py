@@ -128,7 +128,7 @@ def _reconstruct_live_output(trace: Any) -> tuple[Any, bool]:
 
 
 def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
-    """Rebuild the refreshed live output and diagnose any loss of fidelity (H1/H2).
+    """Rebuild the refreshed live output and diagnose any loss of fidelity.
 
     Arms, in order:
 
@@ -139,8 +139,7 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
        a leaf the contract cannot represent -- settled typed with the
        ``use_cache=False`` / ``return_dict=False`` remedy instead of the bare
        "Not enough leaves" ``ValueError`` the rebuild would raise.
-    2. A genuine single bare-tensor root (gated on the FRESH refresh proof, r39
-       corr2_5) is returned as-is.
+    2. A genuine single bare-tensor root (gated on the FRESH refresh proof) is returned as-is.
     3. Output leaves carrying container PATHS but no recorded spec are a declared
        tuple/dict/ModelOutput whose contract the default capture did not persist:
        best-effort ``_container_from_paths`` approximation, reason
@@ -219,8 +218,8 @@ def _diagnose_live_output(trace: Any) -> LiveOutputDiagnosis:
         has_spec = getattr(op, "container_spec", None) is not None
         has_path = bool(getattr(op, "container_path", ()) or ())
         if not has_spec and not has_path and _fresh_bare_tensor_root(trace):
-            # Genuine single bare-tensor model output: no container to reconstruct. r39
-            # corr2_5: gated on the FRESH refresh proof's ``bare_tensor_root`` fact -- an
+            # Genuine single bare-tensor model output: no container to reconstruct.
+            # Gated on the FRESH refresh proof's ``bare_tensor_root`` fact -- an
             # opaque set/frozenset/custom container the traversal fell back on produces the
             # SAME "one leaf, no spec, no path" signature, so without this positive proof a
             # wrong bare-tensor object would be blessed faithful (and a multi-tensor set would
@@ -323,7 +322,7 @@ def _call_witness_checks(
 ) -> tuple[ContractCheck, ...]:
     """Compare scalar-bool and loop witnesses immediately after their call.
 
-    r71 A2: the call's OWNER-RECORD ``control_obligations`` are the required check
+    The call's OWNER-RECORD ``control_obligations`` are the required check
     domain (replay-consumed structure, never the witness stream). Every obligation
     demands its exact same-kind witness; a missing witness whose obligation carries
     no typed predicate gap fails closed as a check (belt behind the parse-time
@@ -431,7 +430,7 @@ def _post_execution_contract_checks(
             # staleness check, not against runtime container structure.
             continue
         if _is_state_metadata_fact_witness(witness):
-            # r65 F-1: declared capture-time state-metadata facts (requires_grad /
+            # declared capture-time state-metadata facts (requires_grad /
             # grad_fn presence) are REPRODUCED by run preparation (the recorded bit is
             # applied to the staged slot), not compared against runtime container
             # structure.
@@ -444,7 +443,7 @@ def _post_execution_contract_checks(
         if witness.kind is ControlWitnessKind.CONDITIONAL_ARM_ENTRY:
             checks.append(_conditional_arm_check(witness, fork))
         elif witness.site_label.startswith(_INPUT_STRUCTURE_SITE_PREFIX):
-            # r67 C2: per-site input-boundary structure facts compare against a runtime
+            # Per-site input-boundary structure facts compare against a runtime
             # snapshot built by the SAME spine function -- kind, exact class, child
             # schema, ordered codec keys, arity, and the symmetric instance-state proof.
             if input_structure_positions is None:
@@ -482,7 +481,7 @@ def _post_execution_contract_checks(
                     affected_op_labels=(witness.site_label,),
                 )
             )
-    # r71 A2 belt: every owner-record arm-entry dependency edge must own its witness
+    # A2 belt: every owner-record arm-entry dependency edge must own its witness
     # (parse enforces the equality; a descriptor that somehow reaches execution with
     # an unwitnessed edge fails closed as a check, never a silently skipped arm).
     from . import control_dependency_site_label
@@ -533,10 +532,10 @@ def _conditional_arm_check(witness: ControlWitness, fork: Any) -> ContractCheck:
 
 
 def _input_structure_positions(descriptor: SparseRunDescriptor) -> set[Any]:
-    """Return the required input-site set for structure-check site selection (r69 A).
+    """Return the required input-site set for structure-check site selection.
 
     Consumes the parse-validated descriptor-native inventory -- NEVER the surviving
-    ``input_structure`` witnesses (the r68 secA-F1 lane re-derived positions from the
+    ``input_structure`` witnesses (the lane re-derived positions from the
     stream being validated, so a stripped family restored weaker semantics). A belt
     cross-checks the surviving facts against the inventory and fails closed typed on
     any deficit that somehow reached execution.
@@ -571,13 +570,13 @@ def _input_structure_positions(descriptor: SparseRunDescriptor) -> set[Any]:
 def _input_structure_witness_check(
     witness: ControlWitness, *, inputs: Any, all_positions: set[Any]
 ) -> ContractCheck:
-    """Compare one persisted input-boundary structure fact with the runtime site (r67 C2).
+    """Compare one persisted input-boundary structure fact with the runtime site.
 
     The runtime snapshot comes from the SAME spine function that produced the persisted
     fact, so capture and runtime can never diverge in vocabulary. Any node mismatch --
-    kind swap at any depth (hon1-F2a), exact-class swap (free-F3/hon1-F2b), empty-
-    dataclass arity (free-F2/hon1-F2c), ordered-key or grammar-key drift (hon1-F1),
-    registered schema drift (corr1-3) -- fails the check (``input_tree_mismatch``
+    kind swap at any depth, exact-class swap, empty-
+    dataclass arity, ordered-key or grammar-key drift,
+    registered schema drift -- fails the check (``input_tree_mismatch``
     class), as does RUNTIME-ADDED undeclared instance state (the symmetric bind-side
     proof: a runtime snapshot refusal can never pass).
     """
@@ -701,7 +700,7 @@ def _raw_runtime_output(
 
 
 def _registered_flatten_children(value: Any) -> list[Any] | None:
-    """Return a registered container's flatten children, else ``None`` (r67 C2, corr1-3)."""
+    """Return a registered container's flatten children, else ``None``."""
 
     if isinstance(value, (torch.Tensor, Mapping, list, tuple, str, bytes)) or value is None:
         return None
@@ -715,7 +714,7 @@ def _registered_flatten_children(value: Any) -> list[Any] | None:
 
 
 def _codec_component(key: Any) -> str | int | None:
-    """Encode one runtime mapping key through the canonical codec, or ``None`` (r67 C2)."""
+    """Encode one runtime mapping key through the canonical codec, or ``None``."""
 
     try:
         return encode_mapping_key(key)

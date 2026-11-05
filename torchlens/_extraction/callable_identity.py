@@ -1,4 +1,4 @@
-"""Callable identity for extraction resume (extract memo D8 + item 15).
+"""Callable identity for extraction resume.
 
 The classifier digests everything a Python callable can OBSERVE — bytecode,
 signature facts, default values BY VALUE, closure cells BY VALUE, and every
@@ -20,9 +20,9 @@ a CYCLE guard (an over-bound container or cycle DEMOTES to partial and is
 named — never ``RecursionError``); set/frozenset demote (unordered); pure
 modules fold ``module@version`` for an allowlisted namespace; functions and
 ``functools.partial`` recurse; bound methods digest ``__self__`` FIRST
-(``nn.Module`` via the D6 state-digest route, other instances via sorted
+(``nn.Module`` via the state-digest route, other instances via sorted
 ``vars()``), then ``__func__``; ``nn.Module`` callables fold
-``type(fn).forward`` plus the D6 digest of their own state; callable objects
+``type(fn).forward`` plus the digest of their own state; callable objects
 fold ``type(fn).__call__`` plus sorted ``vars(fn)``.
 
 The launch pure-module allowlist is exactly the tested set (stdlib-pure
@@ -70,7 +70,7 @@ CALLABLE_IDENTITY_ALGORITHM_ID = "tl_callable_identity_blake2b"
 CALLABLE_IDENTITY_ALGORITHM_VERSION = 2
 
 #: Launch pure-module allowlist: stdlib-pure namespaces plus torch + numpy —
-#: exactly the tested set (extract D8) — plus torchlens itself (the
+#: exactly the tested set — plus torchlens itself (the
 #: intervention-spec precedent: TorchLens-owned ``torchlens.*`` callables
 #: always resolve; the package version rides every record). Growth is
 #: post-launch repo-owner curation through :func:`register_pure_module`.
@@ -91,7 +91,7 @@ _GLOBAL_LOAD_OPS = frozenset({"LOAD_GLOBAL", "LOAD_NAME", "LOAD_DEREF"})
 
 
 def register_pure_module(name: str) -> None:
-    """Register a module namespace as pure for callable classification (D8).
+    """Register a module namespace as pure for callable classification.
 
     Registration is an AUDITED ASSERTION, not an invisible trust grant: the
     module name and its installed version are recorded in every
@@ -281,7 +281,7 @@ def _fold_leaf(fold: _Fold, value: Any, path: str) -> bool:
 
 
 def _fold_container(fold: _Fold, value: Any, path: str, depth: int) -> None:
-    """Fold one ordered container with the size/depth/cycle bounds (D8).
+    """Fold one ordered container with the size/depth/cycle bounds.
 
     Parameters
     ----------
@@ -318,7 +318,7 @@ def _fold_container(fold: _Fold, value: Any, path: str, depth: int) -> None:
 
 
 def _fold_value(fold: _Fold, value: Any, path: str, depth: int) -> None:
-    """Fold one observed value under the D8 value rules.
+    """Fold one observed value under the value rules.
 
     Parameters
     ----------
@@ -351,7 +351,7 @@ def _fold_value(fold: _Fold, value: Any, path: str, depth: int) -> None:
 
 
 def _fold_callable_like(fold: _Fold, value: Any, path: str, depth: int) -> bool:
-    """Fold one callable-shaped value through its matching D8 rule.
+    """Fold one callable-shaped value through its matching rule.
 
     Parameters
     ----------
@@ -433,7 +433,7 @@ def _fold_namespace_identity(fold: _Fold, value: Any, path: str) -> bool:
 
 
 def _fold_module_callable(fold: _Fold, module: nn.Module, path: str, depth: int) -> None:
-    """Fold an ``nn.Module`` value: forward code plus the D6 state digest.
+    """Fold an ``nn.Module`` value: forward code plus the state digest.
 
     Parameters
     ----------
@@ -460,7 +460,7 @@ def _fold_module_callable(fold: _Fold, module: nn.Module, path: str, depth: int)
 
 
 def _fold_bound_method(fold: _Fold, method: types.MethodType, path: str, depth: int) -> None:
-    """Fold a bound method: ``__self__`` FIRST, then ``__func__`` (D8).
+    """Fold a bound method: ``__self__`` FIRST, then ``__func__``.
 
     Two bound methods differing only in instance state must separate, so the
     receiver is digested before the code object.
@@ -528,7 +528,7 @@ def _fold_callable_object(fold: _Fold, obj: Any, path: str, depth: int) -> None:
 
 
 def _loaded_global_names(code: types.CodeType) -> list[str]:
-    """Return the names the bytecode actually loads as globals (D8).
+    """Return the names the bytecode actually loads as globals.
 
     ``dis.get_instructions`` over LOAD_GLOBAL / LOAD_NAME — not every
     ``co_names`` entry, which falsely refuses ``t.float()`` against the
@@ -561,7 +561,7 @@ def _fold_code_object(fold: _Fold, code: types.CodeType) -> None:
     (generator expression, nested lambda, comprehension on Python < 3.12)
     reprs as ``<code object <genexpr> at 0x7f...>`` -- an ADDRESS -- so the
     digest changed on every process and every resume with such a transform
-    refused ``extraction_resume_callable_mismatch`` (audit 2.10c). Nested
+    refused ``extraction_resume_callable_mismatch``. Nested
     code objects fold structurally instead; only address-free consts repr.
 
     Parameters
@@ -684,7 +684,7 @@ def _fold_callable(fold: _Fold, fn: Any, path: str, depth: int) -> None:
 
 
 def classify_callable(fn: Any, *, slot: str = "callable") -> dict[str, Any]:
-    """Classify one user callable for the extraction resume signature (D8).
+    """Classify one user callable for the extraction resume signature.
 
     Parameters
     ----------

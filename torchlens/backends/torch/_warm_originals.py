@@ -3,8 +3,8 @@
 Torch memoizes some tables of callables resolved from the torch namespace at
 first call (``torch.utils._device._device_constructors``, dynamo's rule
 maps). ``wrappers._warm_derived_identity_caches`` warms them before wrappers
-are installed so they stay keyed by the ORIGINALS for the whole wrapped epoch
-(B8-4, R56). A decoration retry runs that warm while the slots a failed pass
+are installed so they stay keyed by the ORIGINALS for the whole wrapped epoch.
+A decoration retry runs that warm while the slots a failed pass
 already replaced still hold torchlens wrappers, so the rebuilt table holds
 wrappers and ``DeviceContext.__torch_function__``, which receives originals,
 stops injecting the device. :func:`originals_exposed` puts the recorded

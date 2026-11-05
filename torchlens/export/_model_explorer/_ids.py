@@ -1,4 +1,4 @@
-"""Node-id minting and component escaping (memo D1 escaping, D2 id rule).
+"""Node-id minting and component escaping.
 
 ONE id rule for every graph product: ``site_key`` + ``"|"`` + the 1-based
 graph-local occurrence ordinal, appended ALWAYS (including ordinal 1). Every
@@ -18,13 +18,13 @@ from ..._utils._record_group_table import record_member
 
 __tl_layer__ = "L8"
 
-#: Reserved prefix for nodes without a mintable site key (memo D2): visibly
+#: Reserved prefix for nodes without a mintable site key: visibly
 #: prefixed, stamped ``id_fidelity=legacy`` in graph attrs, and the ONLY
 #: nodes (with guarded non-identical-structure joins) that ever appear in
 #: sync ``mappingEntries``.
 LEGACY_ID_PREFIX = "legacy|"
 
-#: Reserved prefix for step-boundary proxy nodes (memo D12): can never
+#: Reserved prefix for step-boundary proxy nodes: can never
 #: collide with a real id in their own or the adjacent pane.
 PROXY_ID_PREFIX = "proxy|"
 
@@ -34,7 +34,7 @@ _ESCAPE_CHARS = {"%", "/", "|"}
 def escape_component(component: str) -> str:
     """Percent-encode ``%``, ``/``, ``|``, and control bytes in one component.
 
-    Reversible per memo D1 (upstream slash-escaping PR #537 died unmerged,
+    Reversible (upstream slash-escaping PR #537 died unmerged,
     so the payload self-defends). Applied to namespace path components and
     legacy id payloads; captured site keys arrive already escaped.
     """

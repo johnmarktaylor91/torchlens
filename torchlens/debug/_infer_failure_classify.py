@@ -1,7 +1,7 @@
-"""Evidence-led probe-diary failure classification (quickstart memo D10).
+"""Evidence-led probe-diary failure classification.
 
-Extracted from ``_infer_input_shape._run_search`` (god-file ratchet R43): the
-CLIP-class misdiagnosis fix. A geometric reason may NEVER be the fallback for
+Extracted from ``_infer_input_shape._run_search`` (split out to keep
+that file small): the CLIP-class misdiagnosis fix. A geometric reason may NEVER be the fallback for
 probes that all died non-geometrically -- multi-input signatures get their own
 reason quoting the probe exception, and other all-non-geometric diaries stay
 honest as non-shape blockers.
@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 #: Probe-exception signatures of a forward that needs MORE inputs than the
-#: one tensor the search synthesizes (quickstart memo D10: these diaries must
+#: one tensor the search synthesizes (these diaries must
 #: classify multi_input_required, never fall through to a geometric reason).
 _MULTI_INPUT_RE = re.compile(
     r"(you have to specify|missing \d+ required (?:positional|keyword-only) argument"

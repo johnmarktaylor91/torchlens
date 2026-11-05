@@ -1,17 +1,17 @@
-"""The token-attribution two-liner (attrib memo D22-D29).
+"""The token-attribution two-liner.
 
 .. code-block:: python
 
     result = tl.attribution.text(model, tokenizer, "The Eiffel Tower is in", target=" Paris")
     result.show()
 
-Mechanism (D22): input Integrated Gradients through HF ``inputs_embeds`` --
+Mechanism: input Integrated Gradients through HF ``inputs_embeds`` --
 measured bit-identical to embedding-output replacement -- with positions,
 attention masks, and ALL integer inputs held fixed; the signed attribution is
 sum-reduced over the embedding width so per-token scores retain completeness
 accounting.
 
-``baseline="auto"`` is TASK-AWARE (D23) because the measurement forced it:
+``baseline="auto"`` is TASK-AWARE because the measurement forced it:
 uniform zeros converges to 0.001% on gpt2 and NEVER converges on bert out to
 n=1024, while pad + special-token scaffolding converges monotonically to
 0.097%. Decoder-only causal LMs zero all prompt-token embeddings; encoder
@@ -21,17 +21,17 @@ content tokens while KEEPING special tokens at their true embeddings
 token, or special mask falls back to zeros-all with a NAMED disclosure --
 a missing pad token is never guessed.
 
-``num_steps=128`` is the fixed default (D24, the recorded 2-1);
+``num_steps=128`` is the fixed default;
 ``num_steps="auto"`` opts into the dual-criterion ladder 64 -> 128 -> 256 ->
 512, stopping ONLY when residual_rel <= 1% AND max(L1, L2) successive-grid
 change <= 1% (residual-only stopping is measured-unsound and may never
 return; 5%/5% falsely certifies -- never ship 5%). Rank stability is BANNED
-as a convergence signal (D25): top-k agreement goes stable exactly where the
-certificate is garbage. ``converged=False`` is a primary path (D26) with
+as a convergence signal: top-k agreement goes stable exactly where the
+certificate is garbage. ``converged=False`` is a primary path with
 first-class rendered treatment.
 
 Rendering: tviz owns the one colored-token renderer; this module ships the
-renderer-neutral typed payload and an ESCAPED-TABLE fallback only (D28).
+renderer-neutral typed payload and an ESCAPED-TABLE fallback only.
 """
 
 from __future__ import annotations
@@ -82,7 +82,7 @@ class _LogitsOnly(Module):
 
 
 def _detect_family(model: Module) -> tuple[str, str]:
-    """Classify the model's task family for the auto baseline (D23).
+    """Classify the model's task family for the auto baseline.
 
     Parameters
     ----------
@@ -148,7 +148,7 @@ def _resolve_baseline(
         The tokenizer's pad id, or ``None``.
     keep_special_tokens
         Whether pad-style baselines scaffold special tokens at their true
-        embeddings (the only converging encoder baseline; D23).
+        embeddings (the only converging encoder baseline).
 
     Returns
     -------
@@ -282,7 +282,7 @@ def _resolve_target(
     attention_mask: Tensor,
     family: str,
 ) -> tuple[Any, str, int | None]:
-    """Resolve the target spelling into a scalarizer + disclosure (D29).
+    """Resolve the target spelling into a scalarizer + disclosure.
 
     Parameters
     ----------
@@ -457,7 +457,7 @@ def _resolve_target(
 
 @dataclass(frozen=True)
 class TokenAttributionPayload:
-    """Renderer-neutral token-score payload (the tviz contract, D28).
+    """Renderer-neutral token-score payload (the tviz contract).
 
     Attributes
     ----------
@@ -542,7 +542,7 @@ class TokenAttributionPayload:
 
 @dataclass(frozen=True)
 class TokenAttribution:
-    """Frozen result of the token-attribution two-liner (attrib memo D28).
+    """Frozen result of the token-attribution two-liner.
 
     Attributes
     ----------
@@ -647,7 +647,7 @@ class TokenAttribution:
     _payload_cache: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
 
     def footer_lines(self) -> list[str]:
-        """Build the mandatory disclosure footer (D26-D28)."""
+        """Build the mandatory disclosure footer."""
 
         lines = [
             f"target: {self.target_repr}",
@@ -724,7 +724,7 @@ class TokenAttribution:
 
 
 def _display_tokens(raw_tokens: list[str]) -> list[str]:
-    """Clean tokenizer markers per token WITHOUT merging wordpieces (D28).
+    """Clean tokenizer markers per token WITHOUT merging wordpieces.
 
     Parameters
     ----------
@@ -752,8 +752,8 @@ def _dual_criterion_met(residual_rel: float, stability: float | None) -> bool:
     Residual-only stopping is measured-unsound and may never return (the
     V17/T1 case: bert/zeros reads 1.80% at n=16 by sign-cancellation luck and
     26.7% one grid later; bert/pad-plain passes a 5% criterion at n=64 and
-    reads 9.8% at n=256). Thresholds may TIGHTEN, never loosen (release gate,
-    memo D24). ``stability`` is ``None`` on the first ladder grid -- one grid
+    reads 9.8% at n=256). Thresholds may TIGHTEN, never loosen (release gate).
+    ``stability`` is ``None`` on the first ladder grid -- one grid
     can never certify, because stability needs two grids by construction.
 
     Parameters
@@ -775,7 +775,7 @@ def _dual_criterion_met(residual_rel: float, stability: float | None) -> bool:
 
 
 def _stability_change(previous: Tensor, current: Tensor) -> float:
-    """Successive-grid change: max of relative L1 and L2 norms (D24).
+    """Successive-grid change: max of relative L1 and L2 norms.
 
     The gate is ``max(L1, L2)`` because the two norms give OPPOSITE answers
     at a threshold on real cases (L2 sees one token moving, L1 sees diffuse
@@ -856,7 +856,7 @@ def text(
     keep_special_tokens: bool = True,
     max_length: int | None = None,
 ) -> TokenAttribution:
-    """Per-token attribution for a text input: the two-liner (memo D22-D28).
+    """Per-token attribution for a text input: the two-liner.
 
     Parameters
     ----------
@@ -1082,8 +1082,8 @@ def text(
                 stability = _stability_change(previous_scores, scores_now)
                 grid_pair = (grids_evaluated[-2], grid)
                 # Stop ONLY on the DUAL criterion: residual AND stability
-                # (residual-only stopping is measured-unsound, D24; rank
-                # stability is banned outright, D25).
+                # (residual-only stopping is measured-unsound; rank
+                # stability is banned outright).
                 if _dual_criterion_met(residuals[-1], stability):
                     converged = True
                     break
@@ -1108,7 +1108,7 @@ def text(
     scores = final_values.sum(dim=-1)
     completeness = _completeness_extra(final_extra["attribution_sum"], final_extra["target_delta"])
     # Explicit baseline spellings remain available and ALL warn when the
-    # achieved residual exceeds the tolerance (D23) -- the user chose the
+    # achieved residual exceeds the tolerance -- the user chose the
     # baseline, so the certificate shortfall is disclosed loudly.
     if baseline != "auto" and completeness["residual_rel"] > _RESIDUAL_TOLERANCE:
         warnings.warn(

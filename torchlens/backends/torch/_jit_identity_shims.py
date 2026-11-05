@@ -77,7 +77,7 @@ def _make_jit_entry_shim(original_entry: Callable[..., Any]) -> Callable[..., An
         Keyed on LEDGER IDENTITY, never on ``__tl_*`` attribute presence: a
         foreign ``@functools.wraps(F.relu)`` wrapper inherits the torchlens
         ``__dict__`` markers, and an attribute-keyed check would swap it for the
-        pristine original and drop the foreign behavior (b8-fable R56).
+        pristine original and drop the foreign behavior.
         """
 
         original = _state._decorated_to_orig.get(id(obj))

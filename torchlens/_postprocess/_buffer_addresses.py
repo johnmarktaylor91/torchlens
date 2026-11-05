@@ -98,7 +98,7 @@ def _buffer_addresses_by_label(
     for event in source_buffer_events:
         if event.label_raw in by_label:
             continue
-        # r83 C2: the address the CAPTURE recorded for this event is
+        # the address the CAPTURE recorded for this event is
         # AUTHORITATIVE. The value/shape ladder below exists only to fill a
         # genuinely MISSING (anonymous) address; it must never OVERRIDE a
         # recorded one.
@@ -142,7 +142,7 @@ def _buffer_addresses_by_label(
 
 
 def _recorded_buffer_address(event: OpEvent) -> str | None:
-    """Return the buffer address the CAPTURE recorded for a source event (r83 C2).
+    """Return the buffer address the CAPTURE recorded for a source event.
 
     Source-buffer events are built with ``equivalence_class =
     f"buffer_{address}"`` plus the canonical module-stack suffix appended by
@@ -287,7 +287,7 @@ def _tensor_values_match(left: object, right: object) -> bool:
     if not isinstance(left, torch.Tensor) or not isinstance(right, torch.Tensor):
         return False
     if left.is_meta or right.is_meta:
-        # W1-FAB (weightsfree memo D6): value equality is unobservable on the
+        # Value equality is unobservable on the
         # meta substrate (aten::equal has no meta kernel); an UNKNOWN verdict
         # never claims a match — the address ladder simply does not fill.
         return False

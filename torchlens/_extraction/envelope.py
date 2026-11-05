@@ -1,4 +1,4 @@
-"""The typed batch envelope and the collate door (extract memo D9 + item 5).
+"""The typed batch envelope and the collate door.
 
 Every batch that reaches the model travels as ONE :class:`BatchEnvelope`:
 positional args, kwargs, the INPUT-DERIVED row count, the auxiliary
@@ -45,7 +45,7 @@ __all__ = [
 
 @dataclasses.dataclass(frozen=True)
 class BatchEnvelope:
-    """One collated batch, typed (extract D9).
+    """One collated batch, typed.
 
     Attributes
     ----------
@@ -55,7 +55,7 @@ class BatchEnvelope:
         Keyword arguments for ``model.forward``.
     num_rows:
         INPUT-derived number of stimulus rows in this batch — the row-truth
-        every selected output is validated against (extract D13).
+        every selected output is validated against.
     mask:
         The batch's two-dimensional attention mask when the collator
         supplied one (nonzero = token present); ``None`` otherwise.
@@ -152,7 +152,7 @@ def coerce_envelope(
     source: str,
     batch_index: int,
 ) -> BatchEnvelope:
-    """Coerce a collate result into the ONE typed envelope (extract D9).
+    """Coerce a collate result into the ONE typed envelope.
 
     Parameters
     ----------
@@ -304,7 +304,7 @@ def _envelope_from_sequence(
 
 
 def resolve_tokenizer_once(model: nn.Module, run_state: dict[str, Any]) -> tuple[Any, str]:
-    """Resolve the run's tokenizer ONCE, in the D9 precedence order.
+    """Resolve the run's tokenizer ONCE, in the precedence order.
 
     Order: caller-supplied (recorded by :func:`hf_collate` into
     ``run_state``), attached (``model.to_tokens`` / callable
@@ -405,7 +405,7 @@ def _tokenizer_identity(tokenizer: Any) -> dict[str, Any]:
 
 
 def _require_pad_token(tokenizer: Any, pad_token: str | None, disclosure: dict[str, Any]) -> None:
-    """Enforce the D9 pad-token rule before a padded batch tokenization.
+    """Enforce the pad-token rule before a padded batch tokenization.
 
     Parameters
     ----------
@@ -470,7 +470,7 @@ def _tokenize_batch(
     pad_token: str | None,
     tokenizer_kwargs: Mapping[str, Any] | None,
 ) -> BatchEnvelope:
-    """Tokenize one text batch into a full-mapping envelope (extract D9).
+    """Tokenize one text batch into a full-mapping envelope.
 
     Parameters
     ----------
@@ -524,7 +524,7 @@ def hf_collate(
     pad_token: str | None = None,
     **tokenizer_kwargs: Any,
 ) -> Callable[[list[Any], nn.Module, dict[str, Any]], BatchEnvelope]:
-    """Build the HF text collate helper (extract D9; DOCUMENTED-UNSTABLE).
+    """Build the HF text collate helper (DOCUMENTED-UNSTABLE).
 
     Parameters
     ----------
@@ -600,7 +600,7 @@ def _legacy_collate_items(items: list[Any]) -> Any:
 
 
 def default_collate(items: list[Any], model: nn.Module, run_state: dict[str, Any]) -> BatchEnvelope:
-    """The engine's default collation (extract D9 defaults).
+    """The engine's default collation (extract defaults).
 
     Tensor items stack; tuple/list/dict items collate recursively with the
     historical positional/kwargs meaning; STRING items route through the

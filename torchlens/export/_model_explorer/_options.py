@@ -3,7 +3,7 @@
 The public doors (``to_model_explorer_dict``, ``tl.export.model_explorer``)
 keep the flat keyword spellings as their API and construct ONE frozen record
 from them; the collection/episode/file builders thread the record instead of
-tunneling nine scalars per call (the C06 WatchSettings precedent).
+tunneling nine scalars per call (as the watch settings record does).
 """
 
 from __future__ import annotations

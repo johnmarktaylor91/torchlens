@@ -27,7 +27,7 @@ __all__ = [
 
 
 class EpisodeErrorCode(str, Enum):
-    """Frozen episode/bundle-relation refusal codes (S6/S7 contracts)."""
+    """Frozen episode/bundle-relation refusal codes."""
 
     #: Ledger geometry violates the monotone prefix law, a coherence arm, or
     #: the value-mode token presence rule; the outcome derivation degrades
@@ -40,17 +40,17 @@ class EpisodeErrorCode(str, Enum):
     EPISODE_STATE_UNSNAPSHOTABLE = "episode_state_unsnapshotable"
 
     #: An episode ledger is present on a capture that carries no episode
-    #: declaration (S2 combination table: ILLEGAL, refuse at load).
+    #: declaration (an illegal combination: refuse at load).
     EPISODE_LEDGER_WITHOUT_DECLARATION = "episode_ledger_without_declaration"
 
-    #: A structure-only episode ledger carries token payloads (S7 presence
-    #: rule, structure-only direction).
+    #: A structure-only episode ledger carries token payloads (the token
+    #: presence rule, structure-only direction).
     EPISODE_LEDGER_PAYLOAD_IN_STRUCTURE_ONLY = "episode_ledger_payload_in_structure_only"
 
     #: The episode declaration itself is unusable (stepped module not a
     #: submodule of the episode root, token axis unreadable, forced-token
     #: declaration malformed, or a structure-only episode was declared —
-    #: TYPED REFUSE per the S2 combination table this sprint).
+    #: TYPED REFUSE per the combination table this sprint).
     EPISODE_DECLARATION_INVALID = "episode_declaration_invalid"
 
     #: The declared step count exceeds the wrapped-tier cost ceiling without
@@ -59,11 +59,11 @@ class EpisodeErrorCode(str, Enum):
     #: time, before execution.
     EPISODE_STEP_CEILING_EXCEEDED = "episode_step_ceiling_exceeded"
 
-    #: A measured cross-step join is broken by UNDECLARED exogenous content
-    #: (lane F40c): the trace is intact and chain-shaped at the join, and
+    #: A measured cross-step join is broken by UNDECLARED exogenous content:
+    #: the trace is intact and chain-shaped at the join, and
     #: episode-dependent claims across it (step-series reads, whole-episode
     #: replay, the blessing fold, escalation) refuse. Also the settlement
-    #: refusal under the FORK-4 ``on_feed_break="refuse"`` arm (partial
+    #: refusal under the ``on_feed_break="refuse"`` arm (partial
     #: evidence on ``exc.partial_trace``).
     EPISODE_FEED_BREAK_EXOGENOUS = "episode_feed_break_exogenous"
 
@@ -85,37 +85,37 @@ class EpisodeErrorCode(str, Enum):
     #: reads are unaffected.
     EPISODE_JOIN_UNMEASURED = "episode_join_unmeasured"
 
-    #: An episode-dependent claim crosses a DECLARED crossing (lane F40c):
+    #: An episode-dependent claim crosses a DECLARED crossing:
     #: disclosed, chain-shaped by declaration, still not one closed feed.
     EPISODE_JOIN_DECLARED_CROSSING = "episode_join_declared_crossing"
 
     #: The ledger's persisted capture digest disagrees with the digest
-    #: recomputed from the product it rides (lane F42): a foreign or
+    #: recomputed from the product it rides: a foreign or
     #: tampered ledger -- the exact wrongness the binding exists to catch.
     EPISODE_COUPLING_UNBOUND = "episode_coupling_unbound"
 
     #: The ledger predates capture-digest minting (no binding exists), so
-    #: the coupling attestation cannot run (lane F42); re-capture to bind.
+    #: the coupling attestation cannot run; re-capture to bind.
     EPISODE_COUPLING_UNMINTABLE = "episode_coupling_unmintable"
 
-    #: ``run()`` on a COUPLED episode product (lane F42): the ledger attests
+    #: ``run`` on a COUPLED episode product: the ledger attests
     #: one perturbed execution and no run provider re-arms the capture-time
     #: intervention, so no engine can derive a fresh ledger -- the verdict's
     #: refusal arm (re-capturing with episode= x intervene= is the
     #: fresh-ledger arm).
     EPISODE_COUPLED_REPLAY_UNDERIVABLE = "episode_coupled_replay_underivable"
 
-    #: A bundle relation row names a member absent from the Bundle (S6 R1:
+    #: A bundle relation row names a member absent from the Bundle (R1:
     #: no dangling edges, ever).
     BUNDLE_RELATION_MEMBER_MISSING = "bundle_relation_member_missing"
 
-    #: A bundle mutator would orphan relation rows (S6 R5: cascade explicitly
+    #: A bundle mutator would orphan relation rows (R5: cascade explicitly
     #: or refuse typed; silent orphaning is forbidden).
     BUNDLE_MEMBER_HAS_RELATIONS = "bundle_member_has_relations"
 
-    #: A relation row is outside the closed S6 schema (unknown kind, wrong
+    #: A relation row is outside the closed relation schema (unknown kind, wrong
     #: row shape for the kind, or undeclared/missing-required param keys —
-    #: S6 R2, grammar v2's required/optional split included).
+    #: R2, grammar v2's required/optional split included).
     BUNDLE_RELATION_SCHEMA_INVALID = "bundle_relation_schema_invalid"
 
     #: A relation row's evidence envelope crosses the per-row canonical-JSON
@@ -198,7 +198,7 @@ class EpisodeLedgerError(EpisodeCaptureError, ValidationError, ValueError):
 
 
 class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
-    """Cross-step join (``step_join``) refusal (lane F40c).
+    """Cross-step join (``step_join``) refusal.
 
     ``fields["code"]`` carries ``episode_feed_break_exogenous``,
     ``episode_feed_closed_violation``, ``episode_declared_crossing_stop``,
@@ -217,7 +217,7 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
 
 
 class BundleRelationError(ValidationError, ValueError):
-    """Bundle member-relation table refusal (S6, grammar v2).
+    """Bundle member-relation table refusal (grammar v2).
 
     ``fields["code"]`` carries ``bundle_relation_member_missing``,
     ``bundle_member_has_relations``, ``bundle_relation_schema_invalid``,
@@ -244,7 +244,7 @@ class BundleRelationError(ValidationError, ValueError):
 
 
 class BundleExperimentError(ValidationError, RuntimeError):
-    """Experiment-layer bundle verb refusal or disclosed partial outcome (F03).
+    """Experiment-layer bundle verb refusal or disclosed partial outcome.
 
     ``fields["code"]`` carries ``vary_mapping_invalid``,
     ``vary_member_unknown``, ``vary_member_duplicate``,

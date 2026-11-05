@@ -286,8 +286,7 @@ class CaptureBackend(Protocol):
             Active backend capture session.
         trace_state:
             The session trace's raw-graph workspace, passed as the explicit
-            ownership token (M10: the flat TraceBuildState dissolved into
-            named per-phase workspaces).
+            ownership token.
 
         Returns
         -------

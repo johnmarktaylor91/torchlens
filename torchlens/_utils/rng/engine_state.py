@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
 
-# ---- Python / NumPy global-engine state surface (W051 / AUD-CODE 2.17) -----------------
+# ---- Python / NumPy global-engine state surface -----------------
 #
 # The seed-replayable global engines are witnessed by a before/after state snapshot at
 # the capture boundary. An owner-thread ``getstate -> draw -> setstate`` (or a

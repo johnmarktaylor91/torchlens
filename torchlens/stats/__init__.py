@@ -1,12 +1,6 @@
-"""Streaming statistics for out aggregation (real subpackage; C01 item 18).
+"""Streaming statistics for aggregating outputs over a dataloader: stat kernels, per-unit quantiles and top-k, and save/load of fitted accumulator state.
 
-Implementation lives in ``_streaming`` (stat kernels), ``_per_unit``
-(``Quantile`` and ``TopK``, pooled or per unit), ``_aggregate`` (the
-dataloader aggregation face, with ``_aggregate_cache`` behind ``cache=``)
-and ``_fitted`` / ``_state_io`` (``save_fitted`` / ``load_fitted`` for fitted
-PCA and accumulator state); this facade re-exports every historical
-spelling unchanged.
-"""
+Implementation lives in the ``_streaming``, ``_per_unit``, ``_aggregate`` and ``_fitted`` modules; this facade re-exports them."""
 
 from __future__ import annotations
 
@@ -25,11 +19,10 @@ from ._streaming import (
 
 __tl_layer__ = "FACADE"
 
-# C02 numbers substrate (lovely items 2-4): the frozen TensorStats record,
-# the sound kernel, and the pure stats-line renderers. Spellings
-# DOCUMENTED-UNSTABLE pending naming-session ratification; F10 builds the
-# public lovely surfaces on these.
-# C06 observability substrate (explorer D18): the always-on scalar Spine and
+# Numbers substrate: the frozen TensorStats record, the sound kernel, and the
+# pure stats-line renderers. Spellings DOCUMENTED-UNSTABLE pending
+# naming-session ratification; the public surfaces below build on these.
+# Observability substrate: the always-on scalar Spine and
 # the fixed signed-log2 Histogram implement StreamingStat, closing the
 # tl.stats Histogram gap -- tl.stats.aggregate gets dataset-mode histograms free.
 # One implementation home (torchlens/_observability/_kernels.py); spellings
@@ -65,7 +58,7 @@ from ._tensor_stats import (  # noqa: E402
     tensor_stats,
 )
 
-# F10 lovely surfaces (items 10-11): glance (FORK-C function form; submodule
+# Lovely surfaces: glance (function form; submodule
 # spelling, root budget frozen), the summary-cell/treescope seam adapters,
 # and the echo observer for the shipped hooks=/tap surface. Spellings
 # DOCUMENTED-UNSTABLE pending naming-session ratification.

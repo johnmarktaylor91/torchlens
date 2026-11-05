@@ -60,7 +60,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
   recordings.
 - `PartialTrace.outcome` — forwards the inner trace's sidecar.
 - `Bundle.outcome` — the DERIVED worst-of-members fold (declared container
-  authority, foldB D9: instance three of the two-answers disease after
+  authority, never a second stored answer, as with
   PartialTrace and Recording). The status is the most severe member status
   under the fold's total severity order (`complete < unattested < halted <
   aborted_nonfinite < failed < unknown` — capability-table restrictiveness,
@@ -69,7 +69,7 @@ describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
   fail-closed, `derived=True` always, and the settlement note names the
   driving member. The fold is a DISCLOSURE reported beside results, never a
   settlement and never a per-member gate: capability gating applies at the
-  member whose facts a read cites (foldB D8). Both public save doors agree
+  member whose facts a read cites. Both public save doors agree
   by construction — `bundle.save(path, ...)` delegates to the container door
   (`Bundle.save`), whose member writes run the N1 gate per member; per-trace
   payload options refuse typed (`bundle_save_option_unsupported`).
@@ -119,12 +119,12 @@ Enforced through the ONE chokepoint
 
 | capability | COMPLETE | STOPPED | ABORTED / FAILED | UNATTESTED | UNKNOWN |
 |---|---|---|---|---|---|
-| validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
-| `Trace.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
-| `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `stopped_capture_unsupported`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
-| live replay: refresh / `save_new_outs` / `do` replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
+| validation entry | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
+| `Trace.save` analysis | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
+| `trace.save(path, level="runnable")` | allow | refuse N4 (runnable vocabulary: `stopped_capture_unsupported`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
+| live replay: refresh / `save_new_outs` / `do` replay / rerun / live `run()` / `fast=True` | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
-| `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
+| `backward` / `capture_backward` | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
 | draw / `report.explain` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |
 
 Row rationales, stated once:
@@ -219,7 +219,7 @@ postprocessing (orphans) count as `unmapped`. Verdicts reflect the tensors
 ops actually produced — an intervened op's verdict is of the replaced value
 downstream consumers saw.
 
-## The stop-request latch (F6)
+## The stop-request latch
 
 `evaluate_halt`, `raise_nonfinite`, and imperative `tl.recording.stop()` all
 latch a stop request on the active trace before raising. If the forward then
@@ -262,11 +262,11 @@ sits inside a region whose only success exit reaches an authority stamp.
   finalizer leaked `_output_attribution_input_tensors`, refusing every
   export); it now works, per the capability table.
 - Postprocess-tail failures (steps 18–20, the core freeze) used to be MASKED
-  by an `AttributeError: _raw_graph_ws` cleanup double-fault; F5's guarded
+  by an `AttributeError: _raw_graph_ws` cleanup double-fault; guarded
   cleanups let the original exception propagate, and the settlement stamp in
   `finally` survives any double-fault.
-- A refresh now re-arms `on_nonfinite='raise'` (F2); it silently disarmed before.
-- F3b disclosure: the halted path skips `finalize_forward_session` (and with
+- A refresh now re-arms `on_nonfinite='raise'`; it silently disarmed before.
+- disclosure: the halted path skips `finalize_forward_session` (and with
   it buffer-write reconciliation). Characterization shows byte-identical
   buffer topology, buffer-write event counts, and model buffer state versus
   the complete capture through the halt frontier, so this remains a

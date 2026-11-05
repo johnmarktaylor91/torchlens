@@ -91,7 +91,7 @@ def available_device_bytes(device: torch.device) -> int | None:
         return _available_host_bytes()
     if device_type == "cuda":
         try:
-            # Pin the query to THIS device explicitly (R36-7b): mem_get_info
+            # Pin the query to THIS device explicitly: mem_get_info
             # resolves an index-less device to the CURRENT device, so a
             # capture saving to cuda:1 while cuda:0 is current read the wrong
             # card's headroom.

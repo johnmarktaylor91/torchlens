@@ -64,12 +64,12 @@ from .registry import (
 class host_nondeterminism_monitor:
     """Context manager installing the registry-driven host-nondeterminism monitor.
 
-    Mechanisms (r39 CLASS A + r41, all built FROM :data:`HOST_NONDETERMINISM_REGISTRY`):
+    Mechanisms (all built FROM :data:`HOST_NONDETERMINISM_REGISTRY`):
 
     * **Model-attribute state digest (thread-independent belt).** A cycle-safe sweep of
       every numpy ``Generator`` / ``RandomState`` / bare ``BitGenerator`` / ``random``
       generator the MODEL itself holds -- submodule ``__dict__`` values INCLUDING builtin
-      container nesting (list/tuple/set/frozenset elements and dict keys AND values, r41)
+      container nesting (list/tuple/set/frozenset elements and dict keys AND values)
       -- never a process-wide ``gc`` scan. Before/after state digests catch a draw on ANY
       thread, including a pre-existing worker. Exhaustion of the defensive
       :data:`_INVENTORY_NODE_CAP` flags ``inventory_budget_exhausted`` (INCOMPLETE),
@@ -96,8 +96,8 @@ class host_nondeterminism_monitor:
     * **Clock family.** Module-attr wrappers for every ``time.*`` current-clock reader (the
       implicit-now converters mark only with no explicit-time argument), ``os.times`` and
       feature-detected ``resource.getrusage``; c_call identity for the immutable
-      ``datetime`` current readers (E1: unpatchable extension types).
-    * **Held-reference identity (r41 hon1_1).** Every module-patched original's ``id()``
+      ``datetime`` current readers (unpatchable extension types).
+    * **Held-reference identity.** Every module-patched original's ``id()``
       is registered BEFORE its attribute is replaced, so a pre-window held reference
       (``from time import time`` / ``from os import urandom`` in a model or helper
       module) marks by ``c_call`` identity on the owner and every in-window hooked
@@ -110,18 +110,18 @@ class host_nondeterminism_monitor:
       (its per-op clock reads route patched-attr -> wrapper -> original, emitting
       ``c_call`` for the original from the wrapper's frame).
     * **Dual chained profile hooks (belt).** ``sys.setprofile`` (owner thread) AND
-      ``threading.setprofile`` (threads STARTED in-window; measured E2: a pre-existing
+      ``threading.setprofile`` (threads STARTED in-window; a pre-existing
       worker is unreachable). Each hook chains its own exact predecessor and is
       identity-restored on success and exception. The threading hook additionally
       records each hooked thread's ident into an in-window DIAGNOSTIC registry
-      (its r41 escape-belt 3-class consumer was deleted in r43, replaced by the
-      binary owner/non-owner check in ``_completeness_cross_thread.py``).
+      (the escape belt uses a binary owner/non-owner check, see
+      ``_completeness_cross_thread.py``).
 
     Entropy / instance / construction / clock positives mark from any COVERED thread. A
     REALISTIC pre-existing-thread RNG use (a background worker drawing from a MODEL-HELD
     Generator/RandomState/BitGenerator/``torch.Generator`` -- held anywhere the inert-reachability walk can
     follow WITHOUT executing user code, incl. class descriptors, weakrefs, and callable
-    interiors; r53 corr/F1 -- or reachable from an in-window profiled frame's roots; B4)
+    interiors -- or reachable from an in-window profiled frame's roots)
     is witnessed thread-independently by the state digests, and an unseeded construction
     on any thread by the module/class patches. The residual is only an EXTERNALLY-HELD
     generator drawn on a pre-existing (non-hooked) thread -- or, for the profile-silent
@@ -133,7 +133,7 @@ class host_nondeterminism_monitor:
     namespace stash, a computed module attribute, a ``deque``'s C buffer), of the
     same class as the adversarial draw+``state`` RESTORE (E4) -- a self-cleaning sequence
     no py<=3.11 mechanism can witness -- documented in contract s11, NOT a blanket
-    ceiling: the r38 draft's thread-presence INCOMPLETE over-triggered every capture
+    ceiling: the draft's thread-presence INCOMPLETE over-triggered every capture
     running alongside a benign background thread (DataLoader/Jupyter/pytest), so it is
     intentionally not applied. Future all-thread coverage is ``sys.monitoring`` (PEP 669,
     3.12+, interpreter-wide).
@@ -214,29 +214,29 @@ class host_nondeterminism_monitor:
         self._tl_globals_ids: frozenset[int] = frozenset()
         self._exempt_ids: frozenset[int] = frozenset()
         self._clock_ccall_keys: dict[tuple[int, str], str] = {}
-        # r41 hon1_1: id(original builtin) -> (channel, time_arg_index). ``None`` index
+        # id(original builtin) -> (channel, time_arg_index). ``None`` index
         # marks unconditionally; an int index marks only when the observed call site's
         # positional argcount leaves the explicit-time argument absent (or undecodable).
         self._held_ref_marks: dict[int, tuple[str, int | None]] = {}
-        # r65 CLUSTER Z: id(innermost python function __code__) -> (channel,
+        # id(innermost python function __code__) -> (channel,
         # disposition) for the torch RNG module-patch rows. torch.manual_seed & co are
         # PYTHON functions (they emit ``call`` events, not ``c_call``), so the held-ref
         # layer classifies them by code identity; the innermost ``__wrapped__`` unwind
         # keeps a TorchLens capture wrapper's shared code object from ever being
         # registered (which would misattribute every wrapped torch call).
         self._held_code_marks: dict[int, tuple[str, str]] = {}
-        self._global_engine_prefixes: dict[int, str] = {}  # W051 2.17: singleton id -> prefix
-        self._owner_sync_session: Any = None  # W051 2.16: per-window owner-join state
-        # r67 C1: identity ROUTING CACHE of the process/device default generators --
+        self._global_engine_prefixes: dict[int, str] = {}  # singleton id -> prefix
+        self._owner_sync_session: Any = None  # per-window owner-join state
+        # identity ROUTING CACHE of the process/device default generators --
         # it selects WHICH GENERATOR_METHOD_TABLE column applies, never WHETHER a
         # Generator receiver is classified (every ``isinstance(receiver,
         # torch.Generator)`` c_call dispatches through the table). Seeded at install
         # and re-resolved dynamically on a receiver miss, so a device default
         # populated mid-forward still selects the default column.
         self._default_generator_ids: frozenset[int] = frozenset()
-        # r41 hon2_1: idents of threads hooked by the in-window threading profile
-        # hook (registered race-free at thread bootstrap). Verdict-relevant again
-        # since the foreign-thread pure-read split: ``channels.mark_pure_read``
+        # idents of threads hooked by the in-window threading profile
+        # hook (registered race-free at thread bootstrap). Verdict-relevant:
+        # ``channels.mark_pure_read``
         # consults it to keep in-window-started threads CEILING while ambient
         # pre-existing threads only disclose. Absence is fail-closed: a failed
         # profile install already flagged uncertainty, so an unregistered
@@ -268,7 +268,7 @@ class host_nondeterminism_monitor:
         # scoped (not module-level) so it never joins the process-global state
         # census.
         self._rng_override_cache: dict[type, str | None] = {}
-        # r49 hon1_1: re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
+        # Re-entrancy depth for monitor-INTERNAL probes. While > 0 the monitor is
         # reading through its OWN inventory probe, so any channel a probe transitively touches
         # must NOT be marked as a model host read. Guarded at the single ``_mark`` choke point
         # -> surface-complete over every clock/entropy channel.
@@ -304,7 +304,7 @@ class host_nondeterminism_monitor:
         self.result.channels.add(channel)
 
     def _mark_replayable(self, channel: str) -> None:
-        """Record a torch RNG read reproduced by the capture seed (r65 CLUSTER Z).
+        """Record a torch RNG read reproduced by the capture seed.
 
         Same ``_suppress_self_marks`` choke point as :meth:`_mark`, but lands in the
         NON-ceiling ``replayable_reads`` set: the read sets ``host_rng_consumed``
@@ -325,13 +325,13 @@ class host_nondeterminism_monitor:
 
     @contextmanager
     def _monitor_internal_probe(self) -> Iterator[None]:
-        """Suppress the monitor's OWN transitive channel marks during an internal probe (r49 hon1_1).
+        """Suppress the monitor's OWN transitive channel marks during an internal probe.
 
         A monitor-initiated read is NOT a model host read. The opaque-queue emptiness proof calls
         ``multiprocessing.Queue.empty()``, which reads ``time.monotonic`` through
         ``multiprocessing.connection`` -- without this guard that TorchLens-initiated probe would
         self-mark the clock channel and over-trigger a deterministic model merely holding an empty
-        ``mp.Queue`` to UNVERIFIABLE (the r48 hon1_1 regression). Guarding at the single ``_mark``
+        ``mp.Queue`` to UNVERIFIABLE. Guarding at the single ``_mark``
         choke point is surface-complete: ANY channel a future inventory probe transitively touches
         is auto-exempt. The bracket is owner-thread and ``__enter__``-scoped (BEFORE the user
         forward runs), so no user/model/worker host read is ever inside it.
@@ -444,7 +444,7 @@ class host_nondeterminism_monitor:
         Called at each module-attr patch site BEFORE :meth:`_patch_attr` replaces the
         attribute, so a pre-window ``from module import name`` alias -- which calls the
         original object directly, bypassing the patch -- is classified by identity in
-        :meth:`_classify_c_call` (r41 hon1_1). Class-patch originals are deliberately
+        :meth:`_classify_c_call`. Class-patch originals are deliberately
         NOT registered: a held bound draw method hits the existing receiver-isinstance
         branch already.
         """
@@ -503,7 +503,7 @@ class host_nondeterminism_monitor:
     def _instance_method_wrapper(self, original: Any, channel: str) -> Any:
         """Build a thread-routed marking passthrough for one RNG-instance draw method.
 
-        W051 (2.18): a PRIVATE instance draw is thread-local, so it routes like the
+        A PRIVATE instance draw is thread-local, so it routes like the
         clock/entropy reads (foreign threads disclose, then settle against the owner's
         in-window waits -- ``_rng_channels``); model-held instances stay digest-belted.
         """
@@ -520,7 +520,7 @@ class host_nondeterminism_monitor:
         return wrapper
 
     def _torch_rng_wrapper(self, original: Any, channel: str, disposition: str) -> Any:
-        """Module-attr wrapper for a torch RNG API row (r65 CLUSTER Z).
+        """Module-attr wrapper for a torch RNG API row.
 
         Marks AT ENTRY (before delegation) so a device-module endpoint that raises on a
         deviceless host still records the touch -- fail-closed, never under-marking.
@@ -540,7 +540,7 @@ class host_nondeterminism_monitor:
     def _register_held_code(self, original: Any, channel: str, disposition: str) -> None:
         """Register a torch RNG PYTHON function for held-reference ``call`` marking.
 
-        The r41 held-ref layer registers builtin identity for ``c_call`` events; torch's
+        The held-ref layer registers builtin identity for ``c_call`` events; torch's
         RNG APIs are Python functions, which emit ``call`` events keyed by CODE identity
         instead. The ``__wrapped__`` chain is unwound to the INNERMOST function and only
         a torch-owned code object is ever registered: registering a TorchLens capture
@@ -627,7 +627,7 @@ class host_nondeterminism_monitor:
         This fallback is active only for the feature-detected NumPy Cython method
         shape that emits no profile ``c_call`` event. It covers every materialized
         fast local directly plus globals named by the frame's code object (its
-        ``co_names`` plus its string ``co_consts`` -- r38: the latter resolve
+        ``co_names`` plus its string ``co_consts`` -- the latter resolve
         ``globals()["name"]``-style dynamic-name subscripts), descending
         one inert edge below those globals through exact built-in containers or a
         plain-object ``__dict__``. It never walks a shared module namespace and never
@@ -650,7 +650,7 @@ class host_nondeterminism_monitor:
         cache_key = (id(frame.f_code), id(frame.f_globals))
         cached = self._numpy_global_name_cache.get(cache_key)
         if cached is None:
-            # r38: string CONSTANTS join the referenced-name set. A dynamic-name
+            # string CONSTANTS join the referenced-name set. A dynamic-name
             # namespace read -- ``globals()["name"]`` (and the ``vars()`` /
             # ``eval("name")`` spellings) -- carries the name in ``co_consts``,
             # not ``co_names``, so a generator reached ONLY through such a
@@ -801,7 +801,7 @@ class host_nondeterminism_monitor:
         call reads a clock at all; an undecodable call site marks fail-closed.
         """
 
-        # r41 hon1_1: held-reference identity FIRST. A pre-window ``from time import
+        # Held-reference identity FIRST. A pre-window ``from time import
         # time`` alias calls the ORIGINAL builtin, bypassing the module-attr patch; the
         # original was identity-registered before patching. TorchLens's own frames are
         # exempt by EXACT module-globals ownership -- its per-op clock reads route
@@ -822,7 +822,7 @@ class host_nondeterminism_monitor:
                     # Implicit-now converter: a call site providing the explicit-time
                     # argument is a pure transform ONLY when that argument is provably
                     # non-None -- ``localtime(None)`` reads the clock exactly like
-                    # ``localtime()`` (grind-r5 b8 R57). Undecodable (star-call /
+                    # ``localtime()``. Undecodable (star-call /
                     # unknown opcode) marks fail-closed; a literal ``None`` marks; a
                     # computed argument flags uncertainty (runtime-dependent value:
                     # neither a clock-draw claim nor a clean pass is provable).
@@ -848,7 +848,7 @@ class host_nondeterminism_monitor:
             return
         if channels.classify_consumed_only_receiver(self, receiver, arg, frame):
             return
-        # r67 C1: method c_calls on ANY ``torch.Generator`` receiver -- process/device
+        # method c_calls on ANY ``torch.Generator`` receiver -- process/device
         # defaults, user-constructed, model-held, RETURNED clones, and subclasses (an
         # inherited C method's c_call receiver IS the subclass instance) -- dispatch
         # through the one authoritative GENERATOR_METHOD_TABLE. The default identity
@@ -856,7 +856,7 @@ class host_nondeterminism_monitor:
         # the currently populated ``torch.{cuda,xpu,mtia}.default_generators`` (no
         # imports, no device init) so a default populated mid-forward still selects
         # the default column. Scalar-returning methods carry a marking disposition in
-        # BOTH columns (return closure -- r66 free-F1/corr1-1/hon1-F5 can no longer
+        # BOTH columns (return closure -- a scalar return can never
         # escape); Generator-returning methods are structural because the returned
         # object lands back HERE. An UNKNOWN public method on any Generator receiver
         # is unclassifiable host-RNG semantics -> monitor uncertainty (INCOMPLETE),
@@ -886,7 +886,7 @@ class host_nondeterminism_monitor:
         ):
             self._mark("c_rng_instance_draw")
             return
-        # Immutable ``datetime`` current-clock readers (r42 hon1_1: subclass-safe). The base
+        # Immutable ``datetime`` current-clock readers (subclass-safe). The base
         # readers are class methods on unpatchable C extension types, so a ``datetime.datetime``
         # / ``datetime.date`` SUBCLASS inherits them and reads the SAME wall clock -- but the
         # exact ``id(receiver)`` key misses the subclass. Classify subclass-safe, mirroring the
@@ -899,7 +899,7 @@ class host_nondeterminism_monitor:
                 self._mark(channel)
 
     def _datetime_clock_channel(self, receiver: type, name: str) -> str | None:
-        """Classify a ``datetime``/``date`` current-clock ``c_call`` receiver (r42 hon1_1)."""
+        """Classify a ``datetime``/``date`` current-clock ``c_call`` receiver."""
 
         # Exact base receiver: the original registered key (fast path, unchanged).
         exact = self._clock_ccall_keys.get((id(receiver), name))
@@ -962,7 +962,7 @@ class host_nondeterminism_monitor:
                     self, records_thread_ident, predecessor, frame, event, arg
                 )
             if records_thread_ident:
-                # r41 hon2_1: the threading hook registers every hooked thread's ident
+                # The threading hook registers every hooked thread's ident
                 # (idempotent set.add, GIL-atomic) during thread bootstrap -- BEFORE the
                 # thread's first user statement -- so the escape belt's in-window
                 # classification is race-free even for an escape-first thread.
@@ -993,9 +993,9 @@ class host_nondeterminism_monitor:
                         or digest_scope[1] is not False
                     ):
                         self._snapshot_numpy_frame_rngs(frame)
-                    # r65 CLUSTER Z: held-reference torch RNG spellings are Python
+                    # Held-reference torch RNG spellings are Python
                     # functions -- classified by code identity on ``call`` events (the
-                    # r41 builtin-identity layer only ever sees ``c_call``).
+                    # builtin-identity layer only ever sees ``c_call``).
                     if id(frame.f_code) in self._held_code_marks:
                         self._classify_call(frame)
                 elif event == "return":
@@ -1130,7 +1130,7 @@ class host_nondeterminism_monitor:
             self._flag_uncertain("monitor_install_interrupted")
             self._teardown()
             raise
-        # r41 hon2_1: publish the in-window registry LAST so the escape belt never
+        # Publish the in-window registry LAST so the escape belt never
         # observes a partially-installed window (restored FIRST in the teardown).
         self._previous_active_monitor = monitor_state._ACTIVE_MONITOR
         monitor_state._ACTIVE_MONITOR = self
@@ -1280,7 +1280,7 @@ class host_nondeterminism_monitor:
         self._tl_globals_ids = _torchlens_module_globals_ids()
         self._exempt_ids = frozenset(id(item) for item in _rng_exempt_instances())
         self._global_engine_prefixes = engine_state.global_engine_state_prefixes()
-        # W051 (2.16): owner-thread sync primitives ride the held-code ``call`` layer.
+        # Owner-thread sync primitives ride the held-code ``call`` layer.
         self._held_code_marks.update(channels.owner_sync_code_marks())
 
     def _install_python_rng_primitives(self) -> None:
@@ -1301,7 +1301,7 @@ class host_nondeterminism_monitor:
                     )
 
     def _install_global_engine_state_surfaces(self) -> None:
-        """Patch the Python / legacy-NumPy global-engine STATE surface (W051 2.17)."""
+        """Patch the Python / legacy-NumPy global-engine STATE surface."""
 
         engine_state.install_global_engine_state_surfaces(self)
 
@@ -1309,7 +1309,7 @@ class host_nondeterminism_monitor:
         """Patch the OS-entropy funnels (``os``/``random._urandom``) with held-ref registration."""
 
         # entropy: OS entropy + the secrets funnel alias + uuid4's feed. Each
-        # original is identity-registered BEFORE patching (r41 held-ref layer).
+        # original is identity-registered BEFORE patching (held-ref layer).
         self._register_held_ref(_os_module.urandom, "os.urandom")
         self._patch_attr(
             _os_module, "urandom", self._entropy_wrapper(_os_module.urandom, "os.urandom")
@@ -1415,10 +1415,10 @@ class host_nondeterminism_monitor:
     def _install_torch_rng_surfaces(self) -> None:
         """Patch the frozen torch RNG surface table and seed the default-generator routing cache."""
 
-        # r65 CLUSTER Z: torch RNG API module patches, derived from the ONE frozen
+        # Torch RNG API module patches, derived from the ONE frozen
         # disposition table (entropy/mutation ceiling permanently; replayable_read
         # sets the consumed flag only). Each ORIGINAL is held-code registered
-        # BEFORE its attribute is replaced, mirroring the r41 held-ref layer, so a
+        # BEFORE its attribute is replaced, mirroring the held-ref layer, so a
         # pre-window ``from torch import manual_seed`` alias cannot bypass.
         for surface_row in TORCH_RNG_SURFACE:
             if surface_row.disposition not in ("entropy", "mutation", "replayable_read"):
@@ -1434,7 +1434,7 @@ class host_nondeterminism_monitor:
                 attr_name,
                 self._torch_rng_wrapper(original, surface_row.target, surface_row.disposition),
             )
-        # r67 C1: seed the default-generator ROUTING CACHE for the all-receiver
+        # seed the default-generator ROUTING CACHE for the all-receiver
         # c_call classifier (process default + every populated cuda/xpu/mtia
         # device default). Never forces device init, and never an honesty
         # boundary: the classifier re-resolves on any miss.
@@ -1447,12 +1447,12 @@ class host_nondeterminism_monitor:
         # nesting): digest generators the model HOLDS, so a draw on ANY thread
         # (incl. a pre-existing worker) is caught by the before/after state
         # comparison at __exit__. Deliberately NOT a process-wide
-        # ``gc.get_objects()`` scan -- the r39-draft GC-wide inventory cost
-        # ~900 ms/capture, perturbed the tracemalloc peak, and could over-trigger
-        # on unrelated generators (removed for cause). Realistic CROSS-THREAD
-        # external draws (hon1_1/corr2_2) are caught by ``threading.setprofile``
+        # ``gc.get_objects()`` scan -- a GC-wide inventory costs
+        # ~900 ms/capture, perturbs the tracemalloc peak, and could over-trigger
+        # on unrelated generators. Realistic CROSS-THREAD
+        # external draws are caught by ``threading.setprofile``
         # below; an EXTERNALLY-held generator drawn on a PRE-EXISTING (non-hooked)
-        # thread is the documented residual (contract s11), same class as the
+        # thread is the documented residual, same class as the
         # adversarial draw+state-restore.
         self._generator_states = self._sweep_model_generators()
 
@@ -1467,11 +1467,11 @@ class host_nondeterminism_monitor:
         self._orig_sys_setprofile = _sys_module.setprofile
         self._orig_threading_setprofile = getattr(_threading_module, "setprofile", None)
         # BELT: dual chained profile hooks (owner thread + threads started in-window). These
-        # are the r37/base mechanism (base runs them and is fast); the owner hook catches
+        # are the base mechanism (fast); the owner hook catches
         # owner-thread numpy Generator instance draws and the immutable ``datetime`` readers,
-        # the threading hook catches an in-window helper-thread draw (hon1_1/corr2_2) and
-        # records each hooked thread's ident in the diagnostic registry (the r41
-        # escape-belt 3-class consumer was deleted r43; owner/non-owner is binary now).
+        # the threading hook catches an in-window helper-thread draw and
+        # records each hooked thread's ident in the diagnostic registry (owner/non-owner
+        # is binary).
         self._previous_sys_profile = _sys_module.getprofile()
         self._sys_hook = sys_hook = self._make_profile_hook(self._previous_sys_profile)
         _sys_module.setprofile(sys_hook)
@@ -1519,7 +1519,7 @@ class host_nondeterminism_monitor:
         # both are DOCUMENTED residuals -- contract residual-tail row (vi)
         # in docs/reference/runnable_tlspec_contract.md -- until the
         # sys.monitoring (PEP 669) port -- interpreter-global,
-        # slot-swap-immune -- closes them on py>=3.12 (grind-r5 b8 R57).
+        # slot-swap-immune -- closes them on py>=3.12.
         self._patch_attr(
             _sys_module,
             "setprofile",

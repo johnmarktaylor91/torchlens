@@ -1,12 +1,12 @@
-"""Validation-owned independent output-tensor traversal (b9 R74/75-1).
+"""Validation-owned independent output-tensor traversal.
 
-Ground-truth output enumeration used to share its root with capture: both
+Ground-truth output enumeration must not share its root with capture. If both
 ``backends/torch/backend.py`` (output extraction) and the validation oracle
-resolved through ``backends.torch._ops_containers._walk_output_tensors_with_paths``, so a
-walker defect made capture AND the oracle drop the same output leaf and
-``validate_forward_pass`` returned True over a missing output (sol's live
-plant). This module is the independent second root: a deliberately small,
-self-contained traversal that must NEVER import from ``torchlens.backends``
+resolved through ``backends.torch._ops_containers._walk_output_tensors_with_paths``,
+a walker defect would make capture AND the oracle drop the same output leaf and
+``validate_forward_pass`` would return True over a missing output. This module
+is the independent second root: a deliberately small, self-contained
+traversal that must NEVER import from ``torchlens.backends``
 -- ``tests/test_output_walker_independence.py`` enforces that structurally.
 
 It is a CROSS-CHECK, not a replacement: capture's adapter defines the

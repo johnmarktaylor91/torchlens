@@ -1,4 +1,4 @@
-"""The metadata line formatter for live narration (snoop D2).
+"""The metadata line formatter for live narration.
 
 One fixed-order single line per event on the shared tensor-core grammar:
 common fields are POSITIONAL columns that line up down the page (at 300
@@ -126,7 +126,7 @@ def _format_value(value: float) -> str:
 
 
 def render_stats_segment(stats: TensorStats) -> str:
-    """Render the stats segment on the shared grammar (snoop D4).
+    """Render the stats segment on the shared grammar.
 
     Sampled moments carry ``~`` marks and the mandatory, non-suppressible
     ``sampled=k/N`` evidence token. Sampled narration has no finiteness

@@ -1,4 +1,4 @@
-"""Semantic validator for Model Explorer payloads (memo B0).
+"""Semantic validator for Model Explorer payloads.
 
 Model Explorer's worker silently drops duplicate-id nodes and dangling
 edges, so a payload that parses cleanly can still be silently lossy. This
@@ -206,7 +206,7 @@ def _check_group_rows(
 
 
 def _count_root_ops(nodes: list[dict[str, Any]], report: ValidationReport) -> None:
-    """Count stackless non-boundary nodes (memo D19 re-open tripwire)."""
+    """Count stackless non-boundary nodes (root-level ops outside any namespace)."""
 
     count = 0
     for node in nodes:

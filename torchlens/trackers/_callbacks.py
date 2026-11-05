@@ -1,4 +1,4 @@
-"""HF Trainer + Lightning callbacks over the same engine (memo 3.16, item 10).
+"""HF Trainer + Lightning callbacks over the same engine.
 
 Both are EXPLICIT wrappers the user constructs in their own source -- that
 construction is the enablement act; no environment variable ever activates
@@ -42,7 +42,7 @@ def derived_cadence(
     logging_steps: int | None = None,
     max_steps: int | None = None,
 ) -> int:
-    """Derive a watch cadence from the framework's own signals (memo 3.8).
+    """Derive a watch cadence from the framework's own signals.
 
     A framework that logs every N steps gets tracker samples at the same
     rhythm (never sparser than the panel the user already reads); a visible

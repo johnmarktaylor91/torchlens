@@ -1,4 +1,4 @@
-"""The rebuilt summary renderer (F08; summary memo 3.5/3.6/3.13).
+"""The rebuilt summary renderer.
 
 The taste reference is the HAIRLINE TABLE: one or two short header lines,
 then the table immediately; ONE thin rule under the header and above the
@@ -10,7 +10,7 @@ unicode is an upgrade applied strictly through the declared glyph table.
 
 The renderer is a pure function of typed data -- it never reads the trace
 and never mints a number (raw ints arrive from FactCore projections).
-No ANSI or OSC-8 byte can appear in any returned string (A11).
+No ANSI or OSC-8 byte can appear in any returned string.
 """
 
 from __future__ import annotations
@@ -352,8 +352,8 @@ def _render_table(
 def _banner_lines(facts: SummaryFacts) -> list[str]:
     """Mandatory negative-status honesty banner, above the table.
 
-    Consumes the ONE shared honesty chokepoint's lines (A09's
-    ``honesty_banner_lines``), upgrading only the structure-only line to
+    Consumes the ONE shared honesty chokepoint's lines
+    (``honesty_banner_lines``), upgrading only the structure-only line to
     the pinned house phrasing every human surface uses.
     """
 

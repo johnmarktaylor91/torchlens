@@ -1,4 +1,4 @@
-"""Canonical serializer and the one agent-surface envelope (agent memo 3.9).
+"""Canonical serializer and the one agent-surface envelope.
 
 Every machine payload the agent surface emits -- tool results, errors, CLI
 JSON -- rides ONE envelope with a schema string, the package version, a
@@ -37,7 +37,7 @@ def _torchlens_version() -> str:
 
 
 def canonical_dumps(payload: Any) -> str:
-    """Serialize a payload under the determinism contract (agent memo 3.9).
+    """Serialize a payload under the determinism contract.
 
     Sorted keys, compact separators, ASCII-safe escaping, and
     ``allow_nan=False`` so a bare ``NaN``/``Infinity`` literal is a crash

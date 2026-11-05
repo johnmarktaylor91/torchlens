@@ -6,7 +6,7 @@ from typing import Any
 
 from .._utils._record_group_table import record_member
 
-#: The Op record fields the roofline traffic model reads (D21: read-once /
+#: The Op record fields the roofline traffic model reads (read-once /
 #: write-once ideal traffic = parent outputs + own output + parameters
 #: consumed). Pinned against the Op field vocabulary at import by
 #: :func:`_pin_traffic_fields`, so a field rename can never silently zero a

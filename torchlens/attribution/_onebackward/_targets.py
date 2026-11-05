@@ -1,4 +1,4 @@
-"""Target normalization: two families, exactly-stated requirements (D4).
+"""Target normalization: two families, exactly-stated requirements.
 
 Edge-seeded targets are PRIMARY: a site plus scalar coordinates, or a site
 plus an explicit cotangent, normalizes to ``(target edge, cotangent)`` --
@@ -102,7 +102,7 @@ class NormalizedTarget:
         Chunk-grouping key: targets may share a batched VJP chunk ONLY when
         their cone keys are equal, because a batched call returns ZERO rows
         (not ``None``) for a (target, site) pair outside the target's cone
-        -- fabricated zeros, the exact defect class D3 exists to prevent.
+        -- fabricated zeros, the exact defect class this grouping exists to prevent.
         Same seed site => same cone; same expression tensor => same cone.
     source_repr:
         Human disclosure of the request, for provenance.

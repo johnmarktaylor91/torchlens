@@ -670,7 +670,7 @@ def _probe_torch_function_stack_surgery() -> bool:
     -------
     bool
         ``True`` when the private mode-stack primitives the weightsfree
-        ambient-context absorption (W1-ABSORB / D19) depends on all exist:
+        ambient-context absorption depends on all exist:
         ``torch._C._len_torch_function_stack``, ``_get_function_stack_at``,
         ``_pop_torch_function_stack``, and ``_push_on_torch_function_stack``.
         The probe reads attributes only; where any is missing the absorption
@@ -1217,8 +1217,8 @@ HAS_FLASH_ATTENTION_4_INTERFACE: bool = _probe_flash_attention_4_interface()
 HAS_FUNCTION_APPLY_SLOT: bool = isinstance(
     torch.autograd.Function.__dict__.get("apply"), (classmethod, types.ClassMethodDescriptorType)
 )
-# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
-# R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
+# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability:
+# torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
 # a user-side limit TorchLens never degrades on, so doctor does not report it.
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()
@@ -1301,7 +1301,7 @@ _C10D_ABORT_PG_PROBED: bool = False
 HAS_DISPATCH_MODE_STACK_QUERY: bool = False
 _DISPATCH_MODE_STACK_FN: Callable[[], Any] | None = None
 _DISPATCH_MODE_STACK_PROBED: bool = False
-# r-b4 R26-2: previously-unrouted private probes, each with a named flag.
+# previously-unrouted private probes, each with a named flag.
 HAS_JIT_SCHEMA_ENUMERATION: bool = False
 _JIT_SCHEMA_ENUMERATION_FN: Callable[[], Any] | None = None
 _JIT_SCHEMA_ENUMERATION_PROBED: bool = False
@@ -1348,20 +1348,20 @@ _CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED: bool = False
 HAS_AUTOGRAD_ENGINE_QUEUE_CALLBACK: bool = False
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK: Callable[..., Any] | None = None
 _AUTOGRAD_ENGINE_QUEUE_CALLBACK_PROBED: bool = False
-# torchnative W0.12/W2.1: the in-memory Kineto event field contract behind the
+# the in-memory Kineto event field contract behind the
 # device-time join's extraction adapter. Probed lazily at first extraction (a
 # live profiler session is required to observe an event instance).
 HAS_KINETO_INMEMORY_EVENTS: bool = False
 _KINETO_INMEMORY_EVENTS_PROBED: bool = False
 HAS_KINETO_EVENT_SCOPE: bool = False
 _KINETO_EVENT_SCOPE_PROBED: bool = False
-# torchnative W0.7 (test-oracle exception to E3): torch's still-alive private
+# Test-oracle exception to the no-private-APIs rule: torch's still-alive private
 # categorized memory profiler, consumed ONLY by the memory-timeline parity
 # oracle while upstream keeps it. Probed lazily at first use.
 HAS_MEMORY_PROFILE: bool = False
 _MEMORY_PROFILE_PROBED: bool = False
 
-#: The exact per-event field contract (torchnative W0.12) the extraction
+#: The exact per-event field contract the extraction
 #: adapter consumes: identity, integer-nanosecond interval, runtime
 #: correlation, thread id, device coordinates, the user-annotation flag, and
 #: the typed activity classification. ``scope`` is probed separately
@@ -1483,7 +1483,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
 )
 
 
-# r-b7 R52-4: O(1) membership for mark_torch_capability_missing; the tuple above
+# O(1) membership for mark_torch_capability_missing; the tuple above
 # stays the ORDERED iteration authority (snapshot/report key order is stable).
 _CAPABILITY_ATTR_SET: frozenset[str] = frozenset(_CAPABILITY_ATTRS)
 
@@ -1605,14 +1605,14 @@ def restore_capability_probes(snapshot: dict[str, object]) -> None:
 
 
 class TorchCapabilityWarning(TorchLensWarning):
-    """Graceful torch-capability degradation warning (r-b4 R26-6d).
+    """Graceful torch-capability degradation warning.
 
     A dedicated subclass so CI suppression can key on the CATEGORY instead of
     the message text (``pyproject.toml`` matched the literal message string, so
     editing the wording would have turned every legitimate matrix degradation
     into a suite-wide error under ``error::UserWarning:torchlens``). Subclasses
     ``TorchLensWarning`` (itself a ``UserWarning``), so existing category
-    filters keep matching and the documented root covers it (R64-1).
+    filters keep matching and the documented root covers it.
 
     Examples
     --------
@@ -1644,7 +1644,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # torch's own public surface, so there is nothing for TorchLens to
         # degrade on -- named-dim metadata simply cannot exist on such builds.
         "HAS_NAMED_TENSOR_API",
-        # r7 R26 (opus b4 LM): the three ``torch.Generator`` method probes gate
+        # The three ``torch.Generator`` method probes gate
         # rows of the RNG GENERATOR_METHOD_TABLE (_utils/rng.py); a ``False``
         # DROPS the row, so there is no method left to monitor and NOTHING
         # degrades. Absent on the older half of the declared torch>=2.1 matrix
@@ -1715,7 +1715,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_META_ITEM_GUARD",
         # torch.distributed._functional_collectives._resolve_group /
         # torch.distributed.distributed_c10d._resolve_process_group (funcol
-        # group resolution, merge-ranks C2 recording) are torch-private
+        # group resolution for functional-collective recording) are torch-private
         # surfaces that read absent on every measured release before 2.13
         # (``_torch_compat_table``): a healthy install with nothing to shim --
         # captured funcol calls refuse typed instead of recording correlated
@@ -1734,7 +1734,7 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
 )
 """Capability flags whose ``False`` is an absent OPTIONAL feature, not a degradation.
 
-r-b4 R26-4: doctor/compat previously presented every ``False`` flag as a
+doctor/compat previously presented every ``False`` flag as a
 graceful-degradation WARN, so every healthy torch-only / CPython-3.10 install
 showed a permanent warning row with no actionable remedy -- training users to
 ignore the row. Flags listed here still appear in the snapshot (with their
@@ -1753,7 +1753,7 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     refuse (``env_flag_invalid``) -- the historical any-non-empty-value
     truthiness meant ``=false`` SUPPRESSED, the exact silent-inversion class
     the closed_bool_env doctrine exists to kill. This is the knob's only
-    documentation-of-record (grind b7 R47-7); keep it in sync with the
+    documentation-of-record; keep it in sync with the
     ``_CAPABILITY_WARNING_ENV`` constant above.
 
     Parameters
@@ -1794,7 +1794,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     TorchCapabilitySnapshot
         Mapping from ``HAS_*`` flag name, plus
         ``AUTOCAST_DEVICE_TYPE_ARG_SUPPORTED`` (its own canonical spelling;
-        the duplicate ``HAS_`` alias was retired in r-b7 R42-6), to boolean
+        there is no duplicate ``HAS_`` alias), to boolean
         availability.
     """
 
@@ -1824,7 +1824,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_compile_counters(force_probe=True)
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
-    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
+    # Lazily-probed accessors: resolve so the snapshot reports the real
     # capability, not the placeholder (warnings deduped per process, probes cached).
     get_jit_all_schemas()
     get_tensorbase_class()
@@ -1835,7 +1835,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     dynamo_is_compiling(force_probe=True)
     _ensure_dynamo_orig_callable_marker_probed()
     get_dynamo_explain()
-    # L8/C2 + L9 privately-probed surfaces (fix/private-probe-routing): resolve
+    # Privately-probed surfaces: resolve
     # so the snapshot reports real capabilities. The funcol pair imports
     # torch.distributed like the DTensor/device-mesh forces above; the
     # checkpoint/engine pair is a cheap always-shipped getattr chain.
@@ -1878,7 +1878,7 @@ def get_variable_function_names() -> list[str]:
     list[str]
         Names from ``torch._C._VariableFunctions`` when available, otherwise
         an empty list. The historical fallback returned ``torch.__all__`` —
-        the WRONG namespace for a variable-function roster (r-b7 R42-2): had
+        the WRONG namespace for a variable-function roster: had
         it ever been taken it would have silently mis-seeded the wrapper
         inventory. An empty roster honestly skips VF-based discovery, and the
         flipped ``HAS_VARIABLE_FUNCTIONS`` flag keeps the degradation visible.
@@ -2132,7 +2132,7 @@ def get_current_dispatch_mode_stack() -> list[Any] | None:
         is absent or raises. ``None`` means "cannot answer": the host-escape
         belt census check (its one consumer) must treat that as census-INACTIVE
         so the belt records the escape (fail closed) rather than silently
-        standing down (r-b4 R26-1).
+        standing down.
 
     Notes
     -----
@@ -2171,7 +2171,7 @@ def get_current_dispatch_mode_stack() -> list[Any] | None:
 def get_jit_all_schemas() -> list[Any] | None:
     """Return every registered dispatcher schema, or ``None`` when unavailable.
 
-    Backs the arm-time collective-recognizer census (r-b4 R26-2). ``None``
+    Backs the arm-time collective-recognizer census. ``None``
     means the caller must refuse TYPED (an unvetted dispatcher surface can
     never silently read as "no uncaptured collectives").
     """
@@ -2206,7 +2206,7 @@ def get_tensorbase_class() -> type[Any] | None:
     """Return the C tensor base class (``TensorBase``/legacy ``_TensorBase``).
 
     The ONE probe for every consumer (completeness witness originals,
-    callable-safety method-owner census; r-b4 R26-2). ``None`` flips the flag;
+    callable-safety method-owner census). ``None`` flips the flag;
     consumers that structurally REQUIRE the class raise explicitly (never an
     ``assert`` stripped under ``python -O``).
     """
@@ -2239,7 +2239,7 @@ def get_disable_torch_function_context() -> Any | None:
     """Return ``torch._C.DisableTorchFunction``, or ``None`` when unavailable.
 
     ``None`` means an ambient torch-FUNCTION mode CANNOT be neutralized for
-    import-time probes (r-b4 R26-2): the caller's fallback does not neutralize
+    import-time probes: the caller's fallback does not neutralize
     such a mode, so the degradation must be disclosed by the flag rather than
     silently absorbed.
     """
@@ -2262,7 +2262,7 @@ def get_disable_torch_function_context() -> Any | None:
 def get_variable_functions_class() -> Any | None:
     """Return ``torch._C._VariableFunctionsClass``, or ``None`` when unavailable.
 
-    Backs the internal-torch-builtin registry-key lane (r-b4 R26-2): without
+    Backs the internal-torch-builtin registry-key lane: without
     it, a captured internal builtin is classified through the public ``torch``
     wrapper -- a DIFFERENT argument convention for replay -- so the downgrade
     must flip the flag instead of happening silently.
@@ -2291,7 +2291,7 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     The runnable allocation preflight deliberately fails OPEN without it
     (refusing a legitimate run over a missing estimator would be worse), but
     the degradation flips ``HAS_FAKE_TENSOR_MODE`` so it is visible in
-    doctor/compat instead of silently vanishing (r-b4 R26-2).
+    doctor/compat instead of silently vanishing.
     """
 
     global HAS_FAKE_TENSOR_MODE, _FAKE_TENSOR_MODE_CLS, _FAKE_TENSOR_MODE_PROBED
@@ -2393,7 +2393,7 @@ def swap_hop_compilation_env(replacement: Any) -> Any | None:
 def get_dtensor_shard_geometry_fn() -> Callable[..., Any] | None:
     """Return DTensor's shard-geometry helper, or ``None`` when unavailable.
 
-    Backs the per-site dual geometry of the DTensor refusal (r-b4 R26-2).
+    Backs the per-site dual geometry of the DTensor refusal.
     ``None`` distinguishes "the private API moved" (flag flips, visible in
     doctor/compat) from a legitimately off-mesh rank (helper present, raises
     at computation), which previously collapsed into one silent ``None``.
@@ -2429,7 +2429,7 @@ def get_funcol_group_resolvers(
         :func:`get_torch_capability_snapshot` so the reported flag reflects the
         live runtime rather than a cached earlier answer.
 
-    Backs the functional-collective boundary wraps (merge-ranks C2 recording):
+    Backs the functional-collective boundary wraps (collective recording):
     ``torch.distributed._functional_collectives._resolve_group`` maps every
     public funcol group spelling (ProcessGroup / group-name string / DeviceMesh /
     ``(mesh, dim)`` / rank lists) to a ProcessGroup or group name, and
@@ -2548,14 +2548,12 @@ def get_funcol_wait_redispatch() -> tuple[Any, Callable[[], Any]] | None:
 def get_funcol_module() -> Any | None:
     """Return ``torch.distributed._functional_collectives``, or ``None``.
 
-    Backs the funcol boundary wrap install/uninstall (merge-ranks C2
-    recording): the wraps must patch attributes on torch's REAL funcol module
-    object (a copy would never be consulted by user ``funcol.all_reduce``
-    calls), so this accessor hands out the module itself. The import is
-    eager on first call -- callers only reach it at distributed arm/disarm
-    time, never on the plain-capture hot path. Absence flips the named
-    ``HAS_FUNCOL_MODULE`` flag (visible in ``tl.report.doctor()``)
-    and funcol calls then run unwrapped, exactly the pre-C2 disclosure class.
+    Backs the funcol boundary wrap install/uninstall: the wraps must patch attributes on torch's
+    REAL funcol module object (a copy would never be consulted by user ``funcol.all_reduce`` calls),
+    so this accessor hands out the module itself. The import is eager on first call -- callers only
+    reach it at distributed arm/disarm time, never on the plain-capture hot path. Absence flips the
+    named ``HAS_FUNCOL_MODULE`` flag (visible in ``tl.report.doctor()``) and funcol calls then run
+    unwrapped.
     """
 
     global HAS_FUNCOL_MODULE, _FUNCOL_MODULE_OBJ, _FUNCOL_MODULE_PROBED
@@ -2630,10 +2628,10 @@ def get_async_collective_tensor_type(*, force_probe: bool = False) -> type[Any] 
 def get_checkpoint_hook_class() -> type[Any] | None:
     """Return torch's private non-reentrant checkpoint hook class, or ``None``.
 
-    Backs the L9 checkpoint-token classifier: a ``_checkpoint_hook`` context
+    Backs the checkpoint-token classifier: a ``_checkpoint_hook`` context
     enter is the identity basis for minting non-reentrant checkpoint tokens.
     Absence flips the named ``HAS_CHECKPOINT_HOOK_CLASS`` flag and the
-    classifier degrades fail-closed (degrade class D1: NO tokens are minted,
+    classifier degrades fail-closed (NO tokens are minted,
     so an unrecognized checkpoint variant can never mint a false token).
     """
 
@@ -2713,7 +2711,7 @@ def get_autograd_engine_queue_callback() -> Callable[..., Any] | None:
 
 
 def kineto_events_from_profiler(profiler: Any) -> tuple[Any, ...] | None:
-    """Return one profiler's in-memory Kineto events, or ``None`` (W2.1).
+    """Return one profiler's in-memory Kineto events, or ``None``.
 
     The device-time join consumes in-memory ``_KinetoEvent`` objects --
     integer-nanosecond intervals, runtime correlation IDs, thread IDs, the
@@ -2786,7 +2784,7 @@ def kineto_events_from_profiler(profiler: Any) -> tuple[Any, ...] | None:
 def memory_profile_from_profiler(profiler: Any) -> Any | None:
     """Return one closed profiler's private categorized memory profile.
 
-    torchnative W0.7 (the DEADLINE item): torch deprecated its only
+    Torch deprecated its only
     categorized memory view, and the still-alive private categorizer
     (``profiler._memory_profile()``) is the ONE oracle the rebuilt
     categorized timeline can ever be checked against -- after upstream
@@ -2858,7 +2856,7 @@ def get_torch_function_stack_surgery() -> (
         ``(len_stack, pop_stack, push_stack)`` -- the private ``torch._C``
         mode-stack primitives (``_len_torch_function_stack``,
         ``_pop_torch_function_stack``, ``_push_on_torch_function_stack``)
-        the weightsfree ambient DeviceContext absorption (W1-ABSORB / D19)
+        the weightsfree ambient DeviceContext absorption
         pops and restores caller modes with -- or ``None`` when the
         import-time ``HAS_TORCH_FUNCTION_STACK_SURGERY`` probe found any of
         the four surgery primitives missing. ``None`` means an ambient
@@ -3135,7 +3133,7 @@ def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     bool
         True while a ``torch.compile`` region is traced. False, with no import, while
         ``torch._dynamo`` is unimported (unless ``force_probe``) or no probe resolved: an absent
-        probe means "not compiling". True when a resolved probe RAISES (r-b4 R26-3), so the wrapper
+        probe means "not compiling". True when a resolved probe RAISES, so the wrapper
         takes the disclosed bypass instead of logging data-free FakeTensors. Both degraded paths
         flip ``HAS_DYNAMO_IS_COMPILING``.
 
@@ -3801,12 +3799,12 @@ else:
         return _legacy_get_autocast_dtype(device_type)
 
 
-# --- r35 decision E: ambient execution-context snapshot/restore ------------------
+# --- Ambient execution-context snapshot/restore ------------------
 #
 # Every control below is a PUBLIC torch surface present since before the 2.1
-# support floor (r-b7 R42-1 retired the six HAS_* flags that used to guard
-# them: their False branches were unreachable on any supported torch, and the
-# CUDA-named ones read True even on CUDA-less wheels) -- WITH ONE EXCEPTION:
+# support floor, so no HAS_* flag guards them (such a flag's False branch would be
+# unreachable on any supported torch, and the CUDA-named ones would read True even
+# on CUDA-less wheels) -- WITH ONE EXCEPTION:
 # ``torch.utils.deterministic.fill_uninitialized_memory`` (just below)
 # postdates the 2.1 floor -- the ``torch.utils.deterministic`` submodule does
 # not exist at all on torch 2.1.x -- and is feature-detected through
@@ -4094,7 +4092,7 @@ def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
 def tensor_version_or_none(tensor: Any) -> int | None:
     """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
 
-    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
+    Inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
     not track version counter"), which ``getattr(..., None)`` does not swallow -- every capture
     under ambient ``torch.inference_mode()`` crashed on TL's own dedup/reference/version bookkeeping
     reads. This helper is the ONE safe accessor for every TorchLens-owned ``_version`` read; an
@@ -4138,14 +4136,14 @@ def snapshot_ambient_execution_context() -> dict[str, Any]:
         "flash_sdp_enabled": bool(torch.backends.cuda.flash_sdp_enabled()),
         "mem_efficient_sdp_enabled": bool(torch.backends.cuda.mem_efficient_sdp_enabled()),
         "math_sdp_enabled": bool(torch.backends.cuda.math_sdp_enabled()),
-        # r53 hon_1: the GLOBAL autograd/inference mode is a result-affecting
+        # The GLOBAL autograd/inference mode is a result-affecting
         # ambient control (a Python branch on ``torch.is_grad_enabled()`` /
         # ``is_inference_mode_enabled()`` is steered by it). Every supported
         # torch exposes both queries, so they are REQUIRED strict booleans --
         # never ``None``, never defaulted.
         "grad_enabled": bool(torch.is_grad_enabled()),
         "inference_mode": bool(torch.is_inference_mode_enabled()),
-        # r53 hon_2: deterministic uninit-memory fill knob (feature-detected).
+        # Deterministic uninit-memory fill knob (feature-detected).
         "fill_uninitialized_memory": read_fill_uninitialized_memory(),
     }
     return snapshot
@@ -4166,18 +4164,18 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
     RuntimeError
         If a recorded default dtype is unavailable on this runtime. Every
         other decision-E control is a public torch surface older than the 2.1
-        support floor, so recorded values apply directly (r-b7 R42-1).
+        support floor, so recorded values apply directly.
     """
 
     default_dtype = values.get("default_dtype")
     if default_dtype is not None:
-        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``).
+        # ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``).
         dtype = torch_attr(str(default_dtype).removeprefix("torch."))
         if not isinstance(dtype, torch.dtype):
             raise RuntimeError(f"Recorded default dtype {default_dtype!r} is unavailable.")
         if torch.get_default_dtype() is not dtype:
             torch.set_default_dtype(dtype)
-    # r37 R4 (corr2-3/corr2-2): ``default_device`` is deliberately NOT applied here.
+    # ``default_device`` is deliberately NOT applied here.
     # ``torch.set_default_device`` mutates the PROCESS-level TorchFunctionMode stack
     # (installing or replacing a DeviceContext), so setter-based apply/restore leaks
     # a mode into the caller (measured: a fresh implicit-CPU consumer ended with a
@@ -4227,13 +4225,13 @@ def apply_ambient_execution_context(values: dict[str, Any]) -> None:
         if recorded is None:
             continue
         getattr(torch.backends.cuda, setter)(bool(recorded))
-    # r53 hon_2: the deterministic uninit-memory fill knob restores through the
+    # The deterministic uninit-memory fill knob restores through the
     # ordinary setter path (module property setter; snapshot/apply transactional).
     fill_uninitialized = values.get("fill_uninitialized_memory")
     if fill_uninitialized is not None:
         write_fill_uninitialized_memory(bool(fill_uninitialized))
-    # r53 hon_1: ``grad_enabled``/``inference_mode`` are deliberately NOT applied
-    # here. Like ``default_device`` (r37 R4 above), they restore as SCOPED
+    # ``grad_enabled``/``inference_mode`` are deliberately NOT applied
+    # here. Like ``default_device`` (above), they restore as SCOPED
     # contexts (``torch.set_grad_enabled`` / ``torch.inference_mode``) around the
     # run transaction in ``_ambient_execution_context_restored``, whose
     # ``__exit__`` restores the caller's exact mode on every exit path by

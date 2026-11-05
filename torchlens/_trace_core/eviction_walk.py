@@ -20,7 +20,7 @@ from typing import Any
 
 from .._utils._display_bounded import RecordTuple
 
-# Depth ceiling for the nested-container payload eviction walk (r8 R37).
+# Depth ceiling for the nested-container payload eviction walk.
 _EVICT_WALK_DEPTH_CEILING = 8
 
 #: Exact builtin types the eviction walk always returns unchanged: no instance

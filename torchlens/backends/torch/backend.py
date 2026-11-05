@@ -174,7 +174,7 @@ class TorchBackend:
         return _state._is_decorated
 
     def start_session(self, options: object) -> object:
-        """Return the existing options object as the M2 session token."""
+        """Return the existing options object as the session token."""
         return options
 
     def prepare_model(self, session: object, model: object) -> object:
@@ -239,12 +239,12 @@ class TorchBackend:
 
             trace = cast("Trace", session)
             with capture_escape_guard(trace), capture_completeness_witness(trace):
-                # L7a Layer-1 mode belt: escalated device-neutral escape
+                # Layer-1 mode belt: escalated device-neutral escape
                 # refusals for structure_only=True sessions; a no-op context
                 # on the default path (zero-diff). The plain scalar-escape
                 # warning belt hands off to it in-mode (its module notes why).
                 with structure_only_escape_belt(trace), capture_scalar_escape_warning(trace):
-                    # Plane-W completion authority (merge-ranks C2): a no-op
+                    # Plane-W completion authority: a no-op
                     # for unarmed captures; for armed captures it installs the
                     # capture-scoped funcol wait interposition and settles
                     # every funcol boundary's completion evidence on exit.
@@ -336,7 +336,7 @@ class TorchBackend:
         # on real H200 hardware when the CUPTI correlation matrix came back empty
         # because the "CUDA" capture had launched zero kernels.
         # Meta state never pins a device either: offload-hooked models
-        # (accelerate device_map / cpu/disk offload, lane F37) hold meta
+        # (accelerate device_map / cpu/disk offload) hold meta
         # params between forwards, the hooks place inputs on the real
         # execution device themselves, and moving inputs to meta poisons a
         # forward that runs fine unlogged ("Cannot copy out of meta tensor").
@@ -744,7 +744,7 @@ class TorchBackend:
         A warnings-as-error filter raises the advisory AT THE WARN SITE;
         letting that escape the failed-capture cleanup would REPLACE the
         error the capture door raises -- and with it the ``.partial_trace``
-        recovery the advisory's own text advertises (b3-opus-R07-1). The
+        recovery the advisory's own text advertises. The
         advisory degrades to a note on that error instead; it stays the one
         that propagates.
         """
@@ -776,7 +776,7 @@ class TorchBackend:
             CUDA allocator cache is cleared when this capture touched CUDA.
         """
 
-        # R16-4b: an unconditional empty_cache() stalled EVERY capture teardown
+        # an unconditional empty_cache stalled EVERY capture teardown
         # on CUDA hosts (synchronizes the device and drops the warm allocator
         # arena) even for pure-CPU captures. Gate on the capture-touched-CUDA
         # predicate, matching the postprocess executor site.

@@ -1,6 +1,6 @@
-"""Relation-carriage method bodies for ``Bundle`` (C07X, foldB S6).
+"""Relation-carriage method bodies for ``Bundle``.
 
-The method bodies that carry the S6 member-relation
+The method bodies that carry the member-relation
 table: ``Bundle.relate`` appends validated rows (R4 new-table install) and
 ``Bundle.episode_status`` folds ``episode_member`` rows into the
 derived episode status (a DERIVATION, never Bundle-level settlement).

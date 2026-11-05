@@ -64,11 +64,10 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_options_mode": FieldPolicy.KEEP,
     # L7a structure-only mode marker: persists as of tlspec v8 (the
     # coordinated bump) with the marker-coherence load-validation rows in
-    # torchlens/_io/forgery_validation.py (M-C2/M-C3; M-C1's form-(a)
+    # torchlens/_io/forgery_validation.py (the form-(a)
     # stripped-marker case is a documented scope statement there).
     "_options_structure_only": FieldPolicy.KEEP,
-    # tlspec v9 entry-dark evidence envelope (C07; weightsfree memo
-    # section 5): None until the F33 writer lands; coherence-validated
+    # tlspec v9 entry-dark evidence envelope: None until the writer lands; coherence-validated
     # at load (only a structure-only capture may carry one).
     "_graph_structure_evidence": FieldPolicy.KEEP,
     # L6 resolved-intervention audit record: persists as of tlspec v8
@@ -93,7 +92,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_health_num_expected_opaque_witness_events": FieldPolicy.DROP,
     "_health_num_unaccounted_witness_events": FieldPolicy.DROP,
     "_health_completeness_callback_ns": FieldPolicy.DROP,
-    # grind-r5 P7: the escape-disclosure VERDICT persists (negative claims
+    # The escape-disclosure VERDICT persists (negative claims
     # only -- __getstate__/__setstate__ degrade anything else to None), so
     # a capture TorchLens refused to bless is no longer byte-
     # indistinguishable from a clean one after save/load. rescue_rerun
@@ -166,7 +165,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # restores the default ``False``, so it stays out of
     # ``MODEL_LOG_FIELD_ORDER`` and out of the portable schema.
     "measure_python_peak_memory": FieldPolicy.DROP,
-    "_forward_peak_memory_pair": FieldPolicy.DROP,  # F20 D-7 session pair
+    "_forward_peak_memory_pair": FieldPolicy.DROP,  # session pair
     # Session-time witness knob for collective boundary records: it selects
     # what capture PAID FOR (digests or nothing), not what a trace means;
     # the per-boundary witness.policy_resolved field is the portable
@@ -183,7 +182,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # trace means. Portable load restores the default False, so it stays out
     # of MODEL_LOG_FIELD_ORDER and out of the portable schema.
     "track_nonfinite": FieldPolicy.DROP,
-    # F24 sampling knob + per-call sample store: allocator counters are
+    # sampling knob + per-call sample store: allocator counters are
     # process facts of the capturing run; load restores the default.
     "track_device_memory": FieldPolicy.DROP,
     "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
@@ -204,8 +203,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_source_forward_signature": FieldPolicy.KEEP,
     "_source_forward_docstring": FieldPolicy.KEEP,
     "_source_frames": FieldPolicy.KEEP,
-    # tlspec v9 entry-dark source-snapshot table (C07; convert memo item
-    # 24): one row per (path, digest), empty until the F30 writer lands;
+    # tlspec v9 entry-dark source-snapshot table: one row per (path, digest), empty until the writer lands;
     # fail-closed row validation at load.
     "_source_snapshots": FieldPolicy.KEEP,
     "_provenance_cache_hit": FieldPolicy.KEEP,
@@ -227,13 +225,13 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_options_save_rng": FieldPolicy.KEEP,
     "_options_recurrence_detection": FieldPolicy.KEEP,
     # L1 grouping surface: persists as of tlspec v8; the grouping-policy
-    # stamp validates at load (C1-C8, _postprocess/_grouping_stamp.py).
+    # stamp validates at load (_postprocess/_grouping_stamp.py).
     "_options_grouping": FieldPolicy.KEEP,
     "_options_grouping_policy": FieldPolicy.KEEP,
-    # L8/F6 shard-local capture marker (merge-ranks C2 substrate):
+    # Shard-local capture marker (merge-ranks substrate):
     # persists as of tlspec v8 with the closed-vocabulary load validation
     # in torchlens/_io/forgery_validation.py. Value vocabulary
-    # ("rank_local_shard") is DOCUMENTED-UNSTABLE pending its S2 amendment.
+    # ("rank_local_shard") is DOCUMENTED-UNSTABLE pending its amendment.
     "_provenance_distributed_scope": FieldPolicy.KEEP,
     # L9 backward-residuals surface: both persist as of tlspec v8 with
     # closed-vocabulary load validation in _io/forgery_validation.py.
@@ -342,7 +340,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_cost_forward_peak_memory": FieldPolicy.KEEP,
     "_provenance_forward_memory_backend": FieldPolicy.KEEP,
     "_cost_forward_peak_memory_reason": FieldPolicy.KEEP,
-    # r83 S4: live-capture scratch reinstated by ``__setstate__`` alongside
+    # Live-capture scratch reinstated by ``__setstate__`` alongside
     # ``_tl_backward_hooked_tensor_keys``, but never registered here. Any
     # trace that went through ``__setstate__`` -- which ``cache=True`` makes
     # routine -- therefore tripped the catalog tripwire and failed
@@ -364,9 +362,9 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # validate through validate_loaded_primitive_profile whenever present.
     "_primitive_op_profile": FieldPolicy.KEEP,
     "_pre_forward_rng_states": FieldPolicy.DROP,
-    # r63 C1: pre-clone per-slot state metadata signatures (producer-side only,
+    # Pre-clone per-slot state metadata signatures (producer-side only,
     # never portable) and the buffer storage-pointer attribution index.
-    # r77 F2: capture-time persistent-buffer name universe + geometry
+    # Capture-time persistent-buffer name universe + geometry
     # (producer-side only, never portable).
     "_buffer_storage_addresses": FieldPolicy.DROP,
     "_mlx_saved_payloads": FieldPolicy.DROP,
@@ -384,7 +382,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # Runtime-only: the set of dispatchable op func-call-ids the orphan-removal
     # pass pruned, read by the validation dispatch-count backstop. Never portable.
     "_orphan_pruned_func_call_ids": FieldPolicy.DROP,
-    # Runtime-only (r29 F3b): the capture-time (slot -> producer) parent-edge
+    # Runtime-only: the capture-time (slot -> producer) parent-edge
     # truth keyed by raw label, read by the capture_edge_survival metadata
     # invariant. Registered in _io/scrub.py's runtime-only list; declared here
     # so the portable-state cover stays exhaustive. Never portable.
@@ -393,7 +391,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # by the torch op-finalize hook; same runtime-bookkeeping class as
     # _capture_parent_edge_truth: never persisted, absent on loaded traces.
     "_nonfinite_capture": FieldPolicy.DROP,
-    # F24 session-time stores (saved-band decomposition, first-save set,
+    # session-time stores (saved-band decomposition, first-save set,
     # aborted-nonfinite prefix facts): the _capture_parent_edge_truth
     # class; loaded traces disclose honest absence (field_intent live-only).
     "_autograd_saved_bands": FieldPolicy.DROP,
@@ -416,7 +414,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_backward_projection_fold_state": FieldPolicy.DROP,
     "_implicit_backward_pass_open": FieldPolicy.DROP,
     "_tl_backward_triggers_disarmed": FieldPolicy.DROP,
-    # Idempotent-cleanup sentinel (b6-opus R25): stamped by cleanup() so a
+    # Idempotent-cleanup sentinel: stamped by cleanup() so a
     # second cleanup() early-returns and every reader of a husked trace
     # funnels into the one typed TraceCleanedUpError. Session-time by
     # construction -- a load rebinds a live trace, never a husk.
@@ -445,7 +443,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_provenance_backward_memory_backend": FieldPolicy.KEEP,
     "backward_peak_memory_reason": FieldPolicy.KEEP,
     "_backward_gradfn_refs": FieldPolicy.DROP,
-    # B1-17: the remaining undeclared runtime Trace attrs the widened
+    # the remaining undeclared runtime Trace attrs the widened
     # lockstep gate finds across the 30-axis postprocess matrix. All are
     # session-time by construction; declaring them makes the gate's
     # authority the policy table rather than the pre-spec allowance in
@@ -466,7 +464,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # output-parent retention flag (DEFERRED_RETENTION axis) and a legacy
     # rerun replays it.
     "_rerun_save_request": FieldPolicy.DROP,
-    # Validation side-channel state (B1-04). `validate_forward_pass` is
+    # Validation side-channel state. `validate_forward_pass` is
     # a public method on a user-held Trace, and
     # validation ENTRY unconditionally sets `_last_validation_failure`
     # (`reset_validation_failure` writes None on every run), so a plain
@@ -478,7 +476,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # `ValidationFailure`/`ValidationDiagnostic` are not portable records.
     "_last_validation_failure": FieldPolicy.DROP,
     "_validation_diagnostics": FieldPolicy.DROP,
-    # Session-time semantic-output scratch (B1-02). Written at capture
+    # Session-time semantic-output scratch. Written at capture
     # entry, consumed only by ``decode_outputs_for_trace``, and dropped on
     # every settlement path (``_capture/trace.py``'s
     # ``_drop_semantic_output_transients`` plus the postprocess seam).

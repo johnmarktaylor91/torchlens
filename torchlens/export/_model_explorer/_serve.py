@@ -1,4 +1,4 @@
-"""Serve one-liner over the public pinned vendor API (memo D18).
+"""Serve one-liner over the public pinned vendor API.
 
 ``model_explorer.visualize(..., reuse_server=...)`` with supported watch
 semantics does the whole job; this module deliberately depends on NO private

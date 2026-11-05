@@ -36,14 +36,14 @@ _NUMPY_RNG_INSTANCE_TYPES: tuple[type, ...] = (
     np.random.Generator,
     np.random.RandomState,
     np.random.BitGenerator,
-    # grind-r5 b8 R57: SeedSequence is a spawnable entropy root whose
+    # SeedSequence is a spawnable entropy root whose
     # ``spawn()`` advances only ``_n_children_spawned`` -- digestable hidden
     # state, so it is a first-class monitored holder.
     np.random.SeedSequence,
 )
 """Public NumPy RNG receiver types covered by the host-nondeterminism witness.
 
-``SeedSequence`` is a first-class member (r5 b8-fable R57): ``spawn()`` on a
+``SeedSequence`` is a first-class member: ``spawn()`` on a
 model-held sequence (or on a generator's underlying sequence) advances
 ``n_children_spawned`` -- verdict-steering hidden state that keys every
 future child's stream -- without touching ``bit_generator.state``.
@@ -144,7 +144,7 @@ _PARTIAL_SLOT_DESCRIPTORS: tuple[Any, ...] = tuple(
     )
     if isinstance(descriptor, (MemberDescriptorType, GetSetDescriptorType))
 )
-"""Base ``functools.partial`` C slot descriptors for ``func``/``args``/``keywords`` (r38).
+"""Base ``functools.partial`` C slot descriptors for ``func``/``args``/``keywords``.
 
 ``partial`` interiors are C slots invisible to ``__dict__`` reads; the frame-reachable
 inventory reads them through these BASE descriptors so a hostile subclass shadow never
@@ -155,7 +155,7 @@ _WEAKREF_PROXY_TYPES: tuple[type, ...] = (
     _weakref_module.ProxyType,
     _weakref_module.CallableProxyType,
 )
-"""The two weakref PROXY C types (r39 -- executed false-VERIFIED V9a).
+"""The two weakref PROXY C types.
 
 A proxy is NOT a ``weakref.ref`` subclass and has NO inert dereference: CPython's proxy
 ``tp_traverse`` does not yield the referent (``gc.get_referents(proxy)`` is empty --
@@ -165,7 +165,7 @@ hostile ``__getattribute__`` could fire. Both walks therefore match on the EXACT
 ``type(value)`` (which never forwards) and fail CLOSED."""
 
 _LRU_CACHE_WRAPPER_TYPE: type | None = getattr(_functools_module, "_lru_cache_wrapper", None)
-"""The C ``functools.lru_cache`` wrapper type (r39 -- executed false-VERIFIED V9b).
+"""The C ``functools.lru_cache`` wrapper type.
 
 A cache WARMED before the capture returns its cached generator with no Python frame (the
 wrapped function never runs), so the draw is witnessable only by digesting the cache
@@ -229,7 +229,7 @@ def _untrusted_rng_override(holder_type: type) -> str | None:
     if issubclass(holder_type, np.random.BitGenerator):
         base_names.update(name for name in dir(np.random.BitGenerator) if not name.startswith("_"))
     if issubclass(holder_type, torch.Generator):
-        # r7 b8-sol R57: torch.Generator is subclassable; a user override of
+        # torch.Generator is subclassable; a user override of
         # its draw/state surface (get_state/manual_seed/seed/...) would
         # shadow the C state the digest reads, exactly the numpy false-clean.
         base_names.update(name for name in dir(torch.Generator) if not name.startswith("_"))
@@ -285,7 +285,7 @@ def _rng_exempt_instances() -> tuple[Any, ...]:
     np_singleton = getattr(getattr(np.random, "mtrand", None), "_rand", None)
     if np_singleton is not None:
         exempt.append(np_singleton)
-    # r7 b8-sol R57: torch.Generator holders are digestable now, so the
+    # torch.Generator holders are digestable, so the
     # REPLAYABLE global torch engine must be identity-exempt exactly like the
     # random/numpy module singletons -- its state is seeded and snapshot-
     # replayed by capture, and a seeded torch draw must never ceiling.
@@ -319,14 +319,14 @@ def _rng_exempt_instances() -> tuple[Any, ...]:
 _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
     {
         # Stdlib runtime primitives + torch/numpy implementation objects the custom-holder
-        # generator sweep (r42 corr2_1) must NOT recurse into: threading/asyncio/file/
+        # generator sweep must NOT recurse into: threading/asyncio/file/
         # socket handles and torch/numpy internals (a digestable RNG is snapshotted BEFORE this
         # skip check; everything else in those namespaces is impl noise). Keyed on the top-level
-        # module of the value's TYPE. r45 hon1_1: ``collections`` and ``queue`` are REMOVED --
+        # module of the value's TYPE. ``collections`` and ``queue`` are deliberately absent:
         # ``deque`` / ``ChainMap`` / ``UserList`` / ``UserDict`` / ``Counter`` and the ``queue.*``
-        # containers are now reached structurally (the ``Mapping`` / non-leaf ``Collection`` descent
+        # containers are reached structurally (the ``Mapping`` / non-leaf ``Collection`` descent
         # and the queue-protocol snapshot) BEFORE this skip check ever runs, so their held
-        # generators are no longer silently missed.
+        # generators are not missed.
         "builtins",
         "threading",
         "asyncio",
@@ -347,21 +347,21 @@ _CUSTOM_HOLDER_SKIP_MODULES = frozenset(
         "torch",
     }
 )
-"""Top-level module names whose instances the custom-holder generator sweep skips (r42 corr2_1)."""
+"""Top-level module names whose instances the custom-holder generator sweep skips."""
 
 _STDLIB_CLASS_LEAF_MODULES: frozenset[str] = frozenset(_sys_module.stdlib_module_names) - {
     "__main__"
 }
-"""Stdlib top-level module names whose CLASSES the class-surface walk leafs (r56 amb_1).
+"""Stdlib top-level module names whose CLASSES the class-surface walk leafs.
 
 Structural (``sys.stdlib_module_names``), never a hand-maintained denylist -- closing the
 whole "stdlib class dict carries a process-global registry" family at once (``collections.abc``
-ABC ``_abc_impl`` caches were the proven member: r45 removed ``collections`` from the
-INSTANCE-side skip set so containers descend, which silently re-opened the CLASS-side walk of
+ABC ``_abc_impl`` caches are a known member: ``collections`` is absent from the
+INSTANCE-side skip set so containers descend, which would otherwise re-open the CLASS-side walk of
 ABC dicts). Applies ONLY to :meth:`host_nondeterminism_monitor._is_trusted_leaf_class` -- the
 instance-side container/holder descent is untouched, so a ``deque`` / ``UserList`` /
 ``UserDict`` subclass instance and its held generators stay fully reachable. ``__main__`` is
-carved out: model classes defined in scripts/notebooks keep r53 class-attribute coverage.
+carved out: model classes defined in scripts/notebooks keep class-attribute coverage.
 """
 
 _INVENTORY_LEAF_TYPES: tuple[type, ...] = (
@@ -375,25 +375,25 @@ _INVENTORY_LEAF_TYPES: tuple[type, ...] = (
     torch.nn.Module,
     ModuleType,
 )
-"""Types the sweep's ``Collection`` branch never ELEMENT-ITERATES (r45 hon1_1).
+"""Types the sweep's ``Collection`` branch never ELEMENT-ITERATES.
 
 ``str`` / ``bytes`` / ``bytearray`` / ``memoryview`` / ``np.ndarray`` / a bare ``torch.Tensor``
 satisfy ``collections.abc.Collection`` yet must NOT be descended element-wise: a string would
 explode into per-character strings (huge / cyclic node blow-up) and a tensor / ndarray holds no
-Python-level RNG among its ELEMENTS. r61 hon_1: this tuple now means exactly "do not iterate
+Python-level RNG among its ELEMENTS. This tuple means exactly "do not iterate
 the buffer" -- it is NOT an instance-state wall. A tensor / ndarray-subclass node still walks
 its Python instance ``__dict__`` / ``__slots__`` through the gc fallback's numeric-payload
 branch (:data:`_NUMERIC_PAYLOAD_LEAF_TYPES`), so ``weight.rng = default_rng()`` is inventoried.
 ``torch.nn.Module`` and ``ModuleType`` are likewise excluded from the
 ``Collection`` descent branch (this entry is inert for ``nn.Module`` -- it is not a
-``collections.abc.Collection`` -- and documents intent). r51 hon1_1: an ``nn.Module`` is NO LONGER
+``collections.abc.Collection`` -- and documents intent). An ``nn.Module`` is not
 a hard inventory leaf; it is descended via ``_is_recursable_custom_holder`` (its own
 ``__dict__`` / ``__slots__``), reaching a generator behind an UNREGISTERED submodule.
 """
 
 
 def _derive_abc_impl_type() -> type | None:
-    """The C ``_abc._abc_data`` type carried by every ``ABCMeta`` class (r56 amb_1).
+    """The C ``_abc._abc_data`` type carried by every ``ABCMeta`` class.
 
     Derived from a live ABC rather than importing the private ``_abc`` module. ``None`` on
     a runtime using the pure-Python ``_py_abc`` fallback (no CPython ``_abc_impl`` slot),
@@ -413,46 +413,45 @@ _AMBIENT_BRIDGE_LEAF_TYPES: tuple[type, ...] = (
     CodeType,
     FrameType,
 ) + ((_ABC_IMPL_TYPE,) if _ABC_IMPL_TYPE is not None else ())
-"""Types the authoritative ``gc.get_referents`` fallback SEVERS entirely (r55 C6, r61 split).
+"""Types the authoritative ``gc.get_referents`` fallback SEVERS entirely.
 
-r61 hon_1 split the former ``_GC_EXPANSION_LEAF_TYPES`` by the REASON each member was
+The members are split by the REASON each was
 excluded. This tuple keeps exactly the members that BRIDGE the rooted walk into ambient
 process state -- severed to ``[]``, never partially walked:
 
 - ``ModuleType``: a module is a SHARED namespace; expanding it drops the rooted
   walk into every imported framework's globals. A generator held in a shared
-  module global is the explicit documented residual (contract section 11).
+  module global is the explicit documented residual.
 - ``CodeType``: code objects hold only compile-time constants (``co_consts``)
   -- a live generator cannot exist there.
 - ``FrameType``: frames chain through ``f_back`` into the ENTIRE interpreter
   call stack (TorchLens's own frames included) -- shared, unbounded state.
-- ``_abc._abc_data`` (r56 amb_1): every ``ABCMeta`` class's ``_abc_impl`` slot.
+- ``_abc._abc_data``: every ``ABCMeta`` class's ``_abc_impl`` slot.
   Its ``tp_traverse`` exposes the ABC registry/cache/NEGATIVE-cache weakref sets
   -- PROCESS-GLOBAL bookkeeping accumulating a weakref to every type ever
   ``isinstance``-checked against that ABC. Expanding one bridges the rooted walk
   out of the model subgraph into the ambient object graph (every cached class's
   dict, then its attribute webs), making sweep completeness ambient-state-
-  dependent: under a large ambient graph the walk digested foreign generators
-  and exhausted the node cap BEFORE the model's own generator (the r55 full-run
-  regression on ``test_r47_generator_container_subclass``). The caches hold only
+  dependent: under a large ambient graph the walk would digest foreign generators
+  and exhaust the node cap BEFORE the model's own generator. The caches hold only
   weakrefs to TYPES plus registered classes, so a model-held generator can never
   live inside one -- excluding them loses zero legitimate coverage.
 
-``types.TracebackType`` is deliberately in NEITHER r61 tuple (unchanged posture): a
+``types.TracebackType`` is deliberately in NEITHER tuple: a
 walked traceback contributes only ``tb_frame`` / ``tb_next``, the frame is severed at
 the referent filter, a traceback has no instance ``__dict__`` -- probed, no ambient
 escape either way.
 
-Deliberately NOT severed: ``torch.nn.Module`` (r51 hon1_1 -- an unregistered
+Deliberately NOT severed: ``torch.nn.Module`` (an unregistered
 submodule must stay reachable), ``type`` objects (a referent class is enqueued
-and handled by the r53 class-surface branch with its trusted-leaf gate), and
-stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (r54 corr_4:
-the ``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
+and handled by the class-surface branch with its trusted-leaf gate), and
+stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (the
+``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
 inertness by ``tp_traverse`` itself).
 
-``BuiltinFunctionType`` was REMOVED in r57 C6 (r56 hon_1): its old
-justification ("a C function's only referents are its ``__self__`` module")
-is FALSE for a *bound* C method, whose ``__self__`` is the RECEIVER instance
+``BuiltinFunctionType`` is deliberately not severed: the justification
+"a C function's only referents are its ``__self__`` module"
+does not hold for a *bound* C method, whose ``__self__`` is the RECEIVER instance
 -- ``gen.random.__self__`` IS the numpy ``Generator``, so blanket-
 leafing dropped a real inert edge ``gc.get_referents`` exposes (a model
 caching ``self.sample = self.rng.random`` read false VERIFIED).
@@ -463,33 +462,33 @@ ambient-bridge walls as every other node, and the node never expands
 generically (a module-level C function -- module or absent ``__self__`` --
 contributes nothing).
 
-r57 C6 follow-up: ``FunctionType`` gets the matching callable-specific
+``FunctionType`` gets the matching callable-specific
 treatment in the same method -- authoritative traverse minus its
 ``__globals__`` / ``__builtins__`` namespace edges dropped BY IDENTITY
 (registry-independent, so an ``exec``/``torch.fx``-generated function with a
 SYNTHETIC globals dict is walled too). After any capture, ``wrap_torch()``
 rebinds torch ops (``torch.relu`` / ``torch.zeros``) from builtins to
 ``FunctionType`` wrappers, so without this branch a cached
-``self.act = torch.relu`` fell through to the generic fallback and enqueued
-function namespace/metadata edges -- the same ambient-escape class the r47/
-r56 walls close. Builtin-vs-wrapped op shape no longer changes the sweep.
+``self.act = torch.relu`` would fall through to the generic fallback and enqueue
+function namespace/metadata edges -- the same ambient-escape class the other
+walls close. Builtin-vs-wrapped op shape no longer changes the sweep.
 """
 
 _NUMERIC_PAYLOAD_LEAF_TYPES: tuple[type, ...] = (np.ndarray, np.generic, torch.Tensor)
-"""Numeric-payload types: buffer never walked, instance STATE walked (r61 hon_1).
+"""Numeric-payload types: buffer never walked, instance STATE walked.
 
-These are NO LONGER hard expansion leaves. The r45/r55 posture blanket-leafed them
+These are not hard expansion leaves. Blanket-leafing them
 ("a tensor's traverse reaches autograd internals, and neither holds a Python-level
-RNG"), which silently dropped REAL inert instance state: arbitrary user attributes on
+RNG") would silently drop REAL inert instance state: arbitrary user attributes on
 a tensor / ``nn.Parameter`` / ndarray-subclass instance are valid CPython
-(``self.lin.weight.rng = default_rng()`` -- the r60 hon_1 false-VERIFIED repro).
+(``self.lin.weight.rng = default_rng()``, which a blanket leaf would read as false VERIFIED).
 
-The r61 rule is per-EDGE, not per-type: the C numeric buffer / autograd / storage
+The rule is per-EDGE, not per-type: the C numeric buffer / autograd / storage
 internals are never walked (``gc.get_referents`` is never called on these types), but
 the Python instance ``__dict__`` / ``__slots__`` surfaces ARE walked via
 :meth:`host_nondeterminism_monitor._custom_holder_children` -- the same inert
 protocol every other holder gets (slot member descriptors, never ``getattr``; zero
-user code) -- AND (r63) the node's class-surface edge is enqueued like every other
+user code) -- AND the node's class-surface edge is enqueued like every other
 holder branch's: ``type(value)`` flows through the trusted-leaf-gated class branch,
 so a class-attribute generator on a USER-defined Tensor / Parameter / ndarray
 subclass is inventoried while stock ``torch.Tensor`` / ``nn.Parameter`` /
@@ -505,13 +504,13 @@ different edges.
 
 
 def _resolve_slot_member(klass: type, slot_name: str) -> MemberDescriptorType | None:
-    """Return ``klass``'s slot member descriptor, resolving CPython name mangling (r61 corr_1).
+    """Return ``klass``'s slot member descriptor, resolving CPython name mangling.
 
     A ``__slots__`` entry spelled ``"__rng"`` (two leading underscores, at most one
     trailing) is stored in the class dict under its MANGLED key ``_Class__rng`` --
-    while ``__slots__`` itself still lists the RAW string. The former
-    ``klass.__dict__.get(slot)`` lookup therefore returned ``None`` for every private
-    slot and its held generator was silently unwitnessed (false VERIFIED).
+    while ``__slots__`` itself still lists the RAW string. A plain
+    ``klass.__dict__.get(slot)`` lookup would therefore return ``None`` for every private
+    slot and its held generator would be silently unwitnessed (false VERIFIED).
 
     Mangling rules pinned against CPython ground truth (6/6 probe cases): ``__rng`` ->
     ``_Class__rng``; ``___x`` -> ``_Class___x``; a trailing-dunder name (``__d__``) is
@@ -520,11 +519,11 @@ def _resolve_slot_member(klass: type, slot_name: str) -> MemberDescriptorType | 
     name (``_x``) is not mangled. The DECLARING class from the MRO is the mangling
     authority (each MRO level mangles against its own name).
 
-    r63 (r62 raw-shadow HIGH): the MANGLED private descriptor is preferred BEFORE any
+    The MANGLED private descriptor is preferred BEFORE any
     raw class-dict key. Name mangling is a compile-time class-body transform, so a
     post-hoc raw entry (``M.__rng = shadow`` via module-level ``setattr``) lands at the
-    UNMANGLED key while the real slot descriptor stays at ``_M__rng`` -- the former
-    raw-key-first lookup let that shadow win and silently dropped the slot-held
+    UNMANGLED key while the real slot descriptor stays at ``_M__rng`` -- a
+    raw-key-first lookup would let that shadow win and silently drop the slot-held
     generator (false VERIFIED). Every candidate key is TYPECHECKED: only an inert
     ``types.MemberDescriptorType`` (the C slot descriptor, whose ``__get__`` is pure C
     field access and executes no Python) is ever returned -- never an arbitrary
@@ -552,7 +551,7 @@ def _resolve_slot_member(klass: type, slot_name: str) -> MemberDescriptorType | 
 
 
 _INVENTORY_NODE_CAP = 1_000_000
-"""Defensive node cap for the model-attribute generator sweep (r41 hon1_2).
+"""Defensive node cap for the model-attribute generator sweep.
 
 Realistic models sit 2-3 orders of magnitude below this (a 400-block toy holds ~7.7k
 module-dict values; the cap admits ~1M visited nodes in ~300 ms measured), so no

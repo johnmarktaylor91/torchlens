@@ -1,4 +1,4 @@
-"""The backward additive-tree walk (mikit D2/D3/D4 -- the decomposition engine).
+"""The backward additive-tree walk (the decomposition engine).
 
 The engine walks BACKWARD from the concrete captured tensor the final norm
 consumes (resolved by dataflow, never forward enumeration, never an
@@ -15,8 +15,8 @@ Membership rules, in order, at one addition ``s = x + y``:
    a qualifying addition (same recorded full-hidden shape, two tensor
    parents).
 2. If NEITHER qualifies, the addition is the ROOT: both operands are writers
-   (token + position embeddings on GPT-2; the panel memo's "two additive
-   leaves, one row on rotary models" rule falls out of the graph).
+   (token + position embeddings on GPT-2, giving two additive leaves;
+   rotary models give one row, as the graph dictates).
 3. If BOTH qualify (a genuine additive join), the spine operand is the one
    whose sub-tree the OTHER operand's ancestry re-enters (a writer consumes
    the state it writes onto); if that test cannot decide, the walk refuses

@@ -1,4 +1,4 @@
-"""Dataloader aggregation over streaming statistics (C01 item 18)."""
+"""Dataloader aggregation over streaming statistics."""
 
 from __future__ import annotations
 
@@ -418,7 +418,7 @@ def _run_compiled_aggregate_batch(
     then falls back to the exact full-trace path).
     """
 
-    # Import from the real home, not the lazy root facade: the F10 deferred
+    # Import from the real home, not the lazy root facade: the deferred
     # data_classes -> stats import edge puts this module inside an import
     # SCC where mypy degrades facade names to implicit-Any and refuses the
     # call ("_Any? not callable").

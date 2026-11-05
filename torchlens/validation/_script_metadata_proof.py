@@ -5,7 +5,7 @@ argument of the scripted call as a parent. When the scripted body reads an argum
 through its shape, rank, element count, dtype or device (a DeBERTa-style
 ``scaled_size_sqrt(query_layer, scale_factor)`` reads ``query_layer.size(-1)``), the call's
 value cannot depend on that argument's elements, so perturbing them cannot change the
-output: the edge is outside the perturbation contract (C2), the same class as arg 1 of
+output: the edge is outside the perturbation contract, the same class as arg 1 of
 ``view_as`` in ``STRUCTURAL_ARG_POSITIONS``. Membership is proved per scripted function
 from its own TorchScript graph with nested scripted calls inlined (``function.inlined_graph``,
 the same program, so a helper that hands an argument to another scripted helper is judged by

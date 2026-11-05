@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def refuse_chunked_batch_coupling(trace: Trace, entries: list[Any]) -> None:
-    """Refuse batch-coherent edits on a chunked-forward capture (D34).
+    """Refuse batch-coherent edits on a chunked-forward capture.
 
     The capture door already refuses ``chunk_size`` with ``hooks=`` /
     ``intervene=``; the surviving hole is a batch-coherent helper applied

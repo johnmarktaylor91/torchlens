@@ -1,17 +1,17 @@
-"""Module-tier history collector, Route A (explorer item 6; D15-D17, D21).
+"""Module-tier history collector, Route A (explorer item 6).
 
 One real discovery forward catalogs the selected module outputs while
 returning the user's actual result; persistent observers then reduce
 DETACHED views under ``no_grad`` at the module return -- the collector never
-enters fastlog and needs no capture-core change (D15). No raw retention
+enters fastlog and needs no capture-core change. No raw retention
 after reduction, no autograd reference surviving step commit, anywhere.
 
-Transfer invariant (D16): reductions write fixed-width device vectors into
+Transfer invariant: reductions write fixed-width device vectors into
 a preallocated staging buffer at precomputed site offsets; host transfers
 are BATCHED and per-phase-per-device bounded, independent of site count --
 never a per-site ``.item()`` or ``.to('cpu')``.
 
-Both step spellings ship with provenance recorded (D17): ``optimizer=``
+Both step spellings ship with provenance recorded: ``optimizer=``
 infers the boundary from the shipped optimizer post-step hook and stamps
 ``implicit`` (recording ``unknown`` for the unscale/clip status it cannot
 determine -- it never guesses); the explicit ``step()`` transaction is
@@ -57,11 +57,11 @@ from ._schema import (
 
 __tl_layer__ = "L5"
 
-#: Streams Route A can collect. ``activation_grad`` rides the F24 observer
+#: Streams Route A can collect. ``activation_grad`` rides the observer
 #: seam (backward hooks), not this collector.
 ROUTE_A_STREAMS = ("activation", "param", "param_grad", "param_delta")
 
-#: Update-channel sample size (D11): deterministic seeded fp32 subvector of
+#: Update-channel sample size: deterministic seeded fp32 subvector of
 #: min(numel, 4096) indices per parameter; full coverage degrades gracefully
 #: to EXACT with ``estimated=False``.
 UPDATE_SAMPLE_SIZE = 4096
@@ -70,14 +70,14 @@ UPDATE_SAMPLE_SIZE = 4096
 #: float64 plus identity/disclosure strings, and the sketch cells at int64.
 _SPINE_ROW_BYTES = SPINE_SLOTS * 8 + 64
 
-#: D21 embedding-class sketch exclusion: a parameter owned by an embedding
+#: embedding-class sketch exclusion: a parameter owned by an embedding
 #: table module with at least this many elements reduces spine-only unless
 #: ``WatchSettings(sketch_embeddings=True)`` asks for its sketch. On gpt2 the
 #: token table alone is 69% of a naive preset's reduction elements for the
 #: tensor that moves least and is least diagnostic per byte.
 EMBEDDING_SKETCH_CAP_NUMEL = 1 << 20
 
-#: D22 default history-artifact byte budget (gate-ratified build value): the
+#: default history-artifact byte budget (gate-ratified build value): the
 #: serialized-size accountant refuses BEFORE the block that would cross it.
 DEFAULT_ARTIFACT_BUDGET_BYTES = 256 * 1024 * 1024
 
@@ -86,7 +86,7 @@ _BlockKey = tuple[str, str, str]
 
 @dataclass(frozen=True)
 class PlanRow:
-    """One plan-table row (D21): elements per logged step, ALONGSIDE bytes."""
+    """One plan-table row: elements per logged step, ALONGSIDE bytes."""
 
     site_id: str
     stream: str
@@ -102,7 +102,7 @@ class WatchPlan:
     """The resolved collection plan: rows, totals, and both cost columns.
 
     Bytes predict storage; ELEMENTS predict time -- they differ by orders of
-    magnitude (D21), so both columns print.
+    magnitude, so both columns print.
     """
 
     rows: tuple[PlanRow, ...]
@@ -159,7 +159,7 @@ class StepTruth:
     Defaults state exactly what an unadorned ``step()`` can attest: the
     optimizer step is assumed ``applied`` and the unscale/clip statuses stay
     ``"unknown"`` unless the caller can vouch for them -- the collector
-    never guesses (D17).
+    never guesses.
     """
 
     applied: bool = True
@@ -173,7 +173,7 @@ _EMBEDDING_NOTE = "embedding-class: spine only (WatchSettings(sketch_embeddings=
 
 
 def _embedding_class_params(model: torch.nn.Module) -> set[str]:
-    """Names of giant embedding-table parameters (D21), as ``named_parameters`` spells them."""
+    """Names of giant embedding-table parameters, as ``named_parameters`` spells them."""
 
     owners = {
         id(param)
@@ -186,7 +186,7 @@ def _embedding_class_params(model: torch.nn.Module) -> set[str]:
 
 
 def _site_seed(run_id: str, site_id: str) -> int:
-    """Deterministic private seed for the update channel (D11/D13).
+    """Deterministic private seed for the update channel.
 
     Derived from run/site identity via sha256 -- never touches model or
     global RNG.
@@ -201,7 +201,7 @@ def _batch_to_cpu(
 ) -> list[tuple[_BlockKey, torch.Tensor]]:
     """Move keyed device vectors to CPU in ONE stacked transfer per device.
 
-    This is the D16 chokepoint for the parameter phases: per-site ``.cpu()``
+    This is the chokepoint for the parameter phases: per-site ``.cpu()``
     calls are banned; vectors group by device, stack, and cross in one copy
     per device per phase.
     """
@@ -314,9 +314,9 @@ class HistoryCollector:
         self._implicit_counter = 0
         self._update_samples: dict[str, torch.Tensor] = {}
         self._sample_index_cache: dict[str, torch.Tensor] = {}
-        #: D21: embedding-class parameter names reduced spine-only.
+        #: embedding-class parameter names reduced spine-only.
         self._spine_only_params: set[str] = set()
-        #: D22: accounted serialized bytes of committed blocks, and the
+        #: accounted serialized bytes of committed blocks, and the
         #: per-block upper bound the admission check adds before opening.
         self._artifact_bytes = 0
         self._block_bytes_bound = 0
@@ -324,7 +324,7 @@ class HistoryCollector:
     def _normalize_cadence(
         self, cadence: int | Mapping[str, int] | None, *, default: int | None
     ) -> dict[str, int]:
-        """Normalize cadence input to a per-stream mapping (D21)."""
+        """Normalize cadence input to a per-stream mapping."""
 
         if cadence is None:
             return {}
@@ -350,7 +350,7 @@ class HistoryCollector:
         Catalogs the selected module outputs (shape/dtype/device), the
         selected parameters, builds the plan table, and preallocates the
         per-phase staging buffers. Zero-match selections refuse at plan
-        time: a warning at step 0 of a ten-hour run is not disclosure (D6).
+        time: a warning at step 0 of a ten-hour run is not disclosure.
         """
 
         output, seen = self._run_discovery_forward(*args, **kwargs)
@@ -360,7 +360,7 @@ class HistoryCollector:
             raise WatchPlanError(
                 "The site selection matched NOTHING. Zero-match selectors "
                 "refuse at plan time: a warning at step 0 of a ten-hour run "
-                "is not disclosure (D6).",
+                "is not disclosure.",
                 code="watch_plan_empty",
                 requested=self.requested_sites,
                 remedy=(
@@ -459,7 +459,7 @@ class HistoryCollector:
             self._sites_by_id[site.site_id] = site
 
     def _allocate_staging(self, device: str) -> None:
-        """Preallocate the per-phase module-site staging buffers (D16)."""
+        """Preallocate the per-phase module-site staging buffers."""
 
         n_module_sites = len(self._module_sites)
         if not n_module_sites:
@@ -488,7 +488,7 @@ class HistoryCollector:
         return selected
 
     def _build_plan(self) -> WatchPlan:
-        """Build the D21 plan table: elements AND bytes per logged step."""
+        """Build the plan table: elements AND bytes per logged step."""
 
         rows: list[PlanRow] = []
         total_elements = 0
@@ -509,7 +509,7 @@ class HistoryCollector:
                 numel = site.numel or 0
                 if stream == "param_delta":
                     elements = min(numel, self.update_sample_size)
-                    note = "sampled update channel (D11)" if numel > elements else "exact"
+                    note = "sampled update channel" if numel > elements else "exact"
                 else:
                     elements = numel
                     note = ""
@@ -635,7 +635,7 @@ class HistoryCollector:
 
         Reduces a DETACHED view under no_grad at the module return; writes
         the fixed-width vectors into the preallocated staging buffer at the
-        site's precomputed offset (D16). Re-fires of the same site within
+        site's precomputed offset. Re-fires of the same site within
         one forward (recurrent/reused modules) go to a device-side overflow
         list and merge after the batched phase transfer -- never a per-site
         host copy. The raw tensor is never retained.
@@ -732,7 +732,7 @@ class HistoryCollector:
             self._commit_block()
 
     def _admit_artifact_bytes(self) -> None:
-        """D22: refuse BEFORE the block that would cross the artifact budget.
+        """Refuse BEFORE the block that would cross the artifact budget.
 
         Applies to the disk archive (``output_dir=``); the RAM-only ring has
         its own capacity refusal. The committed artifact stays readable: the
@@ -747,8 +747,8 @@ class HistoryCollector:
         raise HistoryArtifactError(
             f"The next StepBlock (up to {self._block_bytes_bound} bytes) would "
             f"push the history artifact past its byte budget ({budget} bytes; "
-            f"{self._artifact_bytes} committed). Nothing was dropped or degraded "
-            "(D20); the artifact is readable up to the last committed block.",
+            f"{self._artifact_bytes} committed). Nothing was dropped or degraded; "
+            "the artifact is readable up to the last committed block.",
             code="history_artifact_budget_exceeded",
             budget=budget,
             committed=self._artifact_bytes,
@@ -779,7 +779,7 @@ class HistoryCollector:
             self._sketch_staging.zero_()
 
     def _flush_forward_staging(self) -> None:
-        """The batched host transfer for the forward phase (D16).
+        """The batched host transfer for the forward phase.
 
         One staging copy, one touched copy, one sketch copy, and one stacked
         overflow copy per device -- bounded, independent of site count.
@@ -857,7 +857,7 @@ class HistoryCollector:
         del optimizer, args, kwargs
         if not self._block_open and self._optimizer is not None:
             # Implicit spelling: the block opens at the first optimizer
-            # boundary activity after the last close (D17).
+            # boundary activity after the last close.
             self._open_block(self._implicit_counter, provenance="implicit")
         self._flush_forward_staging()
         grad_entries: list[tuple[_BlockKey, torch.Tensor]] = []
@@ -929,10 +929,10 @@ class HistoryCollector:
             self._implicit_counter += 1
 
     def _sample_indices(self, name: str, param: torch.Tensor) -> torch.Tensor:
-        """Deterministic seeded sample indices for one parameter (D11).
+        """Deterministic seeded sample indices for one parameter.
 
         Cached per site: the seed derives from run/site identity via a
-        PRIVATE generator that never touches model or global RNG (D13).
+        PRIVATE generator that never touches model or global RNG.
         """
 
         cached = self._sample_index_cache.get(name)
@@ -952,7 +952,7 @@ class HistoryCollector:
         return indices
 
     def _commit_block(self) -> None:
-        """Commit the open StepBlock atomically (D6)."""
+        """Commit the open StepBlock atomically."""
 
         if not self._block_open:
             return
@@ -974,7 +974,7 @@ class HistoryCollector:
         for key, vec in self._block_spines.items():
             site_id, stream, phase = key
             if stream == "param_delta" and skipped:
-                # A skipped optimizer step records NO fake update (D7/D11).
+                # A skipped optimizer step records NO fake update.
                 continue
             spine = spine_result_from_vector(vec, "float64")
             sketch = None

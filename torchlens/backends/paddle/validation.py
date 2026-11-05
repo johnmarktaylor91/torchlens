@@ -264,9 +264,9 @@ def _arrays_close(left: np.ndarray, right: np.ndarray) -> bool:
     if np.issubdtype(left.dtype, np.bool_) or np.issubdtype(left.dtype, np.integer):
         return bool(np.array_equal(left, right))
     if np.issubdtype(left.dtype, np.floating) or np.issubdtype(left.dtype, np.complexfloating):
-        # The ONE shared eps-derived band (b5-opus R17-1 hoist); complex
-        # payloads take the same component-eps band as mlx/jax (bit-exact
-        # complex here false-failed legitimate replay jitter). equal_nan
+        # The ONE shared eps-derived band; complex payloads take the same
+        # component-eps band as mlx/jax (a bit-exact complex comparison would
+        # false-fail legitimate replay jitter). equal_nan
         # matches this backend's own replay oracle (paddle/backend.py) and
         # every sibling: identical NaN patterns are agreement, NaN-vs-number
         # still fails elementwise.

@@ -108,7 +108,7 @@ def _place_inputs_on_model_device(r: SimpleNamespace) -> None:
     match: this prevents silent device-mismatch errors when the model is on
     CUDA but the user passes CPU tensors (a common mistake). A META first
     parameter is never a destination: offload-hooked models (accelerate
-    device_map / cpu/disk offload, lane F37) hold meta params between forwards
+    device_map / cpu/disk offload) hold meta params between forwards
     and their hooks place inputs on the real execution device themselves;
     moving inputs to meta would poison the forward ("Cannot copy out of meta
     tensor") that runs fine unlogged.
@@ -126,7 +126,7 @@ def _stamp_root_identity(r: SimpleNamespace) -> None:
 
     model = r.model
     if isinstance(model, TLBoundMethodRoot):
-        # F41 bound-method root: the synthetic root's identity reads the
+        # bound-method root: the synthetic root's identity reads the
         # OWNER (type(owner).__name__ / its qualified class name), never the
         # TL-authored wrapper class or the string "method"; the entry-point
         # fact below discloses the bound_method invocation kind.
@@ -185,7 +185,7 @@ def _lower_module_intervene_selector(r: SimpleNamespace) -> None:
     r.module_intervene_selector = candidate_selector
     # .selector is non-None only for single-rule specs, so rules[0] is
     # exact; the rule digest is unrecoverable downstream of this
-    # lowering (W051-BIND 2.3b).
+    # lowering .
     spec_rules: Any = getattr(r.intervene_predicate, "rules", ())
     lowered_rule_id = spec_rules[0].rule_id
     r.module_intervene_entries = [
@@ -201,7 +201,7 @@ def _lower_module_intervene_selector(r: SimpleNamespace) -> None:
         for entry in normalize_hook_plan(candidate_selector, candidate_decision.hook)
     ]
     # Keep the original spec: the capture-door event must record the rules
-    # payload the loader's injected-op anchor (W051-BIND 2.3c) vouches by.
+    # payload the loader's injected-op anchor vouches by.
     r.lowered_intervene_spec = r.intervene_predicate
     r.intervene_predicate = None
 
@@ -319,8 +319,8 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     trace._source_class_qualname = r.model_class_qualname
     trace._provenance_param_hash_quick = r.weight_fingerprint
     trace._provenance_param_hash_full = r.weight_fingerprint
-    # C07X (iv)/D10: unconditional write; F41's fail-closed gate reads it.
-    # module_call for plain module roots, bound_method for the F41
+    # Unconditional write; the fail-closed rerun gate reads it.
+    # module_call for plain module roots, bound_method for the
     # TL-authored wrapper root (derived beside the identity fields above).
     trace._provenance_root_entry_point = r.root_entry_point
     trace._provenance_input_object_id = r.input_object_id
@@ -338,11 +338,10 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     trace.measure_host_peak_memory = r.measure_host_peak_memory
     trace._options_aten_ops = "values" if r.aten_ops == "values" else bool(r.aten_ops)
     _injection.arm_injection_logging(trace, armed=r.log_injections)
-    # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
-    # (memo sec 1.5) and stamps the mirror field here at entry. At S2
-    # ratification the settlement-side stamp moves to the
-    # _capture/outcome.py witness machinery in the S2 author's PR; this
-    # entry write stays as the declared-mode source of truth.
+    # Mode-marker prep: the flag DECLARES the mode and stamps the mirror
+    # field here at entry. The settlement-side stamp moves to the
+    # _capture/outcome.py witness machinery once ratified; this entry
+    # write stays as the declared-mode source of truth.
     trace._options_structure_only = r.structure_only
     # Per-op argument templates are all saved-graph replay needs (trace.do(site, edit)
     # without model=), and they cost about a tenth of capture time with no retained

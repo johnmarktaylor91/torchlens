@@ -277,8 +277,7 @@ def _record_runnable_input_literal_leaves(
     def _walk_site(position: object, value: Any) -> None:
         """Record one boundary site's non-tensor leaves through the shared traversal.
 
-        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
-        Cluster Y): this walker only declares WHAT it records. A mapping child under
+        Container dispatch is single-sourced in ``torchlens._input_walk``: this walker only declares WHAT it records. A mapping child under
         a literal-grammar key is recorded at its tagged path (bool keys stay distinct
         from equal-valued int keys in the leaf-path set); a child under a
         NON-representable key (enum, object, bytes, ...) cannot be
@@ -289,7 +288,7 @@ def _record_runnable_input_literal_leaves(
         leaf, so it is witnessed by a synthetic marker leaf carrying its KIND at
         ``(*path, EMPTY_CONTAINER_PATH_MARKER)`` so an added/removed/kind-changed
         empty container (which can steer ``'flag' in d`` / ``if not lst`` control
-        flow) diverges instead of silently replaying the recorded path. r42 corr1_2:
+        flow) diverges instead of silently replaying the recorded path.
         dataclass containers descend by DECLARED FIELD with the same leaf vocabulary,
         so a tensor-only dataclass input records ZERO opaque leaves (stays fully
         witnessable -> VERIFIED) while a genuinely-opaque field still surfaces.
@@ -322,7 +321,7 @@ def _record_runnable_input_structure(
     input_args: list[Any],
     input_kwargs: dict[Any, Any],
 ) -> None:
-    """Stash ONE per-site input-boundary structure snapshot for runnable honesty (r67 C2).
+    """Stash ONE per-site input-boundary structure snapshot for runnable honesty.
 
     One traversal per normalized model-input site (the snapshot spine in
     ``torchlens._input_walk``) records the complete site set/arity and every nested node
@@ -383,16 +382,15 @@ def _record_runnable_input_tensor_sites(
 
     sites: dict[int, tuple[object, tuple[str | int, ...]]] = {}
     # (tensor, site) leaves so the completeness witness can additionally index model-input
-    # leaves by STORAGE identity (r31): a metadata read routed through a ``.data`` / ``.detach()``
+    # leaves by STORAGE identity: a metadata read routed through a ``.data`` / ``.detach()``
     # alias shares the leaf's storage but is a distinct object the id map above misses.
     tensor_leaves: list[tuple[Any, tuple[object, tuple[str | int, ...]]]] = []
 
     def _walk_site(position: object, value: Any) -> None:
         """Index one boundary site's tensor leaves by identity through the shared traversal.
 
-        Container dispatch is single-sourced in ``torchlens._input_walk`` (r65
-        Cluster Y), so this walker descends EXACTLY the container set the literal
-        walker descends -- including dataclasses (the r64 Finding-1 false-VERIFIED: a
+        Container dispatch is single-sourced in ``torchlens._input_walk``, so this walker descends EXACTLY the container set the literal
+        walker descends -- including dataclasses (the Finding-1 false-VERIFIED: a
         missing dataclass branch here recorded no metadata witness for
         ``box.x.is_contiguous()`` on a dataclass input field, so a same-value
         non-contiguous twin replayed the captured branch as VERIFIED). Mapping
@@ -436,7 +434,7 @@ def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
     on the given inputs, so the captured mode is DECLARED state the replay reproduces.
     Recording it (per submodule -- submodules can differ) lets the producer declare the mode
     as a witness fact; a mode-sensitive op replayed without a recorded mode fact is downgraded
-    to UNVERIFIABLE (fail closed). It runs for every capture (D18 widened the former
+    to UNVERIFIABLE (fail closed). It runs for every capture (widened from the former
     intervention-ready gate so the live refresh projector's mode-claim belt holds on the
     default path; the widening is verdict-inert on the sparse side because the runnable
     producer refuses non-intervention-ready captures outright), touches no tensors, and

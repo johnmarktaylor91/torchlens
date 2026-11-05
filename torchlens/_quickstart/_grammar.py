@@ -1,6 +1,6 @@
-"""The ``input_shape=`` grammar and the deterministic synthesis kernel (B6).
+"""The ``input_shape=`` grammar and the deterministic synthesis kernel.
 
-Grammar (quickstart memo D4, SOL's verbatim): one flat positive-integer tuple
+Grammar: one flat positive-integer tuple
 is one shape; a sequence of shapes is multiple positional tensors; a mapping
 is forward-keyword-to-shape. Batch is included exactly as written. Zero,
 negative, symbolic, and unknown bindings refuse before capture.
@@ -28,7 +28,7 @@ from .._errors import InvalidArgumentError
 
 __tl_layer__ = "L2"
 
-#: Default synthesis seed (memo D4: "a local seed-0 generator").
+#: Default synthesis seed (a local seed-0 generator).
 SYNTHESIS_SEED = 0
 
 #: Closed keyword-name fact table for the mapping form. Fail-closed: a
@@ -222,7 +222,7 @@ def _fact_for_keyword(
 def _fact_for_model(model: nn.Module, *, slot: str) -> tuple[str, float, float, torch.dtype]:
     """Return the model-level (recipe, low, high, dtype) fact, or refuse.
 
-    Fail-closed (memo D4): ambiguity refuses with the ``InputSpec`` override
+    Fail-closed: ambiguity refuses with the ``InputSpec`` override
     teach; dtype is never discovered by failed forwards.
     """
 
@@ -297,7 +297,7 @@ def _forward_keyword_names(model: nn.Module) -> tuple[frozenset[str], bool]:
 
 
 def parse_input_size(input_size: Any, model: nn.Module) -> ParsedInputSize:
-    """Parse and validate the ``input_shape=`` argument (the D4 grammar).
+    """Parse and validate the ``input_shape=`` argument (the grammar).
 
     Parameters
     ----------

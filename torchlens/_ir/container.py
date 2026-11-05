@@ -383,7 +383,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         ]
         container_type = _resolve_container_type(spec)
-        # r49 secB_1: the SHARED substitution predicate decides plain-tuple fallback, so the
+        # the SHARED substitution predicate decides plain-tuple fallback, so the
         # load-time lossy gate and this reconstruction can never disagree. ``not substitute``
         # means the type is a trusted structseq OR a generated namedtuple; the inner check only
         # selects the correct INERT constructor for those two non-substituting cases.
@@ -412,7 +412,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             for field_name in spec.fields
         }
         container_type = _resolve_container_type(spec)
-        # r49 secB_1: shared substitution predicate (== the old inline
+        # shared substitution predicate (== the old inline
         # ``_type_has_safe_new and _fields_are_inert_settable`` conjunction) so gate and
         # reconstruction stay coupled.
         if container_type is not None and not _reconstruction_would_substitute_plain(
@@ -425,7 +425,7 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             key: _rebuild_child_or_leaf(child_by_key, HFKey(key), leaf_iter) for key in spec.keys
         }
         container_type = _resolve_container_type(spec)
-        # r49 secB_1: shared substitution predicate (== the old inline
+        # shared substitution predicate (== the old inline
         # ``_type_has_safe_new and issubclass(dict) and _fields_are_inert_settable`` conjunction)
         # so gate and reconstruction stay coupled.
         if container_type is not None and not _reconstruction_would_substitute_plain(
@@ -555,7 +555,7 @@ def reconstruction_is_lossy(value: Any, captured_names: tuple[Any, ...]) -> bool
 
 
 def _is_trusted_structseq_type(container_type: type[Any], spec: ContainerSpec) -> bool:
-    """Return whether ``container_type`` is a genuine torch structseq (r39 secB_1, spec-aware).
+    """Return whether ``container_type`` is a genuine torch structseq (spec-aware).
 
     The structseq branch is the ONLY container-reconstruction path that invokes an arbitrary
     type's own ``__new__`` (``container_type(values)``), so its trust decision must key on the
@@ -659,7 +659,7 @@ def _model_output_has_foreign_init(
         # First (most-derived) class that defines ``__init__`` -- the one that would run.
         if klass in _TRUSTED_MODEL_OUTPUT_INIT_BASES:
             return False
-        # r42 secB_1: trust a non-base field-mirroring init ONLY when the CONTAINER type is a
+        # trust a non-base field-mirroring init ONLY when the CONTAINER type is a
         # genuine ``transformers`` ModelOutput by RESOLUTION AUTHORITY (identity re-resolution
         # from the real loaded package), never the spoofable / loose ``__module__`` prefix.
         # Unresolved or non-identical -> foreign (fail closed to lossy).
@@ -673,7 +673,7 @@ def _reconstruction_would_substitute_plain(
     names: tuple[Any, ...],
     spec: ContainerSpec | None,
 ) -> bool:
-    """Return whether ``_rebuild_container_from_spec`` would substitute a PLAIN container (r49 secB_1).
+    """Return whether ``_rebuild_container_from_spec`` would substitute a PLAIN container.
 
     The SINGLE shared substitution criterion consulted by BOTH the reconstruction path
     (:func:`_rebuild_container_from_spec`) AND the load-time forged-flag lossy gate
@@ -682,8 +682,8 @@ def _reconstruction_would_substitute_plain(
     ``__new__``-computed state -- exactly when the type's ``__new__`` is not an inert allocator, its
     fields are not inertly settable, or (namedtuple) it is neither a generated namedtuple nor a
     trusted structseq. The gate must treat every such case as lossy, else a forged
-    ``lossy_reconstruction=False`` yields a false ``VERIFIED`` on a type-substituted output (the r48
-    secB_1 ``__new__`` / generated-namedtuple hole).
+    ``lossy_reconstruction=False`` yields a false ``VERIFIED`` on a type-substituted output (the
+    ``__new__`` / generated-namedtuple hole).
 
     Coupling is enforced by SHARED CODE: because reconstruction and the gate call THIS predicate,
     a future gate/reconstruction divergence is a failing coverage meta-test rather than a silent
@@ -721,17 +721,17 @@ def reconstruction_is_lossy_by_type(
     is attacker-controlled in an untrusted bundle: a forged ``False`` would force a false
     ``VERIFIED`` on a genuinely lossy reconstruction. This function re-derives lossiness
     INDEPENDENTLY from the resolved type (the one trustworthy input at load), mirroring the
-    r25 :func:`reconstruction_is_lossy` criteria that are TYPE-observable:
+    :func:`reconstruction_is_lossy` criteria that are TYPE-observable:
 
     * a ``__slots__`` layout with no instance ``__dict__`` (fields cannot be set inertly), or
     * a captured name that resolves to a data descriptor (cannot be set faithfully), or
     * (dataclass kind only) a user ``__post_init__`` that may compute dropped non-field state, or
-    * (dataclass kind only, r47 secB_1) a winning ``__init__`` that is NOT the dataclasses-generated
+    * (dataclass kind only) a winning ``__init__`` that is NOT the dataclasses-generated
       one (a user-authored / foreign constructor that may compute dropped non-field state -- detected
       by the generated init's feature-detected ``co_filename`` marker, see
       ``_dataclass_has_foreign_init``). This defeats a forged ``lossy_reconstruction=False`` naming a
       custom-init dataclass without invoking its constructor.
-    * (dataclass + ``hf_model_output`` kinds, r51 secB_1) a METACLASS (``type(container_type)``) that
+    * (dataclass + ``hf_model_output`` kinds) a METACLASS (``type(container_type)``) that
       defines a ``__call__`` other than the builtin ``type.__call__`` -- a fourth computed-dropped-
       state constructor hook that non-invoking reconstruction (``cls.__new__(cls)``) bypasses,
       applied GATE-DIRECT so reconstruction still rebuilds the correct inert type while the verdict
@@ -744,8 +744,8 @@ def reconstruction_is_lossy_by_type(
     fields (attrs == keys), so applying it to the ``hf_model_output`` kind would over-trigger
     the standard/real ModelOutput case that must stay VERIFIED.
 
-    For the ``hf_model_output`` kind, the r27 hardening adds an INDEPENDENT type-observable proxy
-    for the r25 "computed non-``None`` extra attr on a custom (non-dataclass) ModelOutput
+    For the ``hf_model_output`` kind, the hardening adds an INDEPENDENT type-observable proxy
+    for the "computed non-``None`` extra attr on a custom (non-dataclass) ModelOutput
     ``__init__``" case, which is otherwise invisible without INVOKING ``__init__`` (the RCE
     construction-gadget surface): if the resolved type's own (most-derived) ``__init__`` is a
     custom constructor -- one NOT provided by the trusted mapping bases (``dict`` / ``OrderedDict``)
@@ -780,7 +780,7 @@ def reconstruction_is_lossy_by_type(
         return True
     if kind == "hf_model_output" and _model_output_has_foreign_init(container_type, spec):
         return True
-    # r51 secB_1: a custom metaclass ``__call__`` is a FOURTH computed-dropped-state constructor
+    # a custom metaclass ``__call__`` is a FOURTH computed-dropped-state constructor
     # hook (alongside ``__post_init__`` / foreign ``__init__`` / non-inert ``__new__``). It can
     # compute a dropped tensor-derived extra that non-invoking reconstruction (``cls.__new__(cls)``,
     # which bypasses the metaclass ``__call__`` entirely) drops, and is not type-observable without
@@ -793,7 +793,7 @@ def reconstruction_is_lossy_by_type(
     # ``__dict__`` for the extra and an unslotted tuple subclass is separately flagged).
     if kind in ("dataclass", "hf_model_output") and _metaclass_defines_foreign_call(container_type):
         return True
-    # r49 secB_1: couple the gate to reconstruction's OWN substitution criterion. If
+    # couple the gate to reconstruction's OWN substitution criterion. If
     # ``_rebuild_container_from_spec`` would substitute a PLAIN container for this type (its
     # ``__new__`` is not an inert allocator, or its fields are not inertly settable), the
     # recorded type and any ``__new__``-computed state are dropped -- treat it as lossy,
@@ -987,7 +987,7 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
             return False
         if hasattr(container_type, "_fields"):
             return True
-        # r39 secB_1: a tuple subclass posing as a structseq is admissible ONLY when the
+        # a tuple subclass posing as a structseq is admissible ONLY when the
         # spec-aware resolution-authority gate confirms it -- never the spoofable
         # ``__module__`` class attribute.
         return _is_trusted_structseq_type(container_type, spec)
@@ -1015,7 +1015,7 @@ def _resolve_container_type(spec: ContainerSpec) -> type[Any] | None:
     """Resolve the concrete container type named by a spec under a default-deny gate.
 
     Security contract (this is the fix for the output-container reconstruction RCE and the
-    r27 lazy-import / descriptor gadget on the dotted-name walk):
+    lazy-import / descriptor gadget on the dotted-name walk):
 
     * NEVER imports an attacker-named module -- importing runs top-level module code.
       The type is resolved ONLY from a module already present in ``sys.modules``; every
@@ -1105,7 +1105,7 @@ class RegisteredContainer:
         unflatten:
             Callable accepting ``(aux_data, children)``.
         state_complete:
-            Explicit trusted declaration (r37 R11) that ``unflatten(aux_data,
+            Explicit trusted declaration that ``unflatten(aux_data,
             children)`` restores EVERY piece of per-instance state ``flatten``
             observed -- nothing is dropped. Defaults ``False``: a registration
             without the declaration keeps working for analysis capture, but a
@@ -1121,7 +1121,7 @@ class RegisteredContainer:
 _CONTAINER_REGISTRY: dict[type[Any], RegisteredContainer] = {}
 
 _CONTAINER_REGISTRY_LOCK = threading.Lock()
-"""Serializes registry writes against reader snapshots (r7 b2-sol R54).
+"""Serializes registry writes against reader snapshots.
 
 ``register_container`` is public API callable from any thread; the lookup
 used to iterate the live dict, so a registration racing a capture's walk
@@ -1151,7 +1151,7 @@ def register_container(
         Callable accepting ``(aux_data, children)`` and returning an instance.
     state_complete:
         Trusted declaration that the hook pair round-trips ALL per-instance
-        state (r37 R11); without it, runnable saves refuse instances carrying
+        state; without it, runnable saves refuse instances carrying
         extra ``__dict__`` state instead of dropping it silently on replay.
 
     Examples
@@ -1218,7 +1218,7 @@ def get_registered_container(container_type: type[Any]) -> RegisteredContainer |
 def namedtuple_extra_instance_state(value: Any) -> bool:
     """Return whether a namedtuple INSTANCE carries non-field ``__dict__`` state.
 
-    r37 secB_1: a namedtuple subclass without ``__slots__ = ()`` can stash
+    a namedtuple subclass without ``__slots__ = ()`` can stash
     tensor-derived attributes on the instance (``self.total = a + b`` in a custom
     ``__new__``); the inert ``tuple.__new__`` rebuild drops them. This is the
     NAMEDTUPLE-SPECIFIC capture-side signal -- never route namedtuples through the
@@ -1234,7 +1234,7 @@ def namedtuple_extra_instance_state(value: Any) -> bool:
 
 
 def namedtuple_type_can_carry_instance_state(container_type: type[Any]) -> bool:
-    """Return whether a RESOLVED namedtuple type can hold per-instance state (r37).
+    """Return whether a RESOLVED namedtuple type can hold per-instance state.
 
     The load-time forged-flag defense: a persisted ``lossy_reconstruction=False``
     on a namedtuple spec is only honored when the resolved type structurally
@@ -1252,7 +1252,7 @@ def mapping_extra_instance_state(value: Any) -> bool:
 
     Exact ``dict`` has no instance ``__dict__`` (structurally stateless);
     ``OrderedDict``/``defaultdict`` instances can carry arbitrary attributes the
-    key/value rebuild drops (r37 3-ADJ-2). Capture-side signal, mirrored by the
+    key/value rebuild drops. Capture-side signal, mirrored by the
     save-side losslessness refusal.
     """
 
@@ -1263,7 +1263,7 @@ def mapping_extra_instance_state(value: Any) -> bool:
 
 
 CONTAINER_KIND_CAPABILITIES: dict[str, dict[str, str | bool]] = {
-    # r37 R11 -- THE per-kind reconstruction capability table. One truth consumed
+    # R11 -- THE per-kind reconstruction capability table. One truth consumed
     # by spec construction (torchlens/backends/torch/ops.py::_build_container_spec),
     # the producer losslessness proof (_prove_runnable_output_lossless), and the
     # runtime independent recompute (_runnable_execution::_spec_node_reconstruction_lossy).
@@ -1345,7 +1345,7 @@ CONTAINER_KIND_CAPABILITIES: dict[str, dict[str, str | bool]] = {
         "addressable": True,
     },
 }
-"""Frozen capability rows for every ``ContainerSpec.kind`` (r37 R11)."""
+"""Frozen capability rows for every ``ContainerSpec.kind``."""
 
 
 __all__ = [

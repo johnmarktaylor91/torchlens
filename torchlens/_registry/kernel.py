@@ -1,6 +1,6 @@
 """The ONE private registry kernel behind every typed public domain door.
 
-Registry law (architecture memo 6.1): one PRIVATE kernel, many typed public
+Registry law: one PRIVATE kernel, many typed public
 domain doors, never a public universal registry. Every supported open class
 gets lifecycle completeness (register / unregister / list / info / snapshot),
 a monotone epoch, capability rows REQUIRED at registration, collision refusal
@@ -15,7 +15,7 @@ one :class:`Registry` each with their own typed unit, coercion door, and
 public spelling; builtins register through the door's own public function so
 the in-tree path and the out-of-tree path are the same path.
 
-Discriminator (memo 6.1): a name recorded in provenance, cache, artifact, or
+Discriminator: a name recorded in provenance, cache, artifact, or
 refusal uses a REGISTRY; a local unnamed callable uses a CONTRACT.
 """
 
@@ -41,7 +41,7 @@ _CAPABILITY_SCALARS = (bool, int, float, str)
 
 #: Declared behavior when an artifact or request names a provider that is not
 #: registered in this process: doors either refuse typed or degrade to a
-#: declared analysis-only view. Never an import (memo 6.4: artifact load
+#: declared analysis-only view. Never an import (artifact load
 #: never imports a provider).
 MissingProviderBehavior = Literal["typed_refusal", "analysis_only"]
 
@@ -120,7 +120,7 @@ def _validate_capabilities(registry_name: str, entry_id: str, capabilities: Any)
     """Validate and freeze one capability-row mapping.
 
     Capability rows are REQUIRED at registration: a seam that registers
-    without capability declarations manufactures lies of absence (memo 6.1)
+    without capability declarations manufactures lies of absence
     -- an empty row would read as "this provider can do nothing" to one
     consumer and "capabilities unknown, assume everything" to another.
     """
@@ -343,7 +343,7 @@ class Registry(Generic[T]):
         """Build the teaching refusal for an unknown entry id.
 
         ``code`` is passed AT each raise site (always
-        ``"registry_entry_unknown"``) so the S-17 census sees the code where
+        ``"registry_entry_unknown"``) so the census sees the code where
         the raise happens, not buried in this factory.
         """
 

@@ -221,7 +221,7 @@ def _as_strided_result_contained(args: tuple[Any, ...], result: Any) -> bool:
 
 
 def _finalize_runnable_ledger(state: _WitnessState) -> None:
-    """Discharge every observed dispatch event or record an incomplete fact (r35 I2, r37 INV-1).
+    """Discharge every observed dispatch event or record an incomplete fact.
 
     EXHAUSTIVE over the outcome vocabulary: every event terminates in exactly one
     explicit disposition -- accounted modeled call, exact audited opaque boundary,
@@ -232,7 +232,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
     (replaying the owner replays its internals); a host-return witnessed by the exact
     escape net (``HOST_ESCAPE_OPERATORS``) is discharged (post-hon2_1 the net is
     total: every operand records a positive attribution or a fail-closed flag). A
-    ``returned_tensor`` event -- the corr2-1 class -- is NEVER implicitly discharged:
+    ``returned_tensor`` event is NEVER implicitly discharged:
     an unowned mutating dispatch records ``opaque_side_effect`` and an unowned
     non-mutating value-producing dispatch records ``unmodeled_tensor_return`` (its
     product can bake into a later traced call as an unwitnessed constant). An
@@ -274,7 +274,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
             if event.state_view_accessor:
                 continue
             if event.metadata_witnessed and not event.mutates:
-                # r67 C3: witnessed exactly by the placement metadata net -- the wrapper
+                # witnessed exactly by the placement metadata net -- the wrapper
                 # recorded the receiver's observed value (state observation ledger) or
                 # input fact, so the producer gate owns the honesty decision. An
                 # unattributed receiver never sets the flag and stays an incomplete fact.
@@ -311,7 +311,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
             )
         elif event.outcome == "started":
             # A dispatch that neither returned nor raised cannot exist on a completed
-            # forward; record fail-closed rather than silently passing (INV-1).
+            # forward; record fail-closed rather than silently passing.
             facts.append(
                 {
                     "kind": "unclassified_event",
@@ -343,7 +343,7 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
     Snapshots ``source``'s version and a detached byte clone of its WHOLE untyped storage under
     ``pause_logging`` (so the clone is not itself captured or censused) and holds a strong ref to
     ``source`` so the shared storage stays alive until the forward-end comparison. Snapshotting the
-    full aliased storage (not just ``source``'s element extent) closes the r15-H2 out-of-extent
+    full aliased storage (not just ``source``'s element extent) closes the out-of-extent
     gap: a host write through the alias's storage handle to bytes OUTSIDE ``source``'s view window
     (storage ``__setitem__`` / ``np.as_strided``) is still caught. A source that cannot be
     snapshotted (e.g. a meta tensor with no storage) fails closed immediately.
@@ -367,8 +367,8 @@ def _sample_writeback_at_consumption(
     A mutable zero-copy alias (``numpy`` / ``__array__`` / a storage handle) can be written,
     consumed by a downstream traced op, then byte-exactly RESTORED before forward end -- so the
     single end-of-forward compare (:func:`_check_writeback_watch`) sees ``before == after`` and
-    would falsely VERIFY (r16-H1 TOCTOU). Sampling the watched source's WHOLE-STORAGE bytes at each
-    CONSUMPTION catches the write while it is live in a traced op's input, then rolls it back.
+    would falsely VERIFY (a TOCTOU window). Sampling the watched source's WHOLE-STORAGE bytes at
+    each CONSUMPTION catches the write while it is live in a traced op's input, then rolls it back.
 
     Soundness (no over-trigger). Only a byte difference with the source's version UNCHANGED since
     the exposure is flagged:
@@ -388,7 +388,7 @@ def _sample_writeback_at_consumption(
 
     if not state.writeback_watch and not _has_state_toctou_watch(state.trace):
         return
-    # INV-2 annotation (r37): the ``data_ptr`` matching below is ATTRIBUTION-ONLY
+    # The ``data_ptr`` matching below is ATTRIBUTION-ONLY
     # identity -- it decides which watched source a consuming op MIGHT touch, and a
     # missed match merely defers to the end-of-forward WHOLE-STORAGE content compare
     # (which needs no pointer reasoning at all). Pointer identity is never used as a
@@ -400,9 +400,9 @@ def _sample_writeback_at_consumption(
                 if operand.is_meta:
                     # Every meta storage reports ``data_ptr() == 0`` (no identity) and holds
                     # no bytes, so no write is observable here; matching on 0 compared every
-                    # meta buffer and fabricated the opaque host-write flag (W1-FAB: only an
-                    # observed divergence may raise it). Reached once plane-P (distributed
-                    # arming) installs the dispatch mode around a weights-free capture.
+                    # meta buffer and fabricated the opaque host-write flag (only an observed
+                    # divergence may raise it). Reached once distributed arming installs the
+                    # dispatch mode around a weights-free capture.
                     continue
                 try:
                     consumed_ptrs.add(operand.untyped_storage().data_ptr())
@@ -477,12 +477,12 @@ def _split_consumed_state_items(
 ) -> tuple[list[tuple[str, Any]], list[tuple[str, Any]]]:
     """Split registered state items into consumed-storage HITS and verbatim-path leftovers.
 
-    PERF (w15 F1): the per-consumption TOCTOU scans read every registered param/buffer's
+    PERF: the per-consumption TOCTOU scans read every registered param/buffer's
     CURRENT storage pointer on EVERY dispatched op -- O(ops x params), and each per-item
     wrapped ``untyped_storage().data_ptr()`` call additionally pays the armed numpy-RNG
     setprofile classifier's per-event toll, the multiplicative structure behind the
     quadratic runnable-producer capture. This helper keeps the FULL per-op scan (the scan
-    itself is the r16-H1/r18 coverage: a registration-time ptr->address index goes STALE
+    itself is the coverage: a registration-time ptr->address index goes STALE
     under a mid-forward ``p.data = other`` rebind and would falsely VERIFY a restored
     transient write) but batches the pointer reads through ``map`` over the true-original
     C accessors: C-to-C calls never enter the interpreter loop, so no profile event fires
@@ -662,7 +662,7 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     The wrapper records the receiver tensor (the escape SOURCE) into the shared escape
     tables, gated to the active trace so a TorchLens-internal conversion (run under
     ``pause_logging``) is never mistaken for a user escape. Fires on every thread under
-    the r43 owner-vs-non-owner rule: the OWNER thread (gated on ``_logging_enabled``)
+    the owner-vs-non-owner rule: the OWNER thread (gated on ``_logging_enabled``)
     records through the full precise ladder plus the blanket flags/watches; a NON-owner
     thread (gated on ``belt_armed``) ceilings only when it touches a captured tensor and
     otherwise records nothing (a benign background thread touching its OWN tensors never
@@ -670,7 +670,7 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     mutable zero-copy alias conversion (``numpy`` / ``__array__``) it also records a
     before-image so a subsequent host write-back through the alias is detected at
     forward end. It always calls the original method unchanged, so values, goldens, and
-    outputs are byte-identical. r43: the OWNER thread keeps the precise ladder; a NON-owner
+    outputs are byte-identical. The OWNER thread keeps the precise ladder; a NON-owner
     thread's captured-tensor touch ceilings via :func:`_nonowner_escape_observe`.
     """
 
@@ -680,22 +680,22 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
     is_storage_bridge = name in STORAGE_BRIDGE_ESCAPE_FUNCS
     watch_writeback = name in MUTABLE_ALIAS_ESCAPE_FUNCS or is_storage_bridge
     record_source = not is_storage_bridge
-    # ``data_ptr()`` alone leaks a RAW pointer no forward-end byte watch can re-inspect (r15-H1);
+    # ``data_ptr()`` alone leaks a RAW pointer no forward-end byte watch can re-inspect;
     # a genuine user call fails closed to UNVERIFIABLE. ``untyped_storage()`` / ``storage()`` keep
     # the watch-only write-back treatment (their value reads are already UNVERIFIABLE).
     is_raw_pointer = name == "data_ptr"
-    # r67 C3/C6: storage ACQUISITION registers the returned handle's ORIGIN (input site /
+    # storage ACQUISITION registers the returned handle's ORIGIN (input site /
     # full state alias group / other) in the capture-scoped weak origin map -- and NOTHING
-    # else. The former exposure-time geometry stamp ("``.nbytes()`` is one attribute away")
-    # violated actual-read gating (corr1-4: a discarded handle on a larger-base slot false-
-    # refused the save); the real accessor call on the handle now records through
+    # else. Stamping geometry at exposure time would violate actual-read gating (a
+    # discarded handle on a larger-base slot would false-refuse the save); the real
+    # accessor call on the handle records through
     # ``STORAGE_METADATA_ACCESSOR_DISPOSITIONS``.
     registers_storage_origin = name in {"untyped_storage", "storage", "_typed_storage"}
-    # r65 (closes r64 F2): a zero-copy VIEW export pins the receiver's full layout with no
+    # A zero-copy VIEW export pins the receiver's full layout with no
     # accessor call at all -- ``numpy()``/``__array__`` expose ndarray ``.strides``/``.flags``
     # and DLPack capsules carry strides + byte offset. On a STATE-derived receiver that
     # geometry is a pure function of the slot's physical form (a view-of-state receiver
-    # attributes to the slot exactly as r63), so the export records the exact-layout read
+    # attributes to the slot like any layout read), so the export records the exact-layout read
     # kinds. ``tolist()`` COPIES (layout-safe) and is deliberately excluded.
     records_state_view_geometry = name in {"numpy", "__array__", "__dlpack__"}
 
@@ -743,14 +743,14 @@ def _make_invisible_escape_wrapper(original: Any, state: _WitnessState, name: st
                     # storage pointers (``aliasing._tensors_alias`` ->
                     # ``untyped_storage().data_ptr()``) under the explicit ``internal_scalar_read``
                     # marker. Those are NOT user exposures: snapshotting them and byte-comparing
-                    # under the r14-H1 gate would falsely trip on a later legitimate TRACKED
+                    # under the byte-compare gate would falsely trip on a later legitimate TRACKED
                     # in-place op. Only watch a storage bridge when the marker is inactive -- a
                     # genuine user ``data_ptr()`` / ``storage()`` call. (The numpy / __array__
-                    # mutable alias is never called internally, so it is always watched, as r13.)
+                    # mutable alias is never called internally, so it is always watched.)
                     if watch_writeback and not (is_storage_bridge and _internal_read_active()):
                         _snapshot_writeback_source(state, self)
             elif state.belt_armed:
-                # r43: a non-owner touch of a captured tensor (this receiver, or a captured-
+                # a non-owner touch of a captured tensor (this receiver, or a captured-
                 # derived alias by storage identity) ceilings the capture. A benign OWN-tensor
                 # conversion records nothing.
                 _nonowner_escape_observe(state, self)

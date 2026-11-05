@@ -1,4 +1,4 @@
-"""Frozen TransformSpec + plan/apply protocol + canonical JSON (memo B1).
+"""Frozen TransformSpec + plan/apply protocol + canonical JSON.
 
 A built-in transform is a frozen :class:`TransformSpec` — canonical JSON of
 ``(name, numerics-visible version, normalized params, explicit seed where
@@ -8,7 +8,7 @@ fails-open defects in the v1 slot were the engine trusting an opaque
 callable; a validated plan turns each one into a typed refusal.
 
 The canonical JSON of a chain of these records is the RESUME IDENTITY: any
-numerics-visible change mismatches (transforms memo decision 17).
+numerics-visible change mismatches.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -35,7 +35,7 @@ __all__ = [
     "canonical_json",
 ]
 
-#: Closed seed-source vocabulary (memo decision 4): the realized seed is
+#: Closed seed-source vocabulary: the realized seed is
 #: ALWAYS recorded together with where it came from.
 _SEED_SOURCES: tuple[str, ...] = ("explicit", "library_default")
 
@@ -115,7 +115,7 @@ class TensorSpec:
     shape:
         Full shape INCLUDING the leading stimulus axis; ``None`` marks an
         unknown extent (the batch extent is normally ``None`` — the plan is
-        batch-composition-independent, T-C10).
+        batch-composition-independent).
     dtype:
         ``str(torch.dtype)`` spelling, e.g. ``"torch.float32"``.
 
@@ -165,16 +165,16 @@ class PlannedStep:
     version:
         Numerics-visible algorithm version of the step.
     output:
-        Predicted output :class:`TensorSpec` (T-C6: runtime output must match
+        Predicted output :class:`TensorSpec` (runtime output must match
         or the shard is refused BEFORE publication).
     stream_safe:
-        Whether the step can run at emission time (T-C11).
+        Whether the step can run at emission time.
     may_alias:
         Whether the output may share storage with the input — a first-class
         planning fact; no peak-memory claim follows from shape reduction
-        alone (T-C11).
+        alone.
     context_capable:
-        Whether the step declared context capability (T-C1).
+        Whether the step declared context capability.
     disclosures:
         Plan-time cost/behavior disclosures surfaced to the caller (e.g.
         the O(D*k) ``iid_bernoulli`` generation cost, so a multi-second
@@ -207,7 +207,7 @@ class TransformDefinition:
         Stable transform name (the registry entry id).
     version:
         Numerics-visible algorithm version; any numeric change bumps it
-        (T-C13: a construction change is never a silent substitution).
+        (a construction change is never a silent substitution).
     normalize_params:
         Callable validating and normalizing raw constructor params into the
         canonical JSON-portable dict recorded in the spec.
@@ -216,14 +216,14 @@ class TransformDefinition:
         refuses typed instead of guessing.
     apply_fn:
         ``(spec, tensor, ctx) -> tensor`` pure application; row count and
-        order preserved (T-C2).
+        order preserved.
     context_capable:
-        Whether ``apply_fn`` consumes the context (T-C1 declaration).
+        Whether ``apply_fn`` consumes the context (a declaration).
     stream_safe:
-        Whether the transform can run at emission time (T-C11).
+        Whether the transform can run at emission time.
     zero_param_preset:
         Whether a BARE STRING may coerce to this transform with all-default
-        params (memo decision 2: strings are never import paths or a
+        params (strings are never import paths or a
         parameter mini-language).
     stochastic:
         Whether the transform draws randomness; stochastic transforms must
@@ -286,7 +286,7 @@ class TransformSpec:
     seed_source: str | None = None
 
     def __post_init__(self) -> None:
-        """Validate the seed/seed-source pairing invariant (T-C4)."""
+        """Validate the seed/seed-source pairing invariant."""
 
         if (self.seed is None) != (self.seed_source is None):
             raise TransformContractError(
@@ -319,7 +319,7 @@ class TransformSpec:
         return dict(self.params)
 
     def canonical_record(self) -> dict[str, Any]:
-        """Return the canonical static-chain record of this step (memo 3.17).
+        """Return the canonical static-chain record of this step.
 
         Returns
         -------
@@ -396,7 +396,7 @@ class TransformSpec:
         return self._definition().plan_fn(self, input_spec, ctx)
 
     def apply(self, tensor: torch.Tensor, ctx: TransformContext | None = None) -> torch.Tensor:
-        """Apply this step to one batch tensor (pure; T-C2 row-preserving).
+        """Apply this step to one batch tensor (pure, row-preserving).
 
         Parameters
         ----------

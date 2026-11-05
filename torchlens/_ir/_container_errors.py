@@ -23,7 +23,7 @@ class ContainerReconstructionError(_ActionableErrorMixin, TorchLensError, ValueE
     mirroring the safe-unpickler's global denial. Subclasses ``ValueError`` so the
     runnable run wrapper reports it as a typed ``RunPreconditionError`` denial.
 
-    r3 b1-opus R64-3: the class also escapes RAW from the PUBLIC documented
+    the class also escapes RAW from the PUBLIC documented
     ``Op.multi_output_type`` property, so it is a user-catchable typed refusal,
     not only an internal codec error: it resolves from ``torchlens.errors``,
     carries ``fields["code"] == "container_spec_inadmissible"`` plus a remedy,

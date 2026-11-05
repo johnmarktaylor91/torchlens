@@ -20,7 +20,7 @@ def _scrubbed_transform_repr(fn: Any) -> str | None:
 
     The repr is stored (``_activation_transform_repr``) at every save level. A plain
     function repr is inert, but ``functools.partial`` reprs embed the BOUND ARGUMENT
-    VALUES (B8-20: a probe recovered a planted token from a saved artifact). Redact a
+    VALUES (a probe recovered a planted token from a saved artifact). Redact a
     partial's positional and keyword arguments to ``<scrubbed>`` while keeping the
     wrapped function's own (recursively scrubbed) repr, so the string stays useful
     without leaking captured values.
@@ -47,6 +47,6 @@ def _scrubbed_transform_repr(fn: Any) -> str | None:
     # the default object/function repr (``<function f at 0x7f...>``,
     # ``<Foo object at 0x...>``) -- a non-deterministic value (breaks
     # byte-identical artifacts) and an ASLR heap-layout leak spliced into a
-    # persisted KEEP field (b3-opus, completing the B8-20 scrub). Redact any
+    # persisted KEEP field (completing the scrub). Redact any
     # ``0x<hex>`` address before it is stored.
     return _ADDRESS_RE.sub("0x<scrubbed>", repr(fn))

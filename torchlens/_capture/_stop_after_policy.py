@@ -44,7 +44,7 @@ def settle_unfired_stop_after(
     stacklevel
         Warning stack level, counted from this function.
     """
-    # brainpipe D-16.
+    # brainpipe.
     if stop_after_site is None or bool(getattr(trace, "is_stopped", False)):
         return
     site_repr = repr(stop_after_site)

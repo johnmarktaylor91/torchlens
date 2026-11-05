@@ -251,8 +251,8 @@ def _windowed_axes_in_unit_order(descriptor: ReceptiveField) -> tuple[ReceptiveF
     by ascending ``input_axis`` instead, and any axis permutation between the
     two endpoints (transpose/permute/movedim) makes those orders differ, so
     every producer and consumer of a windowed unit tuple must route through
-    this one ordering (R20-1: zipping coordinates in descriptor order silently
-    transposed exact boxes).
+    this one ordering (zipping coordinates in descriptor order would silently
+    transpose exact boxes).
     """
     assert descriptor.axes is not None
     windowed = tuple(axis for axis in descriptor.axes if axis.kind == "windowed")
@@ -643,11 +643,11 @@ def _map_axis_mapping(
     """Apply an explicit output-axis to parent-axis mapping.
 
     Surviving sliced axes apply their recorded exact affine
-    (``parent = step * out + start``; the historical path copied index sets
-    through unshifted, dropping every slice offset — disputed-r2 b6/R20-2).
+    (``parent = step * out + start``; copying index sets through unshifted
+    would drop every slice offset).
     Scalar-selected parent axes narrow to their recorded singleton index;
     a selected axis with no recorded index and extent > 1 falls back to its
-    conservative full extent and makes the hop non-exact (R20-3: the
+    conservative full extent and makes the hop non-exact (the
     conservative bound must be visible in the box's exactness claim).
     """
     raw = result.values.get("out_to_parent_axis", {})
@@ -790,7 +790,7 @@ def _build_box(
         if axis_descriptor.kind == "pointwise":
             # A surviving pointwise axis is identity-geometry by construction
             # (non-identity composed geometry degrades to a "full" envelope in
-            # _engine_descriptor, disputed-r3 F1/F2, and the full case below
+            # _engine_descriptor, and the full case below
             # folds its inexactness), so the same-index claim is sound and the
             # box's exactness stays the query-time derivation from windowed
             # terminals — the static descriptor ``exact`` flag is a
@@ -837,9 +837,8 @@ def _build_box(
                 # as the descriptor's own axis evidence. A conservative full
                 # axis (for example an unresolved scalar selection over
                 # extent > 1) must be visible in the box's exactness claim —
-                # the historical box derived `exact` from windowed terminals
-                # alone, so this dishonest-exact class was tripwire-BLIND
-                # (disputed-r2 b6/R20-3).
+                # deriving `exact` from windowed terminals alone would let
+                # this dishonest-exact class slip past the tripwire.
                 exact = exact and axis_descriptor.exact
                 box_axes.append(
                     ReceptiveFieldBoxAxis(

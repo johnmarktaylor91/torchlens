@@ -9,7 +9,7 @@ from pathlib import Path
 def _git_commit_hash(cwd: Path) -> str | None:
     """Return the Git commit for ``cwd`` with a short best-effort timeout.
 
-    R21-2: the provenance git commit is resolved from the TORCHLENS package
+    the provenance git commit is resolved from the TORCHLENS package
     directory, not ``Path.cwd()``. Stamping the working directory's repository
     recorded the USER's unrelated repo commit (a privacy leak) and made the same
     capture saved from two directories differ (an ambient-environment dependence in a

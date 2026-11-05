@@ -1,14 +1,14 @@
 """Model Context Protocol (MCP) bridge: serve the agent registry over stdio.
 
 DOCUMENTED-UNSTABLE surface (naming ratification pending). This module is a
-THIN ADAPTER (agent memo 3.1): the tool roster, schemas, budgets, and
+THIN ADAPTER: the tool roster, schemas, budgets, and
 handlers live in ``torchlens.agent`` -- one inspection core, three
 transports. The served ``list_tools`` output is compared FIELD-BY-FIELD
 against the registry as a release gate, so declared-vs-served drift is a red
 test, never a runtime surprise.
 
 The server never executes model/user code, never writes files, never mutates
-artifacts -- unconditionally (memo 3.12, settled 3-0). Every tool declares
+artifacts -- unconditionally. Every tool declares
 ``readOnlyHint=true`` and ``idempotentHint=true``; refusals hand back the
 exact runnable Python line instead.
 
@@ -34,7 +34,7 @@ from ..agent._guide_text import AGENT_GUIDE
 from ..agent._schemas import load_schema as _load_schema, schema_index as _schema_index
 
 #: Server-level instructions shown to MCP hosts (the trust boundary is
-#: STATED here, per agent memo 3.13 -- never a per-payload field).
+#: STATED here -- never a per-payload field).
 SERVER_INSTRUCTIONS = (
     "Read-only TorchLens tools over saved .tlspec artifacts and the runtime "
     "environment. Live capture stays in Python: write tl.trace(...) there "
@@ -173,7 +173,7 @@ def _wrap_signature(tool: Any, input_schema: dict[str, Any]) -> Any:
 def _register_resources(server: Any) -> None:
     """Register the guide and schema documents as MCP resources.
 
-    Hosts expose resources unevenly (memo 3.3), so the same facts stay
+    Hosts expose resources unevenly, so the same facts stay
     fetchable through the tools; resources are the discoverability bonus.
 
     Parameters

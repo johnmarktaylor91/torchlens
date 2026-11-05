@@ -1,4 +1,4 @@
-"""Lowered counterfactuals (mikit D11) -- the TorchLens-original capability.
+"""Lowered counterfactuals -- the TorchLens-original capability.
 
 Any patch whose effect on ``attn_out`` is LINEAR in the patched quantity
 lowers EXACTLY to an add at the real post-projection op:
@@ -147,7 +147,7 @@ def _delta_for(  # noqa: PLR0913 -- one cell's full evidence set (kind/head/two 
     return ((pattern_clean - pattern_corrupt) @ v_head) @ w_o_h
 
 
-def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
+def patch_head(  # noqa: PLR0913 -- the public signature
     model: Any,
     clean_input: Any,
     corrupted_input: Any,

@@ -1,4 +1,4 @@
-"""Model identity for extraction artifacts (extract memo D6 + item 6).
+"""Model identity for extraction artifacts.
 
 ``model_identity: "measured" (DEFAULT) | "asserted" | "none"``:
 
@@ -39,7 +39,7 @@ __tl_layer__ = "L3"
 
 __all__ = ["MODEL_IDENTITY_LEVELS", "compute_model_identity"]
 
-#: Closed identity-level vocabulary (extract D6; "sampled" is retired).
+#: Closed identity-level vocabulary ("sampled" is retired).
 MODEL_IDENTITY_LEVELS: tuple[str, ...] = ("measured", "asserted", "none")
 
 #: Pinned id of the state fold: complete ordered ``state_dict()`` (parameters
@@ -103,7 +103,7 @@ def compute_model_identity(
     hash_name: str = "blake2b",
     assertion: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the model-identity record for an extraction signature (D6).
+    """Build the model-identity record for an extraction signature.
 
     Parameters
     ----------

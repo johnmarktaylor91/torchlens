@@ -293,7 +293,7 @@ def _visible_label_text(label: Any) -> str:
     shipped In/Out multiplicity tables) as RAW markup; sizing a box from
     markup length manufactured phantom geometry penetrations -- a 175-char
     ``<TABLE...>`` label whose visible text is ~7 chars read as a 420 pt
-    half-width (D03-R2). Only the text content carries rendered width.
+    half-width. Only the text content carries rendered width.
     """
 
     text = str(label).strip()
@@ -309,7 +309,7 @@ def _label_boxes(layout: dict[str, Any]) -> list[tuple[str, tuple[float, float, 
     ``dot -Tjson`` gives the label CENTER (``lp``); the box is estimated
     from VISIBLE text length at the emitted font size (default 8pt labels)
     -- deterministic, disclosed as an estimate in the report manifest.
-    HTML-like markup contributes only its text content (D03-R2); a label
+    HTML-like markup contributes only its text content; a label
     with no visible text has no box.
     """
 
@@ -341,14 +341,14 @@ def _label_boxes(layout: dict[str, Any]) -> list[tuple[str, tuple[float, float, 
 def _endpoint_label_boxes(
     layout: dict[str, Any],
 ) -> list[tuple[int, str, str, tuple[float, float, float, float]]]:
-    """Exact head/tail-label glyph boxes from the edge draw ops (D03-R5).
+    """Exact head/tail-label glyph boxes from the edge draw ops.
 
     The bare ``label``/``lp`` read above is structurally blind to
     ``headlabel``/``taillabel`` text (the shipped ``arg N`` family rides
     exactly that channel). Head/tail labels are read here from the
     ``_hldraw_``/``_tldraw_`` op arrays, whose ``T`` ops carry the engine's
     COMPUTED glyph-run geometry -- exact, not estimated, and therefore
-    immune to the markup-length estimation defect class (D03-R2).
+    immune to the markup-length estimation defect class.
 
     Returns ``(edge_index, kind, text, (x0, y0, x1, y1))`` tuples in points,
     y-up; the glyph bbox y-extent is ``[baseline - 0.22 * fontsize,
@@ -427,8 +427,8 @@ def geometry_findings(dot_source: str) -> list[AuditFinding]:
     (midpoint label boxes estimated from text metrics), and endpoint-label
     collision (``headlabel``/``taillabel`` glyph boxes read EXACTLY from
     the ``_hldraw_``/``_tldraw_`` draw ops, checked against node boxes and
-    against each other -- the D03-R4 high-fan-in pileup class; the historic
-    two-check form was structurally blind to it, D03-R5).
+    against each other -- the high-fan-in pileup class; the historic
+    two-check form was structurally blind to it).
     """
 
     layout = _dot_json(dot_source)

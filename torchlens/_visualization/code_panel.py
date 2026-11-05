@@ -352,8 +352,8 @@ def render_code_panel_svg(source_text: str) -> str:
 
     panel = graphviz.Digraph()
     # "#FFFFFF00" (alpha 0), not "transparent": dot 2.43 does not know the
-    # keyword and warns on every code-panel render -- a warning the D24
-    # stderr-surfacing seam now correctly refuses to hide (vizmech).
+    # keyword and warns on every code-panel render -- a warning the
+    # stderr-surfacing seam now correctly refuses to hide.
     panel.attr("graph", bgcolor="#FFFFFF00", margin="0")
     with panel.subgraph(name="cluster_torchlens_code_panel") as cluster:
         cluster.attr(
@@ -680,7 +680,7 @@ def _source_text_to_html_rows(source_text: str, displayed_lines: list[str]) -> l
         )
         # Tooltip shows the basename only: rendered SVGs are shareable, and the
         # visible tooltip should not surface the absolute (username-bearing)
-        # host path (hunt-6 R62-2). The HREF keeps the absolute path -- local
+        # host path. The HREF keeps the absolute path -- local
         # editor clickability is the feature -- and limitations.md discloses
         # that code_panel output embeds local source paths.
         tooltip = html.escape(

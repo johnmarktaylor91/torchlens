@@ -225,7 +225,7 @@ def rebuild_mapping_like(original: Any, pairs: list[tuple[Any, Any]]) -> Any | N
     item writes, then verbatim instance-state copy -- the user's
     ``__new__``/``__init__`` never runs, so ctor side effects cannot enter the
     captured program and same-class instance state is never RESET
-    (grind-p5 b3-opus-R12-2). Returns ``None`` when the rebuild cannot be
+    Returns ``None`` when the rebuild cannot be
     proven faithful (callers keep the original and fail loudly downstream).
     """
 
@@ -267,7 +267,7 @@ def rebuild_list_like(original: Any, items: list[Any]) -> Any | None:
 
     The sequence sibling of :func:`rebuild_mapping_like`: ``list.__new__``
     allocation, ``list.extend`` population, verbatim instance-state copy;
-    the user's ``__new__``/``__init__`` never runs (grind-p5 b3-opus-R12-2).
+    the user's ``__new__``/``__init__`` never runs.
     Returns ``None`` when the rebuild cannot be proven faithful.
     """
 
@@ -303,12 +303,12 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
     mutable container being built is registered in ``_in_progress`` before its
     elements are recursed, so a self-reference resolves to the same in-progress
     copy and the cycle is reproduced in the copy.  The memo is CALL-scoped
-    (retained across siblings, r-b4 R29-3): a DAG-shaped input that reuses one
+    (retained across siblings): a DAG-shaped input that reuses one
     sub-container under several paths is copied ONCE and stays aliased in the
     copy -- which both matches the aliasing topology the model itself would see
-    and makes the copy O(nodes).  The historical path-scoped memo copied a
+    and makes the copy O(nodes).  A path-scoped memo would copy a
     shared node once per PATH, i.e. exponentially in shared-substructure depth
-    (measured x2 per level; depth 25 hung capture entry for ~4 minutes).
+    (x2 per level; depth 25 hung capture entry for ~4 minutes).
     Tensors remain leaves cloned per DISTINCT container occurrence and are
     never memoized.
 
@@ -327,7 +327,7 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         cycles. Callers should not supply this.
     _depth
         Internal recursion depth used to enforce the shared input-boundary
-        nesting ceiling (r-b4 R27-1). Callers should not supply this.
+        nesting ceiling. Callers should not supply this.
 
     Returns
     -------
@@ -365,18 +365,17 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         # under several paths): both resolve to the one memoized copy.
         return existing
     if isinstance(arg, (defaultdict, dict, list, tuple)) and _depth >= INPUT_TREE_MAX_DEPTH:
-        # r-b4 R27-1: the canonical per-capture input copier is depth-bounded with the
+        # the canonical per-capture input copier is depth-bounded with the
         # SAME shared ceiling as every other input-boundary walker -- a deeper tree
         # refuses typed at capture entry instead of dying in a raw RecursionError.
 
         raise_input_tree_depth_refusal(depth=_depth)
     if isinstance(arg, dict):
-        # INERT rebuild ladder (grind-p5 b3-opus-R12-2 sibling): the historical
-        # ``type(arg)()`` re-ran the user's constructor (resetting same-class
-        # instance state), read children through the overridable ``items()``
-        # protocol (a lying override shrank the copy refusal-free), and the
-        # ``defaultdict`` arm substituted the exact stock class for any
-        # subclass. Population happens after registering so a cyclic value can
+        # INERT rebuild ladder: ``type(arg)()`` would re-run the user's constructor
+        # (resetting same-class instance state), reading children through the
+        # overridable ``items()`` protocol would let a lying override shrink the copy
+        # refusal-free, and a ``defaultdict`` arm would substitute the exact stock
+        # class for any subclass. Population happens after registering so a cyclic value can
         # point back at this copy; ``default_factory`` is preserved through the
         # member-descriptor channel (#127).
         arg_type = type(arg)
@@ -487,13 +486,12 @@ def _copy_input_tree_node(
     semantic_gaps: list[str],
     tensor_records: list[tuple[str, torch.Tensor, bool]],
 ) -> Any:
-    """Copy one input-tree node INERTLY, returning the copy (b3-opus-R12-1).
+    """Copy one input-tree node INERTLY, returning the copy.
 
-    The historical implementation prepared a memo and handed the tree to
-    ``copy.deepcopy``, whose protocol runs USER code on container subclasses: a
-    ``__deepcopy__``/``__reduce_ex__`` override could return a DIFFERENT tree
-    (executed: forward captured over [5.0, 5.0] instead of [-3, -4]) and every
-    witness honestly described the SUBSTITUTED tree with zero refusals. This
+    Handing the tree to ``copy.deepcopy`` would run USER code on container
+    subclasses: a ``__deepcopy__``/``__reduce_ex__`` override could return a
+    DIFFERENT tree and every witness would honestly describe the SUBSTITUTED tree
+    with zero refusals. This
     walker copies the tree itself through the ``_input_walk`` inertness
     contract: children read through concrete builtin slots, containers rebuilt
     through the trusted base-type ladders (:func:`rebuild_tuple_like` identity
@@ -572,8 +570,7 @@ def _copy_input_tree_node(
     if value_id in in_progress:
         # Only the tuple arm registers in ``in_progress`` (dict/list cycles
         # resolve through their memo shells), so the re-encountered node is
-        # always a tuple: the historical "else mapping" guess was dead code
-        # reporting a false closed-vocabulary kind (B3R4-R12-2 sibling).
+        # always a tuple, so the kind is ``"sequence"``.
         raise_input_tree_cycle_refusal(kind="sequence")
 
     def _child(child: Any, child_path: str) -> Any:
@@ -720,7 +717,7 @@ def _record_unpreserved_tensor_aliases(
 
     Notes
     -----
-    r-b4 R29-2: the historical implementation ran ``touched_bytes_relation`` on
+    the historical implementation ran ``touched_bytes_relation`` on
     every pair -- O(T^2) in tensor-leaf count (measured 0.72 s at 4k leaves even
     with every storage disjoint). Candidate pairs are now pre-filtered by a
     device-scoped byte-interval sweep (:func:`_alias_candidate_pairs`) that drops
@@ -771,7 +768,7 @@ def _alias_candidate_pairs(
     tensor_records: list[tuple[str, torch.Tensor, bool]],
     footprints: list["TensorByteFootprint | None"],
 ) -> set[tuple[int, int]]:
-    """Return the record-index pairs the alias scan cannot silently skip (r-b4 R29-2).
+    """Return the record-index pairs the alias scan cannot silently skip.
 
     A pair is EXCLUDED only when ``touched_bytes_relation`` provably answers
     ``disjoint`` without a per-pair proof: both footprints known, distinct
@@ -872,7 +869,7 @@ def safe_copy_input_tree(
     path so gradients still reach the caller's input (:mod:`input_leaves` deepcopies
     a LEAF in validation). Every path shares one memo, so a repeated tensor stays one object.
 
-    The tree walk itself is INERT (b3-opus-R12-1): containers are copied by
+    The tree walk itself is INERT: containers are copied by
     :func:`_copy_input_tree_node` through the ``_input_walk`` contract, never
     by handing the tree to ``copy.deepcopy`` -- whose protocol let a user
     ``__deepcopy__``/``__reduce_ex__`` SUBSTITUTE the tree the capture then
@@ -931,9 +928,8 @@ def safe_copy_input_tree(
         # propagate; a clone fallback would just re-walk the same tree.
         raise
     except ReentrantTraceError:
-        # R55: since the r8 R54 admission reorder the copy runs INSIDE the
-        # reserved window, so a tensor-subclass ``__torch_function__`` (or any
-        # input protocol hook) attempting a nested public capture refuses
+        # The copy runs INSIDE the reserved window, so a tensor-subclass ``__torch_function__`` (or
+        # any input protocol hook) attempting a nested public capture refuses
         # HERE. That refusal is a typed program error, not a copy failure --
         # degrading it to a semantic gap would settle the outer capture
         # COMPLETE while silencing the documented ReentrantTraceError.

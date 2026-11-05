@@ -60,7 +60,7 @@ def _first_tensor_shape(value: Any) -> tuple[int, ...] | None:
     tensors = get_vars_of_type_from_obj(value, torch.Tensor, search_depth=5)
     if tensors:
         return tuple(tensors[0].shape)
-    # F20 W1a: module-arg stashes carry payload-free stubs; their recorded
+    # Module-arg stashes carry payload-free stubs; their recorded
     # shape serves the same estimation read.
     return first_stub_shape(value)
 

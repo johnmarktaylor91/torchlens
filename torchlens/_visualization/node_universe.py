@@ -151,7 +151,7 @@ def _project_endpoint_units(
             # the node itself was never emitted, so the rank path shipped
             # DOT whose buffer-write edges pointed at undeclared,
             # unpositioned endpoints and ``neato -n`` hard-errored on stock
-            # densenet121 (vizmech defect 1 / D20). The dot path already
+            # densenet121 (vizmech defect 1 /). The dot path already
             # suppresses these edges at emission; this makes the typed edge
             # list agree with it.
             continue
@@ -233,7 +233,7 @@ def build_node_universe(
         container_max_inline=request.container_max_inline,
         pending_nodes=[],
     )
-    # Boundary bundles (collapse memo D3): members project onto nothing and
+    # Boundary bundles (collapse): members project onto nothing and
     # their edges reroute to the representative, like a collapsed container.
     collapsed_containers.update(
         bundle_member_nodes(trace, source_graph.entries_to_plot, request, collapse_fn)

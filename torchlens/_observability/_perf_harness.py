@@ -1,4 +1,4 @@
-"""The pinned interleaved A/B perf harness (explorer D25; lane F25).
+"""The pinned interleaved A/B perf harness (explorer).
 
 Every published watch/explorer performance number comes from THIS harness,
 never a casual pair of timings: the panel's shared box showed a 1.77x
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 
 __tl_layer__ = "L5"
 
-#: D25 floor: fewer repeats cannot support a published claim.
+#: floor: fewer repeats cannot support a published claim.
 MIN_PUBLISHABLE_REPEATS = 20
 
 
@@ -39,7 +39,7 @@ class ABMeasurement:
     """One interleaved A/B row: medians, spread, band, publish verdict.
 
     ``ratio`` is ``median_b / median_a`` (B the candidate, A the baseline).
-    ``publishable`` is True only when ``repeats`` meets the D25 floor AND
+    ``publishable`` is True only when ``repeats`` meets the floor AND
     the ratio sits outside the measured noise band.
     """
 
@@ -127,7 +127,7 @@ def measure_noise_band(
     return max(ratio, 1.0 / ratio)
 
 
-def measure_ab(  # noqa: PLR0913 -- the D25 publication rule's inputs are each an explicit named knob by design (bundling them would hide what a published row was measured under)
+def measure_ab(  # noqa: PLR0913 -- the publication rule's inputs are each an explicit named knob by design (bundling them would hide what a published row was measured under)
     name: str,
     fn_a: Callable[[], object],
     fn_b: Callable[[], object],
@@ -161,7 +161,7 @@ def measure_ab(  # noqa: PLR0913 -- the D25 publication rule's inputs are each a
     Returns
     -------
     ABMeasurement
-        The row, with ``publishable`` decided by the D25 rule.
+        The row, with ``publishable`` decided by the rule.
     """
 
     band = noise_band if noise_band is not None else measure_noise_band(fn_a, repeats=repeats)
@@ -215,7 +215,7 @@ def format_markdown(
         "",
         f"Measured at SHA `{sha}` on device `{device}`. Basis: {basis}.",
         "",
-        "Publication rule (explorer D25): a row publishes only when its effect",
+        "Publication rule: a row publishes only when its effect",
         "sits OUTSIDE the measured same-workload noise band at n >= "
         f"{MIN_PUBLISHABLE_REPEATS} interleaved repeats; within-noise rows are",
         "disclosed as non-results, never quoted as numbers.",

@@ -115,7 +115,7 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
 
     proven_labels = host_escape_bool_source_labels(self)
     # Shadow set over the list[str] ledger: the per-label list scan was
-    # O(k^2) in terminated-bool count (hunt-6 R52-2 sibling site).
+    # O(k^2) in terminated-bool count.
     seen_terminated_bool_labels = set(self.internally_terminated_bool_ops)
     for label in self._raw_graph_ws.raw_layer_labels_list:
         if label not in proven_labels:
@@ -397,7 +397,7 @@ def _materialize_conditional_records(
         # a rolled multi-pass bool layer. The renamed public ``bool_layers``
         # collapses rolled passes onto one base label, and an unqualified
         # lookup resolves last-writer-wins to an arbitrary pass (round-24
-        # condbranch seal, S3).
+        # condbranch seal).
         setattr(event, "_arm_bool_indices", {})
         setattr(event, "_arm_test_structures", dict(record.branch_test_structures))
         setattr(event, "_bool_layers_raw", [])
@@ -411,7 +411,7 @@ def _materialize_conditional_records(
         if parent_conditional_key is not None and parent_conditional_key in events_by_key:
             event.parent_conditional_id = events_by_key[parent_conditional_key].id
 
-    # Position/membership shadows (r8 R60-6): the list `not in` / `.index()`
+    # Position/membership shadows: the list `not in` / `.index`
     # trio made this loop O(k^2) per conditional over its terminal bool ops
     # (a bool inside a hot unrolled loop shares one structural key). The
     # shadows keep `bool_layers`/`_arm_bool_indices` byte-identical --
@@ -612,7 +612,7 @@ def _merge_same_version_buffers(
     capture carries none) never merges.
 
     Bucketing by version key also keeps the sweep linear: distinct versions are
-    never compared (the hunt-6 R52-1 quadratic).
+    never compared (avoiding a quadratic sweep).
 
     Parameters
     ----------
@@ -700,7 +700,7 @@ def _fix_buffer_layers(self: Trace) -> None:
     deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
     # Per-survivor membership sets shared across the whole sweep: the
     # membership guards in _merge_buffer_entries otherwise rescan the
-    # survivor's growing edge lists once per merged duplicate (hunt-6 R52-1).
+    # survivor's growing edge lists once per merged duplicate.
     survivor_edge_shadows: dict[str, dict[str, set[str]]] = {}
     for buffers_orig in buffer_hash_groups.values():
         _merge_same_version_buffers(
@@ -860,7 +860,7 @@ def _merge_buffer_entries(
     ``survivor_edge_shadows`` (keyed by survivor raw label) carries the
     survivor's edge-list membership sets across repeated merges into the same
     survivor, so the guards below stay O(1) instead of rescanning lists that
-    grow with every merged duplicate (hunt-6 R52-1). Any entry for a node
+    grow with every merged duplicate. Any entry for a node
     whose lists this call mutates as a NEIGHBOUR is invalidated, keeping the
     shadows exact.
     """
@@ -890,8 +890,8 @@ def _merge_buffer_entries(
         # end with two entries naming the survivor. ``list.remove`` strips only the FIRST
         # occurrence, so repointing one-for-one is the multiplicity-faithful move; the
         # closing ``_remove_log_entry(..., remove_references=True)`` scrub would otherwise
-        # strip the leftovers and drop the count to 1 (DISPUTED D1 -- safe hardening,
-        # not an adjudication of reachability).
+        # strip the leftovers and drop the count to 1 (a safe hardening, not a claim
+        # about reachability).
         child_parents = self[child_layer].parents
         repointed = 0
         while buffer_to_remove._label_raw in child_parents:
@@ -926,9 +926,9 @@ def _merge_buffer_entries(
         parent_children = self[parent_layer].children
         if buffer_to_remove._label_raw in parent_children:
             parent_children.remove(buffer_to_remove._label_raw)
-        # Membership-guard the NEIGHBOUR side too (DISPUTED D1 -- safe hardening either
-        # way, NOT an adjudication of reachability). The survivor's own appends above are
-        # guarded, but this one was unconditional: both merged duplicates share their
+        # Membership-guard the NEIGHBOUR side too (a safe hardening either way, NOT a
+        # claim about reachability). The survivor's own appends above are
+        # guarded, and this one must be as well: both merged duplicates share their
         # parent BY CONSTRUCTION (the dedup hash at the call site includes
         # ``buffer_source``), so on any non-None-source merge the shared parent's
         # ``children`` got the survivor appended a SECOND time -- a duplicated child edge,
@@ -947,7 +947,7 @@ def _merge_buffer_entries(
     # branch bools / arm-entry children the duplicate parented. The matching
     # trace-level edges (conditional_branch_edges, conditional_arm_entry_edges,
     # conditional_edge_call_indices) repoint via ``replacement_labels`` in the
-    # closing reference scrub (deep-hunt C3).
+    # closing reference scrub.
     for entry_child in buffer_to_remove.control_flow.entry_children:
         if entry_child not in shadow["conditional_entry_children"]:
             shadow["conditional_entry_children"].add(entry_child)

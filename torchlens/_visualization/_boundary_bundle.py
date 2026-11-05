@@ -1,4 +1,4 @@
-"""Boundary bundle (collapse memo D3): one node for a flood of like model outputs.
+"""Boundary bundle (collapse): one node for a flood of like model outputs.
 
 In an overview render (``collapse`` of ``"auto"``, ``"max"`` or a level above
 0, unrolled, no container display), three or more model-output leaves that
@@ -31,7 +31,7 @@ from .node_spec import render_lines_to_html
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Fewest like leaves that form a bundle (memo D3).
+#: Fewest like leaves that form a bundle.
 MIN_BUNDLE_LEAVES = 3
 _DEFAULT_CALL_DEPTH = 1000
 

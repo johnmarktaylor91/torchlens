@@ -6,7 +6,7 @@ interpretations of things we do not encode. This module is the HARNESS:
 packet building (masked filenames, seeded ordering, the memo's fixed
 question-order discipline), response scoring including the nine
 zero-tolerance honesty classes, and the anchor-midpoint threshold-freezing
-arithmetic. Executing packets against fresh evaluator instances is D03's
+arithmetic. Executing packets against fresh evaluator instances is a
 delegated job with quantitative stop criteria.
 """
 
@@ -111,7 +111,7 @@ def _require_sentinel_probe(key: AnswerKey) -> None:
     """Refuse a sentinel packet whose known-bad control cannot fail.
 
     A battery that cannot separate its own anchors is a broken battery,
-    not a verdict (D03-R6).
+    not a verdict.
     """
 
     if not any(question.kind == "channel_semantics" for question in key.questions):
@@ -151,12 +151,12 @@ def build_packet(
 
     Filenames are masked (an evaluator never sees the lens or model name),
     order is seeded-random within the memo's fixed phase discipline, and
-    the presentation rules ride the packet so D03 does not re-derive them.
+    the presentation rules ride the packet so does not re-derive them.
 
     A ``sentinel`` (known-bad control) packet REQUIRES a channel-semantics
     probe in the key: without one the control cannot fail and the battery
-    cannot separate its own anchors -- a broken battery, not a verdict
-    (D03-R6). Generate the key with ``generate_answer_key(...,
+    cannot separate its own anchors -- a broken battery, not a verdict.
+    Generate the key with ``generate_answer_key(...,
     sentinel=True)``.
     """
 
@@ -243,7 +243,7 @@ def score_responses(key: AnswerKey, responses: dict[str, Any]) -> BatteryScore:
     A wrong answer on a question guarding an honesty class is a CONFIRMED
     class hit: zero tolerance, no threshold arithmetic applies. A response
     matching the answer, ANY ``accepted`` alternative (a tied extremum), or
-    the complete accepted set named as a collection is correct (D03-R7).
+    the complete accepted set named as a collection is correct.
     """
 
     total = 0
@@ -295,7 +295,7 @@ def _string_matches(expected: Any, actual: Any) -> bool:
     """Case/whitespace-neutral equality with label-spelling interchange.
 
     The bare and ``:N``-qualified spellings of ONE label are the same
-    answer (D03-R7); two DIFFERENTLY-qualified spellings never match
+    answer; two DIFFERENTLY-qualified spellings never match
     through the bare stem.
     """
 
@@ -309,7 +309,7 @@ def _boolean_matches(expected: bool, actual: Any) -> bool:
     """The FIRST standalone yes/true/no/false token decides polarity.
 
     An elaborated "No (false). The scale is ordinal ..." is a correct
-    refusal, not a format miss (D03-R7); a response with no boolean token
+    refusal, not a format miss; a response with no boolean token
     never matches.
     """
 

@@ -1,4 +1,4 @@
-"""Frozen vocabulary for cross-rank merged traces (merge-ranks rung C1).
+"""Frozen vocabulary for cross-rank merged traces (merge-ranks).
 
 Every enum here is FROZEN under the ordered-list-equality doc-vs-enum gate in
 ``docs/reference/merged_trace_contract.md`` (the runnable-contract precedent):
@@ -108,7 +108,7 @@ class MergedErrorCode(str, Enum):
     """Frozen machine-readable merge error taxonomy.
 
     Public code branches on these values (or the structured findings), never
-    on exception message text (P4).
+    on exception message text.
     """
 
     MERGE_INPUT_INVALID = "merge_input_invalid"

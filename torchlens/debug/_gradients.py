@@ -1,11 +1,11 @@
 """Gradient-flow audit helpers for TorchLens traces.
 
-Fix pack (checks memo item 2 / D17), all ADDITIVE:
+Fix pack, all ADDITIVE:
 
 - ``module`` + ``is_frontier`` columns: a dead layer zeroes the gradient of
   everything upstream, so the naive report names ~all of the cone; the
   FRONTIER (a flagged op none of whose children carry the same flag) names
-  the culprit (memo D3 -- the composition is load-bearing).
+  the culprit (the composition is load-bearing).
 - ``grad_norm_raw`` / ``rms`` / ``numel`` columns: the fixed absolute
   threshold trips at a ~128x different per-element magnitude across tensors
   of one model (numel artifact); ``rms = norm / sqrt(numel)`` kills it.
@@ -45,7 +45,7 @@ from ._grad_scale_proof import PROVEN_UNSCALED, resolve_scale
 
 #: Column order shared by the rows core and the DataFrame view. The first
 #: seven are the historical columns (semantics unchanged under the default
-#: basis); the rest are the D17 fix-pack additions.
+#: basis); the rest are the fix-pack additions.
 _GRAD_AUDIT_COLUMNS = (
     "op",
     "grad_norm",
@@ -73,7 +73,7 @@ _NO_GRADS_HINT = (
     "trace.backward(loss)"
 )
 
-#: Closed classification bases (D17): total-norm default, RMS opt-in.
+#: Closed classification bases: total-norm default, RMS opt-in.
 _BASES = ("total_norm", "rms")
 
 
@@ -209,7 +209,7 @@ def _bare_label(label: str) -> str:
 def _mark_frontiers(
     rows: list[dict[str, Any]], children_by_label: dict[str, tuple[str, ...]]
 ) -> None:
-    """Mark each flagged row whose children do not share its flag (D3).
+    """Mark each flagged row whose children do not share its flag.
 
     The gradient cone propagates a flag UPSTREAM (a dead layer zeroes every
     ancestor's gradient), so the culprit is the flagged op closest to the
@@ -241,7 +241,7 @@ def _mark_frontiers(
 
 @dataclass(frozen=True)
 class _AuditScaleContext:
-    """Resolved scale/basis facts one audit run classifies under (D17)."""
+    """Resolved scale/basis facts one audit run classifies under."""
 
     scale: float | None
     provenance: str
@@ -317,7 +317,7 @@ def _sync_raw_norms(measurable_entries: list[tuple[dict[str, Any], torch.Tensor]
 def _verdict_for(
     finite: bool, dead: bool, vanishing: bool, exploding: bool, provenance: str
 ) -> str:
-    """Return one row's verdict token under the D17 provenance rule.
+    """Return one row's verdict token under the provenance rule.
 
     Magnitude claims are scale-dependent: unknown provenance yields UNKNOWN
     verdicts, never a silent pass-as-1.0. ``dead`` and ``nonfinite`` are
@@ -634,8 +634,8 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         DataFrame described here.
         Ranked audit rows with counts in ``df.attrs``. The optional view over
         :func:`gradient_flow_audit_rows` (the pandas-free core). New fix-pack
-        columns: ``module``, ``is_frontier`` (the culprit localizer, memo
-        D3), ``grad_norm_raw``, ``rms``, ``numel``, ``verdict``, ``stage``,
+        columns: ``module``, ``is_frontier`` (the culprit localizer),
+        ``grad_norm_raw``, ``rms``, ``numel``, ``verdict``, ``stage``,
         ``scale_provenance``, and ``source_line`` (``"file:line"`` of the user
         code that ran the op). The printed card names the loss scale the
         verdicts used, and an empty report prints the capture recipe

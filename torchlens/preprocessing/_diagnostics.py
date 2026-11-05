@@ -1,4 +1,4 @@
-"""Opt-in input tensor diagnostics (tvscope B3, memo D3/D4 -- demoted arm).
+"""Opt-in input tensor diagnostics (the demoted arm).
 
 Tensor heuristics are NOT verification: measured on seven legitimate real
 pipelines they false-positived on five (including plain float16/bfloat16
@@ -24,18 +24,18 @@ from ._records import DeclaredPreprocessing
 __tl_layer__ = "L5"
 
 #: Closed outcome vocabulary. Deliberately WITHOUT any match/verified member
-#: (memo D4): a tensor arm allowed to say "match" would say it on genuinely
+#: : a tensor arm allowed to say "match" would say it on genuinely
 #: wrong pipelines (the measured miss table).
 OUTCOME_CONTRADICTION = "contradiction"
 OUTCOME_NO_CONTRADICTION = "no_contradiction"
 OUTCOME_NOT_APPLICABLE = "not_applicable"
 
 #: The default check set: intrinsic-failure checks only. The confinement arm
-#: is opt-in-only (memo B3: "confinement arm opt-in-only ... first to cut").
+#: is opt-in-only.
 DEFAULT_CHECKS: tuple[str, ...] = ("nonfinite", "dtype_regime", "layout")
 
 #: Both measured blind spots of the confinement arm, printed on every
-#: confinement finding (memo B3).
+#: confinement finding.
 _CONFINEMENT_BLIND_SPOTS = (
     "blind spots: (1) misses applied-std-below-declared (3 of 6 wrong constant "
     "combinations in the measured table); (2) false-positives on legitimate "
@@ -55,7 +55,7 @@ class DiagnosticFinding:
         ``"confinement"``).
     outcome:
         ``"contradiction"`` / ``"no_contradiction"`` / ``"not_applicable"``
-        -- never a match (closed vocabulary, memo D4).
+        -- never a match (closed vocabulary).
     evidence_class:
         Evidence ranking token: intrinsic failures are ``contradiction``-
         grade; convention-dependent checks are ``premised``.
@@ -79,7 +79,7 @@ class DiagnosticFinding:
 
 @dataclass(frozen=True)
 class InputDiagnostics:
-    """Opt-in tensor findings (tvscope memo D4, record three of three).
+    """Opt-in tensor findings (the third of three records).
 
     This record deliberately has NO ``verified`` attribute and no
     match-shaped state: findings may contradict a declared configuration or
@@ -299,7 +299,7 @@ def diagnose(
     -------
     InputDiagnostics
         Findings that contradict or fail to contradict -- never a match, by
-        type (memo D4).
+        type.
 
     Raises
     ------

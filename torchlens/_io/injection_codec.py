@@ -1,6 +1,6 @@
-"""Injected-op persistence codec (``log_injections`` stage 2, lane F44).
+"""Injected-op persistence codec (``log_injections`` stage 2).
 
-Persistence rides the C07-declared tlspec v9 entry-dark slot
+Persistence rides the declared tlspec v9 entry-dark slot
 ``Op.injection_provenance`` -- NO schema bump: each recorded
 :class:`~torchlens.intervention._injection.InjectedOp` is written into the
 artifact as one synthesized op ROW carrying the slot verbatim, appended to

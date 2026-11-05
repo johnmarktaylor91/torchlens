@@ -1,4 +1,4 @@
-"""Columnar row store backing the ``Op`` facade (the M5 seam).
+"""Columnar row store backing the ``Op`` facade (the seam).
 One ``OpRowStore`` per captured trace holds every stored ``Op`` field cell;
 ``Op`` itself is a two-word ``(_core, _row)`` facade whose generated data
 descriptors read and write cells here. ``DetachedOpStore`` is the single-row
@@ -44,14 +44,14 @@ from .groups import GroupRef, MembershipGroups
 #: Unset-cell sentinel; distinct from None (a real storable value).
 _MISSING = object()
 
-#: CSR-backed relation cell sentinel (M6): the value lives in the store's
+#: CSR-backed relation cell sentinel: the value lives in the store's
 #: dataflow edge table; the facade descriptor rematerializes an immutable
 #: tuple view on first access and caches it back through ``cell_set``.
 #: Distinct from ``_MISSING`` so present/absent semantics stay exact —
 #: ``cell_del`` on a ``_CSR`` cell clears to genuinely absent.
 _CSR = object()
 
-#: Shared-fact cell sentinel (M7): the value lives in the store's fact
+#: Shared-fact cell sentinel: the value lives in the store's fact
 #: blocks (the FunctionCall / ParamAlias group tables); the facade
 #: descriptor hydrates the exact public container type for the row on first
 #: access and caches it back. Same present/absent semantics as ``_CSR``.
@@ -171,13 +171,13 @@ class OpRowStore:
         self._n_rows = 0
         self._sealed = False
         # Sticky flag set by the first OpStoreView taken over this store
-        # (M11 COW fork). Once shared, deletes must stop releasing object
+        # (copy-on-write fork). Once shared, deletes must stop releasing object
         # column cells IN PLACE — a fork reads the same column backing —
         # and tombstone through the overlay instead. Memory-only effect:
         # a removed op's payloads on a forked-from trace are released with
         # the store rather than at removal time.
         self._cow_shared = False
-        # Fork-isolation index (M11/F4): ``fid -> rows`` (tuple once
+        # Fork-isolation index: ``fid -> rows`` (tuple once
         # columnar, set while sealed row-major) of cells whose values may
         # need eager fork-time isolation (exact builtin mutable containers,
         # and immutable containers transitively nesting one).
@@ -188,7 +188,7 @@ class OpRowStore:
         # ``_SealedRowMajorOpRowStore`` at freeze so post-seal container
         # writes register here.
         self._mutable_keys: dict[int, Any] | None = None
-        # Cached per-store sweep plan derived from ``_mutable_keys`` (F4/F11):
+        # Cached per-store sweep plan derived from ``_mutable_keys``:
         # flat parallel arrays of pre-resolved (key, allocation/copy) work so
         # the per-fork sweep is a tight guard+copy loop with no per-cell
         # backing fetch or classification. Built lazily with the index;
@@ -198,16 +198,16 @@ class OpRowStore:
         # no hook on either seal shape, so plan entries alias the observed
         # values and execution re-checks them (``_build_sweep_plan``).
         self._sweep_plan: tuple[Any, ...] | None = None
-        # The M6 dataflow family: bound at the freeze-time relation
+        # The dataflow family: bound at the freeze-time relation
         # conversion (same EdgeTable object registered in the owning
         # TraceCore's edge registry) together with the row -> reference-label
         # table the facade descriptors use to rematerialize views.
         self.dataflow_edges: Any = None
         self.ref_labels: dict[int, str] | None = None
-        # The M7 shared-fact blocks (FunctionCall / ParamAlias group
+        # The shared-fact blocks (FunctionCall / ParamAlias group
         # tables), bound by the same freeze-time conversion.
         self.fact_blocks: Any = None
-        # M14 singleton-label compaction registry (kind tables only):
+        # Singleton-label compaction registry (kind tables only):
         # ``row * n_fields + fid -> the exact str object`` the freeze-seam
         # compaction stored in place of a one-element label list. Decode is
         # gated on OBJECT IDENTITY (``registry[key] is cell_value``), so a
@@ -293,8 +293,8 @@ class OpRowStore:
         replaced with ``None`` -- the existing "no payload retained"
         spelling -- while every metadata cell stays readable. Tensors nested
         inside builtin CONTAINER cells (``saved_args`` trees and friends)
-        are evicted through a bounded walk too (r8 R37, sol repro: a tensor
-        inside a saved-args tuple survived Trace death via any retained Op);
+        are evicted through a bounded walk too (so a tensor
+        inside a saved-args tuple does not survive Trace death via a retained Op);
         tensors inside non-builtin custom objects remain the disclosed
         residual. Keep the source Trace alive (or clone the tensor) to keep
         payloads past the trace's lifetime.
@@ -671,10 +671,10 @@ def _build_sweep_plan(store: OpRowStore) -> tuple[Any, ...]:
     Returns ``(alloc_entries, copy_entries)`` — two sequences of small
     RECORD tuples (``(key, cls, value)`` and ``(key, value, deep)``) so
     ``isolate_mutable_cells`` runs a tight guard+copy loop with no per-cell
-    backing fetch, key arithmetic, or classification (the F11 small-trace
+    backing fetch, key arithmetic, or classification (the small-trace
     fork constant). Records, not positionally-correlated parallel arrays: a
     one-sided append cannot silently truncate the sweep and leave tail fork
-    cells sharing mutable containers with their parent (R23-5). Empty
+    cells sharing mutable containers with their parent. Empty
     mutable containers (the census-dominant case, ~11/op) become bare class
     allocations; non-empty dict/list/set cells use ``_eager_copy``; nesting
     tuples/frozensets use the generic translating copier.
@@ -722,7 +722,7 @@ def _build_sweep_plan(store: OpRowStore) -> tuple[Any, ...]:
 class PooledCell:
     """Shared canonical cell for pooled duplicate/empty mutable containers.
 
-    The M14 memory slice: the freeze-seam compaction replaces exact builtin
+    The memory slice: the freeze-seam compaction replaces exact builtin
     mutable-container cells (``dict``/``list``/``set``/top-level
     ``defaultdict``) whose full content is provably immutable AND either
     empty or repeated across cells with ONE shared ``PooledCell`` per
@@ -855,7 +855,7 @@ class _SealedRowMajorOpRowStore(OpRowStore):
             self._sweep_plan = None
 
 
-#: Live write-audit collectors keyed by audited store id (M10 step
+#: Live write-audit collectors keyed by audited store id (postprocess step
 #: contracts). Populated only while a postprocess step audit is active.
 _AUDIT_COLLECTORS: dict[int, set[int]] = {}
 
@@ -998,7 +998,7 @@ def _write_is_content_effective(old: Any, new: Any) -> bool:
         try:
             return _value_fingerprint(old) != _value_fingerprint(new)
         except Exception:
-            # Fail CLOSED (R22-8): fingerprint machinery failure must read
+            # Fail CLOSED: fingerprint machinery failure must read
             # as an EFFECTIVE write, never collapse to "no-op" -- a no-op
             # classification here would let the write discharge nothing
             # while hiding the step's real effect from the audit.
@@ -1313,7 +1313,7 @@ class _ViewFactBlocks:
 
 
 class OpStoreView:
-    """Per-fork COW view over one sealed base store (the M11 fork substrate).
+    """Per-fork COW view over one sealed base store (the fork substrate).
 
     The view shares the base's frozen storage and isolates everything mutable:
 
@@ -1606,9 +1606,9 @@ class OpStoreView:
         deepcopy fork's snapshot semantics in both directions (fork writes
         were already overlay-isolated).
 
-        The sweep is SPARSE (sol closure review, F4 perf): it visits only
+        The sweep is SPARSE: it visits only
         the base store's cached mutable-cell index — pre-flattened into a
-        per-store sweep PLAN (``_build_sweep_plan``, F11 small-trace
+        per-store sweep PLAN (``_build_sweep_plan``, a small-trace
         constant) so the per-fork loop does no backing fetch or per-cell
         classification — plus this view's base-overlay snapshot, and copies
         only the minimal leak-closure set (``_needs_eager_isolation``).

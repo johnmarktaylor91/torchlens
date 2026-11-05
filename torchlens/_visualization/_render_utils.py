@@ -35,7 +35,7 @@ from ._frame_penwidth import (  # noqa: F401  (spellings kept for importers)
 )
 from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
 
-#: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
+#: Live viewer child handles. Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
 #: one persistent zombie per process (each new spawn reaped the previous
 #: corpse, so the census never returned to baseline).
@@ -51,7 +51,7 @@ def _reap_finished_viewers() -> None:
 def _wait_and_release_viewer(proc: subprocess.Popen[bytes]) -> None:
     """Reap one viewer child the moment it exits.
 
-    r3 b6-opus/sol R40 (carried MED): the registry alone reaped only on the
+    The registry alone reaped only on the
     NEXT launch, so one ``draw()`` that opened a viewer left one zombie for
     the life of the process — and retaining the ``Popen`` handle disabled
     even the finalizer's opportunistic reap. A per-viewer daemon waiter
@@ -126,7 +126,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
             os.startfile(filepath)  # type: ignore[attr-defined]
         else:
             opener = "open" if sys.platform == "darwin" else "xdg-open"
-            # r-b6 R40-1/3a: retain the handle and reap prior viewer children
+            # Retain the handle and reap prior viewer children
             # (the discarded Popen left one persistent zombie per process),
             # and detach the viewer into its own session so a later render
             # timeout kill cannot orphan its grandchildren onto us.
@@ -139,7 +139,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
             )
             _VIEWER_PROCS.append(viewer)
             # Asynchronous wait so the FINAL viewer of a process is reaped
-            # too, not only viewers followed by another launch (r3 R40).
+            # too, not only viewers followed by another launch.
             threading.Thread(
                 target=_wait_and_release_viewer,
                 args=(viewer,),
@@ -168,7 +168,7 @@ RENDER_TIMEOUT_SECONDS = 120
 # PR_SET_PDEATHSIG parent-death binding, kill-grace escalation) lives in
 # ``utils/_subprocess`` so non-visualization callers (the doctor ``dot``
 # probe, the bundle git-provenance stamp) can share it without this module's
-# hard ``graphviz`` import (R40). Render call sites and tests monkeypatch
+# hard ``graphviz`` import. Render call sites and tests monkeypatch
 # ``_render_utils.run_bounded_subprocess``, so the viz-facing wrapper lives
 # here and adds the ONE viz-specific behavior on top of the shared seam.
 from .._utils._subprocess import (  # noqa: E402
@@ -192,8 +192,8 @@ def run_bounded_subprocess(
     Delegates to :func:`torchlens._utils._subprocess.run_bounded_subprocess`
     (the ONE spawn discipline) and adds the viz-specific door: a missing
     Graphviz binary raises the typed install-remedy refusal instead of a raw
-    ``FileNotFoundError: 'dot'`` naming neither Graphviz nor the remedy
-    (b8 R65). The doctor ``dot`` probe, by contrast, wants the raw signal
+    ``FileNotFoundError: 'dot'`` naming neither Graphviz nor the remedy.
+    The doctor ``dot`` probe, by contrast, wants the raw signal
     and calls the shared seam directly. Tests monkeypatch this function to
     simulate Graphviz outcomes. Every Graphviz child renders with the bundled
     font (:func:`torchlens._visualization._fonts.graphviz_font_env`).
@@ -232,7 +232,7 @@ _VISUALIZER_DIR_MARKER = "torchlens_visualizers_"
 def relativize_visualizer_image(path: str) -> str:
     """Return an image path relative to the trace visualizer scratch root.
 
-    r-b6 R19-6: node ``image=`` attributes used to embed the absolute
+    Node ``image=`` attributes used to embed the absolute
     ``tempfile.mkdtemp`` visualizer path, so every run's DOT differed in
     every image node and byte-comparison/golden hashing was impossible for
     those features. Emitting the path RELATIVE to the scratch root keeps
@@ -519,7 +519,7 @@ def make_module_cluster_attrs(
         # the argument channel: with head/tail labels still in use, margin 8
         # regresses three clean toy-gate entries ('In 1' head labels
         # penetrate the tighter border ~3 pt) and the whole-corpus
-        # monotonicity gate (D5) rejects it. The margin flip ships WITH the
+        # monotonicity gate rejects it. The margin flip ships WITH the
         # midpoint conversion (shed wave-4 tail), never before it.
         "margin": "20",
     }
@@ -647,7 +647,7 @@ def render_dot_to_file(
         rendered_path = f"{outpath}.{file_format}"
         from .render_execution import atomic_render_target, surface_layout_stderr
 
-        # Atomic publish + exit-0 stderr surfacing (vizmech D20/D24).
+        # Atomic publish + exit-0 stderr surfacing (vizmech).
         with atomic_render_target(rendered_path) as temp_rendered_path:
             cmd = [dot.engine, f"-T{file_format}", "-o", temp_rendered_path, source_path]
             completed = run_bounded_subprocess(cmd, timeout=timeout_seconds)

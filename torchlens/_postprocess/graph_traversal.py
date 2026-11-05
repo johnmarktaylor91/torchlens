@@ -647,7 +647,7 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
 
     An orphaned op is a nondeterministic value source when its captured
     callable maps to an ATen ``nondeterministic_seeded`` overload OR to the
-    uninitialized-memory family (r53 hon_2, shared predicate). When such an
+    uninitialized-memory family (shared predicate). When such an
     op's value reached a control decision (or, defensively, an output) through
     the sanitized child walk, the recorded taken branch is nondeterministic yet
     fully pruned from the visible graph. Recording its raw label in the

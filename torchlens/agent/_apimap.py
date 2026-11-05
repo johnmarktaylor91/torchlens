@@ -1,6 +1,6 @@
-"""api_map v2: compact rows from ONE authoritative export registry (memo 3.3).
+"""api_map v2: compact rows from ONE authoritative export registry.
 
-Rows are generated from the C01 surface table (``torchlens._surface``), never
+Rows are generated from the surface table (``torchlens._surface``), never
 hand-listed, so the map can never advertise a spelling the facade does not
 serve. Signatures are NOT inlined per row (measured 2.8x token tax); the
 per-name detail mode serves ONE full record instead. The capabilities block
@@ -182,13 +182,13 @@ def name_detail(name: str) -> dict[str, Any]:
         "doc_truncated": len(doc) > 4000,
         "example": _EXAMPLES.get(name) or _bank_example(name),
         # The SHIPPED resource, never a repo-relative path a wheel install
-        # lacks (the v1 map's dead docs pointer, agent memo 3.10 item 1).
+        # lacks (the v1 map's dead docs pointer).
         "doc_anchor": "torchlens.agent.guide()",
     }
 
 
 def capabilities_block() -> dict[str, Any]:
-    """Declare the agent surface's own capabilities (memo 3.3 item 2).
+    """Declare the agent surface's own capabilities.
 
     Returns
     -------

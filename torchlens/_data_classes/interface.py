@@ -384,7 +384,7 @@ def _module_hierarchy_str_recursive(
     own line with recursive expansion.  Otherwise, all children are
     printed compactly on one line with ``_format_list_with_line_breaks``.
 
-    Bounded display walk (r-b4 R27-5): a malformed/cyclic rehydrated
+    Bounded display walk: a malformed/cyclic rehydrated
     ``call_children`` relationship renders a ``<cycle>`` marker, and nesting
     past 200 levels renders ``<max-depth>``, instead of crashing the display
     path with a raw ``RecursionError``.

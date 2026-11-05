@@ -1,12 +1,12 @@
-"""The one-call paper number: ``flops`` (F09; costreport D10-D13).
+"""The one-call paper number: ``flops``.
 
 Both doors -- the model door (one safe capture under the summary
 execution contract: eval mode, ``no_grad``, module flags and RNG restored
 bit-identically) and the retroactive trace door -- feed ONE detached
 builder. The report never auto-prints, its numeric fields are plain ints
-or ``None`` (T-RAW-INT), and it holds no reference to the model or trace.
+or ``None``, and it holds no reference to the model or trace.
 
-The first screen, in order (D10): (1) actual-path analytic forward FLOPs
+The first screen, in order: (1) actual-path analytic forward FLOPs
 under a NAMED FMA convention, true MACs, non-MAC FLOPs, batch/token scope
 when derivable; (2) coverage counts, the evidence mix over knowns, named
 unknowns, and lower-bound language that "COMPLETE, not a lower bound"
@@ -19,12 +19,12 @@ TransformerEncoder fast path off during its capture so every matmul stays
 visible to the cost rules; the breakdown block lists depth-1 INCLUSIVE
 mass that partitions the forward total exactly.
 
-D11: the comparator's D is the HF-as-implemented numel of the main input
+The comparator's D is the HF-as-implemented numel of the main input
 -- padding included (measured: D=numel matches the executed dense body
 within 0.2%; mask-based D lands tens of percent low with batch-dependent
 magnitude). Applicability mirrors HF's own: ``main_input_name`` present
 and a parameter count available -- otherwise the line is OMITTED, never
-guessed. D13: analytic FLOP counts are "actual-path analytic", never
+guessed. Analytic FLOP counts are "actual-path analytic", never
 "measured".
 """
 
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class SixNDFacts:
-    """The 6ND comparator block (D11): reproduces what HF Trainer logs.
+    """The 6ND comparator block: reproduces what HF Trainer logs.
 
     ``d_numel`` is the numel of the main input AS IMPLEMENTED by HF --
     padding included. ``two_nd`` (= 2*N*D) is the forward-body heuristic
@@ -90,7 +90,7 @@ class SixNDFacts:
 
 @dataclass(frozen=True)
 class FlopsReport:
-    """The detached one-call cost report (D10). Raw ints or None only.
+    """The detached one-call cost report. Raw ints or None only.
 
     Examples
     --------
@@ -128,7 +128,7 @@ class FlopsReport:
     attention_full_square_ops: int = 0
 
     def __repr__(self) -> str:
-        """Bounded identity card (F10/D31): blocks point, never dump.
+        """Bounded identity card: blocks point, never dump.
 
         The lower-bound honesty mark is never dropped: an incomplete
         coverage renders ``>=`` on the headline figure.
@@ -194,7 +194,7 @@ class FlopsReport:
         """Render the six-block first screen."""
 
         lines = [
-            # D13: actual-path analytic, never "measured".
+            # actual-path analytic, never "measured".
             f"forward compute (actual-path analytic, {self.convention} convention: "
             f"one MAC = 2 FLOPs): {self.forward_flops if self.forward_flops is not None else '-'}"
         ]
@@ -235,7 +235,7 @@ def _input_scope(trace: Any) -> tuple[int | None, int | None]:
 
 
 def _main_input_numel(trace: Any, model: Any | None) -> int | None:
-    """The 6ND D under HF's own applicability rule (D11), else None."""
+    """The 6ND D under HF's own applicability rule, else None."""
 
     main_input_name = getattr(model, "main_input_name", None) if model is not None else None
     if not main_input_name:
@@ -257,7 +257,7 @@ def _build_report(
     main_input_numel: int | None,
     breakdown_top_k: int,
 ) -> FlopsReport:
-    """Assemble the detached report from the ONE aggregation (D10)."""
+    """Assemble the detached report from the ONE aggregation."""
 
     core = factcore(trace)
     agg = core.compute
@@ -293,9 +293,9 @@ def _build_report(
         # (its own ops plus everything nested below the depth cutoff), the
         # root-direct remainder, and the top-k remainder. Together they
         # partition forward_flops exactly, so nested-module mass can never
-        # vanish from the block (AUD-CODE 3.12c: the former exclusive
-        # ``self_flops`` read showed 136 of 2376 FLOPs for a Sequential of
-        # two blocks plus a head, with no remainder line).
+        # vanish from the block (an exclusive ``self_flops`` read would show
+        # only 136 of 2376 FLOPs for a Sequential of two blocks plus a head,
+        # with no remainder line).
         breakdown = tuple(
             f"{row.label}: {row.subtree_flops} FLOPs"
             for row in tree.rows
@@ -338,7 +338,7 @@ def flops(
     main_input_numel: int | None = None,
     breakdown_k: int = 5,
 ) -> FlopsReport:
-    """Build the one-call cost report from a trace OR a model (D10).
+    """Build the one-call cost report from a trace OR a model.
 
     Parameters
     ----------
@@ -415,7 +415,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
     ``_native_multi_head_attention`` / ``_transformer_encoder_layer_fwd``:
     ONE opaque op each with no cost rule, so the report read 0 FLOPs
     (lower bound) for exactly the matmuls the unfused path counts
-    formula-exact (AUD-CODE 3.12a). The arithmetic is identical on both
+    formula-exact. The arithmetic is identical on both
     paths; only its visibility to the cost rules differs. On torch builds
     predating the public ``torch.backends.mha`` switch (2.1-2.2,
     ``HAS_MHA_FASTPATH_SWITCH`` is ``False``), the helper falls back to

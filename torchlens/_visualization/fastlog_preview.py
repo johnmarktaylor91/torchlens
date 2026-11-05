@@ -219,7 +219,7 @@ def _append_predicate_input_lines(lines: list[str], ctx: RecordContext) -> None:
 def _append_module_event_lines(lines: list[str], layer_log: Any) -> None:
     """Append module entry/exit details when available."""
 
-    # B3R7-R05-1: ``module_call_stack`` is the op's containment stack (the
+    # ``module_call_stack`` is the op's containment stack (the
     # calls it ran inside), not the entered-module stack the old enter-lane
     # semantics implied -- label the line accordingly.
     active = tuple(record_member(layer_log, "module_call_stack", ()) or ())

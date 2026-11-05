@@ -1,4 +1,4 @@
-"""Deterministic coarse-but-legal fallback collapse planner (memo D5(iv)).
+"""Deterministic coarse-but-legal fallback collapse planner.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
@@ -7,10 +7,9 @@ abandoned by the watchdog, capped by the allocation meter, or produces an
 empty frontier (the K_CAP cliff), the render must NEVER degrade to an
 uncollapsed wall — a 1,688-of-1,712-node "plan" was the silent contract
 violation the panel started from. This module builds the deterministic
-replacement by REUSING the shipped v1 significance-greedy machinery
-(memo D5(iv), review r1 3b): the revision-cached ``analyze_collapse`` scores
-order candidate module boxes, the existing readable-band policy decides how
-many to take, and the standard fold discovery adds "+N more" runs where the
+replacement by REUSING the shipped v1 significance-greedy machinery:
+the revision-cached ``analyze_collapse`` scores order candidate module boxes, the existing readable-band policy
+decides how many to take, and the standard fold discovery adds "+N more" runs where the
 raw-op count admits it. Cost is one analysis plus a bounded number of
 O(universe) plan builds; no frontier state is ever consulted, so the result
 is deterministic in (trace revision, context) alone.
@@ -19,7 +18,7 @@ The resulting plan flows through the SAME honesty gates as every other plan:
 it is a normal typed :class:`~.collapse_plan.CollapsePlan`, its
 ``scored_k`` equals its realized count by construction (three-way parity),
 and callers disclose the planner tier (``planner="linear_fallback"`` /
-``"floor_fallback"``) plus the D4 no-silent-floor warnings.
+``"floor_fallback"``) plus the no-silent-floor warnings.
 """
 
 from __future__ import annotations
@@ -159,7 +158,7 @@ def _greedy_box_selection(trace: Trace, band_high: int, universe_count: int) -> 
     optimistic projected count reaches the readable band. The projection
     uses per-module hidden-op counts, so it is optimistic about overlaps;
     the caller builds the real plan once from the returned set and uses the
-    REALIZED count for every disclosure (memo D7: disclosures come from the
+    REALIZED count for every disclosure (disclosures come from the
     realized plan, never from a scored estimate).
     """
 

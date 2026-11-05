@@ -1,4 +1,4 @@
-"""``groupNodeAttributes`` rows and the ``""`` provenance block (memo D7).
+"""``groupNodeAttributes`` rows and the ``""`` provenance block.
 
 The ``""`` (root) row renders in Model Explorer's side panel when nothing is
 selected -- the visible TorchLens provenance-and-disclosure block (versions,
@@ -7,7 +7,7 @@ every omission count). Per-namespace rows carry address/class, direct and
 descendant op counts, deduplicated params, activation bytes, call count, and
 honest measured duration. Missing values are absent, never zero. Rows are
 emitted for ALL namespaces regardless of viewer-side single-child pruning
-(memo D9: emission is asserted always; UI reachability only under the
+(emission is asserted always; UI reachability only under the
 faithful profile).
 """
 

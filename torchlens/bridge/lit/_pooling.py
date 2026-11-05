@@ -1,11 +1,11 @@
 """Explicit, mask-aware pooling for LIT ``Embeddings`` fields.
 
-Pooling is explicit and mask-aware (LIT-panel memo D10): never batch-zero,
+Pooling is explicit and mask-aware: never batch-zero,
 never PAD positions averaged in, never silent flattening of head/spatial/
 sequence axes. Named strategies are ``mean_masked`` / ``first_token`` /
 ``last_unmasked`` plus a validated callable escape hatch; nontensor, missing,
 and unsupported-rank payloads refuse with remedies. Strategy names are
-[UI-SPRINT] placeholders (memo section 11 item 5).
+placeholders pending naming.
 """
 
 from __future__ import annotations

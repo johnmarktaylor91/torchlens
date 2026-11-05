@@ -376,7 +376,7 @@ def _admit_model(model: nn.Module | Callable[..., Any], input_kwargs: Any) -> nn
     # `model.named_modules()` (FSDP/ScriptModule checks), which only makes sense on a real
     # nn.Module. A non-Module input previously leaked an AttributeError from that call
     # instead of the documented "Unsupported model type" ValueError.
-    # The ruled root contract (foldA MEMO s5 item 9, a direct maintainer ruling) is
+    # The ruled root contract (a direct maintainer ruling) is
     # nn.Module OR a bound method of one (owner resolved via ``__self__``):
     # a bound method wraps into the TL-authored synthetic root (owner
     # registered as a submodule; method called exactly once); anything else
@@ -394,7 +394,7 @@ def _admit_model(model: nn.Module | Callable[..., Any], input_kwargs: Any) -> nn
                 received_type=type(model).__name__,
             )
     _reject_opaque_wrappers(model)
-    # grind-r5 b7 R55: ``tl.trace(model, q, k, v)`` lands ``k`` in
+    # ``tl.trace(model, q, k, v)`` lands ``k`` in
     # ``input_kwargs``; trace() refuses it before dispatch for every backend,
     # and direct callers of this torch path get the same check.
     _reject_non_mapping_input_kwargs(input_kwargs)
@@ -477,7 +477,7 @@ def _open_door_state(
     """Resolve echo options and the forward inputs (transform or coercion) into a state."""
     # Echo teaching refusals fire whether or not narrate= is armed: NarrationOptions
     # routed into save=/hooks= refuses with the measured receipts, and
-    # echo x cache/chunked/structure_only composition refuses typed (snoop D1).
+    # echo x cache/chunked/structure_only composition refuses typed.
     from ..._snoop._entry import resolve_echo_capture_options
 
     echo_options = resolve_echo_capture_options(
@@ -515,7 +515,7 @@ def _open_door_state(
 
 def _admit_and_route_save(state: _DoorState) -> _DoorState:
     """Derive the meta admission once and route ``save=`` into options and predicate."""
-    # W2 (weightsfree memo D2): admit_meta derives ONCE from the resolved
+    # admit_meta derives ONCE from the resolved
     # structure-only option state at this CAPTURE entry; the returned
     # admission record (None on ordinary/real captures) is armed around the
     # capture driver below and consumed by the forward scope + settlement.
@@ -555,7 +555,7 @@ def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOption
             code="episode_declaration_invalid",
         )
     if getattr(capture_options, "structure_only", False):
-        # S2 marker-combination table: episode x structure_only is TYPED
+        # marker-combination table: episode x structure_only is TYPED
         # REFUSE this sprint (no value semantics to fold). The refusal
         # code is L7a's capability-table constant — ONE vocabulary for
         # the combination across the entry check and the post-capture
@@ -573,7 +573,7 @@ def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOption
             and not capture_options._layers_to_save
         )
     ):
-        # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
+        # Kind-conditional save rule: tokens/digest
         # evidence derives from the retained root output, so a value-free
         # save policy refuses; a declared status-only episode
         # (step_output_kind='none') derives no evidence and is admitted.
@@ -596,9 +596,9 @@ def _resolve_episode(state: _DoorState) -> _DoorState:
     _refuse_episode_combinations(state.args, state.capture_options)
     episode_resolved = resolve_episode_declaration(episode, state.model)
     if state.args.intervene is not None:
-        # ATTESTED COUPLING (lane F42, the foldA D5 flip): the session
+        # ATTESTED COUPLING (the foldA flip): the session
         # armed here feeds the settlement writers (fire counts,
-        # intervention digest, perturbed fidelity) -- the D5 evidence bar.
+        # intervention digest, perturbed fidelity) -- the evidence bar.
         episode_resolved = replace(
             episode_resolved,
             coupling_session=CouplingSession(rule_identity=rule_identity_of(state.args.intervene)),

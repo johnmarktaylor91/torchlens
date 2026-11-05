@@ -1,18 +1,18 @@
-"""The one-backward product engine (M(reads) items 2/4/6: D3, D11, D12).
+"""The one-backward product engine.
 
 ONE ``autograd.grad`` call pattern serves every read site at once: inputs are
 the alias-deduped GradientEdges of the whole read population (one gradient
-per unique ``(node, slot)``, D11), ``allow_unused=True``,
+per unique ``(node, slot)``), ``allow_unused=True``,
 ``materialize_grads=False`` ALWAYS (torch itself REFUSES ``True`` on
 GradientEdge inputs -- the band probe pinned it -- and silent
 zero-materialization would fabricate rows), ``retain_graph=True`` always
 (repeated reads and a later ordinary ``backward`` must work).
 
-Target batching (D12) is chunked ``is_grads_batched=True`` VJPs with a
+Target batching is chunked ``is_grads_batched=True`` VJPs with a
 plan-vs-refusal posture -- BUT chunks group by CONE: a batched call returns
 ZERO rows (never ``None``) for a (target, input) pair whose input is outside
 that target's cone while inside a chunk-mate's, fabricating exactly the
-silent zeros D3 forbids (measured in this lane's band probe). Targets share
+silent zeros a read must never report (measured in a band probe). Targets share
 a chunk ONLY when they share a cone key (same seed ``(node, slot)``, or the
 same expression tensor), where per-input ``None`` is exact for every row.
 
@@ -41,7 +41,7 @@ __all__ = ["BatchPlan", "EngineReport", "EngineSpec", "run_engine", "resolve_bat
 # Auto plan defaults. CPU batching is a measured single-digit win (1.7-4.3x
 # across labs and substrates), so auto engages a modest chunk; the CUDA
 # crossover is UNMEASURED (every published ratio is CPU) -- the CUDA auto
-# default stays sequential until the C-READ cluster row lands (D13/D12).
+# default stays sequential until the C-READ cluster row lands.
 _AUTO_CPU_BATCH = 32
 _AUTO_CPU_REASON = "cpu_batched_vjp_single_digit_gain_measured"
 _AUTO_CUDA_REASON = "cuda_envelope_unmeasured_pending_c_read"
@@ -49,7 +49,7 @@ _AUTO_CUDA_REASON = "cuda_envelope_unmeasured_pending_c_read"
 
 @dataclass(frozen=True)
 class BatchPlan:
-    """The disclosed target-batching plan (D12).
+    """The disclosed target-batching plan.
 
     Attributes
     ----------

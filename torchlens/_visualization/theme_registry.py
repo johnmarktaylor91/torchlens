@@ -1,4 +1,4 @@
-"""Lens preset registry-as-data and preset resolution (themes memo, lane C05).
+"""Lens preset registry-as-data and preset resolution (themes memo).
 
 Two axes (themes memo architecture item 1): a SEMANTIC LENS (which question
 the picture answers -- which draw settings, channels, and label rows) and a
@@ -10,18 +10,18 @@ substrate ships entry-dark: importable, validated, and pinned by tests.
 
 Design rules implemented from the memo:
 
-- **Registry as inspectable data** (N12): a lens is a frozen record whose
+- **Registry as inspectable data**: a lens is a frozen record whose
   member names EQUAL draw() parameter names, so :func:`describe` teaches the
   channel API; built-ins are instances, keyed by render surface
   (``"graphviz-draw"`` now; fastlog/html reserved); registration validates at
   registration time; records are plain-serialisable.
-- **Defaults-not-overrides** (N1): resolution merges ``lens members <
+- **Defaults-not-overrides**: resolution merges ``lens members <
   explicit user kwargs``, built on the same explicit-field discipline as
   ``options.py`` -- a lens member NEVER overrides a kwarg the caller
   explicitly passed, and ``preset_spec_fn`` rides a dedicated internal slot
   applied BEFORE the user's ``node_spec_fn`` so the lens can carry label
   rows without consuming the user's documented last-word slot.
-- **HEADLINE / SECONDARY member semantics** (N2, record half): a lens
+- **HEADLINE / SECONDARY member semantics** (record half): a lens
   declares which capture-time evidence is its HEADLINE (missing -> typed
   refusal naming the capture remedy) and which members are SECONDARY
   (missing -> degrade with a mandatory rendered notice). The evidence
@@ -189,7 +189,7 @@ def list_lenses(surface: str = GRAPHVIZ_DRAW_SURFACE) -> tuple[LensPreset, ...]:
 def describe_lens(name: str, surface: str = GRAPHVIZ_DRAW_SURFACE) -> str:
     """Return the teaching description of one lens: its exact settings.
 
-    The roster TEACHES the channel API (memo N12): every printed member is a
+    The roster TEACHES the channel API: every printed member is a
     real draw() parameter with the exact value the lens applies.
     """
 

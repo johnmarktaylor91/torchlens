@@ -1,13 +1,13 @@
 """Bundle-metadata (``bundle.json``) section + member-relation loading.
 
-The C07X preserve-and-disclose loader doctrine (foldB D5) over the two
+The preserve-and-disclose loader doctrine over the two
 extension surfaces of ``bundle.json``: the ``member_relations`` table
 (unknown NAMESPACED kinds load opaque under
 ``tl.load(unknown_relations="opaque")``; bare unknown kinds refuse) and the
 top-level section namespace (unknown NAMESPACED sections preserve through
 the Bundle carriage and re-emit verbatim on save; bare-unknown sections
 refuse typed -- the historical silent load-then-destroy is banned in both
-directions). Split from ``_io/bundle.py`` at the C07X amendment (R43 size
+directions). Split from ``_io/bundle.py`` at the amendment (R43 size
 discipline); the loader (``_load_unified_bundle_directory``) is the one
 consumer.
 """
@@ -26,11 +26,11 @@ from . import ArtifactError
 #: Writer-owned bare ``bundle.json`` section keys. ``_tlspec_prerelease`` is
 #: the historical switched-era marker validated (and refused when stale) by
 #: ``validate_prerelease_state`` in the relations loader below. The four
-#: lineage keys are the F03-designed shapes for the C07X split-off join
-#: (foldB s4.4 item 12): ``bundle_id`` / ``forked_from_bundle_id`` container
+#: lineage keys are the designed shapes for the split-off join
+#: : ``bundle_id`` / ``forked_from_bundle_id`` container
 #: identity, ``member_construction`` origin anchors, the hash-chained
 #: ``operations`` chronology, and the ``member_effect_tables`` registry —
-#: all OPTIONAL (absent on pre-F03 artifacts) and fail-closed validated.
+#: all OPTIONAL (absent on older artifacts) and fail-closed validated.
 _KNOWN_BUNDLE_SECTION_KEYS = frozenset(
     {
         "members",
@@ -47,14 +47,14 @@ _KNOWN_BUNDLE_SECTION_KEYS = frozenset(
 
 #: Namespaced-section grammar: same dotted spelling as sidecar family ids
 #: and namespaced relation kinds (one namespace grammar for every extension
-#: door, foldB D16).
+#: door, foldB).
 _NAMESPACED_SECTION_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$")
 
 
 def _partition_bundle_sections(metadata: dict[str, Any]) -> dict[str, Any]:
     """Partition unknown top-level ``bundle.json`` sections (loader leg (c)).
 
-    The C07X preserve-and-disclose doctrine (foldB D5): an unknown section
+    The preserve-and-disclose doctrine: an unknown section
     under a NAMESPACED (dotted) key loads opaque — preserved for verbatim
     re-save through the Bundle carriage, disclosed with one warning, never
     executed. An unknown BARE key refuses typed: the historical behavior
@@ -113,17 +113,17 @@ def _load_gated_member_relations(
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     tlspec_version: Any = None,
 ) -> tuple[Any, ...] | None:
-    """Read the S6 ``member_relations`` key from bundle metadata.
+    """Read the ``member_relations`` key from bundle metadata.
 
     The key persists plainly as of tlspec v8. Loads still route through the
     one pre-release validation chokepoint
     (:func:`torchlens._io.prerelease.validate_prerelease_state`) so a
     switched-era artifact (marker present, switch inactive) keeps refusing
     typed and a malformed marker refuses even under the switch; a marker-free
-    payload validates against the closed S6 row schema. An absent key is
-    simply a plain bundle (S6 R7).
+    payload validates against the closed row schema. An absent key is
+    simply a plain bundle.
 
-    ``unknown_relations`` is the C07X loader-doctrine policy
+    ``unknown_relations`` is the loader-doctrine policy
     (``tl.load(unknown_relations=...)``): under ``"opaque"`` (the default)
     a well-formed row of an unknown NAMESPACED kind loads as a preserved,
     disclosed ``OpaqueRelationRow`` (leg (a)); ``"refuse"`` restores the
@@ -149,7 +149,7 @@ def _load_gated_member_relations(
         Marker present while the switch is inactive, or a malformed marker.
     BundleRelationError
         ``bundle_relation_schema_invalid`` when the payload is outside the
-        closed S6 row schema (``bundle_relation_evidence_over_budget`` rides
+        closed row schema (``bundle_relation_evidence_over_budget`` rides
         through with its own code).
     """
 
@@ -174,7 +174,7 @@ def _load_gated_member_relations(
         raise
     except (TypeError, ValueError) as exc:
         raise BundleRelationError(
-            f"bundle.json 'member_relations' payload is outside the closed S6 schema: {exc}",
+            f"bundle.json 'member_relations' payload is outside the closed schema: {exc}",
             code="bundle_relation_schema_invalid",
         ) from exc
     _refuse_kinds_unadmitted_at(table.rows, tlspec_version)
@@ -256,9 +256,9 @@ def _load_lineage_sections(
     *,
     member_names: list[str],
 ) -> dict[str, Any]:
-    """Read + validate the F03 lineage sections from ``bundle.json``.
+    """Read + validate the lineage sections from ``bundle.json``.
 
-    All four surfaces are OPTIONAL (a pre-F03 artifact simply lacks them);
+    All four surfaces are OPTIONAL (an older artifact simply lacks them);
     every present surface validates FAIL-CLOSED through the shape validators
     in :mod:`torchlens.bundle._lineage` (anchors over the closed origin
     vocabulary, operation rows re-deriving their hash chain, effect tables
@@ -308,7 +308,7 @@ def _load_lineage_sections(
         raise
     except (TypeError, ValueError) as exc:
         raise BundleRelationError(
-            f"bundle.json lineage sections are outside the F03 closed shapes: {exc}",
+            f"bundle.json lineage sections are outside the closed shapes: {exc}",
             code="bundle_lineage_invalid",
         ) from exc
     return loaded

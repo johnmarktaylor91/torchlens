@@ -1,4 +1,4 @@
-"""Content fingerprints of the tensors a staged helper closes over (F9).
+"""Content fingerprints of the tensors a staged helper closes over.
 
 ``tl.steer``, ``tl.mean_ablate``, ``tl.project_onto``, ``tl.project_out`` and
 the ``swap_with`` helper keep the caller's tensor by reference (no copy, so a large

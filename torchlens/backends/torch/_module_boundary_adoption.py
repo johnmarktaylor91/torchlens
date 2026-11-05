@@ -138,14 +138,14 @@ def _collect_model_owned_tensor_ids(model: nn.Module) -> dict[int, torch.Tensor]
     sessions), while a tensor first appearing MID-forward is absent from the
     snapshot and keeps the escape disclosure.
 
-    The mapping VALUES are strong references, deliberately (round-3 b1/b3/b4
-    merged finding): a bare ``set[int]`` of recyclable ids had no liveness
-    pinning, so a model that dropped a snapshotted cache tensor mid-forward
-    freed the object and a later stale-pre-wrap escape product could reuse the
-    exact id -- classified "model-owned known source", silently suppressing
-    the adoption disclosure (the exact laundering 3c721316 closed). Pinning
-    every snapshot member for the session makes id reuse impossible; the
-    workspace drop at the transient-state cleanup seam releases the pins.
+    The mapping VALUES are strong references, deliberately: a bare ``set[int]``
+    of recyclable ids had no liveness pinning, so a model that dropped a
+    snapshotted cache tensor mid-forward freed the object and a later
+    stale-pre-wrap escape product could reuse the exact id -- classified
+    "model-owned known source", silently suppressing the adoption disclosure (a
+    laundering path the strong references close). Pinning every snapshot member
+    for the session makes id reuse impossible; the workspace drop at the
+    transient-state cleanup seam releases the pins.
 
     Parameters
     ----------

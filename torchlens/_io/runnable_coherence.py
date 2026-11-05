@@ -1,4 +1,4 @@
-"""Registry-coherence names for sparse runnable readiness (r83 S3).
+"""Registry-coherence names for sparse runnable readiness.
 
 A loaded artifact names each computational call twice: the execution authority
 ``run.callable_registry[].key`` and the op's independently recorded function name.
@@ -24,7 +24,7 @@ _PRIVATE_BUILTIN_PUBLIC_PREFIXES: Mapping[str, str] = {
 
 
 def _normalized_callable_name(name: str | None) -> str | None:
-    """Return a callable name in the one spelling both records agree on (r83 S3).
+    """Return a callable name in the one spelling both records agree on.
 
     ``sites[].function_path`` (derived from ``layer_list[].func_name``) and
     ``run.callable_registry[].key.qualname`` are persisted independently and
@@ -65,7 +65,7 @@ def _callable_registry_contradiction(
     affected_ops: tuple[str, ...],
     recorded_func_names: Mapping[str, str | None],
 ) -> tuple[str, str] | None:
-    """Return the first op whose recorded name contradicts the registry name (r83 S3).
+    """Return the first op whose recorded name contradicts the registry name.
 
     The callable a loaded artifact EXECUTES comes from
     ``manifest.json -> run.callable_registry[].key``. The SAME call is named
@@ -77,7 +77,7 @@ def _callable_registry_contradiction(
     fields still said ``add``.
 
     Called from the resolver's success sink, so it fires ONLY for a key that
-    RESOLVES to a real, signature-compatible callable -- the S3 threat, a swap
+    RESOLVES to a real, signature-compatible callable -- the threat, a swap
     between two valid ops that would otherwise silently run. An unresolvable or
     signature-incompatible key never reaches here, keeping the resolver's own
     richer readiness/``ReattachError`` path. Compares against the persisted
@@ -119,7 +119,7 @@ def _callable_registry_contradiction(
         recorded = _normalized_callable_name(raw_recorded)
         if recorded is None or recorded in authorities:
             continue
-        # Sanctioned canonicalization pair (round-31 M6, r28 reconcile): the
+        # Sanctioned canonicalization pair: the
         # ``Tensor.data`` surface records the canonical ``detach`` callable as
         # its execution authority -- the getter under the ``detach`` op name,
         # the setter (``t.data = rhs``, logged over the RHS only) under the

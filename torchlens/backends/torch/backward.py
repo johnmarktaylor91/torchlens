@@ -258,9 +258,8 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
     Contract: an IMPLICIT backward (orphan hook-only autograd flow that never passes
     through a wrapped TorchLens backward trigger) has no user call site, so its
     ``backward_call_context`` must stay ``None``. No stable public fixture currently
-    forces that path, so the contract lives here rather than as a skipped test
-    (disputed-r2 b10/R79); if such a fixture is ever found, pin it in
-    ``tests/test_backward_call_context.py``.
+    forces that path, so the contract lives here rather than as a skipped test; if such a
+    fixture is ever found, pin it in ``tests/test_backward_call_context.py``.
     """
 
     current = inspect.currentframe()
@@ -318,7 +317,7 @@ _PENDING_BACKWARD_FINALIZE: weakref.WeakKeyDictionary[Any, bool] = weakref.WeakK
 
 Set by the journal step of :func:`_close_implicit_backward_pass_if_open` and
 cleared only after BOTH finalize sub-steps complete outside any engine
-invocation (L9 memo 1.2). Weak-keyed so it never pins a trace.
+invocation. Weak-keyed so it never pins a trace.
 """
 
 
@@ -490,7 +489,7 @@ def _purge_trace_from_backward_registry(trace: Any) -> None:
 def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "sync_point") -> None:
     """Close an implicit backward bracket: journal + scavenge + guarded finalize.
 
-    L9 memo 1.2 journal/scavenge/finalize split. The public shape stays ONE
+    Journal/scavenge/finalize split. The public shape stays ONE
     function with the same name and signature, so all three shipped call
     sites (the ``_run_backward_with_capture`` sync point on the owner thread,
     the tensor-hook task-id-change close on the ENGINE thread, and the lazy
@@ -506,7 +505,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
       per-fire timing stamp lists. MUST run at close time, before any later
       pass can open -- deferring it is exactly the cross-pass
       ``(grad_fn_object_id, call_index)`` stale-pop mis-attribution.
-    - (F) FINALIZE-if-pending: the R36-1 D2H fence + full projection, run iff
+    - (F) FINALIZE-if-pending: the D2H fence + full projection, run iff
       the pending flag is set AND ``_current_backward_graph_task_id()`` is
       ``None`` (torch's own engine-invocation witness) -- NEVER inside an
       engine invocation, hence never on the engine thread mid-drain. When
@@ -541,7 +540,7 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
             trace._num_backward_passes = max(int(trace._num_backward_passes), int(pass_index))
             trace.__dict__.pop("_active_backward_pass_number", None)
             # Close the open-pass flag BEFORE the fallible record clear
-            # (R14-1 sibling ordering): a clear failure propagates loudly
+            # (matching the sibling ordering): a clear failure propagates loudly
             # either way, but must not strand the implicit pass marked open
             # after its End event was journaled.
             trace._implicit_backward_pass_open = False
@@ -887,7 +886,7 @@ def _materialize_backward_projections(trace: Any) -> None:
     event_count = len(stream_events)
     if not event_count:
         return
-    # Checkpoint witness (memo 2.3): every backward-capturing trace gets the
+    # Checkpoint witness: every backward-capturing trace gets the
     # projected summary, so the affirmative zero-token verdict is available
     # even when no checkpoint enter or degrade flag ever fired.
     _refresh_checkpoint_witness(trace)
@@ -945,7 +944,7 @@ def _materialize_backward_projections(trace: Any) -> None:
 def _bind_backward_epoch(
     trace: Any, *, fold_rows: tuple[list[Any], ...] | None, revision: Any, watermark: Any
 ) -> None:
-    """Bind the projected backward records to the core's backward epoch (M9).
+    """Bind the projected backward records to the core's backward epoch.
 
     Runs AFTER a successful projection and BEFORE the trace-side stamp
     publication. The swap is genuinely atomic: a full rebuild adopts every
@@ -1528,7 +1527,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
         when timing registration failed for this node (untimed fires).
     gradfn_marker_tokens:
         Per-node open ``record_function`` marker LIFO fed by the timing
-        prehook's FLIP-2 sink; the posthook pops it at the finish-stamp line
+        prehook's sink; the posthook pops it at the finish-stamp line
         so the marker span equals the recorded host span by construction.
 
     Returns
@@ -1542,12 +1541,12 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
     def hook(*hook_args: Any) -> tuple[torch.Tensor | None, ...] | None:
         """Record one autograd grad_fn hook firing and apply live interventions."""
         # Finish stamp FIRST, before any logging work, so TorchLens overhead
-        # stays outside the measured span (L9 memo 1.3). Same clock as the
+        # stays outside the measured span. Same clock as the
         # prehook stamp -- perf_counter, never the wall `timestamp`.
         fire_finished_monotonic = time.perf_counter()
-        # FLIP-2 (F27): the node marker closes AT the finish stamp, and
+        # the node marker closes AT the finish stamp, and
         # TorchLens's OWN logging below runs inside a TYPED internal bracket
-        # (TN-D18) so the complement bucket can never publish our
+        # so the complement bucket can never publish our
         # gradient-saving work under torch's name.
         if gradfn_marker_tokens:
             _exit_gradfn_marker(gradfn_marker_tokens.pop())
@@ -2141,8 +2140,8 @@ def _walk_and_hook_backward_graph(
                 topology=tuple(id(next_fn) for next_fn in next_grad_fns),
             )
         )
-        # D5 reentrant sentinel: the discovery stream affirmatively witnesses
-        # reentrant checkpointing (token-free by definition, memo 2.3).
+        # Reentrant sentinel: the discovery stream affirmatively witnesses
+        # reentrant checkpointing (token-free by definition).
         _flag_reentrant_checkpoint_if_sentinel(trace, grad_fn_record.class_qualname)
         if layer_label is not None:
             layer = trace._layer_dict_all_keys[layer_label]
@@ -2233,10 +2232,9 @@ def _emit_discovered_grad_fn(
     """Append a discovery event and runtime record for one grad-fn object.
 
     ``type_counter`` is rewalk-scoped scratch owned by the caller
-    (grind-r6 b5 R45: parking it on ``trace.__dict__`` left an undeclared
-    private field on the Trace that broke ``Trace.save`` after two
-    differentiable grad passes -- ``_backward_grad_fn_type_counter``
-    missing from ``_PORTABLE_STATE_SPEC``).
+    (parking it on ``trace.__dict__`` would leave an undeclared private
+    field on the Trace that breaks ``Trace.save`` after two differentiable
+    grad passes, because it is absent from ``_PORTABLE_STATE_SPEC``).
     """
 
     grad_fn_object_id = id(grad_fn_handle)
@@ -2320,8 +2318,8 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
     # Rewalk-scoped label allocation state, seeded from every existing record
     # so a fresh discovery can never collide with an already-assigned
     # ``type_index`` (same seeding idiom as the projection rebuild path).
-    # Holding this on the trace between rewalks left an undeclared private
-    # field that broke Trace.save (grind-r6 b5 R45).
+    # Holding this on the trace between rewalks would leave an undeclared private
+    # field that breaks Trace.save.
     type_counter: dict[str, int] = {}
     for existing_record in trace._grad_fn_logs.values():
         type_counter[existing_record.type] = max(
@@ -2749,9 +2747,9 @@ def _run_backward_with_capture(
                 _materialize_backward_projections(trace)
             raise rewalk_error
         trace._num_backward_passes = max(int(trace._num_backward_passes), pass_index)
-        # Fenced like the rewalk-error arm above (b3-sol-R14-1): an unfenced
-        # failure in the pending-record clear stranded every grad-fn hook and
-        # strong forward graph ref registered by the walk. Each cleanup step
+        # Fenced like the rewalk-error arm above: an unfenced failure in the
+        # pending-record clear would strand every grad-fn hook and strong
+        # forward graph ref registered by the walk. Each cleanup step
         # runs regardless of its siblings; the FIRST failure still propagates
         # at the end of the tail (never silently swallowed).
         cleanup_error: BaseException | None = None
@@ -2770,10 +2768,10 @@ def _run_backward_with_capture(
             cleanup_error = cleanup_error if cleanup_error is not None else exc
         # SUCCESS path: there is no primary exception whose precedence would
         # justify discarding a failure here, so fold it into cleanup_error
-        # like the sibling steps. suppress(BaseException) silently discarded
+        # like the sibling steps. suppress(BaseException) would silently discard
         # a KeyboardInterrupt delivered during handle removal after a
-        # successful backward and backward returned normally (grind-r6
-        # b8 R63, fable probe). Already-removed / framework-debris handles
+        # successful backward and backward returned normally.
+        # Already-removed / framework-debris handles
         # still never mask a real first failure: the fold keeps the FIRST.
         for handle in handles:
             try:
@@ -2792,8 +2790,8 @@ def _run_backward_with_capture(
             sum(int(param_log.grad_memory) for param_log in trace._param_logs)
         )
         # Fence in-flight cpu_async D2H grad copies before projections make
-        # the payloads reachable (R36-1 for the backward seam): the forward
-        # finalize drain already ran at capture time, so without this drain a
+        # the payloads reachable (the backward-seam counterpart of the forward
+        # drain): the forward finalize drain already ran at capture time, so without this drain a
         # host read of a backward-retained cpu_async payload could observe
         # partial bytes from an unfinished non_blocking copy.
         synchronize_pending_cpu_async_copies()
@@ -2946,7 +2944,7 @@ def _capture_autograd_engine_call(
 
 
 # ---------------------------------------------------------------------------
-# Checkpoint invocation tokens (L9 memo 2.3). Every spelling below is
+# Checkpoint invocation tokens. Every spelling below is
 # DOCUMENTED-UNSTABLE; the typed ambiguity REFUSAL awaits a pending contract amendment and
 # NOT raised anywhere in this module -- only the capture machinery (classifier,
 # per-instance token-bearing closures, witness bookkeeping) ships pre-amendment.
@@ -2963,14 +2961,14 @@ thread (classifier condition 2), so the ordinal needs no lock; engine-thread
 unpack evidence appends go through the per-trace lock.
 """
 
-#: Degrade-flag vocabulary (provisional strings, E-L9-4 routing): D1-D7.
-_CHECKPOINT_FLAG_CLASSIFIER_UNAVAILABLE = "classifier_unavailable"  # D1
-_CHECKPOINT_FLAG_PATCH_UNAVAILABLE = "patch_unavailable"  # D2
-_CHECKPOINT_FLAG_EXOTIC_SUBCLASS = "exotic_subclass"  # D3
-_CHECKPOINT_FLAG_UNMATCHED_BACKWARD_WARN = "unmatched_backward_warn"  # D4
-_CHECKPOINT_FLAG_REENTRANT_NODE_DISCOVERED = "reentrant_node_discovered"  # D5
-_CHECKPOINT_FLAG_UNWITNESSED_ENTER = "unwitnessed_checkpoint_enter"  # D6
-_CHECKPOINT_FLAG_HOOK_IDENTITY_UNPRESERVED = "hook_identity_unpreserved"  # D7
+#: Degrade-flag vocabulary (provisional strings).
+_CHECKPOINT_FLAG_CLASSIFIER_UNAVAILABLE = "classifier_unavailable"
+_CHECKPOINT_FLAG_PATCH_UNAVAILABLE = "patch_unavailable"
+_CHECKPOINT_FLAG_EXOTIC_SUBCLASS = "exotic_subclass"
+_CHECKPOINT_FLAG_UNMATCHED_BACKWARD_WARN = "unmatched_backward_warn"
+_CHECKPOINT_FLAG_REENTRANT_NODE_DISCOVERED = "reentrant_node_discovered"
+_CHECKPOINT_FLAG_UNWITNESSED_ENTER = "unwitnessed_checkpoint_enter"
+_CHECKPOINT_FLAG_HOOK_IDENTITY_UNPRESERVED = "hook_identity_unpreserved"
 
 #: Attribute-name prefix reserved for TorchLens's own hook-wrapper bookkeeping
 #: (``__tl_saved_tensors_hook_scoped__``, ``__tl_checkpoint_token__``,
@@ -2988,9 +2986,9 @@ def _resolve_checkpoint_hook_cls() -> type | None:
     """Return torch's private non-reentrant checkpoint hook class, or ``None``.
 
     A torch without the private name yields ``None`` -> classifier
-    unavailable -> NO tokens (degrade class D1, fail-closed: an unrecognized
-    checkpoint variant can never mint a false token). Routed through the
-    compat chokepoint; absence flips ``HAS_CHECKPOINT_HOOK_CLASS`` there.
+    unavailable -> NO tokens (degrade class ``classifier_unavailable``,
+    fail-closed: an unrecognized checkpoint variant can never mint a false
+    token). Routed through the compat chokepoint; absence flips ``HAS_CHECKPOINT_HOOK_CLASS`` there.
     """
 
     return get_checkpoint_hook_class()
@@ -3016,7 +3014,7 @@ def _carry_foreign_hook_attrs(new_hook: Callable[[Any], Any], old_hook: Any) -> 
     ``context.unpack_hook`` with freshly built token-bearing wrappers. On
     torch >= 2.14, torch's own ``_checkpoint_internal_hook.__enter__`` has
     already stashed a private ``_user_hooks`` attribute on the hook object
-    BEFORE the classifier runs (memo 2.3 addendum); dropping it by installing
+    BEFORE the classifier runs; dropping it by installing
     an unrelated wrapper object would make the matching ``__exit__`` raise
     ``AttributeError`` reaching for state that moved to a different function
     object -- an exception INSIDE ``__exit__`` that skips torch's own
@@ -3071,7 +3069,7 @@ def _flag_checkpoint_degrade(trace: Any, flag: str) -> None:
 
 
 def _flag_reentrant_checkpoint_if_sentinel(trace: Any, class_qualname: str | None) -> None:
-    """Set D5 when a discovered grad-fn is the reentrant checkpoint node."""
+    """Set the reentrant-node flag when a discovered grad-fn is the reentrant checkpoint node."""
 
     if class_qualname and class_qualname.rsplit(".", 1)[-1] == _REENTRANT_CHECKPOINT_QUALNAME:
         _flag_checkpoint_degrade(trace, _CHECKPOINT_FLAG_REENTRANT_NODE_DISCOVERED)
@@ -3084,7 +3082,7 @@ def _token_bearing_pack_hook(
 
     Runs on the owner thread during forward with logging paused by the inner
     scoped body; this wrapper does dict bookkeeping only (no tensor ops), so
-    the r34-A/r33-F2 fences are untouched. The forward-side slot->op binding
+    the existing capture-state fences are untouched. The forward-side slot->op binding
     is NOT claimed: pack evidence is a COUNT, never a producer-op join (the
     pack hook runs before TorchLens logs the producing op).
     """
@@ -3155,20 +3153,20 @@ def _token_bearing_unpack_hook(
 
 
 def _observe_saved_tensors_hooks_enter(context: Any) -> None:
-    """Classify one ``saved_tensors_hooks`` enter; mint or flag (memo 2.3).
+    """Classify one ``saved_tensors_hooks`` enter; mint or flag.
 
     Classifier (exact, conservative, fail-closed) -- a token is minted ONLY
     when ALL of:
 
     1. the context is a ``torch.utils.checkpoint._checkpoint_hook`` instance
-       (lazy private-name resolution; absence -> D1, no tokens);
+       (lazy private-name resolution; absence -> ``classifier_unavailable``, no tokens);
     2. capture-armed on the OWNER thread (same gate as the scoped hook body);
     3. NOT inside an engine invocation (torch's graph-task witness).
 
     ``_recomputation_hook`` instances, ordinary ``saved_tensors_hooks``,
     ``save_on_cpu``, and user subclasses fail (1) and NEVER mint or flag.
-    A ``_checkpoint_hook`` enter failing (2)/(3) sets D6 instead of staying
-    silent: every checkpoint enter therefore either mints or flags.
+    A ``_checkpoint_hook`` enter failing (2)/(3) sets the unwitnessed-enter
+    flag instead of staying silent: every checkpoint enter therefore either mints or flags.
     """
 
     trace, logging_enabled = _state.active_capture()
@@ -3207,7 +3205,7 @@ def _observe_saved_tensors_hooks_enter(context: Any) -> None:
         _carry_foreign_hook_attrs(new_pack_hook, old_pack_hook)
         and _carry_foreign_hook_attrs(new_unpack_hook, old_unpack_hook)
     ):
-        # Fail closed (memo 2.3 addendum, torch >= 2.14): this torch runtime's
+        # Fail closed (torch >= 2.14): this torch runtime's
         # checkpoint internals keep private cross-call identity state
         # directly on the hook callable that the token wrapper could not
         # carry forward safely. Installing it anyway would desync torch's
@@ -3381,13 +3379,13 @@ def _install_saved_tensors_hooks_scope() -> None:
         except AttributeError:
             # An exotic subclass without settable hook attributes degrades to
             # the historical unscoped behavior rather than breaking entry --
-            # and flags D3 so the checkpoint witness never claims coverage a
+            # and flags ``exotic_subclass`` so the checkpoint witness never claims coverage a
             # degraded patch cannot provide.
             active_trace, _ = _state.active_capture()
             if active_trace is not None:
                 _flag_checkpoint_degrade(active_trace, _CHECKPOINT_FLAG_EXOTIC_SUBCLASS)
         else:
-            # Checkpoint-invocation classifier (L9 memo 2.3): mint-or-flag on
+            # Checkpoint-invocation classifier: mint-or-flag on
             # every _checkpoint_hook enter, BEFORE original_enter pushes the
             # instance hooks onto torch's stack so the pushed pair is the
             # token-bearing one.
@@ -3414,8 +3412,7 @@ def _restore_slot_identity_checked(
     A third-party patch layered over the torchlens patch (apex/deepspeed-style
     passthroughs on the autograd entry points) is preserved and its
     ``site_label`` returned for the caller's burial disclosure instead of
-    being silently clobbered -- this was the only teardown in the codebase
-    with no drift guard (grind-r5 b8 R56). Returns ``None`` when the slot was
+    being silently clobbered. Returns ``None`` when the slot was
     restored (or there was nothing to restore).
     """
 
@@ -3495,7 +3492,7 @@ def install_autograd_wrappers() -> None:
     # teardown, then a re-install snapshotting the foreign chain) otherwise
     # re-pointed EVERY live old wrapper at the new global -- a chain that
     # contains the old wrapper itself, i.e. infinite recursion on the first
-    # backward (grind-r5 R56 follow-on, caught by this lane's own gate).
+    # backward.
     closure_original_backward = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_BACKWARD)
     closure_original_grad = cast(Callable[..., Any], _ORIGINAL_AUTOGRAD_GRAD)
 
@@ -3559,7 +3556,7 @@ def install_autograd_wrappers() -> None:
 
         return record_autograd_grad_boundary(engine, original, args, kwargs)
 
-    # Provenance parity with every namespace wrapper (grind-r5 b8 R56): the
+    # Provenance parity with every namespace wrapper: the
     # entry wrappers carry the original's metadata so introspection reports
     # torch.autograd.backward/grad (not a closure qualname), inspect.signature
     # resolves through __wrapped__, and pickling the wrapped entry by
@@ -3735,7 +3732,7 @@ class RecordingBackward:
             # like a successfully-recorded empty pass (e.g. a graph rebuilt
             # under no_grad by reentrant checkpointing pins zero grad-fns).
             if not any(matched is trace for matched in _traces_for_roots(tensor_self)):
-                # D4: KEPT as an evidence-incompleteness flag, NOT a reentrant
+                # KEPT as an evidence-incompleteness flag, NOT a reentrant
                 # detector (its trigger is zero pinned grad-fns, which a
                 # partially-checkpointed model never trips).
                 _flag_checkpoint_degrade(trace, _CHECKPOINT_FLAG_UNMATCHED_BACKWARD_WARN)

@@ -3,7 +3,7 @@
 Split out of ``torchlens/options.py`` (2026-08-26 P03 fix cycle). The
 ``_explicit_fields`` / ``_field_is_explicit`` readers over ``_specified_fields``,
 the frozen-group construction kit (``_resolve_option_value`` /
-``_set_frozen_fields`` / ``_build_option``) and :class:`NarrationOptions` (lane F28) live here;
+``_set_frozen_fields`` / ``_build_option``) and :class:`NarrationOptions` live here;
 ``options.py`` imports them back (one-directional -- this module never
 imports ``options``).
 """
@@ -117,7 +117,7 @@ _ECHO_FIELDS: Final[tuple[str, ...]] = (
 
 @dataclass(frozen=True, init=False, repr=False)
 class NarrationOptions(_OptionsDisplay):
-    """Grouped live-narration options for ``narrate=`` (lane F28, snoop memo D1).
+    """Grouped live-narration options for ``narrate=``.
 
     ``narrate=`` on ``tl.trace``, ``tl.record``, and ``fastlog.Recorder``
     narrates capture events -- one line per event -- through one read-only

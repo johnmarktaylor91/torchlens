@@ -1,4 +1,4 @@
-"""query_sites: structured site discovery over persisted facts (memo 3.5).
+"""query_sites: structured site discovery over persisted facts.
 
 The wire query is a versioned, CLOSED JSON AST that serializes the public
 selector algebra -- never a parallel language. v1 leaves are persisted facts
@@ -515,8 +515,8 @@ def _query_invalid(
 ) -> InvalidArgumentError:
     """Build one typed query-grammar refusal.
 
-    The ``code`` is passed at every raise site (site-visible, so the S-17
-    census records the site as coded through the factory -- the C01 registry
+    The ``code`` is passed at every raise site (site-visible, so the raise-site
+    census records the site as coded through the factory -- the registry
     precedent).
 
     Parameters

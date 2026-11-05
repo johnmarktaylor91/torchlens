@@ -34,7 +34,7 @@ tensor-value-free. Load validates embedded state through the same strict binder;
 `embedded_capture_state`, never a reconstructed model, and a later `load_state_dict()` overrides it.
 Used NON-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_buffer_v1` family
 (declared state, not gated on either include flag; the save discloses it). State ALIAS topology is
-declared (r37): repeated live object identity (tied weights, double-registered buffers) becomes a
+declared: repeated live object identity (tied weights, double-registered buffers) becomes a
 shared alias group staged as ONE allocation; distinct-object overlapping or unprovable state
 topology refuses at save with `state_alias_topology_unsupported`. Payload blobs keep their
 `map_location` transport placement; readiness capability-checks recorded slot devices without
@@ -56,7 +56,7 @@ nondeterministic-capture-context runs report `not_applicable`; `attested` always
 
 `trace.run_transaction(inputs=x, seed=...)` is the provider-neutral execution spelling. A live Trace delegates
 on a fork to the existing `save_new_outs` fast capture path. The live refresh projector's
-buffer-sink refusal is TRAINING-MODE AWARE (D18, by design): eval-mode BatchNorm
+buffer-sink refusal is TRAINING-MODE AWARE (by design): eval-mode BatchNorm
 (every buffer sink carries derived write evidence `buffer_value_changed=False` with agreeing
 mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-sensitive norm
 call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
@@ -121,7 +121,7 @@ capture-scoped `AmbientExecutionContext` are REQUIRED and EXPLICIT, restored at 
 typed; a legacy v1 artifact loads analysis-only with a typed readiness refusal (absent context is
 never defaulted).
 
-The witness-strip class is closed structurally (r71 A): `WITNESS_FAMILY_REGISTRY` v2
+The witness-strip class is closed structurally: `WITNESS_FAMILY_REGISTRY` v2
 (`witness_family_registry_v2`) covers EVERY verdict-steering witness family (the four direct
 control kinds + shape families + two claim-only families), each row naming its independent
 replay-structural anchor. Every replay item that steers a verdict is a typed obligation stamped

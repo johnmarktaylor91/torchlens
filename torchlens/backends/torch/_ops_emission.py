@@ -98,7 +98,7 @@ def _dropped_edge_at_slot(
     gone because its "deliberately excluded from parents" premise no longer
     holds anywhere.
 
-    r29 F3c: ORDERED per-slot identity. When the recorder stamped a parent
+    ORDERED per-slot identity. When the recorder stamped a parent
     label AT this exact slot it must be one of the live tensor's own provenance
     labels, else the call recipe binds the WRONG producer here (a slot
     permutation between value-identical producers passed the former set check).
@@ -137,7 +137,7 @@ def _unattributed_tensor_arg_positions(
     parent_arg_positions:
         Recorded parent-edge locations for the current call.
     recorded_parent_params:
-        The call's resolved ``parent_params`` (r29 F3a): the recorded param
+        The call's resolved ``parent_params`` the recorded param
         edge set a session-validated Parameter slot must appear in.
 
     Returns
@@ -149,7 +149,7 @@ def _unattributed_tensor_arg_positions(
         tensor has a LIVE traced producer absent from the recorded parent
         edges, an identity-witnessed dropped edge independent of the slot value
         (round-31 FN-1..6: value evidence misses a dropped bool/all-zero edge
-        and a swap between value-identical producers). r29 F3a/F3c extend it:
+        and a swap between value-identical producers). Two cases extend it:
         a session-validated PARAMETER slot missing from ``parent_params`` is a
         dropped param edge, and a slot whose RECORDED parent label disagrees
         with the tensor's own provenance labels is a permuted edge (a set check
@@ -233,7 +233,7 @@ def _unattributed_tensor_arg_positions(
         # warning for that unsafe lvalue position when an input-derived RHS would otherwise
         # appear fully represented; the data-alias witness ceilings replay independently.
         unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
-        # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
+        # ``t.data = rhs``: the setter is
         # logged as the canonical single-argument ``detach(rhs)`` call, so
         # the rebound receiver never appears as a recorded argument and no
         # receiver-slot exemption exists here -- ``arg0`` IS the RHS and is
@@ -251,7 +251,7 @@ def _unattributed_tensor_arg_positions(
             if fact
             else isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None
         ):
-            # r29 F3a: the parameter rung. A Parameter never appears in
+            # The parameter rung. A Parameter never appears in
             # ``parent_arg_positions`` (the recorder skips it) and
             # ``tensor_session_parent_labels`` returns ``()`` for it, so a
             # dropped PARAM edge was invisible to both witness branches.
@@ -307,7 +307,7 @@ def log_function_output_tensors(
     bool
         Whether the selected capture producer logged at least one output op.
     """
-    # F20 lazy-buffer completion: torch's lazy pre-hook plumbing can emit a
+    # Lazy-buffer completion: torch's lazy pre-hook plumbing can emit a
     # still-pending UninitializedBuffer as a wrapped call's OUTPUT (the
     # ``__torch_function__`` ``_convert``/``as_subclass`` step). It has no
     # geometry to log and is pre-forward materialization, not model
@@ -315,7 +315,7 @@ def log_function_output_tensors(
     # gate. Mirrors the receiver passthrough in ``wrapped_func``.
     if isinstance(out_orig, torch.Tensor) and _is_uninitialized_param(out_orig):
         return False
-    # W1 decomposition transparency (weightsfree memo D3, defect L1): on an
+    # Decomposition transparency: on an
     # ADMITTED meta structure-only capture, a wrapped call issued BY torch's
     # own Python decomposition machinery (torch/_refs, _prims,
     # _meta_registrations, ...) is not recorded — the enclosing USER op stays

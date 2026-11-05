@@ -1,7 +1,7 @@
-"""Memory-timeline category contract + parity oracle (torchnative W0.7/6.3).
+"""Memory-timeline category contract + parity oracle (torchnative.7/6.3).
 
 Torch deprecated its only categorized memory view; the replacement answers a
-different question. TorchLens's rebuilt timeline (observe implements, W3.2)
+different question. TorchLens's rebuilt timeline (observe implements)
 uses torch's category words ONLY where they map 1:1 to an observed record
 fact and NEVER emits torch's heuristic-only categories -- this module is the
 contract of record for that mapping, plus the machinery of the DEADLINE

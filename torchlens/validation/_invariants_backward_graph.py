@@ -35,7 +35,7 @@ def _check_backward_graph_invariants(trace: Trace) -> None:
     forward layers did not exist when backward graph walking ran, while still
     failing pre-trigger layers whose backpointer was accidentally severed.
     A pre-trigger layer is also exempt when it provably sat OUTSIDE the
-    backward walk (b7-opus R24-X): its recorded handle id was never projected
+    backward walk: its recorded handle id was never projected
     into ``grad_fn_logs`` AND no autograd-visited op is reachable from it
     through grad-carrying edges — the dead-branch case (``_ = h.mean()``) and
     grad-severed subgraphs, where autograd never constructs a backpointer to
@@ -81,7 +81,7 @@ def _refuse_backward_evidence_without_registry(trace: Trace, name: str) -> None:
     The rest of the backward invariant family is gated on ``grad_fn_logs``
     being non-empty, and the capture-event journal is a run-scoped live fact
     that never survives pickle restore, fork, or bundle load -- so on a
-    detached trace a WIPED registry used to silently skip every registry,
+    detached trace a WIPED registry would silently skip every registry,
     backpointer, saved-grad, density, topology, and domain check. Backward
     projection can never legitimately leave ``backward_pass_logs``,
     ``num_backward_passes``, ``grad_fn_order``, or
@@ -318,7 +318,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
         if layer.autograd.grad_fn is None:
             if _layer_postdates_all_backward_triggers(trace, layer):
                 continue
-            # Dead-branch carve-out (b7-opus R24-X): autograd visits a grad_fn
+            # Dead-branch carve-out: autograd visits a grad_fn
             # only when its output feeds a backward root along grad-carrying
             # edges, so a provably non-contributing layer (unconsumed output,
             # or a path severed by a grad-less op) never receives a

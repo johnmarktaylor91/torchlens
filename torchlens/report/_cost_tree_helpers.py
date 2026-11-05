@@ -42,7 +42,7 @@ def _call_display(call: Any) -> str:
 
 
 class _RemainderMass(NamedTuple):
-    """The conserved mass one REMAINDER row folds in (D5/D6)."""
+    """The conserved mass one REMAINDER row folds in."""
 
     flops: int
     n_ops: int
@@ -53,7 +53,7 @@ class _RemainderMass(NamedTuple):
 
 
 def _pct(value: int | None, total: int) -> float | None:
-    """Percent of the known partition total (D4); None-safe."""
+    """Percent of the known partition total; None-safe."""
 
     if value is None or total <= 0:
         return None

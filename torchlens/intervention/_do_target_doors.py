@@ -27,7 +27,7 @@ def apply_region_target_do(  # noqa: PLR0913 - apply_do_mutation's own arguments
     strict: bool,
 ) -> tuple[str, tuple[str, ...]] | None:
     """Apply ``do`` to a ``RegionTarget``; return ``None`` for any other site."""
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
+    # A RegionTarget is the region-as-a-unit door: the replay lowering
     # substitutes the region's derived exit values without replaying the
     # interior. Distinct from the TraceSlice lift below, which keeps its shipped
     # member-site family semantics. sys.modules gate keeps do() free of the regions import.

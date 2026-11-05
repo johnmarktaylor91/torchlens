@@ -201,7 +201,7 @@ def _run_undecorate_saved_tensors(ctx: StepContext) -> None:
 def _run_clear_cuda_cache(ctx: StepContext) -> None:
     """Clear the CUDA caching allocator for CUDA-touching captures."""
 
-    # Untimed (historical). R36-3: additionally gated on the CAPTURE having touched CUDA (the
+    # Untimed (historical). Additionally gated on the CAPTURE having touched CUDA (the
     # trace-level forward_memory_backend fact) so a CPU-only trace inside a
     # GPU training loop no longer flushes the caller's allocator.
     if _cuda_probe._is_cuda_available() and _tensor_utils.capture_touched_cuda(ctx.trace):

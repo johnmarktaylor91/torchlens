@@ -300,7 +300,7 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
     # Render diagnostic from the last draw(): its EncodingChannelSpec can
     # hold the RAW user callable a `color_by=lambda ...` passed in, so
     # carrying it made pickle.dumps crash after an ordinary draw while
-    # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
+    # Trace.save succeeded on the same trace (the raw-callable class).
     # Runtime-only either way; it rebuilds on the next draw.
     state.pop("_last_encoding_state", None)
     # The recorded save request can hold a raw user save callable.
@@ -335,7 +335,7 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state["_out_hash_cache"] = {}
     state["_code_context_cache"] = {}
     _drop_runtime_only_caches(state)
-    # B1-02: the semantic-output scratch never serializes. Plain pickle
+    # the semantic-output scratch never serializes. Plain pickle
     # legitimately carries most session-time DROP state (in-process
     # round-trips need `backward_ready`, `save_budget`, ...), but these
     # hold LIVE USER OBJECTS -- an HF tokenizer and a model-derived
@@ -355,16 +355,16 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     state.pop("_stop_directive", None)
     state.pop("_capture_config", None)
     state["_predicate_save_options"] = None
-    # R10-6: run(fast=True) binds a session holding weakrefs/compiled
+    # run(fast=True) binds a session holding weakrefs/compiled
     # binders; every other session workspace pops here but this one did
     # not, so pickle.dumps/copy.deepcopy after a fast run crashed with
     # "cannot pickle 'weakref.ReferenceType'". Session-time (FieldPolicy
     # DROP under its private name); a restored trace re-runs verified.
     state.pop("_fast_run_session", None)
-    # Session-time plane-P dispatch journal (merge-ranks C2): tuples of
+    # Session-time plane-P dispatch journal (merge-ranks): tuples of
     # per-dispatch facts, meaningless outside the capture session.
     state.pop("_distributed_plane_p", None)
-    # R10-7: the REPR is scrubbed below, but the RAW user callables stayed
+    # the REPR is scrubbed below, but the RAW user callables stayed
     # in state, so a lambda transform= made pickle.dumps crash while
     # Trace.save succeeded on the same trace. Serialize to the loaded-artifact
     # form (None), which every post-load consumer already tolerates.
@@ -374,7 +374,7 @@ def trace_getstate(trace: Trace) -> dict[str, Any]:
     # The actual forward return can retain arbitrary live user objects.
     # It is available only on the capture that executed the forward.
     state["_output_slot"] = None
-    # R10-7b: the MODERN tl.trace(..., transform=...) kwarg populates
+    # the MODERN tl.trace(..., transform=...) kwarg populates
     # `_transform`, a fourth raw-callable holder the original fix missed
     # (it covered only the deprecated activation_transform= spelling).
     state["_transform"] = None
@@ -424,7 +424,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
-        # "_build_state": the pre-M10 flat scratchpad; the three workspace keys are its
+        # "_build_state": the old flat scratchpad; the three workspace keys are its
         # dissolved successors. All transient, all dropped on restore.
         "_build_state",
         "_raw_graph_ws",
@@ -613,7 +613,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
             if op_passes is not None and hasattr(op_passes, "values"):
                 for layer_pass in op_passes.values():
                     layer_pass._autograd_grad_fn_handle = grad_fn_handle
-    # F44 injections stage 2: split persisted injected-op rows out of
+    # injections stage 2: split persisted injected-op rows out of
     # layer_list BEFORE the persisted-claim validators run (the site-key
     # totality check would correctly refuse the partial family) and
     # before any accessor can observe them; forged rows refuse typed
@@ -627,7 +627,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     from .._io.forgery_validation import validate_persisted_forgery_surfaces
 
     validate_persisted_forgery_surfaces(trace)
-    # grind-r5 P7: load-side twin of the __getstate__ sanitation -- a
+    # Load-side twin of the __getstate__ sanitation -- a
     # tampered artifact claiming capture_verified=True (or any non-bool)
     # degrades to None/no-claim; only the producer's NEGATIVE claim (with
     # a string-only reason) is adopted. Verdicts never improve across a
@@ -646,7 +646,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     from .._capture.outcome import resolve_loaded_outcome
 
     trace.__dict__["_capture_outcome"] = resolve_loaded_outcome(trace.__dict__)
-    # Grouping-policy stamp: adopt-or-degrade (L1). An absent stamp
+    # Grouping-policy stamp: adopt-or-degrade. An absent stamp
     # (every pre-stamp v7 artifact) settles silently to the canonical
     # legacy settlement; an invalid one warns once and settles with the
     # violated rule's name. Monotonic: verdicts only worsen across
@@ -663,7 +663,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     from .._postprocess._grouping_stamp import settle_loaded_grouping_policy
 
     trace.__dict__["_options_grouping_policy"] = settle_loaded_grouping_policy(trace.__dict__)
-    # F9: adopt the restored detached records into a fresh sealed core so
+    # Adopt the restored detached records into a fresh sealed core so
     # loaded traces rejoin the single-truth store (best-effort — an abort
     # preserves the coreless-island behavior; backward records stay
     # detached by design). See _data_classes/_trace_rehydrate.py.
@@ -678,7 +678,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
             pickle_module_accessor_state._list,
             pickle_module_accessor_state._pass_dict,
         )
-    # Episode-ledger load validation (S7): an episode payload in the
+    # Episode-ledger load validation: an episode payload in the
     # restored annotations is validated fail-closed -- illegal attachment
     # refuses typed, incoherent geometry quarantines with one warning.
     if isinstance(trace.__dict__.get("annotations"), dict) and (

@@ -1,23 +1,22 @@
 """The per-site payload observation table behind ``summary(view="stats")``.
 
-sumfam item 18 / D18 (C02 substrate) + the F10 polish (lovely item 9):
-observations of ONE CAPTURED BATCH -- per-site count, moments, extrema,
+Observations of ONE CAPTURED BATCH -- per-site count, moments, extrema,
 zero/NaN/Inf census -- rendered from the sound TensorStats kernel, with
 TYPED ROW STATES for unsaved / unsupported / disk-backed / unscanned
 payloads (never a hollow zero row) and an EXPLICIT scan-cost policy. It
 reports observations, never threshold judgments: a dead unit in one batch
 is never called a dead neuron; audit owns judgments.
 
-F10 additions:
+Further properties:
 - rows read in GRAPH (execution) order, disclosed on the table;
 - ``= parent`` marks render ONLY from the capture-path-stable
-  distribution verdict (D28: ``distribution_relation`` derived from the
+  distribution verdict (``distribution_relation`` derived from the
   closed function-semantics table + persisted geometry; ``view_or_copy``
   and ``data_ptr`` can never authorize a mark); marks never fold by
   default -- ``fold_same_as_parent=True`` is the opt-in flag with an
   exact fold count;
 - the total-budget guard lives in the CONSTRUCTOR signature as a declared
-  computation-policy request and is echoed once in the header (D29):
+  computation-policy request and is echoed once in the header:
   rows past the element budget become typed ``unscanned`` rows, never
   silently absent;
 - a table never sorts on a sampled column without saying so in the
@@ -39,11 +38,11 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ..stats._tensor_stats import TensorStats
 
-#: Typed row states (D18): every op gets a row; absence of numbers is a
-#: STATE, never a fabricated zero. ``unscanned`` is the D29 budget state.
+#: Typed row states: every op gets a row; absence of numbers is a
+#: STATE, never a fabricated zero. ``unscanned`` is the budget state.
 STATS_ROW_STATES: tuple[str, ...] = ("ok", "unsaved", "disk_backed", "unsupported", "unscanned")
 
-#: The explicit scan-cost policy line (D4: no surface implicitly triggers a
+#: The explicit scan-cost policy line (no surface implicitly triggers a
 #: payload scan without saying so; the caller asked for the stats view, which IS
 #: the explicit request).
 SCAN_COST_POLICY = (
@@ -52,10 +51,10 @@ SCAN_COST_POLICY = (
     "disk-backed payloads are NOT materialized"
 )
 
-#: The basis disclosure every render must carry (D18): one captured batch.
+#: The basis disclosure every render must carry: one captured batch.
 BASIS_NOTE = "observations of ONE captured batch -- never population claims"
 
-#: Row ordering disclosure (F10): the table reads in execution order.
+#: Row ordering disclosure: the table reads in execution order.
 ORDERING_NOTE = "rows in graph (execution) order"
 
 #: Sortable numeric fields for ``sort_rows`` and their sampled-evidence
@@ -77,7 +76,7 @@ class StatsTableRow:
 
     ``value_stats`` is the frozen TensorStats record on ``state == 'ok'`` rows and
     ``None`` otherwise; ``state`` names WHY numbers are absent.
-    ``parent_mark`` carries the D28 ``= parent`` disclosure (the parent
+    ``parent_mark`` carries the ``= parent`` disclosure (the parent
     label) with its proof provenance in ``relation_basis`` -- populated
     ONLY from a corroborated capture-time distribution verdict.
 
@@ -199,7 +198,7 @@ class StatsTable:
     def fold_same_as_parent(self) -> StatsTable:
         """Fold ``= parent`` rows out, with an exact count (opt-in only).
 
-        Marks NEVER fold by default (D28); this explicit call removes rows
+        Marks NEVER fold by default; this explicit call removes rows
         whose distribution verdict says they carry the parent's exact value
         multiset, recording the exact fold count on ``fold_note``.
         """
@@ -284,7 +283,7 @@ def _row_state(op: Any) -> tuple[str, str | None]:
 
 
 def _parent_mark(trace: Trace, op: Any) -> tuple[str | None, str | None]:
-    """Derive the D28 ``= parent`` mark for one op, fail-closed."""
+    """Derive the ``= parent`` mark for one op, fail-closed."""
 
     for record in getattr(op, "edge_uses", ()) or ():
         verdict = distribution_relation(trace, record)
@@ -309,7 +308,7 @@ def build_stats_table(
     trace:
         Finished capture.
     max_scan_elements:
-        The D29 total-budget REQUEST: rows are scanned in graph order
+        The total-budget REQUEST: rows are scanned in graph order
         until the cumulative retained element count would exceed this
         budget; later retained rows become typed ``unscanned`` rows and
         the header echoes the budget with the exact skip count. ``None``

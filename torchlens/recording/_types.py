@@ -305,7 +305,7 @@ class Recording(TraceLike):
     # validating ``outcome`` property IS the settlement truth (stamped-record re-parse +
     # conservative derivation, never blessing COMPLETE). Without it ``outcome_for`` read the absent
     # ``__dict__`` as UNKNOWN and every capability gate refused settled Recordings with a false
-    # hand-built-object warning (WT1 A-IV item 21, lane A08).
+    # hand-built-object warning.
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
 
     records: list[ActivationRecord]
@@ -449,7 +449,7 @@ class Recording(TraceLike):
         UNKNOWN (or reconstructed HALTED where the halt markers survived)
         with ``recovered=True``, and ``complete`` derives UNATTESTED -- the
         status string on a deserialized object is a plain spoofable field,
-        and a derivation never blesses COMPLETE (R06; same doctrine as the
+        and a derivation never blesses COMPLETE (same doctrine as the
         trace-side structural lattice). All ``derived=True``, never a
         settle-stamp upgrade.
         """
@@ -458,7 +458,7 @@ class Recording(TraceLike):
 
         stamped = getattr(self, "_outcome", None)
         if isinstance(stamped, CaptureOutcome):
-            # R10-5: a plain-pickled Recording's stamped outcome is spoofable
+            # a plain-pickled Recording's stamped outcome is spoofable
             # bytes like any other unpickled field. Re-validate it through the
             # same string-only parse + coherence matrix the trace-side load
             # uses, so an incoherent or forged record degrades (never upgrades)
@@ -479,11 +479,10 @@ class Recording(TraceLike):
                 is_derived=True,
             )
         if status == "recovered" and self.is_failed:
-            # WT1 A-IV item 21 (lane A08): recover() used to rebuild aborted
-            # bundles (PARTIAL sentinel + REASON.txt debris) with
-            # ``failed=False`` and no error evidence -- laundering the failure
-            # record into a benign UNKNOWN. A recovered bundle carrying abort
-            # evidence derives FAILED, never a blank slate.
+            # A recovered bundle carrying abort evidence (PARTIAL sentinel +
+            # REASON.txt debris) derives FAILED, never a blank slate: treating
+            # it as unfailed would launder the failure record into a benign
+            # UNKNOWN.
             return CaptureOutcome(
                 status=CaptureStatus.FAILED,
                 origin=FailureOrigin.UNKNOWN,
@@ -524,7 +523,7 @@ class Recording(TraceLike):
         Never materializes lazy records and never renders payloads: the
         dataclass auto-repr grew ~34x per saved site (recursive
         ``RecordContext`` lookback times full tensor payloads) and OOMed an
-        8 GiB box at four saved sites (lovely bug 1, CRITICAL).
+        8 GiB box at four saved sites.
         """
 
         built = object.__getattribute__(self, "_records_built")
@@ -782,7 +781,7 @@ class Recording(TraceLike):
         """
         # Refusals carry stable machine-branchable codes (branch on
         # exc.fields["code"], never message text). The failed arm mirrors the
-        # capability table's backward/FAILED cell (N3). The halted arm is a
+        # capability table's backward/FAILED cell. The halted arm is a
         # DELIBERATE Recording-scoped strictness beyond the table's
         # HALTED-allow cell, which describes Trace-side backward (a halted
         # Trace holds the prefix autograd graph); a halted Recording is a
@@ -925,7 +924,7 @@ class Recording(TraceLike):
     def narrate(self, last: int | None = None, *, select: Any = None) -> str:
         """Render this recording's events in the live-narration grammar.
 
-        One renderer, three carriers (snoop D5): failed partial recordings
+        One renderer, three carriers: failed partial recordings
         (``on_forward_error="attach_partial"``/``"return_partial"``) render
         their captured frontier under the failure header; the printed labels
         are this recording's own lookup keys.

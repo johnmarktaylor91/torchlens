@@ -76,7 +76,7 @@ def _raw_payload_source(
 ) -> torch.Tensor:
     """Raw payload for one target: the live view on the reduce-only path, else a safe copy.
 
-    Explorer P2 (fastlog leg): the reduce-only path hands the reducer the
+    On the fastlog leg, the reduce-only path hands the reducer the
     live tensor at the save point (the transient safe_copy is the cost the
     path exists to skip); every other path keeps the copy + payload
     respellings.
@@ -189,7 +189,7 @@ def _resolve_storage(
     transformed_disk: torch.Tensor | None = None
     transform = activation_transform
     keep_raw = save_raw_activations or transform is None
-    # Explorer P2 (fastlog leg): a declared summary reducer with raw
+    # On the fastlog leg, a declared summary reducer with raw
     # retention off and no dtype/device respelling skips the transient
     # safe_copy -- the reducer sees a detached view of the live tensor at
     # the save point. The dtype/device respellings keep the copy path: they
@@ -298,9 +298,8 @@ def _invoke_transform(
 ) -> torch.Tensor:
     """Apply a fastlog out transform with logging paused.
 
-    A transform declaring ``_tl_wants_ctx = True`` (duck-typed, F25 op
-    tier) additionally receives the frozen ``RecordContext`` as ``ctx=``
-    so a label-aware reducer (facet splitting) needs no side channel;
+    A transform declaring ``_tl_wants_ctx = True`` (duck-typed) additionally receives the frozen
+    ``RecordContext`` as ``ctx=`` so a label-aware reducer (facet splitting) needs no side channel;
     ordinary transforms keep the one-positional-tensor contract.
     """
 
@@ -372,7 +371,7 @@ def _validate_train_mode_transformed(
     graph-connected when the raw RAM payload retained autograd history.
     Disk transformed payloads are detached inspection copies and are not
     validated here. A transform DECLARING the non-differentiable summary
-    role (explorer P1) is contractually outside the autograd graph and is
+    role is contractually outside the autograd graph and is
     exempt; undeclared detached transforms keep refusing -- the carve-out is
     the declared role, never the output's shape or dtype.
     """

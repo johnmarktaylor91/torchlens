@@ -42,11 +42,10 @@ _RECAPTURE_RECIPE = (
 def _no_projective_vjp_reason(source: Op, targets: Sequence[Op], trace: Trace) -> str:
     """Return the honest reason a projective VJP came back empty.
 
-    Finding B1-19b (SF-04 class): this message used to prescribe
-    ``save_mode="reference"`` unconditionally -- including on traces already
-    captured in that exact mode, which is the shape of remedy that sends a user
-    in a circle. It also blamed a "stale saved tensor identity" for a case that
-    is neither stale nor a mode problem: when the only target is a structural
+    The message is cause-specific: it never prescribes ``save_mode="reference"``
+    on a trace already captured in that mode (a remedy that would send a user in
+    a circle), and it does not blame a "stale saved tensor identity" where
+    nothing is stale. When the only target is a structural
     OUTPUT MARKER whose sole parent is the source, both payloads are independent
     clones of the SAME captured value, so there is no autograd edge between them
     for any VJP to traverse.

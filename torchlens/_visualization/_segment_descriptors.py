@@ -1,6 +1,6 @@
 """Segment descriptor construction and label derivation for collapse plans.
 
-Extracted from ``collapse_optimizer.py`` (C05 fix cycle, R43 size ratchet):
+Extracted from ``collapse_optimizer.py`` (a size ratchet):
 the family that turns a legal segment run into its renderer-facing
 ``SegmentDescriptor`` -- injective Graphviz-safe addresses, owner keys,
 spanned-module derivation, range text, and the honest ``(xN)`` labels.
@@ -131,7 +131,7 @@ def _make_op_segment_descriptor(
     label = _op_segment_label(trace, labels, resolved)
     spanned = _op_segment_spanned_modules(trace, resolved, owner, context.vis_mode)
     if spanned:
-        # r-b6 R19-5: a segment placed above its ops' module homes (top level
+        # A segment placed above its ops' module homes (top level
         # or a shared ancestor) must DISCLOSE the modules it spans — the box
         # otherwise silently strips module containment from every hidden op.
         shown = ", ".join(f"@{module}" for module in spanned[:3])
@@ -196,7 +196,7 @@ def _op_segment_owner_key(
     call-qualified stack equality: a segment whose ops span several calls of
     one reused module has no common call-level entry and owns the honest LCA
     (the shared parent call, or ``None`` for top level) instead of falsely
-    claiming the first call (round-24 C1). Rolled clusters merge passes per
+    claiming the first call. Rolled clusters merge passes per
     address, so rolled commonality stays pass-free AND the returned owner
     must be the pass-free address itself: the rolled cluster flush drains
     buckets by pass-free address, so a pass-qualified owner posts the labeled
@@ -239,7 +239,7 @@ def _op_segment_spanned_modules(
 ) -> list[str]:
     """Return the distinct module homes an op segment spans below its owner.
 
-    r-b6 R19-5: an op segment owns the honest LCA of its members, which can
+    An op segment owns the honest LCA of its members, which can
     sit ABOVE the modules the ops actually live in (top level when the
     members straddle sibling modules). The rendered box then carries no
     module containment at all, so the label must name the spanned modules.
@@ -412,7 +412,7 @@ def _child_segment_range_text(addresses: tuple[str, ...]) -> str:
 
     Name-consecutive runs keep the compact ``prefix.first-last`` interval.
     Flow-legal but name-noncontiguous runs enumerate their members IN FULL,
-    regardless of count (R19): an elided ``first, second, ..., last`` reads
+    regardless of count: an elided ``first, second, ..., last`` reads
     as a complete interval and overstates hidden membership whenever the
     run skips names that render as separate visible boxes.
     """

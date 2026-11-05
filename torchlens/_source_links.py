@@ -37,9 +37,8 @@ def terminal_file_line_link(
 ) -> str:
     """Return an OSC 8 terminal hyperlink for a source location, tty-gated.
 
-    Shipped defect fixed in lane F28 (snoop memo finding e): this helper
-    emitted OSC 8 escape bytes with no tty check, so redirected output and
-    CI logs collected raw ``\\x1b]8;;`` sequences. Escapes now resolve from
+    The helper checks for a tty (an unconditional OSC 8 escape would put
+    raw ``\\x1b]8;;`` sequences into redirected output and CI logs). Escapes resolve from
     ``sys.stdout.isatty()`` by default; the non-tty rendering is the plain
     ``path:line`` text, byte-clean.
 

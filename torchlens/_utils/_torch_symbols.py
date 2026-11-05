@@ -1,5 +1,5 @@
 """Single sanctioned spelling for resolving a top-level ``torch`` attribute on the
-load / decode / exec path (r42 secC_1 / r45 secC_1 / r47 secD_1).
+load / decode / exec path.
 
 The top-level ``torch`` module implements PEP 562 ``__getattr__``: a bare
 ``getattr(torch, name)`` on an attacker-derived manifest / literal string can trigger an
@@ -12,7 +12,7 @@ symbol (plus every real top-level class such as ``UntypedStorage`` / ``TypedStor
 public free-function alias such as ``equal`` / ``allclose`` / ``is_nonzero`` / ``add``) is a
 genuine ``torch.__dict__`` entry, so it still resolves.
 
-r47 secD_1 / secF_1: this is the CANONICAL helper home. It lives under ``torchlens._utils`` -- a
+This is the CANONICAL helper home. It lives under ``torchlens._utils`` -- a
 low-level package that imports only ``torch`` -- so low-level importers (``utils/_torch_compat``,
 ``backends/torch/*``, ``_runnable_state``, ``capture/*``, ``fastlog/*``, ``intervention/*``,
 ``postprocess/*``) resolve it WITHOUT pulling ``_io/__init__.py`` (avoiding an import cycle).
@@ -21,7 +21,7 @@ importers already spelling ``from ._torch_symbols import torch_attr``. The publi
 helper, not a physical module path.
 
 Every attacker-derived top-level ``torch``-name resolution anywhere in the package routes through
-:func:`torch_attr`; a whole-package AST immunizer (``tests/test_r45_torch_symbol_decode.py``) fails
+:func:`torch_attr`; a whole-package AST immunizer (a torch-symbol decode test) fails
 on any bare ``getattr(torch, <non-literal>)`` OR ``hasattr(torch, <non-literal>)`` in
 ``torchlens/**/*.py`` so a future site cannot reintroduce the lazy-import / deprecated-replacement
 side effect. Class roots (``torch.Tensor`` / ``torch._C`` / ``torch.backends``) and literal-name
@@ -105,7 +105,7 @@ def _resolve_dtype(dtype: object | None) -> object | None:
         return dtype
     if dtype.startswith("torch."):
         dtype_name = dtype.split(".", 1)[1]
-        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
+        # ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
         # fall back to the original string when the name is not a real top-level torch symbol.
         return torch_attr(dtype_name) or dtype
     return dtype
@@ -239,7 +239,7 @@ def torch_namespace(namespace: str) -> Any | None:
     """
 
     parts = namespace.removeprefix("torch.").split(".")
-    # r49 secF_1: the FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
+    # The FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
     # ``__getattr__`` can fire a lazy submodule import; resolve it through ``torch_attr``.
     # Later hops are off submodule/class roots that carry no lazy-import hazard.
     current: Any = torch_attr(parts[0])
@@ -275,7 +275,7 @@ def getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | N
         return None
     if root is None:
         return None
-    # r42 secC_1: the PEP-562 lazy-submodule hazard lives ONLY on the top-level ``torch``
+    # The PEP-562 lazy-submodule hazard lives ONLY on the top-level ``torch``
     # module, so it is read through its ``__dict__``; class roots and the proxying
     # ``torch._VF`` module expose inherited/proxied callables only through ``getattr``.
     value = torch_attr(qualname) if root is torch else getattr(root, qualname, None)

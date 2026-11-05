@@ -1,13 +1,13 @@
-# Op surface regrouping plan (FORK-2 — PLAN ONLY, no implementation)
+# Op surface regrouping plan (PLAN ONLY, no implementation)
 
-Status: decided PLAN-ONLY (2026-07); this document is the M13
+Status: decided PLAN-ONLY (2026-07); this document is the
 deliverable of docs/internal/reference/trace_core_design.md section 5. Nothing here
 is implemented, scheduled, or authorized for implementation — it is the
 design of record for the day the fork is exercised.
 
 ## Problem
 
-`Op` exposes ~195 public attributes flat. The M5-M9 columnar re-plumbing
+`Op` exposes ~195 public attributes flat. The columnar re-plumbing
 made the STORAGE cheap (a two-word facade over one row), but the *surface*
 remains a single namespace where everyday fields (`out`, `shape`, `parents`,
 `func_name`) sit beside specialist facts (RNG snapshots, FLOP counters,
@@ -46,7 +46,7 @@ no FIELD_ORDER change:
    `StorageBinding` axes with a `ui_group` column) so the compiler generates
    both surfaces and the lockstep tests police them; no hand-maintained
    duplicate lists.
-5. Rollout gate: a real-IDE completion session (the M0/M13 gate) comparing
+5. Rollout gate: a real-IDE completion session comparing
    completion noise before/after, plus the DX oracle.
 
 ## Explicitly out

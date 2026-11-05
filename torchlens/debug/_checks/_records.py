@@ -1,12 +1,12 @@
-"""Immutable finding / report records for the checks kit (checks memo 4.5).
+"""Immutable finding / report records for the checks kit.
 
 Every record is a frozen dataclass with a versioned ``to_dict()`` so the
 public JSON export (``schema_version=1``) exists from day 1 while the report
-itself stays declared NON-PERSISTENT in bundles for v1 (checks memo D19):
+itself stays declared NON-PERSISTENT in bundles for v1:
 the schema version and the immutable record shape are the forward-
 compatibility hooks for a later bundle sidecar, never a migration.
 
-Evidence vocabulary law (checks memo 4.6): every gradient/parameter scalar
+Evidence vocabulary law: every gradient/parameter scalar
 that crosses any surface carries ``stage`` + ``scale_provenance``; unknown
 provenance yields UNKNOWN verdicts, never a silent pass-as-1.0. Spellings
 are DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -22,17 +22,17 @@ from ._errors import CheckConfigError
 
 __tl_layer__ = "L5"
 
-#: Version stamped into every exported report/audit dict (memo D19).
+#: Version stamped into every exported report/audit dict.
 CHECK_REPORT_SCHEMA_VERSION = 1
 
 #: Severity trio -- deliberately the shipped ``AuditSeverity`` vocabulary
-#: (torchlens.debug), gaining no sibling (memo D16).
+#: (torchlens.debug), gaining no sibling.
 SEVERITIES = ("critical", "warning", "info")
 
-#: Orthogonal control-flow axis (memo 4.5); overridable per registration.
+#: Orthogonal control-flow axis; overridable per registration.
 ACTIONS = ("raise", "warn", "collect")
 
-#: Loop-phase stage of a gradient scalar (memo 4.6). S-A values are
+#: Loop-phase stage of a gradient scalar. S-A values are
 #: pre-clip (scaled under a GradScaler); S-B/S-C values are post-clip and
 #: already unscaled.
 STAGES = ("pre_clip_scaled", "pre_clip_unscaled", "post_clip_applied")
@@ -42,7 +42,7 @@ STAGES = ("pre_clip_scaled", "pre_clip_unscaled", "post_clip_applied")
 SCALE_PROVENANCE = ("unscaled", "gradscaler", "explicit", "unknown")
 
 #: How the evidence was obtained. ``digest`` may never emit an exact pass
-#: (memo D5); ``multi_grad_all`` marks the priced fallback mechanism (DR-1).
+#: ; ``multi_grad_all`` marks the priced fallback mechanism (DR-1).
 EVIDENCE_KINDS = (
     "clone",
     "digest",
@@ -54,12 +54,12 @@ EVIDENCE_KINDS = (
     "capture_hook",
 )
 
-#: Step-axis provenance for check findings (memo D10/D18): hook-only mode
+#: Step-axis provenance for check findings: hook-only mode
 #: labels attempt GROUPING ``inferred``; only the explicit boundary is
 #: ``explicit`` and only it carries caller ``global_step``.
 CHECK_STEP_PROVENANCE = ("explicit", "inferred")
 
-#: Nonfinite attribution (memo D6): ``smeared`` is a field, not prose --
+#: Nonfinite attribution: ``smeared`` is a field, not prose --
 #: the NaN-smear case never names an innocent parameter.
 ATTRIBUTIONS = ("exact", "smeared")
 
@@ -82,12 +82,12 @@ def _require_token(field_name: str, value: str | None, vocabulary: tuple[str, ..
 
 @dataclass(frozen=True)
 class CheckFinding:
-    """One immutable check finding (memo 4.5).
+    """One immutable check finding.
 
     ``values`` carries the measured numbers (already-reduced floats only);
     ``param_names`` the offending parameter/site names with every alias of a tied
     tensor preserved; ``follow_up`` the call that localizes the culprit
-    (memo D3: the finding names a cone, the frontier names the culprit).
+    (the finding names a cone, the frontier names the culprit).
 
     Examples
     --------
@@ -148,7 +148,7 @@ class CheckFinding:
 
 @dataclass(frozen=True)
 class CheckReport:
-    """Deterministically finalized check report (memo 4.5 / D19).
+    """Deterministically finalized check report.
 
     Finalizes on demand and on structured scope exit INCLUDING exceptional
     exit; kill -9 loses in-memory state under any design, so no atexit
