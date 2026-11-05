@@ -5046,7 +5046,7 @@ alphabetical order.
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.append` | `trace.append(inputs, *, model=None)`: run the model on one more compatible batch and add its rows to this Trace in place, with the same checks as a rerun; returns `None`. `model` omitted reuses the live model this Trace holds weakly. A batch that changes shapes beyond the batch axis or an edit not marked `is_compatible_with_append` raises `AppendMismatchError`; a batch that would rewrite streamed activation blobs raises `AppendStreamingUnsupportedError` |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
-| `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
+| `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet, by the membership rule of `Trace.modules_with_facet("q")`; a reused Module is included, and its `.facets` refuses (`module_call_ambiguous`), so read `module.calls[N].facets` |
 | `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
@@ -5092,7 +5092,7 @@ alphabetical order.
 | `Trace.model_ops` | Tuple of the trace's ordinary executed op records, excluding any ops injected by intervention hooks |
 | `Trace.model_profile` | The computed `ModelProfile` semantic input/output descriptor for this trace, not persisted |
 | `Trace.module_calls` | Accessor for per-invocation `ModuleCall` records, looked up by call label or index |
-| `Trace.modules_with_facet` | Yield the single-call Modules whose semantic facet view currently has the facet `name` available; a module called more than once is skipped, or refused (`module_call_ambiguous`) when its facet recipe declares `name`, with a remedy naming the per-call views `module.calls[N].facets` |
+| `Trace.modules_with_facet` | Yield the Modules that have the facet `name` available now: a module called once when its facet view has `name`; a module called more than once when its facet recipe declares `name` and at least one of its calls has it available now. A reused Module's own `.facets` refuses (`module_call_ambiguous`); read each call with `module.calls[N].facets` |
 | `Trace.nonfinite_verdict` | Three-state health verdict: `found`, `checked_and_clean` or `not_checked` |
 | `Trace.num_context_lines` | Number of source lines captured around each call site for `FuncCallLocation` |
 | `Trace.num_edges` | Number of distinct edges in the per-pass Op graph, including boundary edges |

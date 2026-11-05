@@ -303,3 +303,5 @@ class _PlainScalarEscapeState:
     count: int = 0
     first_file: str | None = None
     first_line: int | None = None
+    #: Bool tests among ``count`` whose source TorchLens cannot read (no branch recorded).
+    unreadable_source_count: int = 0
