@@ -17,7 +17,8 @@ import torchlens as tl
 import torchlens._visualization._condensed_flow as condensed_flow
 import torchlens._visualization.auto_collapse as auto_collapse
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
-from torchlens._visualization._render_common import format_collapsed_module_contents
+from torchlens._visualization._header_block import network_count_line
+from torchlens._visualization._label_format import compact_count, format_collapsed_module_contents
 from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens._visualization._trace_collapse import (
     collapse_plan as _collapse_plan,
@@ -2213,9 +2214,10 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
-        assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params:,} params" in source
+        # The header counts the traced network's ops, never the collapsed boxes.
+        assert network_count_line(trace, None, "unrolled") in source
+        assert not re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{compact_count(trace.num_params, full_below=1000)} params" in source
     finally:
         trace.cleanup()
 
@@ -2301,9 +2303,10 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
-        assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params:,} params" in source
+        # The header counts the traced network's ops, never the collapsed boxes.
+        assert network_count_line(trace, None, "unrolled") in source
+        assert not re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{compact_count(trace.num_params, full_below=1000)} params" in source
     finally:
         trace.cleanup()
 

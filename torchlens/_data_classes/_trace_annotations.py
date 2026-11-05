@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import InvalidArgumentError
+from ._annotation_image import annotation_image_value
 
 if TYPE_CHECKING:
+    from PIL import Image
+
     from ..debug._audit import HealthReport
     from .trace import Trace
 
@@ -37,7 +40,7 @@ def annotate(  # noqa: PLR0913 - mirrors Trace.annotate: every axis is a named k
     selector: Any,
     *,
     data: Any = None,
-    image: str | Path | None = None,
+    image: str | Path | Image.Image | None = None,
     max_fanout: int = 1_000_000,
     copy: bool = False,
 ) -> Trace:
@@ -54,8 +57,9 @@ def annotate(  # noqa: PLR0913 - mirrors Trace.annotate: every axis is a named k
         payloads are persisted under ``_annotation_blobs`` and are supported
         only for torch traces.
     image:
-        Optional local image path used by the existing ``NodeSpec.image``
-        render hook.
+        Optional picture for the selected nodes: an image file path or a PIL image.
+        Any format Pillow opens works (PNG, JPEG, WebP, ...); non-PNG pictures
+        are drawn from a PNG copy, since some Graphviz builds cannot read JPEG.
     max_fanout:
         Explicit maximum number of selected sites. The default is
         intentionally large so annotation can fan out across many layers.
@@ -79,7 +83,7 @@ def annotate_in_place(
     selector: Any,
     *,
     data: Any,
-    image: str | Path | None,
+    image: str | Path | Image.Image | None,
     max_fanout: int,
 ) -> None:
     """Apply annotation updates directly to this trace.
@@ -93,7 +97,7 @@ def annotate_in_place(
     data:
         Annotation data supplied by the caller.
     image:
-        Optional image path supplied by the caller.
+        Optional image path or PIL image supplied by the caller.
     max_fanout:
         Explicit fan-out limit passed to the site resolver.
 
@@ -110,7 +114,7 @@ def annotate_in_place(
             remedy="pass data=, image=, or both to annotate()",
         )
     sites = trace._resolve_sites(selector, max_fanout=max_fanout)
-    image_value = str(image) if image is not None else None
+    image_value = annotation_image_value(trace, image) if image is not None else None
     data_kind = annotation_data_kind(trace, data)
     for site in sites:
         key = annotation_key_for_site(trace, site)

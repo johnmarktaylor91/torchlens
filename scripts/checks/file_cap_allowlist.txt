@@ -550,7 +550,7 @@ torchlens/_visualization/_bundle_graph.py::render_bundle_graph	62
 torchlens/_visualization/_condensed_flow.py	814
 torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	77
 torchlens/_visualization/_condensed_flow.py::_condensed_edges	65
-torchlens/_visualization/_encoding.py	1816
+torchlens/_visualization/_encoding.py	1739
 torchlens/_visualization/_encoding.py::_coerce_scalar	69
 torchlens/_visualization/_encoding.py::resolve_color_by	91
 torchlens/_visualization/_encoding.py::resolve_size_by	72

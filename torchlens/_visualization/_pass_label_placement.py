@@ -13,6 +13,14 @@ shared pair still leaves colliding, astray or ambiguous moves on its own by blan
 padding on one side of its HTML table.  The choices are written onto the edge
 statements of the text the image is rendered from only: they depend on the installed
 Graphviz build, so the DOT a drawing returns or saves never carries them.
+
+An argument label (``arg 1``, the head label that names which input of a multi-input
+op an edge feeds) gets the same treatment only when Graphviz's own spot for it lands
+on something: dot puts a head label a fixed distance below its arrowhead, and when the
+edge leaves a module box from the rank below, that spot is the box's title line (a
+ResNet block's residual add over its ``downsample`` box).  Module titles count as
+obstacles here; an argument label whose default spot is clear keeps it, so drawings
+without that collision render exactly as before.
 """
 
 from __future__ import annotations
@@ -33,6 +41,10 @@ Point = tuple[float, float]
 
 #: a head or tail label that carries a rolled pass range (``In 2-3``, ``Out 1``)
 _PASS_TEXT = re.compile(r"(?<![a-z])(?:headlabel|taillabel)=<<TABLE[^\n]*?>(?:In|Out) [0-9]")
+#: an argument-position head label (``arg 1``, ``arg (0, 2)``); placed only when its
+#: default spot collides, and only in drawings with a titled module box to collide with
+_ARG_TEXT = re.compile(r"(?<![a-z])headlabel=<<TABLE[^\n]*?>arg [0-9(]")
+_CLUSTER_LINE = re.compile(r"^\s*subgraph\s+\"?cluster_")
 _EDGE_LINE = re.compile(r'^\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)\s*->\s*("(?:[^"\\]|\\.)*"|[^\s"\[]+)')
 _ASCENT, _DESCENT = 0.78, 0.22  # glyph box model of tests/support/label_geometry.py
 _MIN_GAP = 0.5  # (pt) a label nearer than this to anything collides (the gate allows 0.25 overlap)
@@ -98,8 +110,12 @@ def choose_pass_label_placements(body: list[str], layout_json: str) -> list[str]
     scene.add_fixed_labels(set(targets))
     new_body = list(body)
     for edge in scene.edges:
-        line_index = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
-        if line_index is None or not edge["labels"]:
+        target = targets.get((edge["tail"], edge["head"], edge["occurrence"]))
+        if target is None or not edge["labels"]:
+            continue
+        line_index, kind = target
+        if kind == "arg" and not scene.default_collides(edge):
+            scene.keep_default(edge)  # an argument label moves only off a module title
             continue
         choice, shifts = scene.choose(edge)
         line = _with_placement(new_body[line_index], choice)
@@ -215,17 +231,35 @@ def _stdout_text(completed: subprocess.CompletedProcess[Any]) -> str:
 
 
 def has_pass_labels(body: Iterable[str]) -> bool:
-    """Return whether any statement line carries a rolled ``In``/``Out`` head or tail label."""
+    """Return whether the statements carry a label the placement pass may move.
 
-    return any(_PASS_TEXT.search(line) for line in body)
+    A rolled ``In``/``Out`` head or tail label anywhere, or an ``arg`` head label in a
+    drawing that also has a module box (``subgraph cluster_...``) whose title it could
+    land on.  A drawing with argument labels and no module box keeps Graphviz's own
+    spots without the extra layout.
+    """
+
+    lines = list(body)
+    if any(_PASS_TEXT.search(line) for line in lines):
+        return True
+    return any(_CLUSTER_LINE.match(line) for line in lines) and any(
+        _ARG_TEXT.search(line) for line in lines
+    )
 
 
-def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], int]:
-    """Map ``(tail, head, occurrence)`` of each pass-labelled edge line to its index."""
+def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], tuple[int, str]]:
+    """Map ``(tail, head, occurrence)`` of each labelled edge line to its index and kind.
 
+    The kind is ``"pass"`` for a rolled ``In``/``Out`` label (always placed) and
+    ``"arg"`` for an argument label (placed only when its default spot collides);
+    argument labels are collected only when the body has a module box.
+    """
+
+    lines = list(body)
+    with_clusters = any(_CLUSTER_LINE.match(line) for line in lines)
     seen: dict[tuple[str, str], int] = {}
-    targets: dict[tuple[str, str, int], int] = {}
-    for index, line in enumerate(body):
+    targets: dict[tuple[str, str, int], tuple[int, str]] = {}
+    for index, line in enumerate(lines):
         match = _EDGE_LINE.match(line)
         if match is None:
             continue
@@ -233,7 +267,9 @@ def _pass_label_lines(body: Sequence[str]) -> dict[tuple[str, str, int], int]:
         occurrence = seen.get(pair, 0)
         seen[pair] = occurrence + 1
         if _PASS_TEXT.search(line):
-            targets[(*pair, occurrence)] = index
+            targets[(*pair, occurrence)] = (index, "pass")
+        elif with_clusters and _ARG_TEXT.search(line):
+            targets[(*pair, occurrence)] = (index, "arg")
     return targets
 
 
@@ -299,7 +335,11 @@ class _Scene:
         self.borders = [_ring(_bb(obj["bb"])) for obj in objects[:sub_count] if obj.get("bb")]
         self.splines: list[list[Point]] = []
         self.polygons: list[list[Point]] = [o for outs in self.nodes.values() for o in outs]
-        self.rects: list[Rect] = []
+        # a module box's title line is text a label must not cover
+        self.titles: list[Rect] = [
+            r for obj in objects[:sub_count] for r in _label_lines(obj.get("_ldraw_"))
+        ]
+        self.rects: list[Rect] = list(self.titles)
         self.edges: list[dict[str, Any]] = []
         seen: dict[tuple[str, str], int] = {}
         for edge in layout.get("edges", []):
@@ -491,6 +531,25 @@ class _Scene:
             ambiguous = ambiguous or rival < own + _ATTACH_MARGIN or _wrong_side(label, lines)
         shortfall = math.ceil(max(0.0, _CLEAR_TARGET - clearance) * 2) / 2
         return (round(depth, 3), ambiguous, end_gap > _NEAR_END, shortfall, round(end_gap, 3))
+
+    def default_collides(self, edge: dict[str, Any]) -> bool:
+        """Return whether Graphviz's own spot for one of the edge's labels covers a module title.
+
+        Only the title collision moves an argument label: the trigger stays narrow so
+        every drawing without it keeps Graphviz's own label spots.
+        """
+
+        return any(
+            _overlaps(_grow(rect, _MIN_GAP), title)
+            for label in edge["labels"]
+            for rect in label["default"]
+            for title in self.titles
+        )
+
+    def keep_default(self, edge: dict[str, Any]) -> None:
+        """Record the edge's labels at Graphviz's own spots as obstacles for later edges."""
+
+        self.rects.extend(r for label in edge["labels"] for r in label["default"])
 
     def add_fixed_labels(self, targeted: set[tuple[str, str, int]]) -> None:
         """Count the head/tail labels of edges that are not being placed as obstacles."""
