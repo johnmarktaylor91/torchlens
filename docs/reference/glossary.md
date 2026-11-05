@@ -4050,6 +4050,7 @@ describe each surface in depth.
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered facet functions, optionally filtered by target scope and class-name glob |
 | `tl.facets.parameter_spec` | Recipe helper: a module parameter as a `FacetSpec` (`module, name, recipe_id`), or an absence reason |
+| `tl.facets.reset` | Reset the process facet registry to the built-in recipe set, dropping every recipe registered since (bumps the registry version) |
 | `tl.mechinterp.AblationControlsReport` | Every control rerun of one ablation claim and the verdict per family (read-only record) |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
@@ -6600,7 +6601,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `intervene=` | keyword of `tl.extract_dataset` (keyword-only; default `None`): Optional `InterventionSpec` (`tl.when(selector, helper)`; DOCUMENTED-UNSTABLE): every batch is captured with the spec armed, so stored rows are the INTERVENED activations. Batch zero freezes the structural sites the spec fired at; a batch firing nowhere or ..; constructor keyword of `tl.options.RecordingOptions` (optional); keyword of `tl.record` (keyword-only; default `None`): Optional predicate-time intervention slot evaluated on operation contexts; constructor keyword of `tl.recording.Recorder` (keyword-only; optional); keyword of `tl.trace` (keyword-only; default `None`): Optional predicate returning an intervention decision for current-op live mutation |
 | `intervening_cluster=` | keyword of `Trace.draw` (keyword-only; default `'upstream'`): Combined graph: placement of backward-only nodes (`"upstream"`, `"outside"`, `"downstream"` or `"own"`) |
 | `intervention=` | keyword of `Layer.do` (keyword-only; default `None`): Grouped intervention options (`InterventionOptions`); keyword of `Op.do` (keyword-only; default `None`); keyword of `Trace.do` (keyword-only; default `None`): Grouped intervention options (`InterventionOptions`: `engine` in `"auto"`/`"replay"`/`"rerun"`/`"set_only"`, `strict`, `allow_changed_params`); keyword of `tl.transformer.receipt_from_patch_grid` (keyword-only; default `None`): Intervention wording; the default says what a patch grid does ("clean activation of one head patched into the corrupted run", or "... one kv group ..." with `kv_groups`); keyword of `Recording.do` (keyword-only; default `None`) |
-| `intervention_mode=` | keyword of `Trace.draw` (keyword-only; default `'node_mark'`): How intervened sites are marked: `"node_mark"` or `"cone"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Intervention overlay mode |
+| `intervention_mode=` | keyword of `Trace.draw` (keyword-only; default `'node_mark'`): How intervened sites are marked: `"node_mark"` or `"as_node"`; constructor keyword of `tl.options.VisualizationOptions` (optional): Intervention overlay mode |
 | `invocations=` | constructor keyword of `tl.experimental.Session` (optional) |
 | `io_role=` | constructor keyword of `tl.receptive_field.GradReceptiveField` (required) |
 | `ir=` | keyword of `tl.trackers.graph_ir_to_tensorboard` (required) |
