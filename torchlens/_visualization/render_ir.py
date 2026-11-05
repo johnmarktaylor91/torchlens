@@ -8,7 +8,6 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._utils._display_bounded import short_dataclass_repr
-from .._utils._record_group_table import record_member
 from ._encoding_size_layout import layout_encoded_sizes
 from .request import RenderContext
 
@@ -991,7 +990,7 @@ def _build_regions(
         region_keys = {
             module.address
             for module in trace.modules
-            if record_member(module, "address", "self") != "self"
+            if getattr(module, "address", "self") != "self"
         }
     return tuple(
         RenderIRRegion(

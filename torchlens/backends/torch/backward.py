@@ -21,22 +21,14 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
-from ..._capture.peak_memory import (
-    peak_rss_bytes,
-    process_rss_bytes,
-    record_backward_peak,
-    reset_peak_rss,
-)
+from ..._capture.peak_memory import record_backward_peak
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
     _normalize_grad_fn_type,
 )
 from ..._data_classes.backward_pass import BackwardPass
-from ..._data_classes.func_call_location import (
-    FuncCallLocation,
-    with_source_fingerprint,
-)
+from ..._data_classes.func_call_location import FuncCallLocation, with_source_fingerprint
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
@@ -70,11 +62,8 @@ from ._autograd_grad_boundary import (
     record_autograd_grad_boundary,
 )
 from ._backward_dispatch import backward_window, outside_census
-from ._backward_markers import (
-    begin_grad_fn_marker,
-    end_grad_fn_marker,
-    executing_grad_fn_ref,
-)
+from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
+from ._backward_memory import _memory_snapshot, _peak_memory_baseline
 from ._backward_roots import (
     _autograd_roots_from_call,
     _is_accumulate_grad,
@@ -902,9 +891,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # revision counter: fall back to the event count as a change signal.
         revision = event_count
     if getattr(trace, "_backward_projection_revision", None) == revision:
-        from ..._postprocess._primitive_profile import (
-            _materialize_backward_primitive_profile,
-        )
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
         return
@@ -930,9 +917,7 @@ def _materialize_backward_projections(trace: Any) -> None:
         # the retry (sol review finding 2).
         trace._backward_projection_event_count = event_count
         trace._backward_projection_revision = revision
-        from ..._postprocess._primitive_profile import (
-            _materialize_backward_primitive_profile,
-        )
+        from ..._postprocess._primitive_profile import _materialize_backward_primitive_profile
 
         _materialize_backward_primitive_profile(trace)
     except BaseException:
@@ -2012,57 +1997,6 @@ def _record_higher_order_terminals_from_tuple(
             )
 
 
-def _memory_snapshot(device: torch.device) -> tuple[str, int]:
-    """Return backend name and current allocated memory for a device.
-
-    Parameters
-    ----------
-    device:
-        Device associated with the backward loss tensor.
-
-    Returns
-    -------
-    tuple[str, int]
-        Backend label and memory snapshot in bytes.
-    """
-    if device.type == "cuda" and torch.cuda.is_available():
-        return "cuda", int(torch.cuda.max_memory_allocated(device))
-    if device.type == "mps" and hasattr(torch, "mps"):
-        return "mps", int(torch.mps.current_allocated_memory())
-    return "cpu", max(process_rss_bytes(), peak_rss_bytes())  # VmHWM: a freed buffer counts
-
-
-def _peak_memory_baseline(device: torch.device, measure_host: bool) -> tuple[str, int]:
-    """Return the pre-pass memory baseline WITHOUT resetting peak tracking.
-
-    R36-2: this used to call ``torch.cuda.reset_peak_memory_stats`` on every
-    ``backward``, clobbering the caller's process-wide high-water counter.
-    The baseline is now the pre-existing ``max_memory_allocated`` snapshot:
-    a backward that pushes a new device peak reports the exact excess over
-    the prior high-water mark, and one that stays under it honestly reads
-    ``0``. Under ``CaptureOptions(measure_host_peak_memory=True)`` CPU first
-    resets the process ``VmHWM`` to the current RSS (Linux; see
-    ``capture.peak_memory.reset_peak_rss`` for the process-wide effect), so its
-    baseline is the pass-start RSS and its end reading the pass peak. Without
-    the opt-in nothing is reset and the CPU peak is recorded as ``None``.
-
-    Parameters
-    ----------
-    device:
-        Device associated with the backward loss tensor.
-    measure_host:
-        Whether the trace opted in to the CPU peak (and so to the reset).
-
-    Returns
-    -------
-    tuple[str, int]
-        Backend label and starting memory snapshot in bytes.
-    """
-    if measure_host and device.type not in {"cuda", "mps"}:
-        reset_peak_rss()
-    return _memory_snapshot(device)
-
-
 def _walk_and_hook_backward_graph(
     trace: Any,
     loss: torch.Tensor,
@@ -2235,11 +2169,7 @@ def _walk_and_hook_backward_graph(
             # dispatches; a registration failure degrades this node to
             # untimed fires only (own try/except inside the helper).
             timing_handle = _register_fire_timing_prehook(
-                trace,
-                grad_fn_handle,
-                grad_fn_object_id,
-                fire_start_stamps,
-                gradfn_marker_tokens,
+                trace, grad_fn_handle, grad_fn_object_id, fire_start_stamps, gradfn_marker_tokens
             )
             if timing_handle is not None:
                 handles.append(timing_handle)

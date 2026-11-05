@@ -27,7 +27,6 @@ from ..._data_classes.derived_grad import (
 )
 from ..._data_classes.trace import Trace
 from ..._ir.refs import DtypeRef
-from ..._utils._record_group_table import record_member
 from .._entry_refusals import (
     refuse_if_bad_max_intermediate_grads,
     refuse_tf_loss_not_scalar,
@@ -461,7 +460,7 @@ def _tf_trace_intermediate_signatures(
         if not _is_float_dtype_text(str(getattr(op, "dtype", ""))):
             continue
         signature = TFIntermediateSignature(
-            func_call_id=int(record_member(op, "func_call_id", 0)),
+            func_call_id=int(getattr(op.call, "call_id", 0)),
             op_name=str(getattr(op, "func_name", "")),
             parent_labels=tuple(
                 dict.fromkeys(

@@ -19,6 +19,7 @@ from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._render_node_parts import _buffer_node_address, _module_output_summary
 from .modes import CollapsedModeScope
 
 # Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
@@ -1374,18 +1375,7 @@ def _build_collapsed_module_node(
     )
     # rsplit with maxsplit=1 handles module names containing colons (#104).
     module_tuple = address_w_pass.rsplit(":", 1)
-    try:
-        module_call = self.module_calls[address_w_pass]
-        module_output_layer: GraphNode = self.ops[module_call.output_ops[-1]]
-    except (KeyError, IndexError):
-        module_output_layer = node
-    module_output_shape = getattr(module_output_layer, "shape", None)
-    if module_output_shape is None:
-        module_output_shape = getattr(module_output_layer, "out_shape", None)
-    module_output_shape = module_output_shape or ()
-    module_output_fsize = record_member(module_output_layer, "activation_memory", None)
-    if module_output_fsize is None:
-        module_output_fsize = "0 B"
+    module_output_shape, module_output_fsize = _module_output_summary(self, address_w_pass, node)
     address, call_index = module_tuple
     fold = _run_fold_for_address(address, repeat_folds)
     if fold is not None:
@@ -1766,15 +1756,7 @@ def _get_node_address_shape_color(
         annotation = (
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
-        if annotation is not None and annotation.buffer_versions:
-            address = (
-                f"{source_node.buffer_address}:{_compact_int_ranges(annotation.buffer_versions)}"
-            )
-        elif self._buffer_num_calls[source_node.buffer_address] == 1:
-            address = source_node.buffer_address
-        else:
-            address = f"{source_node.buffer_address}:{record_member(source_node, 'buffer_pass')}"
-        node_address = "<br/>@" + address
+        node_address = "<br/>@" + _buffer_node_address(self, source_node, annotation)
         node_shape = "cylinder"
         node_color = "black"
     elif node.is_output or node.is_input:

@@ -5,6 +5,7 @@
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
 from .._utils._record_group_table import record_member
+from ._atomic_scope import _enclosing_module_calls
 from ._cairosvg import get_cairosvg_support
 from ._focus_stubs import _boundary_module_path, _get_or_create_boundary_node
 from ._render_common import *
@@ -485,7 +486,7 @@ def _enumerate_run_fold_ellipsis_emissions(
     for parent_node in entries_to_plot.values():
         if _render_node_label(parent_node, vis_mode) in skipped_labels:
             continue
-        if parent_node.graph.is_buffer and not _is_buffer_visible(parent_node, show_buffer_layers):
+        if not _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         parent_endpoint = _collapsed_endpoint_for_emission(
             trace,
@@ -498,9 +499,7 @@ def _enumerate_run_fold_ellipsis_emissions(
         parent_name = parent_endpoint or _render_node_name(parent_node, vis_mode)
         for render_edge in edge_map.get(_render_node_label(parent_node, vis_mode), ()):
             child_node = render_edge.target
-            if child_node.graph.is_buffer and not _is_buffer_visible(
-                child_node, show_buffer_layers
-            ):
+            if not _is_buffer_visible(child_node, show_buffer_layers):
                 continue
             child_render_name = _render_node_name(child_node, vis_mode)
             child_endpoint = _collapsed_endpoint_for_emission(
@@ -1194,9 +1193,7 @@ def _owner_module_key_for_node(
     )
     if collapse_address is not None:
         return collapse_address if vis_mode == "unrolled" else collapse_address.split(":", 1)[0]
-    modules = list(getattr(node, "modules", ()) or ())
-    if record_member(node, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
+    modules = _enclosing_module_calls(node)
     if not modules:
         return -1
     owner = modules[-1]

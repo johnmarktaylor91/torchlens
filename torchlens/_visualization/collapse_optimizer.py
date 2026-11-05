@@ -32,6 +32,7 @@ from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _boundary_bundle as _bundle
+from ._atomic_scope import _enclosing_module_calls
 from ._collapse_disclosures import _warn_budget_fallback
 from ._collapse_frontier import (
     K_CAP,
@@ -2467,7 +2468,7 @@ def _expanded_structure(
             own_ops = tuple(
                 label
                 for label in signal.subtree_ops
-                if not record_member(state.trace.ops[label], "is_buffer", False)
+                if not getattr(state.trace.ops[label].graph, "is_buffer", False)
             )
     elif address == "self":
         if state.context.vis_mode == "rolled":
@@ -2481,7 +2482,7 @@ def _expanded_structure(
             own_ops = tuple(
                 op.label
                 for op in state.trace._layer_list
-                if op.label not in child_ops and not record_member(op, "is_buffer", False)
+                if op.label not in child_ops and not getattr(op.graph, "is_buffer", False)
             )
     result = (graph, child_addresses, tuple(own_ops))
     state.expanded_cache[address] = result
@@ -2509,7 +2510,7 @@ def _synthetic_parent_owned_ops(
     return tuple(
         label
         for label in parent_signal.subtree_ops
-        if label not in child_ops and not record_member(state.trace.ops[label], "is_buffer", False)
+        if label not in child_ops and not getattr(state.trace.ops[label].graph, "is_buffer", False)
     )
 
 
@@ -3699,7 +3700,7 @@ def _root_own_unit_count(
     return sum(
         1
         for op in trace._layer_list
-        if op.label not in child_ops and not record_member(op, "is_buffer", False)
+        if op.label not in child_ops and not getattr(op.graph, "is_buffer", False)
     )
 
 
@@ -3835,9 +3836,7 @@ def _rendered_own_unit_map(trace: Trace, context: RenderContext) -> dict[str, tu
         if emission.kind in {"hidden_run_member", "run_fold_ellipsis", "module_box"}:
             continue
         node = emission.node
-        modules = list(getattr(node, "modules", ()) or ()) if node is not None else []
-        if record_member(node, "is_atomic_module", False) and modules:
-            modules = modules[:-1]
+        modules = _enclosing_module_calls(node)
         owner = str(modules[-1]).rsplit(":", 1)[0] if modules else "self"
         units.setdefault(owner, []).append(emission.op_label or emission.name)
     return {address: tuple(dict.fromkeys(labels)) for address, labels in units.items()}

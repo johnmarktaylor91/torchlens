@@ -56,7 +56,7 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ..._utils._record_group_table import record_member, record_storage_attr
+from ..._utils._record_group_table import record_member
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -92,6 +92,11 @@ from .._options import (
 )
 from .._validation_shared import float_replay_tolerances
 from ._closure_consts import _readable_closure_consts
+from ._raw_relabel import (
+    _is_jax_recurrence_source,
+    _jax_equivalent_labels_by_key,
+    _relabel_jax_lineage_fields,
+)
 from ._site_dialect import jax_site_keys
 from ._trace_graph_helpers import (
     _control_parent_labels,
@@ -2202,12 +2207,7 @@ class JAXBackend:
             for capture_index, raw_label in raw_by_capture_index.items()
             if raw_label in raw_to_final_op_label
         }
-        equivalent_labels_by_key: dict[str, set[str]] = {}
-        for label in raw_labels:
-            op_log = trace._raw_graph_ws.raw_layer_dict[label]
-            equivalent_labels_by_key.setdefault(op_log.graph.equivalence_class, set()).add(
-                op_log.label
-            )
+        equivalent_labels_by_key = _jax_equivalent_labels_by_key(trace, raw_labels)
 
         for raw_index, label in enumerate(raw_labels):
             op_log = trace._raw_graph_ws.raw_layer_dict[label]
@@ -2415,7 +2415,7 @@ class JAXBackend:
         # are present on the ops the index collects.
         trace._options_mark_layer_depths = bool(trace._options_mark_layer_depths)
         if trace._options_mark_layer_depths:
-            from .._finalize import compute_preview_input_output_distances
+            from .._finalize_distances import compute_preview_input_output_distances
 
             compute_preview_input_output_distances(trace)
 
@@ -2693,11 +2693,7 @@ class JAXBackend:
             retain = not pruned
             if retain:
                 eligible_labels.append(label)
-            if (
-                op_log.is_input
-                or op_log.graph.is_internal_source
-                or not data_parents_by_label[label]
-            ):
+            if _is_jax_recurrence_source(op_log, data_parents_by_label[label]):
                 source_labels.append(label)
             nodes[label] = RecurrenceNode(
                 label=label,
@@ -2800,22 +2796,7 @@ class JAXBackend:
                 raw_to_final.get(child, child) if isinstance(child, str) else child
                 for child in op_log.children
             ]
-            for lineage_field in (
-                "input_ancestors",
-                "output_descendants",
-                "root_ancestors",
-                "internal_source_ancestors",
-                "internal_source_parents",
-            ):
-                lineage = record_member(op_log, lineage_field, None)
-                if lineage:
-                    relabeled = (
-                        raw_to_final.get(item, item) if isinstance(item, str) else item
-                        for item in lineage
-                    )
-                    setattr(
-                        op_log, record_storage_attr(op_log, lineage_field), type(lineage)(relabeled)
-                    )
+            _relabel_jax_lineage_fields(op_log, raw_to_final)
             op_log._call_parent_arg_positions = _relabel_jax_parent_arg_positions(
                 op_log.call.parent_arg_positions,
                 raw_to_final,

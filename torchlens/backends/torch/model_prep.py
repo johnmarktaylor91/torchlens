@@ -23,7 +23,6 @@ from ... import _state
 from ..._capture.projections import active_recording_state_or_none
 from ..._capture_honesty import warn_held_scan_truncated
 from ..._capture_state_helpers import _is_uninitialized_param
-from ..._constants import LAYER_PASS_LOG_FIELD_ORDER
 from ..._data_classes._module_role_hints import multi_output_role_from_path, role_hints_for_module
 from ..._data_classes.func_call_location import FuncCallLocation
 from ..._data_classes.module import HookInfo
@@ -36,7 +35,6 @@ from ..._ir.op_record import (
 )
 from ..._ir.refs import ParamRef
 from ..._quantities import Bytes
-from ..._utils._record_group_table import op_attr, record_member
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
     _get_code_context,
@@ -70,10 +68,8 @@ from ._module_class_metadata import (
 )
 from ._predicate_forward import _predicate_module_forward
 from ._quantized_flops import estimate_quantized_module_forward_flops
-from ._replacement_op_fields import (
-    _copy_field_value_for_replacement,
-    _next_untagged_tensor_label,
-)
+from ._replacement_op_fields import _next_untagged_tensor_label
+from ._replacement_template import _replacement_template_fields
 from ._root_prep import (
     prepare_bound_owner_once,
     record_model_identity,
@@ -1245,7 +1241,7 @@ def _note_replacement_event(
             timestamp=time.time(),
             run_token=events.run_nonce,
             target_seq=int(getattr(target_event, "seq", 0) or 0),
-            target_func_call_id=record_member(target_event, "func_call_id", None),
+            target_func_call_id=getattr(target_event, "func_call_id", None),
         )
     )
 
@@ -1354,14 +1350,7 @@ def _ensure_module_output_tensor_logged(
     template_entry = parent_entries[0] if parent_entries else None
     layer_type = "internalsource" if is_internal_source else "interventionreplacement"
     raw_label, raw_index, type_index = _next_untagged_tensor_label(trace, layer_type)
-    fields_dict = {
-        field_name: _copy_field_value_for_replacement(
-            getattr(template_entry, op_attr(field_name), None)
-            if template_entry is not None
-            else None
-        )
-        for field_name in LAYER_PASS_LOG_FIELD_ORDER
-    }
+    fields_dict = _replacement_template_fields(template_entry)
     address = _module_address(module)
     # The TOP-LEVEL model is never registered in `_mod_call_index` -- its
     # `forward` is deliberately left undecorated ("Root module is handled

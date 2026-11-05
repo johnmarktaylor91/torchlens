@@ -33,7 +33,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .._utils._record_group_table import record_member
 from ._focus_scope import scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
@@ -146,7 +145,7 @@ def _node_memory(node: Any) -> int | None:
 
     # A render node delegates to its record; read through the group, which
     # both an Op and a Layer serve.
-    value = record_member(getattr(node, "cost", None), "activation_memory", None)
+    value = getattr(getattr(node, "cost", None), "activation_memory", None)
     if isinstance(value, bool) or not isinstance(value, int | float):
         return None
     return int(value)
@@ -317,7 +316,7 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     reused = {
         str(module.address): int(module.num_calls)
         for module in trace.modules
-        if str(record_member(module, "address", "")) not in ("", "self")
+        if str(getattr(module, "address", "")) not in ("", "self")
         and int(getattr(module, "num_calls", 1) or 1) > 1
     }
     outermost = {
@@ -578,24 +577,16 @@ def _swatch_image(swatch: KeySwatch) -> str:
     elif swatch.shape == "box3d":
         depth = 3 * _SWATCH_SCALE
         draw.rectangle(
-            (left + depth, top, right, bottom - depth),
-            fill=fill,
-            outline=border,
-            width=line,
+            (left + depth, top, right, bottom - depth), fill=fill, outline=border, width=line
         )
         draw.rectangle(
-            (left, top + depth, right - depth, bottom),
-            fill=fill,
-            outline=border,
-            width=line,
+            (left, top + depth, right - depth, bottom), fill=fill, outline=border, width=line
         )
     elif swatch.shape == "double":
         gap = 2 * _SWATCH_SCALE
         draw.rectangle((left, top, right, bottom), fill=fill, outline=border, width=line)
         draw.rectangle(
-            (left + gap, top + gap, right - gap, bottom - gap),
-            outline=border,
-            width=line,
+            (left + gap, top + gap, right - gap, bottom - gap), outline=border, width=line
         )
     else:
         draw.rectangle((left, top, right, bottom), fill=fill, outline=border, width=line)

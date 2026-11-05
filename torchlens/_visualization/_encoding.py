@@ -54,6 +54,7 @@ from .._errors import InvalidArgumentError
 from .._utils._record_group_table import record_member
 from ._encoding_aggregate import AggregateTargets, collect_aggregate, encoding_aggregate_targets
 from ._encoding_request import EncodingChannelRequest
+from ._encoding_rolled_marks import _mirror_backed_op_field, _varying_marker
 from ._encoding_size_layout import (
     DEFAULT_NODE_HEIGHT_IN,
     DEFAULT_NODE_WIDTH_IN,
@@ -965,26 +966,6 @@ def _is_shape_valued(value: Any) -> bool:
     if not isinstance(value, (tuple, list)):
         return False
     return all(isinstance(entry, int) and not isinstance(entry, bool) for entry in value)
-
-
-def _varying_marker(node: Any) -> dict[str, Any]:
-    """Return the reconciler's variation marker for a rolled Layer."""
-
-    annotations = getattr(node, "annotations", None)
-    if isinstance(annotations, dict):
-        marker = annotations.get("varying_across_passes")
-        if isinstance(marker, dict):
-            return marker
-    return {}
-
-
-def _mirror_backed_op_field(field_name: str) -> str | None:
-    """Return the Op field backing a mirrored Layer name, if any."""
-
-    from .._data_classes._layer_spec import _LAYER_MIRROR_SPEC
-
-    entry = _LAYER_MIRROR_SPEC.get(field_name)
-    return entry[0] if entry is not None else None
 
 
 def _rolled_reconciled(state: EncodingState, node: Any, field_name: str) -> float | None:
