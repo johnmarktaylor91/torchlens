@@ -5579,3 +5579,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 87cb89d900397a71fc108ab02cb7ebb2243bdde4 (dirty)
 recorded: 2026-11-05T10:26:49.304504+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: conductor run 6: producer-parity static ledger regenerated for B24 (C-263 group spellings and record_member ports on train 5b0e17ef78)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 32e854d321b5815b418873b7d0d9a13888d99c24 (clean)
+recorded: 2026-11-05T11:46:58.019388+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: conductor run 6: producer-parity static ledger regenerated for B24 (C-263 group spellings and record_member ports on train 5b0e17ef78)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 32e854d321b5815b418873b7d0d9a13888d99c24 (clean)
+recorded: 2026-11-05T11:47:02.903316+00:00
