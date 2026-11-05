@@ -284,7 +284,7 @@ def test_unsaved_mask_producer_fails_closed() -> None:
 
     assert view.declared()["pattern"].status == "needs_capture"
     with pytest.raises(MissingFacetError, match="attn_mask") as caught:
-        view.pattern
+        _ = view.pattern
     assert "reconstruction_ready=True" in str(caught.value)
 
 
@@ -296,7 +296,7 @@ def test_train_mode_sdpa_dropout_fails_closed_on_default_capture() -> None:
     view = log.modules["attn"].facets
 
     with pytest.raises(MissingFacetError, match="dropout"):
-        view.pattern
+        _ = view.pattern
 
 
 def test_fused_pattern_intervention_requires_real_eager_facet() -> None:

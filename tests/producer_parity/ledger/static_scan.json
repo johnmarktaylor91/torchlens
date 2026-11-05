@@ -4336,6 +4336,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/_semantic/_sdpa_call_args.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_semantic/coverage.py",

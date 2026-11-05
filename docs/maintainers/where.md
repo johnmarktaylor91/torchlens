@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1649 modules, 690601 lines, 0 modules without a docstring.
+85 packages, 1649 modules, 690605 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -36,7 +36,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14994 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10570 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 15 | 7409 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 15 | 7413 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3069 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
@@ -827,7 +827,7 @@ Selection: naming sites and resolving them on a trace. (21 modules, 10570 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (15 modules, 7409 lines)
+Semantic facet views for TorchLens records. (15 modules, 7413 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -838,7 +838,7 @@ Semantic facet views for TorchLens records. (15 modules, 7409 lines)
 | `_hops` | Hop rule: grammar proposes, payload identity verifies (mikit /, wave 0a). | 430 |
 | `_input_patching` | Patching a model input leaf: the prebuilt patching helpers' path for input-homed facets. | 200 |
 | `_norm_reconstruction` | Shared, validated norm linearization record (mikit , build item 3). | 358 |
-| `_sdpa_call_args` | Recover a fused SDPA call's exact arguments from what a capture recorded. | 124 |
+| `_sdpa_call_args` | Recover a fused SDPA call's exact arguments from what a capture recorded. | 128 |
 | `_state_guard` | Model-state and global-RNG guard shared by the facet patching helpers. | 195 |
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 225 |
 | `facets` | Derived semantic facet views for TorchLens records. | 2105 |
