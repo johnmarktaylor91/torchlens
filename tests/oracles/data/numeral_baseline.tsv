@@ -2914,6 +2914,7 @@ docs-md	docs/maintainers/where.md	180
 docs-md	docs/maintainers/where.md	181
 docs-md	docs/maintainers/where.md	18184
 docs-md	docs/maintainers/where.md	182
+docs-md	docs/maintainers/where.md	18236
 docs-md	docs/maintainers/where.md	1826
 docs-md	docs/maintainers/where.md	183
 docs-md	docs/maintainers/where.md	1834
@@ -3119,6 +3120,7 @@ docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
 docs-md	docs/maintainers/where.md	32
 docs-md	docs/maintainers/where.md	320
+docs-md	docs/maintainers/where.md	32000
 docs-md	docs/maintainers/where.md	321
 docs-md	docs/maintainers/where.md	322
 docs-md	docs/maintainers/where.md	323
@@ -3141,6 +3143,7 @@ docs-md	docs/maintainers/where.md	341
 docs-md	docs/maintainers/where.md	3418
 docs-md	docs/maintainers/where.md	342
 docs-md	docs/maintainers/where.md	343
+docs-md	docs/maintainers/where.md	34373
 docs-md	docs/maintainers/where.md	344
 docs-md	docs/maintainers/where.md	346
 docs-md	docs/maintainers/where.md	3462
@@ -3242,6 +3245,7 @@ docs-md	docs/maintainers/where.md	434
 docs-md	docs/maintainers/where.md	435
 docs-md	docs/maintainers/where.md	4359
 docs-md	docs/maintainers/where.md	436
+docs-md	docs/maintainers/where.md	4361
 docs-md	docs/maintainers/where.md	437
 docs-md	docs/maintainers/where.md	438
 docs-md	docs/maintainers/where.md	439
@@ -3362,6 +3366,7 @@ docs-md	docs/maintainers/where.md	569
 docs-md	docs/maintainers/where.md	57
 docs-md	docs/maintainers/where.md	571
 docs-md	docs/maintainers/where.md	572
+docs-md	docs/maintainers/where.md	57339
 docs-md	docs/maintainers/where.md	574
 docs-md	docs/maintainers/where.md	577
 docs-md	docs/maintainers/where.md	580
@@ -3443,6 +3448,7 @@ docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
 docs-md	docs/maintainers/where.md	68
+docs-md	docs/maintainers/where.md	680293
 docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
 docs-md	docs/maintainers/where.md	688
@@ -3504,6 +3510,7 @@ docs-md	docs/maintainers/where.md	762
 docs-md	docs/maintainers/where.md	763
 docs-md	docs/maintainers/where.md	7651
 docs-md	docs/maintainers/where.md	767
+docs-md	docs/maintainers/where.md	768
 docs-md	docs/maintainers/where.md	77
 docs-md	docs/maintainers/where.md	771
 docs-md	docs/maintainers/where.md	772
@@ -6816,6 +6823,7 @@ package-docstrings	torchlens/_utils/_exception_notes.py	3.10
 package-docstrings	torchlens/_utils/_exception_notes.py	3.11.
 package-docstrings	torchlens/_utils/_exception_notes.py	678
 package-docstrings	torchlens/_utils/_kernel_probes.py	2.1
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.2
 package-docstrings	torchlens/_utils/_kernel_probes.py	86
 package-docstrings	torchlens/_utils/_mps_memory.py	2.5
 package-docstrings	torchlens/_utils/_multipass_access.py	12
@@ -9671,6 +9679,7 @@ test-docstrings	tests/test_compile_set_stance.py	2.6
 test-docstrings	tests/test_completeness_witness.py	10
 test-docstrings	tests/test_completeness_witness.py	11.4
 test-docstrings	tests/test_completeness_witness.py	124
+test-docstrings	tests/test_completeness_witness.py	2.1
 test-docstrings	tests/test_completeness_witness.py	200
 test-docstrings	tests/test_completeness_witness.py	2026
 test-docstrings	tests/test_completeness_witness.py	240
@@ -10968,6 +10977,7 @@ test-docstrings	tests/test_to_pandas_field_coverage.py	3.1
 test-docstrings	tests/test_to_pandas_field_coverage.py	3.4
 test-docstrings	tests/test_torch_compat.py	10
 test-docstrings	tests/test_torch_compat.py	2.1
+test-docstrings	tests/test_torch_compat.py	2.1,
 test-docstrings	tests/test_torch_compat.py	2.1.
 test-docstrings	tests/test_torch_compat.py	2.2
 test-docstrings	tests/test_torch_compat.py	2.3
@@ -10975,6 +10985,8 @@ test-docstrings	tests/test_torch_compat.py	2.4
 test-docstrings	tests/test_torch_compat.py	26
 test-docstrings	tests/test_torch_compat.py	35
 test-docstrings	tests/test_torch_compat.py	42
+test-docstrings	tests/test_torch_func_transforms.py	2.1,
+test-docstrings	tests/test_torch_func_transforms.py	2.2
 test-docstrings	tests/test_torch_func_transforms.py	29
 test-docstrings	tests/test_torch_func_transforms.py	31
 test-docstrings	tests/test_torch_ops_call_recording.py	1.0
