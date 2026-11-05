@@ -31,6 +31,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from tests.test_ag2_gemma2_sites import (
     N_LAYERS,
     _frozen_ops,
@@ -132,6 +133,7 @@ class TestOpLabelReadSite:
         by_op, by_module, _keyed, _to_module = graph_pair
         _close(by_op.constants["other"], by_module.constants["other"])
 
+    @requires_gradient_edge
     def test_unknown_op_label_refuses(self) -> None:
         model = _model()
         trace = _trace(model)
@@ -147,6 +149,7 @@ class TestOpLabelReadSite:
         assert example is not None
         assert example.group(1) in [str(op.label) for op in trace]
 
+    @requires_gradient_edge
     def test_read_site_not_upstream_refuses(self) -> None:
         model = _model()
         trace = _trace(model)
@@ -163,6 +166,7 @@ class TestOpLabelReadSite:
         graph = _graph(model, {example.group(1): tc}, trace)
         assert graph.transcoder_sites == (example.group(1),)
 
+    @requires_gradient_edge
     def test_op_label_key_with_one_decoder_refuses(self) -> None:
         model = _model()
         trace = _trace(model)

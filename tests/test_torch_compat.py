@@ -991,9 +991,13 @@ def test_view_func_replay_falls_back_to_the_older_spelling(
     )
     replay = tc.get_view_func_replay()
     assert replay is torch.Tensor._view_func
+    force_tracking = tc.get_force_original_view_tracking()
+    assert force_tracking is not None
     base = torch.arange(16.0).reshape(4, 4)
-    view = base.t()[1]
-    assert torch.equal(replay(view, base * 2), view * 2)
+    with force_tracking(True):
+        view = base.t()[1]
+        rebuilt = replay(view, base * 2)
+    assert torch.equal(rebuilt, view * 2)
 
 
 def test_probe_gradient_edge_is_functional_not_just_attribute_presence(

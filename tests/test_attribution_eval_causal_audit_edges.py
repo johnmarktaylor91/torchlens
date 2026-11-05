@@ -242,6 +242,7 @@ QKV_EDGES = [
 ]
 
 
+@requires_gradient_edge
 @pytest.mark.heavy
 def test_tiny_gpt2_q_k_v_patches_replay_to_their_measured_effects() -> None:
     """Head-slice patches (q, k, v), MLP and logits receivers, and a bias row replay exactly."""

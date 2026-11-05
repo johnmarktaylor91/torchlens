@@ -13,6 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from tests.test_ag2_gemma2_sites import _frozen_ops, _model, _trace, _transcoders
 
 NORMS = (
@@ -66,6 +67,7 @@ def _equal(a: torch.Tensor, b: torch.Tensor) -> None:
 class TestGemma2Facets:
     """``pattern`` and ``inv_rms`` name the ops an attribution graph holds."""
 
+    @requires_gradient_edge
     def test_frozen_facets_build_the_same_graph(self) -> None:
         model = _model()
         by_facet = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
@@ -80,12 +82,14 @@ class TestGemma2Facets:
         for name, value in by_facet.constants.items():
             _equal(value, by_label.constants[name])
 
+    @requires_gradient_edge
     def test_facet_that_is_not_one_op_refuses(self) -> None:
         with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("result")])
         assert info.value.fields["code"] == "attribution_graph_frozen_facet_unsupported"
         assert "tl.facet('result')" in str(info.value)
 
+    @requires_gradient_edge
     def test_facet_no_module_serves_refuses(self) -> None:
         with pytest.raises(tl.errors.AttributionError) as info:
             _graph(_model(), [tl.facet("no_such_facet")])
