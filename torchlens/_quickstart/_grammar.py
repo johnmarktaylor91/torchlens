@@ -1,4 +1,4 @@
-"""The ``input_shape=`` grammar and the deterministic synthesis kernel (B6).
+"""The ``input_shape=`` grammar and the deterministic synthesis kernel.
 
 Grammar: one flat positive-integer tuple
 is one shape; a sequence of shapes is multiple positional tensors; a mapping

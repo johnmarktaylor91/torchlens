@@ -1,4 +1,4 @@
-"""Relation-carriage method bodies for ``Bundle`` (C07X).
+"""Relation-carriage method bodies for ``Bundle``.
 
 The method bodies that carry the member-relation
 table: ``Bundle.relate`` appends validated rows (R4 new-table install) and

@@ -1,4 +1,4 @@
-"""The one-call picture door ``tl.draw`` (B15).
+"""The one-call picture door ``tl.draw``.
 
 ``draw`` is a curated facade over the input resolver, the concrete capture
 primitive, the theme registry, and the EXISTING renderer -- never a second

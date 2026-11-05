@@ -1,4 +1,4 @@
-"""Balanced truncation budgets, ported from treescope (B3).
+"""Balanced truncation budgets, ported from treescope.
 
 The two-stage truncation protocol is a NAMED CODE BORROW from treescope
 (Daniel D. Johnson, Google DeepMind; Apache License 2.0), ported per the

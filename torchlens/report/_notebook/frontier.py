@@ -1,4 +1,4 @@
-"""The diagnostic frontier: first-dirty sites plus one hop (B6).
+"""The diagnostic frontier: first-dirty sites plus one hop.
 
 "Flagged ops" is unbounded -- one injected NaN flags 65% of distilgpt2's
 ops because nonfinite values propagate, so the flagged set is the whole

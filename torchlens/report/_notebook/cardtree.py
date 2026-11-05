@@ -1,4 +1,4 @@
-"""CardTree: presentation-only HTML card IR + native safe renderer (B1).
+"""CardTree: presentation-only HTML card IR + native safe renderer.
 
 The treescope-grade card substrate (treescope memo decision 3). CardTree is
 presentation STRUCTURE only -- fold state, access expressions, child

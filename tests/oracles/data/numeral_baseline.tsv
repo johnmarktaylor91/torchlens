@@ -3146,7 +3146,6 @@ docs-md	docs/maintainers/where.md	395
 docs-md	docs/maintainers/where.md	397
 docs-md	docs/maintainers/where.md	398
 docs-md	docs/maintainers/where.md	399
-docs-md	docs/maintainers/where.md	4.3
 docs-md	docs/maintainers/where.md	4.4
 docs-md	docs/maintainers/where.md	4.7
 docs-md	docs/maintainers/where.md	40
@@ -5906,7 +5905,6 @@ package-docstrings	torchlens/_quantities.py	2048,
 package-docstrings	torchlens/_quickstart/_gate.py	1_2
 package-docstrings	torchlens/_quickstart/_grammar.py	1.0
 package-docstrings	torchlens/_quickstart/_grammar.py	32,
-package-docstrings	torchlens/_quickstart/_render.py	15
 package-docstrings	torchlens/_quickstart/_render.py	224
 package-docstrings	torchlens/_quickstart/_render.py	224,
 package-docstrings	torchlens/_robustness.py	18
@@ -6897,7 +6895,6 @@ package-docstrings	torchlens/features.py	256
 package-docstrings	torchlens/fingerprint.py	256
 package-docstrings	torchlens/fingerprint.py	64
 package-docstrings	torchlens/intervention/_affine_source.py	1_2
-package-docstrings	torchlens/intervention/_bind_step.py	12
 package-docstrings	torchlens/intervention/_content_identity.py	1000
 package-docstrings	torchlens/intervention/_content_identity.py	16
 package-docstrings	torchlens/intervention/_content_identity.py	256

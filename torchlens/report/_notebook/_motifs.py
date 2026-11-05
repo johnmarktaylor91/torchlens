@@ -1,4 +1,4 @@
-"""Six-state status motifs and the diverging-around-zero value map (B3).
+"""Six-state status motifs and the diverging-around-zero value map.
 
 Two treescope conventions adopted NATIVELY (treescope memo section 4,
 tier 1; credited on the acknowledgments page):

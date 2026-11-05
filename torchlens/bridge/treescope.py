@@ -1,4 +1,4 @@
-"""The treescope bridge: external registration, probe, sniff, door (B4).
+"""The treescope bridge: external registration, probe, sniff, door.
 
 Makes TorchLens objects render boundedly inside Google DeepMind's treescope
 notebook renderer (treescope memo decision 1). Design rules, each earned by

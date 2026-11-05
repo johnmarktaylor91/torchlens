@@ -1,4 +1,4 @@
-"""Edge-intervention boundary validation (L6 4.3), split out of ``core.py``.
+"""Edge-intervention boundary validation, split out of ``core.py``.
 
 One replay-phase check family: a child op carrying tier-(ii)
 edge-substitution entries gets a DIFFERENT check, never NO check. The
