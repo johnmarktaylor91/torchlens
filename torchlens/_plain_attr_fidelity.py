@@ -7,8 +7,8 @@ caller's model state is untouched. Three facts decide whether that is sound:
   (:func:`assert_copy_kept_instance_attrs`); the ``self.__dict__ = self`` AttrDict
   idiom used by HiFi-GAN-family configs copies its items but leaves the copy's
   attribute namespace empty, so the copy's forward raises where the source's does not;
-* whether the copy runs in its source's train/eval mode and simple attribute values
-  (:func:`align_validation_copy`);
+* whether the copy runs in its source's train/eval mode (:func:`align_validation_copy`)
+  and, for the replay copy, its simple attribute values;
 * whether a plain attribute merely aliases the module's own registered tensors
   (:func:`is_registered_tensor_alias`), as ``nn.RNNBase._flat_weights`` does; such
   values are restored by the state_dict restore, so only their identity is plain state.
@@ -361,7 +361,8 @@ def align_validation_copy(source: nn.Module, copied: nn.Module) -> None:
     restored through ``train()`` (pre-order, so a parent's recursion is then
     corrected per child), which also lets a module that swaps behaviour on a
     mode change (that graph module swaps its train and eval graphs) follow.
-    The remaining simple plain attributes are aligned afterwards.
+    Other plain attributes are left as the copy made them, so a class's own
+    ``__deepcopy__`` keeps its say; the replay copy aligns them separately.
     """
 
     assert_copy_kept_instance_attrs(source, copied)
@@ -369,4 +370,3 @@ def align_validation_copy(source: nn.Module, copied: nn.Module) -> None:
         mode = source_module.training
         if isinstance(mode, bool) and copied_module.training is not mode:
             copied_module.train(mode)
-    restore_simple_plain_attrs_on_copy(source, copied)
