@@ -1270,7 +1270,6 @@ HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_attribute_paths("HAS_NODE_PREHOOK")
 HAS_NODE_SEQUENCE_NR: bool = bool(_real_op_probe_leaf().probe_node_sequence_nr())
-HAS_SCHEMA_ALIAS_INFO: bool = bool(_real_op_probe_leaf().probe_schema_alias_info())
 HAS_DETERMINISTIC_FILL_FLAG: bool = _probe_deterministic_fill_flag()
 HAS_FP32_PRECISION_CONTROLS: bool = _probe_attribute_paths("HAS_FP32_PRECISION_CONTROLS")
 HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
@@ -1496,7 +1495,6 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
     "HAS_NODE_SEQUENCE_NR",
-    "HAS_SCHEMA_ALIAS_INFO",
     "HAS_DETERMINISTIC_FILL_FLAG",
     "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",

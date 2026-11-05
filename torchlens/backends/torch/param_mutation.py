@@ -166,9 +166,8 @@ def same_object_logging_copy(out_orig: Any, trace: Any = None, was_inplace: bool
     a same-object in-place return the output IS the user's receiver (a registered
     buffer for BN's ``num_batches_tracked.add_(1)``), and an unmarked read would
     record a phantom declared-state fact. An in-place write through a view first
-    moves the ops whose node autograd discarded onto the base's new ``CopySlices``,
-    or records ``CopySlices`` as the op's node when an earlier reader keeps the
-    view's node (``rebind_rebased_view_producers``).
+    records the base's new ``CopySlices`` as the op's node and moves the ops whose
+    node autograd discarded onto it (``rebind_rebased_view_producers``).
 
     Parameters
     ----------

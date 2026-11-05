@@ -9,9 +9,8 @@ recorded as the operation's autograd handle.
 An in-place write through a view also rebases the view's autograd history:
 ``rebase_history`` gives the base a fresh ``CopySlices`` node that takes the
 place of the view's own node in the graph. ``rebind_rebased_view_producers``
-moves the ops whose recorded node autograd discarded onto that ``CopySlices``,
-or, when a recorded op still reads the view's node, records ``CopySlices`` as
-the writer's node.
+records ``CopySlices`` as the in-place op's node and moves the ops whose
+recorded node autograd discarded onto it.
 """
 
 from __future__ import annotations
@@ -178,61 +177,29 @@ def _orphaned_view_nodes(start: Any, copy_slices: Any, handles: Mapping[str, Any
     return chain if _copy_slices_is_newest(copy_slices, handles, skip) else []
 
 
-def _writer_node_for_read_view(
-    start: Any, copy_slices: Any, handles: Mapping[str, Any]
-) -> Any | None:
-    """Return ``CopySlices`` as the writer's node when a recorded reader keeps the view's nodes.
+def _view_write_node(start: Any, copy_slices: Any, handles: Mapping[str, Any]) -> Any | None:
+    """Return ``CopySlices`` as the in-place op's node when the view write is proven.
 
     The view's chain is proven (``_view_chain_to_prior``) and ``CopySlices`` is
-    this write's node (created after every recorded node, the chain included),
-    but another recorded op reads a chain node, so the view producers keep their
-    nodes. The write's gradient then flows only through ``CopySlices``: the
-    receiver's regenerated view node is a view OF it that backward visits only
-    when the view is read again. ``None`` when any of this is unproven.
+    this write's node (created after every recorded node). ``CopySlices`` runs
+    the write's backward for the base, so every gradient of the write passes
+    through it; the receiver's regenerated view node is only a view OF it, which
+    backward visits only when the written view is read again. ``None`` when any
+    of this is unproven.
     """
 
     chain = _view_chain_to_prior(start, copy_slices)
-    if not chain or not _chain_has_recorded_reader(chain, handles):
+    if not chain or not _copy_slices_is_newest(copy_slices, handles, set()):
         return None
-    return copy_slices if _copy_slices_is_newest(copy_slices, handles, set()) else None
+    return copy_slices
 
 
-def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
-    """Rebind ops to an in-place view write's ``CopySlices``; return the writer's node.
+def _fresh_view_write(trace: Any, receiver: Any) -> tuple[dict[str, Any], Any, Any] | None:
+    """Return ``(handles, receiver's recorded node, CopySlices)`` for a fresh view write.
 
-    Called during capture only, after an in-place op ran and before the receiver
-    takes the op's label; postprocess reads the handle index and never writes it.
-    When the receiver is a view, autograd's ``rebase_history`` gave the base a new
-    ``CopySlices`` node that carries the write's gradient. Two shapes are bound:
-
-    - no recorded op reads the view's nodes: the op that produced the view (and
-      any intermediate view op) recorded a node no backward pass can reach. Each
-      such op's recorded handle moves to ``CopySlices`` (for a view of a view,
-      every view op on the chain shares it), so the recorded backward graph keeps
-      the forward topology. The writer keeps its regenerated view node, which
-      reads ``CopySlices``; the return value is ``None``.
-    - a recorded op read the view before the write: the view producers keep their
-      nodes, and the writer's node is ``CopySlices`` (returned), the node backward
-      visits when the written base is read. The receiver's regenerated view node
-      is then only a view of it.
-
-    The binding is fail-closed: only under grad mode, for a fresh ``CopySlices``
-    (no op records it yet) that the receiver's regenerated node reads from, and
-    when the proof helpers establish the shape. Anything else returns ``None``
-    and leaves the records unchanged, so the backward-graph invariant decides.
-
-    Parameters
-    ----------
-    trace:
-        Active capture trace.
-    receiver:
-        The live tensor the in-place op wrote through.
-
-    Returns
-    -------
-    Any | None
-        The node to record for the in-place op instead of the receiver's
-        ``grad_fn``, or ``None`` to keep the receiver's ``grad_fn``.
+    Only under grad mode, for a grad-requiring view whose base now holds a
+    ``CopySlices`` that no op records yet and that the receiver's regenerated
+    node reads from; ``None`` otherwise.
     """
 
     handles = getattr(getattr(trace, "capture_events", None), "grad_fn_handles_by_label_raw", None)
@@ -252,12 +219,53 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
         or any(handle is copy_slices for handle in handles.values())
     ):
         return None
-    orphaned = _orphaned_view_nodes(handles.get(label), copy_slices, handles)
-    writer_node = (
-        None if orphaned else _writer_node_for_read_view(handles.get(label), copy_slices, handles)
-    )
-    if not orphaned and writer_node is None:
+    return handles, handles.get(label), copy_slices
+
+
+def rebind_rebased_view_producers(trace: Any, receiver: Any) -> Any | None:
+    """Bind an in-place view write to the base's ``CopySlices``; return the writer's node.
+
+    Called during capture only, after an in-place op ran and before the receiver
+    takes the op's label; postprocess reads the handle index and never writes it.
+    When the receiver is a view, autograd's ``rebase_history`` gave the base a new
+    ``CopySlices`` node that runs the write's backward. The in-place op owns it:
+    it is returned and recorded as the op's node, whichever of the base, the view
+    or another alias is read afterwards (a later read of the view goes through a
+    regenerated view node that reads ``CopySlices``).
+
+    When no recorded op reads the view's nodes, the op that produced the view
+    (and any intermediate view op) also recorded a node no backward pass can
+    reach; each such op's handle moves to ``CopySlices`` too (for a view of a
+    view, every view op on the chain shares it), since its backward is folded
+    into the write's. A recorded reader of the view before the write keeps the
+    view producers on their own nodes.
+
+    The binding is fail-closed: ``_fresh_view_write`` and the proof helpers must
+    establish the shape. Anything else returns ``None`` and leaves the records
+    unchanged, so the backward-graph invariant decides.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    receiver:
+        The live tensor the in-place op wrote through.
+
+    Returns
+    -------
+    Any | None
+        The node to record for the in-place op instead of the receiver's
+        ``grad_fn``, or ``None`` to keep the receiver's ``grad_fn``.
+    """
+
+    found = _fresh_view_write(trace, receiver)
+    if found is None:
         return None
+    handles, start, copy_slices = found
+    writer_node = _view_write_node(start, copy_slices, handles)
+    if writer_node is None:
+        return None
+    orphaned = _orphaned_view_nodes(start, copy_slices, handles)
     for raw_label, handle in list(handles.items()):
         if any(handle is node for node in orphaned):
             handles[raw_label] = copy_slices

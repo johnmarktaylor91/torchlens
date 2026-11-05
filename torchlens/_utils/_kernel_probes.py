@@ -73,25 +73,6 @@ def probe_node_sequence_nr() -> bool:
         return False
 
 
-def probe_schema_alias_info() -> bool:
-    """Return whether aten op schemas expose argument alias annotations.
-
-    ``aten::slice``'s ``Tensor(a) self`` must read as aliased and not written;
-    the in-place view-write rebind classifies view backward nodes from it.
-
-    Returns
-    -------
-    bool
-        ``True`` when the annotation reads as an alias that is not a write.
-    """
-
-    try:
-        alias = torch.ops.aten.slice.Tensor._schema.arguments[0].alias_info
-        return alias is not None and alias.is_write is False
-    except (AttributeError, IndexError, RuntimeError):
-        return False
-
-
 def probe_cpu_half_kernels() -> bool:
     """Return whether common CPU kernels accept Half-dtype operands.
 

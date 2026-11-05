@@ -24,7 +24,7 @@ from torchlens.backends.torch import param_mutation
 from torchlens.backends.torch._user_grad_fn import (
     _MAX_VIEW_REBASE_DEPTH,
     _orphaned_view_nodes,
-    _writer_node_for_read_view,
+    _view_write_node,
 )
 from torchlens.errors._validation import MetadataInvariantError
 from torchlens.validation._invariants_backward_graph import _check_backward_graph_invariants
@@ -289,11 +289,13 @@ def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyP
     rebind = param_mutation.rebind_rebased_view_producers
     after_each_write: list[list[str]] = []
 
+    writer_nodes: list[str] = []
+
     def _spy(trace: tl.Trace, receiver: torch.Tensor) -> object:
         writer_node = rebind(trace, receiver)
         handles = trace.capture_events.grad_fn_handles_by_label_raw.values()
         after_each_write.append([type(node).__name__ for node in handles])
-        assert writer_node is None
+        writer_nodes.append(type(writer_node).__name__)
         return writer_node
 
     monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _spy)
@@ -301,6 +303,7 @@ def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyP
         warnings.simplefilter("ignore")
         tl.trace(_TwoViewsWritten(), _input().requires_grad_(True))
     first_write, second_write = after_each_write
+    assert writer_nodes == ["CopySlices", "NoneType"]
     assert first_write.count("CopySlices") == 1
     assert second_write.count("CopySlices") == 1
     assert second_write.count("SliceBackward0") == 1
@@ -452,16 +455,85 @@ def test_a_dead_view_write_is_still_excused(
     assert _backward_verdict(_DeadViewWrite()) is True
 
 
-def test_writer_node_needs_a_reader_and_a_proven_chain() -> None:
-    """``CopySlices`` is the writer's node only when a recorded reader holds the view's node."""
+def test_view_write_node_needs_a_proven_chain() -> None:
+    """``CopySlices`` is the writer's node for a proven chain, read before the write or not."""
 
     view_node, copy_slices, handles = _write_then_handles(lambda y, v: {})
-    assert _writer_node_for_read_view(view_node, copy_slices, handles) is None
+    assert _view_write_node(view_node, copy_slices, handles) is copy_slices
     view_node, copy_slices, handles = _write_then_handles(lambda y, v: {"a": (v * 3.0).grad_fn})
-    assert _writer_node_for_read_view(view_node, copy_slices, handles) is copy_slices
-    assert _writer_node_for_read_view(handles["y"], copy_slices, handles) is None
+    assert _view_write_node(view_node, copy_slices, handles) is copy_slices
+    assert _view_write_node(handles["y"], copy_slices, handles) is None
     handles["later"] = (torch.ones(2, requires_grad=True) * 5.0).grad_fn
-    assert _writer_node_for_read_view(view_node, copy_slices, handles) is None
+    assert _view_write_node(view_node, copy_slices, handles) is None
+
+
+def _base_only(y: torch.Tensor) -> torch.Tensor:
+    """Write a column view in place, then read only the base."""
+
+    y[:, 5:6].add_(0.25)
+    return y
+
+
+def _base_before_and_after(y: torch.Tensor) -> torch.Tensor:
+    """Read the base, write a column view in place, read the base again."""
+
+    early = y * 2.0
+    y[:, 5:6].add_(0.25)
+    return y * early
+
+
+def _intermediate_view(y: torch.Tensor) -> torch.Tensor:
+    """Write a view of an intermediate view in place, then read the intermediate."""
+
+    inner = y[:, 2:8]
+    inner[:, 3:4].mul_(1.5)
+    return inner
+
+
+def _sibling_view(y: torch.Tensor) -> torch.Tensor:
+    """Take a sibling view, write an overlapping column view, read the sibling."""
+
+    sibling = y[:, 4:7]
+    y[:, 5:6].add_(0.25)
+    return sibling
+
+
+_ALIAS_READS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
+    "base_only": _base_only,
+    "base_before_and_after": _base_before_and_after,
+    "intermediate_view": _intermediate_view,
+    "sibling_view": _sibling_view,
+}
+
+
+class _AliasRead(nn.Module):
+    """Write through a view of an intermediate, then read another alias of it."""
+
+    def __init__(self, write: Callable[[torch.Tensor], torch.Tensor]) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.lin = nn.Linear(8, 8)
+        self.write = write
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return a scaled copy of the alias the write function reads."""
+
+        return self.write(self.lin(x)) * 3.0
+
+
+@pytest.mark.parametrize("read", sorted(_ALIAS_READS))
+def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
+    """Reading the base, an intermediate view or a sibling after a view write passes both checks.
+
+    The write's gradient reaches the loss through the base's ``CopySlices`` (or a
+    view regenerated over it), so the in-place op records ``CopySlices``.
+    """
+
+    trace = _traced_backward(_AliasRead(_ALIAS_READS[read]))
+    _check_backward_graph_invariants(trace)
+    writer = _only_layer(trace, ("add_", "mul_"))
+    assert writer.autograd.grad_fn.class_name == "CopySlices"
+    assert _backward_verdict(_AliasRead(_ALIAS_READS[read])) is True
 
 
 @pytest.mark.parametrize(
