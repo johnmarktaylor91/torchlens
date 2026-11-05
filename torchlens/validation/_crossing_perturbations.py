@@ -14,14 +14,19 @@ that does not feed the op still fails. Same style as
 
 A tensor ``clamp`` bound (``min=``/``max=`` given as a tensor) that never binds
 moves the output only once it passes the value it bounds, so the bound is moved
-one step past ``max(x, lo)`` (below ``min(max(x, lo), hi)``) at every element.
+one step past ``max(x, lo)`` (below ``min(max(x, lo), hi)``) at every element. A float
+``scaled_dot_product_attention`` mask over saturated scores gets a margin, sized to the
+recomputed scores, that pushes each row's winning key below the others.
 """
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any
 
 import torch
+
+from ._sdpa_value_proofs import _sdpa_param, sdpa_softmax_rows_well_defined
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -385,3 +390,82 @@ def _bound_step(reached: torch.Tensor) -> torch.Tensor | int:
     if not reached.is_floating_point():
         return 1
     return torch.clamp(reached.abs() * 0.01, min=1.0)
+
+
+def sdpa_mask_crossing_values(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> torch.Tensor | None:
+    """Return an additive sdpa mask that pushes every row's winning key below the rest.
+
+    ``scaled_dot_product_attention`` adds a float ``attn_mask`` to the scores before the
+    softmax. When the scores are large (``q`` and ``k`` of norm 1e3 give scores near 1e7)
+    every softmax row is one-hot, and a mask perturbation sized to the output (the generic
+    draw) cannot change which key wins, so a live mask edge looked dead. Here the saved
+    scores are recomputed, each row's winning key gets ``-(4 * max|score| + 1)`` added at
+    the mask element that reaches it, and every other mask element keeps its value: the
+    winner drops below every other key, so the output moves unless the value rows that
+    win are equal. A row whose every key is some broadcast row's winner would only shift
+    uniformly, so a mask whose every row is like that is left to the generic draw.
+
+    Parameters
+    ----------
+    layer:
+        ``scaled_dot_product_attention`` op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved float ``attn_mask``.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The moved mask, or ``None`` when the parent is not only the float mask, a softmax
+        row is not well defined, there is one key, or the moved mask is not finite.
+    """
+
+    if getattr(layer, "func_name", None) != _SDPA_FUNC or not parent_values.is_floating_point():
+        return None
+    args = tuple(getattr(layer, "saved_args", None) or ())
+    if parent_values.ndim == 0 or len(args) < 3 or not _sdpa_mask_only_slot(layer, parent_label):
+        return None
+    if not sdpa_softmax_rows_well_defined(layer, args):
+        return None
+    try:
+        scores = _sdpa_scores(layer, args, parent_values.detach())
+    except RuntimeError:
+        # Shapes the recomputation cannot broadcast: leave the edge to the generic draw.
+        return None
+    if scores is None or scores.shape[-1] < 2 or not bool(torch.isfinite(scores).all()):
+        return None
+    winners = torch.zeros_like(scores).scatter_(-1, scores.argmax(dim=-1, keepdim=True), 1.0)
+    marked = _reduce_to_shape(winners, parent_values.shape, torch.amax)
+    if marked is None or bool((marked.amin(dim=-1) == 1).all()):
+        return None
+    margin = 4.0 * float(scores.abs().max()) + 1.0
+    candidate = (parent_values.detach().double() - margin * marked).to(parent_values.dtype)
+    return candidate if bool(torch.isfinite(candidate).all()) else None
+
+
+_SDPA_FUNC = "scaled_dot_product_attention"
+
+
+def _sdpa_mask_only_slot(layer: Op, parent_label: str) -> bool:
+    """Return whether the parent fills the sdpa ``attn_mask`` slot and no other slot."""
+
+    positions = getattr(layer, "parent_arg_positions", None) or {}
+    arg_slots = [k for k, v in positions.get("args", {}).items() if v == parent_label]
+    kwarg_slots = [k for k, v in positions.get("kwargs", {}).items() if v == parent_label]
+    return arg_slots + kwarg_slots in ([3], ["attn_mask"])
+
+
+def _sdpa_scores(layer: Op, args: tuple[Any, ...], mask: torch.Tensor) -> torch.Tensor | None:
+    """Recompute ``q @ k^T * scale + mask`` in float64 from the saved call (grouped keys expanded)."""
+
+    query, key = args[0].detach().double(), args[1].detach().double()
+    if query.ndim >= 3 and key.ndim >= 3 and query.shape[-3] != key.shape[-3]:
+        if key.shape[-3] == 0 or query.shape[-3] % key.shape[-3]:
+            return None
+        key = key.repeat_interleave(query.shape[-3] // key.shape[-3], dim=-3)
+    scale = _sdpa_param(layer, args, "scale")
+    scale = 1.0 / math.sqrt(query.shape[-1]) if scale is None else float(scale)
+    return query @ key.transpose(-2, -1) * scale + mask.double().to(query.device)
