@@ -31,6 +31,11 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # survivor would let a later user compile region pass through unlogged
         # whenever Dynamo traces, instead of being detected.
         ("torchlens/backends/torch/_tracing_pass.py", "hop_compile_depth"),
+        # Innermost lifted entry is a cond whose real run calls the user's
+        # branches: saved and restored in hop_internal_compile_scope's
+        # try/finally; a survivor would let Dynamo trace a session forward
+        # unlogged outside that cond's compile.
+        ("torchlens/backends/torch/_tracing_pass.py", "cond_entry_innermost"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
         # a survivor past the load window would arm the unknown-field refusal
