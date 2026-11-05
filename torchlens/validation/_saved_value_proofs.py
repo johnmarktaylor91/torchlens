@@ -22,6 +22,9 @@ saved co-arguments, and returns non-exempt for anything else:
   (``args[2]``) only says where zeros are added, and the saved output already
   equals the saved destination.
 
+Writes that cannot change the output and arguments the kernel never reads are
+proved by ``_unread_value_proofs``, consulted when no family here proves the edge.
+
 Zero einsum operands, eval-mode batch norm at its running mean, unread
 ``scatter_reduce`` destinations and empty split chunks or matmul products are
 proved by ``_operand_value_proofs`` and the overwrite decision before this
@@ -42,6 +45,7 @@ from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import tensor_nanequal
 from ._posthoc_decision import PosthocPerturbDecision
 from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
+from ._unread_value_proofs import unread_value_proof_decision
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 
 if TYPE_CHECKING:
@@ -459,5 +463,7 @@ def saved_value_proof_decision(
         return _NOT_PROVED
     for func_names, decide in _DECISIONS_BY_FAMILY:
         if layer.func_name in func_names:
-            return decide(layer, keys, args)
-    return _NOT_PROVED
+            decision = decide(layer, keys, args)
+            if decision.exempt:
+                return decision
+    return unread_value_proof_decision(layer, keys, args)

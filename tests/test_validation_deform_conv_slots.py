@@ -6,8 +6,8 @@ after reordering its Python arguments. A structural row meant for the sampling
 offsets exempted arg 1, which in this op is the WEIGHT, so a dead weight edge
 was never caught. The row is gone: the weight, the offset and every other
 parent are perturbed, and a dead edge at either slot fails. The dummy mask that
-``mask=None`` builds (``use_mask=False``, never read by the kernel) still fails
-too; it waits on a ruling and is pinned here so it cannot pass silently.
+``mask=None`` builds (``use_mask=False``, never read by the kernel) is proved
+unread by the ``deform_conv2d_unused_mask`` value proof, and only then.
 """
 
 from __future__ import annotations
@@ -95,10 +95,10 @@ def test_masked_deform_block_validates() -> None:
             assert validate_forward_pass(model, torch.randn(1, 3, 6, 6), seed=seed) is True
 
 
-def test_unread_dummy_mask_still_fails() -> None:
-    """``mask=None`` passes ``zeros((N, 1))`` with ``use_mask=False``; that edge still fails."""
+def test_unread_dummy_mask_is_proved_unread() -> None:
+    """``mask=None`` passes ``zeros((N, 1))`` with ``use_mask=False``; the value proof exempts it."""
 
     trace, op = _deform_op(with_mask=False)
     assert op.call.saved_args[13] is False
     result = _perturb(trace, op, _MASK_SLOT)
-    assert (result.decision, result.reason) == ("failed", "perturbation_insensitive")
+    assert (result.decision, result.reason) == ("exempted", "deform_conv2d_unused_mask")
