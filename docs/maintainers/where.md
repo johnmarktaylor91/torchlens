@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1729 modules, 701665 lines, 0 modules without a docstring.
+85 packages, 1729 modules, 701677 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 33971 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 33983 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -2317,7 +2317,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 33971 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 33983 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2398,7 +2398,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 291 |
 | `_setitem_index_probe` | In-domain index probe for integer and bool-mask index components of ''__setitem__''. | 300 |
 | `_shift_probe` | Non-uniform perturbation probes for children that uniform steps cannot move. | 315 |
-| `_snapshot_binding` | Prove that a parent's per-child version snapshot is explained by the recorded graph. | 227 |
+| `_snapshot_binding` | Prove that a parent's per-child version snapshot is explained by the recorded graph. | 239 |
 | `_source_provenance` | Source-provenance completeness: fail forward validation on source-less tensor args. | 127 |
 | `_status` | Compatibility re-export; the status objects live in ''torchlens._validation_status''. | 19 |
 | `_stock_layer_grads` | Stock per-module-output gradient capture for backward validation. | 413 |
