@@ -172,7 +172,7 @@ torchlens/_io/_load_validators.py::_validate_edge_entry	66
 torchlens/_io/_safe_unpickle.py	1404
 torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
-torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	206
+torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	202
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
 torchlens/_io/bundle.py	3665
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64

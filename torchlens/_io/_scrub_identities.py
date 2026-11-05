@@ -208,20 +208,15 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         return grad_id_map.get(value, value)
 
     if isinstance(grad_fn_logs, dict):
-        remapped_logs = type(grad_fn_logs)()
-        for grad_id, grad_fn in grad_fn_logs.items():
-            grad_fn.grad_fn_object_id = remap_grad_id(grad_fn.grad_fn_object_id)
-            grad_fn.creator_object_id = remap_grad_id(grad_fn.creator_object_id)
-            grad_fn.next_grad_fn_ids = [
-                remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
-            ]
-            remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["_grad_fn_logs"] = remapped_logs
+        state["_grad_fn_logs"] = _remap_grad_fn_logs(grad_fn_logs, remap_grad_id)
     state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
     roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
     state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
     for record in (*ops, *layers):
-        record.grad_fn_object_id = remap_grad_id(record_member(record, "grad_fn_object_id", None))
+        grad_id_attr = record_storage_attr(record, "grad_fn_object_id")
+        setattr(
+            record, grad_id_attr, remap_grad_id(record_member(record, "grad_fn_object_id", None))
+        )
     for pass_record in pass_records:
         root_ids = getattr(pass_record, "root_grad_fn_ids", None)
         if root_ids:
@@ -229,6 +224,18 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
 
     for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
         state[object_id_key] = 1 if state.get(object_id_key) is not None else None
+
+
+def _remap_grad_fn_logs(grad_fn_logs: dict[Any, Any], remap_grad_id: Callable[[Any], Any]) -> Any:
+    """Return ``grad_fn_logs`` re-keyed by trace-local ordinal, each record's ids remapped."""
+
+    remapped_logs = type(grad_fn_logs)()
+    for grad_id, grad_fn in grad_fn_logs.items():
+        grad_fn.grad_fn_object_id = remap_grad_id(grad_fn.grad_fn_object_id)
+        grad_fn.creator_object_id = remap_grad_id(grad_fn.creator_object_id)
+        grad_fn.next_grad_fn_ids = [remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids]
+        remapped_logs[remap_grad_id(grad_id)] = grad_fn
+    return remapped_logs
 
 
 def _remap_parent_param_ops(record: Any, remap_barcode_text: Callable[[Any], Any]) -> None:
