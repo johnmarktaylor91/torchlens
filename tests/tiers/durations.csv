@@ -53,7 +53,7 @@ tests/oracles/test_legacy_peak_rss_units.py,2,0.05,0.05,unmarked
 tests/oracles/test_legacy_quantity_doors.py,7,0.12,0.05,unmarked
 tests/oracles/test_legacy_timing_bounds.py,8,2.84,1.03,unmarked
 tests/oracles/test_oracle_w0_deprecation.py,8,0.04,0.02,unmarked
-tests/oracles/test_oracle_w0_lints.py,14,13.87,13.63,heavy
+tests/oracles/test_oracle_w0_lints.py,14,15.28,14.88,heavy
 tests/oracles/test_oracle_w0_registry.py,24,0.39,0.24,unmarked
 tests/oracles/test_oracle_w0_skeleton.py,5,0.03,0.02,unmarked
 tests/oracles/test_oracle_w0_surface.py,12,0.43,0.32,unmarked
@@ -64,7 +64,7 @@ tests/oracles/test_proofnet_purity.py,15,0.89,0.36,unmarked
 tests/oracles/test_proofnet_quantities.py,1,0.11,0.11,unmarked
 tests/packaging_install/test_clean_install.py,24,836.99,218.05,slow
 tests/producer_parity/test_fastlog_late_buffer_probe.py,1,0.11,0.11,heavy
-tests/producer_parity/test_ledger.py,12,13.40,6.87,heavy
+tests/producer_parity/test_ledger.py,12,32.55,16.08,heavy
 tests/producer_parity/test_op_lane_inplace_writers.py,2,4.47,4.41,heavy
 tests/producer_parity/test_p1_record_types.py,8,4.70,2.03,heavy
 tests/producer_parity/test_p2_consumer_migration.py,3,2.89,2.83,heavy
@@ -644,7 +644,7 @@ tests/test_format_helpers.py,8,0.51,0.34,unmarked
 tests/test_forward_created_module_params.py,1,0.50,0.50,smoke
 tests/test_forward_created_parameters.py,5,1.73,0.70,smoke
 tests/test_forward_peak_pair_rerun.py,4,0.42,0.32,unmarked
-tests/test_forward_replay_untracked_writes.py,15,3.29,0.44,unmarked
+tests/test_forward_replay_untracked_writes.py,55,5.94,0.47,unmarked
 tests/test_fp8_guard.py,29,1.18,0.23,heavy
 tests/test_framework_filename_verdict_bound.py,1,0.13,0.13,unmarked
 tests/test_freeze_module.py,1,0.10,0.10,unmarked
@@ -1169,7 +1169,7 @@ tests/test_rank_layout_omissions.py,3,1.29,0.82,unmarked
 tests/test_rank_render_ir_semantic_goldens.py,1,0.57,0.57,unmarked
 tests/test_raw_hook_traced_return_tripwire.py,2,0.17,0.13,unmarked
 tests/test_readme_intervene_lines.py,5,3.61,3.12,heavy
-tests/test_real_world_models.py,112,2597.21,281.72,slow
+tests/test_real_world_models.py,112,4863.21,508.97,slow
 tests/test_receptive_field_deep_chain.py,1,72.11,72.11,slow
 tests/test_receptive_field_empty_endpoint.py,2,0.54,0.38,unmarked
 tests/test_receptive_field_multipass_draw.py,1,0.43,0.43,unmarked
@@ -1617,7 +1617,7 @@ tests/test_to_pandas_field_coverage.py,3,0.21,0.16,unmarked
 tests/test_torch_compat.py,67,0.59,0.11,unmarked
 tests/test_torch_compat_table.py,8,0.19,0.11,unmarked
 tests/test_torch_func_transforms.py,13,1.03,0.22,smoke
-tests/test_torch_ops_call_recording.py,9,3.53,0.64,slow
+tests/test_torch_ops_call_recording.py,10,2.41,0.37,slow
 tests/test_torchnative_backward.py,3,0.18,0.07,unmarked
 tests/test_torchnative_consumers.py,5,0.62,0.35,unmarked
 tests/test_torchnative_drift_oracle.py,1,0.06,0.06,unmarked
@@ -1705,7 +1705,7 @@ tests/test_tvscope_preprocessing.py,15,0.19,0.12,heavy
 tests/test_two_pass_inplace_fix.py,9,5.54,5.07,slow
 tests/test_type_checking_imports.py,1,7.33,7.33,unmarked
 tests/test_unhide_surfaces.py,5,0.71,0.57,heavy
-tests/test_union_merge_integrity.py,29,1.45,0.14,unmarked
+tests/test_union_merge_integrity.py,29,3.46,0.76,unmarked
 tests/test_unpickle_c_path.py,2,0.15,0.12,smoke
 tests/test_unpickle_c_security.py,8,2.48,1.39,unmarked
 tests/test_user_docs_currency.py,44,0.58,0.19,unmarked
@@ -1719,6 +1719,7 @@ tests/test_validate_leaves_model_untouched.py,12,4.39,0.56,unmarked
 tests/test_validate_save_options.py,26,3.24,0.70,unmarked
 tests/test_validation.py,288,58.26,2.26,smoke
 tests/test_validation_after_load.py,5,1.05,0.56,unmarked
+tests/test_validation_binding_swap_tripwire.py,19,1.15,0.09,unmarked
 tests/test_validation_bool_exemption.py,22,2.61,0.92,unmarked
 tests/test_validation_clamp_bound_crossing.py,15,4.20,0.42,unmarked
 tests/test_validation_comparator_selftest.py,10,0.46,0.19,unmarked
@@ -1759,7 +1760,7 @@ tests/test_validation_rung1_class3.py,51,5.40,0.49,unmarked
 tests/test_validation_saturated_activation_crossing.py,8,2.42,0.45,unmarked
 tests/test_validation_saved_value_proofs.py,36,10.63,0.66,unmarked
 tests/test_validation_sdpa_mask_crossing.py,8,2.58,0.48,unmarked
-tests/test_validation_set_receiver.py,23,5.93,0.72,unmarked
+tests/test_validation_set_receiver.py,27,4.35,0.44,unmarked
 tests/test_validation_setitem_index_probe.py,12,1.50,0.49,unmarked
 tests/test_validation_sparse_step_retry.py,11,1.04,0.50,unmarked
 tests/test_validation_structural_slots.py,8,1.74,0.47,unmarked
