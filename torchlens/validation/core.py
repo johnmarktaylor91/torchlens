@@ -78,6 +78,7 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._native_index_perturbation import native_index_perturbation
 from ._non_pass_record import record_replay_exception as _record_replay_exception
 from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs, perturb_through_values
 from ._pre_replay import (
@@ -3181,9 +3182,6 @@ def _prepare_input_args_for_validating_layer(
     tuple[dict[str, Any] | None, str | None]
         Replay argument dictionary, plus an optional unverified reason when the
         replay inputs cannot be reconstructed.
-
-    Returns:
-        Tuple of prepared replay args and an optional unverified reason code.
     """
     if layer_to_validate_parents_for.saved_args is None:
         return None, "missing_saved_args"
@@ -3196,7 +3194,6 @@ def _prepare_input_args_for_validating_layer(
     _restore_live_parameter_args_for_replay(input_args, layer_to_validate_parents_for)
 
     # Swap in saved parent outs:
-
     for arg_type in ["args", "kwargs"]:
         for (
             key,
@@ -3214,10 +3211,7 @@ def _prepare_input_args_for_validating_layer(
                 ]
             else:
                 if _is_buffer_version_parent(parent_layer) and not _buffer_parent_source_equal(
-                    parent_layer,
-                    input_args,
-                    arg_type,
-                    key,
+                    parent_layer, input_args, arg_type, key
                 ):
                     raise ValueError(
                         "Validation cannot source-match buffer-version parent "
@@ -3233,11 +3227,16 @@ def _prepare_input_args_for_validating_layer(
                 input_args, arg_type, key, parent_values.detach().clone()
             )
             if parent_layer_arg in layers_to_perturb:
-                if perturb_strategy == "default":
+                native = native_index_perturbation(
+                    layer_to_validate_parents_for, arg_type, key, parent_values, perturb_strategy
+                )
+                if native is not None and native.values is None:
+                    return None, native.reason
+                if native is not None:
+                    parent_layer_func_values = native.values
+                elif perturb_strategy == "default":
                     parent_layer_func_values = _perturb_parent_values_for_layer(
-                        layer_to_validate_parents_for,
-                        parent_layer_arg,
-                        parent_values,
+                        layer_to_validate_parents_for, parent_layer_arg, parent_values
                     )
                 elif perturb_strategy == _INDEX_SINGLE_ENTRY_STRATEGY:
                     single_entry = index_domain_single_entry_values(
