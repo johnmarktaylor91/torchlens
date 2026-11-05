@@ -215,6 +215,7 @@ def make_change_spec_fn(report: ChangeReport) -> NodeSpecFn | None:
 def change_key_rows(report: ChangeReport, heuristic_count: int) -> tuple[str, ...]:
     """The caption's outline key, and why changed ops may be missing."""
 
+    extra: tuple[str, ...]
     if report.unavailable is not None:
         key, extra = "purple outline: edited", (report.unavailable,)
     elif report.changed_count:

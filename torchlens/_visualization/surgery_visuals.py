@@ -666,7 +666,8 @@ def make_surgery_mark_spec_fn(
             if target is not layer_log and is_multipass_layer(layer_log):
                 node_marks = [mark for mark in node_marks if mark.call_label is None]
         if not node_marks:
-            return default_spec if change_fn is None else change_fn(layer_log, default_spec)
+            changed = None if change_fn is None else change_fn(layer_log, default_spec)
+            return default_spec if changed is None else changed
         any_fact = any(mark.basis == "fact" for mark in node_marks)
         # replace() copies shallowly; give the copy its OWN lines list so the
         # appended mark rows never leak into the caller's default spec.
