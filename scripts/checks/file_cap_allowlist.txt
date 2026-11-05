@@ -174,7 +174,7 @@ torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_save_gates.py::_capture_activation_blob_specs	107
 torchlens/_io/_scrub_identities.py::_scrub_nondeterministic_identities	218
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	3709
+torchlens/_io/bundle.py	3708
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	103
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	73
@@ -876,7 +876,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	62
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	73
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	136
-torchlens/backends/torch/_tl.py	1749
+torchlens/backends/torch/_tl.py	1748
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
@@ -956,7 +956,7 @@ torchlens/backends/torch/wrappers.py	2843
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
-torchlens/backends/torch/wrappers.py::decorate_all_once	68
+torchlens/backends/torch/wrappers.py::decorate_all_once	67
 torchlens/backends/torch/wrappers.py::torch_func_decorator	795
 torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	641
 torchlens/bridge/_sae_export.py::write_delphi	92
