@@ -30,15 +30,6 @@ from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._completeness_origins import internal_scalar_read
-from ._ops_arg_slots import (
-    _ArgSlot,
-    _SlotCall,
-    parents_from_slots,
-    snapshot_arg_slots,
-    templates_from_slots,
-    templates_requested,
-    witness_from_slots,
-)
 from ._tl import (
     get_tensor_label,
     set_tensor_label,
@@ -61,6 +52,7 @@ _TRANSFORM_CONFIG = "__tl_transform_config__"
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ._ops_arg_slots import _ArgSlot
 
 
 __all__ = (
@@ -92,8 +84,8 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
 def _set_arg_template_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
-    call: _SlotCall,
-    slots: tuple[_ArgSlot, ...],
+    call: "_SlotCall",
+    slots: "tuple[_ArgSlot, ...]",
 ) -> None:
     """Seed the replay argument templates and the portable function identity of one call."""
     if templates_requested(self):
@@ -536,6 +528,14 @@ def _build_module_context_fields(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._ops_arg_slots import (  # noqa: E402
+    _SlotCall,
+    parents_from_slots,
+    snapshot_arg_slots,
+    templates_from_slots,
+    templates_requested,
+    witness_from_slots,
+)
 from ._ops_arguments import (  # noqa: E402
     _function_registry_key,
 )

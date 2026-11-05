@@ -22,17 +22,6 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ._ops_arguments import (
-    _capture_layout,
-    _classify_arg_component,
-    _function_registry_key,
-    _literal_value_supported,
-    _peek_raw_graph_workspace,
-    _session_validated_parameter,
-    _tensor_has_known_provenance,
-    _unlabeled_tensor_literal,
-    _unsupported_component,
-)
 from ._tl import (
     TensorMeta,
     clear_tensor_label,
@@ -420,3 +409,18 @@ def witness_from_slots(
         workspace = _peek_raw_graph_workspace(trace)
         if workspace is not None:
             workspace._pending_arg_slots = None
+
+
+# Late import: _ops_arguments pulls in the ops chain, which imports this module back,
+# so the sibling is imported once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _capture_layout,
+    _classify_arg_component,
+    _function_registry_key,
+    _literal_value_supported,
+    _peek_raw_graph_workspace,
+    _session_validated_parameter,
+    _tensor_has_known_provenance,
+    _unlabeled_tensor_literal,
+    _unsupported_component,
+)
