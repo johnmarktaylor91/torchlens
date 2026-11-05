@@ -407,7 +407,7 @@ torchlens/_runnable/path_faithfulness.py::_within_layout_reduction_tolerance	62
 torchlens/_runnable/providers.py::_finalize_provider_run	68
 torchlens/_runnable/providers.py::run_loaded_sparse_trace	106
 torchlens/_runnable/retention.py::_preflight_retention_floor	69
-torchlens/_runnable/state.py	2786
+torchlens/_runnable/state.py	2775
 torchlens/_runnable/state.py::_alias_value_diagnostics	74
 torchlens/_runnable/state.py::_apply_state_metadata_facts	111
 torchlens/_runnable/state.py::_preflight_run_allocation	86

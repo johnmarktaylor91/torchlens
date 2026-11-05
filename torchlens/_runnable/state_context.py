@@ -183,6 +183,9 @@ def _allowed_state_roles(
 ) -> frozenset[StateSlotRole]:
     """Return canonical semantic roles for a state-dict leaf name."""
 
+    if slot_role is TensorSlotRole.BUFFER and leaf_name in {"weight", "bias"}:
+        # Buffers are never recorded with a parameter role; see ``_name_contract``.
+        return frozenset({StateSlotRole.GENERIC_BUFFER})
     if leaf_name == "weight":
         return frozenset({StateSlotRole.WEIGHT, StateSlotRole.NORM_SCALE})
     if leaf_name == "bias":
