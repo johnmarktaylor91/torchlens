@@ -26,7 +26,11 @@ from torchlens._record_type import record_type
 from torchlens._utils._record_group_table import record_member
 from torchlens._utils.hashing import compute_graph_shape_hash
 from torchlens._validation_divergence import _first_reproducibility_divergence
-from torchlens._validation_retrace_saves import retrace_save_coverage_gap, retrace_save_indices
+from torchlens._validation_retrace_saves import (
+    compare_retrace_graphs,
+    retrace_save_coverage_gap,
+    retrace_save_indices,
+)
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.validation import validate_forward_pass
 
@@ -273,3 +277,39 @@ def test_retrace_save_set_that_misses_a_buffer_still_fails(
     torch.manual_seed(0)
     with pytest.warns(TraceNotReproducibleWarning, match="stateful/non-reproducible"):
         assert validate_forward_pass(factory(), make_input()) is False
+
+
+@pytest.mark.parametrize("name", ["reassign", "rewrite_on_some_passes"])
+def test_retrace_save_set_that_misses_a_buffer_source_fails_closed(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Planted bug: a save set that drops only the buffer sources fails closed on coverage.
+
+    The re-trace saves every output (so its hash still equals the first trace's) but
+    the save set handed to the comparison omits the buffer sources: the coverage
+    check, not a hash difference, must report the miss.
+    """
+
+    factory, make_input = _MODELS[name]
+    torch.manual_seed(0)
+    model, x = factory(), make_input()
+    full = _capture(copy.deepcopy(model), x, None)
+    retrace = _capture(copy.deepcopy(model), x, None)
+    try:
+        sources = {
+            source.raw_index
+            for record in full._layer_list
+            if getattr(record, "_graph_buffer_source", None) is not None
+            for source in [full._layer_dict_all_keys[record._graph_buffer_source]]
+        }
+        assert sources, f"{name}: no buffer source to drop -- inconclusive"
+        saved = tuple(i for i in retrace_save_indices(full) if i not in sources)
+        verdict = compare_retrace_graphs(full, retrace, saved)
+        assert verdict is not None
+        first_hash, second_hash, hint = verdict
+        assert first_hash == second_hash
+        assert hint is not None and "outside the re-trace save set" in hint
+        assert compare_retrace_graphs(full, retrace, retrace_save_indices(full)) is None
+    finally:
+        full.cleanup()
+        retrace.cleanup()

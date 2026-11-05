@@ -118,21 +118,21 @@ def retrace_save_coverage_gap(second_trace: Any, saved_indices: frozenset[int]) 
         label = getattr(record, "layer_label", None)
         index = _raw_index(record)
         if index not in saved_indices:
-            return f"buffer op {label!r} ran at raw index {index}, unlike the first forward"
+            return f"buffer op {label!r} at raw index {index} was outside the re-trace save set"
         try:
             source = _buffer_source_record(second_trace, record)
         except LookupError as exc:
             return f"buffer op {label!r} names unresolvable source {exc.args[0]!r}"
         if source is not None and _raw_index(source) not in saved_indices:
             return (
-                f"source of buffer op {label!r} ran at raw index {_raw_index(source)}, "
-                "unlike the first forward"
+                f"source of buffer op {label!r} at raw index {_raw_index(source)} "
+                "was outside the re-trace save set"
             )
     return None
 
 
 def compare_retrace_graphs(
-    first_trace: Any, second_trace: Any
+    first_trace: Any, second_trace: Any, saved_indices: tuple[int, ...]
 ) -> tuple[str, str, str | None] | None:
     """Compare the first validation trace with its slim re-trace.
 
@@ -141,7 +141,11 @@ def compare_retrace_graphs(
     first_trace:
         Postprocessed validation trace (every output saved).
     second_trace:
-        Postprocessed slim re-trace, saved per ``retrace_save_indices(first_trace)``.
+        Postprocessed slim re-trace.
+    saved_indices:
+        The raw indices the re-trace was actually told to save. The coverage check
+        reads these, never a fresh ``retrace_save_indices``, so a save set that
+        missed a buffer node or source fails closed however it was produced.
 
     Returns
     -------
@@ -153,8 +157,7 @@ def compare_retrace_graphs(
 
     first_hash = compute_graph_shape_hash(first_trace, include_module_address=False)
     second_hash = compute_graph_shape_hash(second_trace, include_module_address=False)
-    saved_indices = frozenset(retrace_save_indices(first_trace))
-    coverage_gap = retrace_save_coverage_gap(second_trace, saved_indices)
+    coverage_gap = retrace_save_coverage_gap(second_trace, frozenset(saved_indices))
     if first_hash == second_hash and coverage_gap is None:
         return None
     if first_hash == second_hash:

@@ -721,14 +721,14 @@ def _warn_if_validation_trace_not_reproducible(
     try:
         # Save only the outputs the structure hash reads (buffer nodes and sources;
         # ``_validation_retrace_saves``), failing closed if the save set missed one.
-        # the first trace is captured under a FORCED "shadow"
-        # completeness-witness mode (validate_forward_pass), so the re-trace
-        # must run under the same mode -- comparing a shadow capture against an
-        # ambient-mode capture is exactly the two-capture-modes comparison this
-        # check must not make, and it deterministically false-FAILED every
-        # witness-mode-sensitive model as "stateful/non-reproducible".
+        # The first trace is captured under a FORCED "shadow" completeness-witness
+        # mode (validate_forward_pass), so the re-trace must run under the same
+        # mode -- comparing a shadow capture against an ambient-mode capture is
+        # exactly the two-capture-modes comparison this check must not make (it
+        # false-FAILED every witness-mode-sensitive model as non-reproducible).
         from . import _state
 
+        retrace_saved_indices = retrace_save_indices(first_trace)
         prior_witness_mode = _state._completeness_witness_mode
         _state._completeness_witness_mode = "shadow"
         try:
@@ -746,11 +746,11 @@ def _warn_if_validation_trace_not_reproducible(
                 save_rng=False,
                 output_device=retrace_output_device,
                 save_budget=retrace_save_budget,
-                _resolved_layer_nums_to_save=retrace_save_indices(first_trace),
+                _resolved_layer_nums_to_save=retrace_saved_indices,
             )
         finally:
             _state._completeness_witness_mode = prior_witness_mode
-        verdict = compare_retrace_graphs(first_trace, second_trace)
+        verdict = compare_retrace_graphs(first_trace, second_trace, retrace_saved_indices)
         if verdict is None:
             return "matched"
         first_hash, second_hash, hint = verdict
