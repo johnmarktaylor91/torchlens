@@ -62,9 +62,8 @@ def _resolution_candidate(layer: Any) -> Any:
     # So does a sparse ``check_invariants`` keyword that turns index validation off.
     saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
     pointer = raw_pointer_keyword_name(saved_kwargs)
-    if _is_resolution_exempt(layer) or pointer is not None:
-        return None
-    if isinstance(saved_kwargs, dict) and mapping_disables_invariants(saved_kwargs):
+    switch_off = isinstance(saved_kwargs, dict) and mapping_disables_invariants(saved_kwargs)
+    if _is_resolution_exempt(layer) or pointer is not None or switch_off:
         return None
     func_name = str(getattr(layer, "func_name", "none"))
     key = getattr(layer, "func_id", None)
