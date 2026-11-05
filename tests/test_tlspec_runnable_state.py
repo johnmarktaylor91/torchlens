@@ -15,7 +15,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import RunnableErrorCode, StateSlotRole, StateSource, TensorSlotRole
 from torchlens._runnable.state import prepare_runnable_state
-from torchlens.errors import StateBindingError
+from torchlens.errors import StateBindingError, TorchLensWarning
 from torchlens.options import CaptureOptions
 
 
@@ -377,3 +377,42 @@ def test_n1a_initializes_every_role_deterministically_and_names_every_slot(
     assert torch.all(first.slot_values["state:test:norm_scale"] == 1)
     assert torch.all(first.slot_values["state:test:running_var"] == 1)
     assert torch.count_nonzero(first.slot_values["state:test:weight"]) > 0
+
+
+class _BufferNamedBiasModel(nn.Module):
+    """A causal-mask buffer registered under the leaf name ``bias``.
+
+    transformers 4.x GPT-2 attention keeps its boolean causal mask as a
+    non-persistent buffer literally named ``bias``; the name contract must not
+    demand a parameter bias role for it.
+    """
+
+    def __init__(self) -> None:
+        """Initialize one linear layer and a boolean causal-mask buffer named ``bias``."""
+
+        super().__init__()
+        self.linear = nn.Linear(3, 3)
+        self.register_buffer(
+            "bias", torch.tril(torch.ones(3, 3, dtype=torch.bool)), persistent=False
+        )
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Mask the projected scores with the buffer."""
+
+        return self.linear(value).masked_fill(~self.bias, 0.0)
+
+
+def test_random_init_run_binds_a_buffer_named_bias(tmp_path: Path) -> None:
+    """A buffer whose leaf is ``bias`` binds as a generic buffer, not a parameter bias."""
+
+    model = _BufferNamedBiasModel().eval()
+    inputs = torch.ones(3, 3)
+    trace = tl.trace(model, inputs, capture=CaptureOptions(replayable=True))
+    try:
+        trace.save(tmp_path / "bias_buffer", level="runnable")
+    finally:
+        trace.cleanup()
+    loaded = tl.load(tmp_path / "bias_buffer")
+    with pytest.warns(TorchLensWarning, match="RANDOM"):
+        result = loaded.run_transaction(inputs=inputs, seed=0)
+    assert result.report.state_source is StateSource.RANDOM_INITIALIZATION
