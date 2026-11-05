@@ -11,7 +11,6 @@ from types import MappingProxyType
 from typing import Any
 
 from ..errors._base import TorchLensWarning
-from ._row_journal import journal_record
 from .events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -42,7 +41,7 @@ from .op_record import (
     validate_amendment,
 )
 from .predicate import RecordContext
-from .refs import ParamRef, ReservedLabel, _clone_frozen_record
+from .refs import ParamRef, ReservedLabel, _clone_frozen_record, journal_record
 
 # Op-record count at which a running capture DISCLOSES its growth exactly
 # once (r8 R60-1). Purely informational -- capture continues -- sized from

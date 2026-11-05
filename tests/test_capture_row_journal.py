@@ -25,6 +25,7 @@ import torchlens as tl
 import torchlens._postprocess as postprocess_module
 from torchlens._ir import _row_journal
 from torchlens._ir.op_record import OpRecord, OpRecordAttributeError, record_with_path_updates
+from torchlens._ir.refs import journal_record
 from torchlens.backends.torch import _ops_row_journal
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
 
@@ -283,7 +284,7 @@ def test_lazy_record_equals_eager_raw_and_amended(subject: int, commit_spy: _Com
         assert len(folded) == len(folded_expected)
         for event in folded:
             diffs.extend(f"fast {d}" for d in fast_read_diffs(event, folded_expected[event.seq]))
-            built = _row_journal.journal_record(event)
+            built = journal_record(event)
             diffs.extend(f"folded {d}" for d in record_diffs(built, folded_expected[event.seq]))
         for handle, eager in spy.eager:
             raw = _row_journal._record_from_row(handle) if handle._row is not None else None
@@ -320,7 +321,7 @@ def test_requires_grad_flip_after_capture_cannot_leak(commit_spy: _CommitSpy) ->
                 tensor.detach_()
         folded_expected = _eager_folded(spy)
         for event in spy.journal.amended_op_records():
-            built = _row_journal.journal_record(event)
+            built = journal_record(event)
             diffs.extend(record_diffs(built, folded_expected[event.seq]))
 
     commit_spy.on_ingest = at_ingest
