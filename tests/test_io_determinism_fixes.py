@@ -12,6 +12,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._utils._record_group_table import op_attr
 
 
 class _TiedReprKey:
@@ -529,7 +530,9 @@ def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_pa
         raise AssertionError("a serialized factory must never execute")
 
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    trace.output_ops[0].func_config = {"lookup": defaultdict(factory, {"seen": [3]})}
+    setattr(
+        trace.output_ops[0], op_attr("func_config"), {"lookup": defaultdict(factory, {"seen": [3]})}
+    )
     path = tmp_path / "factory-disclosure.tlspec"
     trace.save(path)
     loaded = tl.load(path)
@@ -537,7 +540,7 @@ def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_pa
         row["kind"] == "unencodable_values_stringified"
         for row in loaded.annotations["capture_advisories"]
     )
-    mapping = loaded.output_ops[0].func_config["lookup"]
+    mapping = loaded.output_ops[0].call.config["lookup"]
     assert type(mapping) is dict
     assert mapping == {"seen": [3]}
     manifest = json.loads((path / "manifest.json").read_text())

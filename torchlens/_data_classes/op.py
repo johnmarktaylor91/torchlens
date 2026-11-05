@@ -2034,9 +2034,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def _autograd_grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass."""
 
-        return _doors.intervention()._op_edits.autograd.grad_for(
-            self, bwd=bwd
-        )  # record-groups: flat
+        return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)  # record-groups: flat
 
     def _record_gradient(
         self,

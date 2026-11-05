@@ -7,7 +7,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import record_member, record_storage_attr
 
 # Canonical remapped param barcode token (``param_000001``), for R21-1's
 # trace-level equivalence-key ordering.
@@ -136,12 +136,13 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         remapped_group = "_".join(sorted(remapped_barcodes))
         record._param_barcodes = remapped_barcodes
         equivalence_class = record_member(record, "equivalence_class", None)
+        attr = record_storage_attr(record, "equivalence_class")
         if isinstance(equivalence_class, str) and original_group:
-            record.equivalence_class = equivalence_class.replace(original_group, remapped_group)
+            setattr(record, attr, equivalence_class.replace(original_group, remapped_group))
         else:
-            record.equivalence_class = remap_barcode_text(equivalence_class)
-        if isinstance(equivalence_class, str) and isinstance(record.equivalence_class, str):
-            equivalence_class_map[equivalence_class] = record.equivalence_class
+            setattr(record, attr, remap_barcode_text(equivalence_class))
+        if isinstance(equivalence_class, str) and isinstance(getattr(record, attr), str):
+            equivalence_class_map[equivalence_class] = getattr(record, attr)
         _remap_parent_param_ops(record, remap_barcode_text)
 
     equivalence_groups = state.get("_graph_op_equivalence_classes")
