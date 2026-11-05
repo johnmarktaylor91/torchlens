@@ -14,7 +14,7 @@ import functools
 import gc
 import types
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from types import ModuleType
 from typing import Any
 
@@ -39,6 +39,10 @@ _SCALAR_SEQUENCE_TYPES = frozenset({list, tuple})
 #: The C ``functools.lru_cache`` wrapper type (``None`` where only the pure-Python
 #: fallback exists; its cache lives in a closure cell the callable walk already reads).
 _LRU_CACHE_WRAPPER_TYPE: type | None = getattr(functools, "_lru_cache_wrapper", None)
+#: Descriptor wrappers whose ``__func__`` may be a cached function (``@staticmethod @lru_cache``).
+_METHOD_DESCRIPTOR_TYPES = frozenset({staticmethod, classmethod})
+#: Referents of a cache wrapper the sweep never walks: its type and the wrapped function.
+_LRU_REFERENT_SKIP_TYPES = frozenset({type, types.FunctionType})
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -440,30 +444,32 @@ def _lru_cache_entries(wrapper: Any) -> list[Any]:
     return [
         referent
         for referent in gc.get_referents(wrapper)
-        if type(referent) not in (type, types.FunctionType)
+        if type(referent) not in _LRU_REFERENT_SKIP_TYPES
     ]
 
 
-def _class_lru_caches(owner: type) -> list[Any]:
-    """Return the C ``lru_cache`` wrappers the user classes of ``owner``'s MRO hold.
+def _class_lru_caches(owner: type) -> Iterator[Any]:
+    """Yield the C ``lru_cache`` wrappers the user classes of ``owner``'s MRO hold.
 
     A cached class attribute (``@staticmethod @lru_cache``, ``@lru_cache`` on a
     method) is the wrapper itself; a decorator that wraps the cache in a Python
     function (transformers' ``compile_compatible_method_lru_cache``) holds it in a
     closure cell. Classes defined by torch hold no model cache and are skipped.
+    Runs for every module of every sweep, so it builds no container: it yields
+    instead of collecting, and its type tests read module-level frozensets
+    rather than tuple literals built per attribute.
     """
 
-    caches: list[Any] = []
     if _LRU_CACHE_WRAPPER_TYPE is None:
-        return caches
+        return
     for klass in owner.__mro__:
         if klass is object or str(getattr(klass, "__module__", "")).startswith("torch."):
             continue
         for attr in vars(klass).values():
-            if type(attr) in (staticmethod, classmethod):
+            if type(attr) in _METHOD_DESCRIPTOR_TYPES:
                 attr = attr.__func__
             if type(attr) is _LRU_CACHE_WRAPPER_TYPE:
-                caches.append(attr)
+                yield attr
             elif type(attr) is types.FunctionType:
                 for cell in attr.__closure__ or ():
                     try:
@@ -471,8 +477,7 @@ def _class_lru_caches(owner: type) -> list[Any]:
                     except ValueError:
                         continue
                     if type(held) is _LRU_CACHE_WRAPPER_TYPE:
-                        caches.append(held)
-    return caches
+                        yield held
 
 
 def _clear_module_callables_tensor_metadata(
