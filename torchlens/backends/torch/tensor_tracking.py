@@ -25,6 +25,7 @@ from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
 from ...recording.types import CaptureSpec
+from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
 from ._tl import (
     get_param_meta,
     get_tensor_label,
@@ -1261,8 +1262,6 @@ def _locate_parent_tensors_in_args(
     tensor_all_arg_positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     if not parent_log_entries:
         return tensor_all_arg_positions
-    from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
-
     if (slots := current_arg_slots(self, args, kwargs)) is not None:
         return parent_arg_positions_from_slots(slots, parent_log_entries)
 

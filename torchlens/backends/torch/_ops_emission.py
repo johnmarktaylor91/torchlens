@@ -10,7 +10,7 @@ import torch
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
-from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, slot_fact
+from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -22,6 +22,7 @@ from ._view_writeback import data_alias_write_reaches_base
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ._ops_arg_slots import _SlotCall
     from .ops import CaptureProducerPolicy  # annotations only; runtime binding at the bottom
 
 
@@ -494,6 +495,27 @@ def apply_live_hooks_to_outputs(
         call_input_snapshots,
         record_is_inplace,
     )
+
+
+def witness_from_slots(
+    trace: Trace,
+    call: _SlotCall,
+    parent_arg_positions: dict[str, dict[Any, str]],
+    recorded_parent_params: list[torch.nn.Parameter],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Run the unattributed / dropped-edge witness on the snapshot, then retire it."""
+
+    try:
+        return _unattributed_tensor_arg_positions(
+            trace,
+            call.args,
+            call.kwargs,
+            call.func_name,
+            parent_arg_positions,
+            recorded_parent_params,
+        )
+    finally:
+        retire_arg_slots(trace)
 
 
 # Late imports: the split modules of this package import one another (cycles), so each

@@ -953,12 +953,11 @@ torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
-torchlens/backends/torch/tensor_tracking.py	1655
+torchlens/backends/torch/tensor_tracking.py	1654
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	83
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
-torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	61
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
 torchlens/backends/torch/wrappers.py	2846
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81

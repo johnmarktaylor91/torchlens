@@ -1,7 +1,7 @@
 """Shared operation fields and tensor variation tracking."""
 
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -30,10 +30,28 @@ from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._completeness_origins import internal_scalar_read
+from ._ops_arg_slots import (
+    _ArgSlot,
+    _LabelRead,
+    _out_destination_ids,
+    _peek_raw_graph_workspace,
+    _session_parent_labels,
+    _SlotCall,
+    _SlotContext,
+    _SnapshotScope,
+    _storage_intact,
+    _tensor_items,
+    parents_from_slots,
+    templates_requested,
+)
 from ._tl import (
+    clear_tensor_label,
     get_tensor_label,
+    get_tensor_meta,
+    mutated_parameter_label,
     set_tensor_label,
 )
+from ._tl_collective import _async_collective_elem
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
@@ -52,7 +70,6 @@ _TRANSFORM_CONFIG = "__tl_transform_config__"
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-    from ._ops_arg_slots import _ArgSlot
 
 
 __all__ = (
@@ -81,15 +98,95 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
     fields_dict["transformed_gradient_memory"] = None
 
 
+def _unvalidated_provenance(
+    trace: "Trace", value: Any, read: _LabelRead, live: Mapping[str, Any]
+) -> bool:
+    """Return ``_tensor_has_known_provenance`` past its prepared-Parameter rung."""
+
+    if _async_collective_elem(value) is not None:
+        return _tensor_has_known_provenance(trace, value)
+    meta = read.meta
+    if meta is None:
+        return False
+    if read.storage_intact and read.live_label is not None:
+        return True
+    if meta.address is not None and session_validated_buffer_address(trace, value) is not None:
+        return True
+    return bool(
+        read.storage_intact and meta.buffer_source is not None and meta.buffer_source in live
+    )
+
+
+def _object_facts(trace: "Trace", value: Any, scope: _SnapshotScope) -> tuple[Any, ...]:
+    """Read one argument tensor's label and witness facts, applying any stale clear.
+
+    Returns the trailing :class:`_ArgSlot` fields, from ``label`` on.
+    """
+
+    is_param = isinstance(value, torch.nn.Parameter)
+    meta = get_tensor_meta(value)
+    gate_label = mutated_parameter_label(value) if is_param else get_tensor_label(value)
+    live_label = gate_label if gate_label is not None and gate_label in scope.live else None
+    read = _LabelRead(meta, live_label, _storage_intact(meta, value, gate_label))
+    in_clear_set = id(value) in scope.clear_ids or (
+        id(value) in scope.visited_ids and (not is_param or gate_label is not None)
+    )
+    data_alias = bool(meta is not None and meta.data_alias and gate_label is not None)
+    if in_clear_set and live_label is None and meta is not None and meta.label_raw is not None:
+        clear_tensor_label(value)
+        gate_label, data_alias = None, False
+    param_unmutated = is_param and gate_label is None
+    validated = is_param and _session_validated_parameter(trace, value)
+    return (
+        live_label,
+        validated or _unvalidated_provenance(trace, value, read, scope.live),
+        () if param_unmutated else _session_parent_labels(read, scope.live),
+        data_alias,
+        param_unmutated,
+        validated,
+    )
+
+
+def snapshot_arg_slots(
+    trace: "Trace", call: _SlotCall, arg_tensors: list[torch.Tensor]
+) -> tuple[_ArgSlot, ...]:
+    """Walk the call's arguments once and record every tensor slot's derivation reads.
+
+    Records the slots as the current op's context (read by the parent-position
+    recorder and the witness) and returns them in walk order.
+    """
+
+    items = list(_tensor_items(call))
+    workspace = _peek_raw_graph_workspace(trace)
+    if not items or workspace is None:
+        return ()
+    templates_on = templates_requested(trace)
+    scope = _SnapshotScope(
+        live=trace.capture_events.live_index.by_raw_label,
+        clear_ids=frozenset({id(t) for t in arg_tensors} | _out_destination_ids(call.kwargs)),
+        visited_ids=frozenset(id(v) for _, _, v, seen in items if seen and templates_on),
+    )
+    facts: dict[int, tuple[Any, ...]] = {}
+    slots = []
+    for kind, key, value, _visited in items:
+        if id(value) not in facts:
+            facts[id(value)] = _object_facts(trace, value, scope)
+        slots.append(_ArgSlot(kind, key, id(value), *facts[id(value)]))
+    by_key = {(slot.kind, slot.key): slot for slot in slots}
+    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, tuple(slots), by_key)
+    return tuple(slots)
+
+
 def _set_arg_template_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
-    call: "_SlotCall",
-    slots: "tuple[_ArgSlot, ...]",
+    call: _SlotCall,
 ) -> None:
     """Seed the replay argument templates and the portable function identity of one call."""
     if templates_requested(self):
-        captured_template = templates_from_slots(self, call, slots)
+        captured_template = _build_args_template(
+            call.func, call.args, call.kwargs, self, func_name=call.func_name
+        )
         fields_dict["args_template"] = captured_template
         fields_dict["kwargs_template"] = captured_template if call.kwargs else None
         # The portable function identity is what lets a LOADED bundle resolve its
@@ -176,7 +273,7 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
     fields_dict["edits"] = []
-    _set_arg_template_fields(self, fields_dict, call, slots)
+    _set_arg_template_fields(self, fields_dict, call)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None
@@ -528,21 +625,19 @@ def _build_module_context_fields(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._ops_arg_slots import (  # noqa: E402
-    _SlotCall,
-    parents_from_slots,
-    snapshot_arg_slots,
-    templates_from_slots,
-    templates_requested,
-    witness_from_slots,
-)
 from ._ops_arguments import (  # noqa: E402
+    _build_args_template,
     _function_registry_key,
+    _session_validated_parameter,
+    _tensor_has_known_provenance,
 )
 from ._ops_capture_records import (  # noqa: E402
     _bind_writeback_receiver_label,
     _record_label_version_snapshot,
     _snapshot_exhaustive_module_stack,
+)
+from ._ops_emission import (  # noqa: E402
+    witness_from_slots,
 )
 from ._ops_exhaustive import (  # noqa: E402
     _check_if_tensor_arg,

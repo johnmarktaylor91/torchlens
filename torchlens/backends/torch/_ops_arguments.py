@@ -35,6 +35,7 @@ from ...intervention.types import (
     Unsupported,
 )
 from ._internal_read import internal_scalar_read
+from ._ops_arg_slots import _peek_raw_graph_workspace, arg_slot_labels
 from ._param_fingerprint import param_fingerprint
 from ._tl import (
     get_live_tensor_label,
@@ -49,7 +50,6 @@ from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-    from ..._ir.workspaces import RawGraphWorkspace
 
 
 __all__ = (
@@ -62,24 +62,6 @@ __all__ = (
     "_session_validated_parameter",
     "_tensor_has_known_provenance",
 )
-
-
-def _peek_raw_graph_workspace(trace: "Trace | None") -> "RawGraphWorkspace | None":
-    """Read the trace's raw-graph workspace, if this capture still holds one.
-
-    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
-    lives for one capture: postprocess pops it at its terminal consume and a
-    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
-    direct private read guarded by ``AttributeError`` rather than a
-    string-literal ``getattr`` default, so a rename breaks loudly.
-    """
-
-    if trace is None:
-        return None
-    try:
-        return trace._raw_graph_ws
-    except AttributeError:
-        return None
 
 
 def _function_registry_key(
@@ -197,7 +179,10 @@ def _capture_layout(value: Any) -> CaptureLayout | None:
 
 
 def _classify_arg_component(
-    value: Any, notes: list[str], trace: "Trace | None" = None
+    value: Any,
+    notes: list[str],
+    trace: "Trace | None" = None,
+    known: dict[int, str | None] | None = None,
 ) -> ArgComponent:
     """Classify a function argument value for replay templating.
 
@@ -207,6 +192,9 @@ def _classify_arg_component(
         Argument value to classify.
     notes
         Accumulator for unsupported-value notes.
+    known
+        The op's snapshot labels by tensor id (read once per op); tensors not in it
+        are read live.
 
     Returns
     -------
@@ -215,8 +203,10 @@ def _classify_arg_component(
     """
 
     label = None
+    if known is not None and id(value) in known:
+        label = known[id(value)]
     # A Parameter mutated in place earlier in the pass replays from its mutation op.
-    if not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
+    elif not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
         if trace is None:
             label = get_tensor_label(value)
         else:
@@ -228,10 +218,10 @@ def _classify_arg_component(
     if _literal_value_supported(value):
         return LiteralValue(value)
     if isinstance(value, (list, tuple)):
-        return tuple(_classify_arg_component(item, notes, trace) for item in value)
+        return tuple(_classify_arg_component(item, notes, trace, known) for item in value)
     if isinstance(value, dict):
         return tuple(
-            (key, _classify_arg_component(item, notes, trace)) for key, item in value.items()
+            (key, _classify_arg_component(item, notes, trace, known)) for key, item in value.items()
         )
     return _unsupported_component(value, notes)
 
@@ -294,9 +284,11 @@ def _build_args_template(
     """
 
     notes: list[str] = []
-    arg_components = tuple(_classify_arg_component(arg, notes, trace) for arg in args)
+    known = arg_slot_labels(trace, args, kwargs)
+    arg_components = tuple(_classify_arg_component(arg, notes, trace, known) for arg in args)
     kwarg_components = tuple(
-        (str(key), _classify_arg_component(value, notes, trace)) for key, value in kwargs.items()
+        (str(key), _classify_arg_component(value, notes, trace, known))
+        for key, value in kwargs.items()
     )
     return CapturedArgTemplate(
         args=arg_components,

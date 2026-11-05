@@ -3,9 +3,14 @@
 The shared-fields builder derives four things from an op's arguments: the parent
 labels, ``parent_arg_positions``, the unattributed / dropped-edge witness and the
 replay argument templates. Each used to walk the arguments and read every tensor's
-label and provenance on its own. :func:`snapshot_arg_slots` walks the arguments once,
-to the recorder's two nesting levels, and records per tensor slot the values those
-derivations read. Tensors nested deeper keep the per-argument lookups.
+label and provenance on its own. The builder's ``snapshot_arg_slots`` walks the
+arguments once, to the recorder's two nesting levels, and records per tensor slot
+the values those derivations read; this module holds the records and the readers.
+Tensors nested deeper keep the per-argument lookups.
+
+The module imports only the tensor-label layer, so the capture modules that read
+the snapshot (shared fields, the position recorder, the template classifier and
+the witness) import it at module top without joining their import cycle.
 
 Ordering: the snapshot is taken after the builder's source-logging loop (buffer and
 closure-constant labels are assigned there) and before the parent labels are read.
@@ -24,22 +29,16 @@ import torch
 
 from ._tl import (
     TensorMeta,
-    clear_tensor_label,
     get_live_tensor_label,
-    get_tensor_label,
-    get_tensor_meta,
     is_tensor_data_alias,
-    mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
 )
-from ._tl_collective import _async_collective_elem
-from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.op import Op
     from ..._data_classes.trace import Trace
-    from ...intervention.types import ArgComponent, CapturedArgTemplate
+    from ..._ir.workspaces import RawGraphWorkspace
 
 SlotKey = tuple[str, Any]
 
@@ -93,6 +92,24 @@ class _SnapshotScope:
     live: Mapping[str, Any]
     clear_ids: frozenset[int]
     visited_ids: frozenset[int]
+
+
+def _peek_raw_graph_workspace(trace: Trace | None) -> RawGraphWorkspace | None:
+    """Read the trace's raw-graph workspace, if this capture still holds one.
+
+    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
+    lives for one capture: postprocess pops it at its terminal consume and a
+    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
+    direct private read guarded by ``AttributeError`` rather than a
+    string-literal ``getattr`` default, so a rename breaks loudly.
+    """
+
+    if trace is None:
+        return None
+    try:
+        return trace._raw_graph_ws
+    except AttributeError:
+        return None
 
 
 def templates_requested(trace: Trace) -> bool:
@@ -167,86 +184,7 @@ def _session_parent_labels(read: _LabelRead, live: Mapping[str, Any]) -> tuple[s
     return tuple(labels)
 
 
-def _unvalidated_provenance(
-    trace: Trace, value: Any, read: _LabelRead, live: Mapping[str, Any]
-) -> bool:
-    """Return ``_tensor_has_known_provenance`` past its prepared-Parameter rung."""
-
-    if _async_collective_elem(value) is not None:
-        return _tensor_has_known_provenance(trace, value)
-    meta = read.meta
-    if meta is None:
-        return False
-    if read.storage_intact and read.live_label is not None:
-        return True
-    if meta.address is not None and session_validated_buffer_address(trace, value) is not None:
-        return True
-    return bool(
-        read.storage_intact and meta.buffer_source is not None and meta.buffer_source in live
-    )
-
-
-def _object_facts(trace: Trace, value: Any, scope: _SnapshotScope) -> tuple[Any, ...]:
-    """Read one argument tensor's label and witness facts, applying any stale clear.
-
-    Returns the trailing :class:`_ArgSlot` fields, from ``label`` on.
-    """
-
-    is_param = isinstance(value, torch.nn.Parameter)
-    meta = get_tensor_meta(value)
-    gate_label = mutated_parameter_label(value) if is_param else get_tensor_label(value)
-    live_label = gate_label if gate_label is not None and gate_label in scope.live else None
-    read = _LabelRead(meta, live_label, _storage_intact(meta, value, gate_label))
-    in_clear_set = id(value) in scope.clear_ids or (
-        id(value) in scope.visited_ids and (not is_param or gate_label is not None)
-    )
-    data_alias = bool(meta is not None and meta.data_alias and gate_label is not None)
-    if in_clear_set and live_label is None and meta is not None and meta.label_raw is not None:
-        clear_tensor_label(value)
-        gate_label, data_alias = None, False
-    param_unmutated = is_param and gate_label is None
-    validated = is_param and _session_validated_parameter(trace, value)
-    return (
-        live_label,
-        validated or _unvalidated_provenance(trace, value, read, scope.live),
-        () if param_unmutated else _session_parent_labels(read, scope.live),
-        data_alias,
-        param_unmutated,
-        validated,
-    )
-
-
-def snapshot_arg_slots(
-    trace: Trace, call: _SlotCall, arg_tensors: list[torch.Tensor]
-) -> tuple[_ArgSlot, ...]:
-    """Walk the call's arguments once and record every tensor slot's derivation reads.
-
-    Records the slots as the current op's context (read by the parent-position
-    recorder and the witness) and returns them in walk order.
-    """
-
-    items = list(_tensor_items(call))
-    workspace = _peek_raw_graph_workspace(trace)
-    if not items or workspace is None:
-        return ()
-    templates_on = templates_requested(trace)
-    scope = _SnapshotScope(
-        live=trace.capture_events.live_index.by_raw_label,
-        clear_ids=frozenset({id(t) for t in arg_tensors} | _out_destination_ids(call.kwargs)),
-        visited_ids=frozenset(id(v) for _, _, v, seen in items if seen and templates_on),
-    )
-    facts: dict[int, tuple[Any, ...]] = {}
-    slots = []
-    for kind, key, value, _visited in items:
-        if id(value) not in facts:
-            facts[id(value)] = _object_facts(trace, value, scope)
-        slots.append(_ArgSlot(kind, key, id(value), *facts[id(value)]))
-    by_key = {(slot.kind, slot.key): slot for slot in slots}
-    workspace._pending_arg_slots = _SlotContext(call.args, call.kwargs, tuple(slots), by_key)
-    return tuple(slots)
-
-
-def _current_context(trace: Trace, args: Any, kwargs: Any) -> _SlotContext | None:
+def _current_context(trace: Trace | None, args: Any, kwargs: Any) -> _SlotContext | None:
     """Return the slot context recorded for exactly this call's arguments, if any."""
 
     workspace = _peek_raw_graph_workspace(trace)
@@ -320,107 +258,16 @@ def parent_arg_positions_from_slots(
     return positions
 
 
-def _child_key(slot_key: SlotKey | None, inner_key: Any) -> SlotKey | None:
-    """Return the recorder key of a container member, or ``None`` past two levels."""
+def arg_slot_labels(trace: Trace | None, args: Any, kwargs: Any) -> dict[int, str | None] | None:
+    """Return the current op's snapshot labels by tensor id, or ``None`` to read live."""
 
-    if slot_key is None or isinstance(slot_key[1], tuple):
-        return None
-    return (slot_key[0], (slot_key[1], inner_key))
-
-
-@dataclass(frozen=True, slots=True)
-class _TemplateWalk:
-    """State of one argument-template walk over a call."""
-
-    trace: Trace
-    by_key: dict[SlotKey, _ArgSlot]
-    notes: list[str]
-
-    def component(self, value: Any, slot_key: SlotKey | None) -> ArgComponent:
-        """Classify one argument value, reading tensor labels from the snapshot."""
-
-        # Deferred: intervention vocabulary sits above the backend layer.
-        from ...intervention.types import LiteralValue, ParentRef
-
-        if slot_key is None:
-            return _classify_arg_component(value, self.notes, self.trace)
-        if isinstance(value, torch.Tensor):
-            slot = slot_fact(self.by_key, slot_key, value)
-            if slot is None:
-                return _classify_arg_component(value, self.notes, self.trace)
-            if slot.label is not None:
-                return ParentRef(slot.label, _capture_layout=_capture_layout(value))
-            return _unlabeled_tensor_literal(value)
-        if _literal_value_supported(value):
-            return LiteralValue(value)
-        if isinstance(value, (list, tuple)):
-            return tuple(
-                self.component(item, _child_key(slot_key, index))
-                for index, item in enumerate(value)
-            )
-        if isinstance(value, dict):
-            return tuple(
-                (key, self.component(item, _child_key(slot_key, key)))
-                for key, item in value.items()
-            )
-        return _unsupported_component(value, self.notes)
+    context = _current_context(trace, args, kwargs)
+    return None if context is None else {slot.value_id: slot.label for slot in context.slots}
 
 
-def templates_from_slots(
-    trace: Trace, call: _SlotCall, slots: tuple[_ArgSlot, ...]
-) -> CapturedArgTemplate:
-    """Build the call's replay template; same values as ``_build_args_template``."""
+def retire_arg_slots(trace: Trace) -> None:
+    """Drop the current op's slot context once its last derivation has read it."""
 
-    from ...intervention.types import CapturedArgTemplate
-
-    walk = _TemplateWalk(trace, {(slot.kind, slot.key): slot for slot in slots}, [])
-    args = tuple(walk.component(arg, ("args", index)) for index, arg in enumerate(call.args))
-    kwargs = tuple(
-        (str(key), walk.component(value, ("kwargs", key))) for key, value in call.kwargs.items()
-    )
-    return CapturedArgTemplate(
-        args=args,
-        kwargs=kwargs,
-        func_id=_function_registry_key(call.func, call.func_name, trace),
-        notes=tuple(walk.notes),
-    )
-
-
-def witness_from_slots(
-    trace: Trace,
-    call: _SlotCall,
-    parent_arg_positions: dict[str, dict[Any, str]],
-    recorded_parent_params: list[torch.nn.Parameter],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """Run the unattributed / dropped-edge witness on the snapshot, then retire it."""
-
-    from ._ops_emission import _unattributed_tensor_arg_positions
-
-    try:
-        return _unattributed_tensor_arg_positions(
-            trace,
-            call.args,
-            call.kwargs,
-            call.func_name,
-            parent_arg_positions,
-            recorded_parent_params,
-        )
-    finally:
-        workspace = _peek_raw_graph_workspace(trace)
-        if workspace is not None:
-            workspace._pending_arg_slots = None
-
-
-# Late import: _ops_arguments pulls in the ops chain, which imports this module back,
-# so the sibling is imported once every definition above exists.
-from ._ops_arguments import (  # noqa: E402
-    _capture_layout,
-    _classify_arg_component,
-    _function_registry_key,
-    _literal_value_supported,
-    _peek_raw_graph_workspace,
-    _session_validated_parameter,
-    _tensor_has_known_provenance,
-    _unlabeled_tensor_literal,
-    _unsupported_component,
-)
+    workspace = _peek_raw_graph_workspace(trace)
+    if workspace is not None:
+        workspace._pending_arg_slots = None
