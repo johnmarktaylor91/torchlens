@@ -428,7 +428,7 @@ renders a saved activation as an image grid. `tl.viz.nodes` holds the hooks (`no
 restyle each node from its record, which is also how a plot of a layer's representation (an MDS
 scatter, an RDM) ends up inside its node. Models TorchLens recognizes
 (for example Hugging Face image classifiers) also label output nodes with their class names; see
-[model conveniences](model_conveniences.md).
+[model conveniences](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/guides/model_conveniences.md).
 
 ## Comparing runs
 
