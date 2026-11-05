@@ -2089,7 +2089,7 @@ def _install_fork_capture_hygiene() -> None:
 _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_method")
 
 
-@originals_exposed()
+@originals_exposed(_setattr_ignoring_advisories, TRANSFORM_BUILDER_SITES + DIRECT_TRANSFORM_SITES)
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
