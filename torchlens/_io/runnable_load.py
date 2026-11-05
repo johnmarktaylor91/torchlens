@@ -1534,12 +1534,11 @@ def _validate_call_arity(
     keyword-only ``cdata`` overload and its siblings) is refused here too.
     """
 
-    def _refuse(detail: str) -> DescriptorStructuralBoundError:
+    def _refuse(
+        detail: str, code: RunnableErrorCode = RunnableErrorCode.CALL_ARITY_MISMATCH
+    ) -> DescriptorStructuralBoundError:
         """Build the typed call-arity refusal for this call id."""
-
-        return DescriptorStructuralBoundError(
-            RunnableErrorCode.CALL_ARITY_MISMATCH, f"calls[{call_id}]", detail
-        )
+        return DescriptorStructuralBoundError(code, f"calls[{call_id}]", detail)
 
     if num_positional_args < 0 or num_keyword_args < 0:
         raise _refuse(f"negative arity ({num_positional_args=}, {num_keyword_args=})")
@@ -1560,7 +1559,8 @@ def _validate_call_arity(
             if not isinstance(head, str):
                 raise _refuse(f"keyword argument root {head!r} is not a string")
             if _rawptr.is_raw_pointer_parameter_name(head):  # r50 raw-pointer family
-                raise _refuse(_rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}"))
+                detail = _rawptr.pointer_keyword_refusal_detail(head, f"call {call_id!r}")
+                raise _refuse(detail, code=RunnableErrorCode.CALL_ARITY_MISMATCH)
             keyword_names.add(head)
     n = num_positional_args
     dense = len(positional_roots) == n and (

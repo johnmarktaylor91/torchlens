@@ -59,7 +59,8 @@ namespaces -- ``tests/test_sec_raw_pointer_family.py`` re-enumerates at runtime
 so a future admission regression fails). ``data_ptr`` as a RESULT (the pure read
 ``Tensor.data_ptr()``, which consumes no address) is deliberately NOT denied.
 
-Leaf module: imports ``torch`` and the standard library only, so the gate in
+Leaf module: imports ``torch``, the standard library and the torch-only
+``_torch_symbols`` leaf, so the gate in
 ``_utils/_callable_safety`` (which the early security front doors call) can
 import it without import-order coupling.
 """
@@ -71,6 +72,8 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import torch
+
+from ._torch_symbols import torch_attr
 
 __tl_layer__ = "L0"
 
@@ -241,7 +244,7 @@ def _storage_base_classes() -> tuple[type, ...]:
 def _registry_classes(attribute: str) -> frozenset[type]:
     """Return the classes in one of torch's own type registries."""
 
-    registry = getattr(torch, attribute, None)
+    registry = torch_attr(attribute)
     if not isinstance(registry, (set, frozenset, tuple, list)):
         return frozenset()
     return frozenset(cls for cls in registry if isinstance(cls, type))
