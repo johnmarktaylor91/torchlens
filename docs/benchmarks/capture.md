@@ -231,6 +231,40 @@ refused in this build (module addresses work). The first capture in a process to
 on ResNet-18, 1.3 to 2.7 s on the LSTM tagger and 4.9 to 5.5 s on GPT-2 small (one call each,
 installing the torch wrappers).
 
+### `trace.run` on new inputs with the fast engine (development build)
+
+A development build of TorchLens (2.38.1, not yet released) sends `trace.run(model, new_x)` on an
+unedited trace that saved a selection through the guarded fast engine instead of a full recapture.
+Both builds were timed in two jobs that ran at the same time on the same shared 32-core Intel Xeon
+2.80 GHz Linux CPU worker (one torch thread per process, load average 6 to 15), with the same
+models, inputs, repeats and saved site as the tables above. The plain forward timed differently in
+the two jobs, so compare the "times plain forward" columns, not the milliseconds across columns.
+
+Correctness: the run reported engine `rerun` before and `guarded_fast` after on every call, with no
+fallback. Before and after, the saved site of the new trace equalled a fresh `tl.trace` of the new
+input exactly (largest absolute difference 0) on all three models, and the new trace's output
+matched a plain forward (0 on ResNet-18 and GPT-2 small, 3.0e-08 on the LSTM tagger).
+
+After the change, `trace.run` costs less than a fresh `tl.trace` on every model (0.11 times on
+ResNet-18, 0.51 on GPT-2 small, 0.16 on the LSTM tagger) but still more than
+`run_transaction(inputs=new_x, fast=True)` on the two small models (about 28 ms more on ResNet-18
+and 7 ms more on the LSTM tagger per call).
+
+| Workload (model, device, repeats) | Tool | Before: median (lowest to highest) | Before: times plain forward | After: median (lowest to highest) | After: times plain forward |
+| --- | --- | --- | --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | plain forward, nothing attached | 22.68 ms (20.90 ms to 23.02 ms) | 1.00x | 14.42 ms (14.28 ms to 15.26 ms) | 1.00x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 508.54 ms (490.37 ms to 709.94 ms) | 22.4x | 442.97 ms (423.87 ms to 442.99 ms) | 30.7x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run(model, new_x)`, no edit staged | 651.95 ms (649.85 ms to 1.08 s) | 28.7x | 47.48 ms (46.99 ms to 48.89 ms) | 3.29x |
+| ResNet-18, CPU, one 64x64 image, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 19.70 ms (18.89 ms to 29.97 ms) | 0.87x | 19.18 ms (19.15 ms to 19.80 ms) | 1.33x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | plain forward, nothing attached | 1.29 s (1.28 s to 1.30 s) | 1.00x | 1.32 s (1.31 s to 1.34 s) | 1.00x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 2.91 s (2.86 s to 2.96 s) | 2.26x | 2.95 s (2.87 s to 3.03 s) | 2.23x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run(model, new_x)`, no edit staged | 4.28 s (4.28 s to 4.29 s) | 3.32x | 1.50 s (1.47 s to 1.54 s) | 1.13x |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, n=2 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 1.45 s (1.45 s to 1.45 s) | 1.12x | 1.47 s (1.47 s to 1.47 s) | 1.11x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | plain forward, nothing attached | 1.04 ms (1.04 ms to 1.07 ms) | 1.00x | 1.67 ms (1.62 ms to 1.67 ms) | 1.00x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | fresh `tl.trace(model, x, save=tl.module(site))` | 42.45 ms (42.11 ms to 43.35 ms) | 40.7x | 70.56 ms (67.46 ms to 71.20 ms) | 42.4x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run(model, new_x)`, no edit staged | 64.86 ms (64.10 ms to 90.98 ms) | 62.2x | 11.58 ms (10.93 ms to 12.07 ms) | 6.96x |
+| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)`, no edit staged | 3.00 ms (2.97 ms to 3.04 ms) | 2.88x | 4.66 ms (4.45 ms to 4.85 ms) | 2.80x |
+
 ### Stopping a rerun early
 
 `trace.run_transaction(inputs=new_x, fast=True, until=<saved module>)` stops the fast rerun once
