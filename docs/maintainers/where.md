@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1604 modules, 682975 lines, 0 modules without a docstring.
+83 packages, 1604 modules, 683073 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 78 | 34598 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 78 | 34591 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 53 | 26845 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1495 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4669 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 106 | 40221 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 106 | 40277 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
@@ -62,7 +62,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 123 | 57871 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9162 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2032 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 27 | 10983 |
@@ -74,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 374 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5540 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3047 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37433 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 79 | 37486 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (78 modules, 34598 lines)
+TorchLens - extract outs and metadata from PyTorch models. (78 modules, 34591 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -179,7 +179,7 @@ TorchLens - extract outs and metadata from PyTorch models. (78 modules, 34598 li
 | `fingerprint` | Provisional public structural-hash helpers. | 350 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 491 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 597 |
-| `options` | Grouped option dataclasses for public TorchLens APIs. | 1741 |
+| `options` | Grouped option dataclasses for public TorchLens APIs. | 1734 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 176 |
 
 ### `torchlens._autoroute`
@@ -300,7 +300,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (106 modules, 40221 lines)
+Core data structures for representing a logged forward pass. (106 modules, 40277 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -362,7 +362,7 @@ Core data structures for representing a logged forward pass. (106 modules, 40221
 | `_trace_docs_intervention` | Full docstrings of the ''Trace'' intervention verbs, hooks and forks methods. | 189 |
 | `_trace_docs_output` | Full docstrings of the ''Trace'' drawing, summaries, export, stacking and narration methods. | 598 |
 | `_trace_docs_stats` | Full docstrings of the ''Trace'' statistics, views and reports methods. | 547 |
-| `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 360 |
+| `_trace_docs_validation` | Full docstrings of the ''Trace'' validation, run and backward verbs methods. | 361 |
 | `_trace_field_spec` | The persisted-field policy table of ''Trace'' (''Trace._PORTABLE_STATE_SPEC''). | 493 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 773 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
@@ -377,7 +377,7 @@ Core data structures for representing a logged forward pass. (106 modules, 40221
 | `_trace_profile` | Trace model-profile helpers. | 190 |
 | `_trace_rehydrate` | Load-time rehydration of a coreless trace into the columnar store. | 218 |
 | `_trace_removal` | Entry removal and parameter-reference release for ''Trace''. | 171 |
-| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 650 |
+| `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays, and ''append''. | 705 |
 | `_trace_source` | Captured forward-source annotations, independent of live source files. | 45 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
@@ -1535,7 +1535,7 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2742 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 9166 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 9162 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1549,7 +1549,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (27 modules, 916
 | `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 717 |
 | `_draw` | The one ''Bundle.draw'' door (the bundle graph and the member diff picture) and ''Bundle.show''. | 178 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
-| `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 212 |
+| `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 208 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
 | `_lookup` | Bundle site lookup: ''at'', the supergraph, structural consistency, accessor descriptors. | 124 |
 | `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 438 |
@@ -1741,7 +1741,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3047 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37433 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (79 modules, 37486 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1794,13 +1794,13 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
 | `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 772 |
 | `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention''. | 135 |
-| `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 714 |
+| `_trace_run` | Trace run functions reached from the records through ''_data_classes._doors.intervention''. | 783 |
 | `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 603 |
 | `_zero_fire` | One zero-fire policy for every intervention door (spelling DOCUMENTED-UNSTABLE). | 515 |
 | `_zero_fire_doors` | Door-specific zero-fire disclosure: the bound-model and rerun doors. | 138 |
 | `audit` | The ONE FireRecord builder and the InterventionEvent envelope. | 554 |
 | `binding` | ''spec.bind(model)'' -- the capture-free bound intervention executor. | 1556 |
-| `bundle` | Compatibility shim for the relocated Bundle implementation. | 9 |
+| `bundle` | Compatibility shim for the relocated Bundle implementation. | 7 |
 | `compose` | ''tl.compose'': the explicit value algebra for chained edits (edits -). | 241 |
 | `edge_semantics` | Edge storage/distribution semantics (lovely item 8 / ). | 203 |
 | `edge_substitution` | Edge substitution (L6 stage 3): replace the value CONSUMED on one edge. | 523 |
@@ -1815,7 +1815,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `predicates` | Predicate-time intervention decisions and sugar. | 203 |
 | `regions` | Regions: derived admissibility on the existing verbs (surgery ). | 1083 |
 | `replay` | Saved-DAG replay engine for TorchLens interventions. | 1678 |
-| `rerun` | Full-forward rerun engine for TorchLens interventions. | 1640 |
+| `rerun` | Full-forward rerun engine for TorchLens interventions. | 1626 |
 | `runtime` | Runtime context ownership for TorchLens intervention execution. | 1638 |
 | `save` | Persistence for TorchLens intervention specifications. | 856 |
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |

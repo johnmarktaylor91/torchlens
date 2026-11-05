@@ -145,18 +145,8 @@ def test_explicit_path_keeps_shared_matrix_unsplit() -> None:
         save="all",
     )
     expected = tl.trace(model, (x[:4], mask), save="all")
-    expected.run(
-        model,
-        (x[4:8], mask),
-        input_transform=False,
-        replay=tl.options.ReplayOptions(append=True),
-    )
-    expected.run(
-        model,
-        (x[8:], mask),
-        input_transform=False,
-        replay=tl.options.ReplayOptions(append=True),
-    )
+    expected.append((x[4:8], mask), model=model)
+    expected.append((x[8:], mask), model=model)
 
     _assert_equivalent_chunked_trace(chunked, expected)
     torch.testing.assert_close(chunked[chunked.output_layers[0]].out, x)
@@ -342,8 +332,8 @@ def test_rerun_chunk_size_matches_manual_append_loop() -> None:
 
     actual.run(model, x, input_transform=False, replay=tl.options.ReplayOptions(chunk_size=4))
     expected.run(model, x[:4], input_transform=False)
-    expected.run(model, x[4:8], input_transform=False, replay=tl.options.ReplayOptions(append=True))
-    expected.run(model, x[8:], input_transform=False, replay=tl.options.ReplayOptions(append=True))
+    expected.append(x[4:8], model=model)
+    expected.append(x[8:], model=model)
 
     _assert_equivalent_chunked_trace(actual, expected)
     assert [row["chunk_size"] for row in actual._append_history] == [4, 4, 2]
