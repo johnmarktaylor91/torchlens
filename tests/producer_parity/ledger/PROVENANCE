@@ -5411,3 +5411,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bd6482c4452c0ea46f2ea96ff427155aedebf845 (dirty)
 recorded: 2026-11-05T09:40:47.632708+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c243-remerge: merge of train 8e628f87fc into numpy2-bridge (mq-b13); safe-weights and saved-tensors-hooks probe bodies moved verbatim to _kernel_probes, causal-bias probe kept in the leaf (C-243 _torch_symbols copy dropped); read sites recomputed on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 708fcf1f162c2ef6430d823db7857dae996cab28 (clean)
+recorded: 2026-11-05T10:29:16.746439+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c243-remerge: merge of train 8e628f87fc into numpy2-bridge (mq-b13); safe-weights and saved-tensors-hooks probe bodies moved verbatim to _kernel_probes, causal-bias probe kept in the leaf (C-243 _torch_symbols copy dropped); read sites recomputed on the merged tree
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 708fcf1f162c2ef6430d823db7857dae996cab28 (clean)
+recorded: 2026-11-05T10:29:20.642967+00:00
