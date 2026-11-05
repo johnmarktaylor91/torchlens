@@ -25,7 +25,7 @@ equal to ``record_with_path_updates`` on the eager record.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, cast
 
 from .events import ArgTemplateRef, ParentEdge
 from .op_record import (
@@ -38,7 +38,6 @@ from .op_record import (
     ModulesFacet,
     OpCore,
     OpRecord,
-    OpRecordAttributeError,
     ParamsFacet,
     PolicyFacet,
     TransformFacet,
@@ -187,10 +186,8 @@ class _RowOpRecord:
         getter = _FAST_READS.get(name)
         if getter is None or not _overlay_known(self._patch):
             if name not in _RECORD_NAMES:
-                raise OpRecordAttributeError(
-                    f"OpRecord has no attribute {name!r} (strict protocol; "
-                    "use the facet paths or the legacy property names)"
-                )
+                # The record's own strict refusal (OpRecordAttributeError), no build.
+                return OpRecord.__getattr__(cast(OpRecord, self), name)
             return getattr(self.materialize(), name)
         patch = self._patch
         if patch:

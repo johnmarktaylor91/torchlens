@@ -24,7 +24,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._postprocess as postprocess_module
 from torchlens._ir import _row_journal
-from torchlens._ir.op_record import OpRecord, record_with_path_updates
+from torchlens._ir.op_record import OpRecord, OpRecordAttributeError, record_with_path_updates
 from torchlens.backends.torch import _ops_row_journal
 from torchlens.backends.torch._ops_container_base import _op_record_from_log
 
@@ -245,9 +245,10 @@ def test_capture_builds_no_record_before_ingest_and_each_once(
     seen: dict[str, int] = {}
 
     def at_ingest(spy: _CommitSpy) -> None:
-        """Snapshot the build counters as ingest starts."""
+        """Refuse an unknown name on a handle, then snapshot the build counters."""
 
-        del spy
+        with pytest.raises(OpRecordAttributeError):
+            _ = spy.journal.op_events[0].not_a_record_name  # refused without a build
         seen.update(build_counter)
 
     commit_spy.build_eager = False
