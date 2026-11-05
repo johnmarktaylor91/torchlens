@@ -10,10 +10,10 @@ import torch
 from ... import _state as _st
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes.internal_types import FuncExecutionContext
+from ._ops_arg_slots import arg_slot_facts, receiver_data_alias, retire_arg_slots, slot_fact
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
-    is_tensor_data_alias,
     mutated_parameter_label,
     session_label_storage_intact,
     session_meta_is_anchored,
@@ -22,6 +22,7 @@ from ._view_writeback import data_alias_write_reaches_base
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ._ops_arg_slots import _SlotCall
     from .ops import CaptureProducerPolicy  # annotations only; runtime binding at the bottom
 
 
@@ -120,6 +121,9 @@ def _unattributed_tensor_arg_positions(
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Find tensor arguments that will not become graph parents or known sources.
 
+    Per-tensor reads come from the op's argument slot snapshot when one was taken
+    for these arguments (``_ops_arg_slots``); deeper tensors are read live.
+
     Parameters
     ----------
     trace:
@@ -140,20 +144,16 @@ def _unattributed_tensor_arg_positions(
     -------
     tuple[tuple[str, ...], tuple[str, ...]]
         ``(all_positions, dropped_edge_positions)``. The first tuple carries
-        every witness marker (stable position strings such as ``"arg1"`` or
+        every witness marker (position strings such as ``"arg1"`` or
         ``"kw:mask.0"``). The second is the branch-(2) subset: slots whose
-        tensor has a LIVE traced producer that is absent from the recorded
-        parent edges -- an identity-witnessed dropped edge, independent of the
-        slot value (round-31 FN-1..6: a dropped bool/all-zero/all-one edge is
-        invisible to value evidence, and a wrong-parent swap between
-        value-identical producers is invisible by construction; the live-label
-        identity witness catches both). r29 F3a/F3c extend the branch: a
-        session-validated PARAMETER slot missing from ``parent_params`` is a
+        tensor has a LIVE traced producer absent from the recorded parent
+        edges, an identity-witnessed dropped edge independent of the slot value
+        (round-31 FN-1..6: value evidence misses a dropped bool/all-zero edge
+        and a swap between value-identical producers). r29 F3a/F3c extend it:
+        a session-validated PARAMETER slot missing from ``parent_params`` is a
         dropped param edge, and a slot whose RECORDED parent label disagrees
-        with the live tensor's own provenance labels is a permuted/wrong edge
-        (the former set-membership check was blind to slot permutations
-        between value-identical producers, which corrupts the runnable call
-        recipe, not merely a verdict).
+        with the tensor's own provenance labels is a permuted edge (a set check
+        misses permutations, which corrupt the runnable call recipe).
     """
 
     positions: list[str] = []
@@ -163,6 +163,7 @@ def _unattributed_tensor_arg_positions(
         or func_name in _SETTER_MUTATION_FUNC_NAMES
         or (func_name.endswith("_") and not func_name.startswith("__"))
     )
+    facts = arg_slot_facts(trace, args, kwargs)
     capture_events = getattr(trace, "capture_events", None)
     live_events = capture_events.live_index.by_raw_label if capture_events is not None else {}
     recorded_parent_labels = {
@@ -171,18 +172,9 @@ def _unattributed_tensor_arg_positions(
     }
 
     def tensor_session_parent_labels(value: torch.Tensor) -> tuple[str, ...]:
-        """Return current-session non-parameter provenance labels for ``value``.
+        """Return the live current-session op or buffer-source labels of ``value``.
 
-        Parameters
-        ----------
-        value:
-            Tensor argument to inspect.
-
-        Returns
-        -------
-        tuple[str, ...]
-            Live current-session op or buffer-source labels that should appear
-            in ``parents`` when the tensor is consumed as an input edge.
+        These should appear in ``parents`` when the tensor is consumed as an input edge.
         """
 
         if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
@@ -219,7 +211,7 @@ def _unattributed_tensor_arg_positions(
         mutates_receiver
         and args
         and isinstance(args[0], torch.Tensor)
-        and is_tensor_data_alias(args[0])
+        and receiver_data_alias(facts, args[0])
         and (
             any(_any_tensor(value, input_rooted) for value in args[1:])
             or any(_any_tensor(value, input_rooted) for value in kwargs.values())
@@ -246,13 +238,19 @@ def _unattributed_tensor_arg_positions(
         # the rebound receiver never appears as a recorded argument and no
         # receiver-slot exemption exists here -- ``arg0`` IS the RHS and is
         # fully witnessed like any other operand.
-        if unsafe_data_alias_receiver or not _tensor_has_known_provenance(trace, value):
+        fact = slot_fact(facts, slot, value)
+        known = fact.known_provenance if fact else _tensor_has_known_provenance(trace, value)
+        if unsafe_data_alias_receiver or not known:
             positions.append(path)
             return
         # A Parameter mutated in place earlier in this pass binds as a graph
         # parent of its mutation op (``promote_mutated_parameters``), so it is
         # witnessed by the label branch below, not the parameter rung.
-        if isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None:
+        if (
+            fact.param_unmutated
+            if fact
+            else isinstance(value, torch.nn.Parameter) and mutated_parameter_label(value) is None
+        ):
             # r29 F3a: the parameter rung. A Parameter never appears in
             # ``parent_arg_positions`` (the recorder skips it) and
             # ``tensor_session_parent_labels`` returns ``()`` for it, so a
@@ -262,13 +260,14 @@ def _unattributed_tensor_arg_positions(
             # dropped param edge. Unprepped / in-forward / foreign
             # Parameters keep their existing paths (branch (1), or the
             # label-rung exemption for activation-derived params).
-            if _session_validated_parameter(trace, value) and not any(
-                value is recorded for recorded in recorded_parent_params
-            ):
+            validated = fact.param_validated if fact else _session_validated_parameter(trace, value)
+            if validated and not any(value is recorded for recorded in recorded_parent_params):
                 positions.append(path)
                 dropped_edge_positions.append(path)
             return
-        provenance_labels = tensor_session_parent_labels(value)
+        provenance_labels = (
+            fact.session_parent_labels if fact else tensor_session_parent_labels(value)
+        )
         # Branch (2): a fully-provenanced tensor whose producer label is not a
         # recorded parent edge (un-provenanced tensors never reach here).
         if provenance_labels and _dropped_edge_at_slot(
@@ -496,6 +495,27 @@ def apply_live_hooks_to_outputs(
         call_input_snapshots,
         record_is_inplace,
     )
+
+
+def witness_from_slots(
+    trace: Trace,
+    call: _SlotCall,
+    parent_arg_positions: dict[str, dict[Any, str]],
+    recorded_parent_params: list[torch.nn.Parameter],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Run the unattributed / dropped-edge witness on the snapshot, then retire it."""
+
+    try:
+        return _unattributed_tensor_arg_positions(
+            trace,
+            call.args,
+            call.kwargs,
+            call.func_name,
+            parent_arg_positions,
+            recorded_parent_params,
+        )
+    finally:
+        retire_arg_slots(trace)
 
 
 # Late imports: the split modules of this package import one another (cycles), so each

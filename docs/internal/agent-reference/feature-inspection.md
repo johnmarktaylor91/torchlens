@@ -3,8 +3,8 @@
 `Trace.draw(show_edge_shapes=True)` labels forward dataflow edges with the producer's
 output shape. Separate outputs retain their own shapes; rolled edges list distinct
 observed shapes. The default `False` leaves drawing bytes unchanged. The
-`VisualizationOptions(show_edge_shapes=True)` group and the `debug_edge_shapes`
-composition use the same channel. Backward gradient edges have no forward tensor label.
+`VisualizationOptions(show_edge_shapes=True)` group and
+`trace.draw(view="debug", show_edge_shapes=True)` use the same channel. Backward gradient edges have no forward tensor label.
 
 ```python
 import torch

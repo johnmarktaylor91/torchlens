@@ -137,3 +137,57 @@ def test_residual_merge_row_is_exact_not_chain_approximated() -> None:
     assert add_row["size"] == (3, 3)
     assert add_row["status"] is ReceptiveFieldStatus.EXACT
     assert bool(add_row["exact"]) is True
+
+
+def test_profile_repr_shows_level_row_count_and_first_rows() -> None:
+    """``repr(profile)`` is a bounded preview: level, row count and the first rows."""
+
+    from torchlens.receptive_field._types import ReceptiveFieldProfile
+
+    rows = [
+        {"name": f"conv_{index}", "input_role": "input_1", "status": "exact", "size": (3, 3)}
+        for index in range(8)
+    ]
+    profile = ReceptiveFieldProfile(frame=pd.DataFrame(rows), level="layer")
+
+    text = repr(profile)
+    lines = text.splitlines()
+
+    assert lines[0] == "ReceptiveFieldProfile(level='layer', rows=8)"
+    assert "conv_0" in text and "conv_4" in text
+    assert "conv_5" not in text
+    assert "3 more rows" in text
+    assert ".to_pandas()" in text
+    assert len(lines) <= 9
+
+
+def test_profile_repr_of_a_captured_trace_and_an_empty_profile() -> None:
+    """A real profile previews its rows; an empty one is the header line alone."""
+
+    from torchlens.receptive_field._types import ReceptiveFieldProfile
+
+    trace = _trace_residual()
+    profile = trace.receptive_fields(level="layer")  # type: ignore[union-attr]
+    frame = profile.to_pandas()
+
+    text = repr(profile)
+
+    assert text.splitlines()[0] == f"ReceptiveFieldProfile(level='layer', rows={len(frame)})"
+    assert str(frame.loc[0, "name"]) in text
+    assert "frame=" not in text
+    empty = ReceptiveFieldProfile(frame=pd.DataFrame(columns=["name", "status"]), level="op")
+    assert repr(empty) == "ReceptiveFieldProfile(level='op', rows=0)"
+
+
+def test_profile_repr_html_is_the_frame_table() -> None:
+    """Notebooks render the profile as its frame's HTML table under a one-line header."""
+
+    trace = _trace_residual()
+    profile = trace.receptive_fields(level="layer")  # type: ignore[union-attr]
+
+    rendered = profile._repr_html_()
+
+    assert rendered is not None
+    assert rendered.startswith("<p>ReceptiveFieldProfile(level=&#x27;layer&#x27;, rows=")
+    assert "<table" in rendered
+    assert str(profile.to_pandas().loc[0, "name"]) in rendered

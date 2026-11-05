@@ -31,7 +31,7 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils._multipass_access import get_multipass_attr
-from .._vocab.node_spec import INTERVENTION_SITE_COLOR
+from .._vocab.node_spec import EDITED_NODE_CLASS, INTERVENTION_SITE_COLOR
 from ._render_utils import html_escape
 from ._typography import EDIT_GAP_SIZE, format_pt
 
@@ -61,8 +61,6 @@ __all__ = [
 
 #: The Greek capital delta every edit mark starts with.
 DELTA = "Δ"
-#: SVG class on an edited node (and the as_node hook node).
-EDITED_NODE_CLASS = "tl_edited"
 #: SVG class on a node the edit changed downstream (drawn only with the cone on).
 DOWNSTREAM_NODE_CLASS = "tl_downstream"
 #: Ring width of the edited node, in points.
