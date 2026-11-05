@@ -246,7 +246,7 @@ def _validate_site_keys(trace: Trace) -> None:
     from ..backends.registry import JAX_BACKEND_NAME
 
     ops = _trace_ops(trace)
-    keys = tuple(op.graph.site_key for op in ops)
+    keys = tuple(record_member(op, "site_key", None) for op in ops)
     if not any(key is not None for key in keys):
         return
     if any(key is None for key in keys):
