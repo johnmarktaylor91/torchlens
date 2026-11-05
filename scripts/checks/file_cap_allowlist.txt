@@ -60,7 +60,7 @@ torchlens/_capture/structure_only.py::discharge_against	90
 torchlens/_capture/structure_only.py::require_structure_only_capability	63
 torchlens/_capture_fingerprint.py::_attribute_state_fragment	114
 torchlens/_capture_fingerprint.py::_forward_input_fragment	63
-torchlens/_capture_state_helpers.py	2306
+torchlens/_capture_state_helpers.py	2302
 torchlens/_capture_state_helpers.py::_move_tensors_to_device	62
 torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	107

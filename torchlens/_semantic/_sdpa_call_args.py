@@ -16,6 +16,7 @@ exactly one op all fail closed.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import torch
@@ -27,8 +28,11 @@ from ..intervention.types import CapturedArgTemplate, LiteralTensor, LiteralValu
 NO_ARGUMENT_RECORD = "the SDPA call's arguments (no saved args and no replay argument template)"
 
 
-class _Unrecoverable(Exception):
-    """One argument slot cannot be rebuilt exactly from the recorded capture."""
+@dataclass(frozen=True)
+class _Missing:
+    """One argument slot cannot be rebuilt exactly; ``reason`` names what is missing."""
+
+    reason: str
 
 
 def sdpa_call_arguments(op: Any, trace: Any) -> tuple[list[Any], dict[str, Any]] | str:
@@ -56,54 +60,54 @@ def sdpa_call_arguments(op: Any, trace: Any) -> tuple[list[Any], dict[str, Any]]
     if not isinstance(template, CapturedArgTemplate):
         return NO_ARGUMENT_RECORD
     positions = getattr(op, "parent_arg_positions", None) or {}
-    try:
-        args = [
-            _resolve(component, op, trace, positions.get("args", {}), index)
-            for index, component in enumerate(template.args)
-        ]
-        kwargs = {
-            key: _resolve(component, op, trace, positions.get("kwargs", {}), key)
-            for key, component in template.kwargs
-        }
-    except _Unrecoverable as missing:
-        return str(missing)
+    args: list[Any] = []
+    for index, component in enumerate(template.args):
+        value = _resolve(component, op, trace, positions.get("args", {}), index)
+        if isinstance(value, _Missing):
+            return value.reason
+        args.append(value)
+    kwargs: dict[str, Any] = {}
+    for key, component in template.kwargs:
+        value = _resolve(component, op, trace, positions.get("kwargs", {}), key)
+        if isinstance(value, _Missing):
+            return value.reason
+        kwargs[key] = value
     return args, kwargs
 
 
 def _resolve(component: Any, op: Any, trace: Any, slot_parents: dict[Any, str], key: Any) -> Any:
-    """Return one argument slot's exact value from its template component."""
+    """Return one argument slot's exact value from its template component, or ``_Missing``."""
 
     if isinstance(component, ParentRef):
         label = slot_parents.get(key)
         if not isinstance(label, str):
-            raise _Unrecoverable(f"the producer of SDPA argument {key!r} (no recorded parent slot)")
+            return _Missing(f"the producer of SDPA argument {key!r} (no recorded parent slot)")
         return _parent_value(op, trace, label, key)
     if isinstance(component, LiteralTensor):
         if not isinstance(component.value, torch.Tensor):
-            raise _Unrecoverable(f"the recorded tensor literal for SDPA argument {key!r}")
+            return _Missing(f"the recorded tensor literal for SDPA argument {key!r}")
         return component.value
     if isinstance(component, LiteralValue):
         return component.value
-    raise _Unrecoverable(
+    return _Missing(
         f"SDPA argument {key!r}: replay template holds {type(component).__name__}, "
         "not a recoverable value"
     )
 
 
-def _parent_value(op: Any, trace: Any, label: str, key: Any) -> torch.Tensor:
+def _parent_value(op: Any, trace: Any, label: str, key: Any) -> torch.Tensor | _Missing:
     """Return the version of parent ``label`` that ``op`` read at capture time."""
 
-    by_key = getattr(trace, "_layer_dict_all_keys", None) or {}
-    parent = by_key.get(label) if hasattr(by_key, "get") else None
+    parent = trace._layer_dict_all_keys.get(label)
     if parent is None:
-        raise _Unrecoverable(f"the producer {label!r} of SDPA argument {key!r} (label unresolved)")
+        return _Missing(f"the producer {label!r} of SDPA argument {key!r} (label unresolved)")
     versions = getattr(parent, "out_versions_by_child", None) or {}
     for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None)):
         if spelling in versions and isinstance(versions[spelling], torch.Tensor):
             return versions[spelling]
     value = saved_output(parent)
     if value is None:
-        raise _Unrecoverable(
+        return _Missing(
             f"the saved output of {label!r}, which feeds SDPA argument {key!r} "
             "(that op's activation was not saved)"
         )
