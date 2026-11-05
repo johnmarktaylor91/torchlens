@@ -459,13 +459,17 @@ def _save_call_args_fields(
     if trace._options_save_args:
         # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
         # used to clone every tensor argument first and charge after.
-        from ._ops_arguments import _copy_saved_call_args
         from ._ops_retention import _admit_saved_args_budget, _commit_saved_args_budget
+        from ._ops_saved_arg_copies import _copy_saved_call_args, _saved_parent_values
 
         arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
         fields_dict["has_saved_args"] = True
         saved_args, saved_kwargs = _copy_saved_call_args(
-            fields_dict["func_name"], tuple(t_args), dict(t_kwargs), True
+            fields_dict["func_name"],
+            tuple(t_args),
+            dict(t_kwargs),
+            True,
+            _saved_parent_values(trace, fields_dict),
         )
         fields_dict["saved_args"] = list(saved_args)
         fields_dict["saved_kwargs"] = saved_kwargs

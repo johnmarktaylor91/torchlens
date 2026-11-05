@@ -33,6 +33,18 @@ parameter aliases. Replay moves each tagged copy back to that device, as an
 exact copy, for the one layer being checked (see
 :mod:`torchlens.validation._replay_device`). This also applies on the clone-path
 rerun; with ``output_device="same"`` nothing is moved or tagged.
+
+The same first-attempt capture (``output_device="same"`` only) also keeps a
+retained tensor argument by reference when its recorded parent op already saved
+the identical value: same dtype, shape, strides and device and the same bytes
+(compared bit for bit, so NaN payloads and signed zeros count). The argument is
+then saved as a detached alias of that parent's saved output, instead of a
+second copy of the same bytes. A recorded parent whose saved value differs (a
+wrong parent tag, or a value changed in place after it was saved) never matches,
+so the argument keeps its copy and every check that compares the two still sees
+the difference. The parent's saved output is TorchLens's own copy; its version
+is recorded with the parameters' and checked at the same two points, with the
+same clone-path rerun on any change.
 """
 
 from __future__ import annotations
@@ -47,6 +59,8 @@ from typing import Any, cast
 
 import torch
 from torch import nn
+
+from ._utils._internal_read import internal_scalar_read
 
 FALLBACK_CHECK = "validation_parameter_reference_fallback"
 CONSUMED_DEVICE_ATTR = "_torchlens_saved_arg_consumed_device"
@@ -103,6 +117,10 @@ class ParameterArgumentReferences:
     offload_device:
         Where retained copies of non-parameter tensor arguments are kept
         (validation's ``output_device``), or ``None`` to keep them in place.
+    alias_saved_values:
+        Whether a retained argument identical to its parent's saved output is
+        kept as an alias of that output (see :meth:`value_alias`). Never on
+        together with ``offload_device``.
     """
 
     def __init__(
@@ -110,10 +128,13 @@ class ParameterArgumentReferences:
         owners: dict[_StorageKey, list[tuple[str, nn.Parameter]]],
         fallback_reason: str | None = None,
         offload_device: str | None = None,
+        alias_saved_values: bool = False,
     ) -> None:
         self._owners = owners
         self._fallback_reason = fallback_reason
         self._offload_device = None if offload_device is None else torch.device(offload_device)
+        self._alias_saved_values = alias_saved_values and self._offload_device is None
+        self._value_aliases: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._versions: dict[int, tuple[torch.Tensor, int, str]] = {}
         self._owners_seen: dict[int, tuple[str, nn.Parameter]] = {}
         self._first_change: str | None = None
@@ -149,6 +170,55 @@ class ParameterArgumentReferences:
         if tensor.requires_grad:
             alias.requires_grad_(True)
         return alias
+
+    @property
+    def aliases_saved_values(self) -> bool:
+        """Whether retained arguments may alias their parent's identical saved output."""
+
+        return self._alias_saved_values
+
+    def value_alias(
+        self, tensor: torch.Tensor, saved_value: Any, parent_label: str
+    ) -> torch.Tensor | None:
+        """Return an alias of ``saved_value`` standing in for a copy of ``tensor``, or ``None``.
+
+        ``saved_value`` is the saved output of the op recorded as ``tensor``'s
+        parent. The alias is taken only when that output is TorchLens's own
+        exclusive copy (a plain dense tensor spanning its whole storage, not a
+        pending clone-on-write alias of a live tensor) and holds exactly the
+        argument's value: same dtype, shape, strides and device, and the same
+        bytes. Like the copy it replaces, the alias is a detached tensor with
+        the argument's ``requires_grad`` under the current grad mode, and it
+        carries the argument's capture label. Its version, shared with the
+        parent's saved output, is recorded and checked by :meth:`first_change`.
+        Callers hold ``pause_logging``.
+        """
+
+        if not self._alias_saved_values:
+            return None
+        with internal_scalar_read():
+            if (
+                not _value_alias_eligible(tensor, saved_value)
+                or _is_pending_deferred_payload(saved_value)
+                or not _same_bits(tensor, saved_value)
+            ):
+                return None
+        from ._utils._tensor_label import get_tensor_label, set_tensor_label
+
+        alias = saved_value.detach()
+        if tensor.requires_grad and torch.is_grad_enabled():
+            alias.requires_grad_(True)
+        label = get_tensor_label(tensor)
+        if label is not None:
+            set_tensor_label(alias, label)
+        self._value_aliases[id(alias)] = (alias, alias._version, parent_label)
+        return alias
+
+    def is_value_alias(self, tensor: torch.Tensor) -> bool:
+        """Whether ``tensor`` is an alias :meth:`value_alias` made in this capture."""
+
+        entry = self._value_aliases.get(id(tensor))
+        return entry is not None and entry[0] is tensor
 
     @property
     def offloads(self) -> bool:
@@ -232,6 +302,12 @@ class ParameterArgumentReferences:
         for tensor, version, name in self._versions.values():
             if tensor._version != version:
                 return _describe_change(name, version, tensor._version)
+        for alias, version, parent_label in self._value_aliases.values():
+            if alias._version != version:
+                return (
+                    f"the saved output of {parent_label!r}, kept by reference as an argument, "
+                    f"was written in place (version {version} to {alias._version})"
+                )
         return None
 
     def first_value_change(self, snapshot: Any) -> str | None:
@@ -284,8 +360,67 @@ def _describe_change(name: str, before: int, after: int) -> str:
     return f"parameter {name!r} was written in place (version {before} to {after})"
 
 
+def _value_alias_eligible(tensor: torch.Tensor, saved_value: Any) -> bool:
+    """Whether ``saved_value`` could stand in for a copy of ``tensor`` (no byte read yet)."""
+
+    if type(tensor) is not torch.Tensor or type(saved_value) is not torch.Tensor:
+        return False
+    for value in (tensor, saved_value):
+        if value.layout is not torch.strided or value.device.type == "meta":
+            return False
+        if value.is_quantized or value.is_inference() or value.is_conj() or value.is_neg():
+            return False
+    if (
+        tensor.dtype != saved_value.dtype
+        or tensor.shape != saved_value.shape
+        or tensor.stride() != saved_value.stride()
+        or tensor.device != saved_value.device
+        or saved_value.numel() == 0
+    ):
+        return False
+    return _spans_whole_storage(saved_value)
+
+
+def _spans_whole_storage(tensor: torch.Tensor) -> bool:
+    """Whether ``tensor`` starts at offset 0 and covers its storage end to end, densely.
+
+    A copy owns exactly its own elements; an output that is a slice of a
+    larger storage, or one with overlapping or gapped strides, is not one.
+    """
+
+    if tensor.storage_offset() != 0:
+        return False
+    span = 1
+    for size, stride in zip(tensor.shape, tensor.stride(), strict=True):
+        span += (size - 1) * abs(stride)
+    if span != tensor.numel():
+        return False
+    return span * tensor.element_size() == tensor.untyped_storage().nbytes()
+
+
+def _is_pending_deferred_payload(saved_value: torch.Tensor) -> bool:
+    """Whether ``saved_value`` still shares a live tensor's storage (a pending clone-on-write).
+
+    Materialising such a payload rebinds that one object to fresh storage, so
+    an alias taken from it would keep reading the live tensor.
+    """
+
+    from ._utils import tensor_utils
+
+    key = tensor_utils._deferred_storage_key(saved_value)
+    return key is None or key in tensor_utils._DEFER_PENDING
+
+
+def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:
+    """Whether two tensors of identical layout hold the same bytes, compared bit for bit."""
+
+    from .validation._live_model_state import _tensor_bits_equal
+
+    return _tensor_bits_equal(tensor, saved_value)
+
+
 def _record_fallback(trace: Any, reason: str) -> None:
-    """Record on the rerun's trace that validation used copied parameter arguments."""
+    """Record on the rerun's trace that validation used copied arguments throughout."""
 
     from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
@@ -295,7 +430,7 @@ def _record_fallback(trace: Any, reason: str) -> None:
             check_name=FALLBACK_CHECK,
             message=(
                 "TorchLens validation reran with every argument copied because a "
-                f"parameter changed during the forward: {reason}. The verdict "
+                f"value kept by reference changed during the forward: {reason}. The verdict "
                 "comes from the copied-argument run."
             ),
             extra={"reason": reason},
@@ -361,7 +496,9 @@ def parameter_argument_references(
             return
         references = ParameterArgumentReferences({}, reason, offload)
     else:
-        references = ParameterArgumentReferences(_parameter_owners(model), None, offload)
+        references = ParameterArgumentReferences(
+            _parameter_owners(model), None, offload, alias_saved_values=True
+        )
     token = _ACTIVE.set(references)
     try:
         yield references

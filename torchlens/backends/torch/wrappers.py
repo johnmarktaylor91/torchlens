@@ -1346,7 +1346,7 @@ def torch_func_decorator(
         # Snapshot args before the call in case in-place ops mutate them.
         receiver_label_before = _receiver_mutation_label(args)
         if trace._options_save_args:
-            from ._ops_arguments import _copy_saved_call_args
+            from ._ops_saved_arg_copies import _copy_saved_call_args
 
             arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
