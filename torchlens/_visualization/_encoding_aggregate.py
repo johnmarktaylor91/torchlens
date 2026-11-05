@@ -19,6 +19,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from .themes import fill_with_ink, ink_on_fill
+
 #: Key prefix separating aggregate-node keys from op/layer keys in the
 #: shared per-draw encoding maps (an op label can never start with it).
 AGGREGATE_KEY_PREFIX = "aggregate::"
@@ -236,8 +238,6 @@ def segment_encoding_attrs(state: Any, name: str, ink: str | None = None) -> dic
     attrs: dict[str, str] = {}
     fill = state.colors.get(key)
     if fill is not None:
-        from .themes import ink_on_fill
-
         attrs.update(fillcolor=fill, fontcolor=ink_on_fill(fill, ink) or "#000000")
     size = state.final_sizes.get(key) or state.sizes.get(key)
     if size is not None:
@@ -257,8 +257,6 @@ def box_channel_spec(state: Any, name: str, spec: Any) -> Any:
     key = aggregate_key(name)
     fill = state.colors.get(key)
     if fill is not None:
-        from .themes import fill_with_ink
-
         spec = fill_with_ink(spec, fill)
     size = state.sizes.get(key)
     if size is not None:

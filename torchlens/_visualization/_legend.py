@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
+from ._edit_change import CHANGED_NODE_CLASS
 from ._render_utils import html_escape
 
 if TYPE_CHECKING:
@@ -159,7 +160,6 @@ def drawn_legend_roles(
     counts as parameterized.
     """
 
-    from ._edit_change import CHANGED_NODE_CLASS
     from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
 
     fills = _role_fills(theme)

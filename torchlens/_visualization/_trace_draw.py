@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._capture_honesty import honesty_banner_lines
 from .._data_classes.module import Module
 from .._errors import InvalidArgumentError
 from .._literals import (
@@ -200,7 +201,12 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     if view is not None:
         from ._view_door import draw_view, explicit_draw_kwargs
 
-        return draw_view(trace, view, explicit_draw_kwargs(draw, locals()))
+        return draw_view(
+            trace,
+            view,
+            explicit_draw_kwargs(draw, locals()),
+            banner_lines=honesty_banner_lines,
+        )
 
     _require_graph_kind(graph, show_containers, show_edge_shapes)
     num_ops = len(trace) if hasattr(trace, "__len__") else None

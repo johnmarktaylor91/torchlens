@@ -9,11 +9,13 @@ spelled once, in :data:`torchlens._literals.DrawViewLiteral`.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, get_args
 
 from .._errors import InvalidArgumentError
 from .._literals import DrawViewLiteral
+from .lenses._resolve import draw_with_lens
+from .surgery_visuals import draw_interventions
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -112,7 +114,13 @@ def explicit_draw_kwargs(
     return explicit
 
 
-def draw_view(trace: Trace, view: object, user_kwargs: Mapping[str, Any]) -> Any:
+def draw_view(
+    trace: Trace,
+    view: object,
+    user_kwargs: Mapping[str, Any],
+    *,
+    banner_lines: Callable[[Trace], Iterable[str]],
+) -> Any:
     """Draw ``trace`` as the named premade view.
 
     Parameters
@@ -124,6 +132,9 @@ def draw_view(trace: Trace, view: object, user_kwargs: Mapping[str, Any]) -> Any
     user_kwargs:
         The caller's explicit ``Trace.draw`` keywords; they win over the
         view's own settings.
+    banner_lines:
+        Returns the capture's honesty banner lines (the interventions view
+        records the ones its header leaves out beside the figure).
 
     Returns
     -------
@@ -138,9 +149,5 @@ def draw_view(trace: Trace, view: object, user_kwargs: Mapping[str, Any]) -> Any
     name = check_view(view)
     if name == "interventions":
         # The interventions view writes its census beside the figure.
-        from .surgery_visuals import draw_interventions
-
-        return draw_interventions(trace, user_kwargs)
-    from .lenses._resolve import draw_with_lens
-
+        return draw_interventions(trace, user_kwargs, banner_lines)
     return draw_with_lens(trace, name, **user_kwargs)

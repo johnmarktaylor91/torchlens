@@ -41,7 +41,7 @@ Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -61,6 +61,7 @@ from ._edit_change import (
     make_change_box_spec_fn,
     make_change_spec_fn,
 )
+from ._intervention_sites import intervention_sites_for_log
 from ._render_names import _SPEC_SLOT_RENDERED_NODE, DEFAULT_DRAW_STEM
 from .theme_registry import GRAPHVIZ_DRAW_SURFACE, LensPreset, register_lens
 
@@ -545,13 +546,17 @@ class SurgeryCensus:
 
 
 def surgery_census(
-    trace: Trace, facts: SurgeryFacts | None = None, report: ChangeReport | None = None
+    trace: Trace,
+    facts: SurgeryFacts | None = None,
+    report: ChangeReport | None = None,
+    banner_lines: Iterable[str] = (),
 ) -> SurgeryCensus:
     """Build the per-lane census for one trace's recorded surgery.
 
     An un-operated trace yields an honest empty census (the LENS refuses on
     missing headline evidence; the census itself is a disclosure and never
-    refuses).
+    refuses). ``banner_lines`` are the capture's honesty banner lines; the
+    census lists the ones the interventions figure leaves off its header.
     """
 
     facts = surgery_facts(trace) if facts is None else facts
@@ -579,14 +584,12 @@ def surgery_census(
         injected_ops=sum(facts.injected_host_counts.values()),
         key_rows=change_key_rows(report, heuristic_count),
         change_rows=change_census_rows(report),
-        header_rows=_omitted_header_rows(trace),
+        header_rows=_omitted_header_rows(banner_lines),
     )
 
 
 def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
     """Compare the trace's saved values against the clean run, skipping edit sites."""
-
-    from .node_spec import intervention_sites_for_log
 
     edited: set[str] = set()
     for site in intervention_sites_for_log(trace):
@@ -600,14 +603,10 @@ def _change_report(trace: Trace, facts: SurgeryFacts) -> ChangeReport:
     return change_report(trace, edited, lambda parent: bool(intervention_sites_for_log(parent)))
 
 
-def _omitted_header_rows(trace: Trace) -> tuple[str, ...]:
+def _omitted_header_rows(banner_lines: Iterable[str]) -> tuple[str, ...]:
     """The capture-status header lines this view leaves off the figure."""
 
-    from .._capture_honesty import honesty_banner_lines
-
-    return tuple(
-        line for line in honesty_banner_lines(trace) if line.startswith(EDIT_VIEW_OMITTED_BANNERS)
-    )
+    return tuple(line for line in banner_lines if line.startswith(EDIT_VIEW_OMITTED_BANNERS))
 
 
 def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:
@@ -725,7 +724,11 @@ def surgery_stage(
     return make_surgery_mark_spec_fn(trace, facts, report), make_change_box_spec_fn(report), lines
 
 
-def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
+def draw_interventions(
+    trace: Trace,
+    user_kwargs: Mapping[str, Any],
+    banner_lines: Callable[[Trace], Iterable[str]],
+) -> Any:
     """Draw ``trace`` under the surgery lens; the census travels with it.
 
     The body of ``Trace.draw(view="interventions")``: a thin door over
@@ -742,6 +745,9 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
     user_kwargs:
         The ``Trace.draw`` keywords the caller passed explicitly (never
         ``lens``); they win over the lens members.
+    banner_lines:
+        Returns the capture's honesty banner lines; the census records the
+        ones the figure's header leaves out.
 
     Returns
     -------
@@ -766,7 +772,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
             outpath = os.path.splitext(written)[0] if written else DEFAULT_DRAW_STEM
         census_path = f"{outpath}.census.txt"
         with open(census_path, "w", encoding="ascii", errors="replace") as census_file:
-            census_file.write(surgery_census(trace).to_text())
+            census_file.write(surgery_census(trace, banner_lines=banner_lines(trace)).to_text())
     return result
 
 

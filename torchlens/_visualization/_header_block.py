@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
+from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
 from ._focus_scope import scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
@@ -512,7 +513,6 @@ def _module_frame_swatch(theme: VisualizationTheme) -> KeySwatch:
 def _edit_swatches(theme: VisualizationTheme, drawn: frozenset[str]) -> list[KeySwatch]:
     """Return the edit entries: a ringed oval ``edited`` and the highlighted arrow."""
 
-    from ._edit_change import CHANGED_INK, CHANGED_PENWIDTH
     from ._edit_highlighter import highlighter_rgba
     from ._edit_marks import EDIT_RING_PENWIDTH, edit_ink
 
