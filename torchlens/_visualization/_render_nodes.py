@@ -14,6 +14,7 @@ from ._encoding_aggregate import (
     collapsed_box_scope,
     segment_encoding_attrs,
 )
+from ._endpoint_rings import color_scale_active, endpoint_ring_spec
 from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
 from ._label_format import (
     collapsed_param_detail,
@@ -573,6 +574,8 @@ def _build_layer_node(
             style="filled,solid",
             extra_attrs={"ordering": "out"},
         )
+        if color_scale_active(encoding):
+            spec = endpoint_ring_spec(spec, node.boundary_kind, theme)
         if theme is not None:
             spec = apply_theme_to_spec(spec, theme)
         if resolved_specs is not None:
@@ -620,6 +623,10 @@ def _build_layer_node(
         annotation_image = drawable_annotation_image(self, annotation_image)
     if annotation_image is not None:
         default_spec = default_spec.replace(image=annotation_image)
+    if color_scale_active(encoding) and (node.is_input or node.is_output):
+        # The scale owns the fill; the endpoint role rides on a ring.
+        role = "input" if node.is_input else "output"
+        default_spec = endpoint_ring_spec(default_spec, role, theme)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:

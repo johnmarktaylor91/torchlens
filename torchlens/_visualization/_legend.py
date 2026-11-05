@@ -166,6 +166,7 @@ def drawn_legend_roles(
 
     from ._edit_change import CHANGED_NODE_CLASS
     from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS
+    from ._endpoint_rings import endpoint_ring_role
 
     fills = _role_fills(theme)
     roles: set[str] = set()
@@ -188,6 +189,9 @@ def drawn_legend_roles(
             elif fill in fills["parameterized"]:
                 roles.add("mutated parameter")
             continue
+        ring_role = endpoint_ring_role(attrs, theme)
+        if ring_role is not None:
+            roles.add(ring_role)  # an endpoint under a colour scale: role on the ring
         # A fill the skin shares with plain ops (the default skin's white
         # tests and buffers) names no other role on a non-cylinder node.
         plain_fill = fill in fills["plain op"]

@@ -781,6 +781,7 @@ def _forward_header_label(
     the header label (top left on every engine); a label override stays the header.
     """
 
+    from ._endpoint_rings import color_scale_active
     from ._header_block import (
         caption_from_label,
         header_block_label,
@@ -801,6 +802,7 @@ def _forward_header_label(
             has_module=False,
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
+            endpoint_rings=color_scale_active(request.encoding),
         )
         if request.show_legend is True:
             notes = reading_notes(node_attrs, request.module)
