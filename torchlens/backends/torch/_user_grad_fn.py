@@ -245,6 +245,18 @@ def _fresh_view_write(trace: Any, receiver: Any) -> tuple[dict[str, Any], Any, A
     return handles, handles.get(label), copy_slices
 
 
+def _is_other_grad_view_of(alias: Any, receiver: Any, base: Any) -> bool:
+    """Return whether ``alias`` is a grad-requiring view of ``base`` other than ``receiver``."""
+
+    return (
+        alias is not receiver
+        and isinstance(alias, torch.Tensor)
+        and alias.requires_grad
+        and alias._is_view()
+        and alias._base is base
+    )
+
+
 def _live_sibling_views(receiver: Any) -> list[tuple[Any, str]]:
     """Return ``(view, label)`` for every other live labeled grad view of the receiver's base.
 
@@ -262,13 +274,7 @@ def _live_sibling_views(receiver: Any) -> list[tuple[Any, str]]:
     found: list[tuple[Any, str]] = []
     seen_labels: set[str] = set()
     for alias in session_storage_alias_candidates(storage_key):
-        if (
-            alias is receiver
-            or not isinstance(alias, torch.Tensor)
-            or not alias.requires_grad
-            or not alias._is_view()
-            or alias._base is not base
-        ):
+        if not _is_other_grad_view_of(alias, receiver, base):
             continue
         label = get_tensor_label(alias)
         if label is not None and label not in seen_labels:
