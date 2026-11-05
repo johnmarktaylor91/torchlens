@@ -125,6 +125,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     transform_builder_decorator,
 )
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
+from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
@@ -2006,10 +2007,9 @@ def decorate_all_once() -> None:
     """
     if _state._is_decorated:
         return  # already fully decorated
-    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty here.
-    # A prior partial failure may have populated the dict without completing
-    # decoration. Using _is_decorated (set at end of this function) ensures
-    # retry after partial failure (#138).
+    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty: a prior partial
+    # failure may have populated it without completing decoration; guarding on
+    # _is_decorated (set at the end) lets that retry run (#138).
 
     _warm_derived_identity_caches()
 
@@ -2091,14 +2091,14 @@ def _install_fork_capture_hygiene() -> None:
 _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_method")
 
 
+@originals_exposed(_setattr_ignoring_advisories, TRANSFORM_BUILDER_SITES + DIRECT_TRANSFORM_SITES)
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
     B8-4 invariant: no torchlens path may FIRST-call a cached torch
-    introspection table while wrappers are installed. Called by BOTH install
-    paths -- full decoration (``decorate_all_once``) and re-install after a
-    prior ``unwrap_torch()`` -- BEFORE any wrapper setattr, so every covered
-    table stays keyed by originals for the whole wrapped epoch. Covered:
+    introspection table while wrappers are installed. Both install paths call
+    this before their setattr loop; ``originals_exposed`` also shows originals
+    on slots a failed decoration pass left wrapped (the #138 retry). Covered:
 
     - the two ``torch.overrides`` tables (the original B8-4 pair);
     - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__``
