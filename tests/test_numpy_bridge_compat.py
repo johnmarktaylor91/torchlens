@@ -249,6 +249,34 @@ def test_tensor_to_numpy_rebuilds_arrays_on_a_broken_bridge(broken_bridge: None)
         array.reshape(-1)[:0] = 0  # writable, like Tensor.numpy()
 
 
+class _NumpyKnowingBfloat16:
+    """NumPy as seen after ``import ml_dtypes``: ``np.dtype("bfloat16")`` resolves."""
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(np, name)
+
+    @staticmethod
+    def dtype(spec: object) -> np.dtype:
+        return np.dtype("uint16") if spec == "bfloat16" else np.dtype(spec)
+
+
+def test_tensor_to_numpy_refuses_bf16_after_numpy_learns_the_name(
+    broken_bridge: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The fallback refuses what ``Tensor.numpy`` refuses, whatever NumPy has registered.
+
+    onnx, jax and tensorflow import ``ml_dtypes``, which teaches NumPy the name
+    ``bfloat16``; an earlier test importing one of them must not turn the bf16
+    refusal into a silently converted array.
+    """
+
+    monkeypatch.setattr(bridge, "np", _NumpyKnowingBfloat16())
+    with pytest.raises(TypeError, match="bfloat16"):
+        bridge.tensor_to_numpy(torch.arange(4, dtype=torch.float32).to(torch.bfloat16))
+    array = bridge.tensor_to_numpy(torch.arange(4, dtype=torch.float32))
+    assert array.tolist() == [0.0, 1.0, 2.0, 3.0]
+
+
 def test_extraction_npy_export_survives_a_broken_bridge(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

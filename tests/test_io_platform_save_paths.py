@@ -158,7 +158,7 @@ def test_host_memory_probe_falls_back_to_psutil_without_procfs_or_sysconf(
     """macOS-like host: no procfs, no SC_AVPHYS_PAGES, psutil still measures."""
 
     psutil = pytest.importorskip("psutil")
-    from torchlens import _save_budget
+    from torchlens import _memory_probes, _save_budget
 
     real_open = open
 
@@ -170,9 +170,12 @@ def test_host_memory_probe_falls_back_to_psutil_without_procfs_or_sysconf(
     def sysconf(name: Any) -> int:
         raise ValueError("unrecognized configuration name")
 
-    # Shadow ``open`` in the probe's module only: psutil itself reads procfs on Linux.
-    monkeypatch.setattr(_save_budget, "open", open_, raising=False)
-    monkeypatch.setattr(_save_budget.os, "sysconf", sysconf)
-    available = _save_budget._available_host_bytes()
+    # The probe lives in ``_memory_probes``; ``_save_budget`` re-exports it, so the
+    # budget reads the same function. Shadow ``open`` in the probe's module only:
+    # psutil itself reads procfs on Linux.
+    assert _save_budget._available_host_bytes is _memory_probes._available_host_bytes
+    monkeypatch.setattr(_memory_probes, "open", open_, raising=False)
+    monkeypatch.setattr(_memory_probes.os, "sysconf", sysconf)
+    available = _memory_probes._available_host_bytes()
     assert available is not None and available > 0
     assert available <= int(psutil.virtual_memory().total)
