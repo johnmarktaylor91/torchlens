@@ -10,8 +10,8 @@
 <title>BlockStack</title>
 <polygon fill="white" stroke="transparent" points="-4,4 -4,-4997.63 365.5,-4997.63 365.5,4 -4,4"/>
 <text text-anchor="start" x="8" y="-4979.43" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">BlockStack</text>
-<text text-anchor="start" x="8" y="-4965.43" font-family="Helvetica,sans-Serif" font-size="14.00">37 ops (33.3 KB)</text>
-<text text-anchor="start" x="8" y="-4951.43" font-family="Helvetica,sans-Serif" font-size="14.00">1.3K params (5.1 KB, all trainable)</text>
+<text text-anchor="start" x="8" y="-4965.43" font-family="Helvetica,sans-Serif" font-size="14.00">37 ops (34.1 KB)</text>
+<text text-anchor="start" x="8" y="-4951.43" font-family="Helvetica,sans-Serif" font-size="14.00">1.3K params (5.2 KB, all trainable)</text>
 <g id="clust2" class="cluster">
 <title>cluster_blocks_pass1</title>
 <polygon fill="white" stroke="black" stroke-width="1.5" points="8,-238.92 8,-4595.79 328,-4595.79 328,-238.92 8,-238.92"/>

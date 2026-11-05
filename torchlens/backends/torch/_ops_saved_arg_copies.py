@@ -156,9 +156,12 @@ def _copy_saved_arg_tree(
             references, arg, retained, receiver_copy=receiver_copy, parent=parents.get(None)
         )
     if _is_flat_sequence(arg):
+        # A slice item may hold tensor bounds, which copy_arg_tree snapshots.
         return type(arg)(
             _parameter_alias(references, item, retained, parent=parents.get(index))
             if isinstance(item, torch.Tensor)
+            else copy_arg_tree(item)
+            if isinstance(item, slice)
             else item
             for index, item in enumerate(arg)
         )
