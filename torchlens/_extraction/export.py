@@ -371,6 +371,22 @@ def _iter_key_batches(reader: Any, key: str) -> Any:
         yield payload[key]
 
 
+def _save_npy(path: Path, tensor: Any) -> None:
+    """Write one tensor to ``path`` as a ``.npy`` file (no pickling).
+
+    Parameters
+    ----------
+    path:
+        Destination file.
+    tensor:
+        Dense tensor whose dtype NumPy can represent.
+    """
+
+    import numpy as np
+
+    np.save(path, tensor_to_numpy(tensor), allow_pickle=False)
+
+
 def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
     """Stream keys into preallocated ``.npy`` memmaps (never object arrays).
 
@@ -422,8 +438,8 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
             values, conversion = _widen_for_export(key, merged.values, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            for name, part in (("values", values), ("offsets", merged.offsets)):
-                np.save(temp / f"{stem}__{name}.npy", tensor_to_numpy(part), allow_pickle=False)
+            _save_npy(temp / f"{stem}__values.npy", values)
+            _save_npy(temp / f"{stem}__offsets.npy", merged.offsets)
             shapes = np.array([list(s) for s in merged.row_shapes], dtype=np.int64)
             np.save(temp / f"{stem}__shapes.npy", shapes, allow_pickle=False)
             members.extend(
