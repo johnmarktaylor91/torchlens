@@ -502,6 +502,45 @@ class TestDocRunnerRoute:
                 raise refusal
         assert excinfo.value.fields["code"] == "onebackward_torch_unsupported"
 
+    def test_only_the_routed_type_and_code_are_accepted_without_the_flag(self, monkeypatch) -> None:
+        """With the flag off, acceptance needs the ROUTES type AND code, nothing looser."""
+
+        from tests.support import capability_routes as routes
+
+        class _Lookalike(Exception):
+            """Carries the routed code but is not the routed error type."""
+
+            fields = {"code": "onebackward_torch_unsupported"}
+
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: False)
+        assert routes.accepts_capability_refusal(
+            ob.ReadError("probe", code="onebackward_torch_unsupported")
+        )
+        assert not routes.accepts_capability_refusal(
+            ob.ReadError("probe", code="read_option_invalid")
+        )
+        assert not routes.accepts_capability_refusal(_Lookalike("probe"))
+        assert not routes.accepts_capability_refusal(RuntimeError("onebackward_torch_unsupported"))
+
+    def test_another_missing_flag_does_not_admit_this_refusal(self, monkeypatch) -> None:
+        """A refusal is accepted only through its own flag: another absent flag cannot."""
+
+        from tests.support import capability_routes as routes
+
+        absent = routes.CapabilityRoute(
+            flag="HAS_PROBE_ONLY",
+            present=lambda: False,
+            refusal=routes.typed_refusal(ob.ReadError, "read_option_invalid"),
+        )
+        monkeypatch.setitem(routes.ROUTES, "HAS_PROBE_ONLY", absent)
+        monkeypatch.setattr(routes._torch_compat, "get_gradient_edge_support", lambda: True)
+        gradient_edge_refusal = ob.ReadError("probe", code="onebackward_torch_unsupported")
+        assert not routes.accepts_capability_refusal(gradient_edge_refusal)
+        with pytest.raises(ob.ReadError):
+            with routes.capability_route("HAS_PROBE_ONLY"):
+                raise gradient_edge_refusal
+        assert routes.accepts_capability_refusal(ob.ReadError("probe", code="read_option_invalid"))
+
 
 class TestTypedDoorProvocations:
     """One direct assertion seam per new stable code (the provocation gate).

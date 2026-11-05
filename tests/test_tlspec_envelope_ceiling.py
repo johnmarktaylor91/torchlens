@@ -113,6 +113,47 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
     assert not any(_is_minor_mismatch(item) for item in caught_exact)
 
 
+@pytest.mark.parametrize("subject", ["Bundle", "Artifact"])
+def test_oracle_minor_mismatch_filter_matches_each_loader_and_nothing_else(subject) -> None:
+    """The goldens' advisory filter silences the minor-mismatch warning of either loader.
+
+    The 2.x manifest path opens the advisory with ``Bundle`` and the format-3 path with
+    ``Artifact`` (``check_runtime_identity(subject=...)``); a golden recorded on another
+    torch minor fires one or the other. Any other TorchLens warning still escapes.
+    """
+
+    import warnings as warnings_module
+
+    import torch
+    from _oracle_env import expect_bundle_minor_version_mismatch
+
+    from torchlens._io._runtime_identity import (
+        TORCHLENS_VERSION,
+        check_runtime_identity,
+        runtime_python_version,
+    )
+    from torchlens.errors import TorchLensWarning
+
+    runtime = torch.__version__.split("+", 1)[0]
+    major, minor, *_ = runtime.split(".")
+    stamps = {
+        "torch_version": f"{major}.{int(minor) + 1}.0+cpu",
+        "torchlens_version": TORCHLENS_VERSION,
+        "python_version": runtime_python_version(),
+    }
+    with warnings_module.catch_warnings(record=True) as unfiltered:
+        warnings_module.simplefilter("always")
+        check_runtime_identity(subject=subject, **stamps)
+    assert [str(item.message).split(" ", 1)[0] for item in unfiltered] == [subject]
+
+    with warnings_module.catch_warnings(record=True) as caught:
+        warnings_module.simplefilter("always")
+        with expect_bundle_minor_version_mismatch():
+            check_runtime_identity(subject=subject, **stamps)
+            warnings_module.warn(f"{subject} unrelated advisory", TorchLensWarning)
+    assert [str(item.message) for item in caught] == [f"{subject} unrelated advisory"]
+
+
 def test_recover_refuses_future_version_bundle(tmp_path) -> None:
     """End-to-end: a future-versioned fastlog bundle refuses out of recover()."""
 

@@ -21,9 +21,16 @@ Counters for one save of a fixed capture:
     ``os.fsync`` calls (every written file, then the directories, then the parent
     after the publish rename).
 ``read_opens`` / ``write_opens``
-    Python-level ``open`` calls under the destination's parent directory, by mode.
-    Tensor blobs are written by the safetensors extension and do not appear here;
-    they appear in the byte counters.
+    Python-level ``open`` calls under the destination's parent directory, by mode,
+    made directly (``open`` / ``io.open``). Tensor blobs are written by the
+    safetensors extension and do not appear here; they appear in the byte counters.
+``pathlib_read_opens`` / ``pathlib_write_opens``
+    The same opens made through ``pathlib`` (``Path.open``, ``read_text``,
+    ``write_text`` and their byte twins), counted apart so both counts mean the same
+    thing on every Python: before 3.11 ``pathlib`` bound ``io.open`` when it was
+    imported, so patching ``io.open`` never saw these calls, while 3.11 and later
+    look ``io.open`` up at each call. On 3.10 the counter patches ``pathlib``'s own
+    accessor to see them.
 ``files_written`` / ``bytes_written``
     Files in the published bundle and their total size with each wall-clock timing
     float (``TIMING_FLOAT_PATHS``) counted at ``TIMING_FLOAT_WIDTH`` bytes; every other
@@ -47,6 +54,7 @@ import cProfile
 import io
 import json
 import os
+import pathlib
 import pstats
 import sys
 import tempfile
@@ -70,6 +78,8 @@ GATED_COUNTERS = (
     "fsync_calls",
     "read_opens",
     "write_opens",
+    "pathlib_read_opens",
+    "pathlib_write_opens",
     "files_written",
     "bytes_written",
 )
@@ -176,12 +186,36 @@ def _open_counter(
     def wrap(original: Callable[..., Any]) -> Callable[..., Any]:
         def counted(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
             if isinstance(file, (str, os.PathLike)) and os.fspath(file).startswith(root_text):
-                counts["write_opens" if any(c in mode for c in "wax+") else "read_opens"] += 1
+                key = "write_opens" if any(c in mode for c in "wax+") else "read_opens"
+                if _called_from_pathlib(sys._getframe(1)):
+                    key = f"pathlib_{key}"
+                counts[key] += 1
             return original(file, mode, *args, **kwargs)
 
         return counted
 
     return wrap
+
+
+def _called_from_pathlib(frame: Any) -> bool:
+    """Return whether ``frame`` (the caller of ``open``) is ``pathlib`` code."""
+
+    module = frame.f_globals.get("__name__", "") if frame is not None else ""
+    return module == "pathlib" or module.startswith("pathlib.")
+
+
+@contextmanager
+def _patched_static(
+    owner: Any, name: str, wrap: Callable[[Callable[..., Any]], Callable[..., Any]]
+) -> Iterator[None]:
+    """Patch a class attribute that holds a plain callable (it must not bind ``self``)."""
+
+    original = vars(owner)[name]
+    setattr(owner, name, staticmethod(wrap(original)))
+    try:
+        yield
+    finally:
+        setattr(owner, name, original)
 
 
 @contextmanager
@@ -203,6 +237,10 @@ def counting(root: Path) -> Iterator[Counter[str]]:
         stack.enter_context(_patched(os, "fsync", _counting(counts, "fsync_calls")))
         stack.enter_context(_patched(builtins, "open", _open_counter(counts, root)))
         stack.enter_context(_patched(io, "open", _open_counter(counts, root)))
+        accessor = getattr(pathlib, "_NormalAccessor", None)
+        if accessor is not None and "open" in vars(accessor):
+            # Python 3.10: ``Path.open`` calls the ``io.open`` its accessor bound at import.
+            stack.enter_context(_patched_static(accessor, "open", _open_counter(counts, root)))
         yield counts
 
 
