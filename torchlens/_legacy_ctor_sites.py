@@ -20,7 +20,7 @@ __tl_layer__ = "L0"
 # name); ``backends/torch/legacy_ctors.py`` installs and restores them.
 # ``torch.Tensor`` itself is not listed: ``torch.Tensor.__new__`` is already an
 # ``IGNORED_FUNCS`` roster row. The sparse twins (``torch.sparse.FloatTensor(
-# indices, values, size)``, the 2018 graph-network spelling of a COO adjacency)
+# indices, values, size)``, the early graph-network spelling of a COO adjacency)
 # dispatch ``aten._sparse_coo_tensor_with_dims_and_tensors`` the same way; torch
 # defines no sparse ``BoolTensor``, which resolution skips like any absent class.
 LEGACY_TENSOR_DTYPE_CLASS_NAMES: tuple[str, ...] = (

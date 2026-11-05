@@ -515,7 +515,7 @@ def test_c_constructor_recovery_refuses_what_it_cannot_prove() -> None:
 
 
 class SparseAdjacency(nn.Module):
-    """The 2018 graph-network idiom: a legacy sparse COO adjacency times node features."""
+    """The early graph-network idiom: a legacy sparse COO adjacency times node features."""
 
     def __init__(self) -> None:
         super().__init__()
