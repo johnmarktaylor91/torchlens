@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._data_classes._state_adapter import state_items
+from ..._utils._record_group_table import record_member, record_storage_attr
 from .. import _json
 from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
@@ -152,8 +153,8 @@ def settle_live_side(trace: Any) -> None:
 
     for op in list(trace._layer_list or ()):
         for key in _EMPTY_MAP_OP_KEYS:
-            if getattr(op, key, None) is None:
-                setattr(op, key, {})
+            if record_member(op, key, None) is None:
+                setattr(op, record_storage_attr(op, key), {})
 
 
 def _write_columns(record: str, payload_policy: Mapping[str, bool]) -> list[str]:
