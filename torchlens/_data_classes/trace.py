@@ -3069,7 +3069,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace":
-        """Rerun the live model on new input and refresh this Trace."""
+        """Rerun the live model on new input and return a new Trace; this Trace is unchanged."""
         options = {k: v for k, v in locals().items() if k not in ("self", "model", "x")}
         result = _doors.intervention()._trace_run.run(self, model, x, **options, transaction=False)
         return cast("Trace", result)

@@ -20,6 +20,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._errors import refuse
 from ._mpl import ATTENTION_CMAP, colorbar, figure, require_matplotlib, save_figure
 from ._records import SavedFigure
@@ -107,11 +108,11 @@ def _heatmap_cells(
         logits = _position_logits(entry.logits, batch_index).index_select(0, index)
         probs = torch.softmax(logits.detach().float(), dim=-1)
         top_prob, top_id = probs.max(dim=-1)
-        top_ids[row] = top_id.cpu().numpy()
+        top_ids[row] = tensor_to_numpy(top_id)
         if target_token_id is None:
-            values[row] = top_prob.cpu().numpy()
+            values[row] = tensor_to_numpy(top_prob)
         else:
-            values[row] = probs[:, target_token_id].cpu().numpy()
+            values[row] = tensor_to_numpy(probs[:, target_token_id])
     return values, top_ids
 
 

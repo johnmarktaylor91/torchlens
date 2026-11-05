@@ -94,6 +94,7 @@ from .._options import (
 )
 from .._validation_shared import float_replay_tolerances
 from ._closure_consts import _readable_closure_consts
+from ._perturbation_probes import _perturb_candidates
 from ._raw_relabel import (
     _is_jax_recurrence_source,
     _jax_equivalent_labels_by_key,
@@ -109,12 +110,11 @@ from ._trace_graph_helpers import (
     _parent_perturbations_change_output,
     _path_to_components,
     _path_to_string,
-    _perturb_candidates,
     _relabel_jax_edge_use,
     _relabel_jax_parent_arg_positions,
     _saved_op_outputs,
+    _saved_parent_input,
     _saved_region_boundary_outputs,
-    _saved_single_output,
     _values_close,
 )
 from ._validation_log import (
@@ -4130,7 +4130,7 @@ def _validate_region_boundary(
             return False
         if not _projection_has_boundary_parent(projection_op, boundary_op):
             return False
-        saved_output = _saved_single_output(projection_op, hidden_outputs_by_label)
+        saved_output = _saved_parent_input(projection_op, hidden_outputs_by_label)
         expected_output = replayed_outputs[projection.output_index]
         if not _values_close(saved_output, expected_output):
             return False
@@ -4199,7 +4199,7 @@ def _inputs_from_region_trace_graph(
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX region parent arg position {position!r} is invalid.")
         parent_op = ops_by_label[parent_label]
-        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
+        inputs[position] = _saved_parent_input(parent_op, hidden_outputs_by_label, inputs[position])
     return tuple(inputs)
 
 
@@ -4345,5 +4345,5 @@ def _inputs_from_trace_graph(
         if not isinstance(position, int) or position < 0 or position >= len(inputs):
             raise ValueError(f"JAX trace parent arg position {position!r} is invalid.")
         parent_op = ops_by_label[parent_label]
-        inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
+        inputs[position] = _saved_parent_input(parent_op, hidden_outputs_by_label, inputs[position])
     return tuple(inputs)

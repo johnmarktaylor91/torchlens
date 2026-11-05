@@ -21,10 +21,7 @@ from ._index_set import (
     _union_optional,
 )
 from ._query_causal import EXTENDED_KINDS, map_extended_to_parent
-from ._query_maps import (
-    _call_interval_callback,
-    _coerce_index_set,
-)
+from ._query_maps import _call_interval_callback, _coerce_index_set, widen_channel_axis
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import (
@@ -542,14 +539,10 @@ def _map_window(
         parent_sets[parent_start + local_axis] = mapped
         exact = exact and callback_exact
     channel_dependency = str(result.values.get("channel_dependency", "full_exact"))
-    channel_axis = parent_start - 1
-    if channel_axis >= 0 and channel_dependency != "pointwise":
-        channel_exact = channel_dependency == "full_exact"
-        parent_sets[channel_axis] = _IndexSet.interval(
-            0, int(parent.shape[channel_axis]) - 1, exact=channel_exact
-        )
-        exact = exact and channel_exact
-    return tuple(parent_sets), exact
+    channel_exact = widen_channel_axis(
+        parent_sets, parent.shape, parent_start - 1, channel_dependency
+    )
+    return tuple(parent_sets), exact and channel_exact
 
 
 def _standard_window_index_set(
@@ -738,9 +731,15 @@ def _map_window_edges(
         mapped[len(parent.shape) - rank + local_axis] = _IndexSet.interval(
             floor(min(starts)), ceil(max(stops))
         )
+    # Only a rule that declares channel mixing widens it (transposed convolution);
+    # interpolation, adaptive pooling, padding and slicing keep channels pointwise.
+    dependency = str(result.values.get("channel_dependency", "pointwise"))
+    channel_exact = widen_channel_axis(
+        mapped, parent.shape, len(parent.shape) - rank - 1, dependency
+    )
     if result.map_index_set or result.map_interval:
-        return tuple(mapped), callbacks_exact
-    return tuple(mapped), bool(result.values.get("exact", False))
+        return tuple(mapped), callbacks_exact and channel_exact
+    return tuple(mapped), bool(result.values.get("exact", False)) and channel_exact
 
 
 def _map_composed_envelope(op: Op, parent: Op, output_sets: _AxisSets) -> _AxisSets:

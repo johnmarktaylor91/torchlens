@@ -724,6 +724,11 @@ def known_native_custom_op_output_dependence(
     return None
 
 
+CALL_OPERATOR_ATTR = "_tl_call_operator"
+"""Attribute a wrapping replay callable (a receiver-mutating operator's) carries to name the
+operator ``functools.partial`` it calls, so validation can still identify the operator."""
+
+
 def recorded_custom_op_name(func: Any) -> str | None:
     """Return the ``namespace::name`` of the ``torch.ops`` operator a recorded op replays.
 

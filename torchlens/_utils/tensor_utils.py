@@ -905,12 +905,12 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 #      moved without interception, so an unforeseen torch-side mutation path
 #      becomes a hard error instead of a silently corrupted saved activation.
 #
-# Known residual (documented; the same class as untraced ops): a host-level
-# write that bypasses torch dispatch entirely (raw ``data_ptr()``/numpy buffer
-# writes, ctypes) neither triggers interception nor bumps the version counter.
-# Eager cloning was immune to that case; deferral is therefore gated to plain
-# captures where none of the honesty machinery (runnable witnesses, backward
-# capture, transforms) is armed.
+# Host-level writes bypass torch dispatch (raw ``data_ptr()``/numpy/DLPack buffer
+# writes, ctypes, foreign kernels) and bump no version, so the wrapper of every
+# zero-copy export made by the logged forward copies out the receiver's pending
+# aliases first (``backends/torch/_storage_exports.py``, residuals listed there).
+# Deferral stays gated to plain captures (no
+# runnable witnesses, backward capture or transforms armed).
 #
 # GRAPH-CONNECTED PAYLOADS (the default ``tl.trace(model, x)`` regime)
 # --------------------------------------------------------------------

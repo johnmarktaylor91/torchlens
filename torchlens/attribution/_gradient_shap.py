@@ -45,6 +45,8 @@ from torchlens.attribution._sampling import (
     _scalar_distribution,
 )
 
+from .._utils.tensor_leaves import tensor_payload_bytes
+
 
 def _tensor_digest(tensor: Tensor) -> str:
     """Return a short sha256 digest of a tensor's bytes for disclosure.
@@ -60,8 +62,7 @@ def _tensor_digest(tensor: Tensor) -> str:
         First 16 hex characters of the sha256 of the raw bytes.
     """
 
-    data = tensor.detach().cpu().contiguous()
-    return hashlib.sha256(bytes(data.numpy().data)).hexdigest()[:16]
+    return hashlib.sha256(tensor_payload_bytes(tensor)).hexdigest()[:16]
 
 
 def _validate_baseline_pool(

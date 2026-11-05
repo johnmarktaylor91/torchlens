@@ -12,6 +12,7 @@ from torch import nn
 from .. import _user_public_impls
 from .._selection.selectors import facet
 from ..errors._base import TorchLensError, TorchLensWarning
+from ..intervention._trace_run import rerun_in_place
 from ..options import _CAPTURE_FIELDS, CaptureOptions
 from ._input_patching import _model_input_home_role, _patch_input_leaf
 from ._state_guard import _CounterfactualStateGuard, _teardown
@@ -840,8 +841,7 @@ def _run_patch(
         log = corrupted_log.fork(name)
         log._attach_hooks(selector, tracked_hook)
         guard.reset()
-        log.run(model, corrupted_input)
-        return log
+        return rerun_in_place(log, model, corrupted_input)
 
     patched_log = _capture_by_reference(model, guard, _capture)
     try:
@@ -903,8 +903,7 @@ def _run_input_patch(
         """Fork the corrupted trace and rerun it on the patched input from the pristine state."""
         log = corrupted_log.fork(name)
         guard.reset()
-        log.run(model, patched_input)
-        return log
+        return rerun_in_place(log, model, patched_input)
 
     return _capture_by_reference(model, guard, _capture)
 

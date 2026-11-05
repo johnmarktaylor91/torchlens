@@ -39,7 +39,10 @@ def _check_backward_graph_invariants(trace: Trace) -> None:
     into ``grad_fn_logs`` AND no autograd-visited op is reachable from it
     through grad-carrying edges — the dead-branch case (``_ = h.mean()``) and
     grad-severed subgraphs, where autograd never constructs a backpointer to
-    retain.
+    retain. An in-place write through a view (its recorded node is a view
+    backward class) is never exempted while the walk visited a ``CopySlices``
+    that no op owns: its gradient runs through that node, and its forward
+    children do not show the written base's readers in every capture mode.
 
     Parameters
     ----------
@@ -325,9 +328,14 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
             # a dropped backpointer on it still raises) AND the grad-carrying
             # reachability walk — which fails closed on every resolution
             # gap — cannot reach any visited op downstream.
+            # A write through a view whose gradient may run through an
+            # unowned ``CopySlices`` is never excused by the forward walk: in a
+            # capture without base-label propagation its readers are not its
+            # forward children.
             if (
                 grad_fn_object_id not in trace._grad_fn_logs
                 and not _layer_feeds_recorded_backward_roots(trace, layer)
+                and not _view_write_gradient_runs_through_copy_slices(trace, layer)
             ):
                 continue
             raise MetadataInvariantError(
@@ -578,6 +586,7 @@ from ._invariants_backward_domain import (  # noqa: E402
     _check_journal_seq_invariants,
     _layer_feeds_recorded_backward_roots,
     _layer_postdates_all_backward_triggers,
+    _view_write_gradient_runs_through_copy_slices,
 )
 from ._invariants_backward_flow import (  # noqa: E402
     _check_backward_event_flow_invariants,
