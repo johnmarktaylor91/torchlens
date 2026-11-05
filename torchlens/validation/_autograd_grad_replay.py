@@ -24,7 +24,7 @@ from __future__ import annotations
 import heapq
 import inspect
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
@@ -195,6 +195,13 @@ def _select_output(op: Op, output: Any) -> Any:
     return output
 
 
+def _capture_index_key(op: Op) -> tuple[int, str]:
+    """Return an op's place in capture's event order, ``-1`` when it has no index."""
+
+    index = getattr(op, "raw_index", None)
+    return (index if isinstance(index, int) else -1, op.label)
+
+
 def _recorded_order(pending: dict[str, Op], resolve: Callable[[str], Op]) -> list[Op]:
     """Return ``pending`` ops parents-first, in capture's execution order where it allows.
 
@@ -204,10 +211,6 @@ def _recorded_order(pending: dict[str, Op], resolve: Callable[[str], Op]) -> lis
     usable index.
     """
 
-    def key(op: Op) -> tuple[int, str]:
-        index = getattr(op, "raw_index", None)
-        return (index if isinstance(index, int) else -1, op.label)
-
     waiting = {
         label: {parent.label for parent in map(resolve, tuple(op.parents))} & pending.keys()
         for label, op in pending.items()
@@ -216,7 +219,11 @@ def _recorded_order(pending: dict[str, Op], resolve: Callable[[str], Op]) -> lis
     for label, parents in waiting.items():
         for parent in parents:
             children[parent].append(label)
-    ready = [(key(pending[label]), label) for label, parents in waiting.items() if not parents]
+    ready = [
+        (_capture_index_key(pending[label]), label)
+        for label, parents in waiting.items()
+        if not parents
+    ]
     heapq.heapify(ready)
     ordered: list[Op] = []
     while ready:
@@ -225,7 +232,7 @@ def _recorded_order(pending: dict[str, Op], resolve: Callable[[str], Op]) -> lis
         for child in children[label]:
             waiting[child].discard(label)
             if not waiting[child]:
-                heapq.heappush(ready, (key(pending[child]), child))
+                heapq.heappush(ready, (_capture_index_key(pending[child]), child))
     return ordered
 
 
@@ -385,7 +392,10 @@ class _SubgraphReplay:
                     replayed = replayed.clone()
                 replayed = align_parent_to_slot_device(input_args, arg_domain, key, replayed)
                 # Differentiable copy into the recorded layout (grad mode is on here).
-                replayed = relay_to_layout(replayed, slot_capture_layout(op, arg_domain, key))
+                replayed = cast(
+                    torch.Tensor,
+                    relay_to_layout(replayed, slot_capture_layout(op, arg_domain, key)),
+                )
                 key_path = key if isinstance(key, tuple) else (key,)
                 input_args[arg_domain] = _write_path(input_args[arg_domain], key_path, replayed)
         input_args["args"] = list(_substitute_params(list(input_args["args"]), self.param_leaves))
