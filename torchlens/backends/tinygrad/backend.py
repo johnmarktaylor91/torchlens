@@ -82,6 +82,7 @@ from ._derived_grads import (
     _tree_leaves_with_paths,
 )
 from ._execution_guard import _reject_mid_capture_execution
+from ._raw_labels import _final_to_raw_labels
 from ._realize_once import RealizedCapture, live_tensor_uops, realize_capture, recorded_values
 from ._rules import (
     CONSTANT_KIND_ANNOTATION,
@@ -1573,17 +1574,7 @@ class TinygradBackend:
         # label would collide across passes and ``parents`` never uses it
         # anyway). An unresolvable label keeps its literal text and fails
         # closed against the capture.
-        final_to_raw: dict[str, str] = {}
-        for known_op in ops_by_raw_label.values():
-            raw_label = getattr(known_op, "_label_raw", None)
-            if not isinstance(raw_label, str):
-                continue
-            label = getattr(known_op, "label", None)
-            if isinstance(label, str):
-                final_to_raw[label] = raw_label
-            layer_label = getattr(known_op, "layer_label", None)
-            if isinstance(layer_label, str) and int(getattr(known_op, "num_passes", 1)) == 1:
-                final_to_raw[layer_label] = raw_label
+        final_to_raw = _final_to_raw_labels(ops_by_raw_label)
         arg_positions = record_member(op, "parent_arg_positions", {}).get("args", {})
         graph_positions = {
             position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
@@ -2860,17 +2851,7 @@ def _parent_perturbations_change_output(
     # recurrence grouping (bare layer_label for a single-pass referenced op,
     # pass-qualified label for a multi-pass one, torch parity); resolve both
     # spellings back to the raw capture identity before raw-keyed lookups.
-    final_to_raw: dict[str, str] = {}
-    for known_op in ops_by_raw_label.values():
-        raw_label = getattr(known_op, "_label_raw", None)
-        if not isinstance(raw_label, str):
-            continue
-        label = getattr(known_op, "label", None)
-        if isinstance(label, str):
-            final_to_raw[label] = raw_label
-        layer_label = getattr(known_op, "layer_label", None)
-        if isinstance(layer_label, str) and int(getattr(known_op, "num_passes", 1)) == 1:
-            final_to_raw[layer_label] = raw_label
+    final_to_raw = _final_to_raw_labels(ops_by_raw_label)
     graph_positions = {
         position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
         for position, label in record_member(op, "parent_arg_positions", {}).get("args", {}).items()

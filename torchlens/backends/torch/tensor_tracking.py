@@ -7,7 +7,7 @@ tracking, and structural fingerprints used by loop detection.
 import time
 import warnings
 import weakref
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -26,6 +26,7 @@ from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
 from ...recording._types import CaptureSpec
+from ._parent_arg_containers import _is_supported_parent_arg_container, _iter_arg_container_items
 from ._tl import (
     get_param_meta,
     get_tensor_label,
@@ -1305,58 +1306,6 @@ def _locate_parent_tensors_in_args(
                 tensor_all_arg_positions[arg_type][position] = parent_label
 
     return tensor_all_arg_positions
-
-
-def _is_supported_parent_arg_container(value: object) -> bool:
-    """Return whether ``value`` participates in parent arg-position mapping.
-
-    Parameters
-    ----------
-    value:
-        Candidate nested argument value.
-
-    Returns
-    -------
-    bool
-        True when ``value`` is a supported list/tuple or mapping container.
-    """
-
-    return isinstance(value, (Mapping, tuple, list))
-
-
-def _iter_arg_container_items(
-    container_kind: str | object,
-    container: object,
-) -> Iterable[tuple[Any, Any]]:
-    """Yield items from an args/kwargs structure or nested supported container.
-
-    Parameters
-    ----------
-    container_kind:
-        Either ``"args"``, ``"kwargs"``, or the nested container object itself.
-    container:
-        Args tuple, kwargs mapping, or a nested supported container.
-
-    Returns
-    -------
-    Iterable[tuple[Any, Any]]
-        Position keys paired with container values.
-
-    Raises
-    ------
-    TypeError
-        If ``container`` is not a supported args/kwargs or nested container shape.
-    """
-
-    if container_kind == "args":
-        return enumerate(cast(tuple[Any, ...], container))
-    if container_kind == "kwargs":
-        return cast(dict[Any, Any], container).items()
-    if isinstance(container, Mapping):
-        return container.items()
-    if isinstance(container, (list, tuple)):
-        return enumerate(container)
-    raise TypeError(f"Unsupported parent-arg container: {type(container)!r}")
 
 
 def _get_ancestors_from_parents(

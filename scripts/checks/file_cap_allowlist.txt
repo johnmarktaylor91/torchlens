@@ -720,7 +720,7 @@ torchlens/backends/_finalize.py	1360
 torchlens/backends/_finalize.py::_apply_recurrence_relabel_epilogue	106
 torchlens/backends/_finalize.py::_finalize_single_op	86
 torchlens/backends/_finalize.py::attach_object_module_logs	65
-torchlens/backends/_finalize.py::compute_preview_input_output_distances	86
+torchlens/backends/_finalize_distances.py::compute_preview_input_output_distances	86
 torchlens/backends/_finalize.py::finalize_single_pass_trace	150
 torchlens/backends/_finalize.py::new_preview_function_trace	100
 torchlens/backends/_finalize.py::populate_object_module_build_data	72
