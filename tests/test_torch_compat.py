@@ -382,6 +382,7 @@ def test_torch_capability_snapshot_contract() -> None:
         # The executing-node resolver matches backward FLOPs to the node that
         # ran them; a build without it charges the innermost node marker.
         "HAS_CURRENT_AUTOGRAD_NODE": tc.HAS_CURRENT_AUTOGRAD_NODE,
+        "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,

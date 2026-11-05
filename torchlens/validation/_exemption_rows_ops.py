@@ -245,6 +245,17 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         _SHAPE,
         _POSITION_NEGATIVE,
     ),
+    # Ruling Lead 3, 4 Nov 2026 2:31 PM PT (view-func-replay): torch reads only the receiver's
+    # view chain, never its values (view_func_impl / rev_view_func_impl in
+    # torch/csrc/autograd/python_variable.cpp); replay rebuilds that chain from the saved
+    # view context. The new base (or new view) at arg 1 stays perturbation-tested.
+    _structural(
+        ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"),
+        frozenset({0}),
+        "the receiver at arg 0 supplies its view chain",
+        "view-chain template: the receiver's elements never reach the output; arg 1 stays tested",
+        "tests/test_view_func_replay.py::test_planted_new_base_blind_replay_fails_perturbation",
+    ),
     _structural(
         "resize_as_",
         (frozenset({1}), ((1, frozenset({"the_template"})),)),
