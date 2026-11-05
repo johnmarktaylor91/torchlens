@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1655 modules, 685818 lines, 0 modules without a docstring.
+83 packages, 1655 modules, 685826 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,7 +22,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37221 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37229 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 9069 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11745 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
@@ -477,7 +477,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10672 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37221 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37229 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -522,7 +522,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3704 |
 | `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 360 |
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
-| `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 276 |
+| `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 284 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1915 |
 | `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 801 |
 | `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 184 |
