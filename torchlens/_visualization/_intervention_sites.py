@@ -16,8 +16,6 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
-__all__ = ["intervention_sites_for_log"]
-
 
 def intervention_sites_for_log(trace: Trace) -> list[Op]:
     """Resolve intervention spec targets to layer-pass records.

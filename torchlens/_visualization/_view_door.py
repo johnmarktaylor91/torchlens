@@ -118,7 +118,6 @@ def draw_view(
     trace: Trace,
     view: object,
     user_kwargs: Mapping[str, Any],
-    *,
     banner_lines: Callable[[Trace], Iterable[str]],
 ) -> Any:
     """Draw ``trace`` as the named premade view.
