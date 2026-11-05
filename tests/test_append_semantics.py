@@ -75,7 +75,7 @@ def test_is_appended_resets_on_non_append_rerun() -> None:
     assert trace._append_sequence_id == 1
 
     with pytest.warns(ControlFlowDivergenceWarning, match="raw-event shape hash diverged"):
-        trace.run(model, torch.randn(4, 3))
+        trace = trace.run(model, torch.randn(4, 3))
 
     assert trace.provenance.is_appended is False
     assert trace._append_sequence_id == 0

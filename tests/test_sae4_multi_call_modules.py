@@ -75,7 +75,7 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
         edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
     assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
-    edited.run(model, x)
+    edited = edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
 

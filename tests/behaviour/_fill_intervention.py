@@ -432,7 +432,7 @@ def _after_intervene(cell: Cell) -> None:
     if before is None:
         return
     torch.manual_seed(SEED)
-    trace.run(cell.model, cell.fresh_inputs())
+    trace = trace.run(cell.model, cell.fresh_inputs())
     cell.expect_same_leaves(before, cell.output_leaves(trace), "replay of the intervened trace")
 
 
@@ -450,7 +450,7 @@ def _expect_loaded_rerun(
 
     torch.manual_seed(SEED)
     try:
-        loaded.run(cell.model, cell.fresh_inputs())
+        loaded = loaded.run(cell.model, cell.fresh_inputs())
     except TorchLensError as exc:
         if _error_code(exc) != NOT_PERSISTED:
             raise

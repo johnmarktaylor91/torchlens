@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._runnable.verification import running_result
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
 
@@ -74,10 +75,15 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
         return out
 
     _attach(trace, tl.func("linear"), remover)
+    source = trace
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        trace.run(model, x)
+        trace = trace.run(model, x)
 
+    # The run wrote a new Trace; its link from the source ends with the run.
+    assert trace is not source
+    assert running_result(source) is None
+    assert relu_handle[0] not in _recipe_handles(source)
     assert events == ["removed", "linear", "linear"], events
     assert trace.last_run["hooks"] == 1
     assert trace.last_run["hooks_fired"] == 2
@@ -88,7 +94,7 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
     assert torch.allclose(trace[trace.output_layers[0]].out, expected)
 
     events.clear()
-    trace.run(model, x)
+    trace = trace.run(model, x)
     assert events == ["linear", "linear"], events
 
 
@@ -105,7 +111,7 @@ def test_forward_hook_removing_itself_fires_once() -> None:
     handle_box.append(_attach(trace, tl.func("relu"), once))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        trace.run(model, x)
+        trace = trace.run(model, x)
 
     assert len(fired) == 1, "a hook that removed itself fired again at a later site"
     assert trace.last_run["hooks"] == 0
@@ -135,7 +141,7 @@ def test_forward_hook_on_a_passed_site_is_gone_at_its_next_site() -> None:
     _attach(trace, tl.func("relu"), relu_hook)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        trace.run(model, x)
+        trace = trace.run(model, x)
 
     assert events == ["linear", "removed", "relu", "relu"], events
     assert trace.last_run["hooks"] == 1
@@ -164,7 +170,7 @@ def test_hooks_later_at_the_firing_site_still_finish_that_site() -> None:
     # Hooks at one site fire in staging order, so ``first`` is staged before ``second``.
     _attach(trace, tl.func("relu"), first)
     second_handle.append(_attach(trace, tl.func("relu"), second))
-    trace.run(model, x)
+    trace = trace.run(model, x)
 
     assert events == ["removed", "first", "second", "first"], events
 
@@ -178,7 +184,7 @@ def test_nothing_removed_keeps_the_rerun_unchanged() -> None:
         return out
 
     _attach(trace, tl.func("relu"), count)
-    trace.run(model, x)
+    trace = trace.run(model, x)
     assert len(fired) == 2
     assert trace.last_run["hooks"] == 1
     assert trace.last_run["hooks_fired"] == 2

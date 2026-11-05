@@ -69,7 +69,7 @@ def test_loaded_pristine_fork_with_a_session_set_only_edit_reruns(tmp_path: Path
     assert fork._runnable.loaded_values_intervened is False, "forks copy the snapshot"
 
     masked = x.masked_fill(_mask(x), 0)
-    fork.run(model, masked)
+    fork = fork.run(model, masked)
 
     expected = model(masked)
     assert torch.allclose(fork[fork.output_layers[0]].out, expected)
@@ -78,7 +78,7 @@ def test_loaded_pristine_fork_with_a_session_set_only_edit_reruns(tmp_path: Path
 def test_loaded_pristine_trace_reruns(tmp_path: Path) -> None:
     model, x = _model(), _input()
     loaded = tl.load(_saved(model, x, tmp_path / "pristine.tlspec", intervened=False))
-    loaded.run(model, x)
+    loaded = loaded.run(model, x)
     assert torch.allclose(loaded[loaded.output_layers[0]].out, model(x))
 
 

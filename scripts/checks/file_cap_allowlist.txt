@@ -428,9 +428,9 @@ torchlens/_runnable/state_context.py::_ambient_execution_context_restored	109
 torchlens/_runnable/state_context.py::_call_execution_context_entered	78
 torchlens/_runnable/state_context.py::_pre_call_contract_checks	79
 torchlens/_runnable/state_context.py::_state_contract_checks	131
-torchlens/_runnable/transaction.py	1260
+torchlens/_runnable/transaction.py	1257
 torchlens/_runnable/transaction.py::_execute_loaded_sparse_transaction	362
-torchlens/_runnable/transaction.py::run_live_trace	99
+torchlens/_runnable/transaction.py::run_live_trace	97
 torchlens/_runnable/verification.py::_attestation_state_matches	61
 torchlens/_runnable/verification.py::_value_at_path	71
 torchlens/_runnable/witness_contracts.py::_tensor_derived_scalar_stale	69
@@ -462,9 +462,9 @@ torchlens/_semantic/logit_lens.py	1393
 torchlens/_semantic/logit_lens.py::_reduce_projection_row	91
 torchlens/_semantic/logit_lens.py::logit_lens	72
 torchlens/_semantic/logit_lens.py::logit_lens_predictions	121
-torchlens/_semantic/patching.py	1092
+torchlens/_semantic/patching.py	1091
 torchlens/_semantic/patching.py::_require_effective_patch	62
-torchlens/_semantic/patching.py::_run_patch	74
+torchlens/_semantic/patching.py::_run_patch	73
 torchlens/_semantic/patching.py::activation_patch_residual_stream	128
 torchlens/_semantic/patching.py::attribution_patch_attention_heads	67
 torchlens/_semantic/recipes/__init__.py::activate_entrypoint_recipes	63
@@ -1045,7 +1045,7 @@ torchlens/debug/_precision.py::bisect_precision	73
 torchlens/debug/_rerun.py::isolated_capture	79
 torchlens/differential.py::diff	110
 torchlens/distributed/_audit.py::_audit_one_membership	77
-torchlens/experiment/_engine.py	903
+torchlens/experiment/_engine.py	899
 torchlens/experiment/_engine.py::sweep_sites	81
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	74
 torchlens/export/__init__.py	1108
@@ -1142,7 +1142,7 @@ torchlens/intervention/_trace_edits.py::do_with_options	65
 torchlens/intervention/_trace_edits.py::set_site	63
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	75
 torchlens/intervention/_trace_hooks.py::attach_sticky_hooks	79
-torchlens/intervention/_trace_run.py::run	305
+torchlens/intervention/_trace_run.py::run	303
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	61
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71

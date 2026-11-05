@@ -35,6 +35,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._do_target_doors import apply_region_target_do, lift_trace_slice
@@ -46,6 +47,7 @@ from ._edit_guards import (
 )
 from ._facet_union import is_facet_union
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
+from ._trace_run import rerun_in_place
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -266,6 +268,9 @@ def clear_edits(
         mark_intervention_spec_mutated(trace)
         # Removal takes effect at once, in a rerun or backward pass in progress.
         retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
+        mirror = running_result(trace)  # a positional run in progress writes a fork
+        if mirror is not None:
+            clear_edits(mirror, site, handle)
     record_operation(
         trace,
         "detach_hooks",
@@ -480,7 +485,7 @@ def _run_do_transaction(  # noqa: PLR0913 - the transaction's state, threaded fr
             result = push_from_handles(trace, attached_handles, options=intervention_options)
         else:
             assert model is not None
-            result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
+            result = rerun_in_place(trace, model, x, replay=ReplayOptions(strict=strict_value))
     except BaseException as exc:
         _detach_failed_do_hooks(trace, attached_handles, pre_state)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))

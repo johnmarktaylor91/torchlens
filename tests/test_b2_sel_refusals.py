@@ -202,7 +202,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     assert "tl.head(5)" in str(reports[0])
     reported = reports[0].fields["site_count"]
     assert f"writes {reported} sites" in str(reports[0])
-    edited.run(model, ids)
+    edited = edited.run(model, ids)
     written = sum(
         bool(torch.count_nonzero(after) == 0 and torch.count_nonzero(before) > 0)
         for before, after in zip(_head_slices(clean, 5), _head_slices(edited, 5), strict=True)

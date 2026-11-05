@@ -59,7 +59,7 @@ def _rerun_log(
     assert (log.cost.forward_peak_memory is None) == (first == 0)
     _measure(monkeypatch, rerun)
     log.do({tl.func("relu"): tl.zero_ablate()}, intervention=_STAGE)
-    log.run(model, torch.randn(2, 3))
+    log = log.run(model, torch.randn(2, 3))
     return log, model
 
 

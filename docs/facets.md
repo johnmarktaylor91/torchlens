@@ -238,7 +238,7 @@ Static patching uses the same scatter-back path:
 patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
 edited = log.fork("patched")
 edited.do(tl.facet("q").head(3), patch, intervention=tl.options.InterventionOptions(engine="set_only"))
-edited.run(model, x)
+edited = edited.run(model, x)
 ```
 
 `tl.head(index)` without a facet name targets the default attention projection
