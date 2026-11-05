@@ -467,8 +467,8 @@ By name lists the 3 most focused examples first;
 | `Layer.macs_backward` | layer.md#layer-cost-facts |
 | `Layer.macs_total` | layer.md#layer-cost-facts |
 | `Layer.module` | layer.md#layer-module-facts |
-| `Layer.module_call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.call_depth` | layer.md#layer-module-facts |
+| `Layer.module_context.call_stack` | layer.md#layer-module-facts |
 | `Layer.module_context.is_atomic_module` | layer.md#layer-module-facts |
 | `Layer.module_context.is_module_input` | layer.md#layer-single-pass-reads |
 | `Layer.module_context.output_of_module_calls` | layer.md#layer-module-facts |
