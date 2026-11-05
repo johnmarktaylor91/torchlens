@@ -60,3 +60,38 @@ def test_hook_fires_once_per_selected_op_per_pass(build: Callable[[Any], Any]) -
     assert len(replay) == len(selected)
     assert all(state is replay[0] for state in replay)
     assert replay[0] is not run_states[0]
+
+
+def test_fork_do_replay_starts_a_fresh_run_state() -> None:
+    """A ``fork.do`` replay is its own run: ``ctx.run_state`` never inherits the capture's scratch.
+
+    ``trace.fork()`` copies the capture's ``last_run``; the replay must not seed
+    its run context from that copy, or the hook's run-scoped counter continues
+    from the capture's value instead of counting this run's fires.
+    """
+
+    run_states: list[Any] = []
+
+    def hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
+        ctx.run_state["fires"] = ctx.run_state.get("fires", 0) + 1
+        run_states.append(ctx.run_state)
+        return out + 1
+
+    x = torch.randn(3, 4)
+    trace = tl.trace(
+        _model(),
+        x,
+        intervene=_one_clause(hook),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    capture_fires = len(run_states)
+    assert capture_fires == 2
+    first_linear = next(op for op in trace.ops if op.func_name == "linear")
+    fork = trace.fork()
+    fork.do(tl.label(first_linear.layer_label), tl.zero_ablate())
+    replay = run_states[capture_fires:]
+    assert len(replay) == 2
+    assert all(state is replay[0] for state in replay)
+    assert replay[0] is not run_states[0]
+    assert replay[0]["fires"] == len(replay)
+    assert run_states[0]["fires"] == capture_fires

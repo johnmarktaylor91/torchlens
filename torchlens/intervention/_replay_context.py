@@ -105,6 +105,41 @@ def _ensure_replay_run_ctx(log: Trace) -> dict[str, Any]:
     return run_ctx
 
 
+def _fresh_replay_run_ctx(log: Trace) -> dict[str, Any]:
+    """Return a NEW run context for one replay of ``log``.
+
+    ``HookContext.run_state`` is run-scoped (glossary): a replay is its own run,
+    so its context never inherits the previous run's hook scratch, the live
+    capture's site minter or the earlier run's summary keys, even when
+    ``trace.fork()`` copied that run's ``last_run`` onto the fork. The one
+    session key carried over is the capture-truth digest ledger
+    (:data:`REPLAY_CAPTURE_DIGESTS_KEY`): it records each site's out the FIRST
+    time any replay overwrote it, so a later replay must extend it, never
+    restart it. The capture's seed is re-derived from the trace options.
+
+    Parameters
+    ----------
+    log:
+        Model log about to be replayed.
+
+    Returns
+    -------
+    dict[str, Any]
+        Fresh run context (not yet installed on ``log``).
+    """
+
+    previous = getattr(log, "last_run", None)
+    run_ctx: dict[str, Any] = {}
+    if isinstance(previous, dict):
+        digests = previous.get(REPLAY_CAPTURE_DIGESTS_KEY)
+        if isinstance(digests, dict):
+            run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = dict(digests)
+    trace_seed = log._options_seed
+    if trace_seed is not None:
+        run_ctx["trace_random_seed"] = trace_seed
+    return run_ctx
+
+
 def _record_capture_digest(
     site: Op, known_digests: Mapping[str, str], new_digests: dict[str, str]
 ) -> None:

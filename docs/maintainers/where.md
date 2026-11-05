@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1730 modules, 702081 lines, 0 modules without a docstring.
+85 packages, 1729 modules, 701711 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5549 |
 | `torchlens.export._model_explorer` | Google Model Explorer export: a writer for Model Explorer's file-ingest schema with module-hierarchy namespaces, op-type labels, ported e... | 16 | 3039 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38151 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 86 | 38185 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1923 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 432 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 85 | 34387 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 33983 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
@@ -1863,7 +1863,7 @@ Google Model Explorer export: a writer for Model Explorer's file-ingest schema w
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38151 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (86 modules, 38185 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1913,9 +1913,9 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_recipe_io` | Save and load a :class:'Recipe' as a ''.tlspec'' directory (manifest kind ''"recipe"''). | 309 |
 | `_region_graph` | Region instance connectivity and re-entry path search. | 64 |
 | `_regions` | Regions: derived admissibility on the existing verbs. | 1025 |
-| `_replay` | Saved-DAG replay engine for TorchLens interventions. | 1636 |
+| `_replay` | Saved-DAG replay engine for TorchLens interventions. | 1635 |
 | `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 359 |
-| `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 343 |
+| `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 378 |
 | `_replay_grad_clear` | Clear recorded op and parameter gradient projections before a differentiable replay. | 50 |
 | `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 505 |
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 237 |
@@ -2317,7 +2317,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (85 modules, 34387 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 33983 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2333,7 +2333,6 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_core_arg_slots` | Slot-level evidence readers for the unattributed-arg-slot sweep. | 101 |
 | `_crossing_perturbations` | Boundary-crossing parent perturbations for ''isclose'', saturation and clamp bounds. | 486 |
 | `_ctc_lengths_perturbation` | Sum-preserving length perturbation for ''ctc_loss''. | 80 |
-| `_degenerate_domains` | Degenerate-domain exemptions: arguments whose saved call admits one valid value. | 319 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |
 | `_descriptor_versions` | Runnable descriptor version tripwire shared by the sparse-descriptor and artifact validators. | 67 |
 | `_destination_coverage` | Destination-overwrite coverage proofs for indexed writes. | 468 |
@@ -2341,15 +2340,15 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_display` | Validation printouts; independent of checks, tolerances and verdict production. | 112 |
 | `_domain_perturbations` | Deterministic in-domain parent perturbations for domain-sensitive ops. | 691 |
 | `_edge_boundary` | Edge-intervention boundary validation, split out of ''core.py''. | 361 |
-| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 667 |
-| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 539 |
+| `_exemption_rows_decisions` | Reason-code rows of the validation exemption table. | 655 |
+| `_exemption_rows_ops` | Op-keyed rows of the validation exemption table. | 494 |
 | `_exemption_schema` | Row schema and derived views for the declared validation exemption table. | 160 |
 | `_exemption_table` | The declared table of validation exemptions. | 91 |
-| `_exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2490 |
+| `_exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2529 |
 | `_exemptions_arg_slots` | Arg-slot locators for perturbed parents in the perturbation exemption checks. | 99 |
 | `_foreign_kernel_dependence` | Pre-perturbation check for the declared per-output dependence of known foreign kernels. | 139 |
 | `_grad_flags` | Captured ''requires_grad'' flags of replay arguments. | 83 |
-| `_index_domain` | Index-domain perturbation probes for index/target-consuming ops. | 461 |
+| `_index_domain` | Index-domain perturbation probes for index/target-consuming ops. | 457 |
 | `_influence_probes` | Evidence probes for posthoc decisions whose perturbed output did not move. | 389 |
 | `_integer_mod_proof` | Value proof for an integer dividend modulo +-1 (''remainder'' / ''fmod''). | 168 |
 | `_invariants` | Metadata invariant checks for ''Trace'' and its sub-objects. | 455 |
@@ -2394,7 +2393,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_replay_storage_context` | Replay a storage-geometry or view-function receiver on a clone of its saved context. | 423 |
 | `_replay_warnings` | Keep validation verdicts independent of the caller's warning filters. | 67 |
 | `_saved_outs_steps` | Recorded failure and diagnostic steps of one forward-replay validation run. | 281 |
-| `_saved_value_proofs` | Posthoc value proofs for parents that provably cannot reach an op's output. | 526 |
+| `_saved_value_proofs` | Posthoc value proofs for parents that provably cannot reach an op's output. | 463 |
 | `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 270 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 291 |
 | `_setitem_index_probe` | In-domain index probe for integer and bool-mask index components of ''__setitem__''. | 300 |
