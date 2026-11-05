@@ -2,8 +2,8 @@
 
 Split out of ``container.py``: the tree-line key and leaf-reference text of a
 container ``repr``, the text of one container path component, the spec
-identity test sibling-leaf discovery uses, and the name of a spec's first
-opaque member.
+identity test sibling-leaf discovery uses, the name of a spec's first
+opaque member, and the refusal text for a final output that cannot be rebuilt.
 """
 
 from __future__ import annotations
@@ -108,3 +108,37 @@ def _opaque_member_text(spec: ContainerSpec | None) -> str | None:
             for component, child in node.child_specs
         )
     return None
+
+
+def _unrebuildable_output_refusal(opaque_member: str | None) -> tuple[str, str, str]:
+    """Return the ``container_not_reconstructable`` refusal for a multi-output trace.
+
+    Parameters
+    ----------
+    opaque_member:
+        Text naming the first opaque node of the final-output spec, or ``None``.
+
+    Returns
+    -------
+    tuple[str, str, str]
+        Problem, code and remedy for ``PayloadUnavailableError``.
+    """
+
+    if opaque_member is None:
+        # No structure was recorded: the capture option persists it.
+        return (
+            "No reconstructable final-output container was captured",
+            "container_not_reconstructable",
+            "trace with capture_container_structure=True to persist container structure",
+        )
+    # The structure is recorded and holds an opaque node: the capture option cannot help.
+    return (
+        f"The final-output container cannot be rebuilt: {opaque_member} is or holds "
+        "an object TorchLens cannot represent (container kind 'opaque', for example a "
+        "Hugging Face DynamicCache)",
+        "container_not_reconstructable",
+        "read the output leaves one by one through trace.output_layers, register "
+        "the type with tl.types.register_container, or have the model return only "
+        "supported containers (for a Hugging Face model, use_cache=False leaves "
+        "the cache out)",
+    )

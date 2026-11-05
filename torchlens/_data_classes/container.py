@@ -29,6 +29,7 @@ from ._container_labels import (
     _leaf_reference,
     _opaque_member_text,
     _same_container_spec,
+    _unrebuildable_output_refusal,
 )
 
 if TYPE_CHECKING:
@@ -869,43 +870,27 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
         if opaque_member is None:
             opaque_member = _opaque_member_text(container.spec)
     if len(output_labels) == 1:
-        return _saved_single_output(trace.ops[output_labels[0]])
-    problem = "No reconstructable final-output container was captured"
-    remedy = "trace with capture_container_structure=True to persist container structure"
-    if opaque_member is not None:
-        # The structure is recorded and holds an opaque node: the capture option cannot help.
-        problem = (
-            f"The final-output container cannot be rebuilt: {opaque_member} is or holds "
-            "an object TorchLens cannot represent (container kind 'opaque', for example a "
-            "Hugging Face DynamicCache)"
-        )
-        remedy = (
-            "read the output leaves one by one through trace.output_layers, register "
-            "the type with tl.types.register_container, or have the model return only "
-            "supported containers (for a Hugging Face model, use_cache=False leaves "
-            "the cache out)"
-        )
-    raise PayloadUnavailableError(problem, code="container_not_reconstructable", remedy=remedy)
+        op = trace.ops[output_labels[0]]
+        value = op.out
+        # An eager load reads an unsaved op's out as None (the live trace already
+        # refuses that read): refuse it here too rather than answer a silent None.
+        if value is not None or getattr(op, "has_saved_activation", False):
+            return value
+        problem, code, remedy = _unsaved_output_refusal(op)
+    else:
+        problem, code, remedy = _unrebuildable_output_refusal(opaque_member)
+    raise PayloadUnavailableError(problem, code=code, remedy=remedy)
 
 
-def _saved_single_output(op: Any) -> Any:
-    """Return a lone output op's saved value; refuse ``activation_not_saved`` when unsaved.
+def _unsaved_output_refusal(op: Any) -> tuple[str, str, str]:
+    """Return the ``activation_not_saved`` refusal for a lone output op that was never saved."""
 
-    An eagerly loaded trace reads an unsaved op's ``out`` as ``None`` (the live trace
-    already refuses), so without this a save that left the output op out would rebuild
-    the model output as a silent ``None``.
-    """
-
-    value = op.out
-    if value is None and not getattr(op, "has_saved_activation", False):
-        label = getattr(op, "layer_label", None) or getattr(op, "label", "the output op")
-        raise PayloadUnavailableError(
-            f"op {label} was not saved; no saved payload is available",
-            code="activation_not_saved",
-            remedy="re-run with save=... covering the output op to retain the model output",
-            label=str(label),
-        )
-    return value
+    label = getattr(op, "layer_label", None) or getattr(op, "label", "the output op")
+    return (
+        f"op {label} was not saved; no saved payload is available",
+        "activation_not_saved",
+        "re-run with save=... covering the output op to retain the model output",
+    )
 
 
 def reconstruct_container(
