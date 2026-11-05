@@ -341,7 +341,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # to _utils/_kernel_probes.py; measured 4277.
     # 4300 -> 4272 (floor batch FB1): the floor capability flags merged in and the
     # causal-bias lookup probe body moved to _utils/_kernel_probes.py; measured 4272.
-    "torchlens/_utils/_torch_compat.py": 4272,
+    "torchlens/_utils/_torch_compat.py": 4267,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

@@ -36,6 +36,11 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # try/finally; a survivor would let Dynamo trace a session forward
         # unlogged outside that cond's compile.
         ("torchlens/backends/torch/_tracing_pass.py", "cond_entry_innermost"),
+        # Whether the running capture lifted the operator entry compile: saved
+        # and restored in lift_hop_entry_compiles' try/finally; a survivor set
+        # would let a later unlifted capture pass a grad map's tracing pass
+        # through (per-row outputs) instead of failing loudly.
+        ("torchlens/backends/torch/_tracing_pass.py", "hop_entry_lifted"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
         # a survivor past the load window would arm the unknown-field refusal
@@ -1634,6 +1639,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_visualization/_color_sources.py", "__all__"),
         ("torchlens/_visualization/_container_edges.py", "__all__"),
         ("torchlens/_visualization/_edge_multiplicity.py", "__all__"),
+        ("torchlens/_visualization/_edit_change.py", "__all__"),
         ("torchlens/_visualization/_edit_highlighter.py", "__all__"),
         ("torchlens/_visualization/_edit_marks.py", "__all__"),
         ("torchlens/_visualization/_expansion_manifest.py", "__all__"),

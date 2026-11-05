@@ -19,7 +19,6 @@ torch's ``NotImplementedError``: validation then fails loudly, never silently.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -261,35 +260,58 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     rules = _witness_hop_rules()
     for op, rule in rules:
         if mode_type not in witness_rule_table(op):
-            # The operator pops the mode before the rule; inside a lifted entry compile
-            # Dynamo would otherwise trace the rule's ``with mode:`` (_tracing_pass).
-            # Without Dynamo imported nothing can trace it yet: wrap it at the first
-            # entry compile instead (compile_disable_witness_hop_rules).
-            dynamo_loaded = "torch._dynamo" in sys.modules
-            op.py_impl(mode_type)(compile_disabled(rule) if dynamo_loaded else rule)
+            op.py_impl(mode_type)(_DynamoDeferredRule(rule))
         registered.append(str(op.name()))
     unresolved = len(rules) < 2 + len(_DENSE_UNDER_MODE)
     mode_type._hop_rules_pending = register_witness_hop_rules if unresolved else None
     return tuple(registered)
 
 
-def compile_disable_witness_hop_rules() -> None:
-    """Put every rule registered before Dynamo was imported behind ``torch.compiler.disable``.
+class _DynamoDeferredRule:
+    """A witness rule registered plain until a lifted entry compile first runs.
 
-    Runs before each TorchLens-lifted operator entry compile (``hop_internal_compile_scope``),
-    the first point at which Dynamo can trace a rule; a plain capture never gets here, so it
-    never imports ``torch._dynamo`` (``torch.compiler.disable`` imports it, and FSDP with it).
+    The operator pops the mode before the rule; inside a lifted entry compile
+    Dynamo would otherwise trace the rule's ``with mode:`` (``_tracing_pass``).
+    ``torch.compiler.disable`` imports ``torch._dynamo``, which a plain import or
+    capture must not, so :func:`hide_witness_hop_rules_from_dynamo` applies it on
+    the lifted-compile path instead.
     """
+
+    __slots__ = ("rule",)
+
+    def __init__(self, rule: _HopRule) -> None:
+        """Hold ``rule``.
+
+        Parameters
+        ----------
+        rule:
+            The witness rule.
+        """
+
+        self.rule = rule
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run the rule.
+
+        Parameters
+        ----------
+        *args, **kwargs:
+            The operator's arguments.
+
+        Returns
+        -------
+        Any
+            The rule's result.
+        """
+
+        return self.rule(*args, **kwargs)
+
+
+def hide_witness_hop_rules_from_dynamo() -> None:
+    """Swap each plain witness rule for its ``torch.compiler.disable`` form (idempotent)."""
 
     for op, _rule in _witness_hop_rules():
         table = witness_rule_table(op)
-        for mode_type, rule in list(table.items()):
-            if _is_torchlens_mode(mode_type) and not getattr(rule, "_torchdynamo_disable", False):
-                del table[mode_type]
-                op.py_impl(mode_type)(compile_disabled(rule))
-
-
-def _is_torchlens_mode(key: Any) -> bool:
-    """Return whether rule-table key ``key`` is a TorchLens dispatch-mode class."""
-
-    return isinstance(key, type) and issubclass(key, _TorchLensDispatchMode)
+        for mode_type, entry in tuple(table.items()):
+            if isinstance(entry, _DynamoDeferredRule):
+                table[mode_type] = compile_disabled(entry.rule)

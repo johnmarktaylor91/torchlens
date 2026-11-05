@@ -2693,16 +2693,14 @@ def get_checkpoint_internal_hook_class() -> type[Any] | None:
     New in torch 2.14 (``torch/utils/checkpoint.py``): ``_checkpoint_hook`` and
     ``_recomputation_hook`` both subclass this intermediate class instead of
     ``torch.autograd.graph.saved_tensors_hooks`` directly. Its ``__enter__`` sets
-    ``self.pack_hook._user_hooks`` (walked by ``_current_user_saved_tensors_hooks``
-    to resolve nested-checkpoint identity) and its ``__exit__`` deletes that same
-    attribute. Absence (torch 2.13 and earlier, or a torch without the private
-    name) means hook objects carry no such cross-call identity state, so a
-    hook-object replacement is always safe; presence means a replacement MUST
-    carry the attribute forward or skip the swap (fail-closed), or torch's own
-    ``__exit__`` raises reaching for state that moved to a different function
-    object -- an exception inside ``__exit__`` that skips the matching
-    ``_pop_saved_tensors_default_hooks()`` call and permanently corrupts torch's
-    global saved-tensors-hooks stack for the rest of the process.
+    ``self.pack_hook._user_hooks`` (walked by ``_current_user_saved_tensors_hooks`` to resolve
+    nested-checkpoint identity) and its ``__exit__`` deletes that same attribute. Absence (torch
+    2.13 and earlier, or a torch without the private name) means hook objects carry no such
+    cross-call identity state, so a hook-object replacement is always safe; presence means a
+    replacement MUST carry the attribute forward or skip the swap (fail-closed), or torch's own
+    ``__exit__`` raises reaching for state that moved to a different function object -- an exception
+    inside ``__exit__`` that skips the matching ``_pop_saved_tensors_default_hooks()`` call and
+    permanently corrupts torch's global saved-tensors-hooks stack for the rest of the process.
     """
 
     global HAS_CHECKPOINT_INTERNAL_HOOK_CLASS, _CHECKPOINT_INTERNAL_HOOK_CLASS
@@ -3168,12 +3166,11 @@ def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     Returns
     -------
     bool
-        True while a ``torch.compile`` region is traced. False, with no import,
-        while ``torch._dynamo`` is unimported (unless ``force_probe``) or no probe
-        resolved: an absent probe means "not compiling". True when a resolved
-        probe RAISES (r-b4 R26-3), so the wrapper takes the disclosed bypass
-        instead of logging data-free FakeTensors. Both degraded paths flip
-        ``HAS_DYNAMO_IS_COMPILING``.
+        True while a ``torch.compile`` region is traced. False, with no import, while
+        ``torch._dynamo`` is unimported (unless ``force_probe``) or no probe resolved: an absent
+        probe means "not compiling". True when a resolved probe RAISES (r-b4 R26-3), so the wrapper
+        takes the disclosed bypass instead of logging data-free FakeTensors. Both degraded paths
+        flip ``HAS_DYNAMO_IS_COMPILING``.
 
     Notes
     -----
@@ -4130,14 +4127,12 @@ def force_mha_slow_path(model: torch.nn.Module) -> Iterator[None]:
 def tensor_version_or_none(tensor: Any) -> int | None:
     """Return ``tensor._version`` for TorchLens-internal bookkeeping, or ``None``.
 
-    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError``
-    ("Inference tensors do not track version counter"), which ``getattr(...,
-    None)`` does not swallow -- every capture under ambient
-    ``torch.inference_mode()`` crashed on TL's own dedup/reference/version
-    bookkeeping reads. This helper is the ONE safe accessor for every
-    TorchLens-owned ``_version`` read; an unavailable version degrades the
-    optimization (dedup miss / conservative mutation fallback), never aborts
-    capture. Genuine USER ``_version`` reads keep their native torch behavior.
+    r37 hon1_4: inference tensors REJECT ``_version`` with ``RuntimeError`` ("Inference tensors do
+    not track version counter"), which ``getattr(..., None)`` does not swallow -- every capture
+    under ambient ``torch.inference_mode()`` crashed on TL's own dedup/reference/version bookkeeping
+    reads. This helper is the ONE safe accessor for every TorchLens-owned ``_version`` read; an
+    unavailable version degrades the optimization (dedup miss / conservative mutation fallback),
+    never aborts capture. Genuine USER ``_version`` reads keep their native torch behavior.
     """
 
     try:

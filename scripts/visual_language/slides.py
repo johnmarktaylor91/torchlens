@@ -706,8 +706,8 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "b",
                 "FlowReshape",
-                call="lens",
-                kwargs={"lens": "overview", "display_filter": "@exclude_reshapes"},
+                call="view",
+                kwargs={"view": "overview", "display_filter": "@exclude_reshapes"},
                 label="a lens with a display filter",
             ),
         ),
@@ -722,7 +722,8 @@ SLIDES: tuple[Slide, ...] = (
         title="Interventions: the edit and what it changed",
         rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
         "show_cone=True a translucent purple underlay runs under the arrows and outlines "
-        'it changed; "as_node" draws the hook as a purple delta diamond.',
+        'it changed (keyed "downstream of the edit" when the interventions view also outlines '
+        'changed values); "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
@@ -756,7 +757,7 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="surgery",
-        title="What an edit did: surgery lens",
+        title="What an edit did: interventions lens",
         rule="Solid magenta cites a recorded fire; dashed marks a declared target that did not "
         "fire here.",
         panels=(
@@ -764,7 +765,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                kwargs={"highlight": "interventions"},
+                kwargs={"view": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -773,14 +774,15 @@ SLIDES: tuple[Slide, ...] = (
             ),
         ),
         keys=(
-            Key("The edit: zero_ablate, replay engine", "node(text~edited)", at="edited"),
+            Key("The edit: zero_ablate", 'node(text~"Δ zero_ablate")', at="edited"),
             Key(
                 "The target's site cohort: no fire recorded at this instance",
                 'node(text~"no fire")',
                 at="cohort",
             ),
         ),
-        footnote="Up to {surgery_cap} citation rows per node; a caption census names the "
+        footnote="Up to {surgery_cap} citation rows per node; a light purple outline marks "
+        "each op whose saved value the edit changed; the .census.txt record names the "
         "replacement lane that ran.",
         rows=("VN19", "VC02", "VC05"),
     ),
@@ -966,9 +968,9 @@ SLIDES: tuple[Slide, ...] = (
         "refuse when evidence is missing.",
         layout="grid",
         panels=(
-            Panel("a", "Flow", call="lens", kwargs={"lens": "overview"}, label="overview"),
-            Panel("b", "Flow", call="lens", kwargs={"lens": "speed"}, label="speed"),
-            Panel("c", "Flow", call="lens", kwargs={"lens": "dims"}, label="dims"),
+            Panel("a", "Flow", call="view", kwargs={"view": "overview"}, label="overview"),
+            Panel("b", "Flow", call="view", kwargs={"view": "speed"}, label="speed"),
+            Panel("c", "Flow", call="view", kwargs={"view": "dims"}, label="dims"),
         ),
         cells=(
             Cell("a", "node(text~tanh)", "overview"),
@@ -988,9 +990,9 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Nonfinite",
-                call="lens",
+                call="view",
                 capture={"save": "@unsaved_abs"},
-                kwargs={"lens": "debug", "node_label_fields": ["label"]},
+                kwargs={"view": "debug", "node_label_fields": ["label"]},
             ),
         ),
         cells=(
@@ -1362,8 +1364,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Edits",
-        "intervention_mode, highlight",
-        ("intervention_mode", "show_cone", "highlight"),
+        "intervention_mode, view='interventions'",
+        ("intervention_mode", "show_cone", "view"),
     ),
     (
         "Measurements",
@@ -1505,7 +1507,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("edited site", "interventions", "a", "node(color={site_color})"),
             ("downstream of an edit", "interventions", "a", "node(class~tl_downstream)"),
             ("hook node", "interventions", "b", "node(shape=diamond)"),
-            ("recorded edit (surgery)", "surgery", "a", "node(text~edited)"),
+            ("recorded edit (surgery)", "surgery", "a", 'node(text~"Δ zero_ablate")'),
         ),
         "alphabet-lines": (
             ("data flows here", "start-here", "a", "edge(style=solid)"),

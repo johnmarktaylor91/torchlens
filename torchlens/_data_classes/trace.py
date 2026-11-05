@@ -76,7 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
-    DrawHighlightLiteral,
+    DrawViewLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -3298,7 +3298,7 @@ class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         file_format: str | None = None,
         open_viewer: bool = False,
-        highlight: DrawHighlightLiteral | None = None,
+        view: DrawViewLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 
