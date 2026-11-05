@@ -68,7 +68,7 @@ physical), random-state, and nondeterministic-capture-context runs report `not_a
 `attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
 `NumericAttestationStatus`, and `RunnableErrorCode` vocabularies live in `torchlens._runnable` and are
-documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 additions:
+documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. Additions:
 `state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
 context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with

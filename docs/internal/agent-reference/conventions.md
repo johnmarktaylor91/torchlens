@@ -62,7 +62,7 @@
   measured break), and the replay law: `run()` on coupled products refuses
   `episode_coupled_replay_underivable` (both engines) and `do()` edits quarantine
   inherited episode evidence. DIAGNOSTIC-TIER: cost is superlinear
-  in step count — tens of steps, never hundreds. Bundles carry the optional S6
+  in step count — tens of steps, never hundreds. Bundles carry the optional
   member-relation table (`relations=`, `Bundle.relate`,
   `Bundle.episode_status`; harness bundles add the `fed_by` content-provenance kind
   with token-stream-bound spans, automatic `token_spans="auto"` matching and the strict

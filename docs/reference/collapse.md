@@ -132,11 +132,11 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
   never an uncollapsed wall.
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
   `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
-  module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
+  module overview plus an expansion manifest (uncollapsed only when
   the root has no child module), a forward drawing's `Drawing.collapse_plan` refuses typed
   (`collapse_plan_unavailable`, reason `collapse_ops_ceiling`), and its `Drawing.collapse_schedule`
   degrades to a single full-graph step.
-- Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
+- Over-ceiling residuals (DOCUMENTED-UNSTABLE): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
   pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
   the picture (schema `torchlens_expansion_manifest_v1`: one entry per collapsed unit

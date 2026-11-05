@@ -34,11 +34,11 @@
     with no 3.0 form at all refuses typed (`metadata_value_unportable`), and the reload check
     parses and decodes the written records before publish; load validates graph structure,
     edge carriers, and TorchLens-owned annotation families.
-9b. tlspec v9 (C07 coordinated schema write): the audit grammar admits per-site
+9b. tlspec v9 (coordinated schema write): the audit grammar admits per-site
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
-    annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
+    annotation families; entry-dark declared slots `Op.injection_provenance` (log-injection writes),
     `Trace.source.snapshots`, `Trace.graph.structure_evidence` validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
@@ -189,7 +189,7 @@
     explicit `CallExecutionContext` (autocast with affirmative disabled state + grad/inference
     mode) and the descriptor carries one `AmbientExecutionContext`, both restored at replay or
     refused typed. Absent context records only ever mean a legacy v1 artifact, which loads
-    analysis-only. r71 A closes the witness-strip class with a structural obligation/discharge
+    analysis-only. The runnable contract closes the witness-strip class with a structural obligation/discharge
     invariant: `WITNESS_FAMILY_REGISTRY` v2 (`witness_family_registry_v2`) covers EVERY
     verdict-steering witness family -- the four direct control kinds plus the shape families plus
     two claim-only families -- each row naming its independent replay-structural anchor. Every
@@ -231,13 +231,13 @@
     faithfulness is `verified|diverged|unverifiable`, state source is
     `live_model_state|embedded_capture_state|user_state_dict|random_initialization|not_applicable`,
     and divergence policy is `raise|return`. Error handling uses `RunnableErrorCode`, never
-    exception-message matching. r37 adds the frozen codes `state_alias_topology_unsupported`
+    exception-message matching. The frozen codes include `state_alias_topology_unsupported`
     (save-time refusal of distinct-object overlapping/unprovable bound-state alias topology; tied
     live-identity state stages as ONE alias-group allocation instead) and `context_field_invalid`
     (parse-time refusal of persisted execution-context values outside their closed vocabulary).
     The complete taxonomy and payload rules live in
     `docs/reference/runnable_tlspec_contract.md`.
-19a. r37 honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
+19a. Runnable honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
     containers carrying extra per-instance state refuse at runnable save
     (`output_container_contract_missing`; one per-kind capability table --
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof

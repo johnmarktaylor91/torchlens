@@ -11,7 +11,7 @@
   (`op_store.py`) held at `trace._trace_core` (declared `FieldPolicy.DROP`); rows are
   row-major lists while building and seal after the final step, key 20 (columnar transpose with
   numeric packing at >=512 rows). `Op._copy_with_shallow_fields()`, pickle restore, fork shells, and
-  preview backends use detached single-row stores. M6 relations are LIVE
+  preview backends use detached single-row stores. Relations are LIVE
   (`relation_views.py`): on FINISHED traces the relation accessors return IMMUTABLE
   views — `tuple` for label sequences (`parents`, `children`, `modules`,
   `module_call_stack`, conditional child lists, ...), `frozenset` for label sets

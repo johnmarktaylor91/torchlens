@@ -111,5 +111,5 @@ disclosure presence, the label-spelling audit, CVD palette gates),
 RenderIR-derived answer keys (`generate_answer_key`; hand keys prohibited),
 and the naive-evaluator battery harness (`build_packet`, `score_responses`,
 `freeze_threshold` -- the anchor-midpoint procedure). The nine honesty
-classes are zero-tolerance forever. Running evaluators is D03's job; the
+classes are zero-tolerance forever. Running evaluators is the battery's job; the
 normative gallery/battery matrix is `docs/internal/reference/lens_gallery_spec.md`.

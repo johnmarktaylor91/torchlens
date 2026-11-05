@@ -30,7 +30,7 @@ Key entry points:
   refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
-  refuse typed pre-D1/S2) mirrored on
+  refuse typed) mirrored on
   `trace.options.grouping`, with the load-validated `grouping_policy_v1` stamp on
   `trace.options.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
@@ -138,7 +138,7 @@ Key entry points:
   parity oracle. FIX-H shipped in `tl.viz.heatmap` (nearest-neighbor
   cells, separate `row_labels=`/`col_labels=`, post-selection omission
   marker). Doc: `docs/reference/tviz.md`.
-- Structure-only capture (DOCUMENTED-UNSTABLE; D8 GRANTED — weights-free
+- Structure-only capture (DOCUMENTED-UNSTABLE; weights-free
   admission live): `tl.trace(model, x,
   capture=CaptureOptions(structure_only=True))` records structure +
   shape/dtype HYPOTHESES, never values; META-BUILT models are admitted

@@ -53,7 +53,7 @@ random/non-equivalent-state, and nondeterministic-capture-context runs are `not_
 `verified|diverged|unverifiable` path faithfulness, and numeric attestation in its `RunResult`.
 Use `on_divergence="return"` only when a permanently poisoned diagnostic result is intended. Match failures
 through `RunnableErrorCode`; the complete frozen taxonomy is in
-`docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
+`docs/reference/runnable_tlspec_contract.md`. Overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
 (`state_alias_topology_unsupported` / `output_container_contract_missing`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
