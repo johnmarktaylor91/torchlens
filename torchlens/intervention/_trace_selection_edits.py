@@ -10,7 +10,7 @@ through the record's ``_attach_hooks`` and ``clear_edits`` verbs.
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -604,19 +604,24 @@ def push_from_handles(
         [] if differentiable else snapshot_module_boundary_sites(trace, _own_specs(trace, wanted))
     )
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
+    run = _push_runner(differentiable)
     with changed_param_scope(False):
-        if differentiable:
-            result = replay_module._run_differentiable_replay(
-                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-            )
-        else:
-            # Through the module so a replay counter patched on it sees this push too.
-            result = replay_module._run_replay(
-                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-            )
+        result = run(
+            trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+        )
     clear_staged_unfired(trace)
     _materialize_module_edits(trace, boundary)
     return result
+
+
+def _push_runner(differentiable: bool) -> Callable[..., Trace]:
+    """Return the replay runner for a push.
+
+    Looked up through the replay module at call time, so a replay counter
+    patched on that module sees this push too.
+    """
+
+    return replay_module._run_differentiable_replay if differentiable else replay_module._run_replay
 
 
 def _plan_with_module_boundaries(trace: Trace, selection: Any, edit: Any) -> tuple[Any, ...]:
