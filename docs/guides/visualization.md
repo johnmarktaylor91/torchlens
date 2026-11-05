@@ -446,7 +446,7 @@ These keywords of `Trace.draw` are not pictured above:
 | `show_edge_shapes` | label each forward edge with the producer's output shape |
 | `show_input_transform_summary` | add a row summarizing the input preprocessing |
 | `container_max_inline` | how many items a container shows inline under `show_containers="collapsed"` or `"nodes"` (default 12) |
-| `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"cone"` |
+| `intervention_mode` | how edited sites are marked: `"node_mark"` (default) or `"as_node"` |
 | `bwd`, `intervening_cluster` | backward and combined graphs: which backward pass or passes to draw, and where backward-only nodes sit (`"upstream"`, `"outside"`, `"downstream"` or `"own"`) |
 
 The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
