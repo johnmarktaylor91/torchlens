@@ -20,6 +20,7 @@ partial diagnostics, and fastlog's lightweight `RecordContext` construction.
 | `config.py` | Session configuration dataclasses used by backend capture |
 | `arg_positions.py` | 3-tier tensor/parameter extraction: static table, dynamic cache, BFS fallback |
 | `salient_args.py` | Human-readable function configuration metadata |
+| `_arg_snapshot.py` | Op-time copy of caller-owned mutable argument containers (lists, dicts, sets, nested) so a later mutation cannot rewrite a stored record (`non_tensor_pos_args`, `non_tensor_kwargs`, `func_non_tensor_args`, `transform_config`) |
 | `flops.py` | Forward and backward FLOPs estimates with registry hooks |
 | `outcome.py` | SINGLE authority for terminal capture truth: `CaptureOutcome`/`CaptureStatus`/`CapturePhase`/`FailureOrigin` plus the N1-N5 capability chokepoint |
 | `session.py` | Capture-session lifecycle state |
