@@ -211,6 +211,45 @@ def test_forged_raw_label_reddens_the_survival_tripwire() -> None:
     assert "buffer_source" in str(scalar_error.value)
 
 
+def test_replay_run_metadata_step_raises_and_records_a_planted_invariant() -> None:
+    """The replay run's metadata step must run the invariants, record, and re-raise.
+
+    Direct killer for the mutation driver's M21 (``return None`` at entry of
+    ``_check_metadata_invariants_recorded``). Every other invariant plant reaches
+    the invariants through ``check_metadata_invariants`` itself or through the
+    consolidated path, which runs them a second time, so neither notices this
+    step being skipped.
+    """
+
+    from torchlens.validation._core import (
+        ValidationDecisionRecorder,
+        _check_metadata_invariants_recorded,
+    )
+    from torchlens.validation._diagnostics import CHECK_METADATA_INVARIANT, get_validation_failure
+
+    clean_trace = tl.trace(_WriteThenRead(), torch.ones(2))
+    clean_recorder = ValidationDecisionRecorder()
+    _check_metadata_invariants_recorded(clean_trace, clean_recorder, None, True)
+    assert clean_recorder.decisions == []
+
+    trace = tl.trace(_WriteThenRead(), torch.ones(2))
+    _entry(trace, "sum_1_3").parents = ["buffer_2_raw"]
+    skipped = ValidationDecisionRecorder()
+    _check_metadata_invariants_recorded(trace, skipped, None, False)
+    assert skipped.decisions == []
+
+    recorder = ValidationDecisionRecorder()
+    with pytest.raises(MetadataInvariantError, match="buffer_2_raw"):
+        _check_metadata_invariants_recorded(trace, recorder, None, True)
+    assert [(d.phase, d.decision, d.reason) for d in recorder.decisions] == [
+        ("metadata", "failed", "metadata_invariant_exception")
+    ]
+    failure = get_validation_failure(trace)
+    assert failure is not None
+    assert failure.check_name == CHECK_METADATA_INVARIANT
+    assert "buffer_2_raw" in failure.message
+
+
 # ---------------------------------------------------------------------------
 # Generative corruption sweep (R73, round 3): the hand plants above pin the
 # known corruption classes; this sweep GENERATES seeded random corruptions so
