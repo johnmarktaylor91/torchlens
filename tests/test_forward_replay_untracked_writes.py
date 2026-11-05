@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import dataclasses
 from collections.abc import Iterator
 from typing import Any
 
@@ -34,6 +35,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
+import torchlens.backends.torch._ops_shared_fields as _shared_fields
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens._utils.arg_handling import copy_arg_tree
@@ -304,13 +306,13 @@ def test_foreign_fill_swapped_operands_fail(route: str, model_name: str, defer: 
     assert not _validate_foreign(_FOREIGN_MODELS[model_name](route), defer, planted=True)
 
 
-#: Set by the planted model just before its ``sub``; the patched binder swaps that call's
-#: two positional parents while capture is running, then clears it.
+#: Set by the planted model just before its ``sub``; the patched slot snapshot swaps that
+#: call's two positional parents while capture is running, then clears it.
 _PLANT_SWAP = [False]
 
 
 class _PlantedSwapForeignFills(_TwoForeignFills):
-    """``_TwoForeignFills`` that asks the patched binder to swap ``sub``'s parents."""
+    """``_TwoForeignFills`` that asks the patched slot snapshot to swap ``sub``'s parents."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         first = torch.full((x.shape[0], 4), -1.0)
@@ -321,18 +323,35 @@ class _PlantedSwapForeignFills(_TwoForeignFills):
         return torch.sub(first, second)
 
 
-def _swapping_binder(real: Any) -> Any:
-    """Wrap the capture binder so the planted call binds its two slots to each other's parent."""
+def _swapping_slot_snapshot(real: Any) -> Any:
+    """Wrap the argument-slot snapshot so the planted call's two slots trade their labels.
 
-    def locate(self: Any, entries: Any, args: Any, kwargs: Any) -> Any:
-        positions = real(self, entries, args, kwargs)
-        bound = positions["args"]
-        if _PLANT_SWAP[0] and {0, 1} <= bound.keys() and bound[0] != bound[1]:
-            _PLANT_SWAP[0] = False
-            bound[0], bound[1] = bound[1], bound[0]
-        return positions
+    Each slot takes the other slot's label and provenance labels together, so the parent
+    recorder and the capture witness both read one consistent (wrong) binding.
+    """
 
-    return locate
+    def snapshot(trace: Any, call: Any, arg_tensors: Any) -> Any:
+        slots = real(trace, call, arg_tensors)
+        index = {(slot.kind, slot.key): i for i, slot in enumerate(slots)}
+        pair = (index.get(("args", 0)), index.get(("args", 1)))
+        if not _PLANT_SWAP[0] or None in pair or slots[pair[0]].label == slots[pair[1]].label:
+            return slots
+        _PLANT_SWAP[0] = False
+        first, second = slots[pair[0]], slots[pair[1]]
+        swapped = list(slots)
+        swapped[pair[0]] = dataclasses.replace(
+            first, label=second.label, session_parent_labels=second.session_parent_labels
+        )
+        swapped[pair[1]] = dataclasses.replace(
+            second, label=first.label, session_parent_labels=first.session_parent_labels
+        )
+        workspace = _shared_fields._peek_raw_graph_workspace(trace)
+        context = workspace._pending_arg_slots
+        by_key = {(slot.kind, slot.key): slot for slot in swapped}
+        workspace._pending_arg_slots = type(context)(call.args, call.kwargs, tuple(swapped), by_key)
+        return tuple(swapped)
+
+    return snapshot
 
 
 @pytest.mark.parametrize("defer", [True, False], ids=["deferred", "eager"])
@@ -348,13 +367,11 @@ def test_capture_time_swap_of_exported_storages_fails(
     exported storage, so neither swapped snapshot is marked and validation fails.
     """
 
-    import torchlens.backends.torch._ops_predicate_events as predicate_events
-
     model = _PlantedSwapForeignFills(route)
     torch.manual_seed(0)
     x = torch.randn(5)
-    real = predicate_events._locate_parent_tensors_in_args
-    monkeypatch.setattr(predicate_events, "_locate_parent_tensors_in_args", _swapping_binder(real))
+    real = _shared_fields.snapshot_arg_slots
+    monkeypatch.setattr(_shared_fields, "snapshot_arg_slots", _swapping_slot_snapshot(real))
     try:
         with _payload_clone_mode(defer=defer):
             trace = tl.trace(
