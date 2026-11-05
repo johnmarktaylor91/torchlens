@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from .._io.lazy import _file_identity
-from .._utils.hashing import sha256_file
+from .._utils.hashing import sha256_handle
 
 __tl_layer__ = "L3"
 
 import dataclasses
 import json
 import os
+import stat
 from pathlib import Path
 from typing import Any, Literal
 
@@ -22,7 +23,7 @@ from .._io import (
     ArtifactTooNewError,
     ArtifactTooOldError,
 )
-from .._io._json import _MAX_JSON_BYTES, loads_bounded, read_bounded
+from .._io._json import _MAX_JSON_BYTES, loads_bounded, open_regular, read_bounded
 from .._io.manifest import Manifest, enforce_version_policy
 from .._io.paths import resolve_bundle_blob_path
 from .._io.streaming import PARTIAL_SENTINEL, REASON_SENTINEL
@@ -36,6 +37,16 @@ from .types import ActivationRecord, Recording
 # warning-ledger DoS while leaving every realistic bundle untouched.
 _INDEX_MAX_BYTES = _MAX_JSON_BYTES
 _MAX_RECOVERY_WARNINGS = 200
+# REASON.txt is display text truncated to 500 characters; never read more than this.
+_REASON_MAX_BYTES = 4096
+#: Sidecar files a finalized fastlog bundle must hold as plain regular files.
+_FASTLOG_SIDECAR_FILES = (
+    "manifest.json",
+    "fastlog_index.jsonl",
+    "pass_index.json",
+    "label_index.json",
+    "metadata.json",
+)
 
 
 #: Governed compatibility refusals recover() must RE-RAISE, never salvage
@@ -268,7 +279,10 @@ def _abort_debris_reason(bundle_path: Path) -> str | None:
     if not (bundle_path / PARTIAL_SENTINEL).exists():
         return None
     try:
-        text = (bundle_path / REASON_SENTINEL).read_text(encoding="utf-8", errors="replace")
+        # Regular file only, bounded: a FIFO named REASON.txt used to hang recover()
+        # and an oversized one was read whole only to be truncated below.
+        with open_regular(bundle_path / REASON_SENTINEL, follow_symlinks=False) as handle:
+            text = handle.read(_REASON_MAX_BYTES).decode("utf-8", errors="replace")
     except OSError:
         text = ""
     text = " ".join(text.split())
@@ -319,7 +333,9 @@ def _read_index_lines(path: Path) -> list[str]:
     """
 
     try:
-        with path.open("rb") as handle:
+        # Regular file only (open_regular): a FIFO index used to block here forever,
+        # and a symlinked index would read whatever file it named.
+        with open_regular(path, follow_symlinks=False) as handle:
             # R10-3 fstat-first: refuse on the stat size BEFORE reading so an
             # over-ceiling index never materializes a transient ~512 MiB
             # buffer. The post-read length check stays as the truth for a file
@@ -410,6 +426,12 @@ def _validate_blob_metadata(
     if not blob_path.exists():
         recovery_warnings.append(f"missing blob {blob_id}")
         return False, None
+    # Containment above resolved symlinks; the blob itself must be the plain file the
+    # writer created, so a FIFO cannot hang the digest and a link cannot alias a file.
+    blob_path = bundle_path / str(relative_path)
+    if not _is_plain_file(blob_path):
+        recovery_warnings.append(f"blob {blob_id} is a symlink or not a regular file")
+        return False, None
     try:
         payload = _load_verified_blob_tensor(blob_path, str(expected_sha256))
     except ArtifactError:
@@ -422,7 +444,7 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     """Verify one fastlog blob's digest, then materialize it.
 
     The digest is computed by a CHUNKED streaming hash over the on-disk bytes
-    (``sha256_file``), never ``read_bytes()``: the prior code read the ENTIRE
+    (``sha256_handle``), never ``read_bytes()``: the prior code read the ENTIRE
     attacker-controlled blob into memory BEFORE the digest check, so a hostile
     bundle whose blob does not even match its claimed hash still forced a full
     allocation (KNOWN HIGH, never closed -- ee29700f bounded only the JSON reads).
@@ -435,15 +457,18 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     # two opens of the same path, so bracket the hash with the file identity and
     # re-check before loading -- a rename-replace in the window is refused
     # rather than admitting bytes that were never hashed.
+    # The digest reads the descriptor open_regular type-checked (no symlink, no FIFO),
+    # so a path swapped for a FIFO after the caller's lstat cannot block the hash.
     try:
-        pre_hash_identity = _file_identity(blob_path.stat())
-        observed_sha256 = sha256_file(blob_path)
+        with open_regular(blob_path, follow_symlinks=False) as handle:
+            pre_hash_identity = _file_identity(os.fstat(handle.fileno()))
+            observed_sha256 = sha256_handle(handle)
     except OSError as exc:
         raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if observed_sha256 != expected_sha256:
         raise ArtifactError(f"Checksum mismatch for fastlog blob at {blob_path}.")
     try:
-        pre_load_identity = _file_identity(blob_path.stat())
+        pre_load_identity = _file_identity(blob_path.lstat())
     except OSError as exc:
         raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if pre_load_identity != pre_hash_identity:
@@ -595,7 +620,7 @@ def _read_metadata(path: Path) -> dict[str, Any]:
     """
 
     try:
-        data = read_bounded(path)
+        data = read_bounded(path, follow_symlinks=False)
     except (OSError, json.JSONDecodeError, UnicodeDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -628,5 +653,22 @@ def _validate_fastlog_layout(bundle_path: Path, manifest: Manifest) -> None:
         candidate = bundle_path / name
         if not candidate.exists():
             raise ArtifactError(f"Fastlog bundle is missing {name}.")
-    if not (bundle_path / "blobs").is_dir():
+    for name in _FASTLOG_SIDECAR_FILES:
+        if not _is_plain_file(bundle_path / name):
+            raise ArtifactError(
+                f"Fastlog bundle {name} is a symlink or not a regular file.",
+                code="fastlog_bundle_file_unsafe",
+                remedy="Copy the bundle with its files as plain files, or re-record it.",
+            )
+    blobs_dir = bundle_path / "blobs"
+    if blobs_dir.is_symlink() or not blobs_dir.is_dir():
         raise ArtifactError("Fastlog bundle blobs path is not a directory.")
+
+
+def _is_plain_file(path: Path) -> bool:
+    """Return whether ``path`` is a regular file and not a symlink (``lstat``, never follows)."""
+
+    try:
+        return stat.S_ISREG(os.lstat(path).st_mode)
+    except OSError:
+        return False
