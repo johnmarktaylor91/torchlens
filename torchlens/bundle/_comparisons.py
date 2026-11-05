@@ -175,15 +175,13 @@ def rank_changes(
     )
     baseline_log = self._members[baseline_name]
     scored: list[tuple[str, float]] = []
-    baseline_sites = list(baseline_log._layer_list)
+    baseline_sites = _scored_sites(baseline_log)
     if baseline_sites:  # the at() model-floor gate, once instead of per site
         names = list(self._members)
         pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
         self._require_comparable("at", pairs=pairs)
     aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
     for site in baseline_sites:
-        if is_mapped_replacement(site, baseline_log):
-            continue  # scored at the site it replaced
         key = site_row_key(site)
         members = resolve_aligned_site(self._members, key, aligned)
         if members is None:
@@ -208,6 +206,12 @@ def rank_changes(
         scored = _fold_module_rows(scored)
     scored.sort(key=lambda row: row[1], reverse=True)
     return scored[:k]
+
+
+def _scored_sites(log: Trace) -> list[Any]:
+    """A member's ops that get a row: a module edit's replacement op is scored at the site it replaced."""
+
+    return [site for site in log._layer_list if not is_mapped_replacement(site, log)]
 
 
 def _check_rank_by(by: str) -> None:
@@ -269,9 +273,7 @@ def diff_members(
     # 0.0, different shapes refuse (typed) naming the site.
     rows: list[tuple[str, float]] = []
     aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
-    for left_site in left_log._layer_list:
-        if is_mapped_replacement(left_site, left_log):
-            continue  # compared at the site it replaced
+    for left_site in _scored_sites(left_log):
         layer_label = str(left_site.layer_label)
         label = site_row_key(left_site)
         suffix = label[len(layer_label) :]

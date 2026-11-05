@@ -38,7 +38,7 @@ def _owning_trace(op: Any) -> Trace | None:
     """The trace ``op`` belongs to, or ``None`` when it is detached."""
 
     try:
-        return op.source_trace  # type: ignore[no-any-return]
+        return op.source_trace
     except (AttributeError, RecordBindingError):
         return None
 
