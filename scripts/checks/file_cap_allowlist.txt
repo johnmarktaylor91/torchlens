@@ -496,7 +496,7 @@ torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
 torchlens/_utils/_tensor_label.py	1748
-torchlens/_utils/_torch_compat.py	4236
+torchlens/_utils/_torch_compat.py	4234
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	62
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -588,7 +588,7 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2030
+torchlens/_visualization/_render_nodes.py	2028
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	217
 torchlens/_visualization/_render_nodes.py::_build_layer_node	151
@@ -1449,7 +1449,7 @@ torchlens/validation/_invariants_topology.py::_check_sibling_relation_derivation
 torchlens/validation/_invariants_topology.py::_check_trace_self_consistency	91
 torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	212
 torchlens/validation/_operand_value_proofs.py::operand_value_proof_decision	85
-torchlens/viz/_feature_maps.py	1026
+torchlens/viz/_feature_maps.py	1025
 torchlens/viz/_feature_maps.py::_render_feature_map_grid	84
 torchlens/viz/_feature_maps.py::feature_map_node_spec	137
 torchlens/viz/_feature_maps.py::feature_map_node_spec.node_spec_fn	85
