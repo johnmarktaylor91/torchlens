@@ -46,7 +46,7 @@ torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	66
 torchlens/_capture/projections.py::_record_from_record_context	103
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projections.py::sync_recording_grad_records_from_sidecar	62
-torchlens/_capture/projectors.py	1010
+torchlens/_capture/projectors.py	1011
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
 torchlens/_capture/projectors.py::RefreshProjector.project	89
 torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	236
@@ -108,7 +108,7 @@ torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1077
 torchlens/_data_classes/param.py::Param.__init__	75
 torchlens/_data_classes/trace.py	3395
-torchlens/_data_classes/trace.py::Trace.__init__	358
+torchlens/_data_classes/trace.py::Trace.__init__	360
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
 torchlens/_data_substrate/artifact.py::read_trusted_rows	73
@@ -337,7 +337,7 @@ torchlens/_postprocess/ast_branches.py	2214
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
 torchlens/_postprocess/ast_branches.py::get_file_index	91
-torchlens/_postprocess/control_flow.py	1278
+torchlens/_postprocess/control_flow.py	1140
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
 torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
@@ -354,9 +354,9 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	68
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79
-torchlens/_postprocess/graph_traversal.py	877
-torchlens/_postprocess/graph_traversal.py::_add_output_layers	288
-torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	90
+torchlens/_postprocess/graph_traversal.py	874
+torchlens/_postprocess/graph_traversal.py::_add_output_layers	293
+torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	70
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
 torchlens/_postprocess/labeling.py	935
 torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	118
@@ -489,11 +489,12 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4388
+torchlens/_utils/_torch_compat.py	4390
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
 torchlens/_utils/_torch_compat.py::probe_c10d_capabilities	73
+torchlens/_utils/_torch_compat.py::probe_funcol_wait_interposition	61
 torchlens/_utils/alias_footprint.py::touched_bytes_relation	106
 torchlens/_utils/arg_handling.py	1016
 torchlens/_utils/arg_handling.py::_alias_candidate_pairs	88
@@ -964,8 +965,8 @@ torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	795
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	641
+torchlens/backends/torch/wrappers.py::torch_func_decorator	796
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	642
 torchlens/bridge/_sae_export.py::write_delphi	92
 torchlens/bridge/_sae_export.py::write_sae_dashboard	111
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86
