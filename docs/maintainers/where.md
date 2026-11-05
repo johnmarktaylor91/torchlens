@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1655 modules, 685826 lines, 0 modules without a docstring.
+83 packages, 1655 modules, 685849 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -65,7 +65,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9167 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.37 and earlier. | 5 | 2035 |
-| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 28 | 10773 |
+| `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 28 | 10796 |
 | `torchlens.debug._checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 12 | 4286 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2278 |
 | `torchlens.errors` | Public TorchLens exception classes. | 5 | 1419 |
@@ -1626,7 +1626,7 @@ Compatibility adapters for TorchLens 2.37 and earlier. (5 modules, 2035 lines)
 
 ### `torchlens.debug`
 
-Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (28 modules, 10773 lines)
+Debugging tools for completed TorchLens traces, grouped by the symptom they answer. (28 modules, 10796 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1649,7 +1649,7 @@ Debugging tools for completed TorchLens traces, grouped by the symptom they answ
 | `_infer_failure_classify` | Evidence-led probe-diary failure classification (quickstart ). | 99 |
 | `_infer_input_shape` | Input-shape inference helpers for TorchLens debug utilities. | 2093 |
 | `_infer_op_facts` | Executed-op fact readers for the input-shape guesser. | 107 |
-| `_infer_report` | The report :func:'torchlens.debug.guess_input_shape' returns, and its one-line repr. | 112 |
+| `_infer_report` | The report :func:'torchlens.debug.guess_input_shape' returns, and its one-line repr. | 135 |
 | `_infer_training_states` | Module training flags saved and restored around shape-inference probes. | 60 |
 | `_nan` | NaN and Inf bisection helpers for TorchLens traces. | 862 |
 | `_nan_backward` | Backward NaN bisector: a fire-order transition ledger with healing. | 624 |
