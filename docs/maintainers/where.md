@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1733 modules, 701686 lines, 0 modules without a docstring.
+85 packages, 1733 modules, 701705 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -52,7 +52,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.agent` | The read-only agent inspection surface: one tool registry exposed through Python (func:'call_tool'), the MCP server (''torchlens.bridge.m... | 16 | 5690 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15152 |
-| `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2550 |
+| `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2569 |
 | `torchlens.attribution._onebackward` | One-backward attribution reads: one backward pass seeded at gradient edges resolved from existing op fields, returned as a :class:'ReadTa... | 11 | 3856 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 20 | 7035 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 928 |
@@ -1290,12 +1290,12 @@ Input-attribution methods for TorchLens. (31 modules, 15152 lines)
 
 ### `torchlens.attribution._graph`
 
-Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. (7 modules, 2550 lines)
+Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. (7 modules, 2569 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 14 |
-| `_build` | ''build_graph'': an attribution graph from one capture, one backward read. | 860 |
+| `_build` | ''build_graph'': an attribution graph from one capture, one backward read. | 879 |
 | `_neuronpedia` | Attribution graphs in Neuronpedia's published attribution-graph schema. | 581 |
 | `_neuronpedia_upload` | Uploads to Neuronpedia through its documented API, with the standard library only. | 447 |
 | `_read_sites` | Read sites inside modules and facet-named frozen sets for ''build_graph''. | 186 |
