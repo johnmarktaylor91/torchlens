@@ -482,7 +482,7 @@ def _pattern_descriptor(
     """Return the K4-family chip descriptor for one accepted instance."""
 
     base = _make_op_segment_descriptor(trace, context, match_record.op_labels)
-    label = f"PATTERN '{match_record.spec.name}' -- {len(match_record.op_labels)} ops"
+    label = f"PATTERN '{match_record.spec.name}' -- {len(match_record.op_labels):,} ops"
     spanned_note = base.label.split(" -- spans ", 1)
     if len(spanned_note) == 2:
         # Keep the R19-5 spanned-modules disclosure the base builder derived.

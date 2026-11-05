@@ -10,8 +10,8 @@
 <title>MiniTransformerBlock</title>
 <polygon fill="white" stroke="none" points="-4,4 -4,-3130.75 690.55,-3130.75 690.55,4 -4,4"/>
 <text xml:space="preserve" text-anchor="start" x="8" y="-3110.45" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">MiniTransformerBlock</text>
-<text xml:space="preserve" text-anchor="start" x="8" y="-3096.45" font-family="Helvetica,sans-Serif" font-size="14.00">34 ops (19.5 KB)</text>
-<text xml:space="preserve" text-anchor="start" x="8" y="-3082.45" font-family="Helvetica,sans-Serif" font-size="14.00">3.28K params (12.8 KB, all trainable)</text>
+<text xml:space="preserve" text-anchor="start" x="8" y="-3096.45" font-family="Helvetica,sans-Serif" font-size="14.00">34 ops (20 KB)</text>
+<text xml:space="preserve" text-anchor="start" x="8" y="-3082.45" font-family="Helvetica,sans-Serif" font-size="14.00">3.28K params (13.1 KB, all trainable)</text>
 <text xml:space="preserve" text-anchor="start" x="8" y="-3072.25" font-family="Helvetica,sans-Serif" font-size="10.00">capture advisory: fused_attention_fastpath_held_off x1 (first at unknown location)</text>
 <g id="clust2" class="cluster">
 <title>cluster_attn_pass1</title>
@@ -104,7 +104,7 @@
 <title>linear_1_3pass1</title>
 <ellipse fill="#d9d9d9" stroke="black" cx="336" cy="-454.24" rx="230.52" ry="59.4"/>
 <text xml:space="preserve" text-anchor="start" x="303" y="-477.94" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_3</text>
-<text xml:space="preserve" text-anchor="start" x="285" y="-459.99" font-family="Helvetica,sans-Serif" font-size="14.00">(6, 1, 48), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="285" y="-459.99" font-family="Helvetica,sans-Serif" font-size="14.00">(6, 1, 48), 1.2 KB</text>
 <text xml:space="preserve" text-anchor="start" x="238.12" y="-440.99" font-family="Helvetica,sans-Serif" font-size="14.00">out_features=48, in_features=16</text>
 <text xml:space="preserve" text-anchor="start" x="183" y="-421.99" font-family="Helvetica,sans-Serif" font-size="14.00">params: in_proj_weight (48, 16) · in_proj_bias (48,)</text>
 </g>
@@ -119,7 +119,7 @@
 <title>unflatten_1_4pass1</title>
 <ellipse fill="white" stroke="black" cx="335" cy="-582.17" rx="96.87" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="291.5" y="-586.87" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">unflatten_1_4</text>
-<text xml:space="preserve" text-anchor="start" x="276.5" y="-568.92" font-family="Helvetica,sans-Serif" font-size="14.00">(6, 1, 3, 16), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="276.5" y="-568.92" font-family="Helvetica,sans-Serif" font-size="14.00">(6, 1, 3, 16), 1.2 KB</text>
 </g>
 <!-- linear_1_3pass1&#45;&gt;unflatten_1_4pass1 -->
 <g id="edge15" class="edge">
@@ -132,7 +132,7 @@
 <title>unsqueeze_1_5pass1</title>
 <ellipse fill="white" stroke="black" cx="335" cy="-683.22" rx="107.48" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="285.12" y="-687.92" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">unsqueeze_1_5</text>
-<text xml:space="preserve" text-anchor="start" x="269" y="-669.97" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 6, 1, 3, 16), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="269" y="-669.97" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 6, 1, 3, 16), 1.2 KB</text>
 </g>
 <!-- unflatten_1_4pass1&#45;&gt;unsqueeze_1_5pass1 -->
 <g id="edge16" class="edge">
@@ -145,7 +145,7 @@
 <title>transpose_2_6pass1</title>
 <ellipse fill="white" stroke="black" cx="334" cy="-797.71" rx="107.48" ry="45.96"/>
 <text xml:space="preserve" text-anchor="start" x="286.75" y="-811.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">transpose_2_6</text>
-<text xml:space="preserve" text-anchor="start" x="268" y="-793.96" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 1, 16), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="268" y="-793.96" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 1, 16), 1.2 KB</text>
 <text xml:space="preserve" text-anchor="start" x="282.25" y="-774.96" font-family="Helvetica,sans-Serif" font-size="14.00">dim0=0, dim1=&#45;2</text>
 </g>
 <!-- unsqueeze_1_5pass1&#45;&gt;transpose_2_6pass1 -->
@@ -159,7 +159,7 @@
 <title>squeeze_1_7pass1</title>
 <ellipse fill="white" stroke="black" cx="321" cy="-912.2" rx="96.87" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="279.38" y="-916.9" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">squeeze_1_7</text>
-<text xml:space="preserve" text-anchor="start" x="262.5" y="-898.95" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 16), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="262.5" y="-898.95" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 16), 1.2 KB</text>
 </g>
 <!-- transpose_2_6pass1&#45;&gt;squeeze_1_7pass1 -->
 <g id="edge18" class="edge">
@@ -172,7 +172,7 @@
 <title>contiguous_1_8pass1</title>
 <ellipse fill="white" stroke="black" cx="320" cy="-1013.25" rx="96.87" ry="32.53"/>
 <text xml:space="preserve" text-anchor="start" x="268.62" y="-1017.95" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">contiguous_1_8</text>
-<text xml:space="preserve" text-anchor="start" x="261.5" y="-1000" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 16), 1.1 KB</text>
+<text xml:space="preserve" text-anchor="start" x="261.5" y="-1000" font-family="Helvetica,sans-Serif" font-size="14.00">(3, 6, 1, 16), 1.2 KB</text>
 </g>
 <!-- squeeze_1_7pass1&#45;&gt;contiguous_1_8pass1 -->
 <g id="edge19" class="edge">
