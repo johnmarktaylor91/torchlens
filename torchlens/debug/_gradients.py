@@ -256,9 +256,7 @@ def _collect_norm_rows(
     provenance: str,
     counts: dict[str, int],
 ) -> tuple[
-    list[dict[str, Any]],
-    list[tuple[dict[str, Any], torch.Tensor]],
-    dict[str, tuple[str, ...]],
+    list[dict[str, Any]], list[tuple[dict[str, Any], torch.Tensor]], dict[str, tuple[str, ...]]
 ]:
     """Phase A: collect per-op 0-dim norm tensors -- NO host sync here.
 
@@ -581,12 +579,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
         rows, key=lambda row: (-int(row["severity"]), not bool(row["is_frontier"]))
     )
     attrs = _audit_attrs(
-        trace,
-        counts,
-        ctx,
-        bwd=selected_bwd,
-        proof_note=proof_note,
-        grad_scales=grad_scales,
+        trace, counts, ctx, bwd=selected_bwd, proof_note=proof_note, grad_scales=grad_scales
     )
     if ctx.scale is None and measurable > 0 and counts["exploding"] == measurable:
         # Deterministic disclosure, not a guess: EVERY measurable gradient

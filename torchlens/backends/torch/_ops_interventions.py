@@ -481,10 +481,7 @@ def _hook_entry_reaches_op_door(entry: Any) -> bool:
 
     # Not memoized: entries are slotted (no weak references), a strong-reference memo would keep a
     # finished capture's hook callables alive, and this walk costs a few calls per op.
-    from ...intervention._runtime import (
-        _input_splice_module_scope,
-        _is_plain_module_selector,
-    )
+    from ...intervention._runtime import _input_splice_module_scope, _is_plain_module_selector
     from ...intervention.hooks import NormalizedHookEntry
 
     if type(entry) is not NormalizedHookEntry:

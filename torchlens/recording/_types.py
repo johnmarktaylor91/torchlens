@@ -593,15 +593,11 @@ class Recording(TraceLike):
         object.__setattr__(base, "_capture_events", session.capture_events)
         object.__setattr__(base, "_output_tensors", list(getattr(session, "output_tensors", [])))
         object.__setattr__(
-            base,
-            "_output_tensor_addresses",
-            list(getattr(session, "output_tensor_addresses", [])),
+            base, "_output_tensor_addresses", list(getattr(session, "output_tensor_addresses", []))
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(
-            base,
-            "_captured_run_cores",
-            tuple(getattr(session, "captured_run_cores", ())),
+            base, "_captured_run_cores", tuple(getattr(session, "captured_run_cores", ()))
         )
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
         object.__setattr__(

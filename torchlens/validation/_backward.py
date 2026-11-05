@@ -231,9 +231,7 @@ def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.
         Detached tensor clones with PyTorch ``state_dict`` metadata preserved.
     """
 
-    from .._capture_state_helpers import (
-        _clone_state_dict_with_metadata as clone_state_dict,
-    )
+    from .._capture_state_helpers import _clone_state_dict_with_metadata as clone_state_dict
 
     return clone_state_dict(model)
 
@@ -606,11 +604,7 @@ def validate_backward_pass(
     bool
         True when captured grads match stock autograd.
     """
-    from .._user_funcs import (
-        _reject_opaque_wrappers,
-        _unwrap_data_parallel,
-        trace as trace_fn,
-    )
+    from .._user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
     from ._invariants import check_metadata_invariants
 
     reset_validation_failure(None)
