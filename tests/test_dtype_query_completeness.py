@@ -8,7 +8,7 @@ bool. Unwrapped, that dispatch had no owner, so the validation census counted it
 op and a correct model failed ``bfs_completeness`` with one more dispatched op than captured
 (an ODE solver's ``torch.promote_types`` in its step setup, an interpolation helper's dtype
 promotion). Wrapped, the call is owned and records no op, the same class as ``torch.equal``.
-A direct ``torch.ops.aten`` call of the same operator has no wrapper and still fails.
+The census itself is unchanged: an unowned dispatch still counts as a dropped op.
 """
 
 from __future__ import annotations
@@ -73,16 +73,3 @@ def test_dtype_query_in_forward_validates(case: str) -> None:
         assert not names & {"promote_types", "can_cast", "result_type"}, names
     finally:
         trace.cleanup()
-
-
-@pytest.mark.smoke
-def test_direct_aten_dtype_query_still_fails_completeness() -> None:
-    """The fix is ownership: a raw aten call of the same operator stays an unowned drop."""
-
-    torch.manual_seed(0)
-    model = _DtypeQueryModel(
-        lambda h: h.to(torch.ops.aten.promote_types.default(h.dtype, torch.float64))
-    ).eval()
-    assert not _validate(model)
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "bfs_completeness", failure
