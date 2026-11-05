@@ -2198,13 +2198,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         folds = resolve_repeat_folds(trace, collapse_fn, fold_repeats=True)
         fold = folds["blocks.0"]
         representative = trace.modules[fold.representative]
-        source = _draw_source(
-            trace,
-            tmp_path,
-            "run_fold_auto_rep_stats",
-            "auto",
-            fold_repeats=True,
-        )
+        source = _draw_source(trace, tmp_path, "run_fold_auto_rep_stats", "auto", fold_repeats=True)
         rep_line = _collapsed_node_line(source, "blocks.0")
 
         assert fold.num_layers != len(representative.layer_labels)

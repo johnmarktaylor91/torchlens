@@ -8,6 +8,7 @@ turns the photo off, and a saved trace keeps a bounded copy that still draws.
 
 from __future__ import annotations
 
+import importlib
 import re
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,8 @@ from torchlens._visualization._input_photo import (
     single_photo,
 )
 
-Image = pytest.importorskip("PIL.Image")
+pytest.importorskip("PIL")
+Image = importlib.import_module("PIL.Image")
 
 _IMG_ROW = re.compile(r'<IMG SRC="raw_inputs/' + re.escape(INPUT_PHOTO_FILE) + '" SCALE="TRUE"/>')
 
