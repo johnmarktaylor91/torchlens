@@ -173,10 +173,15 @@ def drop_edge_injector(
 
 
 def _parent_out_is_bool(_label: str, entry: Any) -> bool:
-    """Return whether the candidate parent's out is a bool tensor."""
+    """Return whether the candidate parent's output is a bool tensor.
 
-    out = getattr(entry, "out", None)
-    return isinstance(out, torch.Tensor) and out.dtype == torch.bool
+    Reads the parent's recorded ``dtype``, which capture keeps for every op, not
+    its saved ``out``: validation's reproducibility re-trace saves only the
+    outputs its structure hash reads, so a predicate on the saved value would
+    drop the edge in the first capture and keep it in the re-trace.
+    """
+
+    return getattr(entry, "dtype", None) == torch.bool
 
 
 def _parent_label_prefix(prefix: str) -> Callable[..., bool]:
