@@ -25,6 +25,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._errors import InvalidArgumentError
+from .._ir.selector_eval import first_selector_kind_outside
+from .structure_only import claim_status_for, require_structure_only_capability
+
 __all__ = ["PlanCheckReport", "PlanSiteCheck", "check_plan"]
 
 
@@ -83,8 +87,6 @@ class PlanCheckReport:
 def _refuse(problem: str, remedy: str, **fields: Any) -> None:
     """Typed plan-check refusal (single code, reason-carrying)."""
 
-    from .._errors import InvalidArgumentError
-
     raise InvalidArgumentError(
         problem,
         code="plan_check_unsupported",
@@ -140,8 +142,6 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
     PlanCheckReport
         Frozen audit report; ``executable`` is always ``False``.
     """
-
-    from .structure_only import claim_status_for, require_structure_only_capability
 
     # REFUTED sources refuse via the chokepoint (supported_hypothesis row).
     require_structure_only_capability(trace, "plan_shape_check")
@@ -261,7 +261,6 @@ def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
 def _is_static_selector(selector: Any) -> bool:
     """Whether a callable selector is a provably value-free structural one."""
 
-    from .._ir.selector_eval import first_selector_kind_outside
     from .._postprocess._selective_save import _STATIC_SELECTOR_KINDS
     from .._selection.selectors import BaseSelector
 

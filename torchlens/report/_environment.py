@@ -25,6 +25,7 @@ from .._utils import _subprocess as _sp, _torch_compat as _tc
 from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS, get_torch_capability_snapshot
 from .._utils.introspection import nested_getattr
 from .._visualization._cairosvg import cairosvg_unavailable_reason, get_cairosvg_support
+from ..backends.torch.belt import belt_report
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,7 @@ def capability_snapshot() -> dict[str, bool]:
 
     snapshot = get_torch_capability_snapshot()
     try:
+        # deferred: optional dependency
         from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
     except ImportError:
         return snapshot
@@ -459,8 +461,6 @@ def _probe_mechanical_belt() -> _EnvironmentCheck:
         with zero signal while the capture still reports
         ``capture_verified=True`` (grind-r6 b3 R02, sol MED).
     """
-
-    from ..backends.torch.belt import belt_report
 
     if not _state._is_decorated:
         return _EnvironmentCheck(

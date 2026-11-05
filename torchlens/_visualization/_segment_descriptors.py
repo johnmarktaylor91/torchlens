@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._utils._display_numbers import format_count
+from ._render_common import format_collapsed_module_contents
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
@@ -432,8 +433,6 @@ def _child_segment_label(
     num_params: int,
 ) -> str:
     """Return a class-free range label for a child segment."""
-
-    from ._render_common import format_collapsed_module_contents
 
     range_text = _child_segment_range_text(addresses)
     contents = format_collapsed_module_contents(num_layers, num_buffers)

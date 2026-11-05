@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._utils.display import int_list_to_compact_str
+
 if TYPE_CHECKING:
     from .._data_classes.grad_fn import GradFn
     from .._data_classes.trace import Trace
@@ -62,6 +64,7 @@ def compute_backward_style_inventory(
 
     # Call-time import: the filter and grad-shape helpers live in
     # ``_render_leaf``, which imports THIS module at load time.
+    # deferred: cycle _visualization
     from ._render_leaf import _format_backward_output_shape, _grad_fn_matches_backward_filter
 
     visible = [
@@ -99,8 +102,6 @@ def _backward_pass_row(
     item 17); otherwise rolled nodes list their passes compactly and
     unrolled calls carry their one pass index.
     """
-
-    from .._utils.display import int_list_to_compact_str
 
     if inventory is not None and inventory.suppress_bwd_row:
         return []

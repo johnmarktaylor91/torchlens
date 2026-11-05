@@ -21,13 +21,13 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ...recording.types import CaptureSpec
-from ...validation.status import (
+from ..._validation_status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
     REGION_REPLAY_PROVENANCE_KEY,
 )
+from ...recording.types import CaptureSpec
 from ..registry import BackendUnsupportedError
 from .op_callback_capture import (
     _MAX_SNAPSHOT_BYTES,

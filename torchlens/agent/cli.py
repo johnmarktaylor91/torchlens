@@ -58,7 +58,7 @@ _ARTIFACT_CODES = (
 def _emit(payload: dict[str, Any], as_json: bool) -> None:
     """Write one result to stdout (canonical JSON or plain key lines)."""
 
-    from ._envelope import canonical_dumps, json_safe
+    from ._envelope import canonical_dumps, json_safe  # deferred: startup cost
 
     if as_json:
         sys.stdout.write(canonical_dumps(json_safe(payload)) + "\n")
@@ -75,7 +75,7 @@ def _tier0_info(path_arg: str, as_json: bool) -> int:
     """Torch-free manifest preflight (``info`` verb)."""
 
     from ._artifacts import artifact_block, read_manifest, resolve_artifact_path, resolve_digest
-    from ._envelope import build_envelope
+    from ._envelope import build_envelope  # deferred: startup cost
     from ._overview import OVERVIEW_MANIFEST_SCHEMA, manifest_overview
 
     path = resolve_artifact_path(path_arg)
@@ -121,17 +121,17 @@ def _tier0(verb: str, args: argparse.Namespace) -> int:
     if verb == "agent":
         return _tier0_agent_init(args.files, bool(args.remove), as_json)
     if verb == "version":
-        from ._envelope import _torchlens_version
+        from ._envelope import _torchlens_version  # deferred: startup cost
 
         _emit({"data": {"torchlens_version": _torchlens_version()}}, as_json)
         return EXIT_OK
     if verb == "guide":
-        from ._guide_text import guide
+        from ._guide_text import guide  # deferred: startup cost
 
         sys.stdout.write(guide())
         return EXIT_OK
     if verb == "schema":
-        from ._envelope import build_envelope
+        from ._envelope import build_envelope  # deferred: startup cost
         from ._schemas import SCHEMA_TOOL_SCHEMA, load_schema, schema_index
 
         name = getattr(args, "name", None)
@@ -248,7 +248,7 @@ def _apply_fail_on(envelope: dict[str, Any], checks: list[str]) -> int:
 def _tier1(verb: str, args: argparse.Namespace) -> int:
     """Dispatch one registry verb in-process (tier 1)."""
 
-    from ._envelope import canonical_dumps, json_safe
+    from ._envelope import canonical_dumps, json_safe  # deferred: startup cost
     from ._registry import call_tool, tool_specs
 
     tool_by_verb = {spec.cli_verb: spec for spec in tool_specs() if spec.cli_verb}
@@ -261,7 +261,7 @@ def _tier1(verb: str, args: argparse.Namespace) -> int:
     try:
         envelope = call_tool(spec.name, request)
     except Exception as exc:  # noqa: BLE001 - CLI boundary: canonical error JSON + closed exit code
-        from ._envelope import build_error_envelope
+        from ._envelope import build_error_envelope  # deferred: startup cost
 
         error = build_error_envelope(exc)
         sys.stderr.write(canonical_dumps(json_safe(error)) + "\n")

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
+from .._io import ArtifactError
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -486,8 +487,6 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
     ArtifactError
         With ``primitive_op_schema_invalid`` or ``primitive_op_fk_invalid``.
     """
-
-    from .._io import ArtifactError
 
     profile = getattr(trace, "_primitive_op_profile", None)
     if profile is None:

@@ -6,6 +6,9 @@ from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.layer import Layer
+from .._data_classes.module import Module, ModuleCall
+from ..intervention.errors import MultiOutputModuleError
 from ._display import _call_message, _output_message, _pass_message
 from ._errors import (
     AmbiguousCallError,
@@ -92,10 +95,7 @@ def resolve_graph_point(trace: Trace | None, handle: object) -> Op:
         If a module call has zero or multiple output operations.
     """
 
-    from .._data_classes.layer import Layer
-    from .._data_classes.module import Module, ModuleCall
     from .._data_classes.op import Op
-    from ..intervention.errors import MultiOutputModuleError
 
     if isinstance(handle, str) and trace is not None:
         return _op_by_name(trace, handle)
@@ -265,7 +265,7 @@ def forward_index_image(
         whether every oracle answer and both supplied sets were exact.
     """
 
-    from ._query import _IndexSet
+    from ._query import _IndexSet  # deferred: cycle receptive_field
 
     source_values = frozenset(source_set.values())
     reached: list[int] = []

@@ -21,6 +21,7 @@ import torch
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._runnable import refuse_poisoned_trace
 from . import _engine
 from ._engine_forward import solve_projective
 from ._errors import (
@@ -69,8 +70,6 @@ def _refuse_poisoned_rf_verification(trace: Trace) -> None:
         Trace whose geometry/gradient agreement would otherwise be reported as
         a receptive-field validation verdict.
     """
-
-    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace, "receptive field verification")
 

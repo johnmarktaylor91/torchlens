@@ -33,8 +33,11 @@ from ..._errors import InvalidArgumentError
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._vocab.node_spec import LENS_BANNER_OMIT_KEY, LENS_CAPTION_KEY
 from ...errors._base import TorchLensWarning
+from .. import surgery_visuals as _surgery_visuals
 from .._encoding_request import EncodingChannelRequest
+from ..request import ResolvedRenderRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
+from ..themes import resolve_theme
 from ._attention import attention_role_spec_fn, first_attention_block, has_attention_subject
 from ._budget import BudgetResolution, resolve_budget
 from ._families import ResolvedSource, resolve_source_family, scalar_or_none, source_coverage
@@ -195,7 +198,7 @@ def _resolve_perf_source(
             remedy=family.capture_remedy,
             argument="view",
         )
-    from ._families import records_for_member, safe_label
+    from ._families import records_for_member, safe_label  # deferred: cycle _visualization
 
     values: dict[str, float] = {}
     for record in records_for_member(trace, source.member):
@@ -253,7 +256,7 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
     def _apply(layer: Any, spec: Any) -> Any:
         """Append the top-5 rank callout line to a ranked layer's spec."""
 
-        from ._families import safe_label
+        from ._families import safe_label  # deferred: cycle _visualization
 
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:
@@ -421,8 +424,6 @@ def _split_request_kwargs(all_kwargs: dict[str, Any]) -> tuple[dict[str, Any], d
 
     from dataclasses import fields as dataclass_fields
 
-    from ..request import ResolvedRenderRequest
-
     request_field_names = {
         request_field.name for request_field in dataclass_fields(ResolvedRenderRequest)
     }
@@ -495,7 +496,6 @@ def _budget_stage(
 
     if build.effective.get("collapse") != "auto" or "collapse" in build.user_kwargs:
         return None
-    from ..request import ResolvedRenderRequest
 
     # The dial is measured on the EFFECTIVE view's render context: a
     # dial priced on the unrolled universe does not map onto a rolled
@@ -612,7 +612,6 @@ def _skin_stage(skin: str | None, build: _LensBuild) -> None:
 
     if skin is not None:
         build.effective["theme"] = skin
-    from ..themes import resolve_theme
 
     theme = resolve_theme(str(build.effective.get("theme", "torchlens")))
     channel_active = build.effective.get("color_by") is not None
@@ -685,8 +684,6 @@ def _surgery_mount(trace: Trace, build: _LensBuild) -> None:
     header's edit line already says the trace is edited.
     """
 
-    from .. import surgery_visuals as _surgery_visuals
-
     mark_spec_fn, box_spec_fn, census_lines = _surgery_visuals.surgery_stage(trace)
     build.preset_fns.append(mark_spec_fn)
     # Collapsed boxes take the marks of the ops inside them; the user's fn last.
@@ -735,7 +732,6 @@ def resolve_lens(
     request_kwargs, passthrough = _split_request_kwargs(_request_dialect(dict(user_kwargs or {})))
     # The surgery row (lane F43) registers at its module's import; resolving
     # it by name must not depend on the caller having imported that module.
-    from .. import surgery_visuals as _surgery_visuals  # noqa: F401
 
     resolved_lens = lens if isinstance(lens, LensPreset) else get_lens(lens)
     _check_subject(trace, resolved_lens)

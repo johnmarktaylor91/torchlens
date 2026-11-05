@@ -145,7 +145,7 @@ JAX_MUTANTS: dict[str, Mutant] = {
     "J08": _rep(
         _JAX_BACKEND,
         "validation_status",
-        "                check_metadata_invariants(trace)\n",
+        "                run_metadata_invariants(trace)\n",
         "                pass\n",
         "skipped metadata invariants on the JAX validation path",
     ),
