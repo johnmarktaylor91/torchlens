@@ -16,7 +16,10 @@ render pass.
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -377,6 +380,54 @@ def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> 
         log.cleanup()
 
 
+def _laid_out_nodes(dot: str) -> dict[str, tuple[float, float, str]]:
+    """Lay ``dot`` out with Graphviz; return name -> (width, height, label) in inches."""
+
+    layout = subprocess.run(
+        ["dot", "-Tjson"], input=dot, capture_output=True, text=True, check=True
+    ).stdout
+    return {
+        obj["name"]: (float(obj["width"]), float(obj["height"]), obj.get("label", ""))
+        for obj in json.loads(layout).get("objects", [])
+        if "width" in obj
+    }
+
+
+def _longest_row(label: str) -> int:
+    """Return the character count of the longest visible row in an HTML table label."""
+
+    return max(len(re.sub(r"<[^>]*>", "", row)) for row in label.split("</TR>"))
+
+
+@pytest.mark.skipif(shutil.which("dot") is None, reason="needs the Graphviz dot binary")
+def test_equal_values_draw_equal_sizes_whatever_the_label(
+    mlp_log: tl.Trace, tmp_path: Path
+) -> None:
+    """The encoded value alone sets a node's size; the label must not widen it.
+
+    A short-label relu and a long-label linear (its params row) share one
+    encoded value; after Graphviz lays them out they have the same width and
+    height, so Graphviz grew neither past its encoded size.
+    """
+
+    labels = [op.label.split(":")[0] for op in mlp_log.ops]
+    short = next(label for label in labels if label.startswith("relu"))
+    long = next(label for label in labels if label.startswith(("linear", "addmm")))
+
+    def value(node: Any) -> float:
+        return 1.0 if node.label.split(":")[0] in (short, long) else 3.0
+
+    dot = _draw(mlp_log, tmp_path, size_by=value)
+    nodes = _laid_out_nodes(dot)
+    short_node = next(v for name, v in nodes.items() if name.startswith(short))
+    long_node = next(v for name, v in nodes.items() if name.startswith(long))
+    # The two labels genuinely differ: the linear's longest row is far longer.
+    assert _longest_row(long_node[2]) >= 2 * _longest_row(short_node[2])
+    assert short_node[:2] == long_node[:2]
+    finals = {key.split(":")[0]: size for key, size in _state(mlp_log).final_sizes.items()}
+    assert finals[short] == finals[long] == pytest.approx(short_node[:2], abs=1e-3)
+
+
 # ---------------------------------------------------------------------------
 # C2(b) writer discipline: width/height/fixedsize node-arg emission sites
 # ---------------------------------------------------------------------------
@@ -409,9 +460,10 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
             if count:
                 found[str(path.relative_to(package_root))] = count
     expected = {
-        # Record-derived image branches (2x fixedsize) + input-batch montage
-        # (fixedsize/width/height) — non-encodable node classes.
-        "_visualization/_render_nodes.py": 5,
+        # Input-batch montage (fixedsize/width/height) — a non-encodable node
+        # class. The record-derived image branches draw a picture cell in a
+        # rounded box (``_node_boxes``) and no longer write fixedsize.
+        "_visualization/_render_nodes.py": 3,
         # Intervention-hook diamond helper (width/height in extra_attrs).
         "_visualization/_render_edges.py": 2,
         # Collapsed container-record node (fixedsize).

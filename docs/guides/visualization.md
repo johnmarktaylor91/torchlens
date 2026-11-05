@@ -325,6 +325,8 @@ a function from a node to a number. The legend states the source, the scale and 
 
 Nodes with no value for the source are left unfilled and the legend says how many were
 encoded. `size_scale=` chooses how values map to area (the legend names the mapping in use).
+A sized node's size comes from its value alone: two nodes with the same value draw the same
+size however long their labels, and every label still fits.
 
 ## Direction
 
