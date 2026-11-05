@@ -320,7 +320,7 @@ max_intermediate_grads=...)` runs one more `mx.value_and_grad` replay with ident
 by the MLX wrappers (capture logging off, so module call counts do not grow); records are matched
 by structural signature, ambiguous groups are skipped, and each public record must pass an
 independent replacement-gradient and perturbation check before it reaches
-`trace.autograd.intermediate_derived_grads` and `op.derived_grad`. `op.grads` and
+`trace.autograd.intermediate_derived_grads` and `op.autograd.derived_grad`. `op.autograd.grads` and
 `trace.saved_grad_ops` stay true-backward-only. Full page: [MLX](backends/mlx.md).
 
 ## Paddle
@@ -392,7 +392,7 @@ trace.autograd.derived_grads["inputs.0"]
 
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` runs a second guarded Paddle AD
 replay; only unambiguous `status == "exact"` records reach `trace.autograd.intermediate_derived_grads`
-and `op.derived_grad`, and `has_backward_pass` stays `False`. Full page: [Paddle](backends/paddle.md).
+and `op.autograd.derived_grad`, and `has_backward_pass` stays `False`. Full page: [Paddle](backends/paddle.md).
 
 ## JAX
 
@@ -469,7 +469,7 @@ trace.autograd.derived_grads["params.w"]
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)` runs one all-tap `jax.grad`
 pass, then checks each attached boundary with an independent boundary-replacement VJP and a finite
 difference; requests above the cap fail. Only records with provenance `status == "exact"` reach
-`trace.autograd.intermediate_derived_grads` and `op.derived_grad`; oracle failures and
+`trace.autograd.intermediate_derived_grads` and `op.autograd.derived_grad`; oracle failures and
 non-float or control outputs are skipped. If the producer cannot run on the installed JAX, leaf
 `derived_grads` stay intact and the intermediate accessor is empty. Flax modules refuse derived
 gradients. Full page: [JAX](backends/jax.md).
@@ -542,8 +542,8 @@ trace.autograd.derived_grads["inputs.0"]
 
 `GradOptions(intermediate_grads=True)` runs a separate no-realize pass: it calls `loss.backward()`
 before realizing any copied outputs and attaches exact unambiguous records to
-`trace.autograd.intermediate_derived_grads` and `op.derived_grad`; ambiguous matches are skipped,
-and `op.grads` and `trace.saved_grad_ops` stay true-backward-only. Full page:
+`trace.autograd.intermediate_derived_grads` and `op.autograd.derived_grad`; ambiguous matches are skipped,
+and `op.autograd.grads` and `trace.saved_grad_ops` stay true-backward-only. Full page:
 [tinygrad](backends/tinygrad.md).
 
 ## Capability Matrix
