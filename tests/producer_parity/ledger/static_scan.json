@@ -4632,6 +4632,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/_validation_retrace_saves.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_visualization/_arg_suppression.py",
