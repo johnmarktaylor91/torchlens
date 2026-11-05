@@ -13,6 +13,7 @@ from ._encoding_aggregate import (
     collapsed_box_scope,
     segment_encoding_attrs,
 )
+from ._input_photo import _raw_input_visualizer_dir, input_photo_attrs
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
 from ._pass_marks import pass_mark_suffix
 from ._render_common import *
@@ -648,7 +649,7 @@ def _build_layer_node(
 
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
-        raw_input_attrs = _render_raw_input(
+        raw_input_attrs = input_photo_attrs(self, node_args) or _render_raw_input(
             self, getattr(self, "input", None), batch_render=getattr(self, "batch_render", "auto")
         )
         if raw_input_attrs is not None:
@@ -1028,27 +1029,6 @@ def _render_raw_input_image_batch(
         "shape": "none",
         "tooltip": f"{total} input images",
     }
-
-
-def _raw_input_visualizer_dir(trace: "Trace") -> Path:
-    """Return a directory for raw-input visualization artifacts.
-
-    Parameters
-    ----------
-    trace:
-        Trace that owns the rendered input node.
-
-    Returns
-    -------
-    Path
-        Directory where image artifacts can be written.
-    """
-
-    from .._utils.display import ensure_trace_visualizer_dir
-
-    input_dir = ensure_trace_visualizer_dir(trace) / "raw_inputs"
-    input_dir.mkdir(parents=True, exist_ok=True)
-    return input_dir
 
 
 def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Image.Image] | None:
