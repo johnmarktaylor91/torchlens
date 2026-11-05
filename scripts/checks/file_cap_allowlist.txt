@@ -1397,7 +1397,7 @@ torchlens/validation/_core.py::validate_parents_of_saved_layer	255
 torchlens/validation/_destination_coverage.py::_index_put_destination_is_fully_overwritten	75
 torchlens/validation/_diagnostics.py::describe_tensor_mismatch	97
 torchlens/validation/_edge_boundary.py::_splice_edge_substitution_args	83
-torchlens/validation/_exemptions.py	2529
+torchlens/validation/_exemptions.py	2490
 torchlens/validation/_exemptions.py::_addcmul_zero_annihilator_decision	70
 torchlens/validation/_exemptions.py::_index_domain_value_irrelevance_decision	108
 torchlens/validation/_exemptions.py::_layer_norm_singleton_shape_decision	77
