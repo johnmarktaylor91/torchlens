@@ -47,6 +47,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._ir._row_journal import journal_record
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import OpEvent
 from torchlens._ir.op_record import (
@@ -134,13 +135,17 @@ def _spy_append_amendment(observations: list[_Observation], failures: list[str])
         family = amendment.family
         label_raw = amendment.target_label_raw
         folded = real_append(self, amendment)
+        # A row-journal handle (capture C2b) stands for the record it builds:
+        # the shape and facet checks below read that record, and the flat
+        # reads still go through the handle's own overlay.
+        record = journal_record(folded)
         observations.append(
             _Observation(
                 site=site,
                 family=family,
                 kwarg_names=tuple(PATH_TO_FLAT[path] for path, _ in amendment.patch),
                 label_raw=label_raw,
-                record_type=type(folded).__name__,
+                record_type=type(record).__name__,
             )
         )
         if site not in _TRANSPORT_SITES:
@@ -166,10 +171,10 @@ def _spy_append_amendment(observations: list[_Observation], failures: list[str])
                     f"{site}: flat field {flat!r} does not carry the emitted "
                     f"value (got {landed!r}, sent {value!r})"
                 )
-            if isinstance(folded, OpRecord):
+            if isinstance(record, OpRecord):
                 owner, _, field_name = path.partition(".")
                 holder = (
-                    folded.core if owner == "core" else getattr(folded, _FACET_ATTRIBUTES[owner])
+                    record.core if owner == "core" else getattr(record, _FACET_ATTRIBUTES[owner])
                 )
                 if holder is None:
                     failures.append(f"{site}: facet {owner!r} absent after folding {path!r}")

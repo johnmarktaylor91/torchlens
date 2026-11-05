@@ -64,8 +64,8 @@ class _InplaceBufferModel(nn.Module):
         y = self.norm(self.conv(x))
         y.relu_()
         flat = y.flatten(1)[:, :16]
+        flat[:, :8].add_(1.0)
         left, right = flat.split(8, dim=1)
-        left.add_(1.0)
         return self.fc(left), right * 2
 
 

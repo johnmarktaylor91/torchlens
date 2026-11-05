@@ -15,6 +15,10 @@ from typing import TYPE_CHECKING
 from ..._data_classes.op import _OP_STORE_LAYOUT
 from ..._ir._row_journal import _RowJournal, _RowOpRecord, _RowResidual
 from ..._trace_core.op_store import OpRowStore
+
+# Module import, not ``from ._ops_row_cells import ...``: a cold import of
+# ``_ops_row_cells`` reaches this module (through ``ops``) while it is still loading.
+from . import _ops_row_cells
 from ._ops_arguments import _build_edge_use_records
 from ._ops_capture_records import (
     _exhaustive_capture_policy,
@@ -23,7 +27,6 @@ from ._ops_capture_records import (
     _param_refs_from_fields,
     _resolve_call_function_ref,
 )
-from ._ops_row_cells import op_row_cells, write_op_row
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -89,5 +92,5 @@ def commit_row_record(draft: ExhaustiveOpDraft) -> _RowOpRecord:
     box = draft.call_ref_box if draft.call_ref_box is not None else []
     function = _resolve_call_function_ref(fields_dict, box)
     rest = _residual_from_draft(draft, function)
-    cells = op_row_cells(trace, fields_dict, draft.fire_results, box)
-    return journal.handle(write_op_row(journal.store, cells), rest)
+    cells = _ops_row_cells.op_row_cells(trace, fields_dict, draft.fire_results, box)
+    return journal.handle(_ops_row_cells.write_op_row(journal.store, cells), rest)

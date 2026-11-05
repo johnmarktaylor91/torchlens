@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from .._capture.outcome import safe_exception_str
 from .._data_classes._nonfinite import first_nonfinite_layer
 from .._data_classes.field_policy import FieldPolicy
+from .._ir._row_journal import materialize_journal_ops
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -434,6 +435,7 @@ def _materialize_failed_capture_events(trace: Trace) -> None:
 
     from torchlens._postprocess._materialize import materialize_from_events
 
+    materialize_journal_ops(events)  # ingest reads records; the row journal holds handles
     materialize_from_events(trace, events)
 
 

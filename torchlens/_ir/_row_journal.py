@@ -178,6 +178,9 @@ class _RowOpRecord:
     def __getattr__(self, name: str) -> Any:
         """Answer a record read from the row, or build the record for the rest."""
 
+        if name in _HANDLE_SLOTS or name[:2] == "__":
+            # An unset slot (copy, unpickle) or a protocol probe: never recurse into a build.
+            raise AttributeError(name)
         record = self._record
         if record is not None:
             return getattr(record, name)
@@ -195,6 +198,23 @@ class _RowOpRecord:
             if path is not None and path in patch:
                 return patch[path]
         return getter(self)
+
+
+_HANDLE_SLOTS = frozenset(_RowOpRecord.__slots__)
+
+
+def materialize_journal_ops(events: Any) -> None:
+    """Swap every row handle on ``events``' op lane for its built record, in place.
+
+    For readers of the raw journal outside ingest's replay clone (the failed
+    capture's partial trace): each entry becomes the record it already stands
+    for, so the lane's values are unchanged; the amendment fold is recomputed.
+    """
+
+    lane = events.op_events
+    if any(type(event) is _RowOpRecord for event in lane):
+        lane[:] = [journal_record(event) for event in lane]
+        events._amended_fold_cache = None
 
 
 def _overlay_known(patch: dict[str, Any]) -> bool:
