@@ -9348,7 +9348,6 @@ test-docstrings	tests/test_auto_collapse_hardening.py	25
 test-docstrings	tests/test_auto_collapse_hardening.py	26
 test-docstrings	tests/test_auto_collapse_hardening.py	60
 test-docstrings	tests/test_auto_collapse_metrics.py	10
-test-docstrings	tests/test_auto_collapse_metrics.py	19
 test-docstrings	tests/test_auto_collapse_metrics.py	20
 test-docstrings	tests/test_auto_collapse_metrics.py	29
 test-docstrings	tests/test_auto_collapse_metrics.py	30

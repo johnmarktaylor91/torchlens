@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1655 modules, 685371 lines, 0 modules without a docstring.
+83 packages, 1655 modules, 685378 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,7 +22,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10672 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37129 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 66 | 37136 |
 | `torchlens._io.format3` | The 2.38 saved format: typed JSON records plus safetensors blobs, no pickle. | 25 | 9000 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11745 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 15 | 6011 |
@@ -477,7 +477,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10672 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37129 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (66 modules, 37136 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -510,7 +510,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (6
 | `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1404 |
 | `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 691 |
 | `_save_subject` | Resolve the object handed to ''save'' into the Trace it stands for. | 78 |
-| `_scrub_identities` | Canonical identities and record joins for portable scrub metadata. | 275 |
+| `_scrub_identities` | Canonical identities and record joins for portable scrub metadata. | 282 |
 | `_scrub_undeclared` | Refusal diagnostics for live state fields missing from a portable state spec. | 82 |
 | `_skipped_blobs` | Non-strict save: null the refs of blobs the payload codec skipped, and fix the saved counts. | 95 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 363 |
