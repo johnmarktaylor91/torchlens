@@ -1472,7 +1472,7 @@ jobs:
       - name: Round-trip packaged tlspec
         working-directory: ${{ runner.temp }}
         run: |
-          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
+          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert len(loaded.ops) == len(trace.ops)"
 
       - name: PEP 561 consumer smoke (installed wheel exposes its types)
         # Red-capable in BOTH directions (grind r3, R84 LOW: py.typed shipped
@@ -1551,7 +1551,7 @@ jobs:
 
           model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.ReLU(), nn.Flatten(), nn.LazyLinear(5))
           trace = tl.trace(model, torch.randn(2, 3, 8, 8), save=tl.func("relu"))
-          assert trace.backend == "torch"
+          assert trace.provenance.backend == "torch"
           assert len(trace.layer_labels) > 0, "no layers captured"
           relu = trace["relu_1_2"]
           assert relu.out is not None
