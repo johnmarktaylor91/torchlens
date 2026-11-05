@@ -556,7 +556,7 @@ torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
 torchlens/_visualization/_render_dot.py::_resolve_collapse_request	96
 torchlens/_visualization/_render_dot.py::_resolve_forward_context	107
 torchlens/_visualization/_render_dot.py::draw	187
-torchlens/_visualization/_render_edges.py	1874
+torchlens/_visualization/_render_edges.py	1873
 torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266
@@ -663,7 +663,7 @@ torchlens/attribution/_gradient_shap.py::_validate_draw_bank	62
 torchlens/attribution/_gradient_shap.py::gradient_shap	233
 torchlens/attribution/_graph/_build.py	822
 torchlens/attribution/_graph/_build.py::build_graph	92
-torchlens/attribution/_graph/_neuronpedia_upload.py::upload_to_neuronpedia	77
+torchlens/attribution/_graph/_neuronpedia_upload.py::upload_to_neuronpedia	76
 torchlens/attribution/_graph/_result.py::AttributionGraph.to_neuronpedia	82
 torchlens/attribution/_guided.py::_modified_backward_attribution	128
 torchlens/attribution/_layer.py	1222
@@ -1104,7 +1104,7 @@ torchlens/intervention/_replay.py::_commit_replay_updates	71
 torchlens/intervention/_replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/_replay.py::_resolve_arg_component	96
 torchlens/intervention/_replay.py::_run_differentiable_replay	62
-torchlens/intervention/_replay.py::_run_replay	152
+torchlens/intervention/_replay.py::_run_replay	150
 torchlens/intervention/_rerun.py	1582
 torchlens/intervention/_rerun.py::_append_rerun	103
 torchlens/intervention/_rerun.py::_capture_with_active_spec	90
