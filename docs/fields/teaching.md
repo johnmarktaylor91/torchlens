@@ -15,7 +15,7 @@ The lists below start with drawing and inspecting, then move to the tutorial not
 
 - [How TorchLens groups operations into layers](../guides/grouping.md): why `linear_1` with passes `linear_1:1` and `linear_1:2` is the same layer run twice, the thing students most often need explained about recurrent and weight-tied models.
 - [Smart-collapse visual reference](../reference/collapse.md): how a large graph folds into readable blocks, with rendered examples at each level.
-- [Semantic lenses](../reference/lenses.md): drawing themes that colour the graph by what each part does.
+- [Premade views](../reference/lenses.md): `trace.draw(view=...)` views that each answer one question about the model.
 - [Transformer pictures](../reference/tviz.md): token-labelled attention heatmaps and grids and the attention atlas, for the attention lecture.
 - [Notebook cards and the treescope bridge](../guides/treescope_cards.md): interactive cards for a notebook walkthrough.
 - [The Netron export](../reference/netron_export.md) and [Google Model Explorer export](../reference/model_explorer.md): open the captured graph in a viewer students may already know.

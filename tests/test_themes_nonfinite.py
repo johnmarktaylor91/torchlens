@@ -82,7 +82,7 @@ def test_zero_coverage_channel_level_degrade() -> None:
             warnings.simplefilter("always")
             resolution = lenses.resolve_lens(log, "debug")
         codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
-        assert "lens_nonfinite_not_checked" in codes
+        assert "view_nonfinite_not_checked" in codes
         assert any("NOT CHECKED" in line for line in resolution.disclosure)
     finally:
         log.cleanup()

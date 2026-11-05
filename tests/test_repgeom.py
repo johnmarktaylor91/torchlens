@@ -510,3 +510,14 @@ def test_mds_evolution_min_n_gate_is_honored() -> None:
 
     with pytest.raises(ValueError, match="too few stimuli"):
         repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=9)
+
+
+def test_matching_pil_image_batch_takes_one_image_as_a_batch_of_one() -> None:
+    """One PIL image (an image-path capture's ``trace.input``) is a batch of one; lists still match."""
+
+    image = _pil_stimuli(1)[0]
+    assert tuple(repgeom._matching_pil_image_batch(image, 1) or ()) == (image,)
+    assert repgeom._matching_pil_image_batch(image, 2) is None
+    images = _pil_stimuli(2)
+    assert list(repgeom._matching_pil_image_batch(images, 2) or ()) == images
+    assert repgeom._matching_pil_image_batch(images, 3) is None

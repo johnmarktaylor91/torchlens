@@ -354,18 +354,24 @@ DOCS: dict[str, str] = {
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
-        highlight:
-            Keyword-only. Named highlight drawn over the graph. ``None`` (the
-            default) draws the plain graph. ``"interventions"`` draws the
-            surgery lens: every recorded intervention is marked on its node
-            (solid border = recorded fact, dashed = heuristic attribution),
-            the caption carries the per-lane census, and when a figure is
-            written the full census text lands beside it as
-            ``<path>.census.txt`` (beside the collision-safe file a bare draw
-            chose). A trace with no recorded intervention refuses
-            ``surgery_evidence_missing``; any other value refuses
-            ``draw_highlight_invalid`` naming the allowed values. The other
-            keywords you pass win over the lens's own settings.
+        view:
+            Keyword-only. A premade view: a bundle of draw settings plus
+            evidence checks and a caption under the header, each answering one
+            question. ``None`` (the default) draws the plain graph.
+            ``"overview"`` (what is this model?), ``"debug"`` (what is
+            broken?), ``"speed"`` (where does time go?), ``"memory"`` (what is
+            big in bytes?), ``"compute"`` (where are the FLOPs?), ``"dims"``
+            (what shape is the data?), ``"sequence"`` (how do the passes
+            unfold?), ``"transformer"`` (how is attention wired?) and
+            ``"interventions"`` (what did the edits change?). A view whose
+            evidence or subject is missing refuses typed with a remedy (for
+            example ``view_attention_subject_absent``, or
+            ``surgery_evidence_missing`` for ``"interventions"`` on a trace
+            with no recorded edit, whose full edit record lands beside a
+            written figure as ``<path>.census.txt``); any other value refuses
+            ``draw_view_invalid`` naming the allowed values. The other keywords
+            you pass win over the view's own settings; ``theme=`` stays the
+            colour skin and composes with any view.
         
         Returns
         -------

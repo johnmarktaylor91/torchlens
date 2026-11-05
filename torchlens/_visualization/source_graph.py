@@ -71,7 +71,7 @@ def build_source_graph(trace: Trace, request: ResolvedRenderRequest) -> SourceGr
         raise InvalidArgumentError(
             f"vis_mode must be either 'rolled' or 'unrolled'; received {request.vis_mode!r}",
             code="visualization_mode_invalid",
-            remedy="pass vis_mode='rolled' or 'unrolled'",
+            remedy="pass rolled=True or rolled=False to trace.draw",
             argument="vis_mode",
         )
 

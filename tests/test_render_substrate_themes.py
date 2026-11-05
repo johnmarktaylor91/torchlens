@@ -26,12 +26,11 @@ from torchlens._visualization.theme_registry import (
 
 def test_builtin_rows_are_registered_and_teach_their_settings() -> None:
     overview = get_lens("overview")
-    blueprint = get_lens("blueprint")
     assert overview.question == "what is this model?"
-    # The blueprint row pins TODAY'S bare-draw contract by name.
-    assert blueprint.members["collapse"] == "none"
-    assert blueprint.members["vis_mode"] == "unrolled"
-    assert blueprint.members["fold_repeats"] is False
+    # No blueprint row: the plain trace.draw() is the everything picture.
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        get_lens("blueprint")
+    assert excinfo.value.fields["code"] == "view_unknown"
     description = describe_lens("overview")
     assert "collapse='auto'" in description
     assert "what is this model?" in description
@@ -41,7 +40,7 @@ def test_builtin_rows_are_registered_and_teach_their_settings() -> None:
 def test_member_names_must_be_draw_parameters() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         register_lens(LensPreset(name="bogus", question="?", members={"not_a_param": 1}))
-    assert excinfo.value.fields["code"] == "lens_member_unknown"
+    assert excinfo.value.fields["code"] == "view_member_unknown"
 
 
 def test_secondary_members_must_be_declared() -> None:
@@ -54,26 +53,26 @@ def test_secondary_members_must_be_declared() -> None:
                 secondary_members=("show_legend",),
             )
         )
-    assert excinfo.value.fields["code"] == "lens_secondary_undeclared"
+    assert excinfo.value.fields["code"] == "view_secondary_undeclared"
 
 
 def test_registry_key_collision_refuses() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         register_lens(LensPreset(name="overview", question="duplicate"))
-    assert excinfo.value.fields["code"] == "lens_name_taken"
+    assert excinfo.value.fields["code"] == "view_name_taken"
 
 
 def test_unknown_lens_lookup_names_the_roster() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         get_lens("no_such_lens")
-    assert excinfo.value.fields["code"] == "lens_unknown"
+    assert excinfo.value.fields["code"] == "view_unknown"
     assert "overview" in str(excinfo.value)
 
 
 def test_resolution_rejects_unknown_user_kwargs() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         resolve_lens_request("overview", {"not_a_param": 1})
-    assert excinfo.value.fields["code"] == "lens_user_kwarg_unknown"
+    assert excinfo.value.fields["code"] == "view_user_kwarg_unknown"
 
 
 def test_preset_spec_fn_rides_the_internal_slot() -> None:
