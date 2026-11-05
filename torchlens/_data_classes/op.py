@@ -2001,7 +2001,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def fx_label(self) -> str | None:
         """Return a torch.fx-style label for this Op when module context is available."""
 
-        return _labels.fx_label(self.source.fx_path, self.source.fx_call_index)
+        return _labels.fx_label(self._source_fx_path, self._source_fx_call_index)
 
     @property
     def trace(self) -> "Trace":

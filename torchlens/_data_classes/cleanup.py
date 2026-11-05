@@ -387,14 +387,14 @@ def _scrub_layer_entry_conditional_fields(
     """
     entry_children: list[str] = []
     entry_seen: set[str] = set()
-    for child_label in layer_entry.control_flow.entry_children:
+    for child_label in layer_entry._control_flow_entry_children:
         mapped = _map_removed_label(child_label, labels_to_remove, replacements)
         if mapped is not None and mapped not in entry_seen:
             entry_seen.add(mapped)
             entry_children.append(mapped)
     layer_entry._control_flow_entry_children = entry_children
     layer_entry._control_flow_arm_children = _filter_conditional_arm_children(
-        layer_entry.control_flow.arm_children,
+        layer_entry._control_flow_arm_children,
         labels_to_remove,
         replacements,
     )
@@ -402,7 +402,7 @@ def _scrub_layer_entry_conditional_fields(
         layer_entry._control_flow_then_children,
         layer_entry._control_flow_elif_children,
         layer_entry._control_flow_else_children,
-    ) = _project_conditional_child_views(layer_entry.control_flow.arm_children)
+    ) = _project_conditional_child_views(layer_entry._control_flow_arm_children)
 
 
 def _scrub_layer_log_conditional_fields(

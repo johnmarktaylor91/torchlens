@@ -1401,9 +1401,9 @@ def _ensure_module_output_tensor_logged(
     input_ancestors: set[str] = set()
     internal_source_ancestors: set[str] = set()
     for parent_entry in parent_entries:
-        root_ancestors.update(parent_entry.graph.root_ancestors or set())
+        root_ancestors.update(parent_entry._graph_root_ancestors or set())
         input_ancestors.update(parent_entry.input_ancestors or set())
-        internal_source_ancestors.update(parent_entry.graph.internal_source_ancestors or set())
+        internal_source_ancestors.update(parent_entry._graph_internal_source_ancestors or set())
     if is_internal_source:
         # A self-rooted internal source: it is its own root and internal-source
         # ancestor, with no input ancestry (mirrors buffer source tagging).
@@ -1528,7 +1528,7 @@ def _ensure_module_output_tensor_logged(
             "children": [],
             "has_children": False,
             "is_input": False,
-            "has_input_ancestor": any(entry.graph.has_input_ancestor for entry in parent_entries),
+            "has_input_ancestor": any(entry._graph_has_input_ancestor for entry in parent_entries),
             "input_ancestors": input_ancestors,
             "min_distance_from_input": None,
             "max_distance_from_input": None,
@@ -1550,7 +1550,7 @@ def _ensure_module_output_tensor_logged(
             "buffer_source_func_name": None,
             "is_internal_source": is_internal_source,
             "has_internal_source_ancestor": is_internal_source
-            or any(entry.graph.has_internal_source_ancestor for entry in parent_entries),
+            or any(entry._graph_has_internal_source_ancestor for entry in parent_entries),
             "internal_source_parents": [],
             "internal_source_ancestors": internal_source_ancestors,
             "is_internal_sink": False,

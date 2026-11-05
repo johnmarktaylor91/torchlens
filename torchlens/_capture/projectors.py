@@ -306,7 +306,7 @@ class RefreshProjector:
                     layer._layer_label_raw,
                     layer.type,
                     tuple(layer.parents),
-                    _normalized_parent_arg_positions(layer.call.parent_arg_positions),
+                    _normalized_parent_arg_positions(layer._call_parent_arg_positions),
                 )
                 for layer in layers
             )
@@ -672,10 +672,10 @@ class RefreshProjector:
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)
             expected_positions = _normalized_parent_arg_positions(
-                target_layer.call.parent_arg_positions
+                target_layer._call_parent_arg_positions
             )
             actual_positions = _normalized_parent_arg_positions(
-                refreshed_layer.call.parent_arg_positions
+                refreshed_layer._call_parent_arg_positions
             )
             if expected_parents != actual_parents or expected_positions != actual_positions:
                 changed_fields: list[str] = []
@@ -708,7 +708,7 @@ class RefreshProjector:
         for layer in self.target._layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
-            grad_fn_handle = layer.autograd.grad_fn_handle
+            grad_fn_handle = layer._autograd_grad_fn_handle
             _register_forward_grad_fn(self.target, grad_fn_handle, layer._layer_label_raw)
             if layer.out is not None:
                 # The logged copy is a graph dead end (for an in-place op the
@@ -784,7 +784,7 @@ class RefreshProjector:
                 layer._layer_label_raw,
                 record_type(layer),
                 tuple(layer.parents),
-                _normalized_parent_arg_positions(layer.call.parent_arg_positions),
+                _normalized_parent_arg_positions(layer._call_parent_arg_positions),
             )
             for layer in trace._layer_list
         )

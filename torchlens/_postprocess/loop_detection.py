@@ -482,7 +482,7 @@ def _group_by_call_sites(self: "Trace") -> None:
         node = self[label]
         if record_member(node, "is_orphan", False):
             continue
-        if node.graph.is_buffer and node.buffer_address:
+        if node._graph_is_buffer and node.buffer_address:
             buffers.append(node)
             continue
         keys[label] = _call_site_group_key(node, classes)

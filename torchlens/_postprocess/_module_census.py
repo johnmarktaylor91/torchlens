@@ -130,13 +130,13 @@ def _call_io_layers(
         # top-level-created inputs (e.g. the model input) from the call's
         # input roster.
         if (
-            call_label in te.module_context.input_to_module_calls
+            call_label in te._module_context_input_to_module_calls
             and te.layer_label not in pass_input_layers
         ):
             pass_input_layers.append(te.layer_label)
         if (
-            te.module_context.is_module_output
-            and call_label in te.module_context.output_of_module_calls
+            te._module_context_is_module_output
+            and call_label in te._module_context_output_of_module_calls
         ):
             pass_output_layers.append(te.layer_label)
             pass_output_ops.append(te.label)
