@@ -1610,6 +1610,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_visualization/_color_sources.py", "__all__"),
         ("torchlens/_visualization/_container_edges.py", "__all__"),
         ("torchlens/_visualization/_edge_multiplicity.py", "__all__"),
+        ("torchlens/_visualization/_edit_change.py", "__all__"),
         ("torchlens/_visualization/_edit_highlighter.py", "__all__"),
         ("torchlens/_visualization/_edit_marks.py", "__all__"),
         ("torchlens/_visualization/_expansion_manifest.py", "__all__"),
