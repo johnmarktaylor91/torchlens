@@ -760,7 +760,7 @@ def record_function_apply(
         host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
         exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
-        log_native_input_views(trace, args, out)
+        log_native_input_views(trace, args, out, marks)
         return out
     spec = BoundarySpec(
         replay=_make_replay_callable(cls, original_function, exits),
