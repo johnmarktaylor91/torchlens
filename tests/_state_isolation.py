@@ -6,6 +6,7 @@ here is autouse so no test module opts in or out.
 
 from __future__ import annotations
 
+import gc
 import os
 import random
 import sys
@@ -410,4 +411,34 @@ def _restore_distribution_validation() -> Iterator[None]:
     """Restore the distribution argument-validation default after each test."""
 
     with distribution_validation_restored():
+        yield
+
+
+@contextmanager
+def deferred_payloads_released() -> Iterator[None]:
+    """Free payload aliases that only garbage reference cycles still hold, on exit.
+
+    A trace dropped inside a reference cycle (a failed capture whose error a
+    test kept in a ``pytest.raises`` info object, for one) keeps its pending
+    deferred-payload aliases registered until the cyclic collector runs. If
+    that happens while Dynamo compiles a later test's function, a weakref
+    callback removes a registry key Dynamo has just put in a guard and the
+    compile fails with ``InternalTorchDynamoError: KeyError``. Collecting at
+    the test boundary frees them here instead. Live traces are untouched.
+    """
+
+    from torchlens._utils import tensor_utils
+
+    try:
+        yield
+    finally:
+        if tensor_utils._DEFER_PENDING:
+            gc.collect()
+
+
+@pytest.fixture(autouse=True)
+def _release_dead_deferred_payloads() -> Iterator[None]:
+    """Free deferred-payload aliases held only by garbage after each test."""
+
+    with deferred_payloads_released():
         yield

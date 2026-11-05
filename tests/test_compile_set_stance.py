@@ -426,6 +426,10 @@ def test_failed_capture_restores_force_eager_stance() -> None:
     with pytest.raises(TraceCaptureError, match="injected stance-scope failure") as _tce_info:
         tl.trace(_CompiledThenRaise(), x)
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
+    # The info object, its traceback and this frame form a cycle that would keep
+    # the partial trace's deferred payload aliases registered until a later
+    # collector pass, which can land inside a later test's Dynamo compile.
+    del _tce_info
     assert compile_events == [], "the stance must compile zero graphs"
 
     compiled_free(x)
