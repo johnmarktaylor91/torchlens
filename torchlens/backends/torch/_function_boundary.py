@@ -754,13 +754,11 @@ def record_function_apply(
             _FRAMES.pop()
         elif frame_exports in _FRAMES:
             _FRAMES.remove(frame_exports)
-
-    if marks.op_events is None:
-        log_native_input_views(trace, args, out)
-        return out
-    collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
-    host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
-    exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
+    exits: tuple[str, ...] = ()
+    if marks.op_events is not None:
+        collapsed: set[str] = trace.__dict__.get(FOREIGN_FUNCTION_INTERIOR_ATTR, set())
+        host_entry_ops = _host_entry_ops(marks.op_events[marks.journal_mark :], collapsed)
+        exits = tuple(sorted(frame_exports)) + host_entry_ops + known_foreign_kernel_exits(cls)
     if not exits:
         log_native_input_views(trace, args, out)
         return out
