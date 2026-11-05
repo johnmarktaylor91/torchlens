@@ -385,3 +385,29 @@ def _reset_rng_state() -> Iterator[None]:
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
         if mlx_random is not None and mlx_state is not None:
             mlx_random.state[:] = mlx_state
+
+
+@contextmanager
+def distribution_validation_restored() -> Iterator[None]:
+    """Put the ``torch.distributions`` argument-validation default back on exit.
+
+    Creating any ``torch.compile`` callable switches that process-wide default
+    off. Left off, a later test's distribution-building model loses its
+    batch-wide argument check and records a different graph.
+    """
+
+    from torch.distributions import Distribution
+
+    incoming = Distribution._validate_args
+    try:
+        yield
+    finally:
+        Distribution.set_default_validate_args(incoming)
+
+
+@pytest.fixture(autouse=True)
+def _restore_distribution_validation() -> Iterator[None]:
+    """Restore the distribution argument-validation default after each test."""
+
+    with distribution_validation_restored():
+        yield
