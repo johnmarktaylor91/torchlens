@@ -117,6 +117,16 @@ class _RowJournal:
 
         return _RowOpRecord(self, self.store._rows[row_index], rest, {})
 
+    def release_rows(self) -> None:
+        """Detach the capture store once ingest has taken its rows (capture C2c).
+
+        The taken rows belong to the trace's op store from then on, and the
+        capture store no longer pins the others; a handle still unbuilt at
+        this point refuses to build (:func:`_record_from_row`).
+        """
+
+        self.store = None
+
 
 class _RowOpRecord:
     """Private journal handle for one exhaustive op: row cells plus residual.
@@ -156,12 +166,31 @@ class _RowOpRecord:
 
         record = self._record
         if record is None:
+            if self._journal.store is None:
+                raise RuntimeError(
+                    f"capture row of {self._cell('_label_raw')!r} was handed off to ingest "
+                    "before its record was built"
+                )
             record = _record_from_row(self)
             self._record = record
             self._row = None
             self._rest = None
             self._parents = None
         return record
+
+    def take_row(self) -> tuple[list[Any], OpRecord] | None:
+        """Return this unamended handle's row and its built record, for ingest (capture C2c).
+
+        The record is built first, from the row as committed, so ingest may
+        then write join cells into the row and adopt it as the op's store row.
+        Returns ``None`` for an amended, already built or handed-off handle,
+        which ingest reads through the record path instead.
+        """
+
+        row = self._row
+        if row is None or self._patch or self._journal.store is None:
+            return None
+        return row, self.materialize()
 
     def with_patch(self, items: Iterable[tuple[str, Any]]) -> Any:
         """Return the handle (or record) with ordered facet-path updates folded on."""
