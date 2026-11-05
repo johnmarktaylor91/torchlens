@@ -10,9 +10,13 @@
   [extract features](field-guide/extract_features.md),
   [intervene](field-guide/intervene.md).
 - [Quickstart: the input ladder](quickstart.md).
+- [Also in TorchLens](also_in_torchlens.md): every feature the README tour does not show, grouped
+  by task, one line each.
 
 ## What it shows
 
+- [The Reproduction Gallery](gallery/index.md): published claims reproduced with TorchLens, each
+  checked against an independent oracle with controls, a saved artifact and a stamp.
 - [The basis grid](gallery/basis_grid.md): the six Reproduction Gallery entries against the six
   verbs they use.
 - [The any-architecture strip](gallery/any_architecture.md): the same three lines on six

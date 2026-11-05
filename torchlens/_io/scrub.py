@@ -1,5 +1,4 @@
 """Portable state scrubbing for TorchLens model logs.
-
 This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
 rehydration: every class-specific ``_PORTABLE_STATE_SPEC`` is applied here so
@@ -25,6 +24,8 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
+from .._output_slot import saved_transformed_output
+from .._utils._display_bounded import RecordTuple, short_dataclass_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._scrub_identities import _scrub_nondeterministic_identities
@@ -51,14 +52,12 @@ _SCRUB_IN_PROGRESS = object()
 
 def _pin_in_memo(memo: dict[int, Any], value: Any) -> None:
     """Keep ``value`` alive for the memo's lifetime so its ``id`` cannot recycle.
-
     The portable-walk memos key rebuilt results by ``id(original)``. When an
     original container is a temporary (dropped once its owner's field is
     replaced), CPython may reuse its address for a later object, which would
     then falsely hit the memo and receive an unrelated rebuilt value. Pinning
     every memoized original under a reserved key (``id(memo)``, the same
     device ``copy.deepcopy`` uses) makes the id-keyed lookup sound.
-
     Parameters
     ----------
     memo:
@@ -73,7 +72,6 @@ def _pin_in_memo(memo: dict[int, Any], value: Any) -> None:
 @dataclass(frozen=True)
 class BlobSpec:
     """A payload selected for portable blob persistence.
-
     Parameters
     ----------
     blob_id:
@@ -555,7 +553,7 @@ def _rebuild_tuple_value(
     if isinstance(value, torch.Size):
         return torch.Size(materialized)
     value_type = type(value)
-    if value_type is tuple:
+    if value_type is tuple or value_type is RecordTuple:
         return materialized
     if not _type_is_load_reconstructible(value_type):
         _disclose_container_downgrade(
@@ -629,6 +627,8 @@ class _ScrubWalk:
     container rule in :data:`_SCRUB_NODE_HANDLERS` and differ only at the
     leaves (:func:`_scrub_object_node`) and in their cycle/depth wording.
     """
+
+    __repr__ = short_dataclass_repr
 
     options: _ScrubOptions
     memo: dict[int, Any]
@@ -1251,9 +1251,9 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_plain_direct_escape_gaps",
         "_foreign_departures",
         "_unrecorded_operator_mutations",
+        "_torch_file_loads",
         "_last_sibling_ordering_decision",
-        # Sibling render diagnostic (same _render_dot write site as the row
-        # above); left unenrolled, ONE draw() poisoned every later Trace.save.
+        # Sibling render diagnostic (same _render_dot write site); unenrolled, one draw() broke saves.
         "_last_encoding_state",
         # Layout-execution geometry record (vizmech D24), same write site class.
         "_last_render_geometry",
@@ -1404,21 +1404,20 @@ def _scrub_field(
 ) -> Any:
     """Scrub one object field according to its effective field policy.
 
-    r69 E: an effective ``DROP``/``WEAKREF_STRIP`` wins BEFORE every field-specific
-    serializer. The sparse-runnable effective policy lists ``raw_input``/``raw_output``
-    in its DROP set, so a runnable save always scrubs both to ``None`` -- including
-    when the ordinary ``save_raw_input``/``save_transformed_output`` policy is ``True`` or
-    ``"small"``. Pre-r69 the Trace raw-value special case ran first and the generic
-    small-value policy retained a nested tensor inside the sparse core, firing the
-    (unchanged) ``assert_sparse_core_has_no_tensor_payload`` tripwire on a fully
-    witnessed nested-string capture (r68 hon1-F5). Ordinary analysis saves are
-    unaffected: their effective raw-field policy is never ``DROP`` here.
+    An effective ``DROP``/``WEAKREF_STRIP`` wins before every field-specific
+    serializer (r69 E): the sparse-runnable effective policy drops ``input`` and
+    ``transformed_output``, so a runnable save scrubs both to ``None`` whatever the
+    ``save_raw_input``/``save_transformed_output`` policy says, and no nested tensor
+    reaches the sparse core (``assert_sparse_core_has_no_tensor_payload``). Otherwise
+    a Trace raw value goes through its save policy; a ``transformed_output`` a replay
+    made stale (the getter refuses) saves as ``None``.
     """
 
     if policy in {FieldPolicy.DROP, FieldPolicy.WEAKREF_STRIP}:
         return None
     if isinstance(owner, Trace) and field_name in {"input", "transformed_output"}:
-        return _scrub_raw_value_for_save(owner, field_name, field_value, walk)
+        stored = saved_transformed_output(field_value)  # a stale transform result saves as None
+        return _scrub_raw_value_for_save(owner, field_name, stored, walk)
     if policy == FieldPolicy.STRINGIFY:
         return _stringify_value(field_value)
     if policy == FieldPolicy.BLOB:

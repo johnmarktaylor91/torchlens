@@ -358,8 +358,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
-    "push": "replay/push engine; execution, not presentation",
-    "push_from": "replay/push engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
@@ -369,7 +367,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
@@ -707,6 +704,8 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
             cache=False,
             save_raw_input=raw_policy,
             save_transformed_output=raw_policy,
+            # names.10: save_transformed_output=True needs a transform to save.
+            output_transform=(lambda out: out * 2.0) if raw_policy is True else None,
         ),
     )
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"

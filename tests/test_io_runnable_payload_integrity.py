@@ -297,7 +297,7 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     assert activations["members"], "the archive really did ship blobs"
     assert activations["original_input_digests"] == []
 
-    result = tl.load(path).run(inputs=inputs.clone())
+    result = tl.load(path).run_transaction(inputs=inputs.clone())
 
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     named = [
@@ -327,7 +327,7 @@ def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) 
     assert not any("records no original-input digests" in str(e.message) for e in caught)
 
     assert _descriptor(path)["payload_layers"]["activations"]["original_input_digests"]
-    result = tl.load(path).run(inputs=inputs.clone())
+    result = tl.load(path).run_transaction(inputs=inputs.clone())
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
@@ -376,7 +376,7 @@ def test_older_version_refuses_at_rehydration_floor(tmp_path: Path) -> None:
     manifest_dict["tlspec_version"] = MIN_TLSPEC_VERSION - 1
     _write_manifest(path, manifest_dict)
 
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"):
         reader.read_manifest(path)
 
 

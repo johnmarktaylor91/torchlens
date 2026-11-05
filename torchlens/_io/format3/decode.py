@@ -137,12 +137,16 @@ def _check_fields(data: Mapping[str, Any], tag: str, at: str) -> None:
         )
 
 
+@cache
 def record_fields_allowed(cls: type) -> frozenset[str] | None:
     """Return the field names a ``record`` of ``cls`` may carry, or ``None`` when unbounded.
 
     Dataclasses and namedtuples declare their fields; a component with a
     ``_PORTABLE_STATE_SPEC`` declares them in the writer contract; a scalar
-    quantity carries ``value`` plus any instance attributes.
+    quantity carries ``value`` plus any instance attributes. The answer comes
+    from code tables only (as ``record_type_table`` does), so it is cached per
+    class: ``component_spec_tables`` walks every spec module and costs several
+    thousand Python calls, and it ran once per decoded ``record`` cell before the cache.
     """
 
     if dataclasses.is_dataclass(cls):

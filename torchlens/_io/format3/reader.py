@@ -1,4 +1,4 @@
-"""Reader of the 3.0 saved format: manifest first, digests, record tables, records.
+"""Reader of the 2.38 saved format: manifest first, digests, record tables, records.
 
 Every step refuses typed before the next opens a file: manifest (2.x test, schema, version
 window), listed files' digests, record tables (envelope, columns, one typed decode per cell),
@@ -26,7 +26,7 @@ from . import contract
 from ._payload_headers import validate_payload_headers
 from ._record_refs import _RecordResolver
 from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
-from .codec_policy import codec_backend
+from .codec_policy import backend_hint_fields, backend_materializes, codec_backend
 from .container import iter_members, read_member_index
 from .decode import (
     CELL_CODE,
@@ -174,7 +174,7 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
         return
     shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
     raise artifact_error(
-        f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
+        f"Artifact manifest {manifest_path} fails the saved format 3 manifest schema: {shown}.",
         code=_CODES["manifest_invalid"],
         remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
         file_path=str(manifest_path),
@@ -307,7 +307,8 @@ class TensorRefSink:
             "requires_grad": ref["requires_grad"],
             "logical_backend": backend,
             "codec": codec_id,
-            "codec_metadata": codec_metadata,
+            # A backend payload's hints are the 2.x tensor-entry fields the codec reads.
+            **backend_hint_fields(codec_metadata),
         }
         return BlobRef(blob_id, kind)
 
@@ -607,6 +608,12 @@ class DecodedArtifact(_RecordResolver):
 
         manifest = {"backend": contract.DEFAULT_BACKEND, **self.manifest}
         manifest["tensors"] = list(self.sink.entries.values())
+        # The rehydrate path reads materialization from the payload policy; format 3 keeps
+        # only the include flags there, so the backend's capability answers it.
+        manifest["payload_policy"] = {
+            **dict(manifest.get("payload_policy") or {}),
+            "materialization_supported": backend_materializes(manifest["backend"]),
+        }
         return manifest
 
 
@@ -642,7 +649,7 @@ def _hook(kind: str, root: Path) -> Callable[..., Any]:
         return _LOAD_HOOKS[kind]
     except KeyError:
         raise artifact_error(
-            f"The 3.0 {kind} loader's rehydration step is not installed; {root} was validated "
+            f"The saved format 3 {kind} loader's rehydration step is not installed; {root} was validated "
             "but not loaded.",
             code=_CODES["blob_missing"],
             remedy="import torchlens (its load door installs the step) and load again",

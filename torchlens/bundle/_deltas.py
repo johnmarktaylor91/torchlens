@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._comparison_tensor import _comparison_tensor
 from .._errors import InvalidArgumentError
 from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention.errors import BundleMemberError
@@ -60,7 +61,9 @@ def _pass_ops(layer: Any) -> list[Any]:
     return sorted(values(), key=lambda op: int(getattr(op, "pass_number", 1) or 1))
 
 
-def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | None:
+def _tensor_field(
+    layer: Any, field: Literal["out", "grad"], codec: Any = None
+) -> torch.Tensor | None:
     """Return a tensor field from a layer-like object.
 
     A logical layer with several passes (a module called twice, a recurrent
@@ -86,12 +89,20 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
 
     ops = _pass_ops(layer)
     if len(ops) > 1:
-        parts = [part for op in ops if isinstance(part := getattr(op, field, None), torch.Tensor)]
+        parts = [part for op in ops if (part := _op_tensor_field(op, field, codec)) is not None]
         if len(parts) != len(ops):
             return None
         device = parts[0].device
         return torch.cat([part.reshape(-1).to(device) for part in parts])
-    value = getattr(layer, field, None)
+    return _op_tensor_field(layer, field, codec)
+
+
+def _op_tensor_field(op: Any, field: Literal["out", "grad"], codec: Any) -> torch.Tensor | None:
+    """Read an op's payload, using the owning trace's codec when supplied."""
+
+    value = getattr(op, field, None)
+    if codec is not None:
+        return _comparison_tensor(value, codec)
     return value if isinstance(value, torch.Tensor) else None
 
 
@@ -361,11 +372,11 @@ def _delta_map_values(
         reference_layer = node.layer_refs.get(baseline_name)
         if reference_layer is None:
             continue
-        reference = _tensor_field(reference_layer, on)
+        reference = self._comparison_field(reference_layer, on)
         if reference is None:
             continue
         candidates = {
-            member_name: _tensor_field(node.layer_refs[member_name], on)
+            member_name: self._comparison_field(node.layer_refs[member_name], on)
             for member_name in (self.names if members is None else members)
             if member_name in node.layer_refs
         }
@@ -488,8 +499,8 @@ def _output_delta_values(
         for output_index, (target_layer, member_layer) in enumerate(
             _output_layer_pairs(target_log, member_log)
         ):
-            reference = _tensor_field(target_layer, on)
-            candidate = _tensor_field(member_layer, on)
+            reference = self._comparison_field(target_layer, on)
+            candidate = self._comparison_field(member_layer, on)
             if reference is None or candidate is None:
                 continue
             label = str(getattr(target_layer, "layer_label", f"output_{output_index}"))
@@ -653,7 +664,13 @@ def site_deltas(
     for node_name in supergraph.topological_order:
         values.update(
             _node_site_values(
-                str(node_name), supergraph.nodes[node_name], metric, baseline_name, on, members
+                str(node_name),
+                supergraph.nodes[node_name],
+                metric,
+                baseline_name,
+                on,
+                members,
+                bundle._comparison_field,
             )
         )
     return SiteDeltas(values=values, node_for_label=node_for_label)
@@ -666,6 +683,7 @@ def _node_site_values(
     baseline_name: str,
     on: Literal["out", "grad"],
     members: Sequence[str],
+    read_tensor: Callable[[Any, Any], torch.Tensor | None],
 ) -> dict[str, dict[str, float]]:
     """Return one supergraph node's per-site values: one site, or one per baseline pass."""
 
@@ -678,12 +696,12 @@ def _node_site_values(
     reference_passes = _ops_by_pass(reference_layer)
     values: dict[str, dict[str, float]] = {}
     for pass_number, reference_op in reference_passes.items():
-        reference = _tensor_field(reference_op, on)
+        reference = read_tensor(reference_op, on)
         if reference is None:
             continue
         site = node_name if len(reference_passes) == 1 else f"{node_name}:{pass_number}"
         candidates = {
-            name: _tensor_field(passes[pass_number], on) if pass_number in passes else None
+            name: read_tensor(passes[pass_number], on) if pass_number in passes else None
             for name, passes in member_passes.items()
         }
         site_values = _member_distances(reference, candidates, baseline_name, metric, site)

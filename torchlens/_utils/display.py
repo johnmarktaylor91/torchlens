@@ -4,6 +4,7 @@ Formatting helpers used by the display/print paths of Trace and Layer,
 plus environment checks (Jupyter detection, parallel-processing guard).
 """
 
+import importlib.util
 import multiprocessing as mp
 import os
 import re
@@ -118,8 +119,29 @@ def _record_phase_timing(trace: "Trace", bucket: str, elapsed_s: float) -> None:
     bucket_stats["count"] += 1
 
 
-@contextmanager
-def _timed_phase(trace: "Trace", bucket: str) -> Iterator[None]:
+class _TimedPhase:
+    """The context manager :func:`_timed_phase` returns.
+
+    A slotted class rather than a ``@contextmanager`` generator: capture times
+    two phases per op, and the generator protocol costs a generator, a helper
+    object and a ``StopIteration`` per entry. The sample is recorded on exit,
+    also when the body raises; exceptions are never suppressed.
+    """
+
+    __slots__ = ("_trace", "_bucket", "_start")
+
+    def __init__(self, trace: "Trace", bucket: str) -> None:
+        self._trace = trace
+        self._bucket = bucket
+
+    def __enter__(self) -> None:
+        self._start = time.perf_counter()
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        _record_phase_timing(self._trace, self._bucket, time.perf_counter() - self._start)
+
+
+def _timed_phase(trace: "Trace", bucket: str) -> _TimedPhase:
     """Record elapsed time for a capture or postprocess phase.
 
     Parameters
@@ -129,17 +151,13 @@ def _timed_phase(trace: "Trace", bucket: str) -> Iterator[None]:
     bucket:
         Stable timing bucket name.
 
-    Yields
-    ------
-    None
-        Context body.
+    Returns
+    -------
+    _TimedPhase
+        Context manager timing its body.
     """
 
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        _record_phase_timing(trace, bucket, time.perf_counter() - start)
+    return _TimedPhase(trace, bucket)
 
 
 def identity(x: Any) -> Any:
@@ -192,7 +210,7 @@ def int_list_to_compact_str(int_list: list[int]) -> str:
 
 
 def human_readable_size(size: float, decimal_places: int = 1) -> str:
-    """Convert a byte count into a human-readable string (e.g. ``"1.5 MB"``).
+    """Convert a byte count into a human-readable string (e.g. ``"1.5 MiB"``).
 
     Args:
         size: Number of bytes.
@@ -205,7 +223,14 @@ def human_readable_size(size: float, decimal_places: int = 1) -> str:
         raise ValueError("size must be non-negative.")
     if decimal_places == 1:
         return str(Bytes(size))
-    return format(Bytes(size), f".{decimal_places}f")
+    return (
+        format(Bytes(size), f".{decimal_places}f")
+        .replace("KB", "KiB")
+        .replace("MB", "MiB")
+        .replace("GB", "GiB")
+        .replace("TB", "TiB")
+        .replace("PB", "PiB")
+    )
 
 
 def format_size(size: float, decimal_places: int = 1) -> str:
@@ -216,12 +241,12 @@ def format_size(size: float, decimal_places: int = 1) -> str:
     size:
         Number of bytes.
     decimal_places:
-        Number of decimal places for KB and larger units.
+        Number of decimal places for KiB and larger units.
 
     Returns
     -------
     str
-        Human-readable byte string such as ``"1.2 MB"``.
+        Human-readable byte string such as ``"1.2 MiB"``.
     """
 
     return human_readable_size(size, decimal_places=decimal_places)
@@ -452,7 +477,9 @@ def progress_bar(
     if not enabled or total is None or total <= threshold:
         return iterable
     try:
-        if in_notebook():
+        # tqdm's notebook bar needs ipywidgets; without it tqdm.notebook raises mid-construction
+        # and the half-built bar prints "Exception ignored in tqdm.__del__" when collected.
+        if in_notebook() and importlib.util.find_spec("ipywidgets") is not None:
             from tqdm.notebook import tqdm
 
             return cast(Iterable[_T], tqdm(iterable, total=total, desc=desc))

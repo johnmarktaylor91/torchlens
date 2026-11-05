@@ -17,6 +17,8 @@ from torchlens.intervention.save import load_intervention_spec as legacy_load_in
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _interventions() -> tl.Trace:
     """Create a deterministic intervention-ready log.
@@ -37,7 +39,7 @@ def _interventions() -> tl.Trace:
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     return log
 

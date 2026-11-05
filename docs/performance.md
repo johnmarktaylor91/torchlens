@@ -21,7 +21,7 @@ dygraph/eager replay and static-inventory audit costs; TensorFlow preview captur
 | Need | Use | Notes |
 | --- | --- | --- |
 | Complete graph metadata and a few activations | `tl.trace(model, x, save=predicate)` | Best default for debugging and one-off analysis. |
-| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure. |
+| Repeated activation pulls in a loop | `tl.record(model, x, save=predicate)` | Torch-only lower-overhead path; call `Recording.to_trace()` only when you need graph structure, `Trace.draw` options or facets (a `Recording` has neither). |
 | A local window around a later op | `tl.trace(..., save=tl.followed_by(...), lookback=K)` | Retains bounded recent metadata, and optionally bounded recent payloads. |
 | Disk-backed selected payloads | `tl.trace(..., storage=tl.to_disk(path))` | Keeps selected payloads portable without retaining them all in RAM. |
 | Intervention during the forward pass | `tl.trace(..., intervene=tl.when(...), save=...)` | Live edits cost more than passive capture; use only when the model must execute edited values. |
@@ -343,8 +343,8 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()` with `do(..., intervention=InterventionOptions(engine="set_only"))` and `push()`, or `do(...)`, which stages the edit and replays it in one call
-(which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
+on an existing trace, prefer `trace.fork()` and `do(site, edit)`, which stages the edit and pushes
+it downstream in one call (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts
 

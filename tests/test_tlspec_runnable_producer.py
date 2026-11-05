@@ -317,7 +317,7 @@ def test_runnable_internal_einsum_identity_save_load_and_run_verified(
     loaded = tl.load(path)
     assert loaded.readiness.status is ReadinessStatus.READY
 
-    result = loaded.run(inputs=inputs)
+    result = loaded.run_transaction(inputs=inputs)
     torch.testing.assert_close(result.output, model(*inputs))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 

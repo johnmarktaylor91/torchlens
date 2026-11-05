@@ -51,6 +51,20 @@ _W44 = np.asarray(
     dtype=np.float32,
 )
 _B4 = np.asarray([0.0, 0.1, -0.1, 0.2], dtype=np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+_LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+_LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+_LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 _W43 = np.asarray(
     [[0.1, -0.2, 0.3], [0.4, 0.5, -0.6], [-0.7, 0.8, 0.9], [1.0, -1.1, 1.2]], dtype=np.float32
 )
@@ -153,8 +167,8 @@ def _build_loop3() -> tuple[Any, Any]:
 
     from tinygrad import Tensor
 
-    weight = Tensor(_W44.tolist())
-    bias = Tensor(_B4.tolist())
+    weight = Tensor(_LOOP_W.tolist())
+    bias = Tensor(_LOOP_B.tolist())
 
     def loop(value: Any) -> Any:
         """Apply the shared affine-relu step three times."""
@@ -163,7 +177,7 @@ def _build_loop3() -> tuple[Any, Any]:
             value = (value.matmul(weight) + bias).relu()
         return value
 
-    return loop, Tensor(_INPUT)
+    return loop, Tensor(_LOOP_X)
 
 
 def _build_norm_softmax() -> tuple[Any, Any]:
@@ -355,9 +369,9 @@ def _intermediates_multi() -> dict[str, Any]:
 def _intermediates_loop3() -> dict[str, Any]:
     """The loop3 row: each step's pre-activation add and relu."""
 
-    value, adds, relus = _INPUT, [], []
+    value, adds, relus = _LOOP_X, [], []
     for _ in range(3):
-        adds.append(value @ _W44 + _B4)
+        adds.append(value @ _LOOP_W + _LOOP_B)
         value = _np_relu(adds[-1])
         relus.append(value)
     return {"add": adds, "where": relus}

@@ -23,7 +23,7 @@ from torchlens._io import (
 )
 from torchlens.errors import ArtifactTooOldError
 
-FLOOR_MATCH = "saved by torchlens 2.x"
+FLOOR_MATCH = "saved by torchlens 2.37 and earlier"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:

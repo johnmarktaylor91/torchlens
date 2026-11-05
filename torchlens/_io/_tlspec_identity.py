@@ -8,6 +8,7 @@ schema v2 backend fields a non-torch or sparse runnable trace adds.
 
 from __future__ import annotations
 
+import importlib.metadata
 from collections.abc import Mapping
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
-from ..backends.registry import get_backend_spec
+from ..backends.registry import TORCH_BACKEND_NAME, get_backend_spec
 from ._tlspec_json_helpers import _hash_named_tensor_meta, _json_str_or_none
 
 if TYPE_CHECKING:
@@ -250,7 +251,7 @@ def _backend_v2_fields(
         "schema_version": 2,
         "backend": backend_name,
         "backend_runtime": _backend_runtime(source, backend_name=backend_name),
-        "torch_version": torch.__version__ if backend_name == "torch" else None,
+        "torch_version": torch.__version__,
         "model_fingerprint": _backend_model_fingerprint(source, backend_name=backend_name),
         "body_format": spec.serialization_policy.body_format,
         "backward_summary": None,
@@ -284,6 +285,10 @@ def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
     if not isinstance(device_summary, dict):
         device_summary = {}
     runtime_version = source._provenance_backend_version
+    if runtime_version is None and backend_name != TORCH_BACKEND_NAME:
+        # Format 3 requires a version string on every non-torch runtime stamp; a backend
+        # that does not stamp one records the installed distribution's version.
+        runtime_version = _installed_version(runtime_name)
     return {
         "name": runtime_name,
         "version": None if runtime_version is None else str(runtime_version),
@@ -291,6 +296,16 @@ def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
         "device_summary": device_summary,
         "compat_policy": {"policy": "metadata-only"},
     }
+
+
+def _installed_version(distribution: str) -> str:
+    """The installed version of ``distribution``, or ``""`` when no such distribution is
+    installed (a runtime-registered backend need not be a package)."""
+
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return ""
 
 
 def _payload_policy(
@@ -389,3 +404,40 @@ def _backend_model_fingerprint(source: Any, *, backend_name: str) -> dict[str, A
             "param_source": source._provenance_param_source,
         }
     }
+
+
+def _preflight_schema_v2_runtime(
+    manifest: Mapping[str, Any],
+    *,
+    backend_name: str,
+) -> None:
+    """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
+
+    from torchlens.backends.registry import BackendRuntimeCompatibilityError
+
+    runtime = manifest["backend_runtime"]
+    spec = get_backend_spec(backend_name)
+    expected_runtime_name = spec.serialization_policy.runtime_name or backend_name
+    runtime_name = runtime.get("name")
+    if runtime_name != expected_runtime_name:
+        raise BackendRuntimeCompatibilityError(
+            f"Manifest backend runtime name {runtime_name!r} does not match expected "
+            f"{expected_runtime_name!r} for backend {backend_name!r}."
+        )
+    if expected_runtime_name != "tf":
+        return
+
+    try:
+        import tensorflow as tf
+    except ImportError as exc:
+        raise BackendRuntimeCompatibilityError(
+            "Portable TensorFlow trace loading requires the tensorflow runtime."
+        ) from exc
+
+    saved_version = runtime.get("version")
+    current_version = str(getattr(tf, "__version__", ""))
+    if saved_version != current_version:
+        raise BackendRuntimeCompatibilityError(
+            "Manifest TensorFlow runtime version "
+            f"{saved_version!r} does not match installed tensorflow {current_version!r}."
+        )

@@ -1008,15 +1008,17 @@ def test_code_panel_doors_split_render_from_config_refusals() -> None:
     assert not isinstance(mode_info.value, TypeError)
 
 
-def test_predicate_type_doors_split_by_surface() -> None:
-    """Each predicate-type door carries ONE code mapping to ONE builtin.
+def test_predicate_type_doors_share_class_across_surfaces() -> None:
+    """Each predicate-type door carries ONE code mapping to ONE builtin on both surfaces.
 
-    The ``tl.trace`` doors keep ``ArgumentTypeError`` (historically raw
-    ``TypeError``) under the unprefixed codes; the ``tl.record`` doors keep
-    ``InvalidArgumentError`` (historically raw ``ValueError``) under their
-    own ``recording_*`` codes (R64 split, the F1/F3/F4 house pattern). This
-    retires the last dual-lineage pair: one documented code never maps to
-    two catchable builtins depending on surface.
+    ``tl.trace`` and ``tl.record`` refuse a non-callable ``intervene=`` under the same
+    code, ``intervention_predicate_type_invalid``, as ``ArgumentTypeError``
+    (``TypeError`` lineage), so one catch serves both doors (RC-280; interaction
+    matrix asymmetry A38). The stop directive keeps one type code per door:
+    ``tl.trace(stop_after=...)`` is a site or a predicate and refuses under
+    ``stop_after_type_invalid``; ``tl.record(stop_after=...)`` is the halt predicate
+    and refuses under ``halt_predicate_type_invalid``. Both are ``ArgumentTypeError``;
+    the former ``recording_*`` codes with ``ValueError`` lineage are retired.
     """
 
     import torch
@@ -1024,26 +1026,19 @@ def test_predicate_type_doors_split_by_surface() -> None:
 
     import torchlens as tl
 
-    for kwarg, trace_code in (
-        ("intervene", "intervention_predicate_type_invalid"),
-        # the stop directive is one door (stop_after=, a site or a predicate):
-        # a value that is neither refuses under its own type code
-        ("stop_after", "stop_after_type_invalid"),
+    for door, stop_code in (
+        (tl.trace, "stop_after_type_invalid"),
+        (tl.record, "halt_predicate_type_invalid"),
     ):
-        with pytest.raises(errors.ArgumentTypeError) as trace_info:
-            tl.trace(nn.Identity(), torch.randn(2), **{kwarg: 123})
-        assert trace_info.value.fields["code"] == trace_code
-        assert isinstance(trace_info.value, TypeError)
-        assert not isinstance(trace_info.value, ValueError)
-
-    # the record surface resolves both predicates in the Recorder (intervene=
-    # and stop_after= on the door); the recording_* codes keep ValueError lineage
-    for kwarg, base in (("intervene", "intervention"), ("stop_after", "halt")):
-        with pytest.raises(errors.InvalidArgumentError) as record_info:
-            tl.record(nn.Identity(), torch.randn(2), **{kwarg: 123})
-        assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
-        assert isinstance(record_info.value, ValueError)
-        assert not isinstance(record_info.value, TypeError)
+        for kwarg, code in (
+            ("intervene", "intervention_predicate_type_invalid"),
+            ("stop_after", stop_code),
+        ):
+            with pytest.raises(errors.ArgumentTypeError) as info:
+                door(nn.Identity(), torch.randn(2), **{kwarg: 123})
+            assert info.value.fields["code"] == code
+            assert isinstance(info.value, TypeError)
+            assert not isinstance(info.value, ValueError)
 
 
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1121,6 +1116,19 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens.intervention._param_fingerprint.ParamChangedSinceCaptureError": (
         "private ReplayPreconditionError subclass; contracted by its code "
         "replay_param_changed_since_capture, caught as ReplayPreconditionError"
+    ),
+    # Public-entry refusals that were plain builtins: private carriers of the coded fields,
+    # kept private until the public spellings are ruled (the raised builtin lineage and
+    # the codes are the contract; callers catch the builtin or TorchLensError).
+    "torchlens._errors._InternalInvariantError": (
+        "private TorchLensError for internal-invariant refusals that were plain "
+        "RuntimeError/ValueError; subclasses both, contracted by codes such as "
+        "module_metadata_missing and aliasing_parent_not_in_call_args"
+    ),
+    "torchlens._entry_refusals._DependencyIncompatibleError": (
+        "private CompatibilityError for an installed dependency missing an API that was a "
+        "plain RuntimeError; contracted by torch_tensorbase_unavailable and "
+        "lovely_tensors_has_no_lovely_function"
     ),
     # Forward-validation copy-failure disclosure: a coded TorchLensWarning
     # (S-18 contract row validation_model_copy_failed) private to validation.
@@ -1238,7 +1246,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow stop signal (BaseException); converted to recording status"
     ),
     "torchlens._fast_live_until.FastUntilReached": (
-        "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
+        "internal control-flow cut signal (BaseException) for trace.run_transaction(inputs=..., fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
     "torchlens._runnable.execution._ProjectionCountExceeded": (
@@ -1510,7 +1518,7 @@ def test_layers_to_save_type_invalid_provoked() -> None:
 
     model = torch.nn.Identity()
     with pytest.raises(ArgumentTypeError) as excinfo:
-        # grad_transform is the FOURTH positional slot (after input_kwargs).
+        # Only model and inputs are positional; extra positional values are refused.
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:

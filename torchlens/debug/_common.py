@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import torch
 
+from .._comparison_tensor import _comparison_tensor
+from .._data_classes._lookup_kinds import op_at
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
+from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -135,7 +139,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
 def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
     """Return the aggregate Layer a bare multi-pass label names, else ``None``.
 
-    ``trace[label]`` refuses a bare multi-pass label (every pass is a distinct
+    A bare multi-pass label names a Layer, not one op (every pass is a distinct
     op); the lineage contract still owes the honest "select a pass" message,
     which needs the aggregate record's pass count.
     """
@@ -168,7 +172,7 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     candidate = op_or_label
     if not (hasattr(candidate, "parents") and hasattr(candidate, "children")):
         try:
-            candidate = trace[op_or_label]
+            candidate = op_at(trace, op_or_label)  # a module name names its output op
         except Exception as exc:  # noqa: BLE001 - debug helpers report odd inputs instead of raising.
             candidate = _multipass_layer_or_none(trace, op_or_label)
             if candidate is None:
@@ -201,13 +205,15 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     return None, f"unavailable: {op_or_label!r} did not resolve to an op"
 
 
-def _safe_out(op: Op) -> tuple[Any | None, str | None]:
+def _safe_out(op: Op, codec: Any = None) -> tuple[Any | None, str | None]:
     """Read ``op.out`` and convert known unavailable cases into a reason.
 
     Parameters
     ----------
     op:
         TorchLens op.
+    codec:
+        Optional producing backend codec for comparison on host tensors.
 
     Returns
     -------
@@ -218,7 +224,8 @@ def _safe_out(op: Op) -> tuple[Any | None, str | None]:
     if not bool(getattr(op, "has_saved_activation", False)):
         return None, "unsaved"
     try:
-        return op.out, None
+        value = op.out
+        return (value if codec is None else _comparison_tensor(value, codec)), None
     except ValueError as exc:
         return None, str(exc)
 
@@ -309,6 +316,83 @@ def _nonfinite_kind(tensor: torch.Tensor) -> str:
         return "none"
     has_nan = bool(torch.isnan(tensor).any().item())
     has_inf = bool(torch.isinf(tensor).any().item())
+    return _kind_from_flags(has_nan, has_inf)
+
+
+def _nonfinite_kind_of(value: Any, codec: Any) -> str:
+    """Classify non-finite values in a saved output from any capture backend.
+
+    Torch tensors use :func:`_nonfinite_kind`; arrays from the other backends are
+    copied to host NumPy through the trace backend's payload codec.
+
+    Parameters
+    ----------
+    value:
+        Saved op output.
+    codec:
+        ``get_payload_codec(trace._provenance_backend)`` for the producing backend.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"`` (also for values the
+        backend codec cannot convert, such as non-array outputs).
+    """
+
+    if isinstance(value, torch.Tensor):
+        return _nonfinite_kind(value)
+    try:
+        array = codec.to_numpy(value).array
+    except (TypeError, ValueError):
+        return "none"
+    if array.dtype.kind not in "fc":
+        return "none"
+    return _kind_from_flags(bool(np.isnan(array).any()), bool(np.isinf(array).any()))
+
+
+def _runs_on_torch(model: Any, inputs: Any, trace_kwargs: dict[str, Any]) -> bool:
+    """Report whether a :func:`torchlens.trace` call would capture on the torch backend.
+
+    Only PyTorch eager capture honours ``on_nonfinite="raise"``; the other backends
+    ignore it, so NaN finders scan a full capture's saved outputs there instead.
+
+    Parameters
+    ----------
+    model:
+        Model to execute.
+    inputs:
+        Positional model input.
+    trace_kwargs:
+        Caller's :func:`torchlens.trace` keyword arguments.
+
+    Returns
+    -------
+    bool
+        ``True`` when the call resolves to the torch backend.
+    """
+
+    spec = resolve_backend_spec(
+        trace_kwargs.get("backend"), model, inputs, trace_kwargs.get("input_kwargs")
+    )
+    return spec.name == TORCH_BACKEND_NAME
+
+
+def _kind_from_flags(has_nan: bool, has_inf: bool) -> str:
+    """Name the non-finite kind from NaN and Inf presence flags.
+
+    Parameters
+    ----------
+    has_nan:
+        Whether any NaN is present.
+    has_inf:
+        Whether any Inf is present.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
     if has_nan and has_inf:
         return "nan+inf"
     if has_nan:

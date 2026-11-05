@@ -15,7 +15,7 @@ from ...._errors import InvalidArgumentError
 from .._families import scalar_or_none
 
 if TYPE_CHECKING:
-    from ...data_classes.trace import Trace
+    from ...._data_classes.trace import Trace
 
 __all__ = ["AnswerKey", "KeyQuestion", "generate_answer_key"]
 
@@ -177,7 +177,7 @@ def _reachable(trace: Trace, source_label: str, target_label: str) -> bool:
             continue
         seen.add(label)
         try:
-            op = trace[label]
+            op = trace.ops[label]
         except (KeyError, InvalidArgumentError):
             # A frontier label the trace cannot serve (boundary pseudo-label)
             # is simply not on any path; the walk continues past it.

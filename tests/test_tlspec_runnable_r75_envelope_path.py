@@ -91,7 +91,7 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
     codes = {diagnostic.code.value for diagnostic in readiness.diagnostics}
     assert "context_field_invalid" in codes, codes
     with pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=run_inputs)
+        loaded.run_transaction(inputs=run_inputs)
 
 
 # Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill; the catch of its regression fault.

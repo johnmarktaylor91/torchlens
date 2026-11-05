@@ -199,7 +199,7 @@ def occlusion(
     data. To ask "what if this region held another input's value", patch from
     a donor trace instead: ``trace.fork().do(selection, tl.patch_from(donor))``
     with the donor captured on that other input, or the population-based
-    replacements (``tl.mean_ablate(population, dim=None)``,
+    replacements (``tl.mean_ablate(population, dim='members')``,
     ``torchlens.intervention.sample_from``, ``resample_rows_from``). The baseline used is always
     returned in ``extra["baseline"]``; report it with the score.
 

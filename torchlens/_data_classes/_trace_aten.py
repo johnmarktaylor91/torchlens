@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._errors import AtenOpsUnavailableError
+from .._utils._display_bounded import RecordTuple
 
 if TYPE_CHECKING:
     from .aten_op import AtenOp, _ModePausedInteriorGap, _PrimitiveOpProfile
@@ -57,10 +58,16 @@ def has_aten_ops(record: Any) -> bool:
 def aten_ops(record: Any) -> tuple[AtenOp, ...]:
     """Return every recorded ATen operation of ``record`` in dispatch order, or refuse typed."""
 
-    return tuple(_require_aten_profile(record, what="Trace.aten_ops").primitive_ops)
+    return RecordTuple(
+        _require_aten_profile(record, what="Trace.aten_ops").primitive_ops, "AtenOps", "calls"
+    )
 
 
 def aten_gaps(record: Any) -> tuple[_ModePausedInteriorGap, ...]:
     """Return the disclosed ATen-row gaps of ``record``, or refuse typed."""
 
-    return tuple(_require_aten_profile(record, what="Trace.aten_gaps").mode_paused_interior)
+    return RecordTuple(
+        _require_aten_profile(record, what="Trace.aten_gaps").mode_paused_interior,
+        "AtenGaps",
+        "gaps",
+    )

@@ -214,26 +214,29 @@ def test_r69_green_pins_stock_numpy_value_transparency(tmp_path: Path) -> None:
     x = torch.tensor([1.0, 2.0, 3.0])
     path = _save(_trace(_FloatBranch(), [x, np.float64(2.0)]), tmp_path / "pin_np.tlspec")
     # np.float64(2.0) <-> 2.0 must VERIFY (the locked r67 heavy-gate pin).
-    assert tl.load(path).run(inputs=[x, 2.0]).report.path_faithfulness is PathFaithfulness.VERIFIED
     assert (
-        tl.load(path).run(inputs=[x, np.float64(2.0)]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, 2.0]).report.path_faithfulness
+        is PathFaithfulness.VERIFIED
+    )
+    assert (
+        tl.load(path).run_transaction(inputs=[x, np.float64(2.0)]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     # Changed value still diverges (both spellings).
     for changed in (0.5, np.float64(0.5)):
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, changed])
+            tl.load(path).run_transaction(inputs=[x, changed])
     # Reverse capture direction: plain float capture, numpy runtime twin verifies.
     path = _save(_trace(_FloatBranch(), [x, 2.0]), tmp_path / "pin_plain.tlspec")
     assert (
-        tl.load(path).run(inputs=[x, np.float64(2.0)]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, np.float64(2.0)]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     # bool/int and int/float family separation stays strict.
     path = _save(_trace(_IntBranch(), [x, 1]), tmp_path / "pin_int.tlspec")
     for swap in (True, 1.0, np.bool_(True), np.float64(1.0)):
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, swap])
+            tl.load(path).run_transaction(inputs=[x, swap])
 
 
 # ======================================================================================
@@ -312,7 +315,7 @@ def test_r69_admitted_key_saves_loads_and_runs_identical(name: str, tmp_path: Pa
     x = torch.tensor([1.0, 2.0, 3.0])
     payload = torch.tensor([0.5, 0.5, 0.5])
     path = _save(_trace(_KeyedTensor(), [x, {key: payload}]), tmp_path / f"key_{name}.tlspec")
-    result = tl.load(path).run(inputs=[x, {key: payload.clone()}])
+    result = tl.load(path).run_transaction(inputs=[x, {key: payload.clone()}])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.equal(result.output, x + payload)
 
@@ -373,7 +376,7 @@ def test_r69_mutated_keys_diverge(tmp_path: Path) -> None:
             tmp_path / f"mut_{index}.tlspec",
         )
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, {runtime_key: payload.clone()}])
+            tl.load(path).run_transaction(inputs=[x, {runtime_key: payload.clone()}])
 
 
 def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path: Path) -> None:
@@ -388,7 +391,7 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
     reserved = ["\x00tl_empty_container", "\x00tl_bool_key", "\x00tlk:x", "\x00junk"]
     for index, key in enumerate(reserved):
         path = _save(_trace(_KeyedTensor(), [x, {key: payload}]), tmp_path / f"d_{index}.tlspec")
-        result = tl.load(path).run(inputs=[x, {key: payload.clone()}])
+        result = tl.load(path).run_transaction(inputs=[x, {key: payload.clone()}])
         assert result.report.path_faithfulness is PathFaithfulness.VERIFIED, key
         assert torch.equal(result.output, x + payload)
         # A CHANGED KEY (a different reserved marker) diverges: the token contract is
@@ -396,12 +399,12 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
         # reserved keys.
         other = "\x00tl_bool_key" if key != "\x00tl_bool_key" else "\x00junk"
         with pytest.raises((PathDivergenceError, RunPreconditionError)):
-            tl.load(path).run(inputs=[x, {other: payload.clone()}])
+            tl.load(path).run_transaction(inputs=[x, {other: payload.clone()}])
 
     # Tuple carrying a reserved string round-trips.
     tup_key = ("\x00tl_empty_container", 1)
     path = _save(_trace(_KeyedTensor(), [x, {tup_key: payload}]), tmp_path / "d_tup.tlspec")
-    result = tl.load(path).run(inputs=[x, {tup_key: payload.clone()}])
+    result = tl.load(path).run_transaction(inputs=[x, {tup_key: payload.clone()}])
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
     # A GENUINE empty-container marker still behaves (an added empty container
@@ -412,11 +415,11 @@ def test_r71d_reserved_marker_keys_round_trip_without_false_divergence(tmp_path:
 
     path = _save(_trace(_EmptyBranch(), [x, {"flag": {}}]), tmp_path / "d_empty.tlspec")
     assert (
-        tl.load(path).run(inputs=[x, {"flag": {}}]).report.path_faithfulness
+        tl.load(path).run_transaction(inputs=[x, {"flag": {}}]).report.path_faithfulness
         is PathFaithfulness.VERIFIED
     )
     with pytest.raises((PathDivergenceError, RunPreconditionError)):
-        tl.load(path).run(inputs=[x, {"flag": {"present": 1}}])
+        tl.load(path).run_transaction(inputs=[x, {"flag": {"present": 1}}])
 
 
 def test_r71d_reserved_registry_meta_test() -> None:
@@ -564,7 +567,7 @@ def test_r69_multi_slot_escape_witnesses_stay_runnable(tmp_path: Path) -> None:
     assert len(members) >= 2, members  # same name, several slots -> distinct identities
     assert all(member.startswith("b::") for member in members), members
     # The r15 honesty verdict is preserved: the run executes and is NOT verified.
-    result = loaded.run(inputs=x.clone(), seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     # A genuinely DUPLICATED escape fact (same name AND slot) still refuses at parse.
     import copy as _copy

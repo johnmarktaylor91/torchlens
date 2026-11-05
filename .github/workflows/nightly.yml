@@ -239,6 +239,25 @@ jobs:
           print(torch.__version__, torchvision.__version__)
           PY
 
+      - name: Collect the whole suite (Python 3.11+ import check)
+        # The smoke rows import only smoke-listed files (tests/conftest.py
+        # skips the rest before import) and the not-slow tier runs on 3.10
+        # only, so a module-level fault in a non-smoke test file was never
+        # imported on 3.11, 3.12 or 3.13 (one dataclass default once broke
+        # 35 test files on 3.11 unseen). Collection only, no run: pytest
+        # exits 2 on a collection error. The newest-admitted rows are the
+        # three measured at 0 errors; floor rows are not claimed. The ids go
+        # to a file: the log shows the count, or the errors on failure.
+        if: matrix.scope == 'smoke' && matrix.track == 'newest-admitted'
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          log="${{ runner.temp }}/collect-only.txt"
+          status=0
+          pytest tests/ --collect-only -q -p no:randomly > "$log" 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then tail -n 200 "$log"; else tail -n 3 "$log"; fi
+          exit "$status"
+
       - name: Run smoke tests and compatibility coverage
         if: matrix.scope == 'smoke'
         env:
@@ -874,7 +893,7 @@ jobs:
             "transformers==5.18.0"
           uv pip check
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: coverage-mid-data-*
           path: ${{ runner.temp }}/coverage-mid-data
@@ -887,7 +906,9 @@ jobs:
           # Four shard files plus shard 4's serial file; fewer means a shard's
           # data is missing and the total would cover part of the tier.
           ls -l "${{ runner.temp }}/coverage-mid-data"
-          test "$(ls "${{ runner.temp }}/coverage-mid-data" | grep -c '^coverage-mid\.')" -eq 5
+          shopt -s nullglob
+          shard_files=("${{ runner.temp }}/coverage-mid-data"/coverage-mid.*)
+          test "${#shard_files[@]}" -eq 5
           coverage combine "${{ runner.temp }}/coverage-mid-data"
 
       - name: Enforce the aggregate coverage floor on the mid tier
@@ -1810,10 +1831,10 @@ jobs:
           # others in one environment.
           - leg: examples-neuro
             extras: "dev,neuro,treescope,mcp,lightning"
-            pkgs: "dagua"
+            pkgs: ""
             files: "tests/test_docstring_examples.py::test_optional_examples_run"
-            # rsatoolbox, xarray, treescope, mcp, lightning and dagua.
-            floor: "6"
+            # rsatoolbox, xarray, treescope, mcp and lightning.
+            floor: "5"
           - leg: examples-compat
             extras: "dev,compat-shims"
             pkgs: "timm"
@@ -1900,7 +1921,11 @@ jobs:
     # and torchvision are held at the versions the base install resolved, so
     # no peer can move them. The base install is the enforcing smoke row
     # (py3.10, torch 2.13.0). LXT (the LRP recipe) is Clear BSD licensed,
-    # which permits this CI use.
+    # which permits this CI use. The docs snippet suite
+    # (tests/test_docs_snippets.py) runs in the same pytest session: a peer
+    # that re-wraps a torch slot at import changes what later captures in the
+    # process see, and its per-peer parity probes run only where the peers
+    # are installed.
     name: Recipe pages with every peer installed
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -1955,7 +1980,10 @@ jobs:
             timm fancy-einsum "open_clip_torch==3.3.0" line_profiler \
             "transformer-lens==3.8.0" huggingface_hub safetensors \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
+            "xarray>=2023.1" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
+          # xarray is tl.export.xarray's peer (the neuro extra's bound): the
+          # export page's snippet and its parity probe skip without it.
           # These declare dependencies that would move torch, transformers or
           # numpy (torchcam pins numpy<2); their pages install them with
           # --no-deps too. dictionary_learning and ViT-Prisma would pull vllm
@@ -1970,20 +1998,24 @@ jobs:
           uv pip freeze --python "$PY" > "$RUNNER_TEMP/peer-freeze.txt"
           cat "$RUNNER_TEMP/peer-freeze.txt"
 
-      - name: Run the recipe pages with the peers required
+      - name: Run the recipe pages and doc snippets with the peers required
         env:
           TORCHLENS_RECIPE_PEERS: "1"
           OMP_NUM_THREADS: "1"
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" -m pytest tests/test_recipe_pages_executed.py \
+            tests/test_docs_snippets.py \
             -rA --tb=short -p no:cacheprovider \
             --junitxml="$RUNNER_TEMP/junit/peer-recipes.junit.xml"
 
-      - name: Declare the executed-test floor (recipe page)
+      - name: Declare the executed-test floor (recipe pages and doc snippets)
         # A skip counts as a failure on this leg (maximum skipped fraction 0):
-        # every page's peer is installed, so a skip means a page went unrun.
+        # every page's and snippet's peer is installed, so a skip means a page
+        # or snippet went unrun. The floor is the measured executed count of
+        # both files in this environment: 107 recipe-page tests and 125 docs
+        # snippet tests, 0 skipped (2026-11-03, torch 2.13.0, python 3.10).
         run: |
-          echo "peer-recipes.junit.xml 53 0" >> "$RUNNER_TEMP/junit/legs.floor"
+          echo "peer-recipes.junit.xml 232 0" >> "$RUNNER_TEMP/junit/legs.floor"
 
       # The SAE export consumers install last and run in their own step: one
       # of them ships a top-level ``tests`` package that shadows the repo's,
@@ -2453,12 +2485,14 @@ jobs:
       - name: Install torch, TorchLens and the notebook kernel
         run: |
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
-          # The [test] extra carries nbclient and ipykernel.
+          # The [test] extra carries nbclient and ipykernel; [tlens-oracle] carries
+          # the pinned transformer_lens that
+          # examples/methods/attribution_graph_transcoders_recipe.ipynb imports.
           uv pip install --system \
             --index-url https://download.pytorch.org/whl/cpu \
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
-            -e ".[dev,test,tabular,viz]" \
+            -e ".[dev,test,tabular,viz,tlens-oracle]" \
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu" \
             "transformers==5.18.0"
@@ -2574,7 +2608,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: junit-*
           path: ${{ runner.temp }}/junit

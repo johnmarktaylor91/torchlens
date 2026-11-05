@@ -136,7 +136,7 @@ def _save_and_run(
         warnings.simplefilter("ignore")
         trace = tl.trace(model, capture_input, capture=_CAPTURE)
         trace.save(path, level="runnable", include_weights=True)
-        return tl.load(path).run(inputs=run_input.clone())
+        return tl.load(path).run_transaction(inputs=run_input.clone())
 
 
 def _assert_layout_launder_closed(model_factory: Any, tmp_path: Path) -> None:

@@ -184,7 +184,9 @@ def log_current_rng_states(torch_only: bool = False) -> dict[str, Any]:
     # ``get_rng_state`` family carries no registry row TODAY -- this bracket keeps the
     # invariant structural rather than dependent on that vocabulary staying read-free).
     with _suppress_active_monitor_marks():
-        rng_dict: dict[str, Any] = {"torch": torch.random.get_rng_state()}
+        # ``torch.get_rng_state`` is a decorated factory: this per-op read (logging on) goes to
+        # the generator directly so TorchLens never records its own snapshot as an op.
+        rng_dict: dict[str, Any] = {"torch": torch.default_generator.get_state()}
         if not torch_only:
             rng_dict["random"] = random.getstate()
             rng_dict["np"] = np.random.get_state()

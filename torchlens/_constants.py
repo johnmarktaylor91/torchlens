@@ -1042,6 +1042,8 @@ PRIMITIVE_OP_FIELD_ORDER = [
 # __torch_function__), but TorchLens still decorates most of them. They are listed separately
 # because _get_torch_overridable_functions() intentionally skips them, so we must add them back
 # into ORIG_TORCH_FUNCS explicitly. Source: torch.overrides.get_ignored_functions().
+# Tensor-returning ``torch.*`` entries of the ignored list (feature-detected rows below).
+_TENSOR_IGNORED_FNS = ("mkldnn_rnn_layer", "_make_dep_token", "_functional_sym_constrain_range")
 IGNORED_FUNCS = [
     ("torch", "load"),
     ("torch", "empty"),
@@ -1086,35 +1088,22 @@ IGNORED_FUNCS = [
     ("torch", "rand"),
     ("torch", "randn"),
     ("torch", "randint"),
-    # r18cg: the random ``*_like`` factories are in torch's get_ignored_functions() (not
-    # overridable via __torch_function__), exactly like their non-``_like`` siblings above, so
-    # they must be re-added here to be decorated. Without them a forward using
-    # ``torch.rand_like`` / ``randn_like`` / ``randint_like`` records the freshly-allocated
-    # output as an unattributed literal (the r45 ``.mH`` capture-gap class); their arg-specs
-    # already exist in _capture/arg_positions.py (_FACTORY_SOURCE_SPEC / randintlike).
+    # r18cg: the random ``*_like`` factories are ignored like their siblings above; unwrapped,
+    # their output recorded as an unattributed literal (specs: _FACTORY_SOURCE_SPEC/randintlike).
     ("torch", "rand_like"),
     ("torch", "randn_like"),
     ("torch", "randint_like"),
     ("torch", "randperm"),
     ("torch", "range"),
     ("torch", "scalar_tensor"),
-    # The modern DLPack interop boundary. ``torch.from_dlpack`` (the same object as
-    # ``torch.utils.dlpack.from_dlpack``) is absent from BOTH of torch's override
-    # registries, so it was never decorated and the op vanished from the trace
-    # entirely: ``z = torch.from_dlpack(y); return z + 1`` recorded no dlpack node. In
-    # the aliasing variant the safety net at least disclosed
-    # ``escape_rescue_unrecovered``, but in the common cross-library direction
-    # (numpy/cupy/jax capsule -> torch, a fresh storage with no captured-tensor alias)
-    # there is no provenance signal at all and both detectors default off, so the
-    # freshly-created tensor read as an unattributed literal -- exactly the silent class
-    # the ``rand_like`` / ``.mH`` re-adds fixed. Protocol-invisible like ``from_numpy``,
-    # so it is also a mechanical-belt candidate (see backends/torch/belt.py).
+    # DLPack interop: ``torch.from_dlpack`` (== ``torch.utils.dlpack.from_dlpack``) is in
+    # neither override registry, so a capsule from numpy/cupy/jax read as an unattributed
+    # literal with no provenance signal. Protocol-invisible like ``from_numpy`` (see belt.py).
     ("torch", "from_dlpack"),
     ("torch.utils.dlpack", "from_dlpack"),
-    # The PUBLIC sparse-compressed constructors. Only the PRIVATE
-    # ``torch._sparse_csr_tensor`` was re-added, so the whole public family was
-    # undecorated: sparse inputs/params refuse at capture entry, but IN-FORWARD sparse
-    # creation was ungated.
+    # The PUBLIC sparse-compressed constructors. Only the PRIVATE ``torch._sparse_csr_tensor`` was
+    # re-added, so the whole public family was undecorated: sparse inputs/params refuse at capture
+    # entry, but IN-FORWARD sparse creation was ungated.
     ("torch", "sparse_coo_tensor"),
     ("torch", "sparse_csr_tensor"),
     ("torch", "sparse_csc_tensor"),
@@ -1122,12 +1111,8 @@ IGNORED_FUNCS = [
     ("torch", "sparse_bsc_tensor"),
     ("torch", "sparse_compressed_tensor"),
     ("torch", "_sparse_csr_tensor"),
-    # The ``torch.sparse`` tensor ops. torch re-exports these C builtins
-    # (``torch._C._sparse._sparse_mm`` and kin) into a namespace the overridable
-    # crawl never visits, so ``torch.sparse.mm(adjacency, features)`` ran
-    # unrecorded and its dense result could not be attributed to any op (the
-    # capture refused with ``output_attribution_failed``). Feature-detected:
-    # ``spsolve`` is newer than the 2.1 floor.
+    # ``torch.sparse`` ops: C builtins re-exported where the crawl never looks, so
+    # ``torch.sparse.mm`` refused with ``output_attribution_failed``. ``spsolve`` is post-2.1.
     *(
         ("torch.sparse", _sparse_op_name)
         for _sparse_op_name in (
@@ -1142,11 +1127,8 @@ IGNORED_FUNCS = [
         )
         if hasattr(torch.sparse, _sparse_op_name)
     ),
-    # The MODERN documented window-factory namespace. Only the legacy top-level twins
-    # (``hann_window``, ``bartlett_window``, ...) were re-added, so a model using
-    # ``torch.signal.windows.hann`` silently recorded its window as an unattributed
-    # literal -- the same shape as the fixed ``rand_like`` gap, and silent with
-    # detectors off. Pure factories, so no tensor edge is dropped, only the node.
+    # ``torch.signal.windows``: only the legacy ``*_window`` twins were rows, so ``windows.hann``
+    # recorded as an unattributed literal. Pure factories: the node was missing, no edge.
     *(
         ("torch.signal.windows", _window_name)
         for _window_name in (
@@ -1163,13 +1145,9 @@ IGNORED_FUNCS = [
             "nuttall",
         )
     ),
-    # The public FP8/MoE entry points (torch 2.13+; absent on 2.8 and earlier,
-    # incl. the 2.1 floor and 2.8 canonical CI rows). Each delegates to a wrapped
-    # ``torch._VF`` interior, so capture stayed COMPLETE, but the op recorded
-    # under the private v2 name rather than what the user called (mislabel
-    # only). Feature-detected (never a bare row) so the curated-roster liveness
-    # gate never needs a ``_KNOWN_DEAD_ROSTER_ROWS`` entry for a not-yet-
-    # introduced spelling: absent means not listed, not "dead".
+    # Public FP8/MoE entry points (torch 2.13+): each delegates to a wrapped ``torch._VF``
+    # interior, which recorded under the private v2 name. Feature-detected so the roster
+    # liveness gate needs no ``_KNOWN_DEAD_ROSTER_ROWS`` entry: absent means not listed.
     *(
         ("torch.nn.functional", _fp8_moe_name)
         for _fp8_moe_name in ("scaled_mm", "grouped_mm", "scaled_grouped_mm")
@@ -1182,12 +1160,9 @@ IGNORED_FUNCS = [
     ("torch.nn.functional", "upsample"),
     ("torch.nn.functional", "upsample_bilinear"),
     ("torch.nn.functional", "upsample_nearest"),
-    # ``handle_torch_function`` is deliberately ABSENT: it is __torch_function__
-    # protocol plumbing, not a tensor op. Decorating it made every composite's
-    # ``if has_torch_function(...)`` preamble route through a TorchLens wrapper
-    # whenever ANY foreign TorchFunctionMode was active (torch's own
-    # DeviceContext included), feeding function objects into tensor-arg capture
-    # and crashing with TorchLensTLCollisionError (stage-0 safety-net fix).
+    # ``handle_torch_function`` is deliberately ABSENT: protocol plumbing, not a tensor op.
+    # Wrapped, every composite's ``has_torch_function`` preamble ran through TorchLens under
+    # any foreign TorchFunctionMode and crashed with TorchLensTLCollisionError (stage-0 fix).
     ("torch.nn.functional", "sigmoid"),
     ("torch.nn.functional", "hardsigmoid"),
     ("torch.nn.functional", "tanh"),
@@ -1207,10 +1182,8 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "__delitem__"),
     ("torch.Tensor", "__iter__"),
     ("torch.Tensor", "__init_subclass__"),
-    # ``__torch_function__`` is deliberately ABSENT: same protocol-plumbing
-    # hazard as ``handle_torch_function`` above. (It was never actually
-    # decorated — classmethod access binds to <class 'method'>, which the
-    # decoration type gate skips — but listing it declared the wrong intent.)
+    # ``__torch_function__`` is deliberately ABSENT (the ``handle_torch_function`` hazard; the
+    # type gate skipped it anyway, but listing it declared the wrong intent).
     ("torch.Tensor", "__new__"),
     ("torch.Tensor", "__subclasshook__"),
     ("torch.Tensor", "as_subclass"),
@@ -1231,14 +1204,34 @@ IGNORED_FUNCS = [
     ("torch.Tensor", "T"),
     ("torch.Tensor", "mT"),
     ("torch.Tensor", "H"),
-    # r45: ``mH`` (batched conjugate transpose) must be wrapped for capture exactly like
-    # its sibling ``H`` / ``mT`` -- otherwise a forward using ``x.mH`` records the adjoint
-    # result as an unattributed literal and the runnable artifact cannot save/run (the r44
-    # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
+    # r45: ``mH`` is wrapped like ``H`` / ``mT``; unwrapped, ``x.mH`` recorded as an unattributed
+    # literal and the runnable artifact could not save or run (r44 corr1_1 / secF_1).
     ("torch.Tensor", "mH"),
     # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
     # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
     *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
+    # Private Tensor methods (most have crawled ``torch.*`` twins; philox records its key as a
+    # parent) and the other tensor-returning ignored functions: unwrapped, each lost provenance.
+    *(
+        ("torch.Tensor", _private_name)
+        for _private_name in (
+            *(f"_to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
+            *("_conj", "_conj_physical", "_neg_view", "_lazy_clone", "_addmm_activation"),
+            *("_is_all_true", "_is_any_true", "_philox_normal_", "_philox_uniform_"),
+            *("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"),
+        )
+        if hasattr(torch.Tensor, _private_name)
+    ),
+    # Read ``torch.__dict__`` (as ``torch_attr`` does): no lazy ``torch.__getattr__``, no upward import.
+    *(("torch", _name) for _name in _TENSOR_IGNORED_FNS if torch.__dict__.get(_name) is not None),
+    # A no-parent factory (the CPU RNG state as a fresh uint8 tensor). TorchLens's own RNG
+    # snapshots read ``torch.default_generator.get_state()``, so they never record.
+    ("torch", "get_rng_state"),
+    ("torch.random", "get_rng_state"),
+    # ``torch.load`` (both spellings) is wrapped only so the provenance warning names it; its result
+    # stays sourceless (replay never reloads files). Excluded: ``torch.empty_quantized``
+    # (uninitialized, no validation exemption), ``to_padded_tensor`` (nested), wrapper subclasses.
+    ("torch.serialization", "load"),
 ]
 
 

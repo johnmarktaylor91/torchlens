@@ -117,7 +117,16 @@
     `autogradfunction` boundary op (`transform_kind="autograd.Function"`,
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
-    validation replays it by calling the Function's `apply` again. An ordinary custom Function
+    validation replays it by calling the Function's `apply` again; when a known kernel returns
+    several tensors, the kernel table declares per output which positional arguments it depends
+    on (ruling: "(b) Declare per-output dependence per kernel in a table."; FlashAttention 4's
+    log-sum-exp reads q and k, not v) and the perturbation check excuses exactly the
+    declared-independent edges, every undeclared kernel, output and position staying strict
+    (`validation/_foreign_kernel_dependence.py`). The same table declares native custom ops
+    recorded as sibling ops with no boundary (FlashAttention 2's
+    `flash_attn::_flash_attn_forward`, keyed on the operator its replay callable calls plus
+    its `func_name`: the log-sum-exp and dropout mask read q and k, the rng state none of q,
+    k, v; the attention output has no row). An ordinary custom Function
     (interior in torch) is captured op by op exactly as before. A round trip outside any
     Function is never collapsed into a boundary that hides ops: the export is journaled as a
     departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited
@@ -193,13 +202,13 @@
     mirror. No record deletion can improve a verdict; the ONE out-of-scope boundary is coherent
     reauthoring (an honest capture of a weaker program), documented in the contract's threat-model
     subsection.
-18. `Trace.run(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
+18. `Trace.run_transaction(inputs=..., seed=...)` is transactional for live and loaded sparse providers, runs
     internal sparse calls under `pause_logging()`, and returns `RunResult(output, trace, report)`.
     Stage 6 enforces input/state, per-call/output, and control-witness honesty before exposure;
     default divergence raises with rollback, while `on_divergence="return"` is the sole monotonic poisoned
     opt-in. Incomplete witness coverage is `unverifiable`; sparse-only and ineligible activation
     runs report numeric attestation as `not_applicable`.
-18a. `Trace.run(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
+18a. `Trace.run_transaction(inputs=..., fast=True)` is an explicit stateful static-loop mode: loaded sparse
     traces must first settle an ordinary run as `verified`, then may reuse staged state, compiled
     binders, and one result Trace; live traces use native forward plus targeted module hooks and
     functional collection only for the functional ops the capture saved (an explicit functional

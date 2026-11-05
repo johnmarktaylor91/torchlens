@@ -23,6 +23,45 @@ from .._errors import InvalidArgumentError
 from ..backends.registry import BackendRegistryError, get_backend_spec
 
 
+def registered_backend_named(name: str) -> bool:
+    """Return whether ``name`` is the name of a backend registered in this runtime now.
+
+    Parameters
+    ----------
+    name:
+        Backend name to look up; an alias is not a backend name.
+
+    Returns
+    -------
+    bool
+        ``True`` when a registered spec carries exactly this name.
+    """
+
+    try:
+        return get_backend_spec(name).name == name
+    except BackendRegistryError:
+        return False
+
+
+def backend_materializes_payloads(name: str) -> bool:
+    """Return whether the registered backend ``name`` rebuilds its saved payloads.
+
+    Parameters
+    ----------
+    name:
+        Backend name to look up; an alias or an unregistered name answers ``False``.
+
+    Returns
+    -------
+    bool
+        The registered capability ``payload_materialization``.
+    """
+
+    if not registered_backend_named(name):
+        return False
+    return get_backend_spec(name).capabilities.payload_materialization
+
+
 def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
     """Raise when ``trace``'s backend cannot expose a true-backward accessor.
 

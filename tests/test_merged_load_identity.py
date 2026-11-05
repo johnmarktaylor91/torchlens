@@ -24,12 +24,15 @@ import os
 import shutil
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
+from torchlens._io._safe_unpickle import SafeBundleUnpickler, _PurePythonBundleUnpickler
 from torchlens._merged._artifact import canonical_json_bytes, load_merged, tree_hash
 from torchlens._merged._enums import MergedErrorCode
 from torchlens._merged._errors import MergedArtifactError
@@ -184,16 +187,19 @@ def test_non_rank_core_member_refuses_not_laundered(tmp_path: Path) -> None:
 
 
 def test_denylisted_member_pickle_refuses_not_laundered(tmp_path: Path) -> None:
-    """A-R58-1: a guarded-unpickler denylist refusal on a member core is TAMPER.
+    """A-R58-1: a hostile pickle planted in a member core is TAMPER.
 
     Plant a classic RCE gadget pickle (``__reduce__`` -> ``os.system``) as one
-    member's ``metadata.pkl`` and re-hash so the descriptor's tree hash matches
-    (the byte-integrity layer would otherwise refuse first). The guarded
-    unpickler denies the gadget with ``pickle.UnpicklingError``. Pre-fix,
-    ``load_merged``'s bare ``except Exception`` around ``load_bundle`` laundered
-    that denylist refusal into the "no longer parses on this runtime"
-    degradation channel and SUCCEEDED the merge off the honest member -- a tamper
-    signal silently downgraded. It must refuse typed as tamper instead.
+    member's trace record (``records/trace.json``, the format 3 home of what
+    2.x pickled as ``metadata.pkl``), re-digest the member's file table and
+    re-hash the descriptor tree (the byte-integrity layers would otherwise
+    refuse first). The format 3 reader refuses the bytes as an invalid JSON
+    record (``bundle_metadata_integrity_refused``) before any pickle opcode
+    runs; neither restricted unpickler is entered. Pre-fix, ``load_merged``'s
+    bare ``except Exception`` around ``load_bundle`` laundered an integrity
+    refusal into the "no longer parses on this runtime" degradation channel and
+    SUCCEEDED the merge off the honest member -- a tamper signal silently
+    downgraded. It must refuse typed as tamper instead.
     """
 
     import pickle as _pickle
@@ -203,12 +209,20 @@ def test_denylisted_member_pickle_refuses_not_laundered(tmp_path: Path) -> None:
             return (os.system, ("echo pwned",))
 
     art = _saved_two_rank(tmp_path)
-    metadata = art / "members" / "rank_0001.tlspec" / "metadata.pkl"
-    assert metadata.exists()
-    metadata.write_bytes(_pickle.dumps(_Evil()))
+    member = art / "members" / "rank_0001.tlspec"
+    record = member / "records" / "trace.json"
+    assert record.exists()
+    record.write_bytes(_pickle.dumps(_Evil()))
+    redigest(member, "records/trace.json")
     _rehash(art)
-    with pytest.raises(MergedArtifactError) as excinfo:
+    with (
+        patch.object(SafeBundleUnpickler, "load") as native_load,
+        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
+        pytest.raises(MergedArtifactError) as excinfo,
+    ):
         load_merged(art)
+    native_load.assert_not_called()
+    python_load.assert_not_called()
     assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_DESCRIPTOR_TAMPER.value
     assert "bundle-integrity" in str(excinfo.value)
 

@@ -106,7 +106,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "container_selector_requires_registry",
         "container_selector_unresolved",
         "container_value_source_invalid",
-        "dagua_renderer_not_opted_in",
         "decoded_output_not_classification",
         "fsdp_capture_unsupported",
         "gradient_not_saved",
@@ -121,14 +120,14 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "intervention_fire_results_cleanup_failed",
         "intervention_fire_results_unrecordable",
         "intervention_tensor_unsupported",
-        "layer_pass_ambiguous",
+        # layer_pass_ambiguous: row DELETED (shrink-only lock-in) -- the indexing
+        # coherence tests provoke it through a multi-pass Layer's .out.
         "layers_not_logged",
         "link_format_invalid",
         "max_pairs_invalid",
         "metric_name_invalid",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
-        "module_call_ambiguous",
         "module_focus_empty",
         "op_lookup_pass_required",
         # option_group_type_invalid: row DELETED (shrink-only lock-in) -- the
@@ -137,14 +136,19 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         # output_sink_conflict: row DELETED (shrink-only lock-in) -- the REM1
         # test_io_streaming migration to the typed ArgumentConflictError now
         # provokes it.
-        "recording_events_not_retained",
+        # recording_events_not_retained: row DELETED (shrink-only lock-in) -- the
+        # public-entry refusal provocations (test_public_entry_refusal_codes) now
+        # provoke it.
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",
-        "recording_multipass_not_convertible",
-        # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
-        # run_legacy_options_conflict, run_source_model_collected: rows
+        # recording_multipass_not_convertible: row DELETED (shrink-only lock-in);
+        # tests/test_record_to_trace_multipass.py asserts the halted multi-pass
+        # refusal by code.
+        # run_fast_divergence_policy_invalid, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins
-        # now provoke them.
+        # now provoke them. run_fast_requires_inputs and
+        # run_legacy_options_conflict left the contract when Trace.run split
+        # from Trace.run_transaction (the keywords no longer reach one door).
         "run_input_missing",
         "selector_function_pattern_type_invalid",
         # skip_fn_boundary_invalid: row DELETED (shrink-only lock-in) -- the

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import pickle
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from io import BytesIO
 from typing import Any
 
@@ -311,6 +311,23 @@ def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
 
 
 # Complexity: the bounded image visitor keeps byte and dimension checks on the same decode path.
+def _sequence_rebuilder(value: Any) -> Callable[[Iterable[Any]], Any] | None:
+    """Return the constructor that rebuilds a walked sequence, or ``None`` to leave it.
+
+    Lists and frozensets (subclasses included) rebuild as the plain built-in; only an
+    exact ``tuple`` rebuilds, so a tuple subclass (a named or display tuple) is kept
+    as it is.
+    """
+
+    if isinstance(value, list):
+        return list
+    if type(value) is tuple:
+        return tuple
+    if isinstance(value, frozenset):
+        return frozenset
+    return None
+
+
 def _rehydrate_small_raw_images(value: Any) -> Any:
     """Restore bounded raw-image sentinels to PIL images when possible.
 
@@ -328,14 +345,9 @@ def _rehydrate_small_raw_images(value: Any) -> Any:
 
     if isinstance(value, dict) and value.get(_RAW_IMAGE_SENTINEL) is True:
         return _rehydrate_small_raw_image(value)
-    if isinstance(value, tuple) and type(value) is not tuple:
-        return value
-    if isinstance(value, list):
-        return [_rehydrate_small_raw_images(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_rehydrate_small_raw_images(item) for item in value)
-    if isinstance(value, frozenset):
-        return frozenset(_rehydrate_small_raw_images(item) for item in value)
+    rebuild = _sequence_rebuilder(value)
+    if rebuild is not None:
+        return rebuild(_rehydrate_small_raw_images(item) for item in value)
     if isinstance(value, dict):
         restored = value.copy()
         for key, item in value.items():

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
@@ -87,6 +87,16 @@ def _check_module_call_boundary_and_tree(
     _check_module_call_output_structure_paths(ml, module_call, name)
 
 
+def _is_root_call(module_call: Any, call_label: str) -> bool:
+    """True for the root's own calls (``self:N``), which no module_call_stack lists.
+
+    A plain root is never pushed on the stack; a bound-method root's owner calls
+    are dropped from every op's stack at postprocess (``_drop_root_call_frames``).
+    """
+
+    return str(getattr(module_call, "address", call_label.rsplit(":", 1)[0])) == "self"
+
+
 def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> None:
     """Check ModuleCall parent/child links and stack prefixes.
 
@@ -138,7 +148,7 @@ def _check_module_call_tree_links(ml: Trace, module_call: object, name: str) -> 
                 f"{getattr(child_call, 'call_parent', None)!r}",
             )
         expected_prefix = list(getattr(module_call, "module_call_stack", ()) or ())
-        if call_label != "self:1":
+        if not _is_root_call(module_call, call_label):
             expected_prefix.append(call_label)
         child_stack = list(getattr(child_call, "module_call_stack", ()) or ())
         if child_stack[: len(expected_prefix)] != expected_prefix:

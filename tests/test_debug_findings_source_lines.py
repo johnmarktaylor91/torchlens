@@ -9,6 +9,8 @@ cross-dtype comparison in ``compare`` and ``first_divergence``.
 from __future__ import annotations
 
 import os
+import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -308,3 +310,99 @@ def test_dtype_range_prints_its_card() -> None:
         finding.source_line is None or THIS_FILE in finding.source_line
         for finding in report.findings
     )
+
+
+class _ConvOneD(nn.Module):
+    """A multi-op leaf module (view, addmm, view), like the HF ``Conv1D``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.randn(4, 6))
+        self.bias = nn.Parameter(torch.zeros(6))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        flat = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
+        return flat.view(*x.shape[:-1], 6)
+
+
+class _ProjBlock(nn.Module):
+    """A block whose projection is a multi-op module."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = _ConvOneD()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(self.proj(x))
+
+
+def _positions(labels: Iterable[str]) -> list[int]:
+    """Graph positions from ``name_k_N:pass`` labels.
+
+    Input and output labels (``input_1:1``) carry no position and are skipped.
+    """
+
+    found = (re.fullmatch(r"\w+?_\d+_(\d+):\d+", label) for label in labels)
+    return [int(match.group(1)) for match in found if match]
+
+
+def test_grad_health_card_leads_with_counts_and_lists_rows_in_order() -> None:
+    """Lead counts the health verdicts; rows name their module and run in graph order."""
+
+    torch.manual_seed(2)
+    x = torch.randn(2, 3, 4, requires_grad=True)
+    trace = tl.trace(_ProjBlock(), x, capture=tl.options.CaptureOptions(save_grads=True))
+    trace.backward(trace[trace.output_layers[0]].out.sum())
+    report = tl.debug.grad_health(trace)
+    frame = report.to_pandas()
+    lead = str(report).splitlines()[0]
+
+    assert set(frame["verdict"]) <= {"ok", "unavailable"}
+    assert f"status=clean ({len(frame)} ops)" in lead
+    assert "[dead=0, exploding=0, " in lead and "vanishing=0]" in lead
+    assert repr(report).startswith("grad_health(_ProjBlock) status=clean (")
+    in_proj = frame[frame["op"].str.match(r"(view|addmm)_")]
+    assert len(in_proj) >= 3
+    assert set(in_proj["module"]) == {"proj"}
+    assert "module=nan" not in str(report)
+    positions = _positions(frame["op"])
+    assert len(positions) >= 4 and positions == sorted(positions), list(frame["op"])
+
+
+def test_grad_health_lists_flagged_rows_first() -> None:
+    """A zeroed branch makes dead gradients; those rows lead the frame and the card."""
+
+    class Zeroed(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = nn.Linear(4, 4)
+            self.head = nn.Linear(4, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.head(torch.relu(self.fc(x)) * 0.0)
+
+    torch.manual_seed(3)
+    trace = tl.trace(
+        Zeroed(),
+        torch.randn(3, 4, requires_grad=True),
+        capture=tl.options.CaptureOptions(save_grads=True),
+    )
+    trace.backward(trace[trace.output_layers[0]].out.sum())
+    report = tl.debug.grad_health(trace)
+    verdicts = list(report.to_pandas()["verdict"])
+    flagged = [verdict for verdict in verdicts if verdict == "dead"]
+
+    assert flagged
+    assert verdicts[: len(flagged)] == flagged
+    assert "status=flagged (" in str(report).splitlines()[0]
+    assert f"dead={len(flagged)}" in str(report).splitlines()[0]
+    assert "verdict=dead" in str(report).splitlines()[2]
+
+
+def test_display_source_line_shows_installed_files_from_the_package_root() -> None:
+    """A card names an installed file from its package root, as an op card does."""
+
+    root = os.path.join(os.sep, "opt", "venv", "lib", "python3.11", "site-packages")
+    location = os.path.join(root, "transformers", "pytorch_utils.py") + ":119"
+
+    assert display_source_line(location) == "transformers/pytorch_utils.py:119"

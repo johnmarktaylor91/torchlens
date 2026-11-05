@@ -1,7 +1,7 @@
 """C03: the ONE immutable public InterventionSpec accepted at every door.
 
 Surgery memo 3.1: ``tl.when(...)`` returns the immutable multi-clause spec;
-the exact same object is accepted by ``fork.do``,
+the exact same object is accepted by ``fork.do`` (propagating or staged),
 ``intervene=``, ``sweep``, and the save/load path. Lane options never enter
 the spec, no lane silently drops a rule, and per-rule IDs distinguish rules
 differing in ANY action argument.
@@ -17,6 +17,11 @@ import torchlens as tl
 from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens.intervention.spec import classify_where
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _TinyModel(nn.Module):
@@ -78,7 +83,7 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(
             spec,
             tl.scale(0.5),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 

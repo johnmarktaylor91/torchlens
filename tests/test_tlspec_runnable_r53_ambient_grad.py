@@ -78,7 +78,7 @@ def test_no_grad_capture_records_false_and_matches_no_grad_oracle(tmp_path: Path
     trace.save(path, level="runnable", include_weights=True)
 
     assert _descriptor_ambient(path)["grad_enabled"] is False
-    result = tl.load(path).run(inputs=x.clone())  # caller is grad-ON here
+    result = tl.load(path).run_transaction(inputs=x.clone())  # caller is grad-ON here
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert torch.allclose(result.output, expected_no_grad)
 
@@ -107,7 +107,7 @@ def test_missing_ambient_mode_field_is_typed_analysis_only(field: str, tmp_path:
     assert "context_field_invalid" in codes, codes
     assert "context_parse_validation" in stages, stages
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=torch.randn(2, 3))
+        loaded.run_transaction(inputs=torch.randn(2, 3))
 
 
 @pytest.mark.parametrize("field", ("grad_enabled", "inference_mode"))
@@ -134,7 +134,7 @@ def test_null_ambient_mode_is_a_typed_refusal_never_a_default(field: str, tmp_pa
     assert readiness is not None
     assert readiness.status.value == "unavailable"
     with pytest.raises(RunnableTLSPECError):
-        loaded.run(inputs=torch.randn(2, 3))
+        loaded.run_transaction(inputs=torch.randn(2, 3))
 
 
 def test_ambient_snapshot_covers_every_recorded_field() -> None:
@@ -167,7 +167,7 @@ def test_live_grad_read_never_ceilings_or_degrades(tmp_path: Path) -> None:
         include_weights=True,
         include_activations=True,
     )
-    report = tl.load(path).run(inputs=x.clone()).report
+    report = tl.load(path).run_transaction(inputs=x.clone()).report
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
     assert report.numeric_attestation is NumericAttestationStatus.ATTESTED
     assert report.nondeterministic_sources == ()

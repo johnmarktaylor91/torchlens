@@ -3,9 +3,15 @@
 A focused draw shows one module's operations. The modules that enclose it
 (its ancestors) contain nothing else that is drawn, so their frames would
 only nest the picture in empty margins. They are not drawn: the header's
-scope line names them instead (``GPT2LMHeadModel > transformer > h.5 >
+scope line names them instead (``GPT2LMHeadModel › transformer › h.5 ›
 mlp``), and the focused module's own frame is the outermost one, with frame
 widths measured from it.
+
+Inside the picture, module addresses leave off the path the scope line
+already printed (the focused module's enclosing path): under the scope
+``GPT2LMHeadModel › transformer › h.5 › mlp`` the frame reads ``@mlp`` and
+its children ``@mlp.c_fc`` (``relative_address``; the label rewriting lives
+in ``_focus_relabel``).
 
 Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -23,22 +29,27 @@ from ._frame_penwidth import compute_module_penwidth
 if TYPE_CHECKING:
     import graphviz
 
+    from .._data_classes.module import Module
     from .._data_classes.trace import Trace
     from .render_ir import RenderIR, RenderIRRegion
 
 __all__ = [
     "drop_ancestor_regions",
-    "strip_focus_ancestors",
     "flatten_ancestor_frames",
     "focus_address",
     "focus_ancestor_keys",
+    "focus_parent_prefix",
+    "focus_relative_depth",
+    "module_at",
     "reading_notes",
+    "relative_address",
     "scope_caption_head",
 ]
 
 #: An op name's counters: ``tanh_6_266`` is the 6th ``tanh`` call and op 266
-#: of the whole forward pass; ``:2`` marks a later pass of a repeated op.
-_OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?::\d+)?$")
+#: of the whole forward pass; ``:2`` marks a later pass of a repeated op. A
+#: DOT node name spells the pass ``pass2``; the drawn label keeps the colon.
+_OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?:(?::|pass)(?P<pass>\d+))?$")
 #: HTML tags inside a node label, and a ``name=value`` call argument in its text.
 _TAG = re.compile(r"<[^>]*>")
 _ARGUMENT = re.compile(r"(?:^|\s)[A-Za-z_]\w*=\S")
@@ -58,6 +69,68 @@ def focus_address(module: Any) -> str | None:
     address = module if isinstance(module, str) else getattr(module, "address", None)
     if not isinstance(address, str) or address in {"", "self"}:
         return None
+    return address
+
+
+def module_at(trace: Trace, address: str) -> Module | None:
+    """Return the module record at ``address``, or ``None`` when the trace has none there."""
+
+    if address not in trace.modules:  # the accessor resolves, it has no .get
+        return None
+    return trace.modules[address]
+
+
+def focus_relative_depth(trace: Trace, module: Any, depth: int) -> int:
+    """Return the module nesting depth to draw, counted from the focused module.
+
+    ``depth=`` is the maximum module nesting depth shown. A whole-model draw
+    counts it from the model (``depth=1`` draws the top-level modules as one
+    box each); a focused draw counts it from the focused module, so
+    ``depth=1`` draws the module's own child modules as one box each and
+    larger values open them, as the same value does for a whole-model draw of
+    a model that started at the focused module. The focused module's own
+    nesting level is read from the called-module stack of its first recorded
+    op (uncalled containers such as a ``ModuleList`` add no level).
+    """
+
+    focus = focus_address(module)
+    if focus is None:
+        return depth
+    for op in trace.ops:
+        stack = [str(call).split(":", 1)[0] for call in getattr(op, "modules", None) or ()]
+        if focus in stack:
+            return depth + stack.index(focus) + 1
+    return depth
+
+
+def focus_parent_prefix(module: Any) -> str | None:
+    """Return the address the scope line prints above the focused module, or ``None``.
+
+    Addresses drawn inside a focused picture leave this prefix off. A module
+    directly under the model (``pre_x``) has none. List indices stay with
+    their list: the prefix of ``transformer.h.5`` is ``transformer``.
+    """
+
+    focus = focus_address(module)
+    if focus is None:
+        return None
+    return ".".join(_breadcrumb(focus)[:-1]) or None
+
+
+def relative_address(address: str, prefix: str | None) -> str:
+    """Return ``address`` without the focused draw's scope prefix.
+
+    An address under the prefix drops it (``transformer.h.5.mlp.c_fc`` reads
+    ``mlp.c_fc`` under ``transformer.h.5``); the prefix module itself reads as
+    its last scope step (``h.5``); any other address is returned whole.
+    """
+
+    if prefix is None:
+        return address
+    if address == prefix:
+        return _breadcrumb(prefix)[-1]
+    if address.startswith(f"{prefix}."):
+        return address[len(prefix) + 1 :]
     return address
 
 
@@ -157,20 +230,6 @@ def drop_ancestor_regions(render_ir: RenderIR, flatten: frozenset[str]) -> Rende
     return replace(render_ir, nodes=nodes, edges=edges, regions=regions)
 
 
-def strip_focus_ancestors(
-    render_ir: RenderIR, payload_keys: Iterable[str], module: Any
-) -> tuple[RenderIR, frozenset[str]]:
-    """Drop a focused draw's ancestor frames from the IR; return it and the dropped keys.
-
-    The keys come from the module-cluster payloads and the IR regions both,
-    so a frame known to either is dropped; a whole-model draw changes nothing.
-    """
-
-    keys = [*payload_keys, *(region.key for region in render_ir.regions)]
-    flatten = focus_ancestor_keys(keys, module)
-    return drop_ancestor_regions(render_ir, flatten), flatten
-
-
 def _kept_parent(
     region: RenderIRRegion,
     kept: Mapping[str, RenderIRRegion],
@@ -225,14 +284,27 @@ def _breadcrumb(address: str) -> list[str]:
     return steps
 
 
-def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: str) -> str:
-    """Return the header head of a focused draw: scope, drawn view, whole model.
+#: Joins the scope line's steps: U+203A between non-breaking spaces.
+_SCOPE_SEPARATOR = "&#160;&#8250;&#160;"
 
-    The first line is the scope: the model class, then each enclosing module
-    down to the focused one with its class (``GPT2LMHeadModel > transformer >
-    h.5 > mlp (GPT2MLP)``); the frames of the enclosing modules are not drawn.
-    The count line covers the drawn view, the parameter line the whole model,
-    and each says so.
+
+def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: str) -> str:
+    """Return the header head: a focused draw's scope and drawn view, else the whole model's.
+
+    A focused draw's first line is the scope: the model class, then each
+    enclosing module down to the focused one with its class
+    (``GPT2LMHeadModel › transformer › h.5 › mlp (GPT2MLP)``); the frames of
+    the enclosing modules are not drawn. Its second line counts the drawn
+    view (``8 ops (480.0 KB)``), with no label: the count line of a
+    whole-model draw carries none either. Steps are joined by a single
+    right-pointing angle quotation mark (U+203A, in the bundled font) between
+    non-breaking spaces, so a long scope never wraps at a separator. The whole
+    scope line is one bold text run: Graphviz writes every change of weight
+    as a separate SVG ``<text>`` placed by its own font metrics, so a line
+    that mixed bold and plain steps drifted at each boundary in browsers
+    whose font differs (the gap before the last step read wider than the
+    others). The whole model's parameter line is printed on a whole-model
+    draw only.
     """
 
     focus = focus_address(module)
@@ -244,13 +316,17 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
         )
     focus_module = trace.modules[focus]
     steps = [_escape(step) for step in _breadcrumb(focus)]
-    steps[-1] = f"<B>{steps[-1]}</B> ({_escape(focus_module.class_name)})"
-    scope = " &gt; ".join([f"<B>{class_name}</B>", *steps])
-    return (
-        f"{scope}<br align='left'/>"
-        f"drawn: {_escape(count_line)}<br align='left'/>"
-        f"whole model: {params_line}<br align='left'/>"
-    )
+    steps[-1] = f"{steps[-1]}&#160;({_escape(focus_module.class_name)})"
+    scope = _SCOPE_SEPARATOR.join([class_name, *steps])
+    return f"<B>{scope}</B><br align='left'/>{_escape(count_line)}<br align='left'/>"
+
+
+def _drawn_op_name(match: re.Match[str], text: str) -> str:
+    """Return the op name as the picture spells it: ``add_1_1``, or ``add_1_1:2`` for a pass."""
+
+    base = f"{match['kind']}_{match['nth']}_{match['op']}"
+    drawn = re.search(rf"(?<![\w.]){re.escape(base)}(?::\d+)?(?!\w)", text)
+    return drawn.group(0) if drawn else base
 
 
 def _ordinal(number: int) -> str:
@@ -262,7 +338,7 @@ def _ordinal(number: int) -> str:
 
 
 def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple[str, ...]:
-    """Return the text rows of a focused draw's reading key.
+    """Return the text rows of a focused draw's reading key (``show_legend=True``).
 
     Each row explains one notation the picture uses, taking a real example
     from the drawn nodes where it can: the ``@`` address prefix, an op
@@ -274,16 +350,29 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
         return ()
     texts = [_TAG.sub(" ", str(attrs.get("label", ""))) for attrs in node_attrs]
     names = [str(attrs.get("name", "")) for attrs in node_attrs]
-    notes = ["@name: the module at that address (a frame title, or a module drawn as one box)"]
+    prefix = focus_parent_prefix(module)
+    under = f" under {prefix}" if prefix else ""
+    notes = [f"@name: a module address{under} (a frame title or a module drawn as one box)"]
     example = next(
-        (m for m in map(_OP_NAME.match, names) if m and not m["kind"].startswith("_")), None
+        (
+            (m, t)
+            for m, t in zip(map(_OP_NAME.match, names), texts, strict=True)
+            if m and not m["kind"].startswith("_")
+        ),
+        None,
     )
     if example is not None:
+        match, text = example
         notes.append(
-            f"{example.group(0)}: the {_ordinal(int(example['nth']))} {example['kind']} call,"
-            f" op {example['op']} of the whole forward pass"
+            f"{_drawn_op_name(match, text)}: the {_ordinal(int(match['nth']))} {match['kind']}"
+            f" call, op {match['op']} of the whole forward pass"
         )
     notes.append("(shape), size: the op's output tensor and its memory")
+    if any(name.startswith("__module_focus_") for name in names):
+        notes.append(
+            "from module, to module: where an input comes from or an output goes,"
+            " then that op's name"
+        )
     if any("params:" in text for text in texts):
         notes.append("params: the weights the op used (filled as the key shows)")
     if any(_ARGUMENT.search(text) for text in texts):

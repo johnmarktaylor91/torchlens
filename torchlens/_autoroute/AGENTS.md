@@ -1,7 +1,9 @@
 # autoroute/ - Implementation Guide
 
 Auto-routing registries for model INPUT preprocessing and OUTPUT decoding
-(lazy public submodule, `tl._autoroute`). The output registry runs twice: the
+(lazy public submodule, `tl._autoroute`; the output registry's public spelling is
+`torchlens.postprocessing`, which re-exports `register`, `unregister`, `list`, `info`,
+`snapshot`, `Detector` and `ResolvedPostprocessing`). The output registry runs twice: the
 automatic, option-free pass at the end of every capture (`decode_outputs_for_trace`,
 live outputs, `meta["style"] is None`) and the read-time door
 `Trace.decode_output(style=, head=, tokenizer=)` (`decode_trace_output`, retained

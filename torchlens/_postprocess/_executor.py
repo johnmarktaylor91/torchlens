@@ -258,7 +258,11 @@ def _run_hash_graph_shape(ctx: StepContext) -> None:
     trace = ctx.trace
     with _vtimed(trace, "  Step 16.5: Graph shape hash", bucket="hash_graph_shape"):
         _hashing.populate_normalized_layer_addresses(trace)
-        trace._provenance_fingerprint = _hashing.compute_graph_shape_hash(trace)
+        # The stored fingerprint is the address-free structural hash, the same
+        # value ``tl.fingerprint.trace`` returns for this trace.
+        trace._provenance_fingerprint = _hashing.compute_graph_shape_hash(
+            trace, include_module_address=False
+        )
 
 
 def _run_mark_tracing_finished(ctx: StepContext) -> None:

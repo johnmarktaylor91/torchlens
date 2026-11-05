@@ -145,7 +145,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merge): the C-063 stack and C-076 brought op.py to 3549, re-keyed down to
     # the next 50-line step; replay-templates' template gating lands on the
     # same tree (merged measurement 3497) and the row stays at 3550.
-    "torchlens/_data_classes/op.py": 3550,
+    "torchlens/_data_classes/op.py": 3450,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -192,8 +192,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 3850,
-    "torchlens/_io/runnable_load.py": 3850,
+    "torchlens/_io/bundle.py": 3750,
+    "torchlens/_io/runnable_load.py": 3750,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
@@ -203,7 +203,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
     # 4300 -> 4200: the GradFn pairing helpers moved to _grad_fn_pairing.py
     # (4191 measured).
-    "torchlens/backends/torch/backward.py": 4200,
+    # 4200 -> 3900: the GradFn membership, graph-relation and growth-fold
+    # helpers moved to _grad_fn_membership.py, _grad_fn_graph.py and
+    # _grad_fn_growth.py (3871 measured).
+    "torchlens/backends/torch/backward.py": 3900,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -238,7 +241,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
     # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
-    "torchlens/_data_classes/trace.py": 3500,
+    # 3600 -> 3500: the do fold, the names codemod and the confirm_mutation sweep (slack rule).
+    # 3500 -> 3400: C-138 remerge4 on train 19cfba538 measures 3398 (slack rule).
+    "torchlens/_data_classes/trace.py": 3400,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -329,7 +334,10 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # capability warning stay here); measured 4968. Debloat target: 3450.
     # 5000 -> 4700 (compat table): the attribute-only capability probes moved
     # to declarative rows in _utils/_torch_compat_table.py; measured 4676.
-    "torchlens/_utils/_torch_compat.py": 4600,
+    # 4600 -> 4450 (cond-validate): the runnable alias resolver moved to its own
+    # module _utils/_runnable_alias_resolver.py, making room for the HOP rule
+    # accessors; measured 4398.
+    "torchlens/_utils/_torch_compat.py": 4450,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -404,7 +412,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 2400,
+    "torchlens/backends/torch/model_prep.py": 2300,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
@@ -419,7 +427,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.
     "torchlens/_visualization/auto_collapse.py": 2150,
-    "torchlens/validation/exemptions.py": 2850,
+    # 2850 -> 2650: the bool influence probes moved to validation/_influence_probes.py
+    # (2615 measured); the ceiling follows down.
+    "torchlens/validation/exemptions.py": 2650,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
@@ -448,12 +458,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (bug 27) with its coherent get/repr in-place -- the accessor lives
     # with its Layer owner; +11 measured lines, next 50-line step.
     "torchlens/_postprocess/loop_grouping_adapter.py": 2600,
-    "torchlens/_visualization/_render_leaf.py": 2400,
-    # Re-keyed down 2450 -> 2350 (r7 R43-F2 slack rule) after the F13 legend
-    # rewrite deleted the six-node emitter from this module; 2350 -> 2100 after
-    # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
-    # head/tail placement classes.
-    "torchlens/_visualization/_render_edges.py": 2100,
+    # Re-keyed down 2300 -> 2200 (r7 R43-F2 slack rule): the branch-label text
+    # helpers moved to _branch_label_text.py; measured 2198.
+    "torchlens/_visualization/_render_leaf.py": 2200,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,

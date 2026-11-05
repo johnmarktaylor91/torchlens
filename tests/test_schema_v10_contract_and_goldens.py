@@ -185,7 +185,7 @@ def test_below_floor_state_refuses_as_2x() -> None:
     fields = excinfo.value.fields
     assert fields["code"] == "artifact_version_below_floor"
     assert fields["floor_tlspec_version"] == 12
-    assert "saved by torchlens 2.x" in str(excinfo.value)
+    assert "saved by torchlens 2.37 and earlier" in str(excinfo.value)
     assert "2.33" not in str(excinfo.value)
 
 

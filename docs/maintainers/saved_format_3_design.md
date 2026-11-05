@@ -393,7 +393,8 @@ existing ops), `_validate_checkpoint_windows` (ordering across ops), `_validate_
 `_validate_audit_edges`, `_validate_audit_params`, `_validate_event_chain`,
 `_validate_structure_only_coherence`, `_validate_kernel_relations`,
 `_validate_graph_structure`, `_validate_edge_carriers` and `_validate_edge_entry` (targets
-exist), `_validate_injection_provenance` and `check_injection_provenance_row`,
+exist), `_validate_injection_provenance` (its per-row check now lives with the injected-row
+cell checks in `torchlens/_io/_injected_row_cells.py`),
 `_validate_structure_evidence` and `_validate_evidence_facts`, `_validate_root_entry_point`,
 `_validate_tl_authored_root`, `_validate_identity_facts`. Codes unchanged.
 

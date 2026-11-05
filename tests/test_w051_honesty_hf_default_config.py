@@ -72,7 +72,7 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
 
     model = _tiny_gpt2(use_cache=True)
     trace = _capture(model, input_ids)
-    result = trace.run(inputs=input_ids)
+    result = trace.run_transaction(inputs=input_ids)
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     check = _reconstruction_check(result.report)
     assert not check.passed
@@ -99,7 +99,7 @@ def test_use_cache_false_container_contract_capture_settles_verified(input_ids) 
 
     model = _tiny_gpt2(use_cache=False)
     trace = _capture(model, input_ids, capture_container_structure=True)
-    result = trace.run(inputs=input_ids)
+    result = trace.run_transaction(inputs=input_ids)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.is_poisoned is False
     assert type(result.output).__name__ == "CausalLMOutputWithCrossAttentions"

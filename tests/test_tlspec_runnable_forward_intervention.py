@@ -100,11 +100,41 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     # Format 3 persists the recipe and the reader restages it, so a fresh verified run
     # refuses rather than silently dropping the recorded grad hook; detach it explicitly.
     with pytest.raises(EngineDispatchError, match="staged intervention spec"):
-        loaded.run(inputs=value, seed=0)
+        loaded.run_transaction(inputs=value, seed=0)
     loaded._clear_hooks()
-    result = loaded.run(inputs=value, seed=0)
+    result = loaded.run_transaction(inputs=value, seed=0)
 
     # The grad intervention never modified the forward output, so the sparse DAG
     # reproduces it byte-for-byte: an op-representable intervention still VERIFIES.
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+def test_patched_fork_refuses_runnable_save_and_names_the_analysis_save(tmp_path: Path) -> None:
+    """A fork patched from another run refuses the runnable save, naming the analysis save.
+
+    The patched values belong to the donor run's inputs, so no runnable artifact
+    can recompute them; the typed refusal says so and points at the analysis
+    save, which then succeeds on the same fork.
+    """
+
+    torch.manual_seed(0)
+    model = _AblationModel().eval()
+    base = _capture(model, torch.randn(2, 4))
+    donor = _capture(model, torch.randn(2, 4))
+    fork = base.fork()
+    fork.do(tl.func("relu"), tl.patch_from(donor))
+    assert torch.equal(fork["relu_1_2"].out, donor["relu_1_2"].out)
+
+    with pytest.raises(RunnablePreflightError) as excinfo:
+        fork.save(tmp_path / "patched.tlspec", level="runnable", include_weights=True)
+    diagnostics = str(excinfo.value.fields.get("diagnostics"))
+    assert "user_intervention_unsupported" in diagnostics
+    assert "producer_patch_source_bound" in diagnostics
+    assert "donor run" in diagnostics
+    assert "trace.save(path, level='executable_with_callables')" in diagnostics
+    assert not (tmp_path / "patched.tlspec").exists()
+
+    analysis_path = tmp_path / "patched-analysis.tlspec"
+    fork.save(analysis_path, level="executable_with_callables")
+    assert analysis_path.exists()

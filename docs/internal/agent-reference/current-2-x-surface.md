@@ -4,6 +4,66 @@
   vocabulary. The frozen carrier preserves `type_name`, bounded `repr_text`, and `at`
   (the original record, row and column). Inspect it with
   `isinstance(value, tl.types.UnencodableValue)`; resaving preserves its disclosure.
+
+### MoE routing identity and tables
+
+`Op.is_router` and `Op.expert` are lazy structural identity facts, with no
+stored per-op fields or capture hooks. Recognition requires a live source
+model, a homogeneous `ModuleList` or `ModuleDict` of experts (or an indexed
+bank of expert matrices), a sibling gate, and captured expert-index dataflow
+from softmax/top-k or argmax/gather into expert computation. A top-k over
+logits followed by softmax is supported too. ModuleDict expert numbers follow
+registration order. A repeated
+module collection or an unrelated top-k calculation alone proves nothing.
+Expert writer coordinates use the existing `expert` kind and expert number.
+
+`Module.routing_table` returns rows for that MoE block, or `None` for an
+unrecognized/non-MoE module. `Trace.routing_table` returns all blocks' rows,
+or `[]`. Rows are plain dictionaries containing `module`, `router`, `call`,
+`token_shape`, `expert_indices`, `gate_weights`, `tokens_per_expert` and `load`.
+Token axes flatten in row-major order; load divides each expert's assignments
+by the total assignments. Each router invocation has its own row. The numbers
+come from saved router outputs; `moe_routing_activation_missing` names a
+missing activation and teaches `save='all'`. Identity needs no activations.
+Fused batched expert math has `Op.expert is None` and still uses its router's
+table. A model whose live structure is no longer available is unrecognized.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+class Routed(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate = nn.Linear(4, 4)
+        self.experts = nn.ModuleList([nn.Linear(4, 4) for _ in range(4)])
+
+    def forward(self, x):
+        weights, indices = self.gate(x).softmax(-1).topk(2, dim=-1)
+        output = torch.zeros_like(x)
+        for number, expert in enumerate(self.experts):
+            token, slot = torch.where(indices == number)
+            output.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+        return output
+
+model = Routed().eval()
+trace = tl.trace(model, torch.randn(3, 4), save='all')
+router_ops = [op for op in trace.ops if op.is_router]
+expert_one = trace[tl.where(lambda op: op.expert == 1)]
+rows = trace.modules['self'].routing_table
+assert rows == trace.routing_table
+assert sum(rows[0]['tokens_per_expert']) == 6
+```
+
+For fused expert outputs whose token and selected-slot axes are retained,
+use the routing record with the existing unit selector. If `fused` is an
+`Op` with output shape `[tokens, selected_slots, channels]`, the expert-one
+selection is `trace[tl.units(fused.layer_label,
+(torch.tensor(rows[0]['expert_indices']) == 1).unsqueeze(-1).expand(fused.shape))]`.
+After an operation sums the expert axis, its output cannot be split into
+expert contributions from routing indices alone.
+
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
@@ -84,8 +144,18 @@
   step 0 the prefill; `.records_at(step)`; `.settings`; `.not_recorded`). Unsupported decoding
   (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
   `record_generation_unsupported`.
+  `generation=torchlens.recording.GenerationOptions(reducers=, kv_sites=, keep_last=, spill=,
+  max_saved_bytes=)` (DOCUMENTED-UNSTABLE) streams that recording at thousands of tokens: per-token
+  reducers from `torchlens.recording.reducers` (`norm`, `top_k`, `probe`; each a `Reducer`), KV-cache
+  slices as series, a ring buffer with disk spill, a retained-byte guard
+  (`record_generation_budget_exceeded`) and the release of each pass's unkept payloads (model
+  inputs, older logits) once it is reduced, so memory is linear in the token count; `GenerationRecording.series(name)` returns a
+  `TokenSeries` (`positions`, `values`), `.series_names`, `.peak_saved_bytes`, `.evicted_steps`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
-  payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
+  payload reads rejected explicitly; recorded ops carry capture-time equivalence classes and
+  parameter identity, so the cooked Trace groups recurrent layers into passes like `tl.trace`.
+  A `Recording` has no `draw()` and no facets (both need `to_trace()`); `tl.extract` takes only
+  `model`, `inputs`, `layers` and `detach_saved_activations`. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
   predicate spelling. Failed forwards default to
   the historical `on_forward_error="raise"` behavior; opt into
@@ -128,6 +198,13 @@
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
+- **`tl.errors.quiet(*codes)` is the one switch that silences TorchLens warnings**: `quiet()`
+  silences every TorchLens warning, `quiet("code", ...)` only the coded warnings whose
+  `fields["code"]` is listed; a bare call lasts for the session and `with tl.errors.quiet(...):`
+  restores the prior state at the end of the block. A capture that keeps more than 1 GiB of saved
+  activations warns once per session with code `capture_memory_threshold_exceeded`, naming
+  `save=` selectors and `save='stats'` as the remedy; `tl.errors.quiet("capture_memory_threshold_exceeded")`
+  hides it.
 - **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
@@ -139,10 +216,23 @@
   loaded trace, the record is never persisted; the record keeps what the forward bound alive as
   long as the trace). `CaptureOptions(carry_state=True)` keeps forward-equivalent state, writes
   included, and records the same rows (the same spelling as
-  `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
+  `trace.run_transaction(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
+- **Conditionals keep source arms; `Conditional.outcome` says which way it went** (doc of
+  record `docs/conditional_attribution.md`). An `if` with no `else` never gains one; when every
+  arm ends in `return`/`raise`/`break`/`continue`, the code after the chain is one more arm of kind
+  `fallthrough` (drawn `FALLTHROUGH`, counted by `num_arms`, `has_else` stays `False`).
+  `Conditional.outcome` (a plain string, derived, not persisted; unrelated to the
+  `CaptureOutcome` of `Trace.outcome`) is `then`/`elif`/`else`/`fallthrough`/`skipped`/
+  `multiple`/`unknown`; `fired_arm_kind is None` means no single arm fired.
+
+  ```python
+  cond = trace.graph.conditionals[0]
+  cond.outcome          # e.g. "fallthrough" for `if c: return a` then `return b`, c false
+  cond.fired_arm_kind   # "fallthrough"; cond.fired_arm.execution_ops names the after-code ops
+  ```
 - **Every capture product carries ONE settled typed outcome** (early-stopping
   unification; doc of record `docs/reference/capture_outcomes.md`).
   `Trace.outcome` / `Recording.outcome` / `PartialTrace.outcome` return a frozen
@@ -203,9 +293,11 @@
   Doc of record: `docs/quickstart.md`.
 - BOUND-METHOD ROOTS (F41, by design; spellings DOCUMENTED-UNSTABLE): `tl.trace`
   (and `tl.validate`) accept an `nn.Module` OR a bound method of one — `tl.trace(model.generate,
-  ids, ...)`. The owner resolves via `method.__self__` and registers as the `owner` submodule of
-  a TL-authored wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the
-  exact bound method EXACTLY ONCE; module addresses read `owner.*`. The synthetic root reads
+  ids, ...)`. The owner resolves via `method.__self__` and is the root `self` of a TL-authored
+  wrapper root (`torchlens/backends/torch/bound_root.py`) whose forward calls the exact bound
+  method EXACTLY ONCE; the wrapper presents the owner's tree, so module addresses, labels,
+  drawings, exports and saved files read as on a plain trace (no `owner.` prefix) and the owner's
+  own calls are the root's calls `self:1..self:N`. The synthetic root reads
   `type(owner).__name__` (never "method") for `model_class_name`/`model_class_qualname`, writes
   `root_entry_point="bound_method:<owner_qualname>.<method>"`, and marks the root op record
   (output-boundary ops) `tl_authored_root=True` (both persisted, fail-closed load validation).
@@ -260,7 +352,7 @@
   geometry violations quarantine `episode_ledger_incoherent`); the annotations key AND the
   Bundle `member_relations` key persist plainly as of the tlspec v8 coordinated bump.
   DIAGNOSTIC-TIER cost, superlinear (gpt2-124M CPU: N=20 79 s / N=100 657 s, 947 MB, 5.4 GB
-  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which collects
+  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run_transaction(inputs=..., fast=True)`, which collects
   every site the capture saved, the save-all default and module saves included) is the engine for episode-scale re-runs and must reproduce wrapped
   tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
   on a module-targeted staged spec fires the staged hooks at module exit inside a native
@@ -337,6 +429,8 @@
   `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
   `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.summary()` (the bundle card as text), `b.to_pandas()` (one `member`-keyed table) and
+  `b.to_agent_json()` (`torchlens.agent_bundle.v1`, members keyed by name) read the bundle whole.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
   `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
@@ -583,6 +677,10 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- Owned ATen and event sequences are tuple subclasses with bounded displays. Equality,
+  hashing, slicing and standalone pickling retain tuple behavior; saved artifacts encode
+  these sequences as ordinary tuples. Collection reprs show counts; `str()` shows five
+  members and the exact remaining count.
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
@@ -1029,7 +1127,7 @@
   dataflow edge family (EdgeUseRecords; replayable-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address
   `(child_func_call_id, arg_kind, arg_path)`. `do(edge_selection, edit)`
-  replaces the value CONSUMED on the edge on the replay/push engine ONLY
+  replaces the value CONSUMED on the edge on the replay engine ONLY
   (rerun/set_only refuse `edge_intervention_engine_unsupported`; rerun-side
   design is an escalated named future) — the child re-executes from the
   substituted input (node-level `is_edited` never fires for
@@ -1069,17 +1167,31 @@
   `substitution_kind="param"`, edit-then-scatter masking over the param
   space, ONE replay pass over all consumer origins whose cone recomputation
   RE-SPLICES every tier-(ii) entry (param, region, and edge kinds), so later
-  pushes never silently revert any edit; chained param edits compose), and the SAME
+  replays never silently revert any edit; chained param edits compose), and the SAME
   validation boundary (`edge_intervention_boundary`; uncorroborated FAIL).
-  Replay/push engine ONLY: rerun/set_only refuse
+  Replay engine ONLY: rerun/set_only refuse
   `param_substitution_engine_unsupported`. The audit record (kind `PARAM`)
   discloses "substituted at consumption ... live parameters unchanged".
+- ONE EDITING VERB: `Trace.do` stages an edit and propagates it in one call.
+  `trace.do(site, value)` sets the site and replays its downstream cone;
+  `trace.do(site, hook)` attaches a sticky hook or helper and replays;
+  `trace.do({a: h1, b: h2})` applies several edits in one propagation; an
+  `InterventionSpec` or `Recipe` applies its rules.
+  `InterventionOptions(engine="set_only")` stages without propagating (the next
+  `run` or `backward` fires it); `InterventionOptions(differentiable=True)` (replay
+  engine only; rerun and set-only ignore it) replays onto a new fork whose outputs
+  stay differentiable and returns it. `do` returns the trace, never a handle:
+  `trace.clear_edits(site)` detaches sticky edits; the set-only engine is the
+  one-shot staging write. The removed stage, propagate and detach spellings are mapped in
+  `docs/reference/deprecations.md`; `ReplayOptions` carries no hook or
+  differentiable field.
 - CHANGED PARAMETERS REFUSE REPLAY (spellings DOCUMENTED-UNSTABLE): a
   replay template holds the live `nn.Parameter`, and capture records its
   version counter, storage pointer and shape on the template literal
   (session-only, `torchlens/intervention/_param_fingerprint.py`). Every
-  replay door (`do()` on the replay engine, `push`, `push_from`,
-  differentiable replay, later replays of every fork kind) refuses
+  replay door (`do()` on the replay engine, for a single site, a mapping of
+  several edits or a resolved selection; `InterventionOptions(differentiable=True)`;
+  later replays of every fork kind) refuses
   `replay_param_changed_since_capture` (`ReplayPreconditionError`, fields
   `param`/`op`/`changed`) when a consumed parameter changed since capture
   (optimizer step, `load_state_dict`, in-place op under `no_grad`,
@@ -1090,7 +1202,7 @@
   parameter object is never read (the template keeps the captured one).
   The rerun engine runs the live model and ignores the option.
 - PASS-QUALIFIED REPLAY (decided 2026-08-17; refusal spelling
-  DOCUMENTED-UNSTABLE): the replay/push engine operates on pass-qualified
+  DOCUMENTED-UNSTABLE): the replay engine operates on pass-qualified
   op labels (`Op.label`, the `label:pass` spelling — single-pass ops carry
   `:1`). Cone traversal, the replay overlay, hook targets, origin sets, and
   pending commits are all keyed per pass, so `fork.do(...)` on multi-pass
@@ -1109,9 +1221,9 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/push_from/`trace[selector]`), `selection_unresolvable` /
+  (`do`; `trace.ops` refuses `ambiguous_op_lookup`; `trace[label]` gives the Layer), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
-  every pass-qualified spelling; bare labels on single-pass layers stay
+  up to five pass-qualified display keys and an exact remainder; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
   selection (`log[label].__selection__()`) is the all-passes spelling.
   Post-hoc `contains`/string addressing accepts pass-qualified needles
@@ -1249,6 +1361,14 @@
   (payload-bounded, dormancy disclosed) and the `bertviz_tuple` parity oracle.
   FIX-H shipped in `tl.viz.heatmap`: nearest-neighbor discrete cells, separate
   `row_labels=`/`col_labels=`, omission marker computed AFTER final overlap selection.
+  Generation steps: `tl.transformer.attention_view(generation, layer, step=k)` takes a
+  generation recording (`tl.record(model, input_ids, save=tl.func("softmax"),
+  generate_kwargs={...})`, eager attention) and returns step `k`'s pattern (0 is the
+  prefill, `k` the k-th decode forward) over every position so far, assembled from the
+  rows each forward computed, nothing recomputed; `episode` names the step and
+  `tl.viz.attention` outlines the computed row. `step=` on a plain trace, a generation
+  without `step=`, or `query_tokens=`/`key_tokens=` with `step=` refuse
+  `tv_record_invalid`. Doc: `docs/field-guide/generation_attention.md`.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
 - MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming
   session): `torchlens.mechinterp` is the transformer analysis kit validated
@@ -1266,7 +1386,10 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms; nnterp accessor spellings such as
   `"attentions_output[3]"` resolve too, and
-  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names), `test_prompt`, `apply_norm_scale`
+  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names;
+  interp-engine point addresses such as `"resid_post.3"` resolve too, and
+  `alias_report(trace, generation="interp-engine")` lists the sites under those
+  addresses plus every interp-engine point with no torchlens site), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
   planning (`retention_plan`). ~47 names; `MechInterpError` family.
   Component edge graph: `torchlens.mechinterp.component_graph(trace)` returns a
@@ -1292,6 +1415,16 @@
   `torchlens.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
   log_scale=False)` (CPR) and `torchlens.mechinterp.circuit_model_difference(...)`
   (CMD) are the MIB trapezoidal areas under `f` and `|1 - f|`.
+  Ablation controls: `tl.mechinterp.ablation_controls(model, inputs, site, metric, *, axis,
+  baseline="zero", donors=None, direction=None, feature_axis=None, n_directions=20,
+  sites=None, seed=0, min_ratio=0.5, alpha=0.05)` reruns one ablation claim under the
+  zero, mean and resample baselines, against `n_directions` matched random directions
+  (when `direction=` is given) and at the neighbouring `sites=`, and returns a read-only
+  `tl.mechinterp.AblationControlsReport` (`clean`, `effect`, `baseline`, `rows`,
+  `families`, `direction_p`, `survives`; `print(report)` is the table). `axis` is the
+  site value's batch axis, required and never guessed. Example:
+  `report = tl.mechinterp.ablation_controls(model, x, tl.module("gain"), metric, axis=0)`
+  then `report.survives`.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
@@ -1380,7 +1513,7 @@
   profiler, and related tools. `bridge.sae.splice(model_or_log, inputs, site=, sae=,
   latents_edit=, tokens=, exclude_bos=False, keep_latents=True, log_latents=False)` (DOCUMENTED-UNSTABLE) is
   the packaged SAE splice experiment: fork +
-  `tl.splice_module` + push swaps a duck-typed SAE's reconstruction (`encode`/`decode`
+  `tl.splice_module` + `do` swaps a duck-typed SAE's reconstruction (`encode`/`decode`
   pair, no SAE package required) in at one site and reports reconstruction fidelity plus
   output-level causal effect; `latents_edit=` is the per-feature causal knob (demo:
   `notebooks/sae_splice_tutorial.ipynb`). `SpliceResult` metrics are float64 and follow
@@ -1504,16 +1637,28 @@
   recipe never anchors `verified`); a PIL image whose model resolves no authority
   refuses `preprocessing_unresolved` (the ImageNet recipe is never applied
   silently; its explicit opt-in is
-  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`); `diagnose()` is the opt-in tensor arm whose
+  `CaptureOptions(input_transform=torchlens.preprocessing.imagenet_default())`;
+  the same code refuses a modality dict whose HF model loads no `AutoProcessor`,
+  the multimodal auto-route claiming on `name_or_path` alone and resolving the
+  processor itself, and a dict with an attached `model.processor` is coerced
+  into keyword inputs; the same text, dict and image resolution reaches `Trace.run`,
+  `tl.record`, `tl.recording.dry_run`, `tl.validation.validate_backward_pass` and the `tl.debug` entries
+  through the coercion door, which spells a singular `image` key as the
+  processor's signature names it); `diagnose()` is the opt-in tensor arm whose
   outcome vocabulary HAS NO match member. `ResolvedPreprocessing.status` derives the
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object
   `weights.transforms()` returns, an HF image processor) stamps that authority's own
-  record, any other transform honest `user_transform` provenance; `attach_authority`
-  records an authority a model cannot carry (torchvision weights), discovery also reads
+  record, any other transform honest `user_transform` provenance; a torchvision
+  model with no handle is matched by its loaded state against the preset checkpoints
+  already in the torch hub cache (exact tensor equality, one unique match, never a
+  download; `resolution_method="state_match"`), `attach_authority`
+  records an authority a model cannot carry otherwise, discovery also reads
   an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
   (recorded preprocessing against the model's card, warning
   `preprocessing_card_mismatch`; nothing runs it automatically).
+  `register`/`unregister` are the public door of the input detector registry
+  (custom raw-input routes; later traces only).
   `torchlens.inventory.list_sites` is the two-rung site inventory (free module
   listing; one disclosed-cost metadata-only forward) whose emitted selectors are
   CERTIFIED against the engine's matcher at emission -- every selector extracts keyed
@@ -1565,7 +1710,7 @@
   16-slot float64 vector per op) and no payload is kept. `tl.stats.site_stats(trace)` returns
   `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
   `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
-  `validate_forward_pass`, `push`, `push_from` on the trace),
+  `validate_forward_pass`, `save_new_outs`, `do` on the replay engine on the trace),
   `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
 - Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
@@ -1799,9 +1944,13 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.FacetFunction`: Registered facet recipe metadata.
 - `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
 - `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.child_output_spec`: Facet spec over a named child module's captured output, for custom recipes.
+- `tl.facets.config_value`: Read the first present attribute of a module or its config, for custom recipes.
 - `tl.facets.describe`: List registered facet function names and declared facets for a class name.
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.facets.parameter_spec`: Facet spec over a named module parameter, for custom recipes.
+- `tl.mechinterp.AblationControlsReport`: Every control rerun of one ablation claim and the verdict per family.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
@@ -1829,6 +1978,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.ablation_grid`: Render the measured-intervention receipt grid (THE differentiator).
 - `tl.viz.attention`: Render an attention view to paper-ready PNG/SVG/PDF pages.
 - `tl.viz.attention_atlas`: Render the whole-model attention atlas (BertViz model view, matched).
+- `tl.viz.chans`: Draw a tensor's leading channels as a grid of grayscale tiles.
 - `tl.viz.contact_sheet`: Render one page of the ranked overview contact sheet.
 - `tl.viz.histogram_waterfall`: Render the histogram waterfall (step x signed-log2-bin density).
 - `tl.viz.image_scatter`: Render a bounded 2D scatter with optional PIL thumbnails.
@@ -1840,6 +1990,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.viz.nodes.histogram`: Create a compact value-distribution histogram visualizer.
 - `tl.viz.nodes.text_table`: Render a text batch as a Graphviz HTML-like table label.
 - `tl.viz.quantile_fan`: Render the quantile-fan strip for one series (the default view).
+- `tl.viz.rgb`: Draw a three-channel tensor as one RGB picture.
 - `tl.viz.site_detail`: Render the per-site detail sheet: every stream on one step axis.
 - `tl.viz.timeline`: Render one timeline v2 artifact as deterministic standalone SVG text.
 - `tl.viz.token_strip`: Render the paper-format token strip via matplotlib.
@@ -1879,7 +2030,7 @@ object's docstring):
 - `tl.errors.AmbiguousCallError`: Raised when a module-level query has multiple executed calls.
 - `tl.errors.AmbiguousLabelError`: Raised when `Bundle.at` finds a label in multiple accessors.
 - `tl.errors.AmbiguousPassError`: Raised when a layer-level query has multiple executed passes.
-- `tl.errors.AmbiguousTargetError`: Raised when a projective query has more than one reachable target.
+- `tl.errors.AmbiguousTargetError`: Raised when a projective query has more than one reachable target and none is the primary output. When the other targets are caches (an output role with a path segment `past_key_values`, `presents` or `mems`, or one containing `cache`), a query with no `target=` answers the primary output instead: the role whose last segment is `logits`, else the first non-cache output in model output order. Two real outputs and no cache still raise; `target=` selects any role, caches included.
 - `tl.errors.AppendStreamingUnsupportedError`: Raised when append rerun would need to mutate active streamed activation blobs.
 - `tl.errors.ArtifactTooNewError`: Raised when an artifact declares a schema newer than this runtime's ceiling.
 - `tl.errors.BundleComparisonError`: Raised when bundle members fail a gated operation's comparison gate.
@@ -1928,7 +2079,9 @@ object's docstring):
 - `tl.io.materialize_nested`: Replace any remaining nested portable blob refs on a loaded model log.
 - `tl.model_output`: Create an output selector.
 - `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
+- `tl.postprocessing.register`: Decorator registering a custom output detector (`name=`, `priority=`); the namespace also exports `unregister`, `list`, `info`, `snapshot`, `Detector` and `ResolvedPostprocessing`.
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
+- `tl.preprocessing.register`: Decorator registering a custom input detector (`name=`, `priority=`) that receives `(model, payload, **kwargs)` and returns a `Trace` by re-entering `tl.trace`, or `None`; the namespace also exports `unregister`. Guide: `docs/guides/model_conveniences.md`.
 - `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
 - `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.report.InterventionValidationReport`: Five-axis intervention validation result.
@@ -1950,7 +2103,7 @@ object's docstring):
 - `tl.transformer.MaskInfo`: Mask provenance for an attention view.
 - `tl.transformer.TokenAxis`: One labeled token axis (query and key stay separate records).
 - `tl.transformer.TokenScoreRow`: One labeled row of per-token scores (strip row).
-- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view.
+- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view; with `step=`, one step of a recorded generation.
 - `tl.transformer.circuitsvis_payload`: Build the CircuitsVis attention payload from typed views.
 - `tl.transformer.metric_strip`: Convert a metric record to a strip record for rendering.
 - `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).

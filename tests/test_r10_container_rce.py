@@ -199,7 +199,7 @@ def test_tampered_container_type_denies_code_execution(
 
     loaded = tl.load(bundle)
     with pytest.raises(RunPreconditionError):
-        loaded.run(inputs=torch.randn(1, 4))
+        loaded.run_transaction(inputs=torch.randn(1, 4))
     # The command must NEVER have run -- no sentinel, no side effect.
     assert not sentinel.exists()
 
@@ -255,7 +255,7 @@ def test_leaf_shaped_tampered_mapping_type_is_stopped_by_the_admissibility_gate(
 
     loaded = tl.load(bundle)
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=torch.randn(1, 4))
+        loaded.run_transaction(inputs=torch.randn(1, 4))
     chain = _chain_text(caught.value)
     assert "disallowed type subprocess.Popen" in chain
     assert "leaves supplied" not in chain
@@ -345,7 +345,7 @@ def test_legit_namedtuple_output_still_round_trips(tmp_path: Path) -> None:
     tl.trace(_NamedTupleModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run_transaction(inputs=x)
 
     assert type(result.output) is _Pair
     assert result.output.meta == 7
@@ -360,7 +360,7 @@ def test_legit_ordereddict_output_still_round_trips(tmp_path: Path) -> None:
     tl.trace(_OrderedDictModel(), x, capture=_CAP).save(
         bundle, level="runnable", include_weights=True
     )
-    result = tl.load(bundle).run(inputs=x)
+    result = tl.load(bundle).run_transaction(inputs=x)
 
     assert type(result.output) is OrderedDict
     assert list(result.output.keys()) == ["value", "meta"]

@@ -65,6 +65,50 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     )
 
 
+class _Triple(nn.Module):
+    """Multiply by a constant so the backward node's two gradient sides differ."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Return three times the input."""
+
+        return x * 3.0
+
+
+def _glossary_row(name: str) -> str:
+    """Return the glossary table row whose first cell is ``name``."""
+
+    glossary = Path(__file__).resolve().parents[1] / "docs/reference/glossary.md"
+    prefix = f"| `{name}` |"
+    return next(line for line in glossary.read_text().splitlines() if line.startswith(prefix))
+
+
+def test_grad_fn_call_gradient_sides_match_their_glossary_rows() -> None:
+    """grad_outputs arrives at the node from later ops; grad_inputs leaves it toward earlier ops.
+
+    The hook is torch's ``Node.register_hook(grad_inputs, grad_outputs)``: for
+    ``y = 3x`` with upstream gradient ``g`` at ``y``, ``grad_outputs`` is ``g``
+    and ``grad_inputs`` is ``3g``, and the glossary rows say which flows in.
+    """
+
+    x = torch.ones(2, requires_grad=True)
+    trace = tl.trace(_Triple(), x, capture=CaptureOptions(save_grads=True))
+    out = trace[trace.output_layers[0]].out
+    upstream = torch.tensor([5.0, 7.0])
+    trace.backward((out * upstream).sum())
+    # The loss's own ``out * upstream`` is a MulBackward outside the traced
+    # graph with no retained payload; the model's ``x * 3.0`` node retains both.
+    call = next(
+        g.calls[0]
+        for g in trace.autograd.grad_fns
+        if g.class_name.startswith("MulBackward") and g.calls[0].grad_outputs is not None
+    )
+
+    assert torch.equal(call.grad_outputs[0], upstream)
+    assert torch.equal(call.grad_inputs[0], 3.0 * upstream)
+    assert "flowing into this grad-fn" in _glossary_row("GradFnCall.grad_outputs")
+    assert "flowing out of this grad-fn" in _glossary_row("GradFnCall.grad_inputs")
+
+
 def test_module_boundary_fields_are_populated_from_calls() -> None:
     """Module aggregate input/output fields are derived from ModuleCall boundaries."""
 

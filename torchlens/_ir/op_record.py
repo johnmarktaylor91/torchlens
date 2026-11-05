@@ -1,24 +1,8 @@
-"""Decomposed op record model: ``OpRecord = OpCore + typed facets``.
+"""Decomposed journal records and typed amendments with strict legacy read access.
 
-Producer-unification design of record (v4): the torch journal's op record
-decomposes into a 13-field required core plus 13 typed optional facets. Every
-one of the 54 legacy ``OpEvent`` fields has an explicit disposition here; the
-``function`` and ``templates`` facets reuse the existing ``FunctionCallRef``
-and ``ArgTemplateRef`` classes, ``source_trace``/``source_trace_id`` travel
-via ``IngestExtras`` (they are trace-identity joins, not record facts), and
-``grad_fn_handle`` never crosses onto ``OpRecord`` (single ownership: the
-journal's ``grad_fn_handles_by_label_raw`` side index).
-
-The strict read protocol exposes the legacy flat names as properties so
-migrated consumers read either record shape; an unknown name raises
-``OpRecordAttributeError`` — an ``AttributeError`` subclass, so surviving
-``getattr(event, name, default)`` sites keep today's default semantics.
-
-The typed amendment lane (nine exact-set families) also lives here: schemas
-are structural (keyword-only constructors, no ``**kwargs``, no optional patch
-paths), identity fields are unpatchable, and appends/folds runtime-validate
-against the registry. Everything in this module is INERT until P3/P4 wire it
-into the emit and ingest paths.
+Records hold a core and typed facets; live handles stay in the journal side index.
+Unknown legacy attributes raise OpRecordAttributeError. Amendments
+have structural keyword-only schemas and are checked when appended and folded.
 """
 
 from __future__ import annotations
@@ -27,7 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field, fields as dataclass_fields, replace as dataclass_replace
 from typing import Any
 
-from .events import ArgTemplateRef, FunctionCallRef, OutputRef, ParentEdge
+from .events import ArgTemplateRef, FunctionCallRef, OutputRef, ParentEdge, _bounded_record_repr
 from .refs import ParamRef
 from .semantics import BackendSemantics, CapturePolicy
 
@@ -36,7 +20,6 @@ OP_RECORD_SCHEMA_VERSION = 1
 
 class OpRecordAttributeError(AttributeError):
     """Strict-protocol refusal for an unknown record attribute.
-
     Subclasses ``AttributeError`` deliberately: consumer sites relying on
     ``getattr(record, name, default)`` (for example the raw-shape hash's
     ``modules``/``func_name`` fallbacks) keep their exact default semantics
@@ -44,14 +27,11 @@ class OpRecordAttributeError(AttributeError):
     """
 
 
-# ---------------------------------------------------------------------------
-# Core + facets
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True, slots=True)
 class OpCore:
     """The 13 required fields every journal op record carries."""
+
+    __repr__ = _bounded_record_repr
 
     seq: int
     kind: str  # "op" | "source" | "synthetic_output"
@@ -72,6 +52,8 @@ class OpCore:
 class GraphFacet:
     """Raw graph-topology metadata beyond the core parent edges."""
 
+    __repr__ = _bounded_record_repr
+
     parent_arg_positions: dict[str, dict[Any, str]]
     edge_uses: tuple[object, ...] = ()
     unattributed_tensor_args: tuple[str, ...] = ()
@@ -85,6 +67,8 @@ class GraphFacet:
 class ModulesFacet:
     """Module containment snapshots taken at op creation."""
 
+    __repr__ = _bounded_record_repr
+
     module_stack: tuple[object, ...] = ()
     modules: tuple[tuple[str, int], ...] = ()
 
@@ -92,6 +76,8 @@ class ModulesFacet:
 @dataclass(frozen=True, slots=True)
 class AncestryFacet:
     """Exhaustive-leg ancestry unions."""
+
+    __repr__ = _bounded_record_repr
 
     input_ancestors: frozenset[str] = frozenset()
     internal_source_ancestors: frozenset[str] = frozenset()
@@ -103,19 +89,22 @@ class AncestryFacet:
 class AutogradFacet:
     """Portable autograd metadata (never the live handle)."""
 
+    __repr__ = _bounded_record_repr
+
     grad_fn_class_qualname: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class TransformFacet:
     """torch.func / transform boundary metadata.
-
     ``transform_config`` here is the CLEAN user mapping: the two legacy
     smuggled channels are first-class fields (``fn_code_location``) or live
     on the annotations facet (``_tl_annotations``); the generated scatter
     re-injects both into the persisted ``transform_config`` cell for
     byte-identical parity.
     """
+
+    __repr__ = _bounded_record_repr
 
     is_transform: bool = False
     transform_kind: str | None = None
@@ -131,6 +120,8 @@ class TransformFacet:
 class ControlFacet:
     """Scalar-bool control-flow observations."""
 
+    __repr__ = _bounded_record_repr
+
     is_scalar_bool: bool | None = None
     bool_value: bool | None = None
 
@@ -138,6 +129,8 @@ class ControlFacet:
 @dataclass(frozen=True, slots=True)
 class ParamsFacet:
     """Parameter participation."""
+
+    __repr__ = _bounded_record_repr
 
     params: tuple[ParamRef, ...] = ()
     parent_params: tuple[object, ...] = ()
@@ -147,12 +140,16 @@ class ParamsFacet:
 class AnnotationsFacet:
     """First-class annotation payload (absorbs both `_tl_annotations` channels)."""
 
+    __repr__ = _bounded_record_repr
+
     annotations: dict[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class PolicyFacet:
     """Capture policy, backend semantics, and stream state flags."""
+
+    __repr__ = _bounded_record_repr
 
     backend_semantics: BackendSemantics | None = None
     policy: CapturePolicy | None = None
@@ -165,6 +162,8 @@ class PolicyFacet:
 class RecordingFacet:
     """Predicate-recording context (sparse producer, boundary retention)."""
 
+    __repr__ = _bounded_record_repr
+
     record_context: object | None = None
     capture_spec: object | None = None
 
@@ -172,11 +171,12 @@ class RecordingFacet:
 @dataclass(frozen=True, slots=True)
 class InterventionFacet:
     """Interventions that touched this op.
-
     ``intervention_template_ref`` is deliberately ABSENT: verified dead in P2
     (every producer writes None; no consumer reads it), it stays on the compat
     ``OpEvent`` only and dies with it in S15.
     """
+
+    __repr__ = _bounded_record_repr
 
     intervention_fired: bool = False
     is_edited: bool = False
@@ -235,6 +235,8 @@ FACET_DEFAULTS: dict[str, Any] = {
 class IngestExtras:
     """Record-adjacent values that are joins, not record facts."""
 
+    __repr__ = _bounded_record_repr
+
     source_trace: object | None = None
     source_trace_id: str | None = None
     # Compat channel until torch decomposition deletes the ingest fallback:
@@ -245,6 +247,8 @@ class IngestExtras:
 @dataclass(frozen=True, slots=True)
 class OpRecord:
     """One decomposed journal op record: required core + optional facets."""
+
+    __repr__ = _bounded_record_repr
 
     core: OpCore
     function: FunctionCallRef | None = None
@@ -271,7 +275,6 @@ class OpRecord:
 
     def _facet_or_default(self, facet_name: str) -> Any:
         """Return facet ``facet_name``, materializing the checked-in default if absent.
-
         Raises
         ------
         OpRecordAttributeError
@@ -591,14 +594,14 @@ _FACET_ATTRIBUTES: dict[str, str] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # The typed amendment lane (nine exact-set families) — inert until P4
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class OpAmendment:
     """One typed post-commit knowledge record targeting a committed op."""
+
+    __repr__ = _bounded_record_repr
 
     seq: int  # writer-stamped at append into the journal's global domain
     run_nonce: int  # matches the owning stream's run nonce at append
@@ -675,7 +678,6 @@ PATH_TO_FLAT: dict[str, str] = {
 
 def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]]) -> OpRecord:
     """Return a new record with ordered ``(facet path, value)`` pairs applied.
-
     Each path names its owning core field or facet slot directly; an absent
     facet materializes from ``FACET_DEFAULTS`` before the patch. This is the
     ONE decomposed-leg fold primitive: the amendment reducer applies patches
@@ -701,7 +703,6 @@ def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]])
 
 def apply_patch_items(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
     """Apply ordered ``(facet path, value)`` pairs to either journal shape.
-
     The dual-leg amendment fold primitive (DoR 4.4): decomposed ``OpRecord``s
     fold via facet ``dataclasses.replace`` (:func:`record_with_path_updates`);
     compat ``OpEvent``s fold via the 1:1 ``PATH_TO_FLAT`` table. The table
@@ -732,7 +733,6 @@ class AmendmentValidationError(ValueError):
 
 def validate_amendment(amendment: OpAmendment) -> None:
     """Runtime-validate one amendment against the closed registry.
-
     Runs at append AND at fold, so a direct ``OpAmendment(...)`` construction
     that bypasses a typed constructor is caught at the journal boundary.
     """
@@ -922,14 +922,11 @@ TYPED_CONSTRUCTORS: dict[str, Any] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # Ingest adaptation: compat OpEvent -> (OpRecord, IngestExtras)
-# ---------------------------------------------------------------------------
 
 
 def op_record_from_event(event: Any) -> tuple[OpRecord, IngestExtras]:
     """Adapt one compat ``OpEvent`` at the single ingest boundary.
-
     A facet is constructed only when its values differ from the checked-in
     defaults, so the adapter round-trips absent facets through the defaults
     table (the property the scatter parity gate proves cell-for-cell).

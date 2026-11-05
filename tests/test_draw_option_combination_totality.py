@@ -110,7 +110,7 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "open_viewer": (HARNESS, "False everywhere (the default): no display side effects"),
     "file_format": (HARNESS, '"dot" everywhere: no graphviz binary cost'),
     # -- default-only ---------------------------------------------------------
-    "renderer": (DEFAULT_ONLY, 'non-default "dagua" needs the optional dagua runtime'),
+    "renderer": (DEFAULT_ONLY, '"graphviz" is the only built-in renderer'),
     "graph": (DEFAULT_ONLY, "backward and combined graphs need a captured backward pass"),
     "bwd": (DEFAULT_ONLY, "backward and combined graphs only"),
     "show_module_paths": (DEFAULT_ONLY, "backward graph only"),
@@ -162,6 +162,8 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "size_scale": (PAIRED, "linear"),
     "stack_by": (PAIRED, True),
     "show_redundant_args": (PAIRED, True),
+    # Walk ruling names.1: the edge-shape channel prints each edge's tensor shape.
+    "show_edge_shapes": (PAIRED, True),
     # highlight="interventions" routes through the surgery lens, which refuses
     # typed on this un-edited sweep trace (the rule in expected_refusal); the
     # edited-trace renders live in test_surgery_visuals_marks.py.

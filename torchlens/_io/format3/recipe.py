@@ -647,9 +647,10 @@ def _capture_rules_problem(rules: Any) -> str | None:
 def trace_capture_rules(trace: Any) -> list[tuple[Any, Any]]:
     """Return original portable predicates without replacing their staged label rules."""
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     saved = getattr(spec, "metadata", {}).get("_capture_rules", [])
-    options = getattr(trace, "_predicate_save_options", None)
+    # A runtime binding a predicate capture installs; other traces never carry it.
+    options = trace.__dict__.get("_predicate_save_options")
     predicate = getattr(options, "intervene", None)
     if predicate is None:
         return list(saved)
@@ -717,17 +718,17 @@ def trace_recipe_context(trace: Any) -> dict[str, Any]:
         if isinstance(record, dict) and record.get("op") == "append"
     ]
     keys = []
-    for layer in getattr(trace, "_layer_list", None) or ():
+    for layer in trace._layer_list or ():
         key = getattr(getattr(layer, "args_template", None), "func_id", None)
         if dataclasses.is_dataclass(key) and not isinstance(key, type):
             keys.append({"layer_label": str(layer.layer_label), "key": dataclasses.asdict(key)})
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     hook_specs = list(getattr(spec, "hook_specs", ()) or ())
     return {
         "append_state": {
-            "is_appended": bool(getattr(trace, "_provenance_is_appended", False)),
-            "append_sequence_id": int(getattr(trace, "_append_sequence_id", 0) or 0),
-            "append_history": list(getattr(trace, "_append_history", None) or ()),
+            "is_appended": bool(trace._provenance_is_appended),
+            "append_sequence_id": int(trace._append_sequence_id or 0),
+            "append_history": list(trace._append_history or ()),
             "state_history": append_records,
         },
         "function_registry_keys": keys,
@@ -767,7 +768,7 @@ def write_trace_recipe(
         staged rule) and the recipe's disclosures.
     """
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if not has_rules(spec):
         return None, []
     header = RecipeHeader(save_level=save_level, **trace_recipe_context(trace))

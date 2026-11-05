@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar, cast
 
 from .._errors import FacadeTeachingError, MissingDependencyError
+from ._display_errors import lookup_message
 
 __all__ = [
     "DependencyGate",
@@ -116,8 +117,35 @@ def _plain_missing(
 
         matches = get_close_matches(name, list(known), n=3, cutoff=0.6)
         if matches:
-            message += ". Did you mean: " + ", ".join(matches) + "?"
+            message = lookup_message(
+                message + ".", matches, "use an active name from dir() on this module."
+            )
     return AttributeError(message)
+
+
+def removed_set_remedy(owner: str, receiver: str, args: str) -> str:
+    """Return the ``facade_redirect`` remedy for a removed ``<owner>.set`` member.
+
+    ``set`` applied a callable once; the ``set_only`` engine of ``do`` stages a
+    callable as a sticky hook that stays until detached, so the remedy says both.
+
+    Parameters
+    ----------
+    owner:
+        Public class name (``"Trace"``, ``"Layer"``, ``"Op"``).
+    receiver:
+        Variable name used in the example call (``"trace"``, ``"layer"``, ``"op"``).
+    args:
+        Positional arguments of the example call (``"site, value"``, ``"value"``).
+    """
+
+    return (
+        f"use {receiver}.do({args}, intervention=tl.options.InterventionOptions("
+        f"engine='set_only')) to stage a value or tensor -- {owner}.set was replaced by the "
+        "set_only engine of do; a callable passed that way becomes a sticky hook that stays "
+        "attached for every later do and run until trace.clear_edits(site) detaches it "
+        f"({owner}.set applied a callable once)"
+    )
 
 
 def refuse_removed_member(owner: str, name: str, removed: Mapping[str, str]) -> None:
@@ -255,8 +283,8 @@ def resolve_facade_attr(
     """
 
     # Step 1: underscore short-circuit -- no table lookup, no dependency
-    # check. Only the root's existing public version has a lazy dunder row.
-    if name.startswith("_") and (owner, name) != ("torchlens", "__version__"):
+    # check. Dunder probes from IPython, copyreg, and inspect must fail fast.
+    if name.startswith("_"):
         raise _plain_missing(owner, name)
 
     # Step 2: redirect table -> typed teaching AttributeError, no dep check.
@@ -355,5 +383,5 @@ def facade_dir(
         if name.startswith("__") and name.endswith("__") or not name.startswith("_"):
             names.add(name)
     for name_set in name_sets:
-        names.update(name for name in name_set if not name.startswith("_") or name == "__version__")
+        names.update(name for name in name_set if not name.startswith("_"))
     return sorted(names)

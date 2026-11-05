@@ -63,8 +63,8 @@ def _alias_reader(**recorded: Any) -> Callable[[dict[str, Any]], None]:
     ``recorded`` overrides the alias slot's recorded fields (shape, rank, dtype).
     """
 
-    def mutate(manifest: dict[str, Any]) -> None:
-        run = manifest["run"]
+    def mutate(descriptor: dict[str, Any]) -> None:
+        run = descriptor  # format 3: runnable/descriptor.json holds what the 2.x manifest ``run`` held
         calls = {call["op_labels"][0].split("_")[0]: call for call in run["calls"]}
         producer_id = calls["relu"]["output_slot_ids"][0]
         reader = calls["mean"]
@@ -109,7 +109,7 @@ def test_direct_alias_with_wrong_recorded_fields_diverges_at_bind(
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader(**recorded))
     with pytest.raises(PathDivergenceError) as caught:
-        _load_runnable(bundle).run(inputs=torch.randn(2, 4))
+        _load_runnable(bundle).run_transaction(inputs=torch.randn(2, 4))
     assert caught.value.fields["code"] == code.value
     assert ":alias" in str(caught.value)
 
@@ -120,6 +120,6 @@ def test_honest_direct_alias_runs_verified(tmp_path: Path) -> None:
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader())
     x = torch.randn(2, 4)
-    result = _load_runnable(bundle).run(inputs=x.clone())
+    result = _load_runnable(bundle).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
     torch.testing.assert_close(result.output, _ReluThenMean()(x))

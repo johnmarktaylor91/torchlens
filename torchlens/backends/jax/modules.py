@@ -493,7 +493,7 @@ def equinox_param_logs(tree: EquinoxModuleTree, trace: Any) -> dict[str, Param]:
         dtype = str(getattr(value, "dtype", ""))
         param = Param(
             module_address=module_address,
-            name=address.rsplit(".", 1)[-1],
+            name=address.removeprefix(f"{module_address}."),
             shape=shape,
             dtype=dtype,  # type: ignore[arg-type]
             num_params=_numel(shape),
@@ -552,7 +552,7 @@ def nnx_param_logs(tree: NnxModuleTree, trace: Any) -> dict[str, Param]:
         dtype = str(getattr(value, "dtype", ""))
         param = Param(
             module_address=module_address,
-            name=address.rsplit(".", 1)[-1],
+            name=address.removeprefix(f"{module_address}."),
             shape=shape,
             dtype=dtype,  # type: ignore[arg-type]
             num_params=_numel(shape),

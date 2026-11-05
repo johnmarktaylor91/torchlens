@@ -59,6 +59,9 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_literals": "L0",
     "_constants": "L0",
     "_quantities": "L0",
+    # Pure numeric spellings depend only on the standard library, including
+    # the quantity display vocabulary used by the other strata.
+    "_utils._display_numbers": "L0",
     "_architecture": "L0",
     "_deprecations": "L0",
     # -- L1 PRODUCT -------------------------------------------------------
@@ -130,7 +133,6 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_captured_run": "L3",
     "_fast_run": "L3",
     "_runnable": "L3",
-    "_runnable._schema_versions": "L1",
     "_transport": "L3",
     "_source_links": "L3",
     "_training_validation": "L3",

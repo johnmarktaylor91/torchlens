@@ -10,7 +10,9 @@ hostile input, and every load path here is fail-closed.
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
 - `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
-  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
+  their root manifest before `load()` parses a trace manifest. Merged, fastlog and current-format
+  manifests first pass the release floor (`raise_if_saved_by_older_major`: a `torchlens_version`
+  stamp below `FIRST_FORMAT3_RELEASE` refuses); extraction takes it in `load_extraction`.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors
@@ -113,7 +115,7 @@ Save preparation lives in `_save_gates.py`; runnable wire storage has no record 
 binding dependency. Runtime component attachment and family binding belong to
 `_format3_runnable_bind.py`, above the pure `format3/runnable.py` carrier.
 
-Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; frozen wire version names come from `_runnable/_schema_versions.py`, which re-exports through `_runnable`.
+Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; it reads the frozen wire version names from the `_runnable` vocabulary through one deferred import in `component_versions()`.
 
 Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/save.py` delegates decoding there.
 

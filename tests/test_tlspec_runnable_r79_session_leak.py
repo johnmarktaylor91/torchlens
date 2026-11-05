@@ -284,7 +284,7 @@ def test_r79_forged_stale_param_stamp_launder_ceils(tmp_path: Path) -> None:
     set_param_meta(forged, barcode=make_random_barcode(), address="w", requires_grad_before=False)
 
     path = _save(StashLaunderBranch(forged).eval(), x.clone(), tmp_path / "forged_a.tlspec")
-    result = tl.load(path).run(inputs=_twin(x))
+    result = tl.load(path).run_transaction(inputs=_twin(x))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     assert result.report.is_poisoned
 
@@ -326,10 +326,10 @@ def test_r79_registered_param_layout_read_stays_verified(tmp_path: Path) -> None
     x = _nchw()
     path = _save(RegisteredParamWrapBranch().eval(), x.clone(), tmp_path / "reg.tlspec")
 
-    same = tl.load(path).run(inputs=x.clone())
+    same = tl.load(path).run_transaction(inputs=x.clone())
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not same.report.is_poisoned
 
-    twin = tl.load(path).run(inputs=_twin(x))
+    twin = tl.load(path).run_transaction(inputs=_twin(x))
     assert twin.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert not twin.report.is_poisoned

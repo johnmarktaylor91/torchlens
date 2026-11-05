@@ -1,4 +1,4 @@
-"""Constants of the 3.0 saved format, pinned against the persisted-field contract.
+"""Constants of the 2.38 saved format, pinned against the persisted-field contract.
 
 Everything here is data: the envelope, the record index, the type map from
 ``StorageKind`` to a JSON encoding class, the typed-value tags, the tensor
@@ -118,7 +118,7 @@ MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
     *WRITER_IDENTITY_FIELDS,
 )
 #: Artifact kinds the manifest ``kind`` may carry.
-ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention")
+ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention", "recipe")
 #: Payload codec ids the format writes; both are safetensors files.
 PAYLOAD_CODEC_IDS: Final[tuple[str, ...]] = ("torch_safetensors_v1", "numpy_safetensors_v1")
 #: The artifact backend an envelope without a ``backend`` key means: the torch writer's.
@@ -283,7 +283,7 @@ PHASE_TIMING_KEY_SOURCE: Final = "torchlens._postprocess._pipeline.PIPELINE"
 
 
 def refuse_writer_not_built(door: str, lane_module: str) -> NoReturn:
-    """Refuse a 3.0 write door that its lane has not filled yet.
+    """Refuse a 2.38 write door that its lane has not filled yet.
 
     Parameters
     ----------
@@ -299,15 +299,15 @@ def refuse_writer_not_built(door: str, lane_module: str) -> NoReturn:
     """
 
     raise ArtifactError(
-        f"The 3.0 saved-format door {door} is not built in this checkout; it is filled in "
+        f"The 2.38 saved-format door {door} is not built in this checkout; it is filled in "
         f"{lane_module}.",
         code="bundle_save_failed",
-        remedy="save with Trace.save (the tlspec 11 writer) until the 3.0 writer lands",
+        remedy="save with Trace.save (the tlspec 11 writer) until the 2.38 writer lands",
     )
 
 
 def refuse_reader_not_built(door: str, lane_module: str) -> NoReturn:
-    """Refuse a 3.0 read door that its lane has not filled yet.
+    """Refuse a 2.38 read door that its lane has not filled yet.
 
     Parameters
     ----------
@@ -323,8 +323,8 @@ def refuse_reader_not_built(door: str, lane_module: str) -> NoReturn:
     """
 
     raise ArtifactError(
-        f"The 3.0 saved-format door {door} is not built in this checkout; it is filled in "
+        f"The 2.38 saved-format door {door} is not built in this checkout; it is filled in "
         f"{lane_module}.",
         code="bundle_load_failed",
-        remedy="load with tl.load (the tlspec 11 reader) until the 3.0 reader lands",
+        remedy="load with tl.load (the tlspec 11 reader) until the 2.38 reader lands",
     )

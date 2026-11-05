@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
+from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from .._entry_refusals import require_hook_factory
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -25,6 +27,7 @@ from .._selection.target import (
     TensorSliceSpec as TensorSliceSpec,
 )
 from .._utils._tensor_layout import CaptureLayout
+from . import _display
 from ._edit_copy import deepcopy_edit
 from ._hook_spec_match import _hook_spec_matches
 from .errors import _refuse_placeholder_edit
@@ -119,8 +122,7 @@ class Edit:
 
         if self.factory is None:
             _refuse_placeholder_edit(self.name, self.portability)
-            raise TypeError(f"Edit {self.name!r} has no hook factory")
-        return self.factory()
+        return require_hook_factory(self.name, self.factory)()
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state, dropping factories pickle cannot carry.
@@ -292,6 +294,9 @@ class CapturedArgTemplate:
     func_id: FunctionRegistryKey | None = None
     notes: tuple[str, ...] = ()
 
+    __repr__ = _display.template_repr
+    __str__ = _display.template_card
+
 
 #: The frozen replay-template records; a rerun refresh rebuilds these field by field.
 REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
@@ -422,19 +427,8 @@ class EdgeUseRecord(_SelectionOperand):
 
         return _selection_from_edge(self)
 
-    def __repr__(self) -> str:
-        """Designed per-edge line (F10): source -> target (arg k) + relations.
-
-        The storage relation prints only when POPULATED (``view``/``copy``);
-        the honest sentinel ``unknown`` stays silent rather than reading as
-        a fact (lovely bug 24's sentinel discipline).
-        """
-
-        path = ".".join(str(component) for component in self.arg_path) or "?"
-        line = f"edge {self.parent_label} -> {self.child_label} ({self.arg_kind} {path})"
-        if self.view_or_copy in ("view", "copy"):
-            line += f" [{self.view_or_copy}]"
-        return line
+    __repr__ = _display.edge_repr
+    __str__ = _display.edge_card
 
 
 @dataclass
@@ -675,6 +669,9 @@ class FrozenInterventionSpec:
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
 
+    __repr__ = _display.frozen_spec_repr
+    __str__ = _display.frozen_spec_card
+
 
 class Relationship(str, Enum):
     """Evidence level for relationships between bundle members.
@@ -759,8 +756,6 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Trace fields.
     """
 
-    from .._constants import MODEL_LOG_FIELD_ORDER
-
     table = _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
@@ -793,8 +788,6 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     dict[str, ForkFieldPolicy]
         Fork policies for Op fields.
     """
-
-    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,

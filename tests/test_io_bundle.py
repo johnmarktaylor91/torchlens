@@ -434,11 +434,20 @@ def test_bundle_save_complex128_round_trips(tmp_path: Path, strict: bool) -> Non
         ),
         (
             # A format 3 manifest stamped by a writer older than the first TorchLens that
-            # writes format 3 is an impossible pairing: below the floor, before identity.
+            # writes format 3 (the 2.38.0 floor) is an impossible pairing: below the
+            # floor, before identity.
             "torchlens_2x_writer",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.36.1"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.37.1"),
             "raise",
-            "first TorchLens that writes saved format 3",
+            "saved by torchlens 2.37",
+        ),
+        (
+            # An older writer at or above the 2.38.0 floor (a pre-release of the
+            # floor release) loads and is logged.
+            "torchlens_older_supported",
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.38.0rc1"),
+            "info_log",
+            "2.38.0rc1",
         ),
         (
             "python_major_mismatch",

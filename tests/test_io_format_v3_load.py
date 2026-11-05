@@ -30,7 +30,7 @@ def test_load_pre_floor_golden_refuses_typed() -> None:
 
     from torchlens.errors import ArtifactTooOldError
 
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"):
         tl.load(str(V3_GOLDEN))
 
 

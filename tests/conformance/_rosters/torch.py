@@ -35,16 +35,21 @@ X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
 W44 = (_RNG.standard_normal((4, 4)) * 0.5).astype(np.float32)
 B4 = _RNG.standard_normal((4,)).astype(np.float32)
 #: NCHW image for the CNN row.
-IMG = _RNG.standard_normal((1, 1, 6, 6)).astype(np.float32)
+_RNG.standard_normal((1, 1, 6, 6))  # the former IMG draw, kept so later draws are unchanged
 W34 = (_RNG.standard_normal((3, 4)) * 0.5).astype(np.float32)
 B3 = _RNG.standard_normal((3,)).astype(np.float32)
 W23 = (_RNG.standard_normal((2, 3)) * 0.5).astype(np.float32)
 B2 = _RNG.standard_normal((2,)).astype(np.float32)
-CONV_W = (_RNG.standard_normal((2, 1, 3, 3)) * 0.5).astype(np.float32)
-CONV_B = _RNG.standard_normal((2,)).astype(np.float32)
+_RNG.standard_normal((2, 1, 3, 3))  # the former CONV_W draw
+_RNG.standard_normal((2,))  # the former CONV_B draw
 FC_W = (_RNG.standard_normal((3, 18)) * 0.3).astype(np.float32)
 FC_B = _RNG.standard_normal((3,)).astype(np.float32)
 LN_EPS = 1e-5
+# The cnn row's image, kernel and bias are multiples of 1/8 or coarser, so all 9-term window sums
+# are exact in float32 and every summation order gives the oracle's bits.
+IMG = ((np.arange(36) % 7 - 3) / 4).astype(np.float32).reshape(1, 1, 6, 6)
+CONV_W = ((np.arange(18) % 5 - 2) / 8).astype(np.float32).reshape(2, 1, 3, 3)
+CONV_B = np.array([0.125, -0.25], dtype=np.float32)
 
 
 # ------------------------------------------------------------------ NumPy oracle

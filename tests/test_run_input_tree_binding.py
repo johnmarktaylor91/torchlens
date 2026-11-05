@@ -1,6 +1,6 @@
-"""``trace.run(inputs=...)`` binds one input tree the same way on every provider.
+"""``trace.run_transaction(inputs=...)`` binds one input tree the same way on every provider.
 
-The behaviour net found ``run(inputs=(y, no), fast=True)`` calling a two-argument
+The behaviour net found ``run_transaction(inputs=(y, no), fast=True)`` calling a two-argument
 forward with the tuple as ONE argument, while ``tl.trace(model, (y, no))``, the
 ordinary live run and the loaded provider all spread it. The fast live path now
 binds through capture's own ``normalize_input_args``.
@@ -54,7 +54,7 @@ def test_live_run_spreads_a_sequence_for_a_two_argument_forward(spelling: str, f
     y, no = _pair()
     trace = tl.trace(model, (y, no))
     new_y, new_no = y + 1, no * 2
-    result = trace.run(inputs=_spellings(new_y, new_no)[spelling], fast=fast)
+    result = trace.run_transaction(inputs=_spellings(new_y, new_no)[spelling], fast=fast)
     with torch.no_grad():
         assert torch.equal(result.output, model(new_y, new_no))
 
@@ -67,6 +67,6 @@ def test_loaded_run_spreads_a_tuple_for_a_two_argument_forward(tmp_path: Path) -
     path = tmp_path / "two.tlspec"
     tl.trace(model, (y, no), capture=capture).save(path, level="runnable", include_weights=True)
     new_y, new_no = y + 1, no * 2
-    result = tl.load(path).run(inputs=(new_y, new_no))
+    result = tl.load(path).run_transaction(inputs=(new_y, new_no))
     with torch.no_grad():
         assert torch.allclose(result.output, model(new_y, new_no))

@@ -74,6 +74,7 @@ def install_runnable_binders(binders: RunnableBinders) -> None:
 
 
 def _binders() -> RunnableBinders:
+    """The runnable binders ``torchlens._io.bundle`` installs at import (refuses before then)."""
     if _BINDERS is None:  # pragma: no cover - bundle installs them at import
         raise RuntimeError("runnable binders are installed when torchlens._io.bundle imports")
     return _BINDERS
@@ -125,7 +126,7 @@ def _index_error(blob_id: str, detail: str, *, code: str = _INDEX_CODE) -> Artif
     """Return the manifest-index refusal for a runnable blob id."""
 
     return ArtifactError(
-        f"Runnable payload {blob_id!r} does not satisfy the 3.0 saved-format contract: {detail}.",
+        f"Runnable payload {blob_id!r} does not satisfy the saved format 3 contract: {detail}.",
         code=code,
         remedy=_RESAVE,
         blob_id=blob_id,

@@ -1,6 +1,6 @@
-# The 3.0 saved format
+# The 2.38 saved format
 
-TorchLens 3.0 saves a trace as a directory of typed JSON record files plus safetensors blob
+TorchLens 2.38 saves a trace as a directory of typed JSON record files plus safetensors blob
 files. Nothing in the directory is pickled, and the reader never executes anything it reads.
 This page is the contract the writer, reader and runnable component are built against; the
 constants it names live in `torchlens/_io/format3/contract.py`, and
@@ -35,7 +35,9 @@ safetensors payload codecs, the writer identity stamp and the writer contract di
 
 A bundle is `manifest.json` with `kind: "bundle"`, `members/<index>-<name>/` holding one trace
 artifact each, and `relations.json`. A recipe saved on its own by `save_intervention` is
-`manifest.json` with `kind: "intervention"`, `intervention.json` and its `blobs/`.
+`manifest.json` with `kind: "intervention"`, `intervention.json` and its `blobs/`. An authored
+`tl.Recipe` saved by `Recipe.save` is `manifest.json` with `kind: "recipe"`, `intervention.json`
+holding one rule per clause (section 5) and its `blobs/`.
 
 ### manifest.json
 
@@ -44,7 +46,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `format` | string | always `"torchlens.saved_format"` |
 | `format_version` | integer | the format major; `3` for this contract |
 | `tlspec_version` | integer | the record contract version the records follow |
-| `kind` | string | `trace`, `bundle` or `intervention` |
+| `kind` | string | `trace`, `bundle`, `intervention` or `recipe` (a `Recipe.save` artifact: rules only, no model) |
 | `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC; the three version stamps parse under PEP 440); required, never part of any digest |
 | `backend`, `backend_runtime` | string | the capture backend and its runtime, as the tlspec 11 manifest stamps them |
 | `save_level` | string | one of `portable`, `audit`, `runnable`, `executable_with_callables` |
@@ -76,16 +78,16 @@ torch minor mismatch, a newer TorchLens writer and a Python major mismatch warn.
 The reader accepts a manifest only when `format` equals `torchlens.saved_format`,
 `format_version` equals 3, and `tlspec_version` lies between the reader floor and the runtime's
 record contract version (both are constants of `contract.py`; the floor is the first record
-contract written in this format, so the 3.0 reader reads nothing older than itself).
+contract written in this format, so the 2.38 reader reads nothing older than itself).
 
 - A directory with a `metadata.pkl`, a manifest without `format`, or `format_version` below 3,
-  refuses `artifact_version_below_floor` (saved by torchlens 2.x; the remedy names 2.36.x).
+  refuses `artifact_version_below_floor` (saved by torchlens 2.37 and earlier; the remedy names 2.36.x).
 - `format_version` above 3, or `tlspec_version` above the runtime's, refuses
   `artifact_version_above_runtime`.
 - `tlspec_version` below the floor refuses `artifact_version_below_floor`.
 
-`tl.io.detect_tlspec_format(path)` returns `"v3"` for a directory with a 3.0 manifest, `"pre_3"`
-for a 2.x save (a `metadata.pkl` or a manifest without `format`), and `"unknown"` for a directory
+`tl.io.detect_tlspec_format(path)` returns `"v3"` for a directory with a 2.38 manifest, `"pre_3"`
+for a pre-2.38 save (a `metadata.pkl` or a manifest without `format`), and `"unknown"` for a directory
 that is not a TorchLens save at all.
 
 ### Digest relation
@@ -328,7 +330,7 @@ One table for the writer and the reader. Codes are rows of
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
 | manifest violates this contract (missing field, wrong type, a version stamp that is not PEP 440, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
-| 2.x artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 | `artifact_version_below_floor` | reader |
+| pre-2.38 artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 (2.38.0) | `artifact_version_below_floor` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |
 | specialized loader given another kind | `artifact_kind_mismatch` | reader |
 | unknown save level | `artifact_save_level_invalid` | writer, reader |
@@ -404,7 +406,7 @@ A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
 ```json
 // manifest.json
 {"format": "torchlens.saved_format", "format_version": 3, "tlspec_version": 12, "kind": "trace",
- "torchlens_version": "3.0.0", "python_version": "3.11.9", "torch_version": "2.13.0",
+ "torchlens_version": "2.38.0", "python_version": "3.11.9", "torch_version": "2.13.0",
  "platform": "Linux-x86_64", "created_at": "2026-11-02T09:00:00Z",
  "backend": "torch", "backend_runtime": "eager", "save_level": "portable",
  "payload_policy": {"include_outs": true, "include_grads": true, "include_saved_args": false,
@@ -452,7 +454,7 @@ with `save_intervention(level="portable")` refuses `intervention_spec_not_portab
 
 ## 9. Loaded equals live
 
-A trace loaded from a 3.0 artifact equals the live trace it was saved from, at every save level:
+A trace loaded from a 2.38 artifact equals the live trace it was saved from, at every save level:
 
 - Column sets: for each record kind, the loaded record's keys equal the live record's persisted
   keys at that level (the required keys plus the optional keys whose flag is on). The test derives

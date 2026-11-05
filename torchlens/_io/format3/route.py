@@ -6,6 +6,7 @@ reader, so the loader's layering (largest cycle, in-function imports) is unchang
 
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
@@ -18,10 +19,14 @@ from . import contract, reader
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ...bundle import Bundle
+    from ...intervention.spec import Recipe
     from ...intervention.types import InterventionSpec
     from .. import PayloadLoadHints
 
 _FORMAT3_READER_SHAPES: Final = frozenset({"v3", "unknown"})
+#: Module that rebuilds a standalone ``Recipe.save`` artifact; imported by name on demand so
+#: this route stays below the intervention package (the model-free door of ``bundle.load``).
+_RECIPE_LOADER: Final = "torchlens.intervention._recipe_io"
 
 
 def is_format3_root(bundle_path: Path, tlspec_format: str) -> bool:
@@ -51,7 +56,7 @@ class Format3LoadRequest:
 
 def load_format3(
     bundle_path: Path, request: Format3LoadRequest
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names
     (``unknown_relations`` reaches the bundle door only)."""
 
@@ -59,6 +64,8 @@ def load_format3(
         kind = reader.read_manifest(bundle_path)["kind"]
         if kind == "intervention":
             return cast("InterventionSpec", reader.load_intervention_recipe(bundle_path))
+        if kind == "recipe":
+            return cast("Recipe", importlib.import_module(_RECIPE_LOADER).load_recipe(bundle_path))
         options: dict[str, Any] = {
             "lazy": request.lazy,
             "map_location": request.map_location,

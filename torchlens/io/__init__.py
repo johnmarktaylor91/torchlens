@@ -29,7 +29,6 @@ from .._io.sidecar import (
 from .._trace_state import TraceState
 from ..intervention.save import save_intervention
 from ..intervention.types import InterventionSpec
-from ..options import suppress_mutate_warnings
 
 
 def list_traces() -> tuple[Any, ...]:
@@ -76,8 +75,8 @@ def detect_tlspec_format(path: str | Path) -> str:
     Returns
     -------
     str
-        One of ``"v3"`` (the 3.0 saved format), ``"pre_3"`` (a save written by
-        TorchLens 2.x), or ``"unknown"`` (no TorchLens save markers).
+        One of ``"v3"`` (saved format 3), ``"pre_3"`` (a save written by
+        torchlens 2.37 or earlier), or ``"unknown"`` (no TorchLens save markers).
 
     Examples
     --------
@@ -429,6 +428,5 @@ __all__ = [
     "materialize_nested",
     "reset_naming_counter",
     "save_intervention",
-    "suppress_mutate_warnings",
     "unregister_sidecar_family",
 ]

@@ -161,7 +161,7 @@ def test_input_tree_mismatch_on_non_tensor_input(tmp_path: Path) -> None:
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "tree.tlspec"))
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=3)
+        loaded.run_transaction(inputs=3)
     assert caught.value.fields["code"] == RunnableErrorCode.INPUT_TREE_MISMATCH.value
 
 
@@ -189,7 +189,7 @@ def test_output_shape_mismatch_on_data_dependent_shape(tmp_path: Path) -> None:
     trace.save(path, level="runnable")
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(inputs=torch.tensor([1.0, 1.0, 2.0, -2.0]))
+        loaded.run_transaction(inputs=torch.tensor([1.0, 1.0, 2.0, -2.0]))
     assert caught.value.fields["code"] == RunnableErrorCode.OUTPUT_SHAPE_MISMATCH.value
 
 
@@ -204,7 +204,7 @@ def test_output_dtype_mismatch_on_upcasting_call(tmp_path: Path) -> None:
         lambda orig: lambda *args, **kwargs: orig(*args, **kwargs).to(torch.float64),
     )
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(inputs=_branch_input())
+        loaded.run_transaction(inputs=_branch_input())
     assert caught.value.fields["code"] == RunnableErrorCode.OUTPUT_DTYPE_MISMATCH.value
 
 
@@ -222,7 +222,7 @@ def test_output_structure_mismatch_on_tampered_output_path(tmp_path: Path) -> No
     _tamper_run_descriptor(path, tamper)
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(inputs=_branch_input())
+        loaded.run_transaction(inputs=_branch_input())
     assert caught.value.fields["code"] == RunnableErrorCode.OUTPUT_STRUCTURE_MISMATCH.value
 
 
@@ -237,7 +237,7 @@ def test_slot_production_mismatch_on_unproduced_output_source(tmp_path: Path) ->
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return")
+        loaded.run_transaction(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.SLOT_PRODUCTION_MISMATCH.value
 
 
@@ -252,7 +252,7 @@ def test_missing_tensor_slot_on_consumer_of_unproduced_slot(tmp_path: Path) -> N
         lambda orig: lambda *args, **kwargs: {"x": orig(*args, **kwargs)},
     )
     with pytest.raises(RunPreconditionError) as caught:
-        loaded.run(inputs=_branch_input(), on_divergence="return")
+        loaded.run_transaction(inputs=_branch_input(), on_divergence="return")
     assert caught.value.fields["code"] == RunnableErrorCode.MISSING_TENSOR_SLOT.value
 
 
@@ -274,7 +274,7 @@ def test_mutation_version_mismatch_on_covert_input_mutation(tmp_path: Path) -> N
 
     _wrap_loaded_callable(loaded, "call:10", mutating)
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(inputs=_branch_input())
+        loaded.run_transaction(inputs=_branch_input())
     assert caught.value.fields["code"] == RunnableErrorCode.MUTATION_VERSION_MISMATCH.value
 
 
@@ -289,7 +289,7 @@ def test_scalar_bool_divergence_on_flipped_branch_input(tmp_path: Path) -> None:
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "flip.tlspec"))
     with pytest.raises(PathDivergenceError) as caught:
-        loaded.run(inputs=-_branch_input())
+        loaded.run_transaction(inputs=-_branch_input())
     assert caught.value.fields["code"] == RunnableErrorCode.SCALAR_BOOL_DIVERGENCE.value
 
 
@@ -312,10 +312,10 @@ def test_conditional_arm_divergence_on_fast_live_module_flip() -> None:
 
     model = ModuleBranch().eval()
     live = tl.trace(model, _branch_input(), save=tl.in_module("a"))
-    same = live.run(inputs=_branch_input(), fast=True)
+    same = live.run_transaction(inputs=_branch_input(), fast=True)
     assert same.report.path_faithfulness is PathFaithfulness.VERIFIED
     with pytest.raises(PathDivergenceError) as caught:
-        live.run(inputs=-_branch_input(), fast=True)
+        live.run_transaction(inputs=-_branch_input(), fast=True)
     assert caught.value.fields["code"] == RunnableErrorCode.CONDITIONAL_ARM_DIVERGENCE.value
 
 
@@ -329,7 +329,7 @@ def test_poisoned_run_refused_on_faithful_consumers(tmp_path: Path) -> None:
     """A return_diverged poisoned Trace refuses export and tabular consumption typed."""
 
     loaded = tl.load(_save_branch_artifact(tmp_path, "poison.tlspec"))
-    result = loaded.run(inputs=-_branch_input(), on_divergence="return")
+    result = loaded.run_transaction(inputs=-_branch_input(), on_divergence="return")
     assert result.report.is_poisoned
     with pytest.raises(PoisonedRunError) as export_caught:
         result.trace.save(tmp_path / "poisoned-export.tlspec")
@@ -378,7 +378,7 @@ def test_input_alias_topology_unresolved_code_surfaces_on_report(tmp_path: Path)
     with pytest.warns(CaptureGapWarning):
         trace = tl.trace(TwoInput().eval(), (a, b), capture=_capture_options())
     trace.save(path, level="runnable")
-    result = tl.load(path).run(inputs=(a, b))
+    result = tl.load(path).run_transaction(inputs=(a, b))
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     rows = [
         check

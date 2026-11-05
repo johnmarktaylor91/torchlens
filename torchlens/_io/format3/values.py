@@ -38,6 +38,9 @@ from .contract import (
 
 #: Largest integer magnitude JSON readers carry exactly (IEEE double mantissa).
 _JSON_SAFE_INT = 2**53
+#: Exact types ``ValueEncoder._encode`` returns unchanged at any position. The record
+#: writer appends such cells as they are, without an encoder call (``plain_cell``).
+_VERBATIM_TYPES: frozenset[type] = frozenset({type(None), bool, str})
 #: Largest ``bytes`` value written inline (base64), per the contract.
 BYTES_LIMIT = 1 << 20
 #: Deepest inline nesting the encoder writes; the bounded JSON reader refuses
@@ -115,6 +118,18 @@ def tagged(tag: str, **fields: Any) -> dict[str, Any]:
     """Return a typed JSON object with ``tag`` and its fields."""
 
     return {TYPED_VALUE_KEY: tag, **fields}
+
+
+def plain_cell(value: Any) -> bool:
+    """Whether the encoder writes ``value`` as it is: ``None``, an exact bool or str, or an
+    exact int within the JSON-safe range (the first branches of ``ValueEncoder._encode``).
+
+    The record writer appends such cells without an encoder call; anything else, a
+    float included, goes through ``ValueEncoder.encode``.
+    """
+
+    kind = type(value)
+    return kind in _VERBATIM_TYPES or (kind is int and -_JSON_SAFE_INT <= value <= _JSON_SAFE_INT)
 
 
 #: TorchLens value-object classes the format holds inline that declare no
@@ -319,7 +334,7 @@ class ValueEncoder:
         """Encode one value at a nesting depth."""
 
         kind = type(value)
-        if value is None or kind is bool or kind is str:
+        if kind in _VERBATIM_TYPES:
             return value
         if kind is int:
             return value if abs(value) <= _JSON_SAFE_INT else tagged("int", v=str(value))
@@ -331,10 +346,8 @@ class ValueEncoder:
             reference = self._record_ref(value)
             if reference is not None:
                 return reference
-        handler = _HANDLERS.get(kind)
-        if handler is not None:
-            return handler(self, value, at, depth)
-        return self._encode_other(value, at, depth)
+        handler = _HANDLERS.get(kind, type(self)._encode_other)
+        return handler(self, value, at, depth)
 
     def _encode_other(self, value: Any, at: str, depth: int) -> Any:
         """Encode a value whose exact type has no direct handler."""
@@ -348,6 +361,11 @@ class ValueEncoder:
         record_cls = record_type_table().get(class_path(type(value)))
         if record_cls is not None:
             return self._record_value(value, at, depth)
+        return self._encode_subclass(value, at, depth)
+
+    def _encode_subclass(self, value: Any, at: str, depth: int) -> Any:
+        """Encode a registered tuple or mapping subtype, a scalar subclass or a callable."""
+
         if isinstance(value, tuple) and type(value) in tuple_subtypes().values():
             return self._tuple(value, at, depth)
         if isinstance(value, Mapping) and type(value).__module__ == "collections":
@@ -364,7 +382,7 @@ class ValueEncoder:
 
         if id(value) in self._active:
             raise ArtifactError(
-                f"The 3.0 writer met a self-referencing value at {at}.",
+                f"The saved format 3 writer met a self-referencing value at {at}.",
                 code="metadata_value_unportable",
                 remedy="break the cycle in the value before saving",
             )

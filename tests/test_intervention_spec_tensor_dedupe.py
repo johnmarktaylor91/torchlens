@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from safetensors import safe_open
 from torch import nn
@@ -27,6 +28,8 @@ from torchlens.intervention._spec_values import _serialize_value, _SerializedSta
 from torchlens.intervention.save import SaveLevel
 from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions, InterventionOptions
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class _SteerModel(nn.Module):
@@ -78,9 +81,15 @@ def _save_sticky_steer(tmp_path: Path, direction: torch.Tensor) -> tuple[Any, st
     log.do(
         tl.func("relu"),
         tl.steer(direction),
-        intervention=InterventionOptions(confirm_mutation=True),
+        intervention=InterventionOptions(),
     )
-    log.push()  # a second fire record: one more reference to the same direction
+    # A later propagating do re-fires the sticky steer: a second fire record, one
+    # more reference to the same direction (an exact identity scale adds no tensor).
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        intervention=InterventionOptions(),
+    )
     path = tmp_path / "steer.tlspec"
     log.save_intervention(path, level="portable")
     return log, label, path
@@ -113,10 +122,11 @@ def test_sticky_steer_hook_reloads_to_the_live_outputs(tmp_path: Path) -> None:
     fresh.do(
         hook_spec.site_target,
         hook_spec.helper,
-        intervention=InterventionOptions(confirm_mutation=True),
+        intervention=InterventionOptions(),
     )
     assert torch.equal(fresh[label].out, live[label].out)
-    assert torch.equal(fresh[label].out, _capture()[label].out + direction)
+    unedited = _capture()
+    assert torch.equal(fresh[label].out, unedited[label].out + direction)
 
 
 def test_codec_keys_sidecar_ids_on_the_tensor_object() -> None:

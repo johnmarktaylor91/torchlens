@@ -68,9 +68,7 @@ def _apply(spec: Any) -> Any:
     """Apply a loaded spec on a fresh capture of the same model and input."""
 
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 def _out(trace: Any) -> torch.Tensor:
@@ -129,7 +127,8 @@ def _remedy_runs(error: InvalidArgumentError, tmp_path: Path) -> None:
     fork.do(tl.subspace(_SITE, _ROTATION[:2], origin=_ORIGIN), tl.scale(2.0))
     path = tmp_path / "resaved.tlspec"
     tl.io.save_intervention(fork, path, level="portable")
-    assert torch.equal(_apply(tl.io.load_intervention_spec(path))[_SITE].out, fork[_SITE].out)
+    reapplied = _apply(tl.io.load_intervention_spec(path))
+    assert torch.equal(reapplied[_SITE].out, fork[_SITE].out)
 
 
 def test_tampered_basis_refuses_at_load(tmp_path: Path) -> None:

@@ -124,7 +124,7 @@ def build_stage_snapshots(
 
     def _run_round_trip() -> Any:
         _seed_everything()
-        result = trace.run(inputs=model_input, seed=_SEED)
+        result = trace.run_transaction(inputs=model_input, seed=_SEED)
         return result.trace
 
     _stage("run", _run_round_trip)

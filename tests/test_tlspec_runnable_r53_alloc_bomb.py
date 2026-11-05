@@ -209,7 +209,7 @@ def test_num_positional_args_bomb_refused_at_load(tmp_path: Path) -> None:
     assert RunnableErrorCode.CALL_ARITY_MISMATCH in {d.code for d in diags}
     assert "descriptor_parse" in {d.detection_stage for d in diags}
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
 
 
 # Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
@@ -265,7 +265,7 @@ def test_random_init_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
     with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
-        loaded.run(inputs=torch.randn(2, 4))
+        loaded.run_transaction(inputs=torch.randn(2, 4))
     assert caught.value.fields.get("code") == "run_capability_unavailable"
     assert caught.value.fields.get("detection_stage") == "state_allocation_preflight"
 

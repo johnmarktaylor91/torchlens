@@ -218,7 +218,7 @@ ROWS: Mapping[str, Row] = {
         "edge.self_loop", "loop-rolled", C, "_render_edges:_is_rolled_loop_carried_self_edge"
     ),
     "VE06": _R(
-        "edge.label.conditional", "branches", P, "_render_leaf:_format_branch_edge_label_html"
+        "edge.label.conditional", "branches", P, "_branch_label_text:_format_branch_edge_label_html"
     ),
     "VE07": _R("edge.skip_bridge", "skip", P, "_render_flow:_build_skip_filtered_edge_map"),
     "VE08": _R("edge.forward_gradient", "combined", P, "_render_leaf:_add_grad_edge"),
@@ -255,9 +255,7 @@ ROWS: Mapping[str, Row] = {
     "VR01": _R(
         "region.module_cluster", "module-boxes", P, "_render_utils:make_module_cluster_attrs"
     ),
-    "VR02": _R(
-        "region.depth_penwidth", "module-boxes", P, "_frame_penwidth:compute_module_penwidth"
-    ),
+    "VR02": _R("region.penwidth", "module-boxes", P, "_frame_penwidth:compute_module_penwidth"),
     "VR03": _R(
         "region.nesting_pruning", "module-boxes", P, "_render_regions:_module_subtree_payload_empty"
     ),
@@ -446,15 +444,6 @@ ROWS: Mapping[str, Row] = {
         P,
         "torchlens._visualization._rank_layout_internal.layout:RANK_LAYOUT_COST_THRESHOLD",
         variants=("auto", "dot", "rank"),
-    ),
-    "VY03": _R(
-        "layout.renderer",
-        "other-pictures",
-        C,
-        "torchlens.experimental.dagua._bridge:render_trace_with_dagua",
-        status="experimental",
-        gate="'dagua' in _literals.VisRendererLiteral.__args__",
-        caption_variants=("graphviz", "dagua"),
     ),
     "VO01": _R("output.format", "export", P, "_render_utils:render_dot_to_file"),
     "VO02": _R("output.save_return", "export", P, "_render_utils:strip_known_extension"),

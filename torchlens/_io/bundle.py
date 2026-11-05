@@ -72,6 +72,7 @@ from ._durability import (
     fsync_tree,
 )
 from ._extra_files import _warn_extra_files
+from ._load_validators import MODEL_FREE_TLSPEC_KINDS, load_model_free_tlspec
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
@@ -85,7 +86,9 @@ from ._save_gates import (
     _save_bundle_via_container_door,
     _stamped_descriptor,
 )
+from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
+from ._tlspec_identity import _preflight_schema_v2_runtime
 from .format3 import (
     contract as format3_contract,
     reader as format3_reader,
@@ -140,6 +143,7 @@ from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
+    from ..intervention.spec import Recipe
     from ..intervention.types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
@@ -199,8 +203,8 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
 
     A loaded ``.tlspec`` bundle is UNTRUSTED input, so ``metadata.pkl`` is read
     with the default-deny :class:`SafeBundleUnpickler` class allowlist (which
-    closes a load-time ``__reduce__`` / ``os.system`` RCE). A global that only a 2.x release
-    wrote refuses with the one 2.x error; nothing is renamed on the way in (the class name
+    closes a load-time ``__reduce__`` / ``os.system`` RCE). A global that only a pre-2.38 release
+    wrote refuses with the one pre-2.38 error; nothing is renamed on the way in (the class name
     predates that and stays).
     """
 
@@ -409,39 +413,9 @@ def save(
     grant it to artifacts whose provenance you trust.
     """
 
-    # A MergedTrace is a presenter, never a Trace: trace.save() refuses it typed
-    # (contract 2.5 "merged runnable export ... refused typed") instead of the
-    # historical bare AttributeError from the poison gate. The sys.modules
-    # gate keeps ordinary saves free of any merged import: a MergedTrace can
-    # only exist after its module was imported.
-    merged_presenter = sys.modules.get("torchlens._merged._presenter")
-    if merged_presenter is not None and isinstance(trace, merged_presenter.MergedTrace):
-        from torchlens._merged._errors import MergedSurfaceUnsupportedError
-
-        from .._merged import MergedErrorCode
-
-        raise MergedSurfaceUnsupportedError(
-            "trace.save() does not support MergedTrace. Write the merged-directory "
-            "artifact with merged.save(path), or save a single rank core with "
-            "merged.ranks[r].save(path).",
-            code=MergedErrorCode.MERGED_SURFACE_UNSUPPORTED,
-        )
-    # A TraceSlice is likewise a presenter, never a Trace: a slice has
-    # dangling boundary edges whose other ends live outside it, so a
-    # persisted slice would imply replay/validation capabilities it cannot
-    # honour. Same sys.modules gate shape as the MergedTrace refusal above
-    # (owners disjoint; a slice can only exist after its module imported).
-    slice_presenter = sys.modules.get("torchlens._trace_slice")
-    if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from torchlens._selection.errors import SelectionError
-
-        raise SelectionError(
-            "trace.save() does not support TraceSlice: a slice is a VIEW with "
-            "declared dangling boundary edges, not a self-contained capture. "
-            "Save the trace the slice was taken from (trace.save(path)) "
-            "and re-derive the view after loading.",
-            code="slice_save_unsupported",
-        )
+    # Presenters refuse typed (MergedTrace, TraceSlice) and a Recording cooks
+    # into the Trace it stands for; see ``torchlens._io._save_subject``.
+    trace = resolve_save_subject(trace)
     # A Bundle is a CONTAINER product, never a Trace: applying the per-trace
     # N1 gate below to it read the container's empty outcome sidecar as
     # UNKNOWN and false-refused EVERY bundle tl.Bundle() built (with the
@@ -1012,6 +986,12 @@ def _finish_format3_trace(
     """Rehydrate one decoded 3.0 trace artifact: tensors, accessors, provenance, recipe."""
 
     root, manifest = artifact.root, artifact.manifest
+    if (
+        manifest.get("backend", format3_contract.DEFAULT_BACKEND)
+        != format3_contract.DEFAULT_BACKEND
+    ):
+        # The runtime fingerprint stays fail-closed (a tf trace loads only on its TF release).
+        _preflight_schema_v2_runtime(manifest, backend_name=manifest["backend"])
     state = artifact.trace_state(ModuleAccessor)
     has_blobs = (root / format3_contract.BLOBS_DIR).is_dir()
     blobs_dir = resolve_bundle_blobs_dir(root) if has_blobs else None
@@ -1111,7 +1091,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object with eager tensor materialization.
 
     Parameters
@@ -1129,7 +1109,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1147,7 +1127,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a ``.tlspec`` object while leaving direct tensors lazy.
 
     Parameters
@@ -1165,7 +1145,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by the bundle manifest.
     """
     ...
@@ -1188,7 +1168,7 @@ def load(
     allowed_custom_callable_modules: Collection[str] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
     _bundle_visited: frozenset[Path] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a TorchLens ``.tlspec`` object polymorphically.
 
     Parameters
@@ -1222,7 +1202,7 @@ def load(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Rehydrated object selected by ``manifest.kind`` for unified files, or
         by legacy format detection for older files.
 
@@ -1334,7 +1314,7 @@ def _load_trace_payload(
     sparse_run: Mapping[str, Any] | None = None,
     trust_custom_callables: bool = False,
     allowed_custom_callable_modules: Collection[str] | None = None,
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a portable Trace payload after manifest dispatch.
 
     Parameters
@@ -1793,7 +1773,7 @@ def _load_unified_tlspec(
     allowed_custom_callable_modules: Collection[str] | None,
     bundle_visited: frozenset[Path] | None = None,
     unknown_relations: Literal["opaque", "refuse"] = "opaque",
-) -> Trace | Bundle | InterventionSpec:
+) -> Trace | Bundle | InterventionSpec | Recipe:
     """Load a unified ``.tlspec`` bundle by manifest kind.
 
     Parameters
@@ -1816,7 +1796,7 @@ def _load_unified_tlspec(
 
     Returns
     -------
-    Trace | Bundle | InterventionSpec
+    Trace | Bundle | InterventionSpec | Recipe
         Loaded object selected by unified manifest kind.
 
     Raises
@@ -1831,16 +1811,14 @@ def _load_unified_tlspec(
     _reject_symlink_path(bundle_path / "metadata.pkl", context="metadata")
     _reject_symlink_path(bundle_path / "blobs", context="blobs directory")
     manifest = _read_manifest_object(bundle_path / "manifest.json")
-    # `kind` predates the "bundle"/"intervention" discriminator on some older
-    # unified manifests (ledgered legacy-manifest tolerance,
-    # test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS): an absent `kind` means a
-    # plain trace, the only kind that existed before the discriminator was
-    # introduced, never an unsupported-kind refusal.
+    # `kind` predates the "bundle"/"intervention" discriminator on some older unified
+    # manifests (ledgered legacy-manifest tolerance, test_tlspec_parse_fuzz.py::_OPTIONAL_KEYS):
+    # an absent `kind` means a plain trace, the only kind that existed before the
+    # discriminator was introduced, never an unsupported-kind refusal.
     kind = manifest.get("kind", "trace")
-    if kind == "intervention":
-        from ..intervention.save import load_intervention_spec
-
-        return load_intervention_spec(
+    if isinstance(kind, str) and kind in MODEL_FREE_TLSPEC_KINDS:
+        return load_model_free_tlspec(
+            kind,
             bundle_path,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,
@@ -2032,43 +2010,6 @@ def _preflight_unified_trace_body_index(
             missing_blob_ids.append(str(tensor_entry.get("blob_id", "<unknown>")))
     if missing_blob_ids:
         refuse_missing_blobs(missing_blob_ids)
-
-
-def _preflight_schema_v2_runtime(
-    manifest: dict[str, Any],
-    *,
-    backend_name: str,
-) -> None:
-    """Fail closed for schema-v2 TensorFlow runtime fingerprint mismatches."""
-
-    from torchlens.backends.registry import BackendRuntimeCompatibilityError
-
-    runtime = manifest["backend_runtime"]
-    spec = get_backend_spec(backend_name)
-    expected_runtime_name = spec.serialization_policy.runtime_name or backend_name
-    runtime_name = runtime.get("name")
-    if runtime_name != expected_runtime_name:
-        raise BackendRuntimeCompatibilityError(
-            f"Manifest backend runtime name {runtime_name!r} does not match expected "
-            f"{expected_runtime_name!r} for backend {backend_name!r}."
-        )
-    if expected_runtime_name != "tf":
-        return
-
-    try:
-        import tensorflow as tf
-    except ImportError as exc:
-        raise BackendRuntimeCompatibilityError(
-            "Portable TensorFlow trace loading requires the tensorflow runtime."
-        ) from exc
-
-    saved_version = runtime.get("version")
-    current_version = str(getattr(tf, "__version__", ""))
-    if saved_version != current_version:
-        raise BackendRuntimeCompatibilityError(
-            "Manifest TensorFlow runtime version "
-            f"{saved_version!r} does not match installed tensorflow {current_version!r}."
-        )
 
 
 def _preflight_torch_entry_logical_backends(
@@ -2568,8 +2509,8 @@ def _write_payload_blob(
     blob, key = store.submit(host_tensor(transport_tensor), codec=NUMPY_CODEC)
     manifest_fields = codec.manifest_fields(blob_spec.value, encoded)
     codec_fields = {"id": NUMPY_CODEC, **manifest_fields}
+    # ``device`` is the transport tensor's; the backend device rides the hints (logical_device).
     reference = tensor_reference(transport_tensor, blob=blob, key=key, codec=codec_fields)
-    reference["device"] = encoded.logical_device
     tensor_refs[blob_spec.blob_id] = reference
     return TensorEntry(
         blob_id=blob_spec.blob_id,

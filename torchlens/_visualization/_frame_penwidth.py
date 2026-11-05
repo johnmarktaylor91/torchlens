@@ -1,30 +1,30 @@
-"""Module frame border widths, shared by the Trace and bundle renderers.
+"""Module frame border width, shared by the Trace and bundle renderers.
 
-Outermost modules get the thickest border; deeper modules thin out by depth
-fraction so the nesting reads at a glance. This module imports nothing from
-the renderer, so a helper that only needs the widths stays out of the
-renderer's import cycle.
+Every module frame is drawn with the same stroke, whatever its nesting depth:
+a frame then looks the same in every picture of the model (a focused draw of
+one submodule, a collapsed overview, the whole graph), and nesting reads from
+the boxes themselves and their titles. The stroke stays a notch heavier than a
+node outline so a frame reads as a container and survives downscaling. This
+module imports nothing from the renderer, so a helper that only needs the
+width stays out of the renderer's import cycle.
 """
 
 from __future__ import annotations
 
-MAX_MODULE_PENWIDTH = 5
-MIN_MODULE_PENWIDTH = 2
+#: Stroke of every module frame, in points (a node outline is 1 pt).
+MODULE_PENWIDTH = 1.5
+#: Kept for callers that quote the range: both ends are the one stroke.
+MAX_MODULE_PENWIDTH = MODULE_PENWIDTH
+MIN_MODULE_PENWIDTH = MODULE_PENWIDTH
 PENWIDTH_RANGE = MAX_MODULE_PENWIDTH - MIN_MODULE_PENWIDTH
 
 
 def compute_module_penwidth(call_depth: int, max_call_depth: int) -> float:
     """Return the cluster border width for a module at ``call_depth``.
 
-    ``call_depth`` is 0-based (outermost is depth 0).  Outermost modules
-    get the maximum penwidth; deepest modules get the minimum.  When the
-    overall hierarchy has only one level (``max_call_depth == 0`` or
-    ``1``) we still return a sensible value so callers don't have to
-    special-case shallow models.
+    The width no longer depends on depth; the arguments stay so every caller
+    that knows a module's depth keeps working unchanged.
     """
 
-    if max_call_depth <= 0:
-        return float(MIN_MODULE_PENWIDTH + PENWIDTH_RANGE)
-    nesting_fraction = (max_call_depth - call_depth) / max_call_depth
-    nesting_fraction = max(0.0, min(1.0, nesting_fraction))
-    return MIN_MODULE_PENWIDTH + nesting_fraction * PENWIDTH_RANGE
+    del call_depth, max_call_depth
+    return MODULE_PENWIDTH

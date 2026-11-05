@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import re
 from collections.abc import Callable, Iterator
@@ -17,11 +18,17 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactTooOldError
 from torchlens._io._tlspec_identity import _backend_runtime
+from torchlens._io.format3.codec_policy import backend_materializes
+from torchlens.backends.registry import get_backend_spec
 from torchlens.errors import EngineDispatchError
 from torchlens.intervention.errors import OpaqueCallableError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class UnifiedTinyModel(nn.Module):
@@ -365,7 +372,9 @@ def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: 
     _write_manifest(path, manifest)
 
     for door in (validate_tlspec, tl.load):
-        with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
+        with pytest.raises(
+            ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"
+        ) as excinfo:
             door(path)
         assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 
@@ -447,9 +456,9 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
         Path(__file__).parent / "fixtures" / "tlspec_v2_16" / "F2_modellog_tiny_cnn.tlspec"
     )
 
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"):
         validate_tlspec(fixture_path)
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.37 and earlier"):
         tl.load(fixture_path)
 
 
@@ -575,7 +584,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -651,7 +660,7 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     path = tmp_path / f"intervention_{level}.tlspec"
 
@@ -873,9 +882,10 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
 
     assert manifest["backend"] == "mlx"
     assert manifest["body_format"] == "safetensors"
-    assert manifest["payload_policy"]["policy"] == "array_payloads"
-    assert manifest["payload_policy"]["materialization_supported"] is True
-    assert manifest["payload_policy"]["payload_kinds"]
+    # Saved format 3 keeps only the include flags in payload_policy and reads the payload
+    # policy and its materialization from the backend spec; body_index carries the kinds.
+    assert get_backend_spec("mlx").serialization_policy.payload_policy == "array_payloads"
+    assert backend_materializes(manifest["backend"]) is True
     assert manifest["body_index"]
     assert all(entry["logical_backend"] == "mlx" for entry in manifest["body_index"])
     assert all(entry["codec"] == "numpy_safetensors_v1" for entry in manifest["body_index"])
@@ -1052,9 +1062,20 @@ def test_intervene_trace_round_trips_transient_dedup_state(
         assert excinfo.value.fields["code"] == "run_intervention_spec_not_persisted"
 
 
-def test_unknown_backend_runtime_version_serializes_as_null() -> None:
-    """Unknown backend runtime versions remain JSON null instead of the string ``None``."""
+def test_unknown_backend_runtime_version_is_a_string_never_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown backend runtime version is a string, never ``None`` nor the string ``"None"``.
 
+    Saved format 3 requires a version string on every non-torch ``backend_runtime`` stamp,
+    so a backend that stamps none records its installed distribution's version, and ``""``
+    when that distribution is not installed.
+    """
+
+    def _not_installed(distribution: str) -> str:
+        raise importlib.metadata.PackageNotFoundError(distribution)
+
+    monkeypatch.setattr(importlib.metadata, "version", _not_installed)
     source = SimpleNamespace(
         _provenance_backend_version=None,
         _provenance_backend_config={},
@@ -1063,5 +1084,5 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
 
     runtime = _backend_runtime(source, backend_name="mlx")
 
-    assert runtime["version"] is None
-    assert '"version": null' in json.dumps(runtime)
+    assert runtime["version"] == ""
+    assert '"version": ""' in json.dumps(runtime)

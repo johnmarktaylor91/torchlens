@@ -220,10 +220,8 @@ def run_benchmarks() -> str:
 
     replay_log = _capture(model, x, replayable=True)
     replay_label, replay_s = _time_repeated(
-        "push(hook=zero relu)",
-        lambda: replay_log.push(
-            replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook})
-        ),
+        "fork().do(hook=zero relu)",
+        lambda: replay_log.fork().do({tl.func("relu"): _zero_hook}),
         repeats=25,
     )
 
@@ -231,7 +229,7 @@ def run_benchmarks() -> str:
     rerun_log.do(
         tl.func("relu"),
         _zero_hook,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     rerun_label, rerun_s = _time_repeated(
         "run(model, x)",
