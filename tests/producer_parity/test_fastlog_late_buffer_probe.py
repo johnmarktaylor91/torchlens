@@ -41,10 +41,10 @@ def _cooked_with_spy() -> tuple[Any, dict]:
     original = materialize_module.materialize_from_events
     seen: dict = {}
 
-    def spy(trace, events):
+    def spy(trace, events, *rest):
         seen["session"] = capture_session_for_events(events)
         seen["labels"] = [event.label_raw for event in events.op_events]
-        original(trace, events)
+        original(trace, events, *rest)
 
     postprocess_module.materialize_from_events = spy
     materialize_module.materialize_from_events = spy

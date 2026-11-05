@@ -1,7 +1,8 @@
 """Deterministic counters for the per-op capture fields dict.
 
-Capture builds one fields dict per op and freezes it into the op record
-(``_op_record_from_log``). The dict used to carry placeholder and computed keys
+Capture builds one fields dict per op and commits it as the op's row
+(``_ops_row_journal.commit_row_record``, which reads what the record freeze
+``_op_record_from_log`` reads). The dict used to carry placeholder and computed keys
 the freeze never reads: graph placeholders postprocess fills (children, output
 and distance flags, buffer and conditional fields), gradient placeholders,
 module-I/O placeholders, final labels, and computed values materialize
@@ -31,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as postprocess_pkg
-import torchlens.backends.torch.ops as torch_ops
+from torchlens.backends.torch import _ops_row_journal
 
 # Keys the per-op build wrote that nothing reads before or at the freeze.
 _UNREAD_KEYS = frozenset(
@@ -175,20 +176,20 @@ def _frozen_key_sets(
     """Trace ``fn`` and return each function-call op's fields-dict key set at the freeze."""
 
     seen: list[frozenset[str]] = []
-    real = torch_ops._op_record_from_log
+    real = _ops_row_journal.commit_row_record
 
-    def spy(trace: Any, fields_dict: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
-        """Record the draft's keys, then freeze it for real."""
+    def spy(draft: Any, *args: Any, **kwargs: Any) -> Any:
+        """Record the draft's keys, then commit it for real."""
 
-        if _is_function_call_draft(fields_dict):
-            seen.append(frozenset(fields_dict))
-        return real(trace, fields_dict, *args, **kwargs)
+        if _is_function_call_draft(draft.fields_dict):
+            seen.append(frozenset(draft.fields_dict))
+        return real(draft, *args, **kwargs)
 
-    monkeypatch.setattr(torch_ops, "_op_record_from_log", spy)
+    monkeypatch.setattr(_ops_row_journal, "commit_row_record", spy)
     try:
         tl.trace(fn, x, input_kwargs=kw or None)
     finally:
-        monkeypatch.setattr(torch_ops, "_op_record_from_log", real)
+        monkeypatch.setattr(_ops_row_journal, "commit_row_record", real)
     return seen
 
 
@@ -203,7 +204,7 @@ def _capture_and_teardown_calls_per_op(
 
     owner = threading.get_ident()
     state: dict[str, Any] = {"phase": "capture", "capture": 0, "teardown": 0, "ops": 0}
-    real_freeze = torch_ops._op_record_from_log
+    real_freeze = _ops_row_journal.commit_row_record
     real_postprocess = postprocess_pkg.postprocess
 
     def profile(frame: FrameType, event: str, _arg: Any) -> None:
@@ -217,12 +218,12 @@ def _capture_and_teardown_calls_per_op(
         ):
             state[state["phase"]] += 1
 
-    def freeze(trace: Any, fields_dict: dict[str, Any], *args: Any, **kwargs: Any) -> Any:
-        """Count one function-call op, then freeze it."""
+    def freeze(draft: Any, *args: Any, **kwargs: Any) -> Any:
+        """Count one function-call op, then commit it."""
 
-        if _is_function_call_draft(fields_dict):
+        if _is_function_call_draft(draft.fields_dict):
             state["ops"] += 1
-        return real_freeze(trace, fields_dict, *args, **kwargs)
+        return real_freeze(draft, *args, **kwargs)
 
     def postprocess(*args: Any, **kwargs: Any) -> Any:
         """Run postprocess with counting paused."""
@@ -234,7 +235,7 @@ def _capture_and_teardown_calls_per_op(
             state["phase"] = "capture"
 
     previous = sys.getprofile()
-    monkeypatch.setattr(torch_ops, "_op_record_from_log", freeze)
+    monkeypatch.setattr(_ops_row_journal, "commit_row_record", freeze)
     monkeypatch.setattr(postprocess_pkg, "postprocess", postprocess)
     with quiet_gc():
         sys.setprofile(profile)
@@ -244,7 +245,7 @@ def _capture_and_teardown_calls_per_op(
             del traced
         finally:
             sys.setprofile(previous)
-            monkeypatch.setattr(torch_ops, "_op_record_from_log", real_freeze)
+            monkeypatch.setattr(_ops_row_journal, "commit_row_record", real_freeze)
             monkeypatch.setattr(postprocess_pkg, "postprocess", real_postprocess)
     assert state["ops"] > 0
     return state["capture"] / state["ops"], state["teardown"] / state["ops"]

@@ -398,6 +398,9 @@ assert collisions == {
     # compose is).
     "recording": ["dry_run", "recover"], "intervention": ["compose", "population"],
     "fingerprint": [], "io": [], "observers": [], "options": [],
+    # The detector registries the glossary spells as tl.<name>.*; every
+    # preprocessing child module is underscore-private.
+    "postprocessing": [], "preprocessing": [],
     "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.
@@ -635,6 +638,30 @@ def test_lazified_module_direct_import_patterns(module_name: str, member_name: s
         f"module = importlib.import_module('torchlens.{module_name}'); "
         f"from torchlens.{module_name} import {member_name}; "
         f"assert getattr(module, {member_name!r}) is {member_name}"
+    )
+
+
+def test_glossary_detector_registries_resolve_through_the_root_facade() -> None:
+    """``tl.postprocessing.register`` and ``tl.preprocessing.resolve`` need no submodule import.
+
+    The glossary and guides spell both namespaces through the root; a fresh
+    interpreter proves the bare import leaves them unimported and the first
+    attribute touch resolves the same objects a direct import would.
+    """
+
+    _run_import_script_capturing(
+        "import sys\n"
+        "import torchlens as tl\n"
+        "for name in ('torchlens.postprocessing', 'torchlens.preprocessing'):\n"
+        "    assert name not in sys.modules, name\n"
+        "register = tl.postprocessing.register\n"
+        "resolve = tl.preprocessing.resolve\n"
+        "from torchlens.postprocessing import register as direct_register\n"
+        "from torchlens.preprocessing import resolve as direct_resolve\n"
+        "assert register is direct_register\n"
+        "assert resolve is direct_resolve\n"
+        "assert tl.postprocessing is sys.modules['torchlens.postprocessing']\n"
+        "assert tl.preprocessing is sys.modules['torchlens.preprocessing']\n"
     )
 
 
