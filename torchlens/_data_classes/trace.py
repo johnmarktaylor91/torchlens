@@ -532,7 +532,7 @@ class ConditionalAccessor:
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace(TraceOutputMixin, TraceLike):
+class Trace(TraceOutputMixin, _trace_rerun_state.TraceAppendMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor

@@ -68,12 +68,14 @@ from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
-from .rerun import run as _rerun_impl
+from .rerun import _append_rerun, run as _rerun_impl
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = [
+    "append",
+    "append_chunk",
     "disarm",
     "run",
 ]
@@ -366,12 +368,14 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
     on_zero_fire: str | MissingType = MISSING,
     transaction: bool = True,
+    append: bool = False,
 ) -> Trace | RunResult:
-    """Body of ``Trace.run`` (``transaction=False``) and ``Trace.run_transaction``.
+    """Body of ``Trace.run`` (``transaction=False``), ``Trace.run_transaction`` and ``Trace.append``.
 
     The methods carry the documented contracts: ``run`` reruns the live model
     and returns the refreshed Trace; ``run_transaction`` returns a
-    ``RunResult`` and leaves the source Trace unchanged.
+    ``RunResult`` and leaves the source Trace unchanged; ``append=True``
+    (``Trace.append``) stacks the new batch onto the Trace through the same gates.
     """
 
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
@@ -634,41 +638,106 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     _warn_stateful_live_run_once(trace, run_model)
 
     resolved_output_transform = _resolve_rerun_output_transform(trace, output_transform)
-    # Guarded fast engine first for a steered rerun: a native forward with
-    # the staged spec applied at real module boundaries, saving the saved
-    # sites and the boundary ops, guarded by the sealed call fingerprint.
-    # Any typed refusal (ineligible save scope or target, a real
-    # divergence) falls back to the capture rerun below, with the code in
-    # ``last_run``. A trace with nothing staged keeps the capture rerun.
-    fast_refused: str | None = None
     with zero_fire_policy_scope(zero_fire_policy):
-        if (
-            chunk_paths is None
-            and not replay_options.append
-            and replay_options.chunk_size is None
-            and stages_user_entries(trace)
-        ):
-            fast_done, fast_refused = try_guarded_fast_rerun(
-                trace, run_model, transformed_input, output_transform=resolved_output_transform
+        if append:
+            result = _append_rerun(
+                trace, run_model, transformed_input, strict=replay_options.strict
             )
-            if fast_done:
-                trace.input = user_input
-                refuse_unfired_fast_run(trace)
-                return trace
-        result = _rerun_impl(
-            trace,
-            run_model,
-            transformed_input,
-            replay=replay_options,
-            chunk_paths=chunk_paths,
-            output_transform=resolved_output_transform,
-            fast_refused=fast_refused,
-        )
-    # Atomic swap rebuilds Trace state; restore raw_input to the new
-    # user-supplied value so visualization / save-load report the
-    # current input rather than the prior trace's.
+        else:
+            result = _live_rerun_engine(
+                trace,
+                (run_model, transformed_input, user_input),
+                replay_options=replay_options,
+                chunk_paths=chunk_paths,
+                output_transform=resolved_output_transform,
+            )
+    # The atomic swap rebuilt state; keep the new user input for draw and save.
     result.input = user_input
     return result
+
+
+def _live_rerun_engine(
+    trace: Trace,
+    call: tuple[nn.Module, Any, Any],
+    *,
+    replay_options: ReplayOptions,
+    chunk_paths: Any | None,
+    output_transform: Callable[[Any], Any] | None,
+) -> Trace:
+    """Run the guarded fast engine for a steered rerun, else the capture rerun.
+
+    ``call`` is ``(model, transformed_input, user_input)``. The guarded fast
+    engine is a native forward with the staged spec applied at real module
+    boundaries, guarded by the sealed call fingerprint; any typed refusal falls
+    back to the capture rerun with the code in ``last_run``. A trace with
+    nothing staged keeps the capture rerun.
+    """
+
+    run_model, transformed_input, user_input = call
+    fast_refused: str | None = None
+    if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
+        fast_done, fast_refused = try_guarded_fast_rerun(
+            trace, run_model, transformed_input, output_transform=output_transform
+        )
+        if fast_done:
+            trace.input = user_input
+            refuse_unfired_fast_run(trace)
+            return trace
+    return _rerun_impl(
+        trace,
+        run_model,
+        transformed_input,
+        replay=replay_options,
+        chunk_paths=chunk_paths,
+        output_transform=output_transform,
+        fast_refused=fast_refused,
+    )
+
+
+def append(trace: Trace, inputs: Any, *, model: nn.Module | None = None) -> None:
+    """Body of ``Trace.append``; the method carries the documented contract.
+
+    Parameters
+    ----------
+    trace:
+        Live Trace to append the batch to, in place.
+    inputs:
+        Forward input tree for the new batch.
+    model:
+        The captured model, or ``None`` to use the one the Trace still holds.
+
+    Raises
+    ------
+    KeywordConflictError
+        ``run_legacy_arguments_conflict`` when ``model`` is not an ``nn.Module``.
+    """
+
+    if model is None:
+        run(trace, inputs, transaction=False, append=True)
+        return
+    if not isinstance(model, nn.Module):
+        raise KeywordConflictError(
+            "model= takes an nn.Module, or None to append through the captured model",
+            code="run_legacy_arguments_conflict",
+            remedy="call trace.append(inputs, model=model) with an nn.Module",
+        )
+    run(trace, model, inputs, transaction=False, append=True)
+
+
+def append_chunk(trace: Trace, model: nn.Module, chunk: Any) -> None:
+    """Append one chunk of a chunked capture, with no input transform (already applied).
+
+    Parameters
+    ----------
+    trace:
+        Trace built from the first chunk; grows in place.
+    model:
+        The model the chunked capture runs.
+    chunk:
+        Model-ready input tree of the next chunk.
+    """
+
+    run(trace, model, chunk, input_transform=False, transaction=False, append=True)
 
 
 def _apply_rerun_transform(
