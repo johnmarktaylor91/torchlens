@@ -9745,6 +9745,8 @@ test-docstrings	tests/test_adversarial_scaling_gates.py	32
 test-docstrings	tests/test_adversarial_scaling_gates.py	400
 test-docstrings	tests/test_adversarial_scaling_gates.py	45
 test-docstrings	tests/test_adversarial_scaling_gates.py	700
+test-docstrings	tests/test_affected_test_map.py	10
+test-docstrings	tests/test_affected_test_map.py	20
 test-docstrings	tests/test_affine_source.py	64.
 test-docstrings	tests/test_ag3a_gemma2_facets.py	1_104
 test-docstrings	tests/test_ag3a_gemma2_facets.py	1_91
