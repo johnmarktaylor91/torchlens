@@ -46,6 +46,7 @@ from tests.real_model.r0.families import (  # noqa: E402
     build_gpt2,
     build_gpt2_default_cache,
 )
+from tests.support.hf_capabilities import gpt2_attention_keeps_causal_mask_buffer  # noqa: E402
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model]
 
@@ -74,7 +75,13 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
 
     _, input_ids = gpt2_and_inputs
     path = tmp_path / "gpt2_runnable"
-    runnable_trace.save(path, level="runnable")
+    if gpt2_attention_keeps_causal_mask_buffer():
+        # 4.x GPT-2 keeps its causal mask as a used non-persistent buffer, which
+        # the runnable save stores as required state and discloses.
+        with pytest.warns(TorchLensWarning, match="NON-persistent"):
+            runnable_trace.save(path, level="runnable")
+    else:
+        runnable_trace.save(path, level="runnable")
     loaded = tl.load(path)
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
         result = loaded.run_transaction(inputs=input_ids, seed=0)

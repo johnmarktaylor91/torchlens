@@ -409,7 +409,9 @@ def test_random_init_run_binds_a_buffer_named_bias(tmp_path: Path) -> None:
     inputs = torch.ones(3, 3)
     trace = tl.trace(model, inputs, capture=CaptureOptions(replayable=True))
     try:
-        trace.save(tmp_path / "bias_buffer", level="runnable")
+        # The used non-persistent buffer is disclosed as required runnable state.
+        with pytest.warns(TorchLensWarning, match="NON-persistent"):
+            trace.save(tmp_path / "bias_buffer", level="runnable")
     finally:
         trace.cleanup()
     loaded = tl.load(tmp_path / "bias_buffer")

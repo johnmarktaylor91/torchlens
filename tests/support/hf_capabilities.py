@@ -142,3 +142,24 @@ def bert_switches_attention_dynamically() -> bool:
         model = BertModel(config).eval()
         model.set_attn_implementation("eager")
     return model.config._attn_implementation == "eager"
+
+
+@functools.cache
+def gpt2_attention_keeps_causal_mask_buffer() -> bool:
+    """Return whether GPT-2 attention registers its causal mask as a non-persistent buffer.
+
+    4.x ``GPT2Attention`` registers ``bias`` (a boolean lower-triangular mask)
+    and ``masked_bias`` as non-persistent buffers; 5.x builds the mask in
+    ``masking_utils`` and registers none. A runnable save of a model with used
+    non-persistent buffers stores their values and discloses that with a
+    ``TorchLensWarning``.
+    """
+
+    import torch
+    from transformers import GPT2Config
+    from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
+
+    with torch.random.fork_rng(devices=[]):
+        config = GPT2Config(n_layer=1, n_head=1, n_embd=4, vocab_size=8, n_positions=4)
+        attention = GPT2Attention(config)
+    return "bias" in attention._non_persistent_buffers_set
