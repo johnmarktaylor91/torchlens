@@ -1,8 +1,9 @@
 """Bridge-aware tensor/NumPy conversion (the one authority).
 
 Product code turns a tensor into a NumPy array, or an array into a tensor,
-through :func:`tensor_to_numpy` and :func:`tensor_from_numpy`; byte copies go
-through ``tensor_leaves.copy_host_bytes``. On a working torch/NumPy bridge each is exactly the historical call. When
+through :func:`tensor_to_numpy`, :func:`tensor_from_numpy` and :func:`host_array`;
+byte copies go through ``tensor_leaves.copy_host_bytes``. On a working
+torch/NumPy bridge each is exactly the historical call. When
 ``HAS_NUMPY_BRIDGE`` is False (a torch build compiled against NumPy 1.x, torch
 2.1 and 2.2, running under NumPy 2, where every bridge call raises "Numpy is
 not available") each falls back to a NumPy-free byte copy, so digests,
@@ -102,3 +103,22 @@ def tensor_from_numpy(array: Any) -> torch.Tensor:
         return torch.empty(shape, dtype=torch_dtype)
     flat = torch.frombuffer(bytearray(contiguous.tobytes()), dtype=torch_dtype)
     return flat.reshape(shape)
+
+
+def host_array(value: Any) -> Any:
+    """Return ``value`` as a host NumPy array; tensors go through :func:`tensor_to_numpy`.
+
+    Parameters
+    ----------
+    value:
+        NumPy-like object, or a tensor-like with ``detach``/``cpu``/``numpy`` methods.
+
+    Returns
+    -------
+    numpy.ndarray
+        NumPy view or copy of the input.
+    """
+
+    if hasattr(value, "detach") and hasattr(value, "cpu") and hasattr(value, "numpy"):
+        return tensor_to_numpy(value.detach())
+    return np.asarray(value)

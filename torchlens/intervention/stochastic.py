@@ -155,10 +155,9 @@ def _feed_datum(hasher: hashlib._Hash, value: Any) -> None:
         hasher.update(b"T")
         hasher.update(str(tuple(value.shape)).encode())
         hasher.update(str(value.dtype).encode())
-        cpu = value.detach().to("cpu")
-        if cpu.dtype == torch.bfloat16:
-            cpu = cpu.to(torch.float32)
-        hasher.update(tensor_payload_bytes(cpu.contiguous()))
+        hasher.update(
+            tensor_payload_bytes(value.float() if value.dtype == torch.bfloat16 else value)
+        )
         return
     if isinstance(value, OneDatum):
         hasher.update(b"O")

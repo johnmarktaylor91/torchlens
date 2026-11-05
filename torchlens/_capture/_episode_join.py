@@ -234,8 +234,7 @@ def _tensor_digest(value: Any) -> str:
     hasher = hashlib.sha256()
     hasher.update(str(value.dtype).encode("utf-8"))
     hasher.update(str(tuple(value.shape)).encode("utf-8"))
-    if flat.numel():
-        hasher.update(tensor_payload_bytes(flat.view(torch.uint8)))
+    hasher.update(tensor_payload_bytes(flat))  # an empty tensor adds no bytes
     return f"sha256:{hasher.hexdigest()}"
 
 

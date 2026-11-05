@@ -801,8 +801,7 @@ def xarray(trace: Any) -> Any:
         if getattr(layer, "has_saved_activation", None) is False:
             skipped_unsaved.append(label)
             continue
-        out = getattr(layer, "out", None)
-        if not isinstance(out, torch.Tensor):
+        if not isinstance(out := getattr(layer, "out", None), torch.Tensor):
             continue
         values = tensor_to_numpy(out.detach())
         # Batch-2 buffer ruling (option c): a buffer is module state with no

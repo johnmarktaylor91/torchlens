@@ -259,3 +259,13 @@ def test_notebook_grid_slices_convert_on_a_broken_bridge(broken_bridge: None) ->
     array = _to_numpy(source)
     assert array.dtype.name == "float32"
     assert array.tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]]
+
+
+def test_host_array_converts_tensors_and_array_likes_on_a_broken_bridge(
+    broken_bridge: None,
+) -> None:
+    """``host_array`` sends tensors through the fallback and array-likes to NumPy."""
+
+    tensor = torch.arange(6, dtype=torch.float32, requires_grad=True).reshape(2, 3)
+    assert bridge.host_array(tensor).tolist() == [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]]
+    assert bridge.host_array([1, 2]).tolist() == [1, 2]

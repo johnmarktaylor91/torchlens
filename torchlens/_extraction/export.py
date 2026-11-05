@@ -422,10 +422,8 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
             values, conversion = _widen_for_export(key, merged.values, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            np.save(temp / f"{stem}__values.npy", tensor_to_numpy(values), allow_pickle=False)
-            np.save(
-                temp / f"{stem}__offsets.npy", tensor_to_numpy(merged.offsets), allow_pickle=False
-            )
+            for name, part in (("values", values), ("offsets", merged.offsets)):
+                np.save(temp / f"{stem}__{name}.npy", tensor_to_numpy(part), allow_pickle=False)
             shapes = np.array([list(s) for s in merged.row_shapes], dtype=np.int64)
             np.save(temp / f"{stem}__shapes.npy", shapes, allow_pickle=False)
             members.extend(

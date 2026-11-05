@@ -863,9 +863,7 @@ def _map_to_heatmap_image(map_tensor: torch.Tensor, *, cmap: str, cell_size: int
     # computed over FINITE values only (one Inf must not floor everything
     # else) and non-finite pixels get the dedicated nan color instead of
     # being laundered into real values.
-    array = np.asarray(
-        tensor_to_numpy(map_tensor.detach().to(device="cpu", dtype=torch.float32)), dtype=np.float64
-    )
+    array = tensor_to_numpy(map_tensor.detach().float().double())  # float32 values, float64 array
     normalized = _normalize_finite(array, None, None)
     colors = _apply_colormap(normalized, cmap)
     colors[~np.isfinite(array)] = np.asarray(_NONFINITE_COLOR, dtype=np.uint8)

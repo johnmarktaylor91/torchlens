@@ -1,7 +1,6 @@
 """Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload.
 
-Torch-only and dependency-light within the package (only the NumPy-bridge flag
-from the compat module), so digest, identity and
+Torch-only and dependency-free within the package, so digest, identity and
 mutation code can import these without pulling the full tensor utilities.
 """
 
@@ -12,8 +11,6 @@ from collections.abc import Iterable, Iterator, Mapping
 from typing import Any, cast
 
 import torch
-
-from ._torch_compat import get_numpy_bridge_support
 
 
 def flat_byte_view(tensor: torch.Tensor) -> torch.Tensor:
@@ -46,10 +43,11 @@ def flat_byte_view(tensor: torch.Tensor) -> torch.Tensor:
 
 
 def copy_host_bytes(flat: torch.Tensor) -> bytes:
-    """Return a CPU-contiguous 1-D ``uint8`` tensor's bytes, also without a bridge.
+    """Return a CPU-contiguous 1-D ``uint8`` tensor's bytes, without NumPy.
 
-    Byte-identical to ``flat.numpy().tobytes()``; the copy goes through NumPy
-    on a working bridge and straight out of the tensor's storage otherwise.
+    Byte-identical to ``flat.numpy().tobytes()``, but copied straight out of
+    the tensor's storage, so it also works when torch's NumPy bridge is broken
+    (a torch build compiled against NumPy 1.x running under NumPy 2).
 
     Parameters
     ----------
@@ -62,12 +60,11 @@ def copy_host_bytes(flat: torch.Tensor) -> bytes:
         A copy of the tensor's bytes (``b""`` for an empty tensor).
     """
 
-    count = flat.numel()
+    host = flat_byte_view(flat.detach().cpu().contiguous())  # a no-op on the documented input
+    count = host.numel()
     if count == 0:
         return b""
-    if get_numpy_bridge_support():
-        return flat.numpy().tobytes()
-    return ctypes.string_at(flat.data_ptr(), count)
+    return ctypes.string_at(host.data_ptr(), count)
 
 
 def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:

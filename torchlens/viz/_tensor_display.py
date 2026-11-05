@@ -254,13 +254,9 @@ def show_tensor(
             ax.axis("off")
             return fig
         fig, axes = plt.subplots(1, channels, squeeze=False)
-        for index in range(channels):
-            ax = axes[0][index]
-            ax.imshow(
-                tensor_to_numpy(_clip_outliers(channel_data[index], outlier_perc)),
-                cmap=cmap,
-                **kwargs,
-            )
+        for index, ax in enumerate(axes[0]):
+            clipped = _clip_outliers(channel_data[index], outlier_perc)
+            ax.imshow(tensor_to_numpy(clipped), cmap=cmap, **kwargs)
             ax.axis("off")
             ax.set_title(str(index))
         return fig

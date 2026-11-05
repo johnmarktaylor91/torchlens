@@ -268,8 +268,7 @@ def _unit_digest_part(entry: Any) -> Any:
     mask = entry.mask
     if bool(mask.all()):
         return label
-    packed = tensor_payload_bytes(mask.reshape(-1).cpu())
-    return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
+    return (label, tuple(mask.shape), hashlib.sha256(tensor_payload_bytes(mask)).hexdigest())
 
 
 def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) -> Any:

@@ -876,10 +876,7 @@ def export_npz(
         mapping = source
     arrays: dict[str, np.ndarray] = {}
     for label, value in dict(mapping).items():
-        if isinstance(value, torch.Tensor):
-            array = tensor_to_numpy(value.detach())
-        else:
-            array = np.asarray(value)
+        array = tensor_to_numpy(value.detach()) if torch.is_tensor(value) else np.asarray(value)
         if array.dtype == object:
             raise InvalidArgumentError(
                 f"Site {label!r} holds an object array; npz interchange is "

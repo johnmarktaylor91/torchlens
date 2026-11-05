@@ -1176,10 +1176,8 @@ def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
 
     transport = to_cpu_contiguous(tensor)
     logical_dtype = str(_entry_field(entry, "logical_dtype") or "")
-    if logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}:
-        array = tensor_to_numpy(transport.to(torch.float32))
-    else:
-        array = tensor_to_numpy(transport)
+    bf16 = logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}
+    array = tensor_to_numpy(transport.to(torch.float32) if bf16 else transport)
     if _entry_has_typed_jax_prng_key(entry):
         return array
     logical_shape = _logical_shape_from_metadata(_entry_field(entry, "codec_metadata"))

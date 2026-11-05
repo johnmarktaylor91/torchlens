@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 from .. import _entry_refusals as _refusals
-from .._utils._numpy_bridge import tensor_to_numpy
+from .._utils._numpy_bridge import host_array
 
 # Historical import homes: the axis-selection internals moved to
 # _heatmap_axes.py in the file-size split; existing tests import them here.
@@ -133,7 +133,7 @@ def heatmap(
 
     _validate_size(width, height)
     _refusals.refuse_if_below("max_axis_items", max_axis_items, 1)
-    array = np.asarray(_as_numpy(data), dtype=np.float64)
+    array = np.asarray(host_array(data), dtype=np.float64)
     if array.ndim != 2:
         _refusals.refuse_viz_shape("heatmap expects a 2D array")
 
@@ -268,7 +268,7 @@ def lineplot(
     """
 
     _validate_size(width, height)
-    values = np.asarray(_as_numpy(series), dtype=np.float64)
+    values = np.asarray(host_array(series), dtype=np.float64)
     if values.ndim == 1:
         values = values[np.newaxis, :]
     if values.ndim != 2 or values.shape[1] == 0:
@@ -276,7 +276,7 @@ def lineplot(
     n_series, n_points = values.shape
     xs: np.ndarray[Any, np.dtype[np.float64]] = np.arange(n_points, dtype=np.float64)
     if x_values is not None:
-        xs = np.asarray(_as_numpy(x_values), dtype=np.float64)
+        xs = np.asarray(host_array(x_values), dtype=np.float64)
         if xs.ndim != 1 or xs.shape[0] != n_points:
             _refusals.refuse_viz_shape("x_values must have shape [K]")
 
@@ -453,7 +453,7 @@ def image_scatter(
     _refusals.refuse_if_below("max_items", max_items, 1)
     _refusals.refuse_if_below("thumbnail_size", thumbnail_size, 4)
     _refusals.refuse_if_canvas_too_small(canvas_size, thumbnail_size)
-    array = np.asarray(_as_numpy(coords), dtype=np.float64)
+    array = np.asarray(host_array(coords), dtype=np.float64)
     if array.ndim != 2 or array.shape[1] != 2:
         _refusals.refuse_viz_shape("render_image_scatter expects coords with shape [N, 2]")
     if array.shape[0] == 0:
@@ -505,25 +505,6 @@ def image_scatter(
             text=f"spread <={max(1, int(math.ceil(max_displacement)))}px",
         )
     return canvas
-
-
-def _as_numpy(value: Any) -> np.ndarray:
-    """Return ``value`` as a CPU NumPy array, accepting Torch-like tensors.
-
-    Parameters
-    ----------
-    value:
-        NumPy-like object or tensor with ``detach``/``cpu``/``numpy`` methods.
-
-    Returns
-    -------
-    np.ndarray
-        NumPy view or copy of the input.
-    """
-
-    if hasattr(value, "detach") and hasattr(value, "cpu") and hasattr(value, "numpy"):
-        return tensor_to_numpy(cast(Any, value).detach())
-    return np.asarray(value)
 
 
 def _validate_size(width: int, height: int) -> None:

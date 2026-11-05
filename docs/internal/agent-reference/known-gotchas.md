@@ -323,6 +323,7 @@
   available` (torch 2.3+ is fine). The lazy `HAS_NUMPY_BRIDGE` flag in `_utils/_torch_compat.py`
   names that state. Product code that needs a tensor's bytes or a host array goes through
   `tensor_payload_bytes` or `copy_host_bytes` (`_utils/tensor_leaves.py`), `digest_byte_view`
-  (`_transport.py`), or `tensor_to_numpy` and `tensor_from_numpy` (`_utils/_numpy_bridge.py`),
-  never a bare `.numpy()` or `torch.from_numpy`; each falls back to a NumPy-free byte copy.
+  (`_transport.py`), or `tensor_to_numpy`, `tensor_from_numpy` and `host_array`
+  (`_utils/_numpy_bridge.py`), never a bare `.numpy()` or `torch.from_numpy`; each falls back to
+  a NumPy-free byte copy.
   Pinned in `tests/test_numpy_bridge_compat.py`.

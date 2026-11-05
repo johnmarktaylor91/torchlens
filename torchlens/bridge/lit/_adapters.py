@@ -613,10 +613,7 @@ class TorchLensLitClassifier(_TorchLensLitModel):
         )
         rows: list[dict[str, Any]] = []
         for i in range(len(id_lists)):
-            row: dict[str, Any] = {
-                "probas": tensor_to_numpy(probas[i]),
-                "tokens": tokens_rows[i],
-            }
+            row: dict[str, Any] = {"probas": tensor_to_numpy(probas[i]), "tokens": tokens_rows[i]}
             for field, column in pooled.items():
                 row[field] = tensor_to_numpy(column[i].detach().cpu().to(torch.float64))
             if salience_rows is not None:

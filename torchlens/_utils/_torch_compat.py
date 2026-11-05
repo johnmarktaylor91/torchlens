@@ -52,10 +52,9 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._attention_bias_probe import probe_attention_causal_bias
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
-from ._torch_symbols import shadowed_torch_submodule, torch_attr
+from ._torch_symbols import probe_attention_causal_bias, shadowed_torch_submodule, torch_attr
 
 __all__ = [
     "torch_structseq_field_names",
@@ -1275,7 +1274,7 @@ def _probe_nn_attention_module() -> bool:
         ``True`` when the ``torch.nn.attention`` namespace exposes
         ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
         dynamo-free (unlike ``torch.nn.attention.bias``, see
-        :func:`._attention_bias_probe.probe_attention_causal_bias`), so it is safe to import
+        :func:`._torch_symbols.probe_attention_causal_bias`), so it is safe to import
         directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
         floor), a healthy old install, not a degradation.
 
@@ -2009,9 +2008,8 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dynamo_compile_counters(force_probe=True)
     probe_c10d_capabilities(force_probe=True)
     get_current_dispatch_mode_stack()
-    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the
-    # real capability, not the pre-probe placeholder. Degradation warnings are
-    # deduped once-per-process and the probes are cached.
+    # r-b4 R26-2 lazily-probed accessors: resolve so the snapshot reports the real
+    # capability, not the pre-probe placeholder (warnings dedupe once; probes cache).
     get_jit_all_schemas()
     get_tensorbase_class()
     get_disable_torch_function_context()
