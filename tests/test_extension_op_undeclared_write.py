@@ -84,12 +84,18 @@ def test_undeclared_write_validates() -> None:
     assert validate_forward_pass(_ScatterIntoZeros(), torch.randn(3, 4))
 
 
-def test_without_the_copy_out_zeros_replay_fails(monkeypatch) -> None:  # noqa: ANN001
-    """Planted bug: with the copy-out disabled, replay of ``zeros`` fails as before."""
+def test_without_the_copy_out_the_argument_check_fails(monkeypatch) -> None:  # noqa: ANN001
+    """Planted bug: with the copy-out disabled, the operator's saved argument fails as before.
+
+    The deferred ``zeros`` payload is the buffer the operator received, so its saved
+    argument shows the operator's own write and argument logging rejects it, the
+    signature m17214 showed at ``scatter_max``.
+    """
 
     monkeypatch.setattr(_ops_calls, "materialize_deferred_for_call", lambda tensors: None)
     torch.manual_seed(0)
     with _deferred_payload_clones():
         assert not tl.validate(_ScatterIntoZeros(), torch.randn(3, 4), seed=0)
     failure = last_validation_failure()
-    assert failure is not None and failure.func_name == "zeros", failure
+    assert failure is not None and failure.func_name == "fill_out", failure
+    assert failure.check_name == "argument_logging", failure
