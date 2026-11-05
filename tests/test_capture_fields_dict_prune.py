@@ -126,9 +126,10 @@ _MAX_KEYS_PER_OP = 91
 _MAX_TORCHLENS_CALLS_PER_OP = 1082.0
 # Python calls into TorchLens code per function-call op while the returned trace
 # is dropped (it dies by refcount; the payload eviction walk dominates). Pinned at
-# the value measured on CI's pinned environment (torch 2.13.0+cpu): 36163 calls over
-# 416 ops, 86.93, the same on two hosts. A new pin, not a raised one.
-_MAX_TEARDOWN_CALLS_PER_OP = 36163 / 416
+# the value measured on CI's pinned environment (torch 2.13.0+cpu): 7973 calls over
+# 416 ops, 19.17 (36163 calls, 86.93, before the walk skipped opaque record types
+# and all-scalar tuples).
+_MAX_TEARDOWN_CALLS_PER_OP = 7973 / 416
 _TORCHLENS_ROOT = os.path.dirname(tl.__file__)
 
 

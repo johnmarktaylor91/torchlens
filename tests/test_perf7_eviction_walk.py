@@ -234,6 +234,25 @@ class _HolderClaimsTensor(_Holder):
         return torch.Tensor
 
 
+class _SometimesClaimsTensor:
+    """An object whose ``__class__`` claims a tensor only when built with ``claims``.
+
+    The first instance a sweep meets is not a tensor; a walk that learned its
+    type as opaque from it would skip the later instance that claims a tensor.
+    """
+
+    def __init__(self, claims: bool) -> None:
+        """Record whether this instance claims the tensor class."""
+
+        self.claims = claims
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:
+        """Claim the tensor class when built to, else answer the real type."""
+
+        return torch.Tensor if self.claims else _SometimesClaimsTensor
+
+
 class _Bytes(int):
     pass
 
@@ -317,6 +336,9 @@ def _adversarial_cells() -> list[Any]:
         _HolderClaimsTensor(torch.ones(1)),
         (_HolderClaimsTensor("x"), _Holder("y")),
         [_Holder(torch.ones(1)), (_Holder(1), (_Holder(2), torch.ones(1)))],
+        _SometimesClaimsTensor(False),
+        _SometimesClaimsTensor(True),
+        (_SometimesClaimsTensor(True), "a"),
     ]
 
 
