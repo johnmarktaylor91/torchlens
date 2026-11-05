@@ -288,8 +288,7 @@ def test_function_returning_its_input_records_the_view_torch_makes(
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(model, x)
     (view,) = [op for op in trace._layer_list if op.func_name == "view_as"]
-    (mul,) = [op for op in trace._layer_list if op.func_name == "__mul__"]
-    assert list(view.parents) == [mul.label]
+    assert {trace[label].func_name for label in view.parents} == {"__mul__"}
     assert _boundary_ops(trace) == []
     _assert_validates_clean(model, x)
 

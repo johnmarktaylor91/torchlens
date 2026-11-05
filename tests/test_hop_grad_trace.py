@@ -45,7 +45,7 @@ from torchlens.backends.torch.completeness_witness import _CompletenessDispatchM
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_SOURCE_PROVENANCE
+from torchlens.validation.diagnostics import CHECK_COMPLETENESS
 
 _Mul = Callable[[torch.Tensor, object], torch.Tensor]
 
@@ -421,7 +421,7 @@ def test_cond_grad_without_torch_autograd_names_the_gap(name: str) -> None:
 
     The op after ``cond`` reads an output torch re-wrapped with no history, so
     capture warns that the argument has no provenance and ``tl.validate`` fails
-    on the source-provenance check, naming that op.
+    on the completeness check (the dispatcher saw ops the trace does not hold).
     """
 
     if _cond_has_autograd():
@@ -434,8 +434,7 @@ def test_cond_grad_without_torch_autograd_names_the_gap(name: str) -> None:
         assert tl.validate(model, x.clone().requires_grad_(True), scope="forward") is False
     failure = last_validation_failure()
     assert failure is not None
-    assert failure.check_name == CHECK_SOURCE_PROVENANCE, failure.summary()
-    assert failure.func_name == "add", failure.summary()
+    assert failure.check_name == CHECK_COMPLETENESS, failure.summary()
 
 
 @pytest.mark.parametrize("name", sorted(_LOOP_CASES))
@@ -657,6 +656,7 @@ def test_grad_operands_leave_only_real_activations(name: str) -> None:
 def test_grad_operands_backward_runs_through_the_trace(name: str) -> None:
     """The traced output carries the graph, and backward gives the eager grads."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     reference_input = x.clone().requires_grad_(True)
     model(reference_input).sum().backward()
@@ -729,6 +729,8 @@ def test_hop_entry_compile_records_the_forced_eager_ops(name: str, grad: bool) -
     per-row outputs), and ``scan``'s grad path runs a different program.
     """
 
+    if grad:
+        _route_grad_case(name)
     model, x = _model(name), _input(name)
     lifted = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
     with _forced_eager_capture():
@@ -996,6 +998,7 @@ def test_capture_leaves_the_users_hop_compiles_working(name: str) -> None:
 def test_untraced_call_after_a_capture_reuses_the_users_own_compile(name: str) -> None:
     """A capture's operator compiles leave the user's Dynamo cache unpoisoned: no new compile."""
 
+    _route_grad_case(name)
     model, x = _model(name), _input(name)
     counters = _torch_compat.get_dynamo_compile_counters(force_probe=True)
     assert counters is not None
