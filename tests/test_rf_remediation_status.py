@@ -96,7 +96,7 @@ class _GroupedQueryAttention(nn.Module):
 
 # Kept: sole branch coverage of receptive_field/rules/attention.py.
 def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
-    """Contain key/value support when grouped-query attention reuses fewer heads."""
+    """Contain key/value support under grouped-query attention; value stays feature-pointwise."""
 
     inputs = (
         torch.randn(1, 4, 3, 2, requires_grad=True),
@@ -110,15 +110,14 @@ def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]
+    expected_kinds = {
+        0: ("pointwise", "full", "full", "full"),
+        1: ("pointwise", "full", "full", "pointwise"),
+    }
 
-    for source in key_value_inputs:
+    for index, source in enumerate(key_value_inputs):
         descriptor = target.receptive_field._descriptor(source)
-        assert tuple(axis.kind for axis in descriptor.axes) == (
-            "pointwise",
-            "full",
-            "full",
-            "full",
-        )
+        assert tuple(axis.kind for axis in descriptor.axes) == expected_kinds[index]
     results = cross_validate(
         trace,
         ops=[target],
@@ -130,7 +129,7 @@ def test_sdpa_grouped_query_attention_widens_key_value_heads() -> None:
 
 # Kept: sole branch coverage of receptive_field/rules/attention.py.
 def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
-    """Contain key/value support broadcast across query batches and heads."""
+    """Contain broadcast key/value support; the value feature axis stays pointwise."""
 
     inputs = (
         torch.randn(2, 4, 3, 2, requires_grad=True),
@@ -144,15 +143,14 @@ def test_sdpa_broadcast_widens_key_value_batch_and_head_axes() -> None:
     )
     target = _op(trace, "scaled_dot_product_attention")
     key_value_inputs = list(trace.input_ops)[1:]
+    expected_kinds = {
+        0: ("full", "full", "full", "full"),
+        1: ("full", "full", "full", "pointwise"),
+    }
 
-    for source in key_value_inputs:
+    for index, source in enumerate(key_value_inputs):
         descriptor = target.receptive_field._descriptor(source)
-        assert tuple(axis.kind for axis in descriptor.axes) == (
-            "full",
-            "full",
-            "full",
-            "full",
-        )
+        assert tuple(axis.kind for axis in descriptor.axes) == expected_kinds[index]
     results = cross_validate(
         trace,
         ops=[target],

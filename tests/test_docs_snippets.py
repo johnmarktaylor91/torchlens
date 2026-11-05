@@ -53,8 +53,15 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "native-torch.md",
         "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
+        # tl.preprocessing / tl.postprocessing / tl.facets registration walkthrough.
+        "guides/model_conveniences.md",
+        # The internals guide: one self-contained fence (loop grouping, a replayed edit).
+        "how-it-works.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
+        # Agent-reference pages whose fences are self-contained programs.
+        "internal/agent-reference/current-2-x-surface.md",
+        "internal/agent-reference/feature-inspection.md",
     ),
     "reference_tooling": (
         "reference/debug.md",
@@ -247,6 +254,23 @@ CANONICAL_PAGES = (
     "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
+
+#: README fences are advertisements: one fence may mix setups or lean on names it
+#: never defines. The README's setup lives here, in the test, never in README
+#: markers. ``README_PRELUDE`` supplies the imports the loop fence elides; the
+#: ViT fence reads ``cat.jpg``, which the test writes as a plain synthetic image.
+README_PRELUDE = "import torch\nfrom torch import nn\n"
+#: README statements that need a model the page's shared namespace does not hold
+#: (the ResNet-18 line in the GPT-2 selection fence). Each is compiled, not run,
+#: and names the test that executes the same API spelling for real:
+#: (statement as written, covering test file, spelling the covering test must use).
+README_ILLUSTRATIVE_STATEMENTS: tuple[tuple[str, str, str], ...] = (
+    (
+        'trace["conv1"].projective_field.of(units, within=["layer1", "layer2"])',
+        "tests/test_field_view_of_resnet.py",
+        'trace["conv1"].projective_field.of(',
+    ),
+)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
 
 
@@ -351,8 +375,33 @@ def _canonical_ambient() -> dict[str, Any]:
     return namespace
 
 
+def _readme_setup(namespace: dict[str, Any], workdir: Path) -> None:
+    """Prepare the README's shared namespace and working directory (see README_PRELUDE)."""
+
+    # The ViT fence's image input needs Pillow, the same condition its preprocessing has.
+    if importlib.util.find_spec("PIL") is None:
+        pytest.skip("README.md imports uninstalled optional dependencies: ['PIL']")
+    from PIL import Image
+
+    Image.new("RGB", (256, 256), (140, 110, 80)).save(workdir / "cat.jpg")
+    exec(compile(README_PRELUDE, "README.md:prelude", "exec"), namespace)
+
+
+def _is_readme_illustrative(page_name: str, node: ast.stmt) -> bool:
+    """Return whether one README statement is in README_ILLUSTRATIVE_STATEMENTS."""
+
+    return page_name == "README.md" and any(
+        ast.unparse(node) == ast.unparse(ast.parse(statement).body[0])
+        for statement, _, _ in README_ILLUSTRATIVE_STATEMENTS
+    )
+
+
 @pytest.mark.heavy
-@pytest.mark.parametrize("page_name", CANONICAL_PAGES)
+@pytest.mark.parametrize(
+    "page_name",
+    # The README runs real pretrained GPT-2 and ViT fences (a 144-run patching sweep included).
+    [pytest.param(p, marks=pytest.mark.slow) if p == "README.md" else p for p in CANONICAL_PAGES],
+)
 def test_canonical_page_python_blocks_execute(
     page_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -360,10 +409,12 @@ def test_canonical_page_python_blocks_execute(
 
     Fences run cumulatively in one shared namespace, statement by statement.
     The only tolerated non-executions are (a) fences whose first line carries an
-    explicit ``API sketch`` comment marker (compile-gated) and (b) statements
+    explicit ``API sketch`` comment marker (compile-gated), (b) statements
     that read a declared OPTIONAL ambient name (``tf_model``/``tf_x``) on a box
-    without the TensorFlow preview dependency. Any other failure is a
-    documentation bug or a harness gap and fails the gate.
+    without the TensorFlow preview dependency and (c) the README statements in
+    ``README_ILLUSTRATIVE_STATEMENTS`` (compiled; each names the test that runs
+    its spelling). Any other failure is a documentation bug or a harness gap
+    and fails the gate.
 
     Parameters
     ----------
@@ -380,6 +431,8 @@ def test_canonical_page_python_blocks_execute(
     blocks = BLOCK_RE.findall(page.read_text(encoding="utf-8"))
     assert blocks, f"{page_name} has no python fences"
     namespace = _canonical_ambient()
+    if page_name == "README.md":
+        _readme_setup(namespace, tmp_path)
     executed_statements = 0
     for block_index, code in enumerate(blocks, start=1):
         source_name = f"{page_name}:python-block-{block_index}"
@@ -387,6 +440,8 @@ def test_canonical_page_python_blocks_execute(
             compile(code, source_name, "exec")
             continue
         for node in ast.parse(code, filename=source_name).body:
+            if _is_readme_illustrative(page_name, node):
+                continue
             loads = {
                 name.id
                 for name in ast.walk(node)
@@ -406,6 +461,122 @@ def test_canonical_page_python_blocks_execute(
             exec(compile(statement, source_name, "exec"), namespace)
             executed_statements += 1
     assert executed_statements > 0, f"{page_name}: nothing executed"
+
+
+def test_readme_illustrative_statements_are_live_and_covered() -> None:
+    """Every README statement the page test skips is still in the README and covered.
+
+    A row whose statement left the README is stale; a row whose covering test
+    no longer exercises the same API spelling would leave that spelling unrun.
+    """
+
+    root = _docs_dir().parent
+    readme_statements = {
+        ast.unparse(node)
+        for code in BLOCK_RE.findall((root / "README.md").read_text(encoding="utf-8"))
+        for node in ast.parse(code).body
+    }
+    for statement, covering_test, spelling in README_ILLUSTRATIVE_STATEMENTS:
+        assert ast.unparse(ast.parse(statement).body[0]) in readme_statements, (
+            f"stale README_ILLUSTRATIVE_STATEMENTS row: {statement!r} is no longer in README.md"
+        )
+        assert spelling in statement, f"{statement!r} does not use its spelling {spelling!r}"
+        covering = root / covering_test
+        assert covering.is_file(), f"{covering_test} no longer exists"
+        assert spelling in covering.read_text(encoding="utf-8"), (
+            f"{covering_test} no longer runs {spelling!r}"
+        )
+
+
+#: Peer libraries the nightly peer leg installs beside TorchLens (the recipe
+#: pages' tools plus the optional-extra fences). A peer that patches torch at
+#: import time AFTER the first capture (nnsight re-wraps ``torch.Tensor.backward``
+#: with ``functools.wraps`` around whatever is installed) once made
+#: ``unwrap_torch`` raise its burial warning under the suite's
+#: warnings-as-errors filter before the decorated flag flipped, so every later
+#: snippet logged only module boundaries: 27 reds that appeared only with the
+#: peers present. ``test_docs_snippets_pass_set_matches_with_peer_imported`` is
+#: the bare-vs-peers parity guard: each installed peer runs the failing shape in
+#: a subprocess under the same filters this suite runs with.
+PEER_MODULES: tuple[str, ...] = (
+    "cornet",
+    "dictionary_learning",
+    "himalaya",
+    "lxt",
+    "matplotlib",
+    "netrep",
+    "nnsight",
+    "open_clip",
+    "quantus",
+    "sae_lens",
+    "sparsify",
+    "timm",
+    "torchcam",
+    "torchvision",
+    "transformers",
+    "tuned_lens",
+    "vit_prisma",
+    "wandb",
+    "weightwatcher",
+    "xarray",
+)
+
+_PEER_PARITY_PROBE = r"""
+import importlib
+import sys
+import warnings
+
+warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
+warnings.filterwarnings("error", category=DeprecationWarning, module=r"torchlens(\.|$)")
+
+import torch
+from torch import nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
+x = torch.ones(2, 4)
+bare = [op.func_name for op in tl.trace(model, x)]
+assert bare[1:-1] == ["linear", "relu", "linear"], bare
+
+importlib.import_module(sys.argv[1])
+
+# backends/torch.md fence 1: validate unwraps to pristine torch and re-wraps.
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+after = [op.func_name for op in tl.trace(model, x)]
+assert after == bare, (bare, after)
+assert tl.validate(model, x, scope="forward", validate_metadata=False) is True
+# The peer's own patch (if any) still runs outside a capture.
+model(x).sum().backward()
+print("PARITY_OK")
+"""
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize("peer", PEER_MODULES)
+def test_docs_snippets_pass_set_matches_with_peer_imported(peer: str) -> None:
+    """The snippet suite's pass set is the same with ``peer`` imported mid-process.
+
+    Runs in a subprocess so the peer's import-time torch patches land on a
+    process that has already captured once, the order the combined nightly
+    session produces, under this suite's warnings-as-errors filters.
+    """
+
+    import subprocess
+    import sys
+
+    if importlib.util.find_spec(peer) is None:
+        pytest.skip(f"peer library {peer} is not installed")
+    completed = subprocess.run(
+        [sys.executable, "-c", _PEER_PARITY_PROBE, peer],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert completed.returncode == 0 and "PARITY_OK" in completed.stdout, (
+        f"{peer}: rc={completed.returncode}\n{completed.stdout[-2000:]}\n{completed.stderr[-4000:]}"
+    )
 
 
 def test_collapse_reference_gallery_exists_and_is_regenerable() -> None:
@@ -493,6 +664,12 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "order; each later fence reads the first fence's trace and helpers)"
     ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "bridges.md": (
+        "bridge fences share the first fence's resnet18 trace and need optional "
+        "third-party runtimes (captum, grad-cam, rsatoolbox, brain-score) plus a "
+        "network call (from_hub); claims covered by tests/test_bridge_real_captum.py, "
+        "tests/test_b2_bridge_captum.py and tests/test_b2_bridge_hub.py"
+    ),
     "backends/tf.md": (
         "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
         "tf_backend marker (needs the tensorflow runtime)"
@@ -554,12 +731,19 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/repe.md": _MIGRATION_PAGES_EXECUTED,
     "migration/autocircuit.md": _MIGRATION_PAGES_EXECUTED,
     "migration/baukit.md": _MIGRATION_PAGES_EXECUTED,
+    "migration/from_flax_tabulate.md": _MIGRATION_PAGES_EXECUTED,
     "field-guide/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/craft_concepts.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/das_gpt2.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/entropy_steering.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_attention.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tensor_images.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
@@ -576,6 +760,8 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/dissection.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/task_rnn_circuits.md": _RECIPE_PAGES_EXECUTED,
+    "neuroai/protein_language_model.md": _RECIPE_PAGES_EXECUTED,
     "gallery/causal_tracing.md": _RECIPE_PAGES_EXECUTED,
     "gallery/cnn_fields.md": _RECIPE_PAGES_EXECUTED,
     "gallery/neuro_rdms.md": _RECIPE_PAGES_EXECUTED,
@@ -706,6 +892,13 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/intervene.md": _LAUNCH_PAGES_EXECUTED,
     "gallery/any_architecture.md": _LAUNCH_PAGES_EXECUTED,
     "migration/comparison.md": _LAUNCH_PAGES_EXECUTED,
+    # Conditional attribution reads the model's source file (tokenize.open), and
+    # this suite execs fences from memory, so an executed copy records no conditional.
+    "conditional_attribution.md": (
+        "the conditional indexer needs the model's source on disk; the same "
+        "early-return shape and its fired_arm_kind and outcome asserts are "
+        "pinned in tests/test_conditional_fallthrough_outcome.py"
+    ),
 }
 
 

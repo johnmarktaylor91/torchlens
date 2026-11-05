@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from .._utils._display_bounded import RecordTuple
 from ._grad_fn_call_packing import GradFnCallPacker, reduce_with_grad_fn_call_columns
 from ._grad_record_columns import reduce_with_grad_record_columns
 from ._inline_tensor import reduce_inline_tensor
@@ -46,6 +47,8 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     sidecar of a bundle (tensor payloads ride safetensors blobs), so the
     slower Python walk is a save-time-only, determinism-buying cost.
     """
+
+    dispatch = {**pickle._Pickler.dispatch, RecordTuple: pickle._Pickler.dispatch[tuple]}
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._output_slot import mark_transformed_output_stale
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
 
 
 def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
@@ -142,7 +145,9 @@ def tensor_content_digest(value: torch.Tensor) -> str:
         # a unit stride. Materialize a dense copy only in that case.
         flat = flat.clone(memory_format=torch.contiguous_format)
     raw = flat.view(torch.uint8)
-    return hashlib.sha256(raw.numpy().tobytes()).hexdigest()
+    # hashlib reads the unit-stride uint8 array through the buffer protocol;
+    # ``tobytes()`` would first copy every payload byte into a bytes object.
+    return hashlib.sha256(raw.numpy().data).hexdigest()
 
 
 def rollback_snapshot(site: Op) -> dict[str, Any]:
@@ -179,3 +184,53 @@ def rollback_snapshot(site: Op) -> dict[str, Any]:
         "edits": list(site.edits),
         "is_edited": site.is_edited,
     }
+
+
+def refresh_output_derivatives(
+    log: Trace,
+    snapshots: Mapping[str, Mapping[str, Any]],
+    refresh_decoded_output: Callable[[Trace], None],
+) -> None:
+    """Bring the trace's output-derived values in step after a replay commit.
+
+    The decoded output is re-derived from the committed output values. The
+    ``output_transform`` result cannot be: a replay has no model return to
+    re-apply it to, so when the commit changed any output op's value the
+    stored result is marked stale and reading ``trace.transformed_output``
+    refuses. A commit that left every output op's value unchanged keeps it.
+
+    Parameters
+    ----------
+    log:
+        Trace whose op outs were just committed.
+    snapshots:
+        Per committed label, the fields held before the commit
+        (:func:`rollback_snapshot`), keyed by layer label.
+    refresh_decoded_output:
+        The decode refresher, passed in by the replay commit: importing it
+        here would pull the replay helper modules into the package's import
+        cycle.
+    """
+
+    refresh_decoded_output(log)
+    for label, before in snapshots.items():
+        site = log._layer_dict_all_keys[label]
+        is_output = site.is_output or site.is_output_parent
+        if is_output and not _same_value(before.get("out"), site.out):
+            mark_transformed_output_stale(log)
+            return
+
+
+def _same_value(before: Any, after: Any) -> bool:
+    """Whether a committed out holds exactly the value it held before the commit."""
+
+    if before is after:
+        return True
+    if not (isinstance(before, torch.Tensor) and isinstance(after, torch.Tensor)):
+        return False
+    return (
+        before.shape == after.shape
+        and before.dtype == after.dtype
+        and before.device == after.device
+        and bool(torch.equal(before, after))
+    )

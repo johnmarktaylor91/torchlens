@@ -25,7 +25,7 @@ trace = tl.trace(
     model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
-op = trace["layer4.1.conv2"]
+op = trace.ops["layer4.1.conv2"]
 rf = op.receptive_field
 print(rf.size, rf.jump, rf.center0)
 
@@ -76,9 +76,13 @@ Never read a numeric box without its `status`.
 
 This is deliberately conservative. Skip connections are composed over the real DAG; norms that
 couple examples, unmasked attention, and global mixing can widen an answer to the whole relevant
-extent. Transposed convolutions, masked attention, interpolation, gathers, and data-dependent
-routing are never promoted to `EXACT` without a proof. A gradient mask can preserve sparse or
-masked structure that an interval box cannot express.
+extent. Causally masked attention (`is_causal=True`, or a softmax whose saved weights are zero
+above the diagonal) narrows the sequence axis in `.of()` set queries: position `i` reaches
+positions `i` and later, and is reached by positions `i` and earlier. The axis-level descriptor
+keeps the sequence axis a whole-extent upper bound through the score product, because one
+input axis feeds both the query and the key side there. Transposed convolutions, interpolation,
+gathers, and data-dependent routing are never promoted to `EXACT` without a proof. A gradient
+mask can preserve sparse or masked structure that an interval box cannot express.
 
 Channel mixing keeps spatial geometry exact. A dense layer (`linear`) reads the whole feature
 axis at each position, and a `layer_norm` reads its whole normalized slice; with parameter
@@ -109,8 +113,8 @@ outgoing_again = op.receptive_field.at((3, 3), direction="projective")
 
 # Restrict the far endpoint. source= selects an ancestor for a receptive query;
 # target= selects a descendant for a projective query.
-early = trace["layer1.0.conv1"]
-late = trace["layer4.1.conv2"]
+early = trace.ops["layer1.0.conv1"]
+late = trace.ops["layer4.1.conv2"]
 between = late.receptive_field.at((3, 3), source=early)
 forward_between = early.projective_field.at((3, 3), target=late)
 ```
@@ -119,6 +123,22 @@ forward_between = early.projective_field.at((3, 3), target=late)
 `source=` names the ancestor result grid; for projective queries, `target=` names the descendant
 result grid. The `unit` always belongs to the view owner: the target for receptive queries and
 the source for projective queries.
+
+A projective query with no `target=` needs one reachable model output. When the source also
+reaches cache tensors, as a decoder with `use_cache=True` returns its `past_key_values`, the
+query answers the primary output: the output role whose last segment is `logits`, else the first
+non-cache output in model output order. An output role counts as a cache when a path segment is
+`past_key_values`, `presents` or `mems`, or contains `cache`. Two real outputs and no cache still
+raise `AmbiguousTargetError`, and `target=` selects any role, a cache tensor included:
+
+```python
+# GPT-2 with use_cache=True returns output.logits and every cached key and value.
+logits_side = op.projective_field.at((3, 0))                       # same as target="output.logits"
+cached_side = op.projective_field.at((3, 0), target="output.past_key_values.layers.1.keys")
+```
+
+Through causal attention the logits answer is the window refusal that points at `probe_grad()`,
+since a causal sequence axis is not a uniform window; `.of()` and `.status` answer per target.
 
 Trace tables are geometric and do not invoke backward:
 

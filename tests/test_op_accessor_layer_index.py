@@ -1,4 +1,4 @@
-"""Bare-layer-label Op reads are served from the alias index, not a row scan.
+"""Bare-layer-label Op reads are served from the layer-label index, not a row scan.
 
 The captures keep live views (``save_mode="view"``) so the GradFn read test can
 differentiate through the recorded tensors the way the Jacobian lens entry does.
@@ -63,18 +63,6 @@ def test_resolve_all_bare_layer_label_reads_the_index() -> None:
     assert ops.resolve_all(single_pass.layer_label) == expected_single
     assert ops.resolve_all(f"{multi_pass.layer_label}:last") == [expected_multi[-1]]
     assert ops.resolve_all("no_such_layer_9") == []
-
-
-def test_resolve_all_falls_back_to_the_scan_when_the_index_is_unavailable() -> None:
-    trace = _trace()
-    ops = trace.ops
-    multi_pass = next(
-        op for op in trace._layer_list if trace._layer_num_calls.get(op.layer_label, 0) > 1
-    )
-    expected = ops.resolve_all(multi_pass.layer_label)
-    ops._alias_indexes = None
-    ops._alias_index_unavailable = True
-    assert ops.resolve_all(multi_pass.layer_label) == expected
 
 
 def test_grad_fn_op_reads_do_not_scan_the_rows() -> None:

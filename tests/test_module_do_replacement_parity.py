@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.options import CaptureOptions, InterventionOptions
+from torchlens.options import CaptureOptions
 
 _REPLACEMENT = "intervention_replacement"
 
@@ -71,11 +71,7 @@ def _forked_module_edit(
 ) -> tuple[tl.Trace, tl.Trace]:
     clean = tl.trace(model, x, save="all", capture=CaptureOptions(replayable=True))
     fork = clean.fork("ablated")
-    fork.do(
-        tl.module(address),
-        tl.zero_ablate(),
-        intervention=InterventionOptions(confirm_mutation=True),
-    )
+    fork.do(tl.module(address), tl.zero_ablate())
     return clean, fork
 
 
@@ -152,11 +148,7 @@ def test_forked_module_edit_has_the_capture_time_shape() -> None:
 def test_a_later_upstream_push_passes_through_the_replacement() -> None:
     model, x = _model_and_input()
     _clean, fork = _forked_module_edit(model, x, "mlp")
-    fork.do(
-        tl.module("inp"),
-        tl.zero_ablate(),
-        intervention=InterventionOptions(confirm_mutation=True),
-    )
+    fork.do(tl.module("inp"), tl.zero_ablate())
     with torch.no_grad():
         inner = torch.relu(model.mlp[0](torch.relu(torch.zeros(2, 16))))
         expected_output = model.head(torch.zeros(2, 16))

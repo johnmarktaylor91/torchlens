@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..errors.episode import BundleExperimentError
 from ._effects import EffectsView
 from ._engine import (
@@ -74,7 +75,7 @@ class GridCell:
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"}}, edit=tl.zero_ablate(),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
@@ -101,7 +102,7 @@ class SweepGrid:
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": ["conv2d_1_1", "relu_1_2"]}, edit=tl.scale(0.5),
     ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
@@ -392,6 +393,8 @@ def _combine_sites(cell_id: str, parts: list[tuple[str, Any]]) -> Any:
 class _Plan:
     """The preflighted grid: resolved cells, refused cells, and the recorded shape."""
 
+    __repr__ = short_dataclass_repr
+
     names: dict[str, tuple[str, ...]]
     edit_axis: str | None
     resolved: list[_Candidate]
@@ -594,7 +597,7 @@ def sweep_grid(
 
     Examples
     --------
-    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> base = tl.trace(model, x)
     >>> metric = lambda t: float(t[t.output_layers[0]].out.sum())
     >>> grid = tl.experiment.sweep_grid(
     ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"},

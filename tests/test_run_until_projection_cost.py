@@ -64,8 +64,8 @@ def test_until_values_match_the_full_run(until):
     model = _stack()
     log = tl.trace(model, torch.randn(2, 3, 8, 8))
     x2 = torch.randn(2, 3, 8, 8)
-    full = log.run(inputs=x2)
-    truncated = log.run(inputs=x2, until=until)
+    full = log.run_transaction(inputs=x2)
+    truncated = log.run_transaction(inputs=x2, until=until)
     executed = 0
     for layer in truncated.trace._layer_list:
         if layer.type in ("input", "output") or layer.out is None:

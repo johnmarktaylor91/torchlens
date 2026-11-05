@@ -65,13 +65,19 @@ from __future__ import annotations
 import io
 import pickle
 import struct
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
+import torchlens as tl
+from torchlens._io import ArtifactError
+from torchlens._io._canonical_pickle import dump_canonical_metadata
+from torchlens._io._inline_tensor import rebuild_inline_tensor
 from torchlens._io._safe_unpickle import (
     _NUMPY_RECONSTRUCT_FUNCS,
     SafeBundleUnpickler,
@@ -98,6 +104,44 @@ _CAP = CaptureOptions(
 _N = 2_000_000
 
 
+def _reconstruct_pickle(module: str, count: int) -> bytes:
+    """Assemble ``_reconstruct(numpy.ndarray, (count,), b"b")`` -- the SEC1 gadget."""
+
+    return (
+        pickle.PROTO
+        + bytes([2])
+        + _glob(module, "_reconstruct")
+        + _glob("numpy", "ndarray")
+        + pickle.MARK
+        + _binint(count)
+        + pickle.TUPLE
+        + pickle.SHORT_BINBYTES
+        + bytes([1])
+        + b"b"
+        + pickle.TUPLE3
+        + pickle.REDUCE
+        + pickle.STOP
+    )
+
+
+def _uint8_typed_storage() -> Any:
+    """Build a 4-byte typed storage without the deprecated ``Tensor.storage()`` accessor."""
+
+    return torch.storage.TypedStorage(
+        wrap_storage=torch.arange(4, dtype=torch.uint8).untyped_storage(),
+        dtype=torch.uint8,
+        _internal=True,
+    )
+
+
+def _typed_view(tensor: torch.Tensor) -> Any:
+    """Wrap a tensor's (frozen) untyped storage as the typed storage ``_rebuild_tensor_v2`` takes."""
+
+    return torch.storage.TypedStorage(
+        wrap_storage=tensor.untyped_storage(), dtype=tensor.dtype, _internal=True
+    )
+
+
 @pytest.fixture(autouse=True)
 def _preserve_disclosure_flags() -> Any:
     """Leave the process-wide one-time save-disclosure flags exactly as they were found.
@@ -108,7 +152,7 @@ def _preserve_disclosure_flags() -> Any:
     cross-file failure. Snapshot and restore both flags around every test here.
     """
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     before = (
         bundle_module._NONPERSISTENT_DISCLOSURE_WARNED,
@@ -209,6 +253,44 @@ def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
     assert _alloc_refusal_reason(helper, "not-a-tuple") is not None
 
 
+def _forbid_unpicklers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every unpickler door fails the test if the 3.0 reader reaches one."""
+
+    def _boom(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("an unpickler ran while loading a 3.0 artifact")
+
+    for owner, name in (
+        (pickle, "Unpickler"),
+        (pickle, "loads"),
+        (pickle, "load"),
+        (torch, "load"),
+        (SafeBundleUnpickler, "load"),
+        (_PurePythonBundleUnpickler, "load"),
+        (_RenameAwareUnpickler, "load"),
+    ):
+        monkeypatch.setattr(owner, name, _boom)
+
+
+def test_reconstruct_gadget_refused_end_to_end_through_tl_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A gadget planted in a real artifact's trace record is refused at the JSON gate.
+
+    The 3.0 reader parses ``records/trace.json`` as bounded UTF-8 JSON and never runs an
+    unpickler, so the pickle bytes refuse typed before any opcode could allocate.
+    """
+
+    path = tmp_path / "hostile.tlspec"
+    tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
+    (path / "records/trace.json").write_bytes(_reconstruct_pickle("numpy.core.multiarray", _N))
+    redigest(path, "records/trace.json")
+
+    _forbid_unpicklers(monkeypatch)
+    with pytest.raises(ArtifactError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
 # --------------------------------------------------------------------------- #
 # 2. Torch tensor factories reached as REDUCE targets via ``_safe_getattr``.
 # --------------------------------------------------------------------------- #
@@ -263,6 +345,117 @@ def _embedded_blob(value: Any, *, legacy: bool) -> bytes:
     buffer = io.BytesIO()
     torch.save(value, buffer, _use_new_zipfile_serialization=not legacy)
     return buffer.getvalue()
+
+
+def _rebuild_amplification_pickle(blob: bytes, count: int) -> bytes:
+    """Assemble ``_rebuild_tensor_v2(_load_from_bytes(blob), 0, (count,), (1,), False, None)``."""
+
+    return (
+        pickle.PROTO
+        + bytes([2])
+        + _glob("torch._utils", "_rebuild_tensor_v2")
+        + pickle.MARK
+        + _glob("torch.storage", "_load_from_bytes")
+        + pickle.MARK
+        + pickle.BINBYTES
+        + struct.pack("<I", len(blob))
+        + blob
+        + pickle.TUPLE
+        + pickle.REDUCE
+        + _binint(0)
+        + pickle.MARK
+        + _binint(count)
+        + pickle.TUPLE
+        + pickle.MARK
+        + _binint(1)
+        + pickle.TUPLE
+        + pickle.NEWFALSE
+        + pickle.NONE
+        + pickle.TUPLE
+        + pickle.REDUCE
+        + pickle.STOP
+    )
+
+
+def test_inline_tensor_storage_is_never_resizable() -> None:
+    """The inline reduction yields a buffer-backed storage torch cannot grow."""
+
+    for dtype in (torch.uint8, torch.float32):
+        itemsize = torch.empty((), dtype=dtype).element_size()
+        loaded = rebuild_inline_tensor(bytes(4 * itemsize), str(dtype), (4,))
+        assert not loaded.untyped_storage().resizable(), f"{dtype} stayed growable"
+
+
+def test_rebuild_tensor_v2_cannot_amplify_an_inline_tensor() -> None:
+    """A vetted ``_rebuild_tensor_v2`` may not GROW the storage behind an inline tensor.
+
+    ``_N`` here is small enough that a REGRESSION does not wedge the suite.
+    """
+
+    storage = _typed_view(rebuild_inline_tensor(bytes(range(4)), "torch.uint8", (4,)))
+    with pytest.raises(RuntimeError, match="(?i)resiz"):
+        torch._utils._rebuild_tensor_v2(storage, 0, (_N,), (1,), False, None)
+    exact_fit = torch._utils._rebuild_tensor_v2(storage, 0, (4,), (1,), False, None)
+    assert exact_fit.tolist() == [0, 1, 2, 3]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_legacy_embedded_storage_refused_by_name(
+    legacy: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The former amplification carrier is refused at ``_load_from_bytes`` before torch.load."""
+
+    def _trip(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("torch.load was entered with file bytes")
+
+    monkeypatch.setattr(torch, "load", _trip)
+    payload = _rebuild_amplification_pickle(
+        _embedded_blob(_uint8_typed_storage(), legacy=legacy), _N
+    )
+    with pytest.raises(pickle.UnpicklingError, match=r"torch\.storage\._load_from_bytes"):
+        SafeBundleUnpickler(io.BytesIO(payload)).load()
+
+
+def test_rebuild_amplification_refused_end_to_end_through_tl_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The storage-amplification gadget in a real artifact is refused at the JSON gate."""
+
+    path = tmp_path / "hostile_rebuild.tlspec"
+    tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
+    (path / "records/trace.json").write_bytes(
+        _rebuild_amplification_pickle(_embedded_blob(_uint8_typed_storage(), legacy=True), _N)
+    )
+    redigest(path, "records/trace.json")
+    _forbid_unpicklers(monkeypatch)
+    with pytest.raises(ArtifactError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
+def test_inline_tensor_round_trips_exactly() -> None:
+    """The writer's inline reduction preserves value, shape, dtype and ``requires_grad``.
+
+    The loaded tensor is a contiguous copy (strides are not preserved); an EXACT-FIT
+    ``_rebuild_tensor_v2`` view over its storage still succeeds.
+    """
+
+    for original in (
+        torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        torch.arange(12, dtype=torch.float32).reshape(3, 4)[:, 1:3],
+        torch.ones(3, requires_grad=True),
+    ):
+        buffer = io.BytesIO()
+        dump_canonical_metadata({"t": original}, buffer)
+        assert b"_load_from_bytes" not in buffer.getvalue()
+        loaded = SafeBundleUnpickler(io.BytesIO(buffer.getvalue())).load()["t"]
+        assert torch.equal(loaded.detach(), original.detach())
+        assert loaded.shape == original.shape
+        assert loaded.dtype == original.dtype
+        assert loaded.requires_grad == original.requires_grad
+    storage = _typed_view(rebuild_inline_tensor(bytes(range(4)), "torch.uint8", (4,)))
+    exact_fit = torch._utils._rebuild_tensor_v2(storage, 0, (4,), (1,), False, None)
+    assert exact_fit.tolist() == [0, 1, 2, 3]
 
 
 # --------------------------------------------------------------------------- #

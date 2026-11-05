@@ -15,28 +15,31 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._data_classes._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
+    clear_staged_unfired,
     mark_intervention_spec_mutated,
+    staged_unfired_rules,
 )
 from .._errors import InvalidArgumentError
-from .._selection.do_plan import build_selection_do_plan
-from ..options import ReplayOptions
+from ..options import InterventionOptions, ReplayOptions
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__: list[str] = []
 
-from .._selection.errors import SelectionError
+from .._selection.do_plan import bind_to_target, build_selection_do_plan
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
 from . import replay as replay_module
+from ._edit_guards import detach_handles, internal_mutation
 from ._module_replacement import (
     MODULE_BOUNDARY_KEY,
     materialize_module_replacements,
@@ -49,7 +52,7 @@ from ._replay_sites import _require_hook_origins
 from .audit import build_fire_record
 from .edge_substitution import apply_edge_substitution_do
 from .errors import EngineDispatchError
-from .hooks import _normalize_sticky_hook_specs, make_hook_context
+from .hooks import _normalize_sticky_hook_specs, _normalize_value_specs, make_hook_context
 from .param_substitution import apply_param_substitution_do, buffer_operand_selection
 from .replay import (
     _commit_replay_updates,
@@ -59,7 +62,7 @@ from .replay import (
     _refuse_armed_gradient_rules,
     _replay_site_key,
     _warn_if_direct_writes_will_be_overlaid,
-    push_from,
+    replay_from_op,
 )
 from .stochastic import assign_batch_donor_groups
 from .types import Edit
@@ -147,7 +150,7 @@ def apply_selection_batch_do(
                 remedy="make every pair's first slot a Selection (lift "
                 "producers with .__selection__()), or use the legacy "
                 "(site, hook) list without Selections",
-                argument="hooks_or_site",
+                argument="site",
             )
         lifted = _lift(selection)
         kind = getattr(lifted, "kind", "ACT")
@@ -183,7 +186,7 @@ def batch_act_plan(
             code="selection_batch_leaf_unsupported",
             remedy="apply leaf-site edits through single-selection "
             "do() calls; batch interior sites only",
-            argument="hooks_or_site",
+            argument="site",
         )
     return resolved, plan, audit
 
@@ -220,7 +223,7 @@ def apply_cross_kind_batch_do(
             code="selection_batch_cross_kind",
             remedy="pass intervention=tl.options.InterventionOptions(engine='replay'), "
             "or apply the ACT pairs in their own do() call on this engine",
-            argument="hooks_or_site",
+            argument="site",
         )
     steps: list[tuple[str, Any]] = []
     for index, ((selection, edit), kind) in enumerate(zip(pairs, kinds, strict=True)):
@@ -245,8 +248,7 @@ def apply_cross_kind_batch_do(
             if mutation_kind == "selection_hooks":
                 push_from_handles(trace, handles, strict=strict)
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         restore_replay_state(trace, journal)
         raise
     return "selection_replayed", tuple(attached)
@@ -322,7 +324,7 @@ def apply_selection_do(
         apply_leaf_selection_edits(trace, leaf_items)
         if engine == "replay":
             for item in leaf_items:
-                push_from(trace, item["op"], replay=ReplayOptions(strict=strict))
+                replay_from_op(trace, item["op"], replay=ReplayOptions(strict=strict))
             trace.intervention_audit.append(audit)
             return "selection_replayed", ()
         trace.intervention_audit.append(audit)
@@ -349,23 +351,20 @@ def attach_selection_plan_hooks(
     boundary_by_handle: dict[str, str] = {}
     try:
         for item in hook_items:
-            handle_ids = trace._attach_hooks(
-                label_selector(item["op"].label),
-                item["edit"],
-                strict=strict,
-                confirm_mutation=True,
-            )
+            with internal_mutation():
+                handle_ids = trace._attach_hooks(
+                    label_selector(item["op"].label), item["edit"], strict=strict
+                )
             attached.extend(handle_ids)
             if MODULE_BOUNDARY_KEY in item:
                 for handle_id in handle_ids:
                     boundary_by_handle[handle_id] = item[MODULE_BOUNDARY_KEY]
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         raise
     # These sticky hooks are the do() plan's edit-then-scatter residue of an
     # edit applied NOW (the caller propagates and appends the audit record),
-    # not user-staged future-run material, so the run(inputs=...) staged-spec
+    # not user-staged future-run material, so the run_transaction(inputs=...) staged-spec
     # honesty gate must skip them: a value-edited fork gets the
     # PendingValueEditsWarning disclosure at the run door, never a refusal.
     attached_ids = set(attached)
@@ -395,12 +394,9 @@ def apply_selection_edge_do(  # noqa: PLR0913 - trace stands in for self on the 
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved edge selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_edges = lifted
+        resolved_edges = bind_to_target(
+            lifted, trace, "the resolved edge selection is bound to a different trace."
+        )
     else:
         resolved_edges = lifted._resolve(trace)
     payload = apply_edge_substitution_do(trace, resolved_edges, edit, engine=engine, strict=strict)
@@ -440,12 +436,9 @@ def apply_selection_param_do(  # noqa: PLR0913 - trace stands in for self on the
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved parameter selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_params = lifted
+        resolved_params = bind_to_target(
+            lifted, trace, "the resolved parameter selection is bound to a different trace."
+        )
     else:
         resolved_params = lifted._resolve(trace)
     payload = apply_param_substitution_do(
@@ -535,7 +528,22 @@ def apply_leaf_selection_edits(trace: Trace, leaf_items: list[dict[str, Any]]) -
     _commit_replay_updates(trace, pending_updates, pending_records)
 
 
-def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) -> Trace:
+def _own_origin_entries(trace: Trace, wanted: frozenset[str]) -> Any:
+    """Normalize the sticky-hook specs one transaction attached, as replay origins."""
+
+    own_specs = [
+        spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
+    ]
+    return _normalize_sticky_hook_specs(own_specs, allow_replay_only_site_targets=True)
+
+
+def push_from_handles(
+    trace: Trace,
+    handle_ids: Iterable[str],
+    *,
+    strict: bool | None = None,
+    options: InterventionOptions | None = None,
+) -> Trace:
     """Push one transaction's freshly attached hooks downstream.
 
     Parameters
@@ -545,38 +553,53 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
     handle_ids:
         Sticky-hook handle ids this transaction attached. Empty when the
         transaction staged a value instead of hooks; every stored rule is
-        then an origin, as for a plain ``push()``.
+        then an origin, as for a replay with no fresh attachments.
     strict:
-        Whether divergence warnings should raise.
+        Site-resolution strictness when ``options`` is absent.
+    options:
+        The merged ``InterventionOptions``; ``strict`` and ``differentiable``
+        (replay onto a fresh fork keeping the autograd graph) are read from it.
 
     Returns
     -------
     Trace
-        The same model log, mutated in place.
+        The same model log, mutated in place; a new differentiable trace when
+        ``options.differentiable`` is set.
     """
 
-    wanted = frozenset(handle_ids)
-    _require_live_replay(trace)  # the capture gates Trace.push runs first
+    if options is not None:
+        strict, differentiable = options.strict, options.differentiable
+    else:
+        strict, differentiable = bool(strict), False
+    # Rules a set-only do staged and nothing fired yet start this replay too.
+    staged_handles, staged_values = staged_unfired_rules(trace)
+    wanted = frozenset(handle_ids) | staged_handles
+    _require_live_replay(trace)  # the capture gates of the replay door run first
     _preflight_log(trace)
     _refuse_armed_gradient_rules(trace, None)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, None)
     origin_entries = hook_entries
     boundary: list[Any] = []
+    if wanted or staged_values:
+        origin_entries = _own_origin_entries(trace, wanted) + _normalize_value_specs(staged_values)
     if wanted:
         own_specs = [
             spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
         ]
-        origin_entries = _normalize_sticky_hook_specs(
-            own_specs, allow_replay_only_site_targets=True
-        )
         boundary = snapshot_module_boundary_sites(trace, own_specs)
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
-        # Through the module so a replay counter patched on it sees this push too.
-        result = replay_module._run_replay(
-            trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
-        )
+        if differentiable:
+            result = replay_module._run_differentiable_replay(
+                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+            )
+        else:
+            # Through the module so a replay counter patched on it sees this push too.
+            result = replay_module._run_replay(
+                trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
+            )
+    clear_staged_unfired(trace)
     # A tl.module(...) edit is recorded like its capture-time twin: the edited
     # value moves into a replacement op after the module's last op.
     if materialize_module_replacements(trace, boundary):
@@ -591,3 +614,24 @@ def _plan_with_module_boundaries(trace: Trace, selection: Any, edit: Any) -> tup
     resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
     tag_module_boundary_items(resolved, plan)
     return resolved, plan, audit
+
+
+def settle_edited_product(trace: Any) -> None:
+    """Inherited evidence no longer describes an edited product.
+
+    Episode step evidence is quarantined and the decoded output rows are
+    re-derived from the edited output (``refresh_decoded_output``), so a fork
+    names its own answer after every propagating ``do()``; when the edited
+    output does not decode the stale rows are dropped and ``decode_output``
+    recomputes or refuses typed rather than answering stale.
+
+    Parameters
+    ----------
+    trace:
+        The trace (usually a fork) whose values a non-staged edit changed.
+    """
+
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    quarantine_episode_after_perturbed_replay(trace)
+    refresh_decoded_output(trace)  # no-op when the capture decoded nothing

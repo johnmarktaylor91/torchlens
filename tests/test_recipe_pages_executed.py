@@ -36,6 +36,8 @@ PAGES: dict[str, str] = {
     "docs/field-guide/training_ribbon.md": "matplotlib",
     "docs/field-guide/tcav.md": "torchlens",
     "docs/field-guide/generation_step_attribution.md": "transformers",
+    "docs/field-guide/generation_attention.md": "transformers",
+    "docs/field-guide/tensor_images.md": "torchvision",
     "docs/field-guide/trainable_backbone.md": "torchvision",
     "docs/field-guide/tuned_lens.md": "tuned_lens",
     "docs/field-guide/jacobian_lens.md": "transformers",
@@ -50,17 +52,27 @@ PAGES: dict[str, str] = {
     "docs/field-guide/sae_trainers.md": "sae_trainers",
     "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
     "docs/field-guide/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/linear_probes.md": "sklearn",
+    "docs/field-guide/craft_concepts.md": "sklearn",
+    "docs/field-guide/das_gpt2.md": "transformers",
+    "docs/field-guide/entropy_steering.md": "transformers",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
-    "examples/recipes/train_tuned_lens_recipe.ipynb": "torchlens",
-    "examples/recipes/das_causal_basis_recipe.ipynb": "torchlens",
-    "examples/recipes/function_vectors_recipe.ipynb": "transformers",
-    "examples/recipes/clip_head_attention_recipe.ipynb": "clip",
-    "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
-    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
-    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
-    "examples/recipes/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "docs/neuroai/task_rnn_circuits.md": "torchlens",
+    "docs/neuroai/protein_language_model.md": "esm",
+    "examples/methods/train_tuned_lens_recipe.ipynb": "torchlens",
+    "examples/methods/das_causal_basis_recipe.ipynb": "torchlens",
+    "examples/methods/function_vectors_recipe.ipynb": "transformers",
+    "examples/methods/clip_head_attention_recipe.ipynb": "clip",
+    "examples/methods/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/methods/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/methods/cka_rsa_two_models_recipe.ipynb": "matplotlib",
+    "examples/methods/attribution_graph_transcoders_recipe.ipynb": "transcoders",
+    "examples/methods/jacobian_lens_recipe.ipynb": "transformers_plot",
+    "examples/methods/eap_ig_circuit_recipe.ipynb": "transformers",
+    "examples/methods/vision_logit_lens_recipe.ipynb": "transformers",
+    "examples/methods/leace_concept_erasure_recipe.ipynb": "transformers",
     "docs/gallery/causal_tracing.md": "transformers",
     "docs/gallery/cnn_fields.md": "torchvision",
     "docs/gallery/neuro_rdms.md": "torchvision",
@@ -78,6 +90,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "torchlens": (),
     "matplotlib": ("matplotlib",),
     "transformers": ("transformers", "tokenizers"),
+    "transformers_plot": ("transformers", "tokenizers", "matplotlib"),
     "torchvision": ("torchvision",),
     "lxt": ("lxt", "transformers"),
     "tuned_lens": ("tuned_lens", "transformers"),
@@ -93,6 +106,8 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "cornet": ("cornet",),
     "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
     "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
+    "sklearn": ("sklearn", "transformers"),
+    "esm": ("transformers", "tokenizers", "matplotlib"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -114,6 +129,12 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: The Jacobian lens page measures 3.8 s on a two-thread worker (two prompts of
 #: batched autograd plus a jacrev check) and is listed to keep the unmarked
 #: family inside its aggregate budget.
+#: The linear-probe page measured 5.9 s through its sixth fence alone on one
+#: core (OMP_NUM_THREADS=1), before its streaming fence.
+#: The CRAFT page trains a small CNN for 150 steps and estimates Sobol indices
+#: over 32 images; it measured 12.4 s on a two-core worker.
+#: The task-RNN circuits page trains its RNN, captures 40 timesteps and runs a
+#: fixed-point search: 10.7 s on one thread of a two-core worker.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/jacobian_lens.md",
@@ -123,12 +144,15 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/field-guide/pretrained_saes.md",
         "docs/field-guide/sae_trainers.md",
         "docs/field-guide/feature_visualisation.md",
-        "examples/recipes/train_tuned_lens_recipe.ipynb",
+        "examples/methods/train_tuned_lens_recipe.ipynb",
         "docs/field-guide/prisma_clip_sae.md",
-        "examples/recipes/das_causal_basis_recipe.ipynb",
-        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
-        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
+        "examples/methods/das_causal_basis_recipe.ipynb",
+        "examples/methods/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/methods/cka_rsa_two_models_recipe.ipynb",
         "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
+        "docs/field-guide/linear_probes.md",
+        "docs/field-guide/craft_concepts.md",
+        "docs/neuroai/task_rnn_circuits.md",
     }
 )
 
@@ -145,13 +169,37 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
 #: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
 #: 180 s on four cores (8,963 feature nodes).
+#: The Jacobian lens notebook downloads GPT-2 small and fits sixteen prompts of
+#: batched autograd through the whole model, then a jacrev check on two blocks.
+#: In the peer-recipe leg (OMP_NUM_THREADS=1, torch 2.13.0, 2026-11-03) the
+#: EAP-IG notebook (GPT-2 small, 35k edge scores and four faithfulness replays)
+#: measured 168.3 and 193.0 s in the test call and 175.7 and 195.6 s run alone
+#: (two runs); the LEACE notebook (GPT-2 small, twelve block erasers) measured
+#: 73.3 and 72.6 s, and 82.0 and 76.9 s. The vision logit lens notebook measured
+#: 8.1 and 7.4 s, and 6.4 and 5.9 s, with a warm cache, but it
+#: downloads ViT-tiny and CLIP ViT-B/32 (about 620 MB) and a test image on first
+#: use, so it sits in the slow tier with the CLIP notebooks.
+#: The DAS page downloads GPT-2 small and trains a basis for 32 steps through a
+#: bound hook: 66 s and 329 s on a four-core worker under light and heavy host
+#: load. The entropy-vector page downloads GPT-2 small, samples continuations
+#: and decodes greedily under four steering settings: 48 s on four cores.
+#: The ESM-2 protein page downloads the public ``facebook/esm2_t6_8M_UR50D``
+#: checkpoint (31 MB) on first use: 14.1 s on one thread with a warm cache, in
+#: the slow tier with the other real-checkpoint pages.
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/field-guide/acdc_ioi.md",
-        "examples/recipes/function_vectors_recipe.ipynb",
-        "examples/recipes/clip_head_attention_recipe.ipynb",
-        "examples/recipes/clip_text_decomposition_recipe.ipynb",
-        "examples/recipes/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/function_vectors_recipe.ipynb",
+        "examples/methods/clip_head_attention_recipe.ipynb",
+        "examples/methods/clip_text_decomposition_recipe.ipynb",
+        "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/vision_logit_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
+        "docs/field-guide/das_gpt2.md",
+        "docs/field-guide/entropy_steering.md",
+        "docs/neuroai/protein_language_model.md",
     }
 )
 
@@ -365,11 +413,14 @@ def test_token_result_save_line_names_a_real_method() -> None:
 
 
 def test_roadmap_names_the_quantized_summary_footer() -> None:
-    """The bits-per-weight footer and flax-tabulate recipe are a roadmap note."""
+    """The bits-per-weight footer stays a roadmap note; the flax-tabulate page says so."""
 
     text = (REPO / "ROADMAP.md").read_text("utf-8")
     assert "bits-per-weight footer" in text
-    assert "coming from flax\n  `tabulate`" in text
+    assert "`docs/migration/from_flax_tabulate.md`" in text
+    page = (REPO / "docs/migration/from_flax_tabulate.md").read_text("utf-8")
+    assert "There is no\nbits-per-weight line in the footer" in page
+    assert "`quantized_tensor` row" in page
 
 
 def test_neuro_refusal_homes_have_recipe_pages() -> None:

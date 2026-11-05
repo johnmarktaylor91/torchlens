@@ -13,7 +13,7 @@ import types
 import weakref
 from collections import OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping
-from io import BytesIO
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,19 +24,24 @@ from safetensors.torch import load_file
 from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
 from .._data_classes._state_adapter import state_items
-from .._data_classes.trace import Trace
+from .._data_classes.trace import ConditionalAccessor, Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
 from ._rehydrate_lazy_names import _lazy_ref_field_name, _lazy_ref_kind, _normalize_map_location
 from ._small_raw import (
-    _RAW_IMAGE_SENTINEL,
-    _RAW_INPUT_IMAGE_BYTES_LIMIT,
-    _RAW_INPUT_IMAGE_MAX_EDGE,
+    _rehydrate_small_raw_images as _rehydrate_small_raw_images,
+    _rehydrate_trace_raw_values,
 )
-from .accessor_rebuild import rebuild_trace_accessors
-from .lazy import LazyActivationRef, _file_identity
+from .accessor_rebuild import rebuild_saved_trace_accessors
+from .lazy import (
+    LazyActivationRef,
+    _build_manifest_index,
+    _file_identity,
+    _manifest_entry_for_blob_ref,
+    _read_materialization_manifest,
+)
 from .manifest import (
     _TORCH_BACKEND_NAME,
     Manifest,
@@ -71,6 +76,7 @@ def rehydrate_trace(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
     resolved_blobs_dir: Path | None = None,
+    trace: Any = None,  # the 3.0 reader's record object to restore into
 ) -> Trace:
     """Restore a scrubbed portable ``Trace`` state.
 
@@ -87,13 +93,11 @@ def rehydrate_trace(
     map_location:
         Target device passed through to ``safetensors`` materialization.
     materialize_nested:
-        Whether nested blob refs inside containers should be materialized when
-        ``lazy=True``.
+        Whether nested blob refs inside containers materialize under ``lazy=True``.
     payload_hints:
         Optional backend payload hints used during materialization.
     resolved_blobs_dir:
-        Canonical blob containment root already resolved for this load
-        operation. When omitted, it is resolved once here.
+        Canonical blob containment root for this load; resolved once here when omitted.
 
     Returns
     -------
@@ -108,16 +112,12 @@ def rehydrate_trace(
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
     portable_key_order = tuple(state_for_load)
 
-    trace = Trace.__new__(Trace)
+    trace = Trace.__new__(Trace) if trace is None else trace
     # The root Trace state is governed artifact bytes: arm the unknown-field
     # partition (state contract, MEMO 3.3) around its ``__setstate__`` exactly
     # like the metadata unpickler arms it for nested records.
     with governed_artifact_load():
         trace.__setstate__(state_for_load)
-    trace.input = _rehydrate_small_raw_images(getattr(trace, "input", None))
-    trace.transformed_output = _rehydrate_small_raw_images(
-        getattr(trace, "transformed_output", None)
-    )
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
@@ -130,6 +130,18 @@ def rehydrate_trace(
     bundle_root = Path(bundle_path)
     canonical_blobs_dir = (
         resolve_bundle_blobs_dir(bundle_root) if resolved_blobs_dir is None else resolved_blobs_dir
+    )
+    _rehydrate_trace_raw_values(
+        trace,
+        partial(
+            _materialize_recursive_blob_refs,
+            manifest_index=manifest_index,
+            bundle_path=bundle_root,
+            resolved_blobs_dir=canonical_blobs_dir,
+            map_location=map_location,
+            payload_hints=payload_hints,
+            payload_statuses=payload_statuses,
+        ),
     )
     _rehydrate_object(
         trace,
@@ -180,32 +192,7 @@ def rehydrate_trace(
         ),
     )
 
-    # rebuild_trace_accessors() MUST run AFTER _rehydrate_object(), not before.
-    # accessor_rebuild.py bakes `trace._buffer_initial_values.get(address)`
-    # into each Buffer's `_initial_value` at construction time (Buffer.__init__
-    # stores it directly; `initial_value` is not a dynamically-recomputed
-    # property). `_buffer_initial_values` is a FieldPolicy.BLOB_RECURSIVE field
-    # that only _rehydrate_object() resolves from raw BlobRef placeholders into
-    # real tensors (for a default eager load; lazy=True/materialize_nested=False
-    # intentionally leaves it as BlobRef for the expert nested-materialization
-    # flow). Building accessors first captured the still-unresolved BlobRef
-    # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
-    # after a plain `tl.load()` instead of a torch.Tensor. Nothing
-    # rebuild_trace_accessors() reads (trace._layer_list, module_accessor_state)
-    # depends on _rehydrate_object() having run first, so this reorder is safe.
-    if module_accessor_state is not None:
-        rebuild_trace_accessors(
-            trace,
-            module_accessor_state._dict,
-            module_accessor_state._list,
-            module_accessor_state._pass_dict,
-        )
-        # An artifact written before the root call counted among saved module
-        # calls stores a count without it; re-derive the stored scalar from the
-        # loaded records so it matches ``saved_module_calls``.
-        from .._postprocess.saved_summary import refresh_saved_module_call_count
-
-        refresh_saved_module_call_count(trace)
+    rebuild_saved_trace_accessors(trace, module_accessor_state)
 
     _stamp_serialized_tlspec_version(trace, manifest)
 
@@ -238,80 +225,12 @@ def _bind_conditional_arms(trace: Trace) -> None:
         Rehydrated trace whose runtime-only conditional bindings should be restored.
     """
 
-    from .._data_classes.trace import ConditionalAccessor
-
     accessor = trace._graph_conditionals
     if not isinstance(accessor, ConditionalAccessor):
         return
     for conditional in accessor.values():
         for arm_index, arm in enumerate(conditional.arms):
             arm._bind(trace, conditional.id, arm_index)
-
-
-def _rehydrate_small_raw_images(value: Any) -> Any:
-    """Restore bounded raw-image sentinels to PIL images when possible.
-
-    Parameters
-    ----------
-    value:
-        Scrubbed raw input or output value.
-
-    Returns
-    -------
-    Any
-        Value with TorchLens small-image sentinels replaced by PIL images when
-        Pillow can decode them; otherwise the original sentinel is retained.
-    """
-
-    if isinstance(value, dict) and value.get(_RAW_IMAGE_SENTINEL) is True:
-        data = value.get("data")
-        if not isinstance(data, bytes):
-            return value
-        # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
-        # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
-        # save-time "small" policy, so this sink must re-impose the SAME canonical
-        # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /
-        # ``max_edge`` fields sitting in ``value``) and fail CLOSED. Without this,
-        # a few-hundred-byte blob declaring huge dimensions forced a large
-        # ``Image.load()`` allocation (decompression-bomb DoS), and malformed
-        # bytes raised an UNCAUGHT Pillow error that crashed the whole load.
-        # 1) Byte cap: refuse to even hand oversized bytes to Pillow's C codecs.
-        if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
-            return value
-        try:
-            from PIL import Image
-        except ImportError:
-            return value
-        # 2) Header-only dimension check BEFORE decode: ``Image.open`` reads the
-        #    format header (giving ``.size``) without allocating pixel buffers, so
-        #    an oversized *declared* image is rejected here -- before ``.load()``
-        #    can allocate -- and bounded to the documented save-time max edge.
-        # 3) Fail closed: any decoder error (malformed / truncated / unsupported
-        #    bytes, or an early decompression-bomb guard) degrades to the inert raw
-        #    sentinel dict instead of propagating out of ``tl.load()``.
-        try:
-            image = Image.open(BytesIO(data))
-            width, height = image.size
-            if (
-                width > _RAW_INPUT_IMAGE_MAX_EDGE
-                or height > _RAW_INPUT_IMAGE_MAX_EDGE
-                or width < 1
-                or height < 1
-            ):
-                return value
-            image.load()
-        except Exception:
-            return value
-        return image
-    if isinstance(value, list):
-        return [_rehydrate_small_raw_images(item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_rehydrate_small_raw_images(item) for item in value)
-    if isinstance(value, frozenset):
-        return frozenset(_rehydrate_small_raw_images(item) for item in value)
-    if isinstance(value, dict):
-        return {key: _rehydrate_small_raw_images(item) for key, item in value.items()}
-    return value
 
 
 def _drop_capture_only_trace_fields(trace: Trace) -> None:
@@ -362,26 +281,6 @@ def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -
         backend_name = manifest.get("backend")
     if isinstance(backend_name, str) and backend_name:
         trace._provenance_backend = backend_name
-
-
-def _build_manifest_index(
-    manifest: Manifest | dict[str, Any],
-) -> Mapping[str, dict[str, Any] | TensorEntry]:
-    """Index manifest tensor entries by blob id."""
-
-    if isinstance(manifest, Manifest):
-        return {entry.blob_id: entry for entry in manifest.tensors}
-
-    tensors = manifest.get("tensors", [])
-    if not isinstance(tensors, list):
-        raise ArtifactError("Portable manifest must contain a list under 'tensors'.")
-    index: dict[str, dict[str, Any]] = {}
-    for entry in tensors:
-        blob_id = entry.get("blob_id")
-        if not isinstance(blob_id, str):
-            raise ArtifactError("Portable manifest tensor entries must include string blob_id.")
-        index[blob_id] = entry
-    return index
 
 
 _REHYDRATE_LEAF = 0
@@ -966,51 +865,8 @@ def _build_lazy_tensor_ref(
         logical_device=entry.logical_device,
         codec_metadata=entry.codec_metadata,
         payload_hints=payload_hints,
+        key=entry.key,
     )
-
-
-def _manifest_entry_for_blob_ref(
-    blob_ref: BlobRef,
-    manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
-) -> TensorEntry | None:
-    """Return the manifest entry corresponding to one ``BlobRef``.
-
-    Parameters
-    ----------
-    blob_ref:
-        Blob reference to resolve.
-    manifest_index:
-        Manifest tensor entries indexed by blob id.
-
-    Returns
-    -------
-    TensorEntry | None
-        Resolved manifest entry, or ``None`` when the manifest only contains the
-        older minimal tensor schema.
-
-    Raises
-    ------
-    ArtifactError
-        If the blob id is missing from the manifest.
-    """
-
-    if blob_ref.blob_id not in manifest_index:
-        raise ArtifactError(f"Manifest is missing blob_id={blob_ref.blob_id}.")
-    entry = manifest_index[blob_ref.blob_id]
-    if isinstance(entry, TensorEntry):
-        return entry
-    required_fields = {
-        "backend",
-        "shape",
-        "dtype",
-        "device_at_save",
-        "layout",
-        "bytes",
-        "sha256",
-    }
-    if not required_fields.issubset(entry.keys()):
-        return None
-    return TensorEntry.from_dict(entry)
 
 
 def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
@@ -1231,7 +1087,7 @@ def rehydrate_nested(
                 "source bundle manifest has changed since load; materialize refs and retry"
             )
 
-    manifest = Manifest.read(manifest_path)
+    manifest = _read_materialization_manifest(bundle_path)
     manifest_index = _build_manifest_index(manifest)
     payload_statuses: list[str] = []
     resolved_blobs_dir = resolve_bundle_blobs_dir(bundle_path)

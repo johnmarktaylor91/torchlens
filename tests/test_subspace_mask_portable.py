@@ -4,8 +4,8 @@
 its ``within=`` element mask and the mask's sha256 in the ``subspace_edit`` payload, so a
 one-position edit (LoReFT acts on one position) saves at ``level="portable"`` and reapplies
 bit-identically. A malformed, tampered or partial stored mask, or a stored keyword the loader
-does not know, refuses at load with a code whose remedy runs. Every other masked edit keeps
-its portability.
+does not know, refuses at load with a code whose remedy runs. A masked plain builtin verb is
+portable too (its own payload is pinned in tests/test_masked_edit_portable.py).
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -74,9 +75,7 @@ def _save_load(fork: Any, path: Path) -> Any:
 
 def _apply(spec: Any) -> Any:
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 _VERBS = {
@@ -89,18 +88,19 @@ def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_pat
     """The session scatters through both masks; the saved edit stores their intersection."""
 
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
-    staged = session.push()
+    staged = session
     loaded = _save_load(session, tmp_path / "first.tlspec").hook_specs[0].helper
     wider = _mask(3) | _mask(4)
     fork = _ready().fork()
     fork.do(tl.units(_SITE, wider), loaded)
-    twice = fork.push()
+    twice = fork
     assert torch.equal(twice[_SITE].out, staged[_SITE].out)
     again = _save_load(fork, tmp_path / "second.tlspec")
     kwargs = dict(again.hook_specs[0].helper.kwargs)
     assert torch.equal(kwargs["mask"], _mask(3))
     assert [key for key, _ in again.hook_specs[0].helper.kwargs].count("mask") == 1
-    assert torch.equal(_apply(again)[_SITE].out, staged[_SITE].out)
+    reapplied = _apply(again)
+    assert torch.equal(reapplied[_SITE].out, staged[_SITE].out)
 
 
 def _stored(mask: Any, digest: Any) -> dict[str, Any]:
@@ -135,10 +135,9 @@ def _remedy_runs(error: Any, tmp_path: Path) -> None:
 
     assert "tl.io.save_intervention(fork, path, level='portable')" in error.fields["remedy"]
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
-    staged = session.push()
-    assert torch.equal(
-        _apply(_save_load(session, tmp_path / "resaved.tlspec"))[_SITE].out, staged[_SITE].out
-    )
+    staged = session
+    reapplied = _apply(_save_load(session, tmp_path / "resaved.tlspec"))
+    assert torch.equal(reapplied[_SITE].out, staged[_SITE].out)
 
 
 @pytest.mark.parametrize("case", sorted(_MALFORMED))
@@ -156,11 +155,12 @@ def test_tampered_mask_refuses_at_load_and_the_remedy_runs(tmp_path: Path) -> No
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     path = tmp_path / "tampered.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    spec_json = path / "spec.json"
+    spec_json = path / "intervention.json"
     text = spec_json.read_text(encoding="utf-8")
     digest = _mask_digest(_mask())
     assert digest in text
     spec_json.write_text(text.replace(digest, _mask_digest(_mask(1))), encoding="utf-8")
+    redigest(path, "intervention.json")
     with pytest.raises(Exception) as excinfo:
         tl.io.load_intervention_spec(path)
     error = _coded(excinfo.value)
@@ -189,12 +189,15 @@ def _coded(error: BaseException) -> Any:
     raise AssertionError(f"no coded error in the chain of {error!r}")
 
 
-def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
-    """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
+def test_other_masked_builtin_edits_save_portably(tmp_path: Path) -> None:
+    """A masked plain verb (no subspace) stores its mask too and reloads executable."""
 
     fork = _ready().fork()
     fork.do(tl.units(_SITE, _mask()), tl.scale(2.0))
-    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="audit")
+    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="portable")
     loaded = tl.io.load_intervention_spec(tmp_path / "plain.tlspec")
     saved = loaded.hook_specs[0].helper
-    assert saved.portability == "opaque_audit" and saved.factory is None
+    assert saved.portability == "builtin" and saved.factory is not None
+    assert torch.equal(dict(saved.kwargs)["mask"], _mask())
+    reapplied = _apply(loaded)
+    assert torch.equal(reapplied[_SITE].out, fork[_SITE].out)

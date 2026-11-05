@@ -26,6 +26,7 @@ from .._semantic.logit_lens import LogitLens, LogitLensPrediction, LogitLensPred
 from ..stats._trajectory import TrajectoryStats, measure_trajectory
 from ._aliases import AliasResolution, alias_report, resolve_alias, translation_table
 from ._compose import apply_norm_scale, full_decomposition, stack_facet
+from ._controls import AblationControlsReport, ablation_controls
 from ._dla import direct_logit_contributions, token_directions
 from ._eap import edge_scores
 from ._edge_patch import patch_edges
@@ -38,6 +39,7 @@ from ._edges import (
 )
 from ._factored import FactoredMatrix
 from ._faithfulness import circuit_model_difference, circuit_performance_ratio
+from ._feature import visualize_feature
 from ._grids import PatchGrid, patch_grid, patch_heads_grid, patch_residual_grid
 from ._heads import attention_head_contributions
 from ._kv_heads import patch_query_heads_grid
@@ -57,6 +59,7 @@ __all__ = [
     "LogitLens",
     "LogitLensPrediction",
     "LogitLensPredictions",
+    "AblationControlsReport",
     "AliasResolution",
     "ComponentEdge",
     "ComponentGraph",
@@ -75,6 +78,7 @@ __all__ = [
     "ProjectionSource",
     "PromptInspection",
     "SavePlan",
+    "ablation_controls",
     "alias_report",
     "apply_norm_scale",
     "attention_head_contributions",
@@ -104,4 +108,5 @@ __all__ = [
     "test_prompt",
     "token_directions",
     "translation_table",
+    "visualize_feature",
 ]

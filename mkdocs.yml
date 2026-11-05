@@ -27,7 +27,11 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -75,12 +79,14 @@ exclude_docs: |
   /_watch_perf_numbers.md
   /acknowledgments.md
   /activation_transform_persistence.md
+  /also_in_torchlens.md
   /internal/agent-reference/architecture.md
   /internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md
   /internal/agent-reference/common-patterns.md
   /internal/agent-reference/conventions.md
   /internal/agent-reference/critical-invariants.md
   /internal/agent-reference/current-2-x-surface.md
+  /internal/agent-reference/feature-inspection.md
   /internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
   /internal/agent-reference/known-gotchas.md
   /internal/agent-reference/package/architecture-overview.md
@@ -100,6 +106,7 @@ exclude_docs: |
   /backward.md
   /benchmarks/capture.md
   /benchmarks/summary_performance.md
+  /bridges.md
   /buffers.md
   /conditional_attribution.md
   /containers.md
@@ -108,14 +115,22 @@ exclude_docs: |
   /doors/neuroai.md
   /doors/vision.md
   /facets.md
+  /fields/debugging_and_training.md
+  /fields/mechanistic_interpretability.md
+  /fields/teaching.md
   /field-guide/acdc_ioi.md
   /field-guide/conditional_steering.md
+  /field-guide/craft_concepts.md
+  /field-guide/das_gpt2.md
   /field-guide/dissection.md
+  /field-guide/entropy_steering.md
   /field-guide/extract_features.md
   /field-guide/feature_visualisation.md
+  /field-guide/generation_attention.md
   /field-guide/generation_step_attribution.md
   /field-guide/intervene.md
   /field-guide/jacobian_lens.md
+  /field-guide/linear_probes.md
   /field-guide/lrp_epsilon_litmus.md
   /field-guide/lrp_transformers_lxt.md
   /field-guide/pretrained_saes.md
@@ -127,6 +142,7 @@ exclude_docs: |
   /field-guide/sae_trainers.md
   /field-guide/see_and_inspect.md
   /field-guide/tcav.md
+  /field-guide/tensor_images.md
   /field-guide/torchcam.md
   /field-guide/trainable_backbone.md
   /field-guide/training_ribbon.md
@@ -146,11 +162,13 @@ exclude_docs: |
   /maintainers/persisted_fields.md
   /maintainers/review_checklist.md
   /maintainers/saved_format_3.md
+  /maintainers/saved_format_3_design.md
   /maintainers/testing.md
   /maintainers/docstring_examples_census.md
   /maintainers/where.md
   /guides/grouping.md
   /guides/kv_cache.md
+  /guides/model_conveniences.md
   /guides/offline_report.md
   /guides/treescope_cards.md
   /intervention_api.md
@@ -164,6 +182,7 @@ exclude_docs: |
   /migration/cross_engine.md
   /migration/from_bertviz_ecco.md
   /migration/from_captum.md
+  /migration/from_flax_tabulate.md
   /migration/from_fx.md
   /migration/from_hf_kwargs.md
   /migration/from_hooks.md
@@ -202,6 +221,8 @@ exclude_docs: |
   /neuroai/journey.md
   /neuroai/loaders.md
   /neuroai/netrep.md
+  /neuroai/protein_language_model.md
+  /neuroai/task_rnn_circuits.md
   /non_goals.md
   /performance.md
   /quickstart.md
@@ -269,8 +290,14 @@ exclude_docs: |
 nav:
   # <generated:nav>
   - index.md
+  - Get started:
+      - faq.md
   - Field guide:
       - field-guide/seeded_subsample.md
+      - See and inspect:
+          - guides/visualization.md
+  - Concepts:
+      - how-it-works.md
   - Reference:
       - API:
           - reference/api/dataset_extraction.md

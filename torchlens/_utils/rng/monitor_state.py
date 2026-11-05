@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
+import sys as _sys_module
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -130,3 +131,41 @@ def _skip_retired_hooks(candidate: Any, predecessor_attr: str) -> Any:
         else:
             candidate = getattr(owner, predecessor_attr, None)
     return candidate
+
+
+def _retired_hook_event(
+    monitor: host_nondeterminism_monitor,
+    threading_slot: bool,
+    predecessor: Any,
+    frame: Any,
+    event: str,
+    arg: Any,
+) -> None:
+    """Handle one profile event reaching a hook whose window is already over.
+
+    ``threading.setprofile`` only seeds NEW threads, so a worker started in-window keeps
+    the hook as its thread-local profile function forever: a permanent per-call tax, and
+    (worse) a later capture's draws on that thread classifying into this dead window's
+    discarded result. A non-LIFO overlap can likewise hand the hook back to the process.
+    Self-uninstall on the first event after teardown, but ONLY when this hook is the one
+    currently installed on this thread: while it is merely a LINK in a live successor's
+    chain, uninstalling would tear down that successor's window too. The hook is named
+    through the monitor's weak handle, never through its own closure, so a finished
+    window carries no self-cycle.
+    """
+
+    try:
+        own_hook = monitor._threading_hook if threading_slot else monitor._sys_hook
+        if own_hook is not None and _sys_module.getprofile() is own_hook:
+            # Held original: a LIVE later window may have its swap-detection wrapper
+            # on the module attr, and this dead-window self-uninstall must not flag it.
+            setter = monitor._orig_sys_setprofile or _sys_module.setprofile
+            setter(predecessor)
+    except Exception:
+        pass
+    if predecessor is not None:
+        try:
+            predecessor(frame, event, arg)
+        except Exception:
+            pass
+    return None

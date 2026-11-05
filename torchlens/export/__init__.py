@@ -25,9 +25,10 @@ from .._capture.structure_only import (
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._entry_refusals import require_xarray_presentations
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
-from ._common import _iter_layers, _scalarize_cell, _static_graph_data
+from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
 from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
@@ -406,8 +407,7 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
     Examples
     --------
     >>> import tempfile, pathlib
-    >>> capture = tl.options.CaptureOptions(replayable=True)
-    >>> bundle = tl.Bundle({"a": tl.trace(model, x, capture=capture), "b": tl.trace(model, x, capture=capture)})
+    >>> bundle = tl.Bundle({"a": tl.trace(model, x), "b": tl.trace(model, x)})
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     out = tl.export.chrome_trace_diff(bundle, pathlib.Path(tmp) / "diff.json")
     ...     text = out.read_text(encoding="utf-8")
@@ -737,7 +737,7 @@ def xarray(trace: Any) -> Any:
     Parameters
     ----------
     trace:
-        TorchLens ``Trace`` whose saved tensor outs should be exported.
+        ``Trace`` (or a ``Recording``, cooked first) whose saved outs are exported.
 
     Returns
     -------
@@ -773,8 +773,8 @@ def xarray(trace: Any) -> Any:
     >>> dataset["out"].sizes["presentation"]
     1
     """
-    # D15: xarray's product IS saved tensor values -- it refuses through the
-    # EXISTING value-payload capability (a marked empty array would be synthetic).
+    # D15: a Recording cooks first; the value-payload capability refuses (no synthetic array).
+    trace = _cook_recording(trace)
     _require_structure_only_capability(trace, "value_payloads")
 
     try:
@@ -826,8 +826,7 @@ def xarray(trace: Any) -> Any:
         layer_coord.extend([label] * flat.shape[1])
         index_coord.extend(range(flat.shape[1]))
 
-    if not arrays or presentation_count is None:
-        raise ValueError("No saved tensor outs are available for xarray export.")
+    presentation_count = require_xarray_presentations(arrays, presentation_count)
 
     data = np.concatenate(arrays, axis=1)
     honesty = capture_honesty_facts(trace)
@@ -1213,7 +1212,7 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
         f"viewBox='0 0 {data['width']} {data['height']}'>"
         "<style>.tl-edge{stroke:#555;stroke-width:1.4}.tl-node rect{fill:#fff;stroke:#222;stroke-width:1.2}"
         ".tl-node-input rect{fill:#D9F0D3}.tl-node-output rect{fill:#F6D7C3}"
-        ".tl-node-parameterized rect{fill:#DDEAF7}.tl-node-buffer rect{fill:#F7E7BA}"
+        ".tl-node-parameterized rect{fill:#C0C0C0}.tl-node-buffer rect{fill:#F7E7BA}"
         ".tl-node text{font:12px sans-serif;fill:#111;pointer-events:none}</style>"
         + "".join(edge_markup)
         + "".join(node_markup)

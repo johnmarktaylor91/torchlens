@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._quantities import Flops, Macs, as_macs
+from .._quantities import Bytes, Flops, Macs, as_macs
 
 if TYPE_CHECKING:
     from .op import Op
@@ -83,6 +83,20 @@ def macs_total(op: Op) -> Macs | None:
     """
 
     return None
+
+
+def checked_bytes(op: Op, traffic: Bytes | None) -> Bytes | None:
+    """Return the traffic ``Op.bytes_read``/``bytes_written`` computed, unless the Trace is gone.
+
+    The traffic model reads the Op's graph parents through the Trace, so on an
+    Op whose Trace was garbage-collected its ``None`` would read as
+    "insufficient metadata": that read refuses typed instead
+    (``trace_reference_collected``, through ``Op.trace``).
+    """
+
+    if traffic is None and op._slot("_source_trace_ref") is not None:
+        _ = op.trace
+    return traffic
 
 
 def arithmetic_intensity(op: Op) -> float | None:

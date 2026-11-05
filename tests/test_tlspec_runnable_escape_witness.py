@@ -99,7 +99,7 @@ def test_original_input_escape_still_verified_attested(
 ) -> None:
     path = _save(model_cls(), capture_x, tmp_path / "m.tlspec", include_activations=True)
 
-    result = tl.load(path).run(inputs=capture_x.clone())
+    result = tl.load(path).run_transaction(inputs=capture_x.clone())
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
@@ -116,7 +116,7 @@ def test_buffer_branch_changed_state_is_unverifiable(tmp_path: Path) -> None:
 
     loaded = tl.load(path)
     loaded.load_state_dict({"gate": torch.tensor(False)})
-    result = loaded.run(inputs=x)
+    result = loaded.run_transaction(inputs=x)
 
     _assert_not_blessed(result.report)
     # Captured gate=True replays x+1; a true live forward with gate=False is x-1.
@@ -161,7 +161,9 @@ def test_r10_data_alias_escape_changed_is_unverifiable(tmp_path: Path) -> None:
         tmp_path / "c.tlspec",
         include_activations=True,
     )
-    changed = tl.load(path).run(inputs=torch.tensor([10.0, 10.0]), on_divergence="return")
+    changed = tl.load(path).run_transaction(
+        inputs=torch.tensor([10.0, 10.0]), on_divergence="return"
+    )
     _assert_not_blessed(changed.report)
     assert not torch.allclose(changed.output, DataAliasScalarEscape()(torch.tensor([10.0, 10.0])))
 
@@ -192,7 +194,7 @@ def test_r10_pruned_param_escape_changed_state_is_unverifiable(tmp_path: Path) -
     path = _save(PrunedParamEscape(), x, tmp_path / "p.tlspec", include_weights=True)
     loaded = tl.load(path)
     loaded.load_state_dict({"w": torch.tensor([7.0])})
-    result = loaded.run(inputs=x.clone(), on_divergence="return")
+    result = loaded.run_transaction(inputs=x.clone(), on_divergence="return")
     _assert_not_blessed(result.report)
     # Captured s=3.0 replays 4*7 + 3 = 31; a true live forward with w=7 is 4*7 + 8 = 36.
     assert abs(result.output.item() - 31.0) < 1e-5

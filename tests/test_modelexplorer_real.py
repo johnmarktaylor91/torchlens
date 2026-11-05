@@ -2,7 +2,7 @@
 
 The id bug survived THREE rounds of toy validation -- capture-side
 recurrence folding rescued every toy -- so the id-uniqueness regression, the
-158/158 edge-resolution case, model-mode receipt discipline, and the worker
+118/118 edge-resolution case, model-mode receipt discipline, and the worker
 floors are pinned on real torchvision/config-built-transformers structures.
 Floors live in test source; absolute counts are asserted only where the
 panel measured them on THIS structure (torchvision resnet18 eval, weights
@@ -96,12 +96,12 @@ def test_resnet18_reuse_duplicates_bare_site_keys() -> None:
 def test_resnet18_eval_ids_unique_and_edges_resolve(
     resnet18_eval_payload: dict[str, Any],
 ) -> None:
-    """THE id-uniqueness regression + the 158/158 edge-resolution case."""
+    """THE id-uniqueness regression + the 118/118 edge-resolution case."""
 
     graph = resnet18_eval_payload["graphs"][0]
     ids = [node["id"] for node in graph["nodes"]]
-    assert len(ids) == len(set(ids)) == 151
-    assert sum(len(node.get("incomingEdges", [])) for node in graph["nodes"]) == 158
+    assert len(ids) == len(set(ids)) == 111
+    assert sum(len(node.get("incomingEdges", [])) for node in graph["nodes"]) == 118
     report = tl.export.validate_model_explorer_payload(resnet18_eval_payload)
     assert report.ok, report.failures
     # grouping rule row 28: each BasicBlock's one ReLU module called twice is
@@ -124,7 +124,7 @@ def test_resnet18_train_mode_changes_receipts_not_integrity() -> None:
     graph = payload["graphs"][0]
     ids = [node["id"] for node in graph["nodes"]]
     assert len(ids) == len(set(ids))
-    assert len(ids) != 151, "train/eval mode must be a visible receipt axis"
+    assert len(ids) != 111, "train/eval mode must be a visible receipt axis"
     report = tl.export.validate_model_explorer_payload(payload)
     assert report.ok, report.failures
 

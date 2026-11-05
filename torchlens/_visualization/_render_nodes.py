@@ -6,13 +6,15 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from ._bool_outcomes import bool_node_fill, bool_value_line
 from ._encoding_aggregate import (
     BoxScopeHelpers,
     box_channel_spec,
     collapsed_box_scope,
     segment_encoding_attrs,
 )
-from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
+from ._label_format import compute_selected_node_lines as _compute_selected_node_lines, shape_rows
+from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -124,7 +126,7 @@ def _get_hidden_parent_buffer_addresses(
             continue
         parent_node: BaseGraphNode
         if isinstance(source_node, Op):
-            parent_node = trace[parent_label]
+            parent_node = trace.ops[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
@@ -556,7 +558,7 @@ def _build_layer_node(
     if isinstance(node, BoundaryNode):
         fillcolor = INPUT_COLOR if node.boundary_kind == "input" else OUTPUT_COLOR
         spec = NodeSpec(
-            lines=[node.display_label],
+            lines=list(node.lines) or [node.display_label],
             shape="oval",
             fillcolor=fillcolor,
             fontcolor="black",
@@ -656,7 +658,7 @@ def _build_layer_node(
     elif node.is_output:
         raw_output_attrs = _render_raw_output(self._decoded_output)
         if raw_output_attrs is None:
-            raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
+            raw_output_attrs = _render_raw_output(self.__dict__.get("transformed_output"))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_name(node, vis_mode)
@@ -1688,6 +1690,12 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
 
 
+def _rolled_mark(layer_log: GraphNode, vis_mode: str) -> str:
+    """Return a rolled multi-pass title mark: the ``:1-2,4`` call range or `` (x3)``."""
+    suffix = _format_rolling_suffix(_rolling_annotation(layer_log, vis_mode))
+    return suffix or f" (x{_rolled_visual_num_passes(layer_log)})"
+
+
 def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
     """Return the face suffix for a rolled annotation.
 
@@ -1823,9 +1831,8 @@ def _is_only_non_buffer_in_module(
 def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     """Returns the background color hex string for a graph node based on its type.
 
-    Maps node types to colors: input=green, output=red, boolean=yellow,
-    buffer=orange, parameterized layers=light gray (trainable), dark gray
-    (frozen) or a two-tone split (both), default=white.
+    Maps node types to role fills: input, output, boolean (pale when False, split
+    when passes disagree), buffer, weights (trainable, frozen, or split), plain.
 
     Args:
         node: node to add
@@ -1838,7 +1845,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_output:
         bg_color = OUTPUT_COLOR
     elif node.is_terminal_bool:
-        bg_color = BOOL_NODE_COLOR
+        bg_color = bool_node_fill(node, BOOL_NODE_COLOR)
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
@@ -1980,58 +1987,39 @@ def compute_default_node_lines(
 
     layer_log = _unwrap_focus_node(layer_log)
     if isinstance(layer_log, BoundaryNode):
-        return [layer_log.display_label]
+        return list(layer_log.lines) or [layer_log.display_label]
 
-    if node_label_fields is not None:
-        selected_lines = _compute_selected_node_lines(
-            layer_log, node_address, vis_mode, node_label_fields
-        )
-        append_overlay_lines(selected_lines, layer_log, node_overlay)
-        return selected_lines
-
-    annotation = _rolling_annotation(layer_log, vis_mode)
-    # An atomic module rectangle carries its split call range on the ``@module``
-    # marking (e.g. ``@shared:1-2,3-5``); keep the title's count clean and
-    # non-redundant in that case, and fall back to a plain ``(xN)`` count.
-    atomic_marking_has_range = getattr(layer_log, "is_atomic_module", False) and (
-        ":" in node_address
+    # A test's outcome row (with its IF/ELIF kind) leads every label, picker or not.
+    lines = [bool_value_line(layer_log)] if layer_log.is_terminal_bool else []
+    # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; the "label" token keeps it too.
+    module_row = node_label_fields is None or "module" in node_label_fields
+    call_label = pass_mark_suffix(
+        layer_log, node_address, vis_mode, _rolled_mark, module_row=module_row
     )
-    if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.pass_number}"
-    elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        if atomic_marking_has_range:
-            call_label = ""
-        else:
-            rolling_suffix = _format_rolling_suffix(annotation)
-            if rolling_suffix:
-                call_label = rolling_suffix
-            else:
-                call_label = f" (x{_rolled_visual_num_passes(layer_log)})"
-    else:
-        call_label = ""
+    if node_label_fields is not None:
+        lines += _compute_selected_node_lines(
+            layer_log, node_address, vis_mode, node_label_fields, call_label
+        )
+        append_overlay_lines(lines, layer_log, node_overlay)
+        return lines
 
+    # Titles are trace keys: ``layer_label`` (plus ``:pass`` when unrolled), never a
+    # ``{type}_{type_index}_{step_index}`` rebuild. ``step_index`` is renumbered per op
+    # after labeling, so in a recurrent graph it names no layer (sum_1_14 for sum_1_5).
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        # F2: show the RESOLVABLE trace identity ``layer_label:pass`` (== op.label,
-        # e.g. linear_1_1:2) instead of ``{type}_{type_index}_{step_index}:{pass}``.
-        # The latter renumbers the ordinal from this pass's step_index and yields an
-        # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
-        # users copying the displayed name got a "not found" ValueError.
         title = f"{layer_log.layer_label}:{layer_log.pass_number}"
     elif (layer_type := record_type(layer_log)) in ["input", "output", "buffer"]:
         title = f"{layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        title = f"{layer_log.layer_label}{call_label}"
 
-    lines: list[str] = []
-    if layer_log.is_terminal_bool:
-        lines.append(str(layer_log.bool_value).upper())
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
     # data, escaped like every row by the S5 choke point).
     shape_summary = getattr(layer_log, "shape_summary", None)
     if isinstance(shape_summary, str) and shape_summary:
         lines.append(shape_summary)
-    lines.append(f"{format_shape(layer_log.shape)}, {format_memory(layer_log.activation_memory)}")
+    lines.extend(shape_rows(layer_log, with_memory=True))
 
     if show_saved_for_backward and (saved := saved_for_backward_line(layer_log, vis_mode)):
         lines.append(saved)

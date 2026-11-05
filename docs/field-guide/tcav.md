@@ -6,7 +6,9 @@ logit increases along it. A TCAV score alone is correlational. This recipe adds
 the causal check: steer the layer along the CAV and measure the change in the
 class score. TorchLens supplies the activations, the gradients and the
 steering; TCAV itself stays a recipe. For a packaged TCAV with its statistics,
-use Captum's `captum.concept.TCAV`.
+use Captum's `captum.concept.TCAV`. To find concepts instead of naming them, see
+[CRAFT](craft_concepts.md), which factorizes one layer's activations and ranks
+the factors by importance.
 
 ## Minimal example on the running model
 

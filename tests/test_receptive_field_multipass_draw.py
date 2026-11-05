@@ -41,7 +41,7 @@ def test_node_spec_draw_tolerates_multi_pass_layers(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     assert len(trace["relu"].ops) == 2, "the fixture must exercise a multi-pass layer"
-    target = trace["conv2"]
+    target = trace.ops["conv2"]
     unit = target.receptive_field.center_unit(batch_index=0)
 
     drawing = trace.draw(

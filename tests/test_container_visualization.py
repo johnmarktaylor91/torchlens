@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.experimental import dagua
 
 
 class DictOutputModel(nn.Module):
@@ -229,38 +228,3 @@ def test_show_containers_survives_multipass_layers(
         file_format="dot",
         path=str(tmp_path / f"{vis_mode}_{show_containers}"),
     )
-
-
-def test_dagua_container_semantics_survive_multipass_layers() -> None:
-    """The dagua bridge degrades per-pass container reads on rolled Layers.
-
-    Exercises the bridge helper directly so the regression is covered even
-    without the optional dagua runtime installed.
-    """
-
-    from torchlens.experimental.dagua._bridge import _container_semantic_attrs
-
-    trace = tl.trace(RecurrentDictOutputModel(), torch.randn(2, 4))
-    multipass_layer = trace.layers["relu_1_2"]
-    assert multipass_layer.num_passes > 1
-
-    attrs = _container_semantic_attrs(multipass_layer)
-
-    assert attrs == {
-        "container_group": None,
-        "container_kind": None,
-        "container_role": None,
-    }
-
-
-def test_dagua_graph_carries_container_semantic_attrs() -> None:
-    """Dagua bridge carries portable semantic container metadata."""
-    pytest.importorskip("dagua")
-
-    trace = _trace(DictOutputModel())
-    graph = dagua.trace_to_dagua_graph(trace)
-
-    assert "final_output:0:dict" in graph.container_group
-    assert "dict" in graph.container_kind
-    assert "a" in graph.container_role
-    assert "b" in graph.edge_container_role

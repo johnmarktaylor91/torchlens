@@ -189,7 +189,7 @@ def test_diff_drawing_of_a_reused_module_does_not_refuse(tmp_path: Path) -> None
         ablated.do(
             tl.module("relu"),
             tl.zero_ablate(),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
 

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from ._accessor_base import SharedNamesMixin, SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor, member_lookup
 from ._base import _TENSOR_FIELD_LITERAL, Super, _TensorBearing
 
 if TYPE_CHECKING:
@@ -209,10 +209,7 @@ class SuperModuleAccessor(SharedNamesMixin, SuperAccessor["Module", SuperModule]
             Matching Module, or ``None`` when unresolved.
         """
 
-        try:
-            resolved = trace.modules[label]
-        except (KeyError, ValueError):
-            return None
+        resolved = member_lookup(trace.modules, label)
         return cast("Module", resolved) if type(resolved).__name__ == "Module" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
@@ -264,10 +261,7 @@ class SuperBufferAccessor(SharedNamesMixin, SuperAccessor["Buffer", SuperBuffer]
             Matching Buffer, or ``None`` when unresolved.
         """
 
-        try:
-            return cast("Buffer", trace.buffers[label])
-        except (KeyError, ValueError):
-            return None
+        return cast("Buffer", member_lookup(trace.buffers, label))
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return buffer labels from one member trace.
@@ -318,10 +312,7 @@ class SuperParamAccessor(SharedNamesMixin, SuperAccessor["Param", SuperParam]):
             Matching Param, or ``None`` when unresolved.
         """
 
-        try:
-            return cast("Param", trace.params[label])
-        except (KeyError, ValueError):
-            return None
+        return cast("Param", member_lookup(trace.params, label))
 
     def _labels_in_member(self, trace: Any) -> list[str]:
         """Return parameter labels from one member trace.
@@ -372,10 +363,7 @@ class SuperGradFnAccessor(SharedNamesMixin, SuperAccessor["GradFn", SuperGradFn]
             Matching GradFn, or ``None`` when unresolved.
         """
 
-        try:
-            resolved = trace.autograd.grad_fns[label]
-        except (KeyError, ValueError):
-            return None
+        resolved = member_lookup(trace.autograd.grad_fns, label)
         return cast("GradFn", resolved) if type(resolved).__name__ == "GradFn" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
@@ -425,10 +413,7 @@ class SuperModuleCallAccessor(SuperAccessor["ModuleCall", SuperModuleCall]):
             Matching ModuleCall, or ``None`` when unresolved.
         """
 
-        try:
-            resolved = trace.module_calls[label]
-        except (KeyError, ValueError):
-            return None
+        resolved = member_lookup(trace.module_calls, label)
         return cast("ModuleCall", resolved) if type(resolved).__name__ == "ModuleCall" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:
@@ -482,10 +467,7 @@ class SuperGradFnCallAccessor(SuperAccessor["GradFnCall", SuperGradFnCall]):
             Matching GradFnCall, or ``None`` when unresolved.
         """
 
-        try:
-            resolved = trace.autograd.grad_fn_calls[label]
-        except (KeyError, ValueError):
-            return None
+        resolved = member_lookup(trace.autograd.grad_fn_calls, label)
         return cast("GradFnCall", resolved) if type(resolved).__name__ == "GradFnCall" else None
 
     def _labels_in_member(self, trace: Any) -> list[str]:

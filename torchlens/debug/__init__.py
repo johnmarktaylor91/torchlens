@@ -76,7 +76,8 @@ from ._graph_breaks import (
     GraphBreakReport as GraphBreakReport,
     graph_breaks,
 )
-from ._infer_input_shape import GuessInputShapeReport, guess_input_shape
+from ._infer_input_shape import guess_input_shape
+from ._infer_report import GuessInputShapeReport
 from ._nan import (
     BisectNanReport,
     FindNanReport,

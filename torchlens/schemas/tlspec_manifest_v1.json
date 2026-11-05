@@ -30,7 +30,7 @@
     },
     "kind": {
       "type": "string",
-      "enum": ["intervention", "trace", "bundle"]
+      "enum": ["intervention", "trace", "bundle", "recipe"]
     },
     "created_at": {
       "type": "string",

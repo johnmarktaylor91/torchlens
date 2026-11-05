@@ -6,6 +6,7 @@ per-family modules never import each other or the package facade.
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
@@ -214,3 +215,19 @@ def _scalarize_cell(value: Any) -> Any:
     except Exception:
         pass
     return repr(value)
+
+
+def _cook_recording(log: Any) -> Any:
+    """Return ``log`` cooked into a Trace when it is a ``Recording``, else unchanged.
+
+    The exporters' product is Trace structure and saved values, so a sparse
+    recording is cooked through ``Recording.to_trace()`` first; its typed
+    refusals (failed, events not retained, multi-pass) propagate unchanged.
+    The ``sys.modules`` gate keeps ordinary exports free of the recording
+    import: a Recording can only exist after its module was imported.
+    """
+
+    recording_types = sys.modules.get("torchlens.recording.types")
+    if recording_types is not None and isinstance(log, recording_types.Recording):
+        return log.to_trace()
+    return log

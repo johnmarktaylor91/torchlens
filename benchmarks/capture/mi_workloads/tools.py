@@ -17,7 +17,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from .common import first_tensor
+from .common import DEVICE, first_tensor
 
 
 class Skip(RuntimeError):
@@ -325,7 +325,7 @@ class TLBind:
 
 
 class TLFastRerun:
-    """Trace once with the intervention staged, then trace.run(inputs=..., fast=True) per call.
+    """Trace once with the intervention staged, then trace.run_transaction(inputs=..., fast=True) per call.
 
     Only on branches that ship the fast steered rerun; elsewhere the first run refuses and we Skip.
     """
@@ -362,7 +362,7 @@ class TLFastRerun:
         tl = self.tl
         t = self._trace_for(ids, site, delta)
         try:
-            out = t.run(inputs=ids, fast=True)
+            out = t.run_transaction(inputs=ids, fast=True)
         except Exception as e:  # noqa: BLE001
             raise Skip(f"fast rerun refused: {type(e).__name__}: {str(e)[:200]}") from e
         refused = (
@@ -506,7 +506,7 @@ def _load_tlens(model: nn.Module, tok: Any, model_id: str) -> Any:
         HookedTransformer = None
     if HookedTransformer is not None:
         return HookedTransformer.from_pretrained_no_processing(
-            model_id, hf_model=model, tokenizer=tok, device="cpu", dtype=torch.float32
+            model_id, hf_model=model, tokenizer=tok, device=str(DEVICE), dtype=torch.float32
         )
     try:
         from transformer_lens.model_bridge import TransformerBridge
@@ -515,7 +515,7 @@ def _load_tlens(model: nn.Module, tok: Any, model_id: str) -> Any:
             from transformer_lens import TransformerBridge
         except Exception as e:  # noqa: BLE001
             raise Skip(f"transformer_lens has neither HookedTransformer nor a bridge: {e}") from e
-    bridge = TransformerBridge.boot_transformers(model_id, device="cpu")
+    bridge = TransformerBridge.boot_transformers(model_id, device=str(DEVICE))
     try:
         bridge.enable_compatibility_mode(no_processing=True)
     except TypeError:

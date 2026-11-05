@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
 from .errors import ReplayPreconditionError
@@ -144,6 +145,14 @@ def _unmet_log_precondition(log: Trace) -> str | None:
         getattr(log, "is_replayable", False)
         or getattr(getattr(log, "options", None), "save_arg_templates", False)
     ):
+        backend = str(log._provenance_backend or TORCH_BACKEND_NAME)
+        if backend != TORCH_BACKEND_NAME:
+            return (
+                f"the {backend} preview backend cannot edit or patch a finished trace: replay "
+                "needs per-op argument templates, which only PyTorch captures record; stage "
+                f"the edit in a new run: tl.trace(model, inputs, backend={backend!r}, "
+                "intervene=...)"
+            )
         return (
             "replay requires per-op argument templates, and this trace has none (a "
             "tl.record recording and a structure_only capture keep none; every other "

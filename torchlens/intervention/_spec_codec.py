@@ -122,18 +122,17 @@ def _validate_spec_json_structure(data: dict[str, Any], spec_path: Path) -> None
 
 def _validate_format_version(format_version: Any, *, path: Path | None = None) -> None:
     """Check ``format_version`` against ``SPEC_FORMAT_VERSIONS``: a refused row raises the
-    one 2.x error (``artifact_version_below_floor``), an unknown version raises
+    one pre-2.38 error (``artifact_version_below_floor``), an unknown version raises
     ``spec_format_version_unsupported``. ``path`` is the spec directory when the caller
     has it, for the refusal's fields."""
 
     row = next((r for r in SPEC_FORMAT_VERSIONS if r.version == str(format_version)), None)
     if row is not None and row.status == "refused":
-        from .._io._pre3_module_paths import INTERVENTION_V1_NOTE, pre_3_artifact_error
+        from .._io.format_contract import below_floor_error
 
-        raise pre_3_artifact_error(
-            f"intervention format_version={row.version}",
+        raise below_floor_error(
+            observed=f"intervention format_version={row.version}",
             path=None if path is None else str(path),
-            remedy_note=INTERVENTION_V1_NOTE,
             code="artifact_version_below_floor",
         )
     if row is None:

@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import quiet
 from torchlens.intervention.errors import EngineDispatchError
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -43,11 +44,8 @@ def _mask(x: torch.Tensor) -> torch.Tensor:
 def _saved(model: nn.Module, x: torch.Tensor, path: Path, *, intervened: bool) -> Path:
     trace = tl.trace(model, x, save="all", capture=CaptureOptions(replayable=True))
     if intervened:
-        trace.do(
-            tl.units(trace.input_ops[0].label, _mask(x)),
-            tl.zero_ablate(),
-            intervention=InterventionOptions(confirm_mutation=True),
-        )
+        with quiet():  # a deliberate root-trace edit; the warning is not under test
+            trace.do(tl.units(trace.input_ops[0].label, _mask(x)), tl.zero_ablate())
     trace.save(path, level="portable", overwrite=True)
     return path
 

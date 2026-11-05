@@ -277,7 +277,8 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `_loaded_from_bundle`) became direct private reads guarded by
     # try/except AttributeError, so no destination package rises.
     "_data_classes": 22,
-    "experimental": 1,
+    # experimental 1 -> 0 (2026-11-03): the alternate renderer bridge and its
+    # one reach-in were removed with the package.
     "recording": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
     # consolidation): the replay.py refresh scrub discards one key from the
