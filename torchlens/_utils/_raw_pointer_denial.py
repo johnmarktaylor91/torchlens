@@ -18,7 +18,7 @@ non-NULL address is an arbitrary-memory read / type-confusion primitive.
 Denying these ONE NAME AT A TIME does not terminate: the legacy constructors
 alone are 38 classes across ``torch`` / ``torch.cuda`` / ``torch.sparse`` /
 ``torch.cuda.sparse`` that torch regenerates per dtype, so every new dtype
-sibling is a new gadget. This module closes the CLASS with two structural rules
+sibling is a new gadget. This module closes the CLASS with three structural rules
 and no enumeration of individual names:
 
 1. CONSTRUCTOR-TYPE rule (:func:`is_raw_pointer_constructor_type`). Every torch
@@ -42,7 +42,14 @@ and no enumeration of individual names:
    (an ``IGNORED_FUNCS`` roster row that TorchLens does decorate and log, with
    uninitialized-memory semantics tracked in ``_utils/_uninit_alloc.py``) keeps
    resolving and running, while the keyword-only ``cdata=`` spelling of the SAME
-   callable is refused before any call happens.
+   callable is refused before any call happens. Replay validation of a loaded
+   bundle applies the same keyword rule twice: the op never resolves, and every
+   re-execution refuses it (``validation/_loaded_callables``).
+
+3. PRIVATE-C rule (:func:`is_unlisted_private_c_callable`). The signature rule
+   cannot read a pybind builtin, so a callable of a ``torch._C.*`` submodule fails
+   CLOSED unless that module is EXACTLY listed by the gate; the bare ``torch`` /
+   ``torch._C`` prefix never admits ``torch._C._aoti`` or ``torch._C._cudart``.
 
 The parameter names were chosen to have zero overlap with the pure forward-op
 surface: no captured torch forward op takes a parameter named ``cdata``,
@@ -52,9 +59,9 @@ namespaces -- ``tests/test_sec_raw_pointer_family.py`` re-enumerates at runtime
 so a future admission regression fails). ``data_ptr`` as a RESULT (the pure read
 ``Tensor.data_ptr()``, which consumes no address) is deliberately NOT denied.
 
-Leaf module: imports ``torch`` and the standard library only, so the early
-security front doors (``_io/_safe_unpickle``, ``_io/_alloc_belt``) can use it
-without import-order coupling.
+Leaf module: imports ``torch`` and the standard library only, so the gate in
+``_utils/_callable_safety`` (which the early security front doors call) can
+import it without import-order coupling.
 """
 
 from __future__ import annotations
@@ -140,9 +147,10 @@ def raw_pointer_keyword_name(names: Iterable[str]) -> str | None:
 def signature_takes_raw_pointer(func: Callable[..., Any]) -> bool:
     """Return whether an inspectable callable accepts a raw-pointer parameter.
 
-    Fails SAFE in the permissive direction for non-inspectable C builtins (no
-    signature -> ``False``): those are closed by the constructor-type rule and by
-    the keyword refusal at the replay argument boundary, not here.
+    Non-inspectable C builtins (no signature) return ``False`` here: they are
+    closed by the constructor-type rule, by :func:`is_unlisted_private_c_callable`
+    (which fails CLOSED for a pybind builtin of an unlisted ``torch._C.*``
+    submodule) and by the keyword refusals at the replay boundaries.
 
     Parameters
     ----------
@@ -160,6 +168,58 @@ def signature_takes_raw_pointer(func: Callable[..., Any]) -> bool:
     except (TypeError, ValueError):  # C builtins expose no signature.
         return False
     return any(is_raw_pointer_parameter_name(name) for name in signature.parameters)
+
+
+def is_unlisted_private_c_callable(func: Callable[..., Any], listed: frozenset[str]) -> bool:
+    """Return whether a callable lives in a ``torch._C.*`` submodule not EXACTLY listed.
+
+    Private-C submodules hold pybind / C builtins with no inspectable signature,
+    so the signature rule cannot see a positional raw pointer
+    (``torch._C._aoti.alloc_tensor_by_stealing_from_void_ptr``,
+    ``torch._C._cudart.cudaHostRegister``) or a library-loading constructor
+    (``torch._C._aoti.AOTIModelContainerRunnerCpu``). Such a callable fails
+    CLOSED unless its module is an exact entry of the forward-op allowlist; the
+    bare ``torch`` / ``torch._C`` prefix entries never admit it.
+
+    Parameters
+    ----------
+    func:
+        Capture-unwrapped callable under the security gate.
+    listed:
+        The gate's forward-op module allowlist (exact module names).
+
+    Returns
+    -------
+    bool
+        ``True`` for a callable of an unlisted ``torch._C.<sub>`` module.
+    """
+
+    module = str(getattr(func, "__module__", "") or "")
+    return module.startswith("torch._C.") and module not in listed
+
+
+def is_raw_pointer_risk(func: Callable[..., Any], listed: frozenset[str]) -> bool:
+    """Return whether the gate must deny ``func`` under any raw-pointer rule.
+
+    Parameters
+    ----------
+    func:
+        Capture-unwrapped callable under the security gate.
+    listed:
+        The gate's forward-op module allowlist (exact module names).
+
+    Returns
+    -------
+    bool
+        ``True`` for a tensor / storage class, a callable whose signature takes a
+        pointer, or a callable of an unlisted ``torch._C.*`` submodule.
+    """
+
+    return (
+        is_raw_pointer_constructor_type(func)
+        or signature_takes_raw_pointer(func)
+        or is_unlisted_private_c_callable(func, listed)
+    )
 
 
 def _storage_base_classes() -> tuple[type, ...]:

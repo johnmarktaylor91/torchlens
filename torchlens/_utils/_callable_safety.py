@@ -1289,10 +1289,10 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     still resolve. Module-less C tensor method descriptors are admitted when bound to a
     Tensor class (so the whole C tensor-op surface keeps resolving).
 
-    Raw-pointer family (r50): every torch tensor / storage CLASS and every inspectable
-    pointer / address / handle-taking callable is denied structurally before the module
-    gate (``_raw_pointer_denial``), closing the ``torch.<dtype>Tensor`` ``cdata=``
-    constructor families and their future siblings as a CLASS.
+    Raw-pointer family (r50): every torch tensor / storage CLASS, every inspectable
+    pointer / address / handle-taking callable and every builtin of a ``torch._C.*``
+    submodule not EXACTLY listed is denied before the module gate (``_raw_pointer_denial``),
+    closing the ``cdata=`` constructor families and the pybind pointer adopters as a CLASS.
 
     Anything else -- notably ``torch.load`` / ``torch.save`` / ``torch.from_file``, the
     functionalization controls, the state mutators ``set_default_dtype`` /
@@ -1324,9 +1324,9 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # ``torch`` namespace cannot slip. Fails safe: no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50: deny the RAW-POINTER family structurally (``_raw_pointer_denial``). Runs
-    # BEFORE the module gate, which prefix-admitted ``torch.cuda`` / ``torch.sparse``.
-    if _rawptr.is_raw_pointer_constructor_type(real) or _rawptr.signature_takes_raw_pointer(real):
+    # r50: deny the RAW-POINTER family structurally (``_raw_pointer_denial``) BEFORE the
+    # module gate, whose bare ``torch`` / ``torch._C`` prefixes admit deeper submodules.
+    if _rawptr.is_raw_pointer_risk(real, _ALLOWED_FORWARD_OP_MODULES):
         return False
     module = str(getattr(real, "__module__", "") or "")
     if module == "":
