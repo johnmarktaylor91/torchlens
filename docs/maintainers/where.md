@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1658 modules, 692258 lines, 0 modules without a docstring.
+85 packages, 1658 modules, 692259 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3069 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 67 | 22282 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 67 | 22316 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 98 | 48413 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5263 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 15 | 5419 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 77 | 31853 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 77 | 31820 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2752 |
 
 ## Modules by package
@@ -906,7 +906,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (67 modules, 22282 lines)
+Shared helpers used by two or more TorchLens packages. (67 modules, 22316 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -943,7 +943,7 @@ Shared helpers used by two or more TorchLens packages. (67 modules, 22282 lines)
 | `_package_frames` | Which Python frames belong to TorchLens itself. | 78 |
 | `_producer_version` | Parse the torch version a saved artifact recorded (never the live runtime). | 31 |
 | `_quiet_property` | Attribute reads for the tensor search that keep property getters' log records quiet. | 75 |
-| `_raw_pointer_denial` | Structural raw-pointer denial for resolved callables and bundle keywords. | 397 |
+| `_raw_pointer_denial` | Structural raw-pointer denial for resolved callables and bundle keywords. | 429 |
 | `_runnable_alias_resolver` | Runnable torch alias resolution: successors for recorded torch callable paths. | 196 |
 | `_runnable_torch_aliases` | Monotonic torch callable moves for sparse runnable reattachment (a data-only leaf). | 215 |
 | `_script_call_slot` | Probe for the TorchScript call boundary: can ''ScriptFunction.__call__'' be replaced. | 35 |
@@ -959,7 +959,7 @@ Shared helpers used by two or more TorchLens packages. (67 modules, 22282 lines)
 | `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4275 |
 | `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 276 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
-| `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 453 |
+| `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 455 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_uninit_alloc` | Uninitialized-memory value-source family ( hon_2): ONE closed table. | 226 |
@@ -2253,7 +2253,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (77 modules, 31853 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (77 modules, 31820 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2298,7 +2298,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_invariants_topology` | Trace consistency and graph topology invariants. | 761 |
 | `_layer_grad_report` | Layer-gradient parity report for PATH E module-output validation. | 322 |
 | `_live_model_state` | Restore a validated model's state without writing into unchanged tensors. | 163 |
-| `_loaded_callables` | Resolve a loaded trace's op callables from their recorded function identities. | 196 |
+| `_loaded_callables` | Resolve a loaded trace's op callables from their recorded function identities. | 163 |
 | `_mask_builder_dependence` | Pre-perturbation check for the declared unread arguments of known transformers mask builders. | 276 |
 | `_masked_scatter_perturbation` | Count-preserving mask perturbation for ''masked_scatter''. | 100 |
 | `_membership_perturbation` | Membership-toggling parent perturbation for ''torch.isin''. | 152 |
