@@ -270,7 +270,8 @@ def test_default_capture_reconstructs_a_recorded_padding_mask() -> None:
 
     model = _MaskBuildingWrapper().eval()
     x = _padded_input()
-    view = tl.trace(model, x).modules["attn"].facets
+    log = tl.trace(model, x)  # held: a module record's facets read through its live trace
+    view = log.modules["attn"].facets
 
     pattern = view.pattern.value
     assert torch.allclose(pattern, _manual_masked_pattern(model, x), atol=1e-6)
@@ -294,7 +295,8 @@ def test_train_mode_sdpa_dropout_fails_closed_on_default_capture() -> None:
     """Active SDPA dropout keeps the reconstruction refused on a default capture."""
 
     model = _MaskBuildingWrapper(dropout_p=0.5).train()
-    view = tl.trace(model, _padded_input()).modules["attn"].facets
+    log = tl.trace(model, _padded_input())
+    view = log.modules["attn"].facets
 
     with pytest.raises(MissingFacetError, match="dropout"):
         view.pattern
