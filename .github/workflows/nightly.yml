@@ -358,11 +358,13 @@ jobs:
     # The tier test-tiers.json declares as pre_merge: 'not rare and not slow'
     # in 8 single-process shards with one seed, so serial and heavy tests run
     # here safely, on the pinned environment. `--tier-shard INDEX/COUNT`
-    # (tests/_tiers_plugin.py) keeps whole test files, balanced by the tracked
-    # per-file durations in tests/tiers/durations.csv exactly as
-    # `python scripts/tier_durations.py shards --count 8` prints them;
-    # regenerate that file with `tier_durations.py regenerate` from a tier
-    # run's junit.
+    # (tests/_tiers_plugin.py) balances the selected tests by the tracked
+    # per-file durations in tests/tiers/durations.csv, each test capped at its
+    # own tier's budget (the file rows also measure the slow tests this tier
+    # deselects), splitting any file heavier than a quarter of a shard,
+    # exactly as `python scripts/tier_durations.py shards --count 8 --items
+    # <collect-only listing>` prints them; regenerate that file with
+    # `tier_durations.py regenerate` from a tier run's junit.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -821,7 +823,7 @@ jobs:
     name: Mid-tier coverage data (shard ${{ matrix.shard }} of 4)
     # The aggregate floor's measurement (see the coverage job's comment): the
     # mid tier, 'not rare and not slow and not heavy', under branch coverage,
-    # in 4 whole-file shards (`--tier-shard`, balanced by
+    # in 4 shards (`--tier-shard`, balanced by
     # tests/tiers/durations.csv), each at -n 4. Shard 4, the lightest (measured
     # 2026-11-03: 545 to 1,007 s against 761 to 1,462 s for the heaviest), also
     # runs the tier's serial tests in one process, as the CI serial step does. A shard holds a

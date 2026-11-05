@@ -18,6 +18,7 @@ Commands::
     python scripts/tier_durations.py check
     python scripts/tier_durations.py shards --count 6
     python scripts/tier_durations.py shards --count 6 --index 2
+    python scripts/tier_durations.py shards --count 8 --items collected.txt
     python scripts/tier_durations.py files --tier smoke
 
 ``regenerate`` aggregates a pytest junit XML (``--junitxml``), a per-test CSV
@@ -27,8 +28,12 @@ the previous rows of files on disk the measurement never reached (rare-only
 files, modules skipped at collection).
 ``check`` fails when a bounded file's slowest test exceeds its tier budget and
 is the body of the ``tier-durations`` repository check. ``shards`` balances the
-test files on disk over ``--count`` shards by measured seconds (longest
-processing time first); ``--index`` prints one shard's files for ``pytest``.
+test files on disk over ``--count`` shards by their whole-suite measured seconds
+(longest processing time first); ``--index`` prints one shard's files. With
+``--items`` (a selection's collect-only output) it balances that selection's
+tests the way ``--tier-shard`` does: the rows measure every tier, so each
+selected test is weighted by its file's mean capped at the test's own tier
+budget, and a file heavier than a quarter of a shard is split test by test.
 ``files --tier smoke`` prints the smoke file list: every ``test_*.py`` whose
 source spells a smoke mark, computed from the tree on each call (nothing is
 stored, so it cannot go stale). Every smoke run collects only these files.
@@ -356,6 +361,87 @@ def shard_seconds(rows: list[FileRow], shard: list[str]) -> float:
     return sum(seconds.get(file, 0.0) for file in shard)
 
 
+#: A file whose selected tests weigh more than this share of one even shard is
+#: dealt out test by test; lighter files stay whole (module fixtures run once).
+SPLIT_FILE_SHARE = 0.25
+
+
+@dataclass(frozen=True)
+class ShardItem:
+    """One selected test: its file, node id and own tier (``unmarked`` when it carries none)."""
+
+    file: str
+    nodeid: str
+    tier: str
+
+
+def item_weights(rows: list[FileRow], items: Iterable[ShardItem]) -> dict[str, float]:
+    """Estimate each selected test's seconds from its file's row, capped by the test's own tier.
+
+    The ledger measures every tier, so a file's mean seconds per test is mostly
+    its slow tests' time when it has any. A selected test that is not slow or
+    rare is bounded by its tier budget, so its estimate is the smaller of the
+    file mean and that budget. Files without a row take the median file mean.
+    """
+
+    means = {
+        row.file: row.seconds / row.tests for row in rows if row.tests and row.tier != "missing"
+    }
+    fallback = statistics.median(means.values()) if means else 1.0
+    weights: dict[str, float] = {}
+    for item in items:
+        mean = means.get(item.file, fallback)
+        budget = TIER_BUDGETS.get(item.tier, SMOKE_DURATION_BUDGET_SECONDS)
+        weights[item.nodeid] = mean if budget is None else min(mean, budget)
+    return weights
+
+
+def balanced_item_shards(rows: list[FileRow], count: int, items: list[ShardItem]) -> dict[str, int]:
+    """Assign every selected test to one of ``count`` shards; return node id to shard index.
+
+    Balances the session's own selection, not the whole-suite rows: tests are
+    weighted by ``item_weights``; a file heavier than ``SPLIT_FILE_SHARE`` of an
+    even shard is split into single tests, every other file is one unit; units
+    go longest first to the least-loaded shard. The result depends only on the
+    set of items (never their order), so every shard process and xdist worker
+    computes the same split.
+    """
+
+    ordered = sorted(items, key=lambda item: item.nodeid)
+    weights = item_weights(rows, ordered)
+    by_file: dict[str, list[str]] = {}
+    for item in ordered:
+        by_file.setdefault(item.file, []).append(item.nodeid)
+    limit = SPLIT_FILE_SHARE * sum(weights.values()) / max(count, 1)
+    units: list[tuple[float, str, list[str]]] = []
+    for file, nodeids in by_file.items():
+        load = sum(weights[n] for n in nodeids)
+        if load > limit and len(nodeids) > 1:
+            units += [(weights[n], n, [n]) for n in nodeids]
+        else:
+            units.append((load, file, nodeids))
+    units.sort(key=lambda unit: (-unit[0], unit[1]))
+    loads = [0.0] * count
+    assignment: dict[str, int] = {}
+    for load, _key, nodeids in units:
+        target = min(range(count), key=lambda i: (loads[i], i))
+        loads[target] += load
+        assignment.update(dict.fromkeys(nodeids, target))
+    return assignment
+
+
+def read_collected_items(path: Path) -> list[ShardItem]:
+    """Read ``pytest --collect-only -q`` output (``nodeid`` or ``nodeid<TAB>tier`` lines)."""
+
+    items: list[ShardItem] = []
+    for line in path.read_text().splitlines():
+        nodeid, _, tier = line.strip().partition("\t")
+        if "::" not in nodeid:
+            continue
+        items.append(ShardItem(nodeid.split("::", 1)[0], nodeid, tier.strip() or "unmarked"))
+    return items
+
+
 # ----------------------------------------------------------------------- CLI
 
 
@@ -443,7 +529,25 @@ def _check(args: argparse.Namespace) -> int:
     return 1 if structural or failures else 0
 
 
+def _item_shards(args: argparse.Namespace) -> int:
+    rows = read_rows(args.durations)
+    items = read_collected_items(args.items)
+    assignment = balanced_item_shards(rows, args.count, items)
+    weights = item_weights(rows, items)
+    if args.index is not None:
+        print("\n".join(item.nodeid for item in items if assignment[item.nodeid] == args.index))
+        return 0
+    for index in range(args.count):
+        mine = [item for item in items if assignment[item.nodeid] == index]
+        files = len({item.file for item in mine})
+        estimate = sum(weights[item.nodeid] for item in mine)
+        print(f"shard {index}: {len(mine)} tests from {files} files, {estimate:.0f}s estimated")
+    return 0
+
+
 def _shards(args: argparse.Namespace) -> int:
+    if args.items is not None:
+        return _item_shards(args)
     rows = read_rows(args.durations)
     shards = balanced_shards(rows, args.count, test_files_on_disk())
     if args.index is not None:
@@ -495,6 +599,14 @@ def build_parser() -> argparse.ArgumentParser:
     shards.add_argument("--count", type=int, required=True)
     shards.add_argument("--index", type=int, help="print only this shard's files, one per line")
     shards.add_argument("--durations", type=Path, default=DURATIONS_PATH)
+    shards.add_argument(
+        "--items",
+        type=Path,
+        help=(
+            "a selection's collect-only output (pytest --collect-only -q, optionally "
+            "nodeid<TAB>tier): balance its tests exactly as --tier-shard does"
+        ),
+    )
     shards.set_defaults(func=_shards)
 
     files = sub.add_parser("files", help="list test files whose source spells a tier")

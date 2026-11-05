@@ -157,15 +157,15 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
-    """Register ``--tier-shard INDEX/COUNT`` (the not-slow tier's file shards)."""
+    """Register ``--tier-shard INDEX/COUNT`` (the not-slow tier's shards)."""
 
     parser.addoption(
         "--tier-shard",
         metavar="INDEX/COUNT",
         default=None,
         help=(
-            "run only the test files of shard INDEX (0-based) of COUNT, balanced by the "
-            "tracked per-file durations (python scripts/tier_durations.py shards)"
+            "run only shard INDEX (0-based) of COUNT of the selected tests, balanced by the "
+            "tracked per-file durations (python scripts/tier_durations.py shards --items)"
         ),
     )
 
@@ -179,27 +179,47 @@ def parse_tier_shard(spec: str) -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
+#: Tier markers an item can carry, loosest first; an item with none is ``unmarked``.
+_ITEM_TIER_MARKERS = ("rare", "slow", "heavy")
+
+
+def item_tier(item: Any) -> str:
+    """Return the loosest tier marker on ``item`` (``unmarked`` when it carries none)."""
+
+    closest = getattr(item, "get_closest_marker", None)
+    for name in _ITEM_TIER_MARKERS:
+        if closest is not None and closest(name) is not None:
+            return name
+    return "unmarked"
+
+
 def tier_shard_items(
     items: list[pytest.Item], index: int, count: int, root: Path
 ) -> tuple[list[pytest.Item], list[pytest.Item]]:
-    """Split ``items`` into this shard's and the rest, by whole test file.
+    """Split the selected ``items`` into this shard's and the rest.
 
-    The files on disk are balanced exactly as ``tier_durations.py shards`` prints
-    them, so the shards are disjoint and together cover every file; an item
-    from a file outside that list (none today) runs in shard 0, never nowhere.
+    The shards balance this session's own selection (``tier_durations.py shards
+    --items`` prints the same split from a collect-only listing): each test is
+    weighted by its file's measured mean capped at its own tier's budget, files
+    heavier than a quarter of a shard are split test by test, the rest stay
+    whole. Every item lands in exactly one shard.
     """
 
-    from scripts.tier_durations import balanced_shards, read_rows, test_files_on_disk
+    from scripts.tier_durations import ShardItem, balanced_item_shards, read_rows
 
-    on_disk = test_files_on_disk()
-    mine = set(balanced_shards(read_rows(), count, on_disk)[index])
-    known = set(on_disk)
+    selected = [
+        ShardItem(
+            Path(str(item.path)).resolve().relative_to(root).as_posix(),
+            item.nodeid,
+            item_tier(item),
+        )
+        for item in items
+    ]
+    assignment = balanced_item_shards(read_rows(), count, selected)
     kept: list[pytest.Item] = []
     dropped: list[pytest.Item] = []
-    for item in items:
-        file = Path(str(item.path)).resolve().relative_to(root).as_posix()
-        in_shard = file in mine or (file not in known and index == 0)
-        (kept if in_shard else dropped).append(item)
+    for item, shard_item in zip(items, selected, strict=True):
+        (kept if assignment[shard_item.nodeid] == index else dropped).append(item)
     return kept, dropped
 
 
