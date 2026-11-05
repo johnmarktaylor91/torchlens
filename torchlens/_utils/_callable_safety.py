@@ -1323,7 +1323,8 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # the allowlisted ``torch`` namespace cannot slip; no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels before the module gate.
+    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels structurally BEFORE the module gate,
+    # whose bare ``torch`` / ``torch._C`` prefixes admit deeper submodules.
     if _unchecked.is_unchecked_memory_kernel(real):
         return False
     if _rawptr.is_raw_pointer_risk(real, _ALLOWED_FORWARD_OP_MODULES):
@@ -1334,10 +1335,9 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     if _matches(module, _DENIED_MODULES) or is_denied_stdlib_or_builtin_module(module):
         return False
     if module in _OPERATOR_MODULES:
-        # POSITIVE allowlist for the operator root: only the pure arithmetic /
-        # comparison / bitwise / index operators are admitted; every generic
-        # gadget or mutation primitive (``call`` / ``attrgetter`` / ``setitem``
-        # / ``iadd`` / ...) is default-denied.
+        # POSITIVE allowlist for the operator root: only the pure arithmetic / comparison / bitwise
+        # / index operators are admitted; every generic gadget or mutation primitive (``call`` /
+        # ``attrgetter`` / ``setitem`` / ``iadd`` / ...) is default-denied.
         return _terminal_callable_name(real) in _ALLOWED_OPERATOR_NAMES
     # r43: on the EXACT internal-builtin roots (``torch`` / ``torch._C`` /
     # ``torch._tensor``) DEFAULT-DENY and admit ONLY structurally-recognized genuine

@@ -4457,6 +4457,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_utils/_sparse_invariant_guard.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
   "field": "label_raw",
   "file": "torchlens/_utils/_tensor_label.py",
   "has_default": false,
