@@ -723,8 +723,7 @@ _RUNNING_RESULT_KEY = "_running_result_ref"
 def run_result_fork(trace: Any, *, in_place: bool) -> Iterator[Any]:
     """Yield the Trace a positional run writes: a fork of ``trace``, or ``trace`` itself.
 
-    The fork keeps the user's annotation blobs, as the in-place rerun did, and starts
-    with no ``last_run``, so the run builds its own run context. While
+    The fork keeps the user's annotation blobs, as the in-place rerun did. While
     the run is in progress ``trace`` holds a weak reference to it, so a sticky
     hook removed through the source's handle mid-run also leaves the fork's
     recipe (``running_result``); the reference is gone when the run ends. A run
@@ -737,9 +736,6 @@ def run_result_fork(trace: Any, *, in_place: bool) -> Iterator[Any]:
         yield trace
         return
     result = _run_result_fork(trace)
-    # The run is the result's own: hooks see a fresh ctx.run_state, never a copy of the
-    # source's last run (its scratch counters would carry into the new run).
-    result.last_run = None
     blobs = trace._user_annotation_blobs()  # user annotate(data=) blobs ride a rerun
     if blobs is not None:
         result._annotation_blobs = dict(blobs)
