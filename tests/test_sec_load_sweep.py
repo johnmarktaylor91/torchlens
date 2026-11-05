@@ -278,7 +278,6 @@ def test_fifo_json_refuses_without_blocking(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "path",
     [
@@ -304,6 +303,7 @@ def test_bounds_unchecked_kernels_are_denied(path: str) -> None:
     assert not is_pure_forward_callable(value), f"{path} admitted"
 
 
+@pytest.mark.smoke
 def test_no_admitted_callable_is_bounds_unchecked() -> None:
     """RUNTIME enumeration of the replay roots: nothing admitted matches the rule."""
 
@@ -349,13 +349,13 @@ def test_crafted_bundle_naming_an_unchecked_kernel_never_runs(tmp_path: Path) ->
         _recompute_runtime_fingerprints(descriptor)
 
     mutate_runnable_descriptor(bundle, _craft)
-    try:
+    with pytest.raises(TorchLensError) as info:
         loaded = tl.load(str(bundle))
-    except TorchLensError:
-        return  # refused at load: nothing was resolved or run
-    assert loaded._runnable.readiness.status is ReadinessStatus.UNAVAILABLE
-    with pytest.raises(RunCapabilityUnavailableError):
+        assert loaded._runnable.readiness.status is ReadinessStatus.UNAVAILABLE
         loaded.run_transaction(inputs=torch.randn(2, 4))
+    assert isinstance(info.value, RunCapabilityUnavailableError) or (
+        "refused for security" in str(info.value)
+    ), info.value
 
 
 @pytest.mark.parametrize("trust", [False, True])
