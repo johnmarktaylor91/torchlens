@@ -181,16 +181,18 @@ an index, a label or a slice, has filters such as `trace.layers.compute`, `trace
 or `trace.params.trainable`, and serves `.labels`, the tuple of its members' lookup labels. Use
 these when you know what kind of thing you want.
 
-The general door is `trace[...]`. It returns an Op, a Selection, a Module, a module call, a
-Param, a Buffer or a backward-graph node, and never a Layer. Integers and slices index the ordered
+The general door is `trace[...]`. It returns a Layer, an Op, a Selection, a Module, a module
+call, a Param, a Buffer or a backward-graph node: the kind the key names. Integers and slices index the ordered
 list of Ops. A string is tried in a fixed order: a module address is first rewritten to its
-canonical form; then the string is looked up as a Layer label, which gives that Layer's Op when it
-has one pass; then among the other lookup keys the labeling step built for every Op; then in each
+canonical form; then the string is looked up as a Layer label, which gives that Layer (single- or
+multi-pass); then among the other lookup keys the labeling step built for every Op; then in each
 typed collection in turn; then case-insensitively; and finally as a substring that must match
 exactly one Op. If nothing matches it raises `KeyError` with a help message. Pass tokens work
 wherever an Op label does: `relu_1_2:2` names one pass, `relu_1_2:last` the last, and
-`relu_1_2:all` returns a Selection of every pass. A bare label of a multi-pass Layer is ambiguous
-and refuses with the code `multipass_bare_label_ambiguous` instead of guessing a pass.
+`relu_1_2:all` returns a Selection of every pass. A bare label of a multi-pass Layer gives the
+aggregate Layer; a door that must give one Op refuses it instead of guessing a pass:
+`trace[tl.label("relu_1_2")]` with the code `multipass_bare_label_ambiguous` and
+`trace.ops["relu_1_2"]` with `ambiguous_op_lookup`.
 
 The third form is a selector. `tl.module(...)`, `tl.func(...)`, `tl.label(...)`, `tl.in_module(...)`,
 `tl.where(...)` and `tl.grad(...)` build a `tl.Selector`, a query that does not depend on any
