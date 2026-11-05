@@ -13,7 +13,9 @@ recorded facts they produce are checked equal to the plain forms they replace.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import sys
+import types
 import warnings
 from collections import OrderedDict
 from typing import Any
@@ -285,3 +287,42 @@ def test_shadow_escape_detector_relu_trace_has_no_unattributed_args() -> None:
     assert not [m for m in messages if "no graph/source provenance" in m], messages
     assert not [m for m in messages if "untyped_storage" in m], messages
     assert not trace.__dict__.get("escape_diagnostics"), trace.__dict__.get("escape_diagnostics")
+
+
+def _walk_visits(monkeypatch: pytest.MonkeyPatch, root: object) -> list[type]:
+    """Run the session walker from ``root``; return the type of every value it is called on."""
+
+    visited: list[type] = []
+    real = _session_cleanup._clear_session_tensor_metadata
+
+    def counting(value: Any, seen: set[int], depth: int = 0, visit: Any = None) -> None:
+        visited.append(type(value))
+        real(value, seen, depth, visit)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(_session_cleanup, "_clear_session_tensor_metadata", counting)
+        _session_cleanup._clear_session_tensor_metadata(root, set())
+    return visited
+
+
+def test_session_walk_stops_at_the_logging_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A logger or handler reachable from a model does not lead the walk to every logger.
+
+    ``Logger.manager.loggerDict`` holds every logger in the process, so walking into
+    it made the walk's size depend on which packages had been imported.
+    """
+
+    stash = torch.ones(2)
+    holder = types.SimpleNamespace(
+        logger=logging.getLogger("torchlens.test.walk"),
+        adapter=logging.LoggerAdapter(logging.getLogger("torchlens.test.walk.adapter"), {}),
+        handler=logging.StreamHandler(),
+        stash=[stash],
+    )
+    before = _walk_visits(monkeypatch, holder)
+    for suffix in ("alpha", "beta", "gamma", "delta"):
+        logging.getLogger(f"torchlens.test.walk.extra.{suffix}").addHandler(logging.NullHandler())
+    after = _walk_visits(monkeypatch, holder)
+    assert before == after
+    assert logging.Manager not in before and logging.PlaceHolder not in before
+    assert torch.Tensor in before  # the walk still reaches the model's own stash
