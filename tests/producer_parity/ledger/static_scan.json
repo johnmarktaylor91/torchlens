@@ -10616,6 +10616,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_snapshot_binding.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "unattributed_tensor_args",
   "file": "torchlens/validation/_source_provenance.py",
