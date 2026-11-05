@@ -4549,6 +4549,8 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     design, never loosen).
     """
 
+    from support.fp8_guard import permit_cpu_float8_allocation
+
     from torchlens._utils.tensor_utils import get_fp8_dtypes
     from torchlens.validation._core import _ground_truth_output_matches_saved
 
@@ -4558,18 +4560,21 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     e4m3 = torch.float8_e4m3fn
     assert e4m3 in fp8_dtypes
 
-    exact = torch.tensor([1.0, 0.5, 0.25], dtype=e4m3)
-    assert _ground_truth_output_matches_saved(exact, exact.clone())
+    # torch 2.1/2.2 CPU cannot fill fresh Float8 storage under the forced
+    # determinism (HAS_CPU_FLOAT8_DETERMINISTIC_FILL); the guard is a no-op elsewhere.
+    with permit_cpu_float8_allocation():
+        exact = torch.tensor([1.0, 0.5, 0.25], dtype=e4m3)
+        assert _ground_truth_output_matches_saved(exact, exact.clone())
 
-    # One fp8 ULP at 1.0 (1.0 -> 1.125) must FAIL: 12.5% relative is real
-    # corruption even though it is a single fp8 quantum.
-    one_ulp = torch.tensor([1.125, 0.5, 0.25], dtype=e4m3)
-    assert not _ground_truth_output_matches_saved(exact, one_ulp)
+        # One fp8 ULP at 1.0 (1.0 -> 1.125) must FAIL: 12.5% relative is real
+        # corruption even though it is a single fp8 quantum.
+        one_ulp = torch.tensor([1.125, 0.5, 0.25], dtype=e4m3)
+        assert not _ground_truth_output_matches_saved(exact, one_ulp)
 
-    # No absolute floor may bless small-magnitude fp8 corruption: subnormal
-    # fp8 values vs an all-zero output must FAIL (atol is zeroed for fp8).
-    sub = torch.tensor([0.001953125, 0.00390625], dtype=e4m3)
-    assert not _ground_truth_output_matches_saved(sub, torch.zeros_like(sub))
+        # No absolute floor may bless small-magnitude fp8 corruption: subnormal
+        # fp8 values vs an all-zero output must FAIL (atol is zeroed for fp8).
+        sub = torch.tensor([0.001953125, 0.00390625], dtype=e4m3)
+        assert not _ground_truth_output_matches_saved(sub, torch.zeros_like(sub))
 
 
 def test_deep_numeric_replay_outlier_bound_scales_with_depth() -> None:

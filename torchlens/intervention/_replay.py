@@ -59,10 +59,12 @@ from ._replay_grad_clear import _clear_op_gradient_projection, _clear_param_grad
 from ._replay_sites import (
     _buffer_thread_candidate,
     _frontier_leaf,
+    _is_passthrough_replacement,
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
     _parent_value,
+    _thread_passthrough_site,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -487,6 +489,9 @@ def _run_replay(
             continue
         if site.call.call_id is not None and site.call.call_id in executed_call_ids:
             continue
+        if _is_passthrough_replacement(site):
+            _thread_passthrough_site(site, state, _commit_member)
+            continue
         group = _group_for_site(site, call_groups, cone_keys)
         if site.call.call_id is not None:
             executed_call_ids.add(site.call.call_id)
@@ -522,14 +527,9 @@ def _run_replay(
             if state.is_preserved_origin(member):
                 continue
             if getattr(member, "is_output", False):
-                # A boundary output node carries its PARENT's resolved slot,
-                # never a re-application of its recorded MODEL-output
-                # container path (the HF structured-output replay crash /
-                # silent integer-path mis-slice). When the parent's value is
-                # already in the overlay (a preserved edited origin, an
-                # earlier group member, a hooked site), the boundary node
-                # mirrors it; otherwise it takes the parent's slot of the
-                # just-executed call.
+                # A boundary output node mirrors its PARENT's resolved slot
+                # (overlay first, else the just-executed call), never its own
+                # recorded MODEL-output container path (HF structured outputs).
                 parent = _boundary_slot_parent_op(member, log, label_keys=state.label_keys)
                 parent_key = _replay_site_key(parent)
                 if parent_key in state.overlay:

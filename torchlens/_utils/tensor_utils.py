@@ -1271,8 +1271,8 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
     _defer_dead_alias_count += 1
     entries = _DEFER_PENDING.get(key)
     if entries is not None:
-        live = [e for e in entries if e.ref() is not None]
-        if not live:
+        live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
+        if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live

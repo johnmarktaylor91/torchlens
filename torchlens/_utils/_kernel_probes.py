@@ -10,8 +10,10 @@ missing, so any other failure still surfaces.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import torch
+from torch.utils._python_dispatch import TorchDispatchMode
 
 from ._cuda_probe import _is_cuda_available
 
@@ -277,5 +279,119 @@ def probe_gradient_edge() -> bool:
             [gradient_edge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
         )
     except Exception:
+        return False
+    return True
+
+
+class _ParameterAsSubclassProbeMode(TorchDispatchMode):
+    """Redispatch operations unchanged for the Parameter subclass capability probe."""
+
+    def __torch_dispatch__(
+        self,
+        func: Any,
+        types: tuple[type[Any], ...],
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Redispatch one probe operation without changing its result.
+
+        Parameters
+        ----------
+        func:
+            Dispatcher operator invoked by the probe.
+        types:
+            Participating tensor subclass types.
+        args:
+            Positional operator arguments.
+        kwargs:
+            Keyword operator arguments.
+
+        Returns
+        -------
+        Any
+            Unmodified operator result.
+        """
+
+        del types
+        return func(*args, **(kwargs or {}))
+
+
+def probe_parameter_as_subclass_in_dispatch_mode() -> bool:
+    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
+    :class:`TorchDispatchMode` is active because the returned raw tensor is already
+    associated with a base ``Tensor`` Python object. Newer torch releases permit the
+    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
+    behavioral probe mirrors the dynamic-parameter logging context without parsing a
+    version string.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    parameter = torch.nn.Parameter(torch.empty(0))
+    try:
+        with _ParameterAsSubclassProbeMode():
+            plain_tensor = parameter.as_subclass(torch.Tensor)
+    except (RuntimeError, TypeError):
+        return False
+    return type(plain_tensor) is torch.Tensor
+
+
+class _SubclassCtorProbe(torch.Tensor):
+    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+
+
+def probe_subclass_ctor_in_dispatch_mode() -> bool:
+    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+
+    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
+    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
+    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
+    subclass X but the raw Tensor object is already associated to a python
+    object of type Tensor." This reproduces on stock torch with a no-op mode
+    (TorchLens's own wrapping is not the cause); newer torch permits the
+    conversion. TorchLens's completeness witness and intervention-ready
+    captures are themselves dispatch modes, so call sites that construct or
+    convert into a strict subclass while one is active need this behavioral
+    probe rather than a parsed version string. Sibling probe (Parameter-to-
+    Tensor, the opposite direction, also version-gated but independently):
+    :func:`probe_parameter_as_subclass_in_dispatch_mode`.
+
+    Returns
+    -------
+    bool
+        ``True`` when the conversion succeeds inside a redispatching mode.
+    """
+
+    base = torch.empty(0)
+    try:
+        with _ParameterAsSubclassProbeMode():
+            converted = base.as_subclass(_SubclassCtorProbe)
+    except (RuntimeError, TypeError):
+        return False
+    return type(converted) is _SubclassCtorProbe
+
+
+def probe_roll_tensor_shifts() -> bool:
+    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
+
+    Older torch (verified: 2.8 rejects with ``RuntimeError: shifts required``;
+    2.13 accepts) does not unpack a 0-dim tensor passed as the ``shifts``
+    argument itself; the tuple spelling ``shifts=(tensor,)`` is accepted
+    everywhere. Behavioral probe on a 1-element tensor, never a version parse.
+
+    Returns
+    -------
+    bool
+        ``True`` when the bare tensor ``shifts`` spelling executes.
+    """
+
+    try:
+        torch.roll(torch.zeros(2), shifts=torch.zeros((), dtype=torch.long))  # type: ignore[arg-type]
+    except (RuntimeError, TypeError):
         return False
     return True

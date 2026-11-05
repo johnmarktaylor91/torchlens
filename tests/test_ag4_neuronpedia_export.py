@@ -27,6 +27,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens.attribution._graph._neuronpedia import check_contract
 
 INFLUENCE_TOL = 1e-12
@@ -171,6 +172,7 @@ def _check_contract(exported: dict) -> None:
 # ---------------------------------------------------------------- cases
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("name", ["F1", "F2", "F3"])
 def test_export_meets_the_structural_contract(graphs, name) -> None:
     exported = _export(graphs[name])
@@ -179,18 +181,21 @@ def test_export_meets_the_structural_contract(graphs, name) -> None:
     assert exported["links"], "the default pruning keeps edges on every fixture"
 
 
+@requires_gradient_edge
 def test_path_writes_the_returned_json(graphs, tmp_path) -> None:
     path = tmp_path / "graph.json"
     exported = _export(graphs["F2"], path=path)
     assert json.loads(path.read_text(encoding="utf-8")) == exported
 
 
+@requires_gradient_edge
 def test_prompt_defaults_to_the_decoded_tokens(graphs) -> None:
     graph = graphs["F1"]
     assert _export(graph)["metadata"]["prompt"] == "".join(f"<{t}>" for t in fx.TOKENS)
     assert _export(graph, prompt="three tokens")["metadata"]["prompt"] == "three tokens"
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -230,6 +235,7 @@ def _with_cycle(graph):
     return dataclasses.replace(graph, adjacency_matrix=adjacency)
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     "change",
     [
@@ -269,6 +275,7 @@ def _broken(exported: dict, change: str) -> dict:
     return broken
 
 
+@requires_gradient_edge
 def test_contract_check_refuses_broken_exports(graphs) -> None:
     exported = _export(graphs["F1"])
     check_contract(exported)

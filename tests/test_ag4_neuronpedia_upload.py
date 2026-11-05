@@ -32,6 +32,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens._selection.subspace import BasisProvenance
 from torchlens.attribution._graph import _neuronpedia_upload as up
 
@@ -134,6 +135,7 @@ def _direction(dim: int = 4, site: str = "model.layers.3") -> tl.intervention.Di
 # ---------------------------------------------------------------- graph upload
 
 
+@requires_gradient_edge
 def test_graph_upload_sends_the_documented_sequence(fake, exported) -> None:
     fake.script = _graph_answers()
     url = tl.attribution.upload_to_neuronpedia(exported, api_key=KEY)
@@ -180,6 +182,7 @@ def _too_small(graph: dict) -> dict:
     return graph
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     ("change", "code"),
     [
@@ -200,6 +203,7 @@ def test_graph_upload_refuses_an_invalid_graph_before_any_request(
     assert fake.sent == []
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["graph", "vector"])
 def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     for key in (None, "", "   "):
@@ -213,6 +217,7 @@ def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     assert fake.sent == []
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     ("script", "step"),
     [
@@ -250,6 +255,7 @@ def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> 
     assert len(fake.sent) == len(script)
 
 
+@requires_gradient_edge
 def test_graph_upload_refuses_a_response_without_its_fields(fake, exported) -> None:
     for answer in ({"url": SIGNED}, {"putRequestId": "p", "url": "http://plain/x.json"}, b"[]"):
         fake.script, fake.sent = [(200, answer)], []
@@ -259,6 +265,7 @@ def test_graph_upload_refuses_a_response_without_its_fields(fake, exported) -> N
         assert len(fake.sent) == 1
 
 
+@requires_gradient_edge
 def test_api_key_and_signature_never_appear_in_errors_or_logs(fake, exported, caplog) -> None:
     caplog.set_level(logging.DEBUG)
     signature = re.search(r"X-Amz-Signature=(\w+)", SIGNED).group(1)
@@ -338,6 +345,7 @@ def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction
 # ---------------------------------------------------------------- never live
 
 
+@requires_gradient_edge
 def test_default_transport_is_never_built_under_tests(exported) -> None:
     """Without a fake, the upload reaches the guarded real transport and nothing else.
 
@@ -353,6 +361,7 @@ def test_default_transport_is_never_built_under_tests(exported) -> None:
         _direction().upload_to_neuronpedia(api_key=KEY, model_id="tiny", name="v")
 
 
+@requires_gradient_edge
 def test_docs_upload_example_runs_against_the_fake_transport(fake, tmp_path, monkeypatch) -> None:
     text = DOC.read_text(encoding="utf-8")
     python_fences = re.findall(r"```python\n(.*?)\n```", text, re.DOTALL)

@@ -234,7 +234,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	487
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3712
+torchlens/_io/runnable_load.py	3711
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -465,9 +465,8 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1393
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1843
+torchlens/_trace_core/op_store.py	1670
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
-torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	136
 torchlens/_trace_core/relation_views.py::freeze_trace_relation_views	79
 torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
@@ -484,7 +483,7 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4356
+torchlens/_utils/_torch_compat.py	4277
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	62
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -557,7 +556,7 @@ torchlens/_visualization/_render_dot.py::_rank_layout_cost_inputs	61
 torchlens/_visualization/_render_dot.py::_resolve_collapse_request	96
 torchlens/_visualization/_render_dot.py::_resolve_forward_context	107
 torchlens/_visualization/_render_dot.py::draw	187
-torchlens/_visualization/_render_edges.py	1918
+torchlens/_visualization/_render_edges.py	1874
 torchlens/_visualization/_render_edges.py::_add_edges_for_node	531
 torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266

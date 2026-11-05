@@ -22,6 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens._utils._record_group_table import record_member
 from torchlens.attribution._viz import attribution_color_by
 
@@ -89,6 +90,7 @@ def _check_painting(trace, color_by, expected: dict[str, float]) -> int:
     return painted
 
 
+@requires_gradient_edge
 def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     _trace, graph = built["F1"]
     other = tl.trace(nn.Sequential(nn.Linear(2, 2)), torch.ones(1, 2))
@@ -98,6 +100,7 @@ def test_graph_overlay_refuses_a_graph_from_another_trace(built) -> None:
     assert "Remedy:" in str(excinfo.value)
 
 
+@requires_gradient_edge
 def test_docs_graph_example_overlay_lines_run(tmp_path) -> None:
     fences = re.findall(r"```python\n(.*?)\n```", DOC.read_text(encoding="utf-8"), re.DOTALL)
     (fence,) = [f for f in fences if "color_by(trace, graph" in f]

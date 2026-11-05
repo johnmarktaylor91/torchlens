@@ -416,6 +416,8 @@ def test_torch_capability_snapshot_contract() -> None:
         # ran them; a build without it charges the innermost node marker.
         "HAS_CURRENT_AUTOGRAD_NODE": tc.HAS_CURRENT_AUTOGRAD_NODE,
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
+        # The unchecked view replay; older torch spells it ``_view_func``.
+        "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
@@ -981,6 +983,25 @@ def test_tensor_any_over_dims_fallback_matches_native_tuple_dim(
     monkeypatch.setattr(tc, "get_reduce_tuple_dim_support", lambda: True)
     native = tc.tensor_any_over_dims(mask, (0, 2))
     assert torch.equal(fallback, native)
+
+
+def test_view_func_replay_falls_back_to_the_older_spelling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``Tensor._view_func_unsafe`` view replay resolves to ``Tensor._view_func``.
+
+    The replay itself is exercised end to end through this fallback by the
+    ``_view_func`` cases of ``tests/test_view_func_replay.py`` on a torch that
+    lacks the newer spelling.
+    """
+
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_VIEW_FUNC_UNSAFE", ("torch:Tensor._no_such_view_func",)
+    )
+    assert tc.get_view_func_replay() is torch.Tensor._view_func
+    monkeypatch.undo()
+    expected = getattr(torch.Tensor, "_view_func_unsafe", torch.Tensor._view_func)
+    assert tc.get_view_func_replay() is expected
 
 
 def test_probe_gradient_edge_is_functional_not_just_attribute_presence(

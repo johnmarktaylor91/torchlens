@@ -20,7 +20,7 @@ import pytest
 import torch
 from torch import nn
 from torch.overrides import TorchFunctionMode
-from torch.utils._pytree import tree_leaves
+from torch.utils._pytree import tree_flatten
 
 import torchlens as tl
 
@@ -58,7 +58,7 @@ class _CensusMode(TorchFunctionMode):
         out = func(*args, **kwargs)
         if isinstance(out, torch.Tensor):
             self.census.ops += 1
-            for leaf in tree_leaves((args, kwargs)):
+            for leaf in tree_flatten((args, kwargs))[0]:
                 if id(leaf) in self.buffer_names:
                     self.census.buffers_read.add(self.buffer_names[id(leaf)])
             self.census.buffer_writes += sum(

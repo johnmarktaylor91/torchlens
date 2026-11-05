@@ -36,6 +36,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _PurePythonBundleUnpickler,
 )
+from torchlens._utils._torch_compat import get_tensorbase_class
 
 # --------------------------------------------------------------------------- #
 # Stream builders (raw opcodes, version-robust)
@@ -182,7 +183,7 @@ def _honest_values() -> dict[str, Any]:
         "numpy_scalar": np.float64(1.5),
         "module_identity": nn.Identity(),
         "module_type": nn.Linear,
-        "tensor_method": getattr(torch._C.TensorBase, "sum"),  # noqa: B009 -- the pickled shape
+        "tensor_method": getattr(get_tensorbase_class(), "sum"),  # noqa: B009 -- the pickled shape
         "nested": {"layers": [{"name": f"l{i}", "shape": (i, i + 1)} for i in range(20)]},
         "shared": (lambda s: [s, s, {"again": s}])(["memo", "shared"]),
     }
