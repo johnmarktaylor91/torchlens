@@ -447,6 +447,21 @@ def _is_frozen_dataclass_instance(value: Any) -> bool:
     return frozen
 
 
+def _hands_over(value: Any) -> bool:
+    """Return whether a rerun refresh keeps ``value`` itself instead of copying it.
+
+    Tensors keep their payload identity; the atomic kinds, enum members and
+    torchlens quantities come back unchanged from a deep copy anyway; a frozen
+    dataclass record read from the discarded capture is never rebound.
+    """
+
+    return (
+        isinstance(value, (torch.Tensor, enum.Enum, Quantity))
+        or type(value) in _ATOMIC_RERUN_VALUE_TYPES
+        or _is_frozen_dataclass_instance(value)
+    )
+
+
 def copy_rerun_value(trace: Trace, value: Any) -> Any:
     """Copy rerun metadata while keeping tensor payload identities.
 
@@ -464,18 +479,13 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
         copying would be incorrect or unnecessary.
     """
 
-    if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
+    if _hands_over(value):
         return value
-    if isinstance(value, (enum.Enum, Quantity)):
-        return value  # a member's deep copy is itself; a quantity is an immutable number
-    if _is_frozen_dataclass_instance(value):
-        return value  # a frozen record read from a discarded capture; nothing rebinds its fields
+    if isinstance(value, (list, tuple)):
+        items = [copy_rerun_value(trace, item) for item in value]
+        return items if isinstance(value, list) else tuple(items)
     if isinstance(value, (set, frozenset)):
         return type(value)(copy_rerun_value(trace, item) for item in value)
-    if isinstance(value, list):
-        return [copy_rerun_value(trace, item) for item in value]
-    if isinstance(value, tuple):
-        return tuple(copy_rerun_value(trace, item) for item in value)
     if isinstance(value, dict):
         return {
             copy_rerun_value(trace, key): copy_rerun_value(trace, item)
