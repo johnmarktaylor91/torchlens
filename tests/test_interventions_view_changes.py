@@ -132,6 +132,76 @@ def test_unchanged_downstream_values_stay_plain(tmp_path: Path) -> None:
     del clean
 
 
+class _Blocks(nn.Module):
+    """pre -> b1 (linear, relu) -> b2 (linear, relu) -> head."""
+
+    def __init__(self) -> None:
+        """Build the blocks."""
+
+        super().__init__()
+        self.pre = nn.Linear(8, 16)
+        self.b1 = nn.Sequential(nn.Linear(16, 16), nn.ReLU())
+        self.b2 = nn.Sequential(nn.Linear(16, 16), nn.ReLU())
+        self.head = nn.Linear(16, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the blocks."""
+
+        return self.head(self.b2(self.b1(self.pre(x))))
+
+
+def _box(source: str, address: str) -> str:
+    """Return the DOT statement of the collapsed box drawn for ``address``."""
+
+    nodes = re.findall(r'^\t"?\w+"? \[.*?\]\n', source, re.M | re.S)
+    boxes = [node for node in nodes if re.search(rf"\b{re.escape(address)}\b", node)]
+    assert len(boxes) == 1, f"expected one box for {address}, got {len(boxes)}: {boxes}"
+    return boxes[0]
+
+
+def _edited_blocks() -> tuple[tl.Trace, tl.Trace]:
+    """Return ``(clean, fork)`` with the relu inside ``b1`` zeroed in the fork."""
+
+    torch.manual_seed(0)
+    clean = tl.trace(_Blocks().eval(), torch.randn(2, 8), capture=_CAPTURE)
+    fork = clean.fork()
+    relu = next(label for label in fork.op_labels if label.startswith("relu"))
+    fork.do(fork[relu], tl.zero_ablate())
+    return clean, fork
+
+
+def test_collapsed_boxes_take_the_marks_of_their_ops(tmp_path: Path) -> None:
+    """A box holding a changed op is outlined with its largest change; upstream stays plain."""
+
+    clean, fork = _edited_blocks()
+    source = fork.draw(
+        view="interventions", depth=1, path=str(tmp_path / "view"), file_format="svg"
+    ).dot
+    b2 = _box(source, "b2")
+    assert CHANGED_INK in b2 and "changed by up to" in b2, b2
+    expected = max(
+        float((fork[label].out - clean[label].out).abs().max())
+        for label in fork.modules["b2"].layer_labels
+    )
+    assert f"changed by up to {expected:.3g}" in b2
+    head = _box(source, "head")
+    assert CHANGED_INK in head and "changed by up to" in head, head
+    b1 = _box(source, "b1")
+    assert "holds an edited op" in b1 and "penwidth=3" in b1, b1
+    pre = _box(source, "pre")
+    assert CHANGED_INK not in pre and "changed by up to" not in pre, pre
+
+
+def test_caption_does_not_name_the_census_file(tmp_path: Path) -> None:
+    """The drawing no longer points at the sidecar; the sidecar is still written."""
+
+    _clean, fork = _edited_pair()
+    source = fork.draw(view="interventions", path=str(tmp_path / "view"), file_format="svg").dot
+    assert ".census.txt" not in source
+    assert "edit record" not in source
+    assert (tmp_path / "view.census.txt").exists()
+
+
 @pytest.mark.parametrize(
     ("edited", "clean", "changed", "largest"),
     [

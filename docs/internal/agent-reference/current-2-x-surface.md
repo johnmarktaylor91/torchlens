@@ -573,7 +573,9 @@ expert contributions from routing indices alone.
   holding attention (GPT-2 `transformer.h.0`) and names it in the caption; explicit `module=`
   wins. `"interventions"` outlines edited ops in purple (dashed = inferred site) and ops whose
   saved value differs from the clean run (`trace.parent_trace`) in light purple with the
-  largest absolute change; without a live unedited parent the caption says so. The full
+  largest absolute change; a collapsed module box takes the marks of its ops (edit outline
+  when it holds an edit site, else the largest change inside); without a live unedited
+  parent the caption says so. The full
   record goes beside a written figure as `<path>.census.txt` (beside the collision-safe file
   a bare draw chose). Any other value
   refuses `draw_view_invalid` listing the allowed values; a missing subject or evidence refuses

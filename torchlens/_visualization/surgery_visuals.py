@@ -47,12 +47,18 @@ from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from .._vocab.node_spec import INTERVENTION_SITE_COLOR, NodeSpec, NodeSpecFn
+from .._vocab.node_spec import (
+    INTERVENTION_SITE_COLOR,
+    CollapsedNodeSpecFn,
+    NodeSpec,
+    NodeSpecFn,
+)
 from ._edit_change import (
     ChangeReport,
     change_census_rows,
     change_key_rows,
     change_report,
+    make_change_box_spec_fn,
     make_change_spec_fn,
 )
 from ._render_names import _SPEC_SLOT_RENDERED_NODE, DEFAULT_DRAW_STEM
@@ -530,12 +536,7 @@ class SurgeryCensus:
         """
 
         injected = () if self.injected_ops == 0 else (f"injected ops: {self.injected_ops}",)
-        return (
-            self.key_rows
-            + self.caption_rows
-            + injected
-            + ("full edit record: the .census.txt file beside the figure",)
-        )
+        return self.key_rows + self.caption_rows + injected
 
     def to_text(self) -> str:
         """The full census as one plain-ASCII text block."""
@@ -689,8 +690,10 @@ def make_surgery_mark_spec_fn(
     return surgery_mark_spec_fn
 
 
-def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
-    """Resolve the surgery lens stage: marks callback + census disclosure.
+def surgery_stage(
+    trace: Trace,
+) -> tuple[NodeSpecFn, CollapsedNodeSpecFn | None, tuple[str, ...]]:
+    """Resolve the surgery lens stage: op marks, collapsed-box marks, census caption.
 
     Refuses typed when the headline evidence (C03 audit entries) is absent:
     with nothing recorded, the picture would answer a different question.
@@ -719,7 +722,7 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
             "see the .census.txt sidecar or surgery_census(trace).to_text()",
         )
-    return make_surgery_mark_spec_fn(trace, facts, report), lines
+    return make_surgery_mark_spec_fn(trace, facts, report), make_change_box_spec_fn(report), lines
 
 
 def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:

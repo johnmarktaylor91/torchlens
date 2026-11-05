@@ -29,6 +29,9 @@ INTERVENTION_SITE_COLOR = "#7B1FA2"
 INTERVENTION_CONE_COLOR = "#7B1FA2"
 INTERVENTION_HOOK_FILL_COLOR = "#F3E5F5"
 INTERVENTION_HOOK_BORDER_COLOR = "#7B1FA2"
+#: SVG class on an edited node (and the as_node hook node, and a collapsed box
+#: holding an edit site); the legend shows the edit swatch when it is present.
+EDITED_NODE_CLASS = "tl_edited"
 INTERVENTION_OVERRIDE_KEYS = frozenset(
     {
         "intervention_site_color",

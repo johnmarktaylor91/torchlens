@@ -18,12 +18,12 @@ from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
+from ._render_names import call_collapsed_spec_fn
 from .modes import CollapsedModeScope
 
-# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this
-# file under its ratchet ceiling; re-exported here for existing importers.
-# The spec-slot context lives there too, so the intervention callback reads it
-# without importing this module.
+# Home moved to node_spec (S5 territory) at the L5 wave-1 merge to keep this file under its
+# ratchet ceiling; re-exported here for existing importers. The spec-slot context lives there
+# too, so the intervention callback reads it without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
 from .themes import _edge_and_label_inks
 
@@ -1549,7 +1549,7 @@ def _build_collapsed_module_node(
     # Encoding channels: exact member-op aggregate, user may override.
     mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
-        result = collapsed_node_spec_fn(ml, mode_spec)
+        result = call_collapsed_spec_fn(collapsed_node_spec_fn, ml, mode_spec, scope.op_labels)
         spec = mode_spec if result is None else result
     else:
         spec = mode_spec
