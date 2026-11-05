@@ -26,7 +26,12 @@ from typing import Any, NamedTuple
 import torch
 
 from ..._data_classes._state_adapter import state_items
-from ..field_registry import RECORD_CONTRACT_CLASSES, component_spec_tables
+from ..field_registry import (
+    _PERSISTED_MODULE_NAMES,
+    _RUNTIME_MODULE_NAMES,
+    RECORD_CONTRACT_CLASSES,
+    component_spec_tables,
+)
 from ..format_errors import ArtifactError
 from ._carriers import CallablePlaceholder, UnencodableValue
 from .contract import (
@@ -109,9 +114,13 @@ def _replace_record_copies(value: Any, copies: Mapping[int, Any]) -> Any:
 
 
 def class_path(cls: type) -> str:
-    """Return the dotted ``module.qualname`` spelling the format uses for a class."""
+    """Return the dotted ``module.qualname`` spelling the format uses for a class.
 
-    return f"{cls.__module__}.{cls.__qualname__}"
+    A module 3.0 made private keeps its persisted path (``intervention._types``
+    classes are written as ``torchlens.intervention.types.<name>``).
+    """
+
+    return f"{_PERSISTED_MODULE_NAMES.get(cls.__module__, cls.__module__)}.{cls.__qualname__}"
 
 
 def tagged(tag: str, **fields: Any) -> dict[str, Any]:
@@ -220,8 +229,9 @@ def record_type_table() -> dict[str, type]:
     pairs.extend(_VALUE_CLASSES_BEYOND_COMPONENT_SPECS)
     table: dict[str, type] = {}
     for module_name, qualname in pairs:
-        path = f"{module_name}.{qualname}"
-        cls = getattr(import_module(module_name), qualname, None)
+        path = f"{_PERSISTED_MODULE_NAMES.get(module_name, module_name)}.{qualname}"
+        runtime_module = _RUNTIME_MODULE_NAMES.get(module_name, module_name)
+        cls = getattr(import_module(runtime_module), qualname, None)
         if path in record_paths or not isinstance(cls, type) or issubclass(cls, enum.Enum):
             continue
         table[path] = cls
