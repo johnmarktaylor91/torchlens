@@ -69,3 +69,57 @@ def _is_module_boundary_row(trace: Trace, label_raw: str, entry: Any) -> bool:
     if kind is None:
         kind = getattr(entry, "type", None)
     return kind in _MODULE_BOUNDARY_KINDS
+
+
+def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set[str]) -> set[str]:
+    """Add raw-label siblings for any surviving ``func_call_id`` group.
+
+    Parameters
+    ----------
+    nodes_seen:
+        Raw labels reachable from the input/output flood.
+
+    Returns
+    -------
+    set[str]
+        Reachable raw labels expanded so multi-output wrapper calls are kept
+        atomically.
+    """
+
+    func_groups: dict[int, set[str]] = {}
+    for raw_label in self._raw_graph_ws.raw_layer_labels_list:
+        func_call_id = getattr(self._raw_graph_ws.raw_layer_dict[raw_label], "func_call_id", None)
+        if func_call_id is not None:
+            func_groups.setdefault(func_call_id, set()).add(raw_label)
+
+    expanded_seen = set(nodes_seen)
+    changed = True
+    while changed:
+        changed = False
+        for raw_labels in func_groups.values():
+            if expanded_seen.intersection(raw_labels) and not raw_labels.issubset(expanded_seen):
+                expanded_seen.update(raw_labels)
+                changed = True
+    return expanded_seen
+
+
+def _remember_orphan_rows(self: Trace, orphan_nodes: set[str]) -> None:
+    """Retain orphan identities, records and saved payload facts before removal."""
+
+    self._orphan_labels = [
+        label for label in self._raw_graph_ws.raw_layer_labels_list if label in orphan_nodes
+    ]
+    self._orphan_logs = tuple(
+        self._raw_graph_ws.raw_layer_dict[label] for label in self._orphan_labels
+    )
+    self._orphan_records = [
+        {
+            "raw_label": orphan._label_raw,
+            "label": orphan.label,
+            "payload_ref": orphan.out_ref
+            if getattr(orphan, "out_ref", None) is not None
+            else orphan.out,
+        }
+        for orphan in self._orphan_logs
+        if getattr(orphan, "has_saved_activation", False)
+    ]

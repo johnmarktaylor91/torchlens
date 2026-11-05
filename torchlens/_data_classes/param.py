@@ -39,6 +39,7 @@ from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
 from .._utils._display_errors import short_name_message
 from ._accessor_base import Accessor
+from ._lookup_kinds import converted, param_for_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
@@ -852,12 +853,12 @@ class Param:
             "resolver_status": "resolved",
             "_derived_grad_payload": None,
             "_derived_grad_record_path": None,
+            "_grad_records": [],  # DROP: a 3.0 row has no column; grads reads it
         }
         default_fill_state(state, defaults=param_setstate_defaults)
-        # Repair present-but-wrong-typed container fields from legacy states
-        # (e.g. `co_parent_params` serialized as a `set` where a `list` is now
-        # declared). `default_fill_state` only fills absent keys; this closes
-        # the same gap `Trace`/`Op` already close for their own fields.
+        # Repair present-but-wrong-typed legacy container fields (e.g. `co_parent_params` stored
+        # as a `set` where a `list` is now declared). `default_fill_state` only fills absent keys;
+        # this closes the same gap `Trace`/`Op` already close for their own fields.
         coerce_container_typed_state(state, param_setstate_defaults)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
@@ -1032,11 +1033,8 @@ class ParamAccessor(Accessor["Param"]):
             return matches[0]
         if len(matches) > 1:
             candidates = tuple(address for match in matches for address in match.all_addresses)
-            raise AmbiguousOpLookupError(
-                short_name_message(key, candidates),
-                candidates=candidates,
-            )
-        return None
+            raise AmbiguousOpLookupError(short_name_message(key, candidates), candidates=candidates)
+        return converted(self, key, param_for_key)  # a module address or op label names one Param
 
     def _resolve_pass_qualified(self, key: str) -> "Param | None":
         """Resolve pass-qualified notation to the parent Param."""

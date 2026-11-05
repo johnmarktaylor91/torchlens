@@ -1,7 +1,7 @@
 # Learn TorchLens
 
 Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes); each later notebook
-is one rung up and stands on its own. Every notebook runs on a laptop CPU in about a minute and
+is one rung up and stands on its own. Every notebook runs on a laptop CPU in seconds and
 downloads nothing: the models come from `learn_models.py` beside the notebooks.
 
 ## How to run

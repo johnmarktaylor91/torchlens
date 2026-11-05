@@ -16,13 +16,19 @@ from __future__ import annotations
 import time
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from ... import _state
 from ..._capture._stop_after_policy import settle_unfired_stop_after
 from ..._ir.intervention import FireResult
+from ..._ir.op_record import amend_module_exit_intervention
 from ..._ir.predicate import RecordContext
+from ..._ir.selector_eval import (
+    module_address_matches,
+    module_union_addresses,
+    selector_contains_kind,
+)
 from ..._selection.selectors import BaseSelector
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
@@ -107,6 +113,7 @@ class PaddleInterventionRuntime:
         from ...intervention.hooks import split_site_branches
 
         selector = getattr(intervene, "selector", None)
+        _validate_module_selector(selector)
         if selector is not None and any(
             universe != "activation" for universe, _branch in split_site_branches(selector)
         ):
@@ -135,7 +142,9 @@ class PaddleInterventionRuntime:
             Normalized decision when the predicate matched.
         """
 
-        if self.intervene is None:
+        if self.intervene is None or selector_contains_kind(
+            getattr(self.intervene, "selector", None), "module"
+        ):
             return None
         result = self.intervene(ctx)
         try:
@@ -435,3 +444,126 @@ def _fire_record(
         call_index=ctx.raw_index,
         replaced=replaced,
     )
+
+
+def _validate_module_selector(selector: Any) -> None:
+    """Refuse mixed module trees before any forward executes."""
+
+    if selector_contains_kind(selector, "module") and module_union_addresses(selector) is None:
+        raise BackendUnsupportedError(
+            "paddle backend module interventions require tl.module(...) or a union "
+            "of module selectors; mixed or negated module selectors are unsupported.",
+            code=PADDLE_REFUSAL_OPTION,
+            option="intervene",
+        )
+
+
+def _apply_module_exit(trace: Any, frame: Any, output: Any) -> Any:
+    """Apply one selected module call to all its output tensor leaves."""
+
+    runtime = trace._paddle_intervention_runtime
+    if runtime is None:
+        return output
+    predicate = runtime.intervene
+    addresses = module_union_addresses(getattr(predicate, "selector", None))
+    if not addresses or not any(
+        module_address_matches((frame.address, frame.call_index), address) for address in addresses
+    ):
+        return output
+    backend = runtime._backend
+    by_id = {}
+    replacements = {}
+    for path, tensor in backend._iter_tensors_with_paths(output):
+        if id(tensor) not in by_id:
+            by_id[id(tensor)] = _emit_module_leaf(trace, runtime, tensor)
+        replacements[path] = by_id[id(tensor)]
+    return _replace_leaves(output, replacements)
+
+
+def _replace_leaves(output: Any, replacements: dict[Any, Any], path: tuple[Any, ...] = ()) -> Any:
+    """Rebuild the supported output containers with edited leaves."""
+
+    if path in replacements:
+        return replacements[path]
+    if isinstance(output, tuple):
+        return tuple(
+            _replace_leaves(item, replacements, (*path, i)) for i, item in enumerate(output)
+        )
+    if isinstance(output, list):
+        return [_replace_leaves(item, replacements, (*path, i)) for i, item in enumerate(output)]
+    if isinstance(output, dict):
+        return {
+            key: _replace_leaves(item, replacements, (*path, key)) for key, item in output.items()
+        }
+    return output
+
+
+@dataclass(frozen=True)
+class _ReplacementBoundaryPredicate:
+    """Fire one module edit's decision at its own replacement boundary op only.
+
+    Equivalent here to ``tl.when(tl.func("interventionreplacement"), decision)``:
+    the Paddle intervention path reads only the decision's hook and isolate flag,
+    and a func selector matches the captured function name or the layer type.
+    """
+
+    decision: InterventionDecision | None
+
+    def __call__(self, ctx: Any) -> InterventionDecision | None:
+        """Return the decision for the boundary op and ``None`` for any other op."""
+
+        names = (getattr(ctx, "func_name", None), getattr(ctx, "layer_type", None))
+        return self.decision if "interventionreplacement" in names else None
+
+
+def _copy_leaf(tensor: Any) -> Any:
+    """Copy the raw producer value without changing its label or existing consumers."""
+
+    return tensor.clone()
+
+
+def _emit_module_leaf(trace: Any, runtime: Any, tensor: Any) -> Any:
+    """Record a declared replacement through Paddle's existing replay machinery."""
+
+    backend = runtime._backend
+    label = backend.tensor_store.get_label(tensor)
+    predicate = runtime.intervene
+    runtime.intervene = _ReplacementBoundaryPredicate(predicate.decision)
+    try:
+        with _state.pause_logging():
+            raw = _copy_leaf(tensor)
+            replacement = backend.emit_paddle_operation(
+                trace,
+                "interventionreplacement",
+                _copy_leaf,
+                (tensor,),
+                {},
+                raw,
+                module_stack=tuple(trace._paddle_module_stack),
+            )
+    finally:
+        runtime.intervene = predicate
+    events = trace.capture_events
+    boundary = events.op_event_by_label_raw[backend.tensor_store.get_label(replacement)]
+    event = events.op_event_by_label_raw.get(label)
+    if event is not None:
+        fires = tuple(
+            replace(
+                fire,
+                site_label=label,
+                fire_record=replace(
+                    fire.fire_record, target_label=label, func_call_id=event.func_call_id
+                ),
+            )
+            for fire in boundary.fire_results
+        )
+        events.append_amendment(
+            amend_module_exit_intervention(
+                event.seq,
+                label,
+                intervention_fired=True,
+                is_edited=boundary.is_edited,
+                fire_results=(*event.fire_results, *fires),
+            )
+        )
+    return replacement

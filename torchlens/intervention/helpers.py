@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -10,6 +9,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._io.format3.contract import HELPER_REGISTRY_VERSION
 from ._helper_internals import (
     _align_direction,
     _dim_outside_mean_vocabulary,
@@ -37,10 +37,9 @@ from .errors import (
     SpliceModuleDtypeError,
 )
 from .hooks import HookContext
+from .masked_edit import checked_arguments, with_stored_mask
 from .population import Population
 from .types import Edit
-
-HELPER_REGISTRY_VERSION = "1"
 
 
 def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
@@ -262,8 +261,8 @@ def steer(
     strength:
         Scalar multiplier.
     dim:
-        Required when a vector direction must be aligned with an out
-        axis, avoiding silent batch/position assumptions.
+        Out axis a vector direction lies along. Omitted, it is inferred when exactly one
+        out axis has the direction's length; else ``AmbiguousAxisError`` (pass ``dim=``).
     allow_shape_change:
         Stored escape-hatch metadata for later execution phases.
 
@@ -294,7 +293,7 @@ def steer(
         def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
             """Add the steering vector to the out."""
 
-            aligned = _align_direction(direction, out, dim=dim)
+            aligned = _align_direction(direction, out, dim=dim, infer=True)
             return out + aligned.to(device=out.device, dtype=out.dtype) * scale_value
 
         return _hook
@@ -996,11 +995,9 @@ def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit
 def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
-    The single builtin-name registry shared by ``.tlspec`` intervention-spec
-    loads and ``Edit`` pickle restore: a builtin helper's runtime hook
-    factory is a local closure (never serialized), so both restore paths
-    re-derive the whole spec from its stable ``(name, args, kwargs)``
-    identity by re-invoking the constructor.
+    Shared by ``.tlspec`` loads and ``Edit`` pickle restore: the hook factory is a
+    local closure (never serialized), so both re-invoke the constructor on the stable
+    ``(name, args, kwargs)``; a stored element mask is checked and re-applied.
 
     Parameters
     ----------
@@ -1019,9 +1016,8 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     Raises
     ------
     InvalidArgumentError
-        ``intervention_helper_unknown`` if ``name`` is not a known builtin
-        helper; ``intervention_helper_renamed`` if it is the old name of a
-        renamed one (a clean break: a saved spec naming it no longer loads).
+        ``intervention_helper_unknown``, ``intervention_helper_renamed`` (a clean break) or
+        ``intervention_helper_arguments_invalid`` (foreign keywords, or a bad stored mask).
     """
 
     constructors, renamed_to = _builtin_constructor_lookup(name)
@@ -1046,21 +1042,15 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
             renamed_to=renamed_to,
         )
     constructor = constructors[name]
-    try:
-        inspect.signature(constructor).bind(*args, **kwargs)
-    except TypeError as exc:
+    kwargs, stored_mask, problem = checked_arguments(name, constructor, args, kwargs)
+    if problem is not None:
         raise InvalidArgumentError(
-            f"The saved intervention calls builtin helper {name!r} with arguments its "
-            f"constructor does not take ({exc}); the spec was saved by a torchlens whose "
-            "helper keywords differ",
+            problem.message,
             code="intervention_helper_arguments_invalid",
-            remedy=(
-                "load the spec with the torchlens version that saved it, or rebuild the "
-                "edit with the current constructor and save it again"
-            ),
-            argument="kwargs",
-        ) from exc
-    return constructor(*args, **kwargs)
+            remedy=problem.remedy,
+            argument=problem.argument,
+        ) from problem.cause
+    return with_stored_mask(constructor(*args, **kwargs), stored_mask)
 
 
 #: The one remedy text for the retired ``resample_ablate`` spelling, shared by

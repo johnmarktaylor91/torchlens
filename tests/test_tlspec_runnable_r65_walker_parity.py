@@ -216,8 +216,8 @@ def test_r64_dataclass_metadata_read_witnessed_and_layout_twin_diverges(
 
     twin = _layout_twin(x)
     with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=_LayoutBox(twin))
-    diverged = tl.load(path).run(inputs=_LayoutBox(twin), on_divergence="return")
+        tl.load(path).run_transaction(inputs=_LayoutBox(twin))
+    diverged = tl.load(path).run_transaction(inputs=_LayoutBox(twin), on_divergence="return")
     assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
     assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
     assert diverged.report.is_poisoned
@@ -233,7 +233,7 @@ def test_r64_dataclass_original_input_still_verifies_and_attests(tmp_path: Path)
     path = tmp_path / "r64_dc_layout_ok.tlspec"
     _capture_runnable(_DataclassLayoutBranch(), _LayoutBox(x), path)
 
-    result = tl.load(path).run(inputs=_LayoutBox(x))
+    result = tl.load(path).run_transaction(inputs=_LayoutBox(x))
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
     torch.testing.assert_close(result.output, x + 10)

@@ -77,6 +77,9 @@ pages:
   - path: internal/agent-reference/current-2-x-surface.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
+  - path: internal/agent-reference/feature-inspection.md
+    section: internal
+    note: agent and contributor reference; AGENTS.md points here
   - path: internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md
     section: internal
     note: agent and contributor reference; AGENTS.md points here
@@ -167,9 +170,15 @@ pages:
   - path: field-guide/conditional_steering.md
     section: field-guide
     moved_from: [recipes/conditional_steering.md]
+  - path: field-guide/craft_concepts.md
+    section: field-guide
+  - path: field-guide/das_gpt2.md
+    section: field-guide
   - path: field-guide/dissection.md
     section: field-guide
     moved_from: [recipes/dissection.md]
+  - path: field-guide/entropy_steering.md
+    section: field-guide
   - path: field-guide/extract_features.md
     section: field-guide
   - path: field-guide/feature_visualisation.md
@@ -273,6 +282,9 @@ pages:
   - path: maintainers/saved_format_3.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
+  - path: maintainers/saved_format_3_design.md
+    section: internal
+    note: maintainer page; saved_format_3.md links it
   - path: maintainers/testing.md
     section: internal
     note: maintainer page; CONTRIBUTING.md links it
@@ -295,6 +307,14 @@ pages:
   - path: guides/treescope_cards.md
     section: field-guide
     group: See and inspect
+  - path: guides/visualization.md
+    section: field-guide
+    group: See and inspect
+    publish: true
+  - path: how-it-works.md
+    section: concepts
+    publish: true
+    note: narrative guide to the internals; maintainers/architecture.md is its maintainer companion
   - path: index.md
     section: home
     publish: true
@@ -322,6 +342,8 @@ pages:
   - path: migration/from_captum.md
     section: relation
     moved_from: [migration/captum.md]
+  - path: migration/from_flax_tabulate.md
+    section: relation
   - path: migration/from_fx.md
     section: relation
   - path: migration/from_hf_kwargs.md
@@ -407,6 +429,12 @@ pages:
     section: field-guide
     group: Neuroscience
   - path: neuroai/netrep.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/protein_language_model.md
+    section: field-guide
+    group: Neuroscience
+  - path: neuroai/task_rnn_circuits.md
     section: field-guide
     group: Neuroscience
   - path: non_goals.md

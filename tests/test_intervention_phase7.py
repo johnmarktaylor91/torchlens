@@ -20,8 +20,10 @@ from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 from torchlens.types import Relationship
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: Stage a sticky hook on the trace without propagating it (the rerun propagates it).
-_STAGE = InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = InterventionOptions(engine="set_only")
 
 
 class BadModel(torch.nn.Module):

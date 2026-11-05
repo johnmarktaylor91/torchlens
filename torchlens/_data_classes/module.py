@@ -47,7 +47,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Bytes, Duration, Flops, Macs
-from .._utils._display_errors import module_lookup_message, module_output_message
+from .._utils._display_errors import module_output_message
 from ._accessor_base import Accessor
 from ._call_tree import (
     _bound_call_trace,
@@ -57,8 +57,10 @@ from ._call_tree import (
     _resolve_call_ops,
     _sum_call_ops_field,
 )
+from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
+from ._moe_views import _ModuleRouting
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -242,7 +244,7 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
-        return None
+        return module_call_owning_op(self._dict.values(), key)  # an op label names its call
 
 
 @dataclass
@@ -953,9 +955,9 @@ class ModuleCall:
 
         cache = self.__dict__.get("_facets_cache")
         if cache is None:
-            from .._semantic.facets import FacetView
+            from .._semantic import _call_subject, facets
 
-            cache = FacetView(self)
+            cache = facets.FacetView(_call_subject.call_subject(self))
             self.__dict__["_facets_cache"] = cache
         return cache
 
@@ -1166,7 +1168,7 @@ _MODULE_CONTAINER_DEFAULTS: dict[str, Any] = {
 
 
 @dataclass(init=False)
-class Module:
+class Module(_ModuleRouting):
     """Aggregate metadata for one nn.Module across all its invocations.
 
     The primary user-facing class for module inspection.  Provides both
@@ -1662,17 +1664,17 @@ class Module:
         if trace is None:
             return self.params
 
-        module_addresses = [module.address for module in self._recursive_modules_depth_first()]
+        # Iterate the params once (each pass restores live refs); per-module scans were quadratic.
+        params = list(trace._param_logs)
+        params_by_module: dict[Any, list[Any]] = {}
+        for param in params:
+            params_by_module.setdefault(param.module_address, []).append(param)
         recursive_param_dict: dict[str, Any] = {}
-        for module_address in module_addresses:
-            for param in trace._param_logs:
-                if (
-                    param.module_address == module_address
-                    and param.address not in recursive_param_dict
-                ):
-                    recursive_param_dict[param.address] = param
+        for module in self._recursive_modules_depth_first():
+            for param in params_by_module.get(module.address, ()):
+                recursive_param_dict.setdefault(param.address, param)
         # A never-called descendant has no Module record; its params are still in the subtree.
-        for param in trace._param_logs:
+        for param in params:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
@@ -1845,6 +1847,7 @@ class Module:
             **_MODULE_CONTAINER_DEFAULTS,
             "_buffer_accessor": None,
             "_source_trace_ref": None,
+            "cls": None,  # DROP: a 3.0 row has no column, a live class never reloads
             "class_source_file": None,
             "class_source_line": None,
             "init_source_file": None,
@@ -1854,11 +1857,10 @@ class Module:
             "training": True,
         }
         default_fill_state(state, defaults=module_setstate_defaults)
-        # Repair present-but-wrong-typed container fields from legacy states.
-        # `default_fill_state` only fills absent keys; this closes the same
-        # gap `Trace`/`Op` already close for their own fields. `ops`/`params`/
-        # `recursive_params` are accessor classes handled separately below,
-        # not plain containers, so they are intentionally absent from
+        # Repair present-but-wrong-typed container fields from legacy states. `default_fill_state`
+        # only fills absent keys; this closes the same gap `Trace`/`Op` already close for their
+        # own fields. `ops`/`params`/`recursive_params` are accessor classes handled separately
+        # below, not plain containers, so they are intentionally absent from
         # `_MODULE_CONTAINER_DEFAULTS`.
         coerce_container_typed_state(state, module_setstate_defaults)
         from .._io.state_keys import refuse_callable_shadowing_state_keys
@@ -1873,8 +1875,7 @@ class Module:
             self._sync_boundary_fields_from_calls()
 
     # --- Per-call delegating properties ---
-    # Mirror the Layer delegation pattern: single-pass modules transparently
-    # expose per-pass fields; multi-pass modules raise with guidance.
+    # Single-pass modules delegate; multi-pass modules raise with guidance.
 
     @property
     def facets(self) -> Any:
@@ -2172,14 +2173,14 @@ class Module:
             return None
         return f"{self.forward_source_file}:{self.forward_source_line}"
 
-    def _single_call_or_error(self) -> ModuleCall:
+    def _single_call_or_error(self, remedy: str | None = None) -> ModuleCall:
         """Return the only ModuleCall or raise for multi-call modules."""
 
         if self.num_calls != 1 or len(self.ops) != 1:
             raise InvalidArgumentError(
                 f"Module '{self.address}' has {self.num_calls} calls; use module.calls[N]",
                 code="module_call_ambiguous",
-                remedy="access one call via module.calls[N]",
+                remedy=remedy or "access one call via module.calls[N]",
                 address=self.address,
                 num_calls=self.num_calls,
             )
@@ -2348,9 +2349,12 @@ class Module:
         return len(self.layer_labels)
 
     def __getitem__(self, ix: int | str) -> Any:
-        """Return the Op at position ix within this module's layer list.
+        """Return the record ``ix`` names inside this module.
 
-        Supports int indexing and string label lookup (#120).
+        An int gives the Layer at that position of this module's layer list. A
+        string gives the kind the key names: a layer label of this module gives
+        what ``trace[label]`` gives, a descendant module address its Module and
+        a descendant call label its ModuleCall (#120).
         """
         if self._source_trace is None:
             raise RecordBindingError(
@@ -2359,20 +2363,7 @@ class Module:
                 remedy="keep the owning Trace alive and index layers through it",
             )
         if isinstance(ix, str):
-            # String label lookup within this module's layers
-            if ix in self.layer_labels:
-                return self._source_trace[ix]
-            # Try substring match within module layers
-            matches = [lbl for lbl in self.layer_labels if ix in lbl]
-            if len(matches) == 1:
-                return self._source_trace[matches[0]]
-            elif len(matches) > 1:
-                raise AmbiguousOpLookupError(
-                    module_lookup_message(ix, self, matches),
-                    key=str(ix),
-                    address=self.address,
-                )
-            raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
+            return module_item(self, ix)
         return self._source_trace.layers[self.layer_labels[ix]]
 
     def __iter__(self) -> Iterator[Any]:
@@ -2459,7 +2450,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
     * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
     * **alias** (str) -- for shared modules (same nn.Module registered at
       multiple addresses), any alias resolves to the same Module.
-    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCall.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns that call's Module.
     * **ordinal index** (int) -- position in address order.
 
     Available as ``trace.modules``.
@@ -2500,19 +2491,28 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
                 if alias not in self._dict:
                     self._alias_dict[alias] = ml
 
-    def __getitem__(self, key: int | str) -> "Module":
-        """Return a Module by module-specific lookup rules."""
+    def _module_by_address(self, key: Any) -> "Module":
+        """Return the Module an ordinal, address, alias or pass label names (no conversion)."""
         key = "self" if key == "" else key
         if isinstance(key, str) and key in self._alias_dict:
             return self._alias_dict[key]
-        if isinstance(key, str) and key in self._pass_dict:
-            key = self._pass_dict[key].address
-        return super().__getitem__(key)
+        return super().__getitem__(self._pass_dict[key].address if key in self._pass_dict else key)
+
+    def __getitem__(self, key: int | str) -> "Module":
+        """Return a Module by address, else the Module an op, param or buffer key ran in."""
+        try:
+            return self._module_by_address(key)
+        except KeyError:
+            if (resolved := converted(self, str(key), module_for_key)) is None:
+                raise
+            return resolved
 
     def __contains__(self, key: object) -> bool:
-        """Return True if key is a known module address, alias, or pass label."""
-        key = "self" if key == "" else key
-        return super().__contains__(key) or key in self._alias_dict or key in self._pass_dict
+        """Return True if key is a module address, alias or pass label; ``in`` never converts."""
+        try:
+            return isinstance(key, (int, str)) and self._module_by_address(key) is not None
+        except (KeyError, TypeError, IndexError, ValueError):
+            return False
 
     def __dir__(self) -> list[str]:
         """Return Python attributes plus module addresses for tab completion.

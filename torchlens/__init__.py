@@ -13,17 +13,17 @@ cookbook of recipes; also ``trace.to_agent_json()``, ``trace.explain()`` and the
 
 from __future__ import annotations
 
+import typing as _typing
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
-if _TYPE_CHECKING:
+if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.38.0"
-
-if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
+
+#: Released together with the io copy in _vocab/_package_version.py (test_version_coherence).
+__version__ = "2.38.1"
 
 _LAZY_ATTRS = {
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
@@ -163,7 +163,7 @@ _LAZY_ATTRS = {
 }
 
 
-def _resolve_top_level(name: str) -> _Any:
+def _resolve_top_level(name: str) -> _typing.Any:
     """Resolve a top-level TorchLens attribute, honoring existing globals.
 
     Parameters
@@ -272,7 +272,7 @@ _REDIRECTS: dict[str, str] = {
     "SiteTable": "use torchlens.Selection -- trace[selector] returns one",
     "SpecCompat": "use torchlens.types.SpecCompat",
     "StreamingOptions": "use torchlens.options.StorageOptions",
-    "suppress_mutate_warnings": "use torchlens.io.suppress_mutate_warnings",
+    "suppress_mutate_warnings": "use torchlens.errors.quiet() (or quiet(code, ...) for chosen codes)",
     "swap_with": "use torchlens.intervention.helpers.swap_with (swap_with(other_label)) -- an edit helper under torchlens.intervention.helpers, not a root verb",
     "TargetManifestDiff": "use torchlens.types.TargetManifestDiff",
     "TensorInputObservation": "use torchlens.types.TensorInputObservation",
@@ -295,7 +295,7 @@ _REDIRECTS: dict[str, str] = {
 _REFUSALS: dict[str, str] = {}
 
 
-def __getattr__(name: str) -> _Any:
+def __getattr__(name: str) -> _typing.Any:
     """Return lazy package attributes through the five-step facade order.
 
     The order (architecture memo 5.4, testable spec): (1) underscore-prefixed
@@ -350,7 +350,7 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
-def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
+def _suggest_layer_labels(trace: _typing.Any, query: str) -> list[str]:
     """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
 
     from ._utils._display_errors import candidate_keys
@@ -501,7 +501,7 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
 
 
 def pluck(
-    model: _nn.Module, inputs: _Any, layer: str, stop_after: _Any | None = None
+    model: _nn.Module, inputs: _typing.Any, layer: str, stop_after: _typing.Any | None = None
 ) -> _torch.Tensor:
     """Return the saved out for one layer.
 
@@ -544,7 +544,7 @@ def pluck(
     return _out_from_log(trace, layer)
 
 
-def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
+def _extract_facet_plan(layers: _typing.Any) -> dict[str, _typing.Any]:
     """Return ``output_key -> facet selector`` for the facet selectors in an extract request.
 
     A list entry keys by the selector's spelling; a mapping entry by the user label.
@@ -562,12 +562,12 @@ def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
 
 def _extract_with_facets(
     model: _nn.Module,
-    x: _Any,
-    layers: _Any,
-    facet_plan: dict[str, _Any],
+    x: _typing.Any,
+    layers: _typing.Any,
+    facet_plan: dict[str, _typing.Any],
     *,
     detach_saved_activations: bool,
-) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _typing.Any]]:
     """Extract a request holding facet selectors: each facet's value, as ``trace[selector]`` reads it.
 
     One facet alone captures with ``save=selector`` (its homes); a mixed or
@@ -575,6 +575,7 @@ def _extract_with_facets(
     as in a plain extract, from the same trace.
     """
 
+    from ._data_classes._lookup_kinds import _record_view
     from .options import CaptureOptions as _LazyCaptureOptions
 
     capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
@@ -584,7 +585,7 @@ def _extract_with_facets(
     else:
         trace = _resolve_top_level("trace")(model, x, capture=capture)
     outputs: dict[str, _torch.Tensor] = {}
-    views: dict[str, _Any] = {}
+    views: dict[str, _typing.Any] = {}
     items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
     for label, value in items:
         key = (
@@ -597,17 +598,17 @@ def _extract_with_facets(
             outputs[key], views[key] = facet.value, facet
         else:
             outputs[key] = _out_from_log(trace, str(value))
-            views[key] = trace[str(value)]
+            views[key] = _record_view(trace, str(value))
     return trace, outputs, views
 
 
 def _extract_layers_with_trace(
     model: _nn.Module,
-    x: _Any,
+    x: _typing.Any,
     layers: _Iterable[str] | _Mapping[str, str],
     *,
     detach_saved_activations: bool = True,
-) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _Any]]:
+) -> tuple[Trace, dict[str, _torch.Tensor], dict[str, _typing.Any]]:
     """Run one selective capture and resolve the requested layers.
 
     Parameters
@@ -633,8 +634,8 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
+    from ._data_classes._lookup_kinds import _record_view
     from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
-    from ._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:
@@ -645,11 +646,11 @@ def _extract_layers_with_trace(
     capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
     trace = _resolve_top_level("trace")(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, _torch.Tensor] = {}
-    views: dict[str, _Any] = {}
+    views: dict[str, _typing.Any] = {}
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            views[label] = _record_view(trace, pattern)  # the plain door canonicalizes the name
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -659,13 +660,13 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = trace[match]
+            views[match] = _record_view(trace, match)
     return trace, outputs, views
 
 
 def extract(
     model: _nn.Module,
-    inputs: _Any,
+    inputs: _typing.Any,
     layers: _Iterable[str] | _Mapping[str, str],
     *,
     detach_saved_activations: bool = True,

@@ -218,7 +218,8 @@ RESULT = [
 ### A rotation learned elsewhere
 
 TorchLens applies a rotation you trained elsewhere (distributed alignment search, ReFT); it does
-not fit one. The first `k` rows of the learned rotation `R` are the basis, so
+not fit one. [Fit a causal basis on GPT-2 small](field-guide/das_gpt2.md) fits one with a plain
+PyTorch loop over captured activations and applies it with the builtin edit. The first `k` rows of the learned rotation `R` are the basis, so
 `do(tl.subspace(site, R[:k], origin=...), edit)` edits the learned subspace. With a builtin verb
 the staged edit is the builtin `subspace_edit`, which stores the verb, the float64 orthonormal rows
 it applies, the bound axis, the rows' sha256 and the basis provenance (`origin`, `method`, the
@@ -257,7 +258,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x).fork()
-reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions())
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -311,7 +312,10 @@ subspace with `within=tl.units(site, mask)`, `mask` True on every feature of tha
 subspace edit with a builtin verb stores its mask and the mask's sha256, so a one-position edit
 still saves at `level="portable"` and reloads as the same edit; a stored mask that is malformed
 refuses `subspace_spec_invalid` at load and one changed after saving refuses
-`subspace_spec_mask_tampered`. Other masked edits keep their own portability.
+`subspace_spec_mask_tampered`. A plain builtin verb under an element mask (`fork.do(tl.units(site,
+mask), tl.zero_ablate())`, the heads `head_ablation_candidates` returns) stores its mask and the
+mask's sha256 the same way and saves at `level="portable"`; an edit that needs user code still
+refuses `intervention_spec_not_portable`.
 `tl.bridge.pyreft.read(directory)` reads a saved pyreft artifact into these two pieces
 (`artifact.subspace(site, positions=...)` and `artifact.edit`); see
 [from pyvene](migration/from_pyvene.md#reading-a-pyreft-loreft-artifact).
@@ -346,7 +350,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens).fork()
-fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
+fresh.do(spec, intervention=tl.options.InterventionOptions())
 
 RESULT = [
     torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit
@@ -378,13 +382,11 @@ Portable saves reject opaque local callables. Use built-in helpers such as `zero
 
 A `.tlspec/` directory contains:
 
-- `spec.json`: serialized selector, hook, helper, function-registry, append, and target-manifest
-  metadata.
-- `manifest.json`: tensor sidecar manifest with hashes and storage metadata.
-- `tensors/`: tensor payloads stored separately from JSON, one blob per tensor object however
-  many places the spec references it (a sticky hook's `hook` and `helper` entries and its fire
-  records share one blob).
-- `README.md`: a generated human-readable summary.
+- `manifest.json`: the artifact manifest, `kind: "intervention"`.
+- `intervention.json`: the recipe: each rule's selector and built-in `Edit` identity as typed
+  JSON; a user callable is a placeholder, never pickled.
+- `blobs/recipe-<nnnn>.safetensors`: the recipe's tensors, one entry per tensor object however
+  many places the recipe references it (a sticky hook's edit and its fire records share one).
 
 Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture with
 `torchlens.intervention.check_spec_compat(spec, new_trace)`.

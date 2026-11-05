@@ -25,6 +25,7 @@ from .._capture.structure_only import (
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._entry_refusals import require_xarray_presentations
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
@@ -825,8 +826,7 @@ def xarray(trace: Any) -> Any:
         layer_coord.extend([label] * flat.shape[1])
         index_coord.extend(range(flat.shape[1]))
 
-    if not arrays or presentation_count is None:
-        raise ValueError("No saved tensor outs are available for xarray export.")
+    presentation_count = require_xarray_presentations(arrays, presentation_count)
 
     data = np.concatenate(arrays, axis=1)
     honesty = capture_honesty_facts(trace)
@@ -1212,7 +1212,7 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
         f"viewBox='0 0 {data['width']} {data['height']}'>"
         "<style>.tl-edge{stroke:#555;stroke-width:1.4}.tl-node rect{fill:#fff;stroke:#222;stroke-width:1.2}"
         ".tl-node-input rect{fill:#D9F0D3}.tl-node-output rect{fill:#F6D7C3}"
-        ".tl-node-parameterized rect{fill:#DDEAF7}.tl-node-buffer rect{fill:#F7E7BA}"
+        ".tl-node-parameterized rect{fill:#C0C0C0}.tl-node-buffer rect{fill:#F7E7BA}"
         ".tl-node text{font:12px sans-serif;fill:#111;pointer-events:none}</style>"
         + "".join(edge_markup)
         + "".join(node_markup)

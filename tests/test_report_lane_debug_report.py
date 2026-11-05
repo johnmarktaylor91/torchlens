@@ -165,6 +165,7 @@ def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
     rows, attrs = _dead_neurons_rows(trace, dim=None, max_activation=0.0)
     columns = [
         "op",
+        "module",
         "total_units",
         "dead_count",
         "dead_frac",

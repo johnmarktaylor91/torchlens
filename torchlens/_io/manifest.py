@@ -12,28 +12,27 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sys
-import warnings
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, TypeGuard
 
-import torch
-from packaging.version import InvalidVersion, Version
-
-from .. import __version__ as TORCHLENS_VERSION
-from ..errors._base import TorchLensWarning
 from . import (
     MIN_TLSPEC_VERSION,
     TLSPEC_VERSION,
     ArtifactError,
-    ArtifactRuntimeIncompatibleError,
     _json,
     above_ceiling_error,
     below_floor_error,
 )
+from ._runtime_identity import (
+    check_runtime_identity,
+    runtime_python_version as _runtime_python_version,
+)
 
 LOGGER = logging.getLogger(__name__)
+
+#: Re-exported for the 2.x writers (``tlspec``, ``streaming``) that stamp python_version.
+_RUNTIME_PYTHON_VERSION = _runtime_python_version
 
 _CODEC_METADATA_TUPLE_TAG = "__torchlens_codec_tuple_v1__"
 
@@ -124,6 +123,8 @@ class TensorEntry:
         Optional physical transport dtype string.
     codec_metadata:
         Optional best-effort JSON-ready codec metadata.
+    key:
+        Tensor key inside a packed 3.0 safetensors chunk; ``None`` for a one-tensor blob.
     """
 
     blob_id: str
@@ -145,6 +146,7 @@ class TensorEntry:
     transport_backend: str | None = None
     transport_dtype: str | None = None
     codec_metadata: dict[str, Any] | None = None
+    key: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TensorEntry:
@@ -154,11 +156,6 @@ class TensorEntry:
         ----------
         data:
             Raw decoded JSON mapping.
-
-        Returns
-        -------
-        TensorEntry
-            Validated tensor entry.
 
         Raises
         ------
@@ -210,12 +207,13 @@ class TensorEntry:
                 "logical_device",
                 "transport_backend",
                 "transport_dtype",
+                "key",
             )
         }
         codec_metadata = data.get("codec_metadata")
-        if codec_metadata is not None and not isinstance(codec_metadata, dict):
-            raise _schema_refuse("Manifest tensor entry 'codec_metadata' must be an object.")
         if codec_metadata is not None:
+            if not isinstance(codec_metadata, dict):
+                raise _schema_refuse("Manifest tensor entry 'codec_metadata' must be an object.")
             codec_metadata = _restore_codec_metadata_value(codec_metadata)
             if not isinstance(codec_metadata, dict):
                 raise _schema_refuse(
@@ -405,19 +403,7 @@ class Provenance:
 
 
 def _optional_str(data: dict[str, Any], field_name: str) -> str | None:
-    """Return an optional manifest string field after validation.
-
-    Parameters
-    ----------
-    data:
-        Manifest entry mapping.
-    field_name:
-        Optional field to read.
-
-    Returns
-    -------
-    str | None
-        Field value, or ``None`` when omitted.
+    """Return the optional string field ``field_name`` of ``data`` (``None`` when omitted).
 
     Raises
     ------
@@ -929,134 +915,12 @@ def enforce_version_policy(manifest: Manifest) -> None:
             code="artifact_version_below_floor",
         )
 
-    runtime_torch = _parse_version(torch.__version__, label="runtime torch")
-    manifest_torch = _parse_version(manifest.torch_version, label="manifest torch")
-    if runtime_torch is not None and manifest_torch is not None:
-        if runtime_torch.major != manifest_torch.major:
-            raise ArtifactRuntimeIncompatibleError(
-                "Bundle torch_version="
-                f"{manifest.torch_version} is incompatible with runtime torch_version="
-                f"{torch.__version__} (major version mismatch). Remedy: load the "
-                "bundle under a torch runtime with the recorded major version.",
-                code="bundle_torch_incompatible",
-                remedy="load the bundle under a torch runtime with the recorded major version",
-            )
-        if runtime_torch.minor != manifest_torch.minor:
-            warnings.warn(
-                "Bundle torch_version="
-                f"{manifest.torch_version} differs from runtime torch_version="
-                f"{torch.__version__} (minor version mismatch).",
-                TorchLensWarning,
-                stacklevel=2,
-            )
-    elif manifest.torch_version != torch.__version__:
-        raise ArtifactRuntimeIncompatibleError(
-            "Bundle torch_version="
-            f"{manifest.torch_version} could not be parsed compatibly with runtime "
-            f"torch_version={torch.__version__}; refusing load. Remedy: load the "
-            "bundle under a torch runtime with the recorded major version.",
-            code="bundle_torch_incompatible",
-            remedy="load the bundle under a torch runtime with the recorded major version",
-        )
-
-    runtime_torchlens = _parse_version(TORCHLENS_VERSION, label="runtime torchlens")
-    manifest_torchlens = _parse_version(
-        manifest.torchlens_version,
-        label="manifest torchlens",
-        warn_on_failure=False,
+    check_runtime_identity(
+        torch_version=manifest.torch_version,
+        torchlens_version=manifest.torchlens_version,
+        python_version=manifest.python_version,
+        subject="Bundle",
     )
-    if manifest_torchlens is None:
-        raise ArtifactError(
-            "Bundle torchlens_version="
-            f"{manifest.torchlens_version!r} could not be parsed under PEP 440; "
-            "refusing a current-schema artifact with unverifiable producer "
-            "provenance. Remedy: re-save the artifact with a released torchlens.",
-            code="bundle_producer_unverifiable",
-            remedy="re-save the artifact with a released torchlens",
-        )
-    if runtime_torchlens is not None and manifest_torchlens is not None:
-        if manifest_torchlens > runtime_torchlens:
-            warnings.warn(
-                "Bundle torchlens_version="
-                f"{manifest.torchlens_version} is newer than runtime torchlens_version="
-                f"{TORCHLENS_VERSION}.",
-                TorchLensWarning,
-                stacklevel=2,
-            )
-        elif manifest_torchlens < runtime_torchlens:
-            LOGGER.info(
-                "Bundle torchlens_version=%s is older than runtime torchlens_version=%s.",
-                manifest.torchlens_version,
-                TORCHLENS_VERSION,
-            )
-
-    runtime_python = _parse_version(_runtime_python_version(), label="runtime python")
-    manifest_python = _parse_version(manifest.python_version, label="manifest python")
-    if runtime_python is not None and manifest_python is not None:
-        if runtime_python.major != manifest_python.major:
-            warnings.warn(
-                "Bundle python_version="
-                f"{manifest.python_version} differs from runtime python_version="
-                f"{_runtime_python_version()} (major version mismatch).",
-                TorchLensWarning,
-                stacklevel=2,
-            )
-    elif manifest.python_version != _runtime_python_version():
-        warnings.warn(
-            "Bundle python_version="
-            f"{manifest.python_version} differs from runtime python_version="
-            f"{_runtime_python_version()} and could not be parsed under PEP 440.",
-            TorchLensWarning,
-            stacklevel=2,
-        )
-
-
-def _parse_version(
-    version_text: str,
-    *,
-    label: str,
-    warn_on_failure: bool = True,
-) -> Version | None:
-    """Parse a version string under PEP 440 with warning fallback.
-
-    Parameters
-    ----------
-    version_text:
-        Raw version string to parse.
-    label:
-        Human-readable label for warnings.
-    warn_on_failure:
-        Whether an unparseable version should emit the legacy fallback warning.
-
-    Returns
-    -------
-    Version | None
-        Parsed version object, or ``None`` when parsing fails.
-    """
-
-    try:
-        return Version(version_text)
-    except InvalidVersion:
-        if warn_on_failure:
-            warnings.warn(
-                f"Could not parse {label} version {version_text!r} under PEP 440; "
-                "falling back to string comparison.",
-                TorchLensWarning,
-                stacklevel=3,
-            )
-        return None
-
-
-def _runtime_python_version() -> str:
-    """Return the current runtime Python version string.
-
-    Returns
-    -------
-    str
-        ``major.minor.micro`` string for the active interpreter.
-    """
-
-    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
 
 def _validate_unsupported_tensors(raw_value: Any) -> list[dict[str, str]]:

@@ -10,7 +10,8 @@ from .._input_coerce import _coerce_inputs
 from ..options import CaptureOptions
 from ._dry_run import DryRun
 from ._recorder import Recorder
-from .options import PredicateFn
+from .exceptions import refuse_recorder_uninitialized
+from .options import PredicateFn, RecordingOptions
 
 
 def dry_run(
@@ -52,9 +53,11 @@ def dry_run(
     inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
-        "history_size": history_size,
-        "include_source_events": include_source_events,
-        "on_predicate_error": "fail-fast",
+        "recording": RecordingOptions(
+            history_size=history_size,
+            include_source_events=include_source_events,
+            on_predicate_error="fail-fast",
+        ),
     }
     if seed is not None:
         recorder_kwargs["capture"] = CaptureOptions(seed=seed)
@@ -65,9 +68,9 @@ def dry_run(
 
     with recorder_cm as recorder:
         if recorder._state is None:  # noqa: SLF001
-            raise RuntimeError("Recorder state was not initialized")
+            refuse_recorder_uninitialized("Recorder state was not initialized")
         if recorder._capture_events is None:  # noqa: SLF001
-            raise RuntimeError("Recorder capture events were not initialized")
+            refuse_recorder_uninitialized("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
         recorder._state.keep_all_contexts = True  # noqa: SLF001
         recorder(inputs, input_kwargs)

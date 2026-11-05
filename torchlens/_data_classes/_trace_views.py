@@ -15,7 +15,7 @@ from .._utils._display_bounded import RecordTuple
 from .._utils._display_collections import callable_list_repr, callable_list_str
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from .trace import Trace
 
@@ -602,6 +602,51 @@ def suggest_layer_labels(trace: Trace, selector: str, *, limit: int = 10) -> lis
         if len(result) >= limit:
             break
     return result
+
+
+def modules_with_facet(trace: Trace, name: str) -> Iterator[Any]:
+    """Yield single-call Modules whose facet view has ``name`` available now.
+
+    Facets are read on a module called once; a module called more than once has
+    no module-level facet view. Such a module is skipped when no facet recipe for
+    its class declares ``name`` (a reused dropout or activation), and refused by
+    name when one does (a shared attention layer), so a sweep never drops a layer
+    that carries the facet without saying so. The refusal's remedy names the
+    per-call views, ``module.calls[N].facets``, which read each call alone.
+
+    Raises
+    ------
+    InvalidArgumentError
+        Code ``module_call_ambiguous``: a module called more than once has a
+        recipe declaring ``name``.
+    """
+
+    for module in trace.modules:
+        if module.num_calls == 1 and len(module.ops) == 1:
+            if module.facets.has(name):
+                yield module
+        elif _recipe_declares_facet(module, name):
+            # The coded single-call refusal names the module and its call count.
+            module._single_call_or_error(remedy=_per_call_facet_remedy(module, name))
+
+
+def _per_call_facet_remedy(module: Any, name: str) -> str:
+    """Return the remedy that points a refused sweep at the per-call facet views."""
+
+    return (
+        f"read each call's facets instead: trace.modules[{module.address!r}].calls[N]"
+        f".facets.{name} for N in range({module.num_calls}), or "
+        f"trace.module_calls[{module.address + ':1'!r}].facets.{name}"
+    )
+
+
+def _recipe_declares_facet(module: Any, name: str) -> bool:
+    """Return whether a facet recipe matching ``module``'s class declares ``name``."""
+
+    from .._semantic.facets import _matching_recipes, _snapshot_for_record
+
+    recipes = _matching_recipes(module, _snapshot_for_record(module))
+    return any(name in recipe.declared_facets for recipe in recipes)
 
 
 def find_nan(trace: Trace) -> Any:

@@ -321,3 +321,25 @@ def test_tf_trace_to_pandas_smoke() -> None:
     trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf")
 
     assert not trace.to_pandas().empty
+
+
+@pytest.mark.parametrize("rolled", [False, True], ids=["unrolled", "rolled"])
+def test_tf_keras_draw_keeps_root_scoped_edges(rolled: bool, tmp_path: Any) -> None:
+    """Draw a Keras Sequential: edges its ops scope to the root call reach the drawing."""
+
+    model = keras.Sequential(
+        [
+            keras.Input((6, 6, 1)),
+            keras.layers.Conv2D(4, 3, name="conv"),
+            keras.layers.ReLU(name="act"),
+            keras.layers.Flatten(name="flat"),
+            keras.layers.Dense(2, name="head"),
+        ]
+    )
+    x = tf.constant(np.random.default_rng(0).standard_normal((1, 6, 6, 1)), dtype=tf.float32)
+    trace = tl.trace(model, x, backend="tf")
+    dot = trace.draw(str(tmp_path / "keras"), file_format="svg", rolled=rolled, layout="dot").dot
+    drawn = {line.split(" [", 1)[0].strip() for line in dot.splitlines() if " -> " in line}
+    links = {(op.label, child) for op in trace._layer_list for child in op.children}
+
+    assert len(drawn) == len(links), (sorted(drawn), sorted(links))

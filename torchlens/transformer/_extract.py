@@ -24,8 +24,10 @@ from typing import Any
 
 import torch
 
+from .._semantic.recipes._helpers import relays_wrapped_core
 from ..errors._base import TorchLensError
 from ._errors import refuse
+from ._generation_attention import generation_attention_view
 from ._records import AttentionView, GqaInfo, MaskInfo, TokenAxis
 
 __all__ = ["attention_view", "attention_views"]
@@ -51,12 +53,14 @@ def _has_facet(module: Any, name: str) -> bool:
 
 
 def _modules_with_pattern(trace: Any) -> list[str]:
-    """Return module addresses exposing an available ``pattern`` facet."""
+    """Return module addresses exposing an available ``pattern`` facet, one per layer."""
 
     return [
         str(module.address)
         for module in getattr(trace, "modules", ())
-        if getattr(module, "address", None) != "self" and _has_facet(module, "pattern")
+        if getattr(module, "address", None) != "self"
+        and _has_facet(module, "pattern")
+        and not relays_wrapped_core(module, "pattern")
     ]
 
 
@@ -126,6 +130,19 @@ def _masked_positions(
         # isinf-keyed detector silently finds nothing.
         floor = torch.finfo(work.dtype).min
         masked = work <= floor / 2
+    return _fit_grid(masked, n_dst, n_src, batch_index)
+
+
+def _fit_grid(
+    masked: torch.Tensor, n_dst: int, n_src: int, batch_index: int
+) -> torch.Tensor | None:
+    """Return ``masked`` as a ``[n_dst, n_src]`` grid, broadcasting singleton axes.
+
+    A key-padding mask arrives as ``[batch, 1, 1, src]`` (transformers 4.x
+    eager BERT's extended mask) and a full mask as ``[batch, 1, dst, src]``;
+    both reduce to the grid. ``None`` when the shape cannot broadcast.
+    """
+
     masked = _squeeze_to_grid(masked, batch_index)
     if masked.shape[-2:] != (n_dst, n_src):
         try:
@@ -164,7 +181,7 @@ def _mask_from_eager(trace: Any, module: Any, batch_index: int) -> MaskInfo | No
     if home_label is None:
         return None
     try:
-        scores_op = trace[home_label]
+        scores_op = trace.ops[home_label]
     except (KeyError, TorchLensError):
         return None
     shape = tuple(getattr(scores_op, "shape", ()) or ())
@@ -184,7 +201,7 @@ def _additive_mask_from_parent(
     """Return the masked-position grid if a parent op holds the additive fill."""
 
     try:
-        value = trace[parent_label].out
+        value = trace.ops[parent_label].out
     except (KeyError, TorchLensError):
         return None
     if not isinstance(value, torch.Tensor) or not value.is_floating_point():
@@ -193,10 +210,11 @@ def _additive_mask_from_parent(
     filled = value <= floor / 2
     if not bool(filled.any()):
         return None
-    masked = _squeeze_to_grid(filled, batch_index)
-    if masked.shape != (n_dst, n_src):
+    if filled.ndim < 2 or filled.shape[-1] != n_src:
+        # Only a per-key operand is a mask: a scalar fill would broadcast to
+        # "every cell masked".
         return None
-    return masked.contiguous()
+    return _fit_grid(filled, n_dst, n_src, batch_index)
 
 
 def _gqa_info(module: Any, n_heads: int) -> GqaInfo | None:
@@ -249,53 +267,8 @@ def _token_axes(
     )
 
 
-def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (axes + batch + mask)
-    trace: Any,
-    layer: str,
-    *,
-    tokens: Any = None,
-    query_tokens: Any = None,
-    key_tokens: Any = None,
-    batch_index: int = 0,
-    mask: torch.Tensor | None = None,
-) -> AttentionView:
-    """Extract one layer's attention pattern as a typed view (memo D5/D6).
-
-    Parameters
-    ----------
-    trace:
-        A finished TorchLens trace of a transformer forward.
-    layer:
-        Module address of the attention module (see
-        :func:`attention_views` for discovery).
-    tokens:
-        Token strings for BOTH axes (self-attention convenience).
-    query_tokens:
-        Destination-axis tokens (cross-attention; T5 is rectangular).
-    key_tokens:
-        Source-axis tokens (cross-attention).
-    batch_index:
-        Batch element to extract.
-    mask:
-        Explicit user/model mask metadata (source 3 of the hierarchy);
-        bool ``[n_destination, n_source]``, True = masked out. Used only
-        when no captured source resolves.
-
-    Returns
-    -------
-    AttentionView
-        The canonical ``[head, destination, source]`` view with provenance,
-        mask provenance (or none), and the GQA disclosure when declared.
-
-    Examples
-    --------
-    >>> trace = tl.trace(model, x)
-    >>> try:
-    ...     tl.transformer.attention_view(trace, "no.such.layer")
-    ... except tl.errors.RenderError as err:
-    ...     print(err.fields["code"])
-    tv_facet_missing
-    """
+def _pattern_module(trace: Any, layer: str) -> Any:
+    """Return the module at ``layer``; refuse an unknown address or one with no pattern facet."""
 
     if layer not in getattr(trace, "modules", {}):
         available = _modules_with_pattern(trace)
@@ -316,6 +289,105 @@ def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (ax
             "attention-detection rows",
             available=available,
         )
+    return module
+
+
+def _is_generation(value: Any) -> bool:
+    """Return whether ``value`` is a generation recording (per-step forward records)."""
+
+    return hasattr(value, "records_at") and hasattr(value, "steps")
+
+
+def _check_step_request(trace: Any, step: int | None, query_tokens: Any, key_tokens: Any) -> int:
+    """Return the requested step; refuse a ``step=`` request that does not fit ``trace``."""
+
+    if not _is_generation(trace):
+        refuse(
+            code="tv_record_invalid",
+            message="step= pictures one step of a recorded generation; this object is "
+            "not a generation recording.",
+            remedy="drop step= for a single forward's trace, or record the generation with "
+            'tl.record(model, input_ids, save=tl.func("softmax"), generate_kwargs={...})',
+        )
+    if step is None:
+        refuse(
+            code="tv_record_invalid",
+            message="A generation recording holds one attention pattern per forward; "
+            "attention_view needs the step to picture.",
+            remedy=f"pass step= from 0 (the prefill) to {len(trace.steps) - 1}",
+        )
+    if query_tokens is not None or key_tokens is not None:
+        refuse(
+            code="tv_record_invalid",
+            message="A generation step's pattern is self-attention over the sequence so far; "
+            "query_tokens=/key_tokens= do not apply.",
+            remedy="pass tokens= with one label per position of generation.sequences",
+        )
+    return step
+
+
+def attention_view(  # noqa: PLR0913 -- the record-shaped extraction surface (axes + batch + mask)
+    trace: Any,
+    layer: str,
+    *,
+    tokens: Any = None,
+    query_tokens: Any = None,
+    key_tokens: Any = None,
+    batch_index: int = 0,
+    mask: torch.Tensor | None = None,
+    step: int | None = None,
+) -> AttentionView:
+    """Extract one layer's attention pattern as a typed view (memo D5/D6).
+
+    Parameters
+    ----------
+    trace:
+        A finished TorchLens trace of a transformer forward, or, with ``step``,
+        a generation recording (``tl.record(..., generate_kwargs=...)``) that
+        saved the attention softmax.
+    layer:
+        Module address of the attention module (see
+        :func:`attention_views` for discovery).
+    tokens:
+        Token strings for BOTH axes (self-attention convenience).
+    query_tokens:
+        Destination-axis tokens (cross-attention; T5 is rectangular).
+    key_tokens:
+        Source-axis tokens (cross-attention).
+    batch_index:
+        Batch element to extract.
+    mask:
+        Explicit user/model mask metadata (source 3 of the hierarchy);
+        bool ``[n_destination, n_source]``, True = masked out. Used only
+        when no captured source resolves.
+    step:
+        Generation step to picture: 0 is the prefill forward, ``k`` the k-th
+        decode forward. Needs a generation recording as ``trace``; the view
+        covers every position up to the step, the step's computed row is the
+        last one, and ``episode`` names the step.
+
+    Returns
+    -------
+    AttentionView
+        The canonical ``[head, destination, source]`` view with provenance,
+        mask provenance (or none), and the GQA disclosure when declared.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.transformer.attention_view(trace, "no.such.layer")
+    ... except tl.errors.RenderError as err:
+    ...     print(err.fields["code"])
+    tv_facet_missing
+    """
+
+    if step is not None or _is_generation(trace):
+        step = _check_step_request(trace, step, query_tokens, key_tokens)
+        return generation_attention_view(
+            trace, layer, step, tokens=tokens, batch_index=batch_index, mask=mask
+        )
+    module = _pattern_module(trace, layer)
     pattern, provenance = _pattern_tensor(trace, layer, batch_index)
     n_heads, n_dst, n_src = pattern.shape
     query_axis, key_axis = _token_axes(tokens, query_tokens, key_tokens, n_dst, n_src)

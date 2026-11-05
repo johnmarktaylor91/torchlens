@@ -27,3 +27,8 @@ basis-grid line counts come from regions marked `# region: <name>` ... `# endreg
 script: `torchlens` is the analysis written with TorchLens, `plain` the same analysis
 written with plain PyTorch hooks or autograd (the independent oracle). Blank, comment and
 docstring lines are not counted.
+
+Each script also saves what its figure needs beside `<entry>.json` (a `<entry>_figure.npz`
+or `.json` file) and draws the page figure from those saved results through `_figures.py`,
+which imports no torch. `python examples/gallery/<entry>.py --figure-only --out DIR` redraws
+the PNG and SVG from a finished run without rerunning the model.

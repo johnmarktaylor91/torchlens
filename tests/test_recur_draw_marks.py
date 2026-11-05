@@ -1,10 +1,12 @@
 """Recurrent and conditional drawing marks: edge annotation size and pass marks.
 
-* Edge annotations (``In``/``Out`` pass ranges, argument labels, IF/THEN) follow
+* Edge annotations (``In``/``Out`` pass ranges, argument labels, THEN/ELSE) follow
   the edge font size (``edge_overrides["fontsize"]`` or ``font_size``) instead of
-  a fixed 8 pt; the default drawing keeps 8 pt and 18 pt.
-* A rolled pass range on a conditional edge shares the branch label's midpoint
-  slot rather than floating as a tail or head label.
+  a fixed size; the default drawing keeps 13 pt annotations and 14 pt arm labels.
+* A rolled pass range sits at the node it describes (``Out`` as the tail label,
+  ``In`` as the head label), also on a conditional edge, whose arm label keeps
+  the midpoint, and beside an argument label, which takes the midpoint (restored
+  head/tail placement, JMT 3 Nov 2026).
 * The ``"label"`` token of ``node_label_fields`` carries the pass marks the default
   title shows, and the ``"pass"`` token prints nothing on single-pass nodes.
 """
@@ -67,8 +69,16 @@ def _edge_point_sizes(dot: str) -> set[str]:
     return {size for line in _edge_lines(dot) for size in _POINT_SIZE.findall(line)}
 
 
+def _edge_attr(line: str, kind: str) -> str:
+    """Return one HTML label attribute (``label``, ``headlabel``, ...) of a DOT edge line."""
+
+    match = re.search(rf"(?<![a-z]){kind}=(<<TABLE.*?</TABLE>>)", line)
+    return "" if match is None else match.group(1)
+
+
 def _branch_edge(dot: str) -> str:
-    lines = [line for line in _edge_lines(dot) if "<u>IF</u>" in line]
+    # The conditional-arm edge: IF names the test node, THEN rides the arm edge.
+    lines = [line for line in _edge_lines(dot) if "<u>THEN</u>" in line]
     assert len(lines) == 1, lines
     return lines[0]
 
@@ -91,7 +101,8 @@ def linear_trace() -> Iterator[tl.Trace]:
 
 def test_resolve_edge_typography_scales_annotation_and_emphasis() -> None:
     record = resolve_edge_typography(DEFAULT_TYPOGRAPHY, edge_overrides={"fontsize": 7})
-    assert (record.annotation_pt, record.emphasis_pt) == ("7", "9")
+    # Both scale by 7/14 from the 13/14 default (emphasis keeps its ratio to the base).
+    assert (record.annotation_pt, record.emphasis_pt) == ("7", "7")
     assert resolve_edge_typography(DEFAULT_TYPOGRAPHY) is DEFAULT_TYPOGRAPHY
     # A callable override cannot size a whole draw; the theme record stands.
     unsized = resolve_edge_typography(DEFAULT_TYPOGRAPHY, edge_overrides={"fontsize": len})
@@ -106,10 +117,10 @@ def test_resolve_edge_typography_scales_annotation_and_emphasis() -> None:
     assert ordered.annotation_pt == "11"
 
 
-def test_default_edge_annotations_keep_8_and_18_point(loop_if_trace: tl.Trace) -> None:
+def test_default_edge_annotations_keep_the_theme_sizes(loop_if_trace: tl.Trace) -> None:
     dot = _dot(loop_if_trace, rolled=True)
-    assert '<FONT POINT-SIZE="18"><b><u>IF</u>' in _branch_edge(dot)
-    assert '"8"' in {f'"{size}"' for size in _edge_point_sizes(dot)}
+    assert '<FONT POINT-SIZE="14"><b><u>THEN</u>' in _branch_edge(dot)
+    assert '"13"' in {f'"{size}"' for size in _edge_point_sizes(dot)}
 
 
 @pytest.mark.parametrize(
@@ -121,25 +132,27 @@ def test_edge_font_size_sizes_every_edge_annotation(
     loop_if_trace: tl.Trace, kwargs: dict[str, object]
 ) -> None:
     dot = _dot(loop_if_trace, rolled=True, **kwargs)
-    assert _edge_point_sizes(dot) == {"7", "9"}
-    assert '<FONT POINT-SIZE="9"><b><u>IF</u>' in _branch_edge(dot)
-    assert "labelfontsize=8" not in dot
+    # 13 pt annotations and 14 pt arm labels both scale to 7 pt.
+    assert _edge_point_sizes(dot) == {"7"}
+    assert '<FONT POINT-SIZE="7"><b><u>THEN</u>' in _branch_edge(dot)
+    assert "labelfontsize=13" not in dot
 
 
 def test_edge_font_size_sizes_argument_labels(linear_trace: tl.Trace) -> None:
     default = _dot(linear_trace, rolled=True)
     sized = _dot(linear_trace, rolled=True, edge_overrides={"fontsize": 12})
-    assert "8" in _edge_point_sizes(default)
-    assert "8" not in _edge_point_sizes(sized)
+    assert "13" in _edge_point_sizes(default)
+    assert "13" not in _edge_point_sizes(sized)
     assert "12" in _edge_point_sizes(sized)
 
 
-def test_rolled_pass_range_shares_the_branch_midpoint(loop_if_trace: tl.Trace) -> None:
+def test_rolled_pass_range_sits_at_its_node_beside_the_branch_label(
+    loop_if_trace: tl.Trace,
+) -> None:
     line = _branch_edge(_dot(loop_if_trace, rolled=True))
-    label = line.split("[label=", 1)[1]
-    assert "<u>IF</u>" in label and ">Out " in label
-    assert "taillabel" not in line
-    assert "headlabel" not in line
+    assert "<u>THEN</u>" in _edge_attr(line, "label") and ">Out " not in _edge_attr(line, "label")
+    assert ">Out " in _edge_attr(line, "taillabel")
+    assert _edge_attr(line, "headlabel") == ""
 
 
 def test_label_token_carries_pass_marks(linear_trace: tl.Trace) -> None:
@@ -164,11 +177,23 @@ def test_pass_token_is_empty_on_single_pass_nodes(linear_trace: tl.Trace) -> Non
         assert f">{pass_number}<" in unrolled
 
 
-def test_rolled_argument_and_pass_range_share_one_midpoint(loop_if_trace: tl.Trace) -> None:
+def test_rolled_argument_takes_the_midpoint_and_pass_range_stays_at_the_head(
+    loop_if_trace: tl.Trace,
+) -> None:
+    """``h`` enters the cell on pass 1 only (``In 1``); ``x`` enters every pass."""
+
     dot = _dot(loop_if_trace, rolled=True)
     input_edges = [line for line in _edge_lines(dot) if line.strip().startswith("input_")]
     assert len(input_edges) == 2
-    for line in input_edges:
-        assert "headlabel" not in line and "xlabel" not in line
-        label = line.split("[label=", 1)[1]
-        assert ">arg " in label and ">In " in label
+    # input_2 feeds pass 1 only (``In 1`` at its head, its argument at the midpoint);
+    # input_1 feeds every pass, so it carries no range and its argument takes the midpoint.
+    ranged = [line for line in input_edges if ">In " in line]
+    assert len(ranged) == 1 and ranged[0].strip().startswith("input_2")
+    (line,) = ranged
+    assert _edge_attr(line, "xlabel") == ""
+    assert ">In " in _edge_attr(line, "headlabel")
+    assert ">arg " not in _edge_attr(line, "headlabel")
+    assert ">arg " in _edge_attr(line, "label") and ">In " not in _edge_attr(line, "label")
+    (every_pass,) = [other for other in input_edges if other is not line]
+    assert ">arg " in _edge_attr(every_pass, "label")
+    assert "headlabel" not in every_pass and "xlabel" not in every_pass

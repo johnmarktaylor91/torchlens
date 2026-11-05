@@ -22,6 +22,7 @@ from ..._data_classes.prehook import (
     ModuleInputSnapshot,
     PreHookEffect,
 )
+from ..._errors import RecordBindingError
 from ..._utils._display_bounded import short_dataclass_repr
 from ._prehook_state import (
     _compare_observations,
@@ -107,14 +108,19 @@ class PreHookProvenanceLedger:
 
         Raises
         ------
-        RuntimeError
-            When the trace is already dead: the ledger is session-only and
-            every wrapper checks ``active`` before reaching the trace.
+        RecordBindingError
+            Code ``trace_reference_collected`` when the trace is already dead:
+            the ledger is session-only and every wrapper checks ``active``
+            before reaching the trace.
         """
 
         trace = self.trace_ref()
         if trace is None:
-            raise RuntimeError("pre-hook provenance ledger outlived its capture trace")
+            raise RecordBindingError(
+                "pre-hook provenance ledger outlived its capture trace",
+                code="trace_reference_collected",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
+            )
         return trace
 
     def current_token(self, module: nn.Module) -> _InvocationToken | None:

@@ -23,19 +23,24 @@
 #   hard_fail   optional: choosing an avoid call fails the whole run
 
 rules:
-  - "Steering or patching many forwards, or through `generate()`: build the edit once and bind it, `tl.when(site, edit).bind(model)`. Never run `tl.trace` per step: a capture per step costs far more than a hook."
-  - "Address sites with selectors: `tl.module(\"layer3\")` is a module's output, `tl.func(\"relu\")` every relu op, `tl.in_module(\"layer3\")` the ops inside a module. Op labels such as `\"relu_1_2\"` exist only after a capture."
-  - "Edit a captured trace with `trace.fork().do(site, edit, model=model, inputs=x)`; edit during capture with `tl.trace(model, x, intervene=tl.when(site, edit))`."
-  - "Hand results on as a saved path (`trace.save(\"run.tlspec\")`, reopened with `tl.load`), not printed tensors. Open your own or a trusted file with `tl.load` directly; inspect an untrusted one with the read-only tools, manifest first."
-  - "Errors are typed: branch on `exc.fields['code']` and follow `exc.fields['remedy']`, never the message text."
-  - "Trace the eager module, never a `torch.compile`, TorchScript or exported artifact, and never run captures from several threads at once."
+  - "Many forwards or `generate()`: bind once, `bound = tl.when(site, edit).bind(model)`, call `bound(x)` or `bound.generate(...)`; plain `model(x)` stays unedited. Never `tl.trace` per step. With the KV cache, later steps see only the new token: index `[:, -1]`."
+  - "Sites: `tl.module(\"layer3\")` is a module's output, `tl.func(\"relu\")` every relu op, `tl.in_module(\"layer3\")` the ops inside it. Labels like `\"relu_1_2\"` exist only after a capture."
+  - "Tuple outputs: one site per tensor; `trace[\"attn\"]` is ambiguous, `trace.modules[\"attn\"].outs` lists them, an edit runs on each (check `out.shape`)."
+  - "The last hidden state is the final norm's output (`model.norm`, GPT-2 `transformer.ln_f`), not the last block's."
+  - "Saved values are copies, but an edit's `out` is live: clone what you keep or in-place ops overwrite it."
+  - "Edit a trace with `trace.fork().do(site, edit, model=model, inputs=x)`; during capture, `tl.trace(model, x, intervene=tl.when(site, edit))`."
+  - "Batched VJPs: capture with `capture=tl.options.CaptureOptions(save_mode=\"view\")` (a copy has no graph), then one `torch.autograd.grad(..., is_grads_batched=True)`."
+  - "Batches: pass `input_kwargs={\"attention_mask\": mask}` and read each row's last real token, not `[:, -1]`; match a reference's batch size (`tl.extract_dataset` uses 32): kernels drift about 1e-5."
+  - "Hand results on as a saved path (`trace.save(\"run.tlspec\")`, `tl.load`), not printed tensors; untrusted files: read-only tools, manifest first."
+  - "Errors are typed: branch on `exc.fields['code']`, follow `exc.fields['remedy']`, not the message."
+  - "Trace the eager module, never a `torch.compile`d, scripted or exported one, or capture from several threads at once."
 
 cards:
   - id: capture
     task: 'Capture a forward pass and read an activation'
     one_liner: 'One call records every operation, its shapes and its activations, checked by replay.'
     canonical: 'trace = tl.trace(model, x)'
-    avoid: 'Hand-written forward hooks, which miss functional calls such as torch.relu.'
+    avoid: 'Forward hooks miss functional calls like torch.relu.'
     tier: core
     doors: [mechinterp, neuroai, vision]
     related: [select-save, draw]
@@ -48,7 +53,7 @@ cards:
     task: 'Keep only the activations you need'
     one_liner: 'A selector passed to save= keeps chosen sites and records the rest as structure only.'
     canonical: 'trace = tl.trace(model, x, save=tl.func("relu"))'
-    avoid: 'Saving every activation of a large model and filtering afterwards.'
+    avoid: 'Saving every activation, then filtering.'
     tier: core
     doors: [mechinterp, neuroai, vision]
     related: [capture, extract-layers]
@@ -74,7 +79,7 @@ cards:
     task: 'Extract features over a whole dataset'
     one_liner: 'Streams chosen layers'' activations for every stimulus, in order, with a manifest of what produced them.'
     canonical: 'tl.extract_dataset(model, stimuli, ["layer3", "avgpool"], path="features")'
-    avoid: 'tl.trace once per batch in a loop.'
+    avoid: 'tl.trace per batch in a loop.'
     tier: core
     doors: [neuroai, vision]
     related: [extract-layers, probe, train-sae]
@@ -87,7 +92,7 @@ cards:
     task: 'Steer a language model during generation'
     one_liner: 'Binds one edit to the model so every forward, including generate(), applies it at about hook cost.'
     canonical: 'tl.when(tl.module("model.layers.6"), tl.steer(direction, strength=4.0)).bind(lm)'
-    avoid: 'tl.trace at every generation step.'
+    avoid: 'tl.trace per step.'
     tier: core
     doors: [mechinterp]
     related: [steer-once, record-generation]
@@ -101,7 +106,7 @@ cards:
     task: 'Add a direction to one site and capture the result'
     one_liner: 'A capture-time edit steers one site and records the steered run.'
     canonical: 'steered = tl.trace(model, x, intervene=tl.when(tl.module("layer3"), tl.steer(direction, strength=4.0, dim=1)))'
-    avoid: 'Editing the model''s forward code or weights.'
+    avoid: 'Editing the model''s code or weights.'
     tier: kit
     doors: [mechinterp, vision]
     related: [steer-generate, ablate]
@@ -114,7 +119,7 @@ cards:
     task: 'Ablate a component and measure the effect'
     one_liner: 'Fork a captured trace and replay it with the site zeroed, leaving the model untouched.'
     canonical: 'ablated = tl.trace(model, x).fork().do(tl.module("layer3"), tl.zero_ablate(), model=model, inputs=x)'
-    avoid: 'Editing the model''s weights or forward code.'
+    avoid: 'Editing the model''s code or weights.'
     tier: core
     doors: [mechinterp, vision]
     related: [patch, sweep]
@@ -127,7 +132,7 @@ cards:
     task: 'Patch activations from one input into another'
     one_liner: 'Replay the corrupted run with one site''s activation taken from the clean run.'
     canonical: 'patched = tl.trace(model, x_corrupt).fork().do(tl.module("layer3"), tl.patch_from(tl.trace(model, x_clean)), model=model, inputs=x_corrupt)'
-    avoid: 'Copying tensors between two hook runs by hand.'
+    avoid: 'Copying tensors between hook runs.'
     tier: kit
     doors: [mechinterp]
     related: [ablate, compare-runs]
@@ -140,7 +145,7 @@ cards:
     task: 'Sweep edits over one site'
     one_liner: 'Captures one intervened trace per value and returns them as a Bundle.'
     canonical: 'runs = tl.sweep(model, x, tl.module("layer3"), [tl.scale(s) for s in (0.0, 0.5, 2.0)], include_baseline=True)'
-    avoid: 'A hand-written loop of separate captures with no shared baseline.'
+    avoid: 'Separate captures with no shared baseline.'
     tier: kit
     doors: [mechinterp, vision]
     related: [ablate, compare-runs]
@@ -153,7 +158,7 @@ cards:
     task: 'Compare two runs site by site'
     one_liner: 'A Bundle holds named traces and compares them at any site against a baseline.'
     canonical: 'bundle = tl.Bundle({"clean": tl.trace(model, x), "ablated": ablated}, baseline="clean")'
-    avoid: 'Diffing two printed summaries by eye.'
+    avoid: 'Diffing printed summaries by eye.'
     tier: kit
     doors: [mechinterp]
     related: [patch, sweep]
@@ -167,7 +172,7 @@ cards:
     task: 'Draw the computational graph'
     one_liner: 'One call renders the graph with modules collapsed for readability.'
     canonical: 'tl.draw(model, x)'
-    avoid: 'Exporting to ONNX or torch.fx to look at it.'
+    avoid: 'Exporting to ONNX or torch.fx.'
     tier: core
     doors: [mechinterp, neuroai, vision]
     related: [capture, export-html]
@@ -181,7 +186,7 @@ cards:
     task: 'Print a summary of the model'
     one_liner: 'A module table with operation counts, shapes and parameter totals.'
     canonical: 'print(tl.summary(model, x))'
-    avoid: 'Counting parameters by hand from model.parameters().'
+    avoid: 'Counting model.parameters() by hand.'
     tier: kit
     doors: [vision, neuroai]
     related: [capture, draw]
@@ -195,7 +200,7 @@ cards:
     task: 'Reopen a saved trace'
     one_liner: 'Loads a .tlspec artifact back into a Trace with its activations and provenance.'
     canonical: 'trace = tl.load("run.tlspec")'
-    avoid: 'Opening the file with pickle or torch.load.'
+    avoid: 'pickle or torch.load.'
     tier: core
     doors: [mechinterp, neuroai, vision, agents]
     related: [to-disk, agent-inspect]
@@ -208,7 +213,7 @@ cards:
     task: 'Stream a large capture to disk'
     one_liner: 'storage= writes payloads to a directory during capture instead of holding them in memory.'
     canonical: 'trace = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))'
-    avoid: 'Capturing everything in memory, then saving.'
+    avoid: 'Capturing all in memory, then saving.'
     tier: kit
     doors: [neuroai, vision]
     related: [save-load, select-save]
@@ -221,7 +226,7 @@ cards:
     task: 'Get gradients of intermediate activations'
     one_liner: 'Capture with gradient saving on, then run the backward pass through the trace.'
     canonical: 'trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))'
-    avoid: 'Reading .grad on intermediate tensors, which autograd does not keep.'
+    avoid: 'Reading .grad on intermediates (autograd drops it).'
     tier: kit
     doors: [mechinterp, vision]
     related: [attribution, capture]
@@ -234,7 +239,7 @@ cards:
     task: 'Check that a capture is faithful'
     one_liner: 'Replays the captured graph and compares every value with the real forward.'
     canonical: 'tl.validate(model, x)'
-    avoid: 'Trusting a capture of custom kernels unchecked.'
+    avoid: 'Trusting custom kernels unchecked.'
     tier: kit
     doors: [mechinterp, neuroai, vision]
     related: [capture, doctor]
@@ -247,7 +252,7 @@ cards:
     task: 'Record a few sites over many forwards cheaply'
     one_liner: 'A sparse recording keeps chosen sites without building the full graph.'
     canonical: 'recording = tl.record(model, x, save=tl.func("relu"))'
-    avoid: 'A full tl.trace per forward when only a few sites are needed.'
+    avoid: 'A full tl.trace per forward for a few sites.'
     tier: kit
     doors: [mechinterp, neuroai]
     related: [select-save, record-generation]
@@ -260,7 +265,7 @@ cards:
     task: 'Record activations across a whole generation'
     one_liner: 'One recording spans every step of generate(), with the KV cache on.'
     canonical: 'recording = tl.record(lm, ids, save=tl.module("model.layers.6"), generate_kwargs={"max_new_tokens": 16, "do_sample": False})'
-    avoid: 'A separate tl.trace per generated token.'
+    avoid: 'tl.trace per token.'
     tier: advanced
     doors: [mechinterp]
     related: [steer-generate, record-many]
@@ -286,7 +291,7 @@ cards:
     task: 'Collect features to train a linear probe'
     one_liner: 'Extract one layer over labelled stimuli, then fit any classifier on the saved features.'
     canonical: 'tl.extract_dataset(model, stimuli, ["layer4"], path="probe_features")'
-    avoid: 'Calling tl.trace per batch to gather probe features.'
+    avoid: 'tl.trace per batch.'
     tier: kit
     doors: [neuroai, mechinterp, vision]
     related: [extract-dataset]
@@ -299,7 +304,7 @@ cards:
     task: 'Gather activations to train a sparse autoencoder'
     one_liner: 'Write one layer''s activations over a dataset, then hand them to an SAE trainer.'
     canonical: 'tl.extract_dataset(model, stimuli, ["layer4"], batch_size=64, path="sae_acts")'
-    avoid: 'Calling tl.trace per batch to build an SAE training set.'
+    avoid: 'tl.trace per batch.'
     tier: advanced
     doors: [mechinterp]
     related: [extract-dataset, probe]
@@ -312,7 +317,7 @@ cards:
     task: 'Build a representational dissimilarity matrix'
     one_liner: 'One call turns stimulus-by-feature activations into an RDM.'
     canonical: 'rdm = tl.repgeom.rdm(features)'
-    avoid: 'A hand-written pairwise distance loop.'
+    avoid: 'A pairwise distance loop.'
     tier: advanced
     doors: [neuroai]
     related: [extract-dataset, neuro-compare]
@@ -325,7 +330,7 @@ cards:
     task: 'Compare model features with brain data'
     one_liner: 'Runs RSA, ridge encoding and CKA between a trace and neural recordings.'
     canonical: 'result = tl.neuro.compare(trace, brain, analyses=("rsa", "ridge", "cka"))'
-    avoid: 'Re-implementing RSA and ridge scoring by hand.'
+    avoid: 'Hand-written RSA and ridge scoring.'
     tier: advanced
     doors: [neuroai]
     related: [rdm, extract-dataset]
@@ -338,7 +343,7 @@ cards:
     task: 'Stream summary statistics over a dataset'
     one_liner: 'Aggregates means, norms or quantiles at chosen sites without keeping activations.'
     canonical: 'stats = tl.stats.aggregate(model, batches, metrics={"relu_1_2": tl.stats.Aggregator(tl.stats.Mean())})'
-    avoid: 'Saving all activations of every batch to average later.'
+    avoid: 'Saving every batch to average later.'
     tier: advanced
     doors: [neuroai, mechinterp]
     related: [extract-dataset, record-many]
@@ -365,7 +370,7 @@ cards:
     task: 'Fail a test when the architecture changes'
     one_liner: 'Hashes the traced structure and raises when it no longer matches the pinned value.'
     canonical: 'tl.fingerprint.assert_unchanged(model, x, expected=None)'
-    avoid: 'Comparing str(model), which misses changes inside forward.'
+    avoid: 'Comparing str(model): it misses forward changes.'
     tier: advanced
     doors: [agents]
     related: [validate]
@@ -391,7 +396,7 @@ cards:
     task: 'Inspect an untrusted artifact'
     one_liner: 'The read-only tools read the manifest first and never unpickle until asked.'
     canonical: 'overview = tl.agent.call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})'
-    avoid: 'Calling tl.load on an untrusted artifact before reading its manifest.'
+    avoid: 'tl.load on an untrusted artifact before its manifest.'
     tier: kit
     doors: [agents]
     related: [save-load]

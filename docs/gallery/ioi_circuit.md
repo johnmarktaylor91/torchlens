@@ -3,6 +3,8 @@
 Wang et al.'s 26-head indirect-object-identification circuit is the membership oracle for
 an EAP-IG ranking on GPT-2 small; the fixed 1,000-row run passed with head ROC AUC 0.9263.
 
+![ROC curve of the head ranking against Wang's 26-head membership: summed outgoing attribution separates the 26 IOI heads from the other 118 with ROC AUC 0.926, and the top 26 heads recover 77% of Wang's set; the chance diagonal is dotted.](../images/gallery/ioi_roc.svg)
+
 | Field | Value |
 | --- | --- |
 | Claim | Wang et al., *Interpretability in the Wild: a Circuit for Indirect Object Identification in GPT-2 small*, ICLR 2023, arXiv 2211.00593 |
@@ -49,8 +51,9 @@ gallery helper's sorted-path and content SHA-256
 Reload reproduced all 26 ranked head names exactly. This verifies saved-score replay,
 not an independent rerun of the model or all interpolation captures.
 
-The plotting helpers write `ioi_roc.png` / `.svg` and `ioi_circuit.png` / `.svg` from
-the saved scores. The graph shows the 20 strongest absolute head-to-head q/k/v edges,
+The script reduces the saved scores to `ioi_circuit_figure.json`, and the shared
+`_figures.py` renderer writes `ioi_roc.png` / `.svg` and `ioi_circuit.png` / `.svg` from
+that file (`--figure-only` redraws them without rerunning the model). The graph shows the 20 strongest absolute head-to-head q/k/v edges,
 with Wang's head classes colored and all other heads grey. Arrow width encodes absolute
 attribution, without asserting that an edge is necessary. Edges for different q/k/v
 channels can share endpoints and overlap; the saved table retains each channel identity. The ROC uses all 144 heads

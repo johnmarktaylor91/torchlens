@@ -6,12 +6,14 @@ import importlib
 import pickle
 import warnings
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 import torch
 
 import torchlens as tl
+from torchlens.intervention._replay_sites import _unmet_log_precondition
 from torchlens.intervention.errors import (
     ControlFlowDivergenceWarning,
     MultiMatchWarning,
@@ -20,8 +22,10 @@ from torchlens.intervention.errors import (
 from torchlens.io import TraceState
 from torchlens.options import InterventionOptions
 
-_CONFIRM = InterventionOptions(confirm_mutation=True)
-_DIFFERENTIABLE = InterventionOptions(differentiable=True, confirm_mutation=True)
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
+_CONFIRM = InterventionOptions()
+_DIFFERENTIABLE = InterventionOptions(differentiable=True)
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
 
@@ -357,6 +361,21 @@ def test_replay_rejects_non_intervention_ready_logs() -> None:
 
     with pytest.raises(ReplayPreconditionError, match="argument templates"):
         log.do({tl.func("relu"): _identity_hook}, intervention=_CONFIRM)
+
+
+@pytest.mark.parametrize("backend", ["jax", "tf", "mlx", "paddle", "tinygrad"])
+def test_replay_refusal_names_the_preview_backend(backend: str) -> None:
+    """A preview trace has no argument templates; the refusal names its backend, not tl.record."""
+
+    preview_log = SimpleNamespace(
+        _tracing_finished=True, is_replayable=False, options=None, _provenance_backend=backend
+    )
+
+    message = _unmet_log_precondition(cast(Any, preview_log))
+
+    assert message is not None
+    assert f"the {backend} preview backend cannot edit or patch a finished trace" in message
+    assert "every other" not in message
 
 
 def test_replay_runs_on_default_capture() -> None:

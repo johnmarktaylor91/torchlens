@@ -17,9 +17,10 @@ from pathlib import Path
 import pytest
 import torch
 from PIL import Image
+from support.cairosvg_skip import require_cairosvg
 from torch import nn
 
-cairosvg = pytest.importorskip("cairosvg")
+cairosvg = require_cairosvg()
 
 import test_loop_module_rolling as demos  # noqa: E402
 from support.label_geometry import audit_gv_source  # noqa: E402
@@ -216,8 +217,8 @@ def test_container_edge_labels_are_midpoint_and_geometry_clean(tmp_path: Path) -
         path=str(tmp_path / "container_labels"),
     ).dot
 
-    assert '<FONT POINT-SIZE="8">left</FONT>' in gv_source
-    assert '<FONT POINT-SIZE="8">right</FONT>' in gv_source
+    assert '<FONT POINT-SIZE="13">left</FONT>' in gv_source
+    assert '<FONT POINT-SIZE="13">right</FONT>' in gv_source
     assert "headlabel=" not in gv_source
     assert "taillabel=" not in gv_source
     assert "labeldistance=" not in gv_source

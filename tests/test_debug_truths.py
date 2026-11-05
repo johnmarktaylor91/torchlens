@@ -138,6 +138,18 @@ def test_dead_neurons_counts_transformer_features_on_the_last_axis() -> None:
     assert list(relu["sample_dead_idx"]) == [0, 1, 2]
 
 
+def test_dead_neurons_rows_name_the_module_that_returned_the_op() -> None:
+    """The module column holds the innermost module whose output the op is."""
+
+    torch.manual_seed(13)
+    trace = tl.trace(_Block(dead=3), torch.randn(2, 7, 6))
+    frame = tl.debug.dead_neurons(trace).to_pandas()
+
+    assert list(frame.columns[:2]) == ["op", "module"]
+    assert _row(frame, "linear")["module"] == "up"
+    assert _row(frame, "relu")["module"] != "up"
+
+
 class _ConvNet(nn.Module):
     """Channels 0 and 1 are dead (zero weight, negative bias); 2 to 4 vary."""
 

@@ -621,7 +621,7 @@ for label in trace.op_labels:
 ### op-internal-source
 A tensor made inside `forward` (here `torch.ones`) is an internal source, not an input.
 
-- covers: `Op.is_internal_source`, `Op.is_internally_initialized`, `Op.internal_source_parents`, `Op.internal_source_ancestors`, `Op.has_internal_source_ancestor`, `Op.tl_authored_root`
+- covers: `Op.is_internal_source`, `Op.is_internally_initialized`, `Op.is_constant`, `Op.internal_source_parents`, `Op.internal_source_ancestors`, `Op.has_internal_source_ancestor`, `Op.tl_authored_root`
 - tasks: graph, internal-source
 - fixture: none
 
@@ -633,6 +633,7 @@ trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.ops["ones_1_1"], trace.ops["add_1_2"]
 print("is_internal_source", ones.is_internal_source)
 print("is_internally_initialized", ones.is_internally_initialized)
+print("is_constant", ones.is_constant, add.is_constant)
 print("internal_source_parents", add.internal_source_parents)
 print("internal_source_ancestors", add.internal_source_ancestors)
 print("has_internal_source_ancestor", add.has_internal_source_ancestor)
@@ -640,6 +641,7 @@ print("tl_authored_root", ones.tl_authored_root)
 # Output:
 # is_internal_source True
 # is_internally_initialized True
+# is_constant True False
 # internal_source_parents ('ones_1_1',)
 # internal_source_ancestors frozenset({'ones_1_1'})
 # has_internal_source_ancestor True

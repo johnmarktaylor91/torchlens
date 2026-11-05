@@ -413,11 +413,11 @@ def test_r63_canonical_read_saves_verified_and_digest_witnesses(tmp_path: Path) 
 
     x = torch.randn(3)
     path = _save(_trace(CanonicalIsContiguousRead(), x), tmp_path / "canon.tlspec")
-    result = tl.load(path).run(inputs=x.clone())
+    result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     changed = tl.load(path)
     changed.load_state_dict({"w": torch.full((2, 3), 5.0)})
-    result = changed.run(inputs=x.clone())
+    result = changed.run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
@@ -458,7 +458,7 @@ def test_r63_named_control_capture_never_verified(tmp_path: Path) -> None:
         except (RunnablePreflightError, StateBindingError) as exc:
             assert "state_metadata_mismatch" in str(exc)
             return  # refusing the save outright is equally honest
-        result = tl.load(path).run(inputs=x.clone())
+        result = tl.load(path).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -478,7 +478,7 @@ def test_r63_runtime_tripwire_catches_mutated_staged_state(tmp_path: Path) -> No
     staged[slot_id] = torch.ones(3, 2).t()  # same shape/dtype, non-canonical stride
     loaded._runnable.staged_user_state = MappingProxyType(staged)
     with pytest.raises(PathDivergenceError) as excinfo:
-        loaded.run(inputs=torch.randn(3))
+        loaded.run_transaction(inputs=torch.randn(3))
     assert "canonical staged metadata signature" in str(excinfo.value)
 
 

@@ -455,7 +455,7 @@ def _run_predicate_forward_with_root_frame(
             state.append_context(enter_ctx)
     outputs = None
     try:
-        with _timed_phase(trace, "dispatch:forward_model"):
+        with _timed_phase(trace, "dispatch_forward_model"):
             with _forward_peak_memory_bracket(trace, model_device):
                 with backend.inference_context(trace):
                     outputs = cast(Callable[..., Any], model)(*input_args, **input_kwargs)

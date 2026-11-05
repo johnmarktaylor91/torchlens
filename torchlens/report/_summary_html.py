@@ -21,7 +21,7 @@ from ._summary_render import CellTotals, SummaryFacts, _cell, cell_totals
 _CSS = """
 <style>
 .tl-summary {font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12.5px; line-height: 1.45; color: #1a1a2e;}
+  font-size: 12.5px; line-height: 1.45; color: #1f1f1f;}
 .tl-summary .tl-table {max-width: 100%; overflow-x: auto;}
 .tl-summary table {border-collapse: collapse; width: auto;}
 .tl-summary thead th {position: sticky; top: 0; background: #f4f4f8;
@@ -42,7 +42,7 @@ _CSS = """
 }
 @media (prefers-color-scheme: dark) {
   .tl-summary {color: #e6e6ef;}
-  .tl-summary thead th {background: #26263a; border-bottom-color: #666;}
+  .tl-summary thead th {background: #2b2b2b; border-bottom-color: #666;}
   .tl-summary .tl-banner {color: #ffb454;}
 }
 </style>

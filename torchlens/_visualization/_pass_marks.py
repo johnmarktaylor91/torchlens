@@ -4,29 +4,30 @@ The default node title carries them (``linear_1_1:2`` on an unrolled pass,
 ``linear_1_1 (x3)`` or ``linear_1_1:1-2,4`` on a rolled layer), and so do the
 ``"label"`` and ``"pass"`` tokens of ``node_label_fields``, so a picker that drops
 the wide parameter row keeps the loop marks. Rolled edges carry ``In``/``Out``
-pass ranges; on a conditional edge they share the branch label's midpoint slot,
-and beside an argument label they share its midpoint slot, which Graphviz reserves
-layout space for, instead of floating at the endpoint over arrows and other labels.
+pass ranges as head and tail labels, each beside the node it describes
+(``_render_edges._label_rolled_call_indexs``).
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from .._utils._multipass_access import get_multipass_attr
 
 __all__ = (
-    "pass_label_fits",
     "pass_mark_suffix",
     "pass_rows",
-    "stack_labels",
-    "with_branch",
 )
 
 #: The shape ``_render_leaf._format_branch_edge_label_html`` emits (IF, THEN, ELIF n, ...).
-_BRANCH_LABEL = re.compile(r'<<FONT POINT-SIZE="[^"]*"><b><u>.*</u></b></FONT>>', re.DOTALL)
+_BRANCH_LABEL = re.compile(
+    r'<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0"><TR>'
+    r'<TD WIDTH="\d+"></TD><TD><FONT POINT-SIZE="[^"]*"><b><u>.*</u></b></FONT></TD>'
+    r'<TD WIDTH="\d+"></TD></TR></TABLE>>',
+    re.DOTALL,
+)
 
 
 def _num_passes(layer_log: Any) -> int:
@@ -75,37 +76,3 @@ def pass_rows(layer_log: Any, vis_mode: str) -> list[str]:
     if vis_mode == "unrolled":
         return [str(get_multipass_attr(layer_log, "pass_number", 1, multipass=1))]
     return [str(_num_passes(layer_log))]
-
-
-def pass_label_fits(edge_dict: Mapping[str, Any]) -> bool:
-    """Return whether an edge's midpoint slot can take its ``In``/``Out`` pass label."""
-
-    label = edge_dict.get("label")
-    return label is None or bool(_BRANCH_LABEL.fullmatch(str(label)))
-
-
-def with_branch(edge_dict: Mapping[str, Any], pass_label: str) -> str:
-    """Return ``pass_label``, stacked under the edge's branch label when it has one.
-
-    Both are Graphviz HTML labels (``<...>`` wrapped once more in ``<>``); the
-    result is one borderless two-row table, so the branch word and the pass
-    range share the reserved midpoint space.
-    """
-
-    branch = edge_dict.get("label")
-    if branch is None or not _BRANCH_LABEL.fullmatch(str(branch)):
-        return pass_label
-    return stack_labels(str(branch), pass_label)
-
-
-def stack_labels(top: str, bottom: str) -> str:
-    """Return two Graphviz HTML labels as one borderless two-row label.
-
-    Each argument is an HTML label (``<...>`` wrapped once more in ``<>``); the
-    result keeps one HTML root, so it is a valid single ``label``.
-    """
-
-    return (
-        '<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0">'
-        f"<TR><TD>{top[1:-1]}</TD></TR><TR><TD>{bottom[1:-1]}</TD></TR></TABLE>>"
-    )

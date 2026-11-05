@@ -113,7 +113,7 @@ class TestTraceGC:
 
         model = _TwoLayerNet().eval()
         trace = tl.trace(model, torch.randn(1, 5), save=tl.module("fc1"))
-        trace.run(inputs=torch.randn(1, 5), fast=True)
+        trace.run_transaction(inputs=torch.randn(1, 5), fast=True)
         trace_ref = weakref.ref(trace)
         param_ref = weakref.ref(next(model.parameters()))
         assert model.fc1._forward_hooks
@@ -459,14 +459,14 @@ class TestTraceGC:
         gc.collect()
         assert trace._source_model_ref() is None, "inline model should be collected"
         with pytest.raises(RunCapabilityUnavailableError) as excinfo:
-            trace.run(inputs=torch.randn(1, 5))
+            trace.run_transaction(inputs=torch.randn(1, 5))
         message = str(excinfo.value)
         assert "weakly" in message and "strong reference" in message, (
             "the collected-model refusal must disclose the weak-reference "
             f"dependency and its remedy; got: {message}"
         )
         with pytest.raises(RunCapabilityUnavailableError) as fast_excinfo:
-            trace.run(inputs=torch.randn(1, 5), fast=True)
+            trace.run_transaction(inputs=torch.randn(1, 5), fast=True)
         assert "weakly" in str(fast_excinfo.value)
 
     def test_cleanup_drops_the_receptive_field_solution_cache(self):
@@ -560,7 +560,7 @@ class TestLifetimeCoverageGaps:
 
         model = _TwoLayerNet().eval()
         source = tl.trace(model, torch.randn(1, 5), save="all")
-        result = source.run(inputs=torch.randn(1, 5))
+        result = source.run_transaction(inputs=torch.randn(1, 5))
         fork_ref = weakref.ref(result.trace)
 
         del result

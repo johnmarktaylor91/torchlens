@@ -15,11 +15,8 @@ Fix pack (checks memo item 2 / D17), all ADDITIVE:
   via ``grad_scales={bwd: scale}``; UNKNOWN provenance yields UNKNOWN
   magnitude verdicts in the new ``verdict`` column, never a silent
   pass-as-1.0.
-- ``basis=`` selector: the legacy total-norm classification stays the
-  DEFAULT for one deprecation cycle; the flip to ``basis="rms"`` is
-  announced in ``attrs["basis_notice"]`` and gated on the multi-model
-  calibration runs -- changing a shipped verdict semantics unannounced is
-  the defect class the checks panel exists to prevent.
+- ``basis=`` selector: ``"total_norm"`` (the default) classifies on each
+  gradient's total norm; ``basis="rms"`` classifies on ``norm/sqrt(numel)``.
 """
 
 from __future__ import annotations
@@ -36,8 +33,14 @@ if TYPE_CHECKING:
 
 from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
-from .._debug_report import Report, table_report, trace_subject
-from ._common import _op_label, _require_pandas, _source_line, _tensor_unavailable_reason
+from .._debug_report import Report, _TableReport, trace_subject
+from ._common import (
+    _module_address,
+    _op_label,
+    _require_pandas,
+    _source_line,
+    _tensor_unavailable_reason,
+)
 from ._grad_scale_proof import PROVEN_UNSCALED, resolve_scale
 
 #: Column order shared by the rows core and the DataFrame view. The first
@@ -70,16 +73,8 @@ _NO_GRADS_HINT = (
     "trace.backward(loss)"
 )
 
-#: Closed classification bases (D17): legacy total-norm default, RMS opt-in.
+#: Closed classification bases (D17): total-norm default, RMS opt-in.
 _BASES = ("total_norm", "rms")
-
-#: The planned-flip announcement (deprecation notice, D17).
-_BASIS_NOTICE = (
-    "basis='total_norm' is the legacy classification and remains the default "
-    "for one deprecation cycle; the flip to basis='rms' (norm/sqrt(numel), "
-    "killing the ~128x numel artifact) is announced and gated on the "
-    "multi-model calibration runs. Opt in with basis='rms' today."
-)
 
 
 def _unavailable_row(
@@ -92,7 +87,7 @@ def _unavailable_row(
     label:
         Op label for the row.
     module:
-        Atomic module address for the row, if known.
+        Address of the module that ran the op (atomic or innermost), if known.
     reason:
         Why the gradient payload was unavailable.
     source_line:
@@ -183,7 +178,7 @@ def _validate_options(
         raise InvalidArgumentError(
             f"basis must be one of {_BASES}, got {basis!r}",
             code="grad_basis_invalid",
-            remedy="pass basis='total_norm' (legacy default) or basis='rms'",
+            remedy="pass basis='total_norm' (the default) or basis='rms'",
         )
     if grad_scale is not None and grad_scales is not None:
         raise KeywordConflictError(
@@ -274,7 +269,7 @@ def _collect_norm_rows(
     children_by_label: dict[str, tuple[str, ...]] = {}
     for op in saved_grad_ops:
         label = _op_label(op)
-        module = getattr(op, "atomic_module_address", None)
+        module = _module_address(op)
         source_line = _source_line(op)
         try:
             grad = op.grad_for(bwd=selected_bwd)
@@ -445,8 +440,6 @@ def _audit_attrs(
         "scale_provenance": ctx.provenance,
         "torchlens_capture_honesty": capture_honesty_facts(trace),
     }
-    if ctx.basis == "total_norm":
-        attrs["basis_notice"] = _BASIS_NOTICE
     if ctx.scale is not None:
         attrs["grad_scale"] = ctx.scale
     if proof_note is not None:
@@ -492,8 +485,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     names the fact that could not be proven), and UNKNOWN provenance yields
     UNKNOWN magnitude verdicts in the ``verdict`` column
     (the scale-invariant ``dead`` and ``nonfinite`` verdicts survive); the
-    legacy boolean columns keep their shipped classification through the
-    ``basis`` deprecation window (``attrs["basis_notice"]``).
+    boolean columns classify on the selected ``basis``.
 
     Parameters
     ----------
@@ -522,14 +514,14 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
         ITS stamp. Mutually exclusive with ``grad_scale``.
     basis:
         Classification basis for the boolean columns and the ``verdict``
-        column: ``"total_norm"`` (legacy default) or ``"rms"``
+        column: ``"total_norm"`` (the default) or ``"rms"``
         (``norm / sqrt(numel)``).
 
     Returns
     -------
     tuple[list[dict[str, Any]], dict[str, Any]]
         Severity-ranked audit row dicts and the attrs mapping (counts,
-        thresholds, basis + deprecation notice, capture-honesty facts on the
+        thresholds, basis, capture-honesty facts on the
         audited path). When every measurable gradient flags exploding
         without a scale, ``attrs["all_exploding_hint"]`` names the AMP
         scaled-gradients possibility.
@@ -582,10 +574,9 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     measurable = _classify_rows(measurable_entries, ctx, counts)
     _mark_frontiers(rows, children_by_label)
 
+    # Flagged rows first (most severe, culprit frontier first), then graph order.
     sorted_rows = sorted(
-        rows,
-        key=lambda row: (int(row["severity"]), bool(row["is_frontier"]), str(row["op"])),
-        reverse=True,
+        rows, key=lambda row: (-int(row["severity"]), not bool(row["is_frontier"]))
     )
     attrs = _audit_attrs(
         trace, counts, ctx, bwd=selected_bwd, proof_note=proof_note, grad_scales=grad_scales
@@ -634,8 +625,7 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         Per-backward scale stamps ``{bwd: scale}``; see
         :func:`gradient_flow_audit_rows`.
     basis:
-        ``"total_norm"`` (legacy default, deprecation window announced in
-        ``attrs["basis_notice"]``) or ``"rms"``.
+        ``"total_norm"`` (the default) or ``"rms"``.
 
     Returns
     -------
@@ -689,13 +679,43 @@ def _grad_health_report(trace: Trace, rows: list[dict[str, Any]], attrs: dict[st
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
-    return table_report(
-        "grad_health",
-        frame,
-        subject=trace_subject(trace),
+    return _TableReport(
+        helper="grad_health",
+        frame=frame,
+        subject_text=trace_subject(trace),
         finding_columns=("op", "module", "verdict", "grad_norm", "source_line"),
-        coverage=_scale_coverage(attrs, has_rows=bool(rows)),
+        coverage_text=_scale_coverage(attrs, has_rows=bool(rows)),
+        status_text=_health_status(rows) if rows else None,
+        severity_counts=tuple(_verdict_counts(rows).items()) if rows else (),
     )
+
+
+#: Verdicts that flag a gradient problem (the lead's ``flagged`` status).
+_FLAG_VERDICTS = ("dead", "exploding", "nonfinite", "vanishing")
+
+
+def _verdict_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Count the rows' verdicts for the lead: the three health flags always, others when present."""
+
+    counts = dict.fromkeys(("dead", "exploding", "vanishing"), 0)
+    for row in rows:
+        verdict = str(row.get("verdict"))
+        if verdict != "ok":
+            counts[verdict] = counts.get(verdict, 0) + 1
+    return counts
+
+
+def _health_status(rows: list[dict[str, Any]]) -> str:
+    """The lead's verdict token: ``flagged``, ``unknown`` (no proven scale) or ``clean``."""
+
+    verdicts = {str(row.get("verdict")) for row in rows}
+    if verdicts.intersection(_FLAG_VERDICTS):
+        status = "flagged"
+    elif "unknown" in verdicts:
+        status = "unknown"
+    else:
+        status = "clean"
+    return f"{status} ({len(rows)} ops)"
 
 
 def _scale_coverage(attrs: Mapping[str, Any], *, has_rows: bool) -> str | None:

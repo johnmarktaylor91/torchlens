@@ -24,8 +24,10 @@ import torchlens as tl
 from torchlens import errors
 from torchlens.appliances import _appliances
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: Stage a sticky hook on the trace without propagating it.
-_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 class _Net(nn.Module):
@@ -75,7 +77,7 @@ def test_save_type_refusal_remedies_all_run(net) -> None:
 def test_save_selection_composes_with_other_capture_options(net) -> None:
     model, x = net
     trace = tl.trace(model, x, save=["fc"], capture=tl.options.CaptureOptions(save_args=True))
-    assert trace["fc"].has_saved_activation
+    assert trace.ops["fc"].has_saved_activation
     relu_ops = [op for op in trace.ops if op.type == "relu"]
     assert relu_ops
     assert all(op.has_saved_activation is False for op in relu_ops)
@@ -84,7 +86,7 @@ def test_save_selection_composes_with_other_capture_options(net) -> None:
 def test_activations_by_address_lists_existing_addresses(net) -> None:
     model, x = net
     trace = tl.trace(model, x)
-    assert [op.label for op in trace.activations_by_address("fc")] == [trace["fc"].label]
+    assert [op.label for op in trace.activations_by_address("fc")] == [trace.ops["fc"].label]
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
         trace.activations_by_address("fc2")
     fields = exc_info.value.fields
@@ -136,12 +138,12 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
     model, x = net
     trace = tl.trace(model, x)
     with pytest.raises(errors.InvalidArgumentError) as empty_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert empty_info.value.fields["code"] == "appliance_unknown"
     assert "register(name, factory)" in empty_info.value.fields["remedy"]
     tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert exc_info.value.fields["registered"] == ("outside",)
     remedy_call = re.search(r"trace\.using\('[^']*'\)", exc_info.value.fields["remedy"])
     assert remedy_call is not None

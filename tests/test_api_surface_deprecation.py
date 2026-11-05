@@ -55,7 +55,7 @@ REMOVED_TOP_LEVEL_CASES = [
     ("rehydrate_nested", "torchlens.io", "materialize_nested"),
     ("reset_naming_counter", "torchlens.io", "reset_naming_counter"),
     ("save_intervention", "torchlens.io", "save_intervention"),
-    ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
+    ("suppress_mutate_warnings", "torchlens.errors", "quiet"),
     ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
     ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),

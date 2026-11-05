@@ -296,13 +296,13 @@ def record(
     inputs, input_kwargs = _checked_inputs(model, inputs, input_kwargs)
     _require_generate_kwargs(generation, generate_kwargs)
     recorder_kwargs: dict[str, Any] = {
-        **knobs,
         "save": save,
         "intervene": intervene,
         "stop_after": stop_after,
         "storage": storage,
         "narrate": narrate,
         "capture": capture,
+        "recording": RecordingOptions(**knobs),
     }
     if generate_kwargs is not None:
         output, generated = record_generation(

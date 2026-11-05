@@ -19,7 +19,7 @@ The lists below are in the order most people want them: see one site, edit it, t
 - [Stochastic and population edits](../stochastic_edits.md): mean ablation, resampling ablation and causal scrubbing from one population noun and one edit.
 - [Editing generation and the KV cache](../guides/kv_cache.md): what "intervene during generation" can mean and how each is spelled.
 - [Performance: choosing a fast path](../guides/fast_paths.md): full capture, replay and capture-free live hooks differ in cost by two orders of magnitude; pick before a sweep.
-- [Paired-prompt activation patching notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/paired_prompt_patching.ipynb): a single-site clean-versus-corrupt patching session.
+- [Paired-prompt activation patching notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/paired_prompt_patching.ipynb): patches each of GPT-2 small's 144 attention heads from a France prompt into an Italy prompt and maps which heads carry " Paris".
 - [Causal trace notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/causal_trace_recipe.ipynb): a full clean-versus-corrupt causal trace with a per-site heatmap.
 - [Ablation grid notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/ablations_grid.ipynb): an ablation sweep over discovered sites.
 - [Steering notebook](https://github.com/johnmarktaylor91/torchlens/blob/main/examples/workflows/steering.ipynb): build a steering vector and apply it at replay time.

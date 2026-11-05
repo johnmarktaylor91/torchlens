@@ -452,7 +452,7 @@ def test_refresh_shape_change_emits_single_aggregated_warning() -> None:
 
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
-        trace.run(inputs=torch.randn(8, 4))
+        trace.run_transaction(inputs=torch.randn(8, 4))
 
     shape_warnings = [w for w in caught if "Tensor shape changed" in str(w.message)]
     assert len(shape_warnings) == 1
@@ -732,11 +732,11 @@ class TestConditionalBranchDetection:
     # Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_render_leaf.py.
     @pytest.mark.parametrize(
         ("stem", "view", "message"),
-        [("cond_rolled_test", "rolled", "Rolled graph should contain IF edge label")],
+        [("cond_rolled_test", "rolled", "Rolled graph should name its IF test")],
         ids=["rolled_graph_conditional_edges"],
     )
     def test_if_label_in_visualization(self, stem, view, message):
-        """Rendered graph contains 'IF' edge label; rolled view preserves IF/THEN labels."""
+        """Rendered graph names the IF test node; rolled view keeps the THEN arm labels."""
         import os
         import tempfile
 

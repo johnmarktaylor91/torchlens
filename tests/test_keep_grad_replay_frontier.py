@@ -20,6 +20,8 @@ import torchlens as tl
 from torchlens.errors import TorchLensWarning
 from torchlens.intervention import _gradient_contract, keep_grad
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CODE = "keep_grad_replay_frontier"
 _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(5))
 
@@ -55,7 +57,7 @@ def _codes(caught: list[warnings.WarningMessage]) -> list[str]:
 
 
 def _push_differentiable(model: nn.Module) -> Any:
-    options = tl.options.InterventionOptions(differentiable=True, confirm_mutation=True)
+    options = tl.options.InterventionOptions(differentiable=True)
     return _ready(model).do(tl.label("linear_1_1"), keep_grad(tl.scale(2.0)), intervention=options)
 
 

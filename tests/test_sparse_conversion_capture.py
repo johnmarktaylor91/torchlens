@@ -110,7 +110,7 @@ def test_sparse_conversion_validates_and_replays(method: str) -> None:
     trace = tl.trace(model, x)
     try:
         fresh = torch.randn(4, 4)
-        result = trace.run(inputs=fresh)
+        result = trace.run_transaction(inputs=fresh)
         try:
             assert torch.equal(result.output, model(fresh))
         finally:

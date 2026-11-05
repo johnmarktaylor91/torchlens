@@ -806,7 +806,7 @@ def _concatenation_starts_by_position(op: Op, raw_axis: int) -> tuple[int, ...]:
     -------
     tuple[int, ...]
         Slice start at each ``op.parents`` position, truncated to the shorter of
-        ``op.parents`` and ``op.input_shapes`` exactly as the per-parent scan was.
+        ``op.parents`` and the operand shapes exactly as the per-parent scan was.
     """
 
     scope = _active_geometry_memo()
@@ -818,7 +818,7 @@ def _concatenation_starts_by_position(op: Op, raw_axis: int) -> tuple[int, ...]:
             return cached[1]
     positions: list[int] = []
     offset = 0
-    for _label, shape in zip(op.parents, op.input_shapes, strict=False):
+    for shape in ReceptiveFieldRuleContext(op)._parent_shapes[: len(op.parents)]:
         positions.append(offset)
         if shape is None:
             continue

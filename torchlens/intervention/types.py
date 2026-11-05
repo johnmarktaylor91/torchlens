@@ -8,6 +8,7 @@ from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
+from .._entry_refusals import require_hook_factory
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -27,7 +28,9 @@ from .._selection.target import (
 )
 from .._utils._tensor_layout import CaptureLayout
 from . import _display
+from ._edit_copy import deepcopy_edit
 from ._hook_spec_match import _hook_spec_matches
+from .errors import _refuse_placeholder_edit
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -111,13 +114,15 @@ class Edit:
 
         Raises
         ------
+        NonExecutableSpecError
+            If the spec is an audit-only placeholder with no runtime factory.
         TypeError
-            If the spec does not carry a runtime factory.
+            If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
-            raise TypeError(f"Edit {self.name!r} has no hook factory")
-        return self.factory()
+            _refuse_placeholder_edit(self.name, self.portability)
+        return require_hook_factory(self.name, self.factory)()
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state, dropping factories pickle cannot carry.
@@ -166,14 +171,7 @@ class Edit:
         factory-dropping pickle path.
         """
 
-        import copy as _copy
-
-        cls = type(self)
-        clone = cls.__new__(cls)
-        memo[id(self)] = clone
-        for key, value in self.__dict__.items():
-            object.__setattr__(clone, key, _copy.deepcopy(value, memo))
-        return clone
+        return deepcopy_edit(self, memo)
 
 
 @dataclass(frozen=True, slots=True)

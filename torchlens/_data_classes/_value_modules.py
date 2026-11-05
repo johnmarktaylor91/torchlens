@@ -9,13 +9,24 @@ from .._utils._display_card import inline_names, one_line, render_card
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import format_exact_count
 from .._utils.fail_open import fail_open
-from ._value_state import _count_words, edited_token, payload_facts, resolve_record, value_line
+from ._value_state import (
+    _count_words,
+    edited_token,
+    payload_facts,
+    trace_of,
+    value_line,
+)
 
 
 def _output(record: Any, label: str) -> str:
-    """One output site's metadata and words; never choose from a plurality."""
+    """One output site's metadata and words; never choose from a plurality.
 
-    output = resolve_record(record, label)
+    The output label resolves to its Op through ``trace.ops`` (a bare layer
+    label at ``trace[...]`` names the Layer).
+    """
+
+    trace = trace_of(record)
+    output = fail_open(lambda: trace.ops[label], lambda _error: None) if trace is not None else None
     if output is None:
         return label
     metadata, stats, honesty = payload_facts(output)

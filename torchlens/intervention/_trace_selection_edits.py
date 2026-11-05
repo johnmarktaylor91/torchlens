@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
     clear_staged_unfired,
@@ -29,12 +30,12 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .._selection.do_plan import build_selection_do_plan
-from .._selection.errors import SelectionError
+from .._selection.do_plan import bind_to_target, build_selection_do_plan
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
 from . import replay as replay_module
+from ._edit_guards import detach_handles, internal_mutation
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
 from ._replay_sites import _require_hook_origins
@@ -139,7 +140,7 @@ def apply_selection_batch_do(
                 remedy="make every pair's first slot a Selection (lift "
                 "producers with .__selection__()), or use the legacy "
                 "(site, hook) list without Selections",
-                argument="hooks_or_site",
+                argument="site",
             )
         lifted = _lift(selection)
         kind = getattr(lifted, "kind", "ACT")
@@ -175,7 +176,7 @@ def batch_act_plan(
             code="selection_batch_leaf_unsupported",
             remedy="apply leaf-site edits through single-selection "
             "do() calls; batch interior sites only",
-            argument="hooks_or_site",
+            argument="site",
         )
     return resolved, plan, audit
 
@@ -212,7 +213,7 @@ def apply_cross_kind_batch_do(
             code="selection_batch_cross_kind",
             remedy="pass intervention=tl.options.InterventionOptions(engine='replay'), "
             "or apply the ACT pairs in their own do() call on this engine",
-            argument="hooks_or_site",
+            argument="site",
         )
     steps: list[tuple[str, Any]] = []
     for index, ((selection, edit), kind) in enumerate(zip(pairs, kinds, strict=True)):
@@ -237,8 +238,7 @@ def apply_cross_kind_batch_do(
             if mutation_kind == "selection_hooks":
                 push_from_handles(trace, handles, strict=strict)
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         restore_replay_state(trace, journal)
         raise
     return "selection_replayed", tuple(attached)
@@ -340,21 +340,18 @@ def attach_selection_plan_hooks(
     attached: list[str] = []
     try:
         for item in hook_items:
-            attached.extend(
-                trace._attach_hooks(
-                    label_selector(item["op"].label),
-                    item["edit"],
-                    strict=strict,
-                    confirm_mutation=True,
+            with internal_mutation():
+                attached.extend(
+                    trace._attach_hooks(
+                        label_selector(item["op"].label), item["edit"], strict=strict
+                    )
                 )
-            )
     except BaseException:
-        for handle_id in attached:
-            trace.clear_edits(handle=handle_id, confirm_mutation=True)
+        detach_handles(trace, attached)
         raise
     # These sticky hooks are the do() plan's edit-then-scatter residue of an
     # edit applied NOW (the caller propagates and appends the audit record),
-    # not user-staged future-run material, so the run(inputs=...) staged-spec
+    # not user-staged future-run material, so the run_transaction(inputs=...) staged-spec
     # honesty gate must skip them: a value-edited fork gets the
     # PendingValueEditsWarning disclosure at the run door, never a refusal.
     attached_ids = set(attached)
@@ -382,12 +379,9 @@ def apply_selection_edge_do(  # noqa: PLR0913 - trace stands in for self on the 
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved edge selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_edges = lifted
+        resolved_edges = bind_to_target(
+            lifted, trace, "the resolved edge selection is bound to a different trace."
+        )
     else:
         resolved_edges = lifted._resolve(trace)
     payload = apply_edge_substitution_do(trace, resolved_edges, edit, engine=engine, strict=strict)
@@ -427,12 +421,9 @@ def apply_selection_param_do(  # noqa: PLR0913 - trace stands in for self on the
             "a hook callable, or a replacement tensor."
         )
     if isinstance(lifted, Selection):
-        if lifted._trace is not trace:
-            raise SelectionError(
-                "the resolved parameter selection is bound to a different trace.",
-                code="selection_trace_mismatch",
-            )
-        resolved_params = lifted
+        resolved_params = bind_to_target(
+            lifted, trace, "the resolved parameter selection is bound to a different trace."
+        )
     else:
         resolved_params = lifted._resolve(trace)
     payload = apply_param_substitution_do(
@@ -589,3 +580,24 @@ def push_from_handles(
             )
     clear_staged_unfired(trace)
     return result
+
+
+def settle_edited_product(trace: Any) -> None:
+    """Inherited evidence no longer describes an edited product.
+
+    Episode step evidence is quarantined and the decoded output rows are
+    re-derived from the edited output (``refresh_decoded_output``), so a fork
+    names its own answer after every propagating ``do()``; when the edited
+    output does not decode the stale rows are dropped and ``decode_output``
+    recomputes or refuses typed rather than answering stale.
+
+    Parameters
+    ----------
+    trace:
+        The trace (usually a fork) whose values a non-staged edit changed.
+    """
+
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    quarantine_episode_after_perturbed_replay(trace)
+    refresh_decoded_output(trace)  # no-op when the capture decoded nothing

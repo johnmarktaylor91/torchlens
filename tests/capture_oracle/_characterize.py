@@ -1147,14 +1147,15 @@ def _capture_once(case: CaseSpec) -> tuple[dict[str, Any], dict[str, float | int
     input_before = _tensor_fingerprint(input_tensor)
     input_version_before = int(input_tensor._version)
     rng_before = _rng_fingerprint()
-    instrumentation = _install_instrumentation()
 
     with tempfile.TemporaryDirectory(prefix="torchlens-capture-oracle-") as temp_dir:
         disk_path = Path(temp_dir) / "capture.tlspec"
-        tracemalloc.start()
-        started = time.perf_counter()
         product: Any | None = None
         exception: BaseException | None = None
+        # Installed last before the try so its finally always restores the observers.
+        instrumentation = _install_instrumentation()
+        tracemalloc.start()
+        started = time.perf_counter()
         try:
             try:
                 product, exception, _output = _run_capture(case, model, input_tensor, disk_path)

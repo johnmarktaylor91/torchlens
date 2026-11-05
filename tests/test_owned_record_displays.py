@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import pickle
 from dataclasses import dataclass
 
@@ -13,12 +14,18 @@ import torchlens as tl
 from torchlens._data_classes._accessor_base import Accessor
 from torchlens._data_classes.func_call_location import FuncCallLocation
 from torchlens._extraction.trace_safetensors import _encode
-from torchlens._io._portability_preflight import (
-    canonical_metadata_bytes,
-    sanitize_annotation_tensors,
-)
+from torchlens._io._canonical_pickle import dump_canonical_metadata
+from torchlens._io.format3.values import ValueEncoder
 from torchlens._io.scrub import _rebuild_tuple_value, scrub_for_save
 from torchlens._utils._display_bounded import RecordTuple
+
+
+def canonical_metadata_bytes(state):
+    """Return the canonical metadata pickle bytes for ``state``."""
+
+    buffer = io.BytesIO()
+    dump_canonical_metadata(state, buffer)
+    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -61,8 +68,10 @@ def test_owned_tuple_wire_bytes_match_plain_tuple():
     assert type(rebuilt) is tuple
     assert canonical_metadata_bytes(rebuilt) == canonical_metadata_bytes(plain)
     assert canonical_metadata_bytes(owned) == canonical_metadata_bytes(plain)
-    sanitized = sanitize_annotation_tensors({"rows": owned})
-    assert type(sanitized["rows"]) is tuple
+    at = "trace[0].annotations"
+    assert ValueEncoder().encode({"rows": rebuilt}, at) == ValueEncoder().encode(
+        {"rows": plain}, at
+    )
     assert _encode(owned) == _encode(plain)
 
 

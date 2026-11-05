@@ -325,7 +325,7 @@ class TLBind:
 
 
 class TLFastRerun:
-    """Trace once with the intervention staged, then trace.run(inputs=..., fast=True) per call.
+    """Trace once with the intervention staged, then trace.run_transaction(inputs=..., fast=True) per call.
 
     Only on branches that ship the fast steered rerun; elsewhere the first run refuses and we Skip.
     """
@@ -362,7 +362,7 @@ class TLFastRerun:
         tl = self.tl
         t = self._trace_for(ids, site, delta)
         try:
-            out = t.run(inputs=ids, fast=True)
+            out = t.run_transaction(inputs=ids, fast=True)
         except Exception as e:  # noqa: BLE001
             raise Skip(f"fast rerun refused: {type(e).__name__}: {str(e)[:200]}") from e
         refused = (

@@ -5,13 +5,13 @@ format are in `README.md`. `op.md#op-facts` is the `### op-facts` heading in `op
 By name lists the 3 most focused examples first;
 `torchlens api-map --name NAME` prints the first one for a root name.
 
-470 examples, 1216 public names, 145 tasks.
+474 examples, 1222 public names, 147 tasks.
 
 ## By task
 
 | Task | Examples |
 |---|---|
-| ablate | bundle.md#bundle-fork-do, layer.md#layer-do-ablate, namespaces.md#namespaces-experiment, op.md#op-do-ablate, tasks.md#tasks-ablate, toplevel.md#toplevel-edit-zero-ablate, toplevel.md#toplevel-edit-mean-ablate, traps.md#traps-module-edit-read-op-wrong, traps.md#traps-module-edit-read-op-right, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-save-load-edited, workflows.md#workflows-bundle-rank-edits |
+| ablate | bundle.md#bundle-fork-do, layer.md#layer-do-ablate, namespaces.md#namespaces-experiment, namespaces.md#namespaces-mechinterp-ablation-controls, op.md#op-do-ablate, tasks.md#tasks-ablate, toplevel.md#toplevel-edit-zero-ablate, toplevel.md#toplevel-edit-mean-ablate, traps.md#traps-module-edit-read-op-wrong, traps.md#traps-module-edit-read-op-right, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-save-load-edited, workflows.md#workflows-bundle-rank-edits |
 | activations | module.md#module-outputs, module.md#modulecall-outputs, options.md#options-detach-saved, options.md#options-activation-transform, options.md#options-output-device-save-mode |
 | agent | bundle.md#bundle-to-agent-json, namespaces.md#namespaces-agent, trace.md#trace-to-agent-json |
 | agent-inspect | tasks.md#tasks-agent-inspect |
@@ -19,7 +19,7 @@ By name lists the 3 most focused examples first;
 | appliances | namespaces.md#namespaces-appliances, trace.md#trace-using-appliance |
 | arguments | module.md#module-forward-args, module.md#modulecall-args |
 | aten | options.md#options-aten-ops, trace.md#trace-aten-ops |
-| attention | toplevel.md#toplevel-select-facet-head |
+| attention | namespaces.md#namespaces-transformer-generation-step, toplevel.md#toplevel-select-facet-head |
 | attribution | namespaces.md#namespaces-attribution, tasks.md#tasks-attribution |
 | audit | trace.md#trace-intervention-audit |
 | autograd | layer.md#layer-grad-fn, layer.md#layer-grad-fn-after-backward, op.md#op-grad-fn, op.md#op-grad-fn-after-backward |
@@ -38,6 +38,7 @@ By name lists the 3 most focused examples first;
 | compat | namespaces.md#namespaces-compat |
 | conditionals | layer.md#layer-conditional-test, layer.md#layer-conditional-body, layer.md#layer-conditional-children, op.md#op-conditional-test, op.md#op-conditional-body, op.md#op-conditional-children |
 | containers | op.md#op-containers |
+| controls | namespaces.md#namespaces-mechinterp-ablation-controls |
 | cost | layer.md#layer-cost-facts, module.md#module-flops, op.md#op-cost-facts, trace.md#trace-compute-coverage, trace.md#trace-profile |
 | custom-function | grad_fn.md#grad-fn-custom-node |
 | debug | namespaces.md#namespaces-debug, trace.md#trace-uncalled-modules, trace.md#trace-audit, trace.md#trace-nonfinite |
@@ -46,7 +47,7 @@ By name lists the 3 most focused examples first;
 | diff | namespaces.md#namespaces-differential |
 | distributed | namespaces.md#namespaces-distributed, toplevel.md#toplevel-merge-ranks-refuses-local, toplevel.md#toplevel-merge-report-refuses-local |
 | doctor | namespaces.md#namespaces-report, tasks.md#tasks-doctor |
-| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
+| draw | bundle.md#bundle-draw, module.md#module-collapse-score, module.md#module-draw, namespaces.md#namespaces-viz, options.md#options-vis-rolled, options.md#options-vis-file-output, options.md#options-vis-direction-layout, options.md#options-vis-depth-collapse, options.md#options-vis-style, options.md#options-vis-dpi, options.md#options-vis-node-callbacks, options.md#options-vis-encodings, options.md#options-vis-buffers, options.md#options-vis-edge-shapes, options.md#options-vis-backward-graph, options.md#options-vis-intervention-args, options.md#options-vis-object, tasks.md#tasks-draw, toplevel.md#toplevel-draw-file, trace.md#trace-module-collapse-order, trace.md#trace-draw, trace.md#trace-animate, trace.md#trace-show, workflows.md#workflows-draw-trace-file, workflows.md#workflows-draw-rolled-loop, workflows.md#workflows-draw-options, workflows.md#workflows-draw-one-call-pdf |
 | episode | trace.md#trace-episode |
 | errors | namespaces.md#namespaces-errors, traps.md#traps-error-fields |
 | examples | namespaces.md#namespaces-examples |
@@ -65,6 +66,7 @@ By name lists the 3 most focused examples first;
 | flops | layer.md#layer-cost-facts, op.md#op-cost-facts, trace.md#trace-compute-coverage |
 | fork | trace.md#trace-fork-do, trace.md#trace-fork-scoped |
 | function | layer.md#layer-func-facts, op.md#op-func-facts, op.md#op-args-facts, op.md#op-arg-templates, op.md#op-saved-args |
+| generation | namespaces.md#namespaces-transformer-generation-step |
 | geometry | namespaces.md#namespaces-repgeom |
 | grad-fn | grad_fn.md#grad-fn-list, grad_fn.md#grad-fn-class-facts, grad_fn.md#grad-fn-neighbours, grad_fn.md#grad-fn-forward-op, grad_fn.md#grad-fn-calls, grad_fn.md#grad-fn-builtin-source, grad_fn.md#grad-fn-custom-node, grad_fn.md#grad-fn-higher-order, grad_fn.md#grad-fn-to-pandas |
 | gradients | bundle.md#bundle-grad-fns, layer.md#layer-grad-facts, layer.md#layer-grad-loop, layer.md#layer-gradient-transform, module.md#module-grads, module.md#modulecall-grads, op.md#op-grad-facts, op.md#op-grads-per-backward, op.md#op-gradient-transform, op.md#op-lazy-grad, options.md#options-save-grads, options.md#options-backward-ready, options.md#options-grad-transform, params.md#params-grad, tasks.md#tasks-gradients, toplevel.md#toplevel-select-grad-fn, toplevel.md#toplevel-select-grad-input-output, toplevel.md#toplevel-select-in-backward-pass, toplevel.md#toplevel-select-without-op, toplevel.md#toplevel-grad-site-edit, trace.md#trace-backward-saved-grads, trace.md#trace-capture-backward, trace.md#trace-armed-edits, traps.md#traps-vjp-copy-wrong, traps.md#traps-vjp-copy-right, workflows.md#workflows-gradients-per-pass, workflows.md#workflows-gradients-match-autograd, workflows.md#workflows-draw-options |
@@ -83,11 +85,11 @@ By name lists the 3 most focused examples first;
 | labels | layer.md#layer-addresses, op.md#op-labels-facts, op.md#op-lookup-keys |
 | layers | module.md#module-layers, module.md#module-container-protocol |
 | lazy | op.md#op-lazy-out, op.md#op-lazy-grad |
-| lm | bundle.md#bundle-token-pairs, bundle.md#bundle-token-divergence, capture.md#capture-lm-final-norm, namespaces.md#namespaces-facets, namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-transformer, trace.md#trace-facets-attention, trace.md#trace-using-appliance, traps.md#traps-final-norm-wrong, traps.md#traps-final-norm-right, traps.md#traps-padding-last-token-wrong, traps.md#traps-padding-last-token-right |
+| lm | bundle.md#bundle-token-pairs, bundle.md#bundle-token-divergence, capture.md#capture-lm-final-norm, namespaces.md#namespaces-facets, namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-transformer, namespaces.md#namespaces-transformer-generation-step, trace.md#trace-facets-attention, trace.md#trace-using-appliance, traps.md#traps-final-norm-wrong, traps.md#traps-final-norm-right, traps.md#traps-padding-last-token-wrong, traps.md#traps-padding-last-token-right |
 | load | namespaces.md#namespaces-io, trace.md#trace-save-load, trace.md#trace-readiness, trace.md#trace-archived-activations, trace.md#trace-load-state-dict |
 | lookup | layer.md#layer-addresses, op.md#op-lookup-keys, trace.md#trace-getitem-label-or-selector, trace.md#trace-iterate, trace.md#trace-boundary-op-views, trace.md#trace-saved-views, trace.md#trace-params-buffers, trace.md#trace-module-calls-root |
 | loops | capture.md#capture-loop-passes, layer.md#layer-label-facts, layer.md#layer-ops-per-pass, layer.md#layer-total-duration-loop, layer.md#layer-cost-facts, layer.md#layer-graph-facts, layer.md#layer-edges-across-passes, layer.md#layer-grad-loop, layer.md#layer-to-pandas, module.md#module-multicall-out-wrong, module.md#module-multicall-out-right, op.md#op-pass-facts, options.md#options-recurrence-detection, options.md#options-vis-rolled, toplevel.md#toplevel-pass-variance, toplevel.md#toplevel-stable-across-passes, trace.md#trace-stack-passes, trace.md#trace-animate, traps.md#traps-layer-label-multipass-wrong, traps.md#traps-layer-label-multipass-right, workflows.md#workflows-loop-read-passes, workflows.md#workflows-loop-pass-values-differ, workflows.md#workflows-loop-edit-one-pass, workflows.md#workflows-loop-edit-all-passes, workflows.md#workflows-gradients-per-pass, workflows.md#workflows-draw-rolled-loop |
-| mechinterp | namespaces.md#namespaces-mechinterp |
+| mechinterp | namespaces.md#namespaces-mechinterp, namespaces.md#namespaces-mechinterp-ablation-controls |
 | memory | layer.md#layer-tensor-facts, module.md#module-memory, module.md#modulecall-memory, op.md#op-autograd-memory, options.md#options-detach-saved, options.md#options-activation-transform, options.md#options-output-device-save-mode, options.md#options-chunk-size, options.md#options-memory-probes, trace.md#trace-cleanup |
 | metrics | namespaces.md#namespaces-transformer |
 | migrate | namespaces.md#namespaces-compat |
@@ -122,7 +124,7 @@ By name lists the 3 most focused examples first;
 | record-many | tasks.md#tasks-record-many, toplevel.md#toplevel-classes-recording |
 | replay | layer.md#layer-call-records, op.md#op-arg-templates, op.md#op-saved-args, op.md#op-edge-records, options.md#options-save-args-rng, options.md#options-replay-knobs |
 | reproducibility | options.md#options-name-seed |
-| rerun | trace.md#trace-run-rerun, trace.md#trace-replace-state-from, trace.md#trace-load-state-dict |
+| rerun | trace.md#trace-run-rerun, trace.md#trace-run-transaction, trace.md#trace-replace-state-from, trace.md#trace-load-state-dict |
 | rsa | namespaces.md#namespaces-repgeom |
 | save | namespaces.md#namespaces-intervention, namespaces.md#namespaces-io, trace.md#trace-bill-of-materials, trace.md#trace-save-load, trace.md#trace-save-intervention |
 | save-load | bundle.md#bundle-save-load, op.md#op-lazy-out, op.md#op-lazy-grad, tasks.md#tasks-save-load, toplevel.md#toplevel-load-roundtrip, workflows.md#workflows-save-load-roundtrip, workflows.md#workflows-save-load-edited |
@@ -844,6 +846,7 @@ By name lists the 3 most focused examples first;
 | `Op.is_buffer` | op.md#op-buffer-writes |
 | `Op.is_buffer_source` | op.md#op-buffer-writes |
 | `Op.is_compute_op` | op.md#op-io-role |
+| `Op.is_constant` | op.md#op-internal-source |
 | `Op.is_edited` | op.md#op-do-ablate, workflows.md#workflows-save-load-edited |
 | `Op.is_final_output` | op.md#op-io-role |
 | `Op.is_in_conditional` | op.md#op-conditional-body |
@@ -1095,6 +1098,8 @@ By name lists the 3 most focused examples first;
 | `tl.low_variance` | toplevel.md#toplevel-low-variance |
 | `tl.mean_ablate` | toplevel.md#toplevel-edit-mean-ablate |
 | `tl.mechinterp` | namespaces.md#namespaces-mechinterp |
+| `tl.mechinterp.ablation_controls` | namespaces.md#namespaces-mechinterp-ablation-controls |
+| `tl.mechinterp.AblationControlsReport` | namespaces.md#namespaces-mechinterp-ablation-controls |
 | `tl.mechinterp.measure_trajectory` | namespaces.md#namespaces-mechinterp |
 | `tl.merge_ranks` | toplevel.md#toplevel-merge-ranks-refuses-local |
 | `tl.merge_report` | toplevel.md#toplevel-merge-report-refuses-local |
@@ -1163,6 +1168,7 @@ By name lists the 3 most focused examples first;
 | `tl.trackers.MemorySink` | namespaces.md#namespaces-trackers |
 | `tl.trackers.ScalarPoint` | namespaces.md#namespaces-trackers |
 | `tl.transformer` | namespaces.md#namespaces-transformer |
+| `tl.transformer.attention_view` | namespaces.md#namespaces-transformer-generation-step |
 | `tl.transformer.token_metrics` | namespaces.md#namespaces-transformer |
 | `tl.transforms` | namespaces.md#namespaces-transforms |
 | `tl.transforms.flatten` | namespaces.md#namespaces-transforms |
@@ -1308,6 +1314,7 @@ By name lists the 3 most focused examples first;
 | `Trace.root_module` | trace.md#trace-module-calls-root |
 | `Trace.root_trace` | trace.md#trace-fork-do |
 | `Trace.run` | trace.md#trace-run-rerun |
+| `Trace.run_transaction` | trace.md#trace-run-transaction |
 | `Trace.save` | tasks.md#tasks-save-load, trace.md#trace-save-load, workflows.md#workflows-save-load-roundtrip (+1 more) |
 | `Trace.save_intervention` | trace.md#trace-save-intervention |
 | `Trace.save_visualizations` | trace.md#trace-facts-capture-flags |
@@ -1369,6 +1376,7 @@ By name lists the 3 most focused examples first;
 | `VisualizationOptions.rolled` | options.md#options-vis-rolled |
 | `VisualizationOptions.show_buffers` | options.md#options-vis-buffers |
 | `VisualizationOptions.show_cone` | options.md#options-vis-intervention-args |
+| `VisualizationOptions.show_edge_shapes` | options.md#options-vis-edge-shapes |
 | `VisualizationOptions.show_legend` | options.md#options-vis-encodings |
 | `VisualizationOptions.show_redundant_args` | options.md#options-vis-intervention-args |
 | `VisualizationOptions.size_by` | options.md#options-vis-encodings |

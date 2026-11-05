@@ -84,7 +84,7 @@ print("profile_enabled", trace.profile_enabled)
 # model_name Toy
 # state TraceState.PRISTINE
 # state_history []
-# tlspec_version 11
+# tlspec_version 12
 # profile_enabled False
 ```
 
@@ -196,12 +196,12 @@ Index a trace by label for one record, or by a selector for a Selection.
 
 ```python
 trace = tl.trace(model, x)
-op = trace["relu_1_2"]
-print(type(op).__name__, op.label)
+layer = trace["relu_1_2"]
+print(type(layer).__name__, layer.label)
 selection = trace[tl.func("relu")]
 print(type(selection).__name__, selection.labels)
 # Output:
-# Op relu_1_2:1
+# Layer relu_1_2:1
 # Selection ('relu_1_2:1',)
 ```
 
@@ -724,6 +724,27 @@ print("relu zero", bool((trace.ops["relu_1_2"].out == 0).all()))
 # relu zero True
 ```
 
+### trace-run-transaction
+Run a verified fresh execution on a new input and read its report; the trace itself is left unchanged.
+
+- covers: `Trace.run_transaction`
+- tasks: rerun
+- fixture: toy
+
+```python
+trace = tl.trace(model, x)
+x2 = torch.randn(3, 4)
+result = trace.run_transaction(inputs=x2, seed=0)
+print(type(result).__name__)
+print(torch.allclose(result.output, model(x2)))
+again = tl.trace(model, x)
+print(torch.equal(trace.ops["relu_1_2"].out, again.ops["relu_1_2"].out))
+# Output:
+# RunResult
+# True
+# True
+```
+
 ### trace-save-intervention
 Save a fork's edit recipe so another session can re-apply it.
 
@@ -1187,7 +1208,7 @@ Get a registered appliance bound to a trace.
 
 ```python
 trace = tl.trace(lm, ids)
-appliance = trace.using("mi")
+appliance = trace.using("mechinterp")
 print(type(appliance).__name__)
 # Output:
 # MechInterpAppliance
@@ -1269,7 +1290,7 @@ trace = tl.trace(model, x, capture=options, save="all")
 trace.save("run.tlspec", level="runnable", include_weights=True)
 loaded = tl.load("run.tlspec")
 loaded.load_state_dict(model.state_dict())
-result = loaded.run(inputs=x)
+result = loaded.run_transaction(inputs=x)
 print(torch.allclose(result.output, model(x)))
 # Output:
 # True

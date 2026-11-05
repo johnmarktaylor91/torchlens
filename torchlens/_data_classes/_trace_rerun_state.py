@@ -393,6 +393,9 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
         "output_layers_by_pass",
         "output_layers_by_module_call",
         "_output_container_specs_by_raw_label",
+        # The fresh run decoded its own outputs; the old rows describe the replaced run.
+        "_decoded_output",
+        "_provenance_output_postprocessor",
     )
     for field_name in field_names:
         if hasattr(new_log, field_name):

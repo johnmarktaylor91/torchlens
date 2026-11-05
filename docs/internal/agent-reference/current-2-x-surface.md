@@ -1,5 +1,69 @@
 ## Current 2.x Surface
 
+- Saved 3.0 artifacts use `tl.types.UnencodableValue` for values outside the typed
+  vocabulary. The frozen carrier preserves `type_name`, bounded `repr_text`, and `at`
+  (the original record, row and column). Inspect it with
+  `isinstance(value, tl.types.UnencodableValue)`; resaving preserves its disclosure.
+
+### MoE routing identity and tables
+
+`Op.is_router` and `Op.expert` are lazy structural identity facts, with no
+stored per-op fields or capture hooks. Recognition requires a live source
+model, a homogeneous `ModuleList` or `ModuleDict` of experts (or an indexed
+bank of expert matrices), a sibling gate, and captured expert-index dataflow
+from softmax/top-k or argmax/gather into expert computation. A top-k over
+logits followed by softmax is supported too. ModuleDict expert numbers follow
+registration order. A repeated
+module collection or an unrelated top-k calculation alone proves nothing.
+Expert writer coordinates use the existing `expert` kind and expert number.
+
+`Module.routing_table` returns rows for that MoE block, or `None` for an
+unrecognized/non-MoE module. `Trace.routing_table` returns all blocks' rows,
+or `[]`. Rows are plain dictionaries containing `module`, `router`, `call`,
+`token_shape`, `expert_indices`, `gate_weights`, `tokens_per_expert` and `load`.
+Token axes flatten in row-major order; load divides each expert's assignments
+by the total assignments. Each router invocation has its own row. The numbers
+come from saved router outputs; `moe_routing_activation_missing` names a
+missing activation and teaches `save='all'`. Identity needs no activations.
+Fused batched expert math has `Op.expert is None` and still uses its router's
+table. A model whose live structure is no longer available is unrecognized.
+
+```python
+import torch
+from torch import nn
+import torchlens as tl
+
+class Routed(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.gate = nn.Linear(4, 4)
+        self.experts = nn.ModuleList([nn.Linear(4, 4) for _ in range(4)])
+
+    def forward(self, x):
+        weights, indices = self.gate(x).softmax(-1).topk(2, dim=-1)
+        output = torch.zeros_like(x)
+        for number, expert in enumerate(self.experts):
+            token, slot = torch.where(indices == number)
+            output.index_add_(0, token, expert(x[token]) * weights[token, slot, None])
+        return output
+
+model = Routed().eval()
+trace = tl.trace(model, torch.randn(3, 4), save='all')
+router_ops = [op for op in trace.ops if op.is_router]
+expert_one = trace[tl.where(lambda op: op.expert == 1)]
+rows = trace.modules['self'].routing_table
+assert rows == trace.routing_table
+assert sum(rows[0]['tokens_per_expert']) == 6
+```
+
+For fused expert outputs whose token and selected-slot axes are retained,
+use the routing record with the existing unit selector. If `fused` is an
+`Op` with output shape `[tokens, selected_slots, channels]`, the expert-one
+selection is `trace[tl.units(fused.layer_label,
+(torch.tensor(rows[0]['expert_indices']) == 1).unsqueeze(-1).expand(fused.shape))]`.
+After an operation sums the expert axis, its output cannot be split into
+expert contributions from routing indices alone.
+
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../../guides/fast_paths.md)):
@@ -134,6 +198,13 @@
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
+- **`tl.errors.quiet(*codes)` is the one switch that silences TorchLens warnings**: `quiet()`
+  silences every TorchLens warning, `quiet("code", ...)` only the coded warnings whose
+  `fields["code"]` is listed; a bare call lasts for the session and `with tl.errors.quiet(...):`
+  restores the prior state at the end of the block. A capture that keeps more than 1 GiB of saved
+  activations warns once per session with code `capture_memory_threshold_exceeded`, naming
+  `save=` selectors and `save='stats'` as the remedy; `tl.errors.quiet("capture_memory_threshold_exceeded")`
+  hides it.
 - **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
@@ -145,7 +216,7 @@
   loaded trace, the record is never persisted; the record keeps what the forward bound alive as
   long as the trace). `CaptureOptions(carry_state=True)` keeps forward-equivalent state, writes
   included, and records the same rows (the same spelling as
-  `trace.run(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
+  `trace.run_transaction(inputs=..., carry_state=True)`). A default `trace.run()` restores the parameters and
   buffers it changed, not random state. Train-mode BatchNorm runs through
   `run` and `run(until=)` (D18); `backward()` through a default run's activations works without
   `carry_state=True`.
@@ -281,7 +352,7 @@
   geometry violations quarantine `episode_ledger_incoherent`); the annotations key AND the
   Bundle `member_relations` key persist plainly as of the tlspec v8 coordinated bump.
   DIAGNOSTIC-TIER cost, superlinear (gpt2-124M CPU: N=20 79 s / N=100 657 s, 947 MB, 5.4 GB
-  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run(fast=True)`, which collects
+  RSS) — tens of steps, never hundreds; guarded-fast (`trace.run_transaction(inputs=..., fast=True)`, which collects
   every site the capture saved, the save-all default and module saves included) is the engine for episode-scale re-runs and must reproduce wrapped
   tokens bit-exactly (pinned). The same engine serves a STEERED rerun: `trace.run(model, x)`
   on a module-targeted staged spec fires the staged hooks at module exit inside a native
@@ -758,14 +829,13 @@
   Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
   `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
-  remedy: load it with 2.36.x, or capture again). There is no reader, ledger or migration. The
-  2.16 intervention spec format (`format_version` 1) refuses the same way. WRITE/READ SYMMETRY (W051-IO): the
-  save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
-  unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
-  naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
-  `log_value` tensors) are coerced to plain detached tensors on the scrubbed copy, and the
-  loader anchors manifest facts to the pickled state (`bundle_manifest_metadata_mismatch`),
-  validates op graph coherence (`artifact_graph_structure_invalid`), corroborates tier-(ii)
+  remedy names 2.36.x and re-capture). There is no reader, ledger or migration. The 2.16
+  intervention spec format also refuses at this floor. WRITE/READ SYMMETRY (W051-IO): the
+  save path writes typed JSON with no pickle and, before publish, parses and decodes the
+  written records with the reader's decoder; a value with no typed encoding is stringified
+  with a manifest disclosure, a value with no 3.0 form at all refuses typed
+  (`metadata_value_unportable`), tensors under annotations (incl. `log_value` tensors) are
+  coerced to plain detached tensors on the scrubbed copy, and the loader validates op graph coherence (`artifact_graph_structure_invalid`), corroborates tier-(ii)
   edge carriers against the audit (`artifact_edge_substitutions_invalid`), and checks the
   TorchLens-owned annotation families (`artifact_annotations_invalid`); a v9+ artifact with
   no `root_entry_point` refuses `artifact_root_entry_point_invalid`.
@@ -1151,7 +1221,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (`do`/`trace[selector]`), `selection_unresolvable` /
+  (`do`; `trace.ops` refuses `ambiguous_op_lookup`; `trace[label]` gives the Layer), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   up to five pass-qualified display keys and an exact remainder; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1291,6 +1361,14 @@
   (payload-bounded, dormancy disclosed) and the `bertviz_tuple` parity oracle.
   FIX-H shipped in `tl.viz.heatmap`: nearest-neighbor discrete cells, separate
   `row_labels=`/`col_labels=`, omission marker computed AFTER final overlap selection.
+  Generation steps: `tl.transformer.attention_view(generation, layer, step=k)` takes a
+  generation recording (`tl.record(model, input_ids, save=tl.func("softmax"),
+  generate_kwargs={...})`, eager attention) and returns step `k`'s pattern (0 is the
+  prefill, `k` the k-th decode forward) over every position so far, assembled from the
+  rows each forward computed, nothing recomputed; `episode` names the step and
+  `tl.viz.attention` outlines the computed row. `step=` on a plain trace, a generation
+  without `step=`, or `query_tokens=`/`key_tokens=` with `step=` refuse
+  `tv_record_invalid`. Doc: `docs/field-guide/generation_attention.md`.
   Records are session-only, never persisted. Doc: `docs/reference/tviz.md`.
 - MECHINTERP KIT (F05; every spelling DOCUMENTED-UNSTABLE pending the naming
   session): `torchlens.mechinterp` is the transformer analysis kit validated
@@ -1308,7 +1386,10 @@
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
   trace; tuple and compact `"k6"` forms; nnterp accessor spellings such as
   `"attentions_output[3]"` resolve too, and
-  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names), `test_prompt`, `apply_norm_scale`
+  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names;
+  interp-engine point addresses such as `"resid_post.3"` resolve too, and
+  `alias_report(trace, generation="interp-engine")` lists the sites under those
+  addresses plus every interp-engine point with no torchlens site), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
   planning (`retention_plan`). ~47 names; `MechInterpError` family.
   Component edge graph: `torchlens.mechinterp.component_graph(trace)` returns a
@@ -1334,6 +1415,16 @@
   `torchlens.mechinterp.circuit_performance_ratio(faithfulness, *, fractions=None,
   log_scale=False)` (CPR) and `torchlens.mechinterp.circuit_model_difference(...)`
   (CMD) are the MIB trapezoidal areas under `f` and `|1 - f|`.
+  Ablation controls: `tl.mechinterp.ablation_controls(model, inputs, site, metric, *, axis,
+  baseline="zero", donors=None, direction=None, feature_axis=None, n_directions=20,
+  sites=None, seed=0, min_ratio=0.5, alpha=0.05)` reruns one ablation claim under the
+  zero, mean and resample baselines, against `n_directions` matched random directions
+  (when `direction=` is given) and at the neighbouring `sites=`, and returns a read-only
+  `tl.mechinterp.AblationControlsReport` (`clean`, `effect`, `baseline`, `rows`,
+  `families`, `direction_p`, `survives`; `print(report)` is the table). `axis` is the
+  site value's batch axis, required and never guessed. Example:
+  `report = tl.mechinterp.ablation_controls(model, x, tl.module("gain"), metric, axis=0)`
+  then `report.survives`.
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
@@ -1859,6 +1950,7 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
 - `tl.facets.parameter_spec`: Facet spec over a named module parameter, for custom recipes.
+- `tl.mechinterp.AblationControlsReport`: Every control rerun of one ablation claim and the verdict per family.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).
@@ -2011,7 +2103,7 @@ object's docstring):
 - `tl.transformer.MaskInfo`: Mask provenance for an attention view.
 - `tl.transformer.TokenAxis`: One labeled token axis (query and key stay separate records).
 - `tl.transformer.TokenScoreRow`: One labeled row of per-token scores (strip row).
-- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view.
+- `tl.transformer.attention_view`: Extract one layer's attention pattern as a typed view; with `step=`, one step of a recorded generation.
 - `tl.transformer.circuitsvis_payload`: Build the CircuitsVis attention payload from typed views.
 - `tl.transformer.metric_strip`: Convert a metric record to a strip record for rendering.
 - `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).

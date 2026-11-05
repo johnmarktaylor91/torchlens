@@ -126,7 +126,7 @@ def test_default_capture_reads_source_lazily(toy) -> None:
 def test_op_card_shows_location_and_text(toy) -> None:
     module, path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
-    relu = trace["relu_1"]
+    relu = trace.ops["relu_1"]  # a bare layer label at trace[...] names the Layer
     card = str(relu)
     line = _line_of(path, "the relu line")
     frame = relu.code_context[-1]

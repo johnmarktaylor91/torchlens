@@ -1,763 +1,319 @@
-# <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/logo.png" width=8% height=8%> TorchLens
+# <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/logo.png" width=8% align="absmiddle"> TorchLens
 
 [![PyPI version](https://img.shields.io/pypi/v/torchlens.svg)](https://pypi.org/project/torchlens/)
 [![Python versions](https://img.shields.io/pypi/pyversions/torchlens.svg)](https://pypi.org/project/torchlens/)
 [![PyTorch 2.1+](https://img.shields.io/badge/PyTorch-2.1%2B-EE4C2C.svg)](https://pytorch.org/)
-[![Release](https://github.com/johnmarktaylor91/torchlens/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/johnmarktaylor91/torchlens/actions/workflows/release.yml)
 [![Nightly](https://github.com/johnmarktaylor91/torchlens/actions/workflows/nightly.yml/badge.svg)](https://github.com/johnmarktaylor91/torchlens/actions/workflows/nightly.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
-**See, save, and steer any PyTorch model.** TorchLens captures every activation
-and gradient -- across the forward and backward pass -- auto-visualizes the full
-computational graph, exposes rich per-op metadata, and lets you intervene on the
-network as it runs. Any architecture, even dynamic and recurrent ones.
+**Inspect, visualize and intervene on any operation in any neural network.**
 
-> **[Explore the Model Menagerie](https://modelmenagerie.ai)** -- a live, browsable atlas of
-> **thousands of cataloged neural-network architecture entries** (8,500+ catalog entries
-> across ~3,600 architecture families, measured 2026-08-16) captured with TorchLens, from
-> McCulloch & Pitts (1943) to today's frontier models. *(Early preview.)*
+Understanding and controlling the computations inside neural networks is [the most important scientific challenge of our time](https://darioamodei.com/post/the-urgency-of-interpretability) (at least). Progress on this problem, known as *mechanistic interpretability*, would help [make AI more beneficial for society](https://www.goodfire.com/research/interpretability-for-alzheimers-detection), [illuminate how our brains work](https://doi.org/10.1146/annurev-vision-082114-035447), and guard against undesirable behaviors like [deception](https://arxiv.org/abs/2412.14093) or [killing us all](https://ai-2027.com/).
 
-Run across **thousands of cataloged entries** in the Model Menagerie (image, video, audio,
-multimodal, language; feedforward, recurrent, transformer, GNN, MoE, diffusion) --
-**verified on thousands of models across all major architecture families**: each verified
-capture is replayed op-by-op against its own forward pass, with metadata-invariant
-tripwires over the graph, so faithful capture is **proven, not assumed, for verified captures**. TorchLens also
-records **180+ metadata fields per operation**, and
-**550+ fields in total** across every record type — operations, modules, parameters,
-buffers, gradients, and the model itself.
+Some aspects of mechanistic interpretability are deep and open-ended. We need to understand dauntingly complex systems that may soon outsmart us, with new frontier models arriving faster than we can study the current ones. It's not even clear what a "solution" would look like, or how many obstacles remain. We'll surely need help from the AI agents themselves.
+
+Other aspects are just plumbing, and while tedious, they are finite: the same small set of tasks for every model, like extracting and editing its activations and gradients. For instance, PyTorch has long lacked a built-in way to extract every intermediate activation from arbitrary networks (an official docstring admits this can take ["some massaging"](https://github.com/pytorch/vision/blob/e334535aaf10e3327b618e1f9f069e09d18ebb8e/torchvision/models/feature_extraction.py#L391-L405)). But all networks are built from the same basic parts, so a few well-made tools should work on all of them.
+
+The modest goal of TorchLens is to fix these plumbing problems once and for all, so you and your agents can spend your time and tokens on the deep questions, and maybe even solve some of them.
+
+## What TorchLens does
+
+Almost everything you do in TorchLens starts with one function, `tl.trace`. You don't have to set anything up. Pass it any PyTorch model and its input exactly as they are, with no hooks, wrappers or changes to your code:
 
 ```python
-import torch, torchvision.models as models, torchlens as tl
-
-model = models.resnet18(weights="IMAGENET1K_V1").eval()  # .eval(): pretrained models arrive
-# in train mode, and a train-mode forward silently updates BatchNorm running statistics
-x = torch.rand(1, 3, 224, 224, generator=torch.Generator().manual_seed(0))
-
-log = tl.trace(model, x)      # one call -- full graph + all activations
-print(log.summary())          # module table, op count, FLOPs
-print(log["conv2d_1_1"].out.shape)  # grab any activation by name ...
-print(log["layer1.0"].out.shape)    # ... or by module path
-print(log[7].func_name)             # ... or by ordinal
-log.draw()                    # PDF of the computational graph
-```
-
-Every verb climbs the same three-rung **input ladder** ([full guide](docs/quickstart.md)):
-
-```python
-# API sketch; `model` is your model and `lm` any HuggingFace language model.
-log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
-log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
-log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
-```
-
-**Using an AI coding agent?** Run `python -m torchlens guide` (or `tl.agent.guide()`) and put the
-text in the agent's instructions file (`AGENTS.md`, `CLAUDE.md`). It says when TorchLens is shorter than
-plain PyTorch hooks (first NaN or Inf, functional ops such as `F.softmax`, many-site edits, model comparison)
-and gives recipes for module outputs, NaN origins, edits, activation patching and gradients that run as written.
-
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/swin_v2_b_demo.jpg" width="70%" height="70%">
-
-**Quick Links**
-
-- [Paper](https://www.nature.com/articles/s41598-023-40807-0) |
-  [Learn TorchLens: eleven notebooks](notebooks/learn/README.md) |
-  [Facets tutorial](notebooks/facets_tutorial.ipynb) |
-  [Examples](examples/README.md) |
-  [Quick recipes](examples/quick/README.md) |
-  [Workflows](examples/workflows/README.md)
-- [Choosing a fast path](docs/guides/fast_paths.md) |
-  [Performance guide](docs/performance.md) |
-  [Receptive & projective fields](docs/receptive_projective_fields.md) |
-  [AI-agent quick reference](docs/for-ai-agents.md) |
-  [Limitations and remedies](docs/reference/limitations.md) |
-  [Migration tables](docs/migration/) |
-  [Maintainer docs](docs/maintainers/architecture.md)
-
-
-## Validated across thousands of catalog entries
-
-TorchLens is not just smoke-tested on example models. The Model Menagerie validation
-campaign runs the same adversarial check across the cataloged architecture
-entries (**8,500+ rows across ~3,600 families** in the menagerie catalog, measured
-2026-08-16; the live site carries additional locally-validated entries): capture the model with TorchLens, forward-replay the
-captured DAG, compare replayed outputs against the original forward pass, and
-run metadata-invariant tripwires over the resulting graph. If replay or an
-invariant fails, the capture is treated as genuinely wrong and caught
-automatically, not waved through because the model "ran."
-
-```text
-model forward -> TorchLens capture -> DAG replay -> output parity + metadata invariants
-```
-
-Today the campaign has algorithmically verified **thousands of models across all major
-architecture families**, and the count is climbing; the exact per-row verification status
-lives in the menagerie project's append-only ledger rather than in this README, so the public
-claim stays hedged until the campaign closes. Inside this repository, a coverage-chosen sample of
-the hand-built classics (`tests/classics_corpus/`) runs the same capture, replay, and invariant
-checks as part of the test suite. That is the wedge:
-TorchLens aims for captures that are **provably faithful, not just plausible**.
-Plain forward hooks and static extraction utilities can be fast and useful, but
-they can also silently miss dynamic paths, reused modules, functional ops,
-fused attention, recurrent unrolls, or metadata needed to tell two sites apart.
-
-The residual is tracked openly: the remaining tail is mostly genuinely huge
-models, models with hard-to-build dependencies, or architectures that need more
-bespoke inputs before an automated run is fair. They are counted as unverified,
-not hidden as successes.
-
-
-## Installation
-
-Install Graphviz first (required for graph visualizations), then TorchLens:
-
-```bash
-sudo apt install graphviz   # Debian/Ubuntu; see graphviz.org for other platforms
-pip install torchlens
-```
-
-On Debian forky and Ubuntu 26.04 or later, also run
-`sudo apt install libgvplugin-neato-layout8`: Graphviz 14 ships the neato engine,
-which large-graph (rank) layouts use, as a separate package.
-
-Supported versions (each row below is executed by a CI leg on every release, not
-asserted from metadata; the full platform statement is in
-[docs/reference/limitations.md](docs/reference/limitations.md)):
-
-| Component | Supported | How it is verified |
-|---|---|---|
-| Python | 3.10, 3.11, 3.12, 3.13 | one smoke-tier CI row per interpreter, plus clean-venv wheel installs at release |
-| PyTorch | 2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13 (the first torch with wheels for each interpreter) | floor rows pin the exact floor pair per interpreter; newest-admitted rows pin the current release; a gating nightly row runs torch 2.15.0 on Python 3.11; a daily canary runs latest |
-| transformers (`torchlens[hf]`) | Policy: track the latest released transformers. 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and four fixtures recorded on 5.x, including the T5 sdpa construction pin that only 5.18+ satisfies, are deselected on the 4.x legs until per-band expectations land); both the release-gating R0 deep sweep (`pr.yml`) and the nightly `hf-band-legs` candidate leg pin exactly the latest released 5.x (5.18.0), re-recorded on every release bump. The candidate leg additionally runs the offline, real-checkpoint R1 + 20-scenario RG workflow gallery against an exact passed-ID floor; its three remaining known limitations (typed, pinned refusals, not crashes) are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`); release-gating pin in `.github/workflows/pr.yml` |
-| Platforms | Linux/CPU is the tested platform; macOS and Windows run a nightly import + capture + save/load canary only | see the CI-attested platforms section of the limitations doc |
-
-`pip install torchlens` installs the CPU-agnostic core (torch is resolved by pip for
-your platform); optional integrations are extras, e.g. `pip install "torchlens[hf]"`.
-Every declared extra is resolved on every supported interpreter by the nightly
-metadata gate, and `torchlens[all]` means "everything that installs together" (the
-excluded members are named in `pyproject.toml`).
-
-
-## Quickstart
-
-```python
-import torch
-import torchvision.models as models
 import torchlens as tl
+from transformers import GPT2LMHeadModel
 
-model = models.alexnet(weights=None)
-x = torch.randn(1, 3, 224, 224)
+gpt2 = GPT2LMHeadModel.from_pretrained("gpt2").eval()
+text = "The capital of France is"
 
-log = tl.trace(model, x)
-print(log.summary())
+trace = tl.trace(gpt2, text)              # run model as-is, logging every operation
+op = trace["tanh_6"]                      # fetch the 6th tanh operation
+op.out.shape                              # torch.Size([1, 5, 3072])
+op.parents, op.children                   # the operations before and after tanh_6
+mlp = trace.modules["transformer.h.5.mlp"]  # look up a module's record by its address
+mlp.total_flops_forward                     # MLP's forward FLOPs (one of 800+ metadata fields in TorchLens)
+trace.draw(module="transformer.h.5.mlp.act")  # draw the graph of the MLP's GELU activation module
 ```
 
-```
-Model: AlexNet
-+-----------------------------+---------------+--------+-------+
-| Layer                       | Output Shape  | Params | Train |
-+-----------------------------+---------------+--------+-------+
-| input                       | [1,3,224,224] | 0      | -     |
-| features (Sequential)       | [1,256,6,6]   | 2.5 M  | yes   |
-| avgpool (AdaptiveAvgPool2d) | [1,256,6,6]   | 0      | -     |
-| classifier (Sequential)     | [1,1000]      | 58.6 M | yes   |
-| output                      | [1,1000]      | -      | -     |
-+-----------------------------+---------------+--------+-------+
-Params: 61,100,840 unique; trainable: 61,100,840
-Ops: 22 total
-Edges: 23 total
-Forward FLOPs: 1.4 GFLOPs  MACs: 718.9 MFLOPs
-```
+<picture>
+  <img alt="TorchLens drawing of every operation inside the GELU module of GPT-2 block 5's MLP" src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_gelu_v3.svg" width="400">
+</picture>
 
-Index any operation by name, module path, or ordinal:
+This figure zooms in on the MLP's GELU module; here is [the whole GPT-2 graph](https://modelmenagerie.ai/models/gpt2-huggingface/). Each node is one tensor operation. For instance, `tanh_6_266` is the 6th `tanh` operation and the 266th operation overall. The function name and call number are enough on their own, so `trace["tanh_6"]` and `trace["tanh_6_266"]` return the same operation. A trace can also be indexed by a module's address (`trace["transformer.h.5.mlp"]`) or by a selector (below).
+
+That one `tl.trace` call runs your model as usual and logs the result of every operation it executes, not just module outputs. Because the `Trace` object returned by this function holds every step of the forward pass, it can answer questions that require the whole computational graph: which units influence which other units (receptive and projective fields), whether replaying each step reproduces its saved result (`tl.validate`), or how results change downstream when you edit one activation. A trace with gaps (e.g., module outputs only) cannot fully answer such questions.
+
+Since the trace holds everything, TorchLens doesn't need a separate tool for every question. A small "basis set" of composable tools covers just about anything you'd want to do when inspecting or intervening on a network:
+
+**Select** activations or gradients by any criteria, from simple ("every LayerNorm in the `transformer.h.5` module") to sophisticated ("every unit in `layer1` and `layer2` of a ResNet affected by a specific set of units in `conv1`"). Any set of units you can describe by their kind, location and causal links to other units can be picked out with a single selector like those below ([provably](docs/reference/selection_completeness.md)).
 
 ```python
-log['relu_1_2'].out.shape      # torch.Size([1, 64, 55, 55])
-log['features.6'].out.shape    # same op via module path
-log[7].func_name               # 'conv2d'
-log['conv2d_3'].out.shape      # short name (ordinal suffix optional)
-log[-1].layer_label            # 'output_1'
+trace[tl.func("layer_norm") & tl.in_module("transformer.h.5")]           # by function and module
+trace["conv1"].projective_field.of(units, within=["layer1", "layer2"])   # by downstream influence (ResNet-18)
 ```
 
-Visualize the graph as a PDF:
+**Extract** activations at whatever speed or level of detail you need: save them all, stop the forward pass once you have the ones you want, or quickly run a dynamic model many times while saving only those matching your criteria (e.g., every ReLU after a convolution). Saved activations can stay connected to the network if you want, so you can train it on any loss computed from them. You can also apply a function to each activation as it is saved (e.g., averaging across token positions or moving it to the CPU), and even go below Python function calls to the results of PyTorch's low-level ATen operations.
 
 ```python
-log.draw()                        # unrolled by default
-log.draw(rolled=True)             # rolled (compact for recurrent)
-log.draw(rolled=False)            # every pass as a distinct node
+trace = tl.trace(
+    gpt2, text,
+    save=tl.func("tanh"),                             # keep only the tanh ops
+    stop_after="transformer.h.5",                     # stop forward pass after block 5
+    capture=tl.options.CaptureOptions(
+        aten_ops="values",                            # save ATen results too
+        activation_transform=lambda x: x.mean(1),     # also save each activation averaged across token positions
+    ),
+)
+trace["tanh_6"].out.norm().backward()                 # train on any function of saved activations
+trace["tanh_6"].transformed_out                       # the saved average across token positions, shape (1, 3072)
+trace["tanh_6"].aten_ops[0].out                       # output of the first ATen call beneath tanh_6
 ```
 
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
-
-
-## What You Can Do
-
-### 1. Flexible feature extraction
-
-Save everything, or select exactly what you need:
+Gradients work the same way: ask for them when you call `tl.trace`, run a backward pass from any loss you want, and read the gradient at any operation, or at the `grad_fn` nodes PyTorch runs between operations.
 
 ```python
-# Save only relu activations
-log = tl.trace(model, x, save=tl.func('relu'))
-
-# Save all ops inside the 'classifier' submodule
-log = tl.trace(model, x, save=tl.in_module('classifier'))
-
-# Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
-conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
-log = tl.trace(model, x, save=conv_before_relu,
-               capture=tl.options.CaptureOptions(lookback=4,
-                                                 lookback_payload_policy='detached_raw'))
-
-# Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
-
-# Lightweight sparse recording for tight loops -- materialize structure later
-recording = tl.record(model, x, save=tl.func('relu'))
-trace = recording.to_trace()   # a Recording has no draw() or facets; the cooked
-                               # Trace has every Trace.draw option and groups
-                               # recurrent layers into passes like tl.trace
-
-# Pull several layers at once (extract takes only model, inputs, layers and
-# detach_saved_activations; every other option lives on tl.trace)
-acts = tl.extract(model, x, ['relu_1_2', 'conv2d_3_7'])
-
-# One-line activation pull
-act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly
-
-# Batch extraction across a dataset (any iterable of unbatched samples works)
-dataset = [torch.randn(3, 224, 224) for _ in range(8)]
-tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
-                   batch_size=32, path='torchlens-activations/')
+trace = tl.trace(
+    gpt2, text,
+    capture=tl.options.CaptureOptions(save_grads=True),  # record gradients when a backward pass runs
+)
+loss = trace["lm_head"].out[0, -1].max()                 # any scalar can serve as the loss; here, the top next-word score
+trace.backward(loss)                                     # run the backward pass from the loss
+trace["tanh_6"].grad.shape                               # torch.Size([1, 5, 3072]): the gradient at tanh_6's output
+trace["tanh_6"].grad_fn.calls[0].grad_inputs[0].shape    # torch.Size([1, 5, 3072]): the gradient passed back to tanh_6's input
 ```
 
-**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
-than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
-GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
-roughly 14x the raw forward and amortizes on large models. See
-[docs/performance.md](docs/performance.md) for the full benchmark table. To steer or patch a
-model over many forwards or through `generate()`, skip capture entirely with
-`tl.when(site, action).bind(model)`; see
-[choosing a fast path](docs/guides/fast_paths.md).
-
-Save and load traces portably:
+**Inspect** every part of a network in exhaustive detail. Every operation, module, parameter, buffer, and `grad_fn` node gets its own data structure, as does the trace itself, with [800+ metadata attributes](docs/reference/glossary.md) in all, covering everything from each operation's output shape and FLOPs to the line of code that ran it, whether it was inside an `if` branch, and the random number state when it ran. You can summarize this metadata in a readable table, or export it to pandas (one row per operation, module, parameter, etc.).
 
 ```python
-log.save('my_trace')
-loaded = tl.load('my_trace')
+print(trace["tanh_6"])                       # everything TorchLens knows about one operation
+# Layer tanh_6: float32 [1, 5, 3072] on cpu, min -1.000 max 0.9937 mean -0.4892 sd 0.4728
+#   position  operation 266 of 541
+#   module    transformer.h.5.mlp.act
+#   output    15,360 values, 60.0 KiB
+#   values    min -1.000  max 0.9937  mean -0.4892  sd 0.4728
+#   graph     mul_23 -> tanh_6 -> add_25 (reaches 13 of 25 model outputs)
+#   function  tanh, gradient TanhBackward0, 151 us
+#   source    transformers/activations.py:66 in forward
+#   more      .ops  .parents  .children  .to_pandas()
+trace["tanh_6"].code_context[-1].call_line   # the exact line of source code that called tanh_6
+# 'return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))'
+trace.params["lm_head.weight"].all_module_addresses   # GPT-2 reuses its embedding weights as its output layer
+# ['transformer.wte', 'lm_head']
 ```
 
-### 2. Forward AND backward pass
-
-Capture per-op gradients with the same API:
+**Visualize** a model's computational graph using one-line defaults, premade styles for common tasks (e.g., debugging, profiling, seeing what an intervention changed), or full customization. TorchLens can show recurrent networks "rolled" or "unrolled", collapse nested modules to any depth (or pick a readable depth automatically), and draw the backward pass. Each node (one operation) can also show its own content, like input images or text, output category labels, or MDS plots of intermediate layer representations. Any visual attribute, such as node size or color, can be mapped to any metadata you like (e.g., memory use or execution time). The [visualization guide](docs/guides/visualization.md) explains every part of a drawing and every option.
 
 ```python
-x = torch.randn(1, 3, 224, 224, requires_grad=True)
-log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-log.backward(log[log.output_layers[0]].out.sum())
-
-grad = log['relu_1_2'].grad      # gradient tensor flowing through that op
-print(grad.shape)                 # torch.Size([1, 64, 55, 55])
+trace.draw(collapse="auto")                      # fold nested modules into boxes as needed to keep the graph readable
+trace.draw(rolled=True)                          # draw a loop's layers once each, with an arrow back for the repeats
+trace.draw(color_by="time", size_by="bytes")     # color nodes by execution time, size them by memory use
 ```
 
-Narrow gradient saving to specific ops with the same selector predicates:
+**Intervene** on any activation or gradient (using simple syntax based on Judea Pearl's [do-calculus](https://www.amazon.com/dp/1541608984)) to ablate, steer, patch in activations from another run (20+ built-in edits), or apply your own function. Edits can propagate through the saved graph without rerunning the model, or be applied to a fresh run.
 
 ```python
-log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.func('relu')))
-log.backward(log[log.output_layers[0]].out.sum())
+site = tl.module("transformer.h.5.mlp")                   # select block 5's MLP to edit
+ablated = trace.fork().do(site, tl.zero_ablate())         # copy the trace and zero the MLP in the copy
+italy = tl.trace(gpt2, "The capital of Italy is")         # trace the same model on an Italy prompt
+patched = italy.fork().do(site, tl.patch_from(trace))     # patch in the MLP's activations from the France run
 ```
 
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gradients.png" width=30% height=30%>
-
-Backward capture is PyTorch-only. Non-torch backends expose derived leaf-level
-gradients through a second AD pass. See [docs/backward.md](docs/backward.md).
-
-### Influence geometry in both directions
-
-**The first tool that gets ResNets right:** TorchLens computes receptive fields back toward an
-input and projective fields forward toward an output over the captured DAG, then can cross-check
-the geometric answer with an empirical gradient support mask. It includes ResNet skip connections
-because it analyzes executed graph paths rather than multiplying a module list.
+**Compare** any set of traces (e.g., clean vs. patched, different inputs, different checkpoints) operation by operation by grouping them into a `Bundle` object: compute metrics across them at any operation, find where they diverge most, and show the differences on the graph.
 
 ```python
-target = log["features.6"]
-rf = target.receptive_field
-unit = rf.center_unit(batch_index=0)
-box = rf.at((3, 3))
-check = rf.check(unit)
-# Projective geometry needs a windowed path; AlexNet's dense classifier head is not,
-# so select a downstream conv endpoint explicitly with target=.
-outgoing = target.projective_field.at((3, 3), target=log['features.8'])
+runs = tl.Bundle({"italy": italy, "patched": patched})         # group two Traces into one Bundle
+runs.rank_changes("italy", k=10)      # the 10 operations the patch changed most
+runs.draw(graph="diff")               # draw the model with those changes highlighted
 ```
 
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/receptive_projective_fields.svg" width="70%" alt="Receptive and projective field directions through a neural-network graph">
-
-Every geometric claim is verification-backed, not asserted: `rf.check(unit)` cross-checks
-one unit against an empirical gradient support mask, and
-`tl.validate(model, x, scope="receptive_field")` runs the armed gradient tripwire over a
-whole model with a PASS / FAIL / INDETERMINATE verdict. No other extraction tool ships a
-receptive-field subsystem with this verification loop.
-
-See the [receptive and projective fields guide](docs/receptive_projective_fields.md) for the
-status contract, visual overlays, validation, and layer-to-layer queries.
-
-### 3. Vast metadata per operation
-
-Every operation records shape, dtype, device, timing, FLOPs, parameter info,
-module containment, graph distances, conditional context, RNG state, and more.
-The full print of any op includes all of this:
+**Debug** models with over 20 convenient functions for finicky tasks like locating the first operation that produces a NaN, finding dead units and exploding gradients, and inferring what input shape a model expects. Each result names the operation and the line of code that ran it.
 
 ```python
-print(log['conv2d_3_7'])
+tl.debug.find_nan(model, x)                    # finds the first operation that produced a NaN and its line of code
+tl.debug.dead_neurons(trace)                   # dead units in each layer
+tl.debug.grad_health(trace)                    # vanishing and exploding gradients, after trace.backward(loss)
+tl.debug.guess_input_shape(model).shape        # (1, 16): input shape inferred from the model alone
 ```
 
-```
-Layer conv2d_3_7, operation 7/22:
-    Output tensor: shape=(1, 384, 13, 13), dtype=torch.float32, size=253.5 KB
-        tensor([[-0.0198,  0.0946,  0.1109, ...
-    Related Layers:
-        - parent layers: maxpool2d_2_6
-        - child layers: relu_3_8
-    Params: Computed from params with shape (384, 192, 3, 3), (384,); 663936 params total (2.5 MB)
-    Function: conv2d (grad_fn_handle: ConvolutionBackward0)
-    Computed inside module: features.6:1
-    Config: out_channels=384, in_channels=192, kernel_size=(3, 3), padding=(1, 1)
-    Time elapsed: 1.4 ms
-    Lookup keys: -17, 7, conv2d_3, conv2d_3:1, conv2d_3_7, conv2d_3_7:1, features.6, features.6:1
-```
-
-Every op also records the Python call stack that produced it, with file and
-line number:
+Every tool above is designed to work on [*any* PyTorch model](#model-menagerie), including ones with loops, conditional branches, and other dynamic behavior. For example, this small model has a conditional branch and a loop. Setting `rolled=True` draws each operation in the loop as one node, no matter how many times it runs; the default (unrolled) gives each pass its own node:
 
 ```python
-loc = log['conv2d_3_7'].code_context[0]
-print(loc.file, loc.line_number, loc.func_name)
-```
-
-Metadata is available as pandas DataFrames:
-
-```python
-df = log.to_pandas()            # one row per op
-params_df = log.params.to_pandas()
-modules_df = log.modules.to_pandas()
-```
-
-### 4. Automatic visualization
-
-```python
-log.draw()                           # default: unrolled with sibling ordering
-log.draw(rolled=True)                # compact rolled layout
-log.draw(rolled=False)               # every pass as a distinct node
-```
-
-Control nesting depth to zoom in on submodules:
-
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/nested_modules_example.png" width=80% height=80%>
-
-For recurrent models, the rolled view collapses repeated structure cleanly:
-
-<img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/simple_recurrent.png" width=30% height=30%>
-
-```python
-class SimpleRecurrent(torch.nn.Module):
+class Loop(nn.Module):
     def __init__(self):
         super().__init__()
-        self.fc = torch.nn.Linear(in_features=5, out_features=5)
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+
     def forward(self, x):
-        for r in range(4):
-            x = self.fc(x)
-            x = x + 1
-            x = x * 2
+        if x.sum() < 0:     # branch
+            x = -x
+        for _ in range(2):  # 2 passes
+            x = self.fc2(torch.relu(self.fc1(x)))
         return x
 
-recurrent_model = SimpleRecurrent()
-seq = torch.randn(6, 5)
-recurrent_log = tl.trace(recurrent_model, seq)
-print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(rolled=True)
+loop = Loop()
+x = torch.randn(1, 4)
+trace = tl.trace(loop, x)
+trace.draw(rolled=True, direction="leftright")  # rolled (first picture)
+trace.draw(direction="leftright")               # unrolled (second picture)
 ```
 
-And the HTML export is already **interactive** -- one self-contained file with
-pan, zoom, and node-hover metadata, no server and no extra dependency:
+<p align="center">
+<img alt="The loop model drawn rolled, left to right: the input splits to a sum test, labelled IF, that lands on a yellow IF: TRUE node, and to a negation, labelled THEN, that feeds a row of first Linear, ReLU and second Linear drawn once each and marked x2; a short arc under the row returns from the second Linear to the first, labelled with the passes it carries, and the second Linear's last pass leaves to the output on the right." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_loop_v6.png" width="100%">
+<br><br>
+<img alt="The same loop model unrolled, left to right: after the IF test and the THEN negation, the two passes of first Linear, ReLU and second Linear are laid out as six separate nodes in one row, each named with its pass number, ending at the output." src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/readme_loop_v6_unrolled.png" width="100%">
+</p>
+
+TorchLens also works at every scale, from single ATen calls up to agent harnesses that call the model many times. For autoregressive language models, TorchLens can trace the whole generation loop. Give it `gpt2.generate`, and each new token gets its own pass through the model, so you can pull out the activations for any token ([guide](docs/guides/kv_cache.md#trace-a-generation-loop)):
 
 ```python
-from pathlib import Path
-viewer = tl.export.html(recurrent_log, Path('trace.html'))   # open in any browser
+gen = tl.trace(gpt2.generate, "The capital of France is", input_kwargs={"max_new_tokens": 4})
+gen["transformer.h.5.mlp"].num_calls     # 4: one call per generated token
+gen["transformer.h.5.mlp:1"].out.shape   # torch.Size([1, 5, 768]): the first call reads the whole prompt
+gen["transformer.h.5.mlp:4"].out.shape   # torch.Size([1, 1, 768]): later calls read only the newest token
 ```
 
-See [docs/reference/export.md](docs/reference/export.md) for the SVG, Netron,
-Model Explorer, and profiler export family.
+Pipelines and agent harnesses are the next scale up, sending the model several separate requests (e.g., draft and critique, voting, tool calls), each a generation like the one above. Put one trace per request in a `Bundle`, tell it which answer went into which prompt, and TorchLens pairs each token of a later input with the token of an earlier output it was copied from, so you can follow an effect across calls or draw the pipeline as a graph ([notebook](examples/workflows/multi_call_bundle.ipynb)).
 
-### 5. Interventions
-
-Ablate, steer, scale, or replace activations during the forward pass:
+For popular networks (e.g., Hugging Face models, torchvision models), TorchLens adds quality-of-life features like automatically preprocessing text or image inputs and showing ImageNet category labels for outputs. Additionally, it can split operation outputs into functionally distinct "facets" like the individual attention heads in a transformer, which you can select, inspect, and intervene on just as you would any other activation. You can [add such functionality to models of your choosing](docs/guides/model_conveniences.md), and TorchLens will add it for popular new models as they come out. For example, given a vision transformer from Hugging Face and a raw image, TorchLens applies the preprocessing published with the model, labels the outputs with ImageNet categories, and splits each attention layer into heads you can inspect or edit one at a time:
 
 ```python
-# Zero-ablate all relu activations inline during capture
-ablated = tl.trace(model, x, save=tl.func('relu'),
-                   intervene=tl.when(tl.func('relu'), tl.zero_ablate()))
-print(ablated['relu_1_2'].out.abs().max())  # tensor(0.)
-
-# Scale relus to 50%
-scaled = tl.trace(model, x, save=tl.func('relu'),
-                  intervene=tl.when(tl.func('relu'), tl.scale(0.5)))
+from transformers import ViTForImageClassification
+vit = ViTForImageClassification.from_pretrained("google/vit-base-patch16-224")
+cat = tl.trace(vit, "cat.jpg")                              # TorchLens recognizes this model, so it preprocesses the raw image for you
+cat.output_table(k=3)                                       # tiger cat 0.44, tabby 0.25, Egyptian cat 0.17
+cat.modules["vit.layers.5.attention"].facets.q.shape        # torch.Size([1, 197, 12, 64]): queries split into 12 heads
+head3 = tl.module("vit.layers.5.attention") & tl.head(3)    # head 3 of block 5's attention
+ablated = cat.fork().do(head3, tl.zero_ablate())            # copy the run and zero that head in the copy
+ablated.output_table(k=3)                                   # tiger cat 0.47, tabby 0.27, Egyptian cat 0.18
 ```
 
-Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
-`torchlens.intervention.scramble_elements`, `tl.steer`, `tl.scale`, `tl.clamp`,
-`tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.splice_module`, and
-`torchlens.intervention.helpers.swap_with`.
-
-For post-hoc DAG replay and isolated experiments, capture with `tl.trace(model, x)`
-and use `log.fork()` + `log.do(site, edit)` (replays the saved graph) /
-`log.run(model, x)`. Live hooks during rerun require capture-time selectors
-(e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
-`log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
-for the full reference.
-
-To steer many forwards or a `generate()` loop, use `spec.bind(model)` (about the cost of a
-plain hook) rather than tracing or rerunning per step; see the steering recipe in
-[docs/internal/agent-reference/common-patterns.md](docs/internal/agent-reference/common-patterns.md).
-
-Compare multiple runs side by side with `tl.bundle`:
+The tools are built to combine, so whole experiments can fit in just a few lines:
 
 ```python
-# Default save policy retains inputs, so the bundle can PROVE the two runs
-# saw identical inputs before comparing (comparisons never assume it).
-clean_log = tl.trace(model, x)
-patched_log = tl.trace(model, x,
-                       intervene=tl.when(tl.func('relu'), tl.zero_ablate()))
-bundle = tl.Bundle({'clean': clean_log, 'patched': patched_log}, baseline='clean')
-bundle.at('relu_1_2').compare()   # one site; a multi-site selector must resolve uniquely
+france = tl.trace(gpt2, "The capital of France is")     # for Hugging Face models, TorchLens tokenizes input text automatically
+italy = tl.trace(gpt2, "The capital of Italy is")
+def paris_vs_rome(trace):                                 # how much more the model predicts " Paris" than " Rome"
+    logits = trace["lm_head"].out[0, -1]                  # next-word scores
+    return (logits[6342] - logits[10598]).item()          # GPT-2's token ids for " Paris" and " Rome"
+
+heads = {(b, h): tl.module(f"transformer.h.{b}.attn") & tl.head(h, "v")
+         for b in range(12) for h in range(12)}          # values of all 144 attention heads
+effects = {bh: paris_vs_rome(italy.fork().do(head, tl.patch_from(france)))
+           for bh, head in heads.items()}                # patch each head from France into Italy
+max(effects, key=effects.get)                            # (9, 8): the head that matters most
+
+# patch heads (9, 8) and (10, 0) from France into a copy of the Italy run
+both = italy.fork().do(heads[9, 8] | heads[10, 0], tl.patch_from(france))
+paris_vs_rome(italy), paris_vs_rome(both)                # (-5.25, 2.99): the model now prefers Paris over Rome
 ```
 
-**Facets** provide named sub-views for attention heads, LSTM outputs, and
-fused projections (for models with those structures):
+For a fuller walkthrough, see the [activation patching notebook](examples/workflows/paired_prompt_patching.ipynb).
 
-The following is an API sketch; `vit_model` and `lstm` must be models whose module
-structures provide the shown paths, and are not defined by this generic example.
+You can save a trace with `trace.save` and load it later (even on another machine) with `tl.load`, so you can share a result, compare two runs, or hand one to an agent without rerunning the model.
 
-```python
-# API sketch; `vit_model` and `lstm` are application-supplied models with these paths.
-# ViT / transformer model with attention blocks
-log = tl.trace(vit_model, x)
-q = log.modules['blocks.0.attn'].facets['q']    # query vectors for head 0
-h_n = log.modules['lstm'].facets['h_n']         # LSTM final hidden state
+TorchLens (as you might expect) focuses on PyTorch, whose eager execution and dynamic autograd graph make every forward and backward step visible and editable mid-run. But nothing in its design depends on PyTorch itself (since all networks are just sequences of tensor operations with trainable parameters, packaged into modules—exactly what TorchLens records), so it also has backends for JAX, TensorFlow, MLX, PaddlePaddle and tinygrad ([feature comparison](docs/backends.md#capability-matrix)), and future frameworks can be added the same way.
+
+The work of TorchLens stops at the edge of the network: it gets you the activations, gradients and metadata from inside it, but leaves the downstream analyses (such as decoding, representational similarity, and dimensionality reduction) to you and to the many excellent packages built for them (see [Related tools](#related-tools)).
+
+## Install
+
+```bash
+pip install torchlens                       # with pip
+conda install -c conda-forge torchlens      # or with conda
+
+# Install Graphviz to draw a model's computational graph (https://graphviz.org/download/):
+sudo apt install graphviz    # Debian/Ubuntu
+brew install graphviz        # macOS
 ```
 
-See [docs/facets.md](docs/facets.md) for the full facets reference, including
-activation patching helpers, SDPA reconstruction, and TransformerLens aliases.
+TorchLens runs on Python 3.10 to 3.13 with PyTorch 2.1 or later. Features that require other packages are optional extras; for example, `pip install "torchlens[hf]"` allows you to pass raw text or images straight to Hugging Face and timm models (the full list is in [`pyproject.toml`](pyproject.toml)).
 
-See [docs/intervention_api.md](docs/intervention_api.md) for the full selector
-and helper reference.
+## Learning TorchLens
 
-### 6. Works on anything, including dynamic and recurrent models
+- **[Tutorial notebooks](notebooks/learn/):** eleven short notebooks that build up TorchLens step by step, from a first trace to running full experiments at scale. Each runs on a laptop CPU in about a minute, or in your browser on Colab.
+- **Guides by field:** where to start, depending on your work:
+  - **[Mechanistic interpretability](docs/fields/mechanistic_interpretability.md)**
+  - **[NeuroAI and computational neuroscience](docs/neuroai/journey.md)**
+  - **[Debugging and training networks](docs/fields/debugging_and_training.md)**
+  - **[Teaching neural networks](docs/fields/teaching.md)**
+- **[Examples](examples/):** runnable notebooks and scripts, from quick tasks to full experiments:
+  - **[Recipes](examples/quick/)**, one short self-contained script per common task: extract activations, find the operation that first produces a NaN, save and load a trace.
+  - **[Workflows](examples/workflows/)**: ablation grids, activation patching, steering, representational similarity for neuroscience.
+  - **[Replications](examples/replications/)**, scripts that re-test published interpretability findings on GPT-2: induction heads, the IOI name movers, causal tracing.
+  - **[Recent methods](examples/methods/)**, run end to end on public checkpoints: the [Jacobian lens](examples/methods/jacobian_lens_recipe.ipynb), EAP-IG circuit discovery on GPT-2's IOI task, attribution graphs with transcoders, the logit lens on ViT and CLIP, LEACE concept erasure, DAS causal bases.
+- **[Glossary](docs/reference/glossary.md):** definitions for every public function and argument.
+- **[API map](https://johnmarktaylor91.github.io/torchlens/api-map/):** an interactive, searchable map of every public module, class, function, method and argument, rebuilt from the code at each release.
+- **[FAQ](docs/faq.md):** common questions, including what TorchLens deliberately leaves to other tools.
+- **[Also in TorchLens](docs/also_in_torchlens.md):** 58 features that didn't fit in this README, like:
+  - tracing a model with no weights loaded
+  - knowing which field of a model's input or output each tensor belongs to, even in nested objects like a Hugging Face `CausalLMOutputWithPast` ([containers](docs/containers.md))
+  - finding the first operation where fp16 or bf16 drifts from a float64 rerun (`tl.debug.bisect_precision`)
 
-TorchLens uses eager-mode Python-level function wrapping rather than graph
-tracing. This means it captures whatever actually runs, including:
+## Model Menagerie
 
-- Dynamic control flow (if/else branching, loops, early exits)
-- Recurrent architectures (RNNs, LSTMs, state-space models)
-- Transformer variants including fused attention
-- Graph neural networks
-- Mixed architectures
+TorchLens is meant to work on *any* model, so it is continually tested on a growing [Model Menagerie](https://modelmenagerie.ai) of over 6,400 networks, spanning over eight decades of neural network history and every major domain (vision, language, audio, graphs, reinforcement learning, and more). Each model is checked with `tl.validate`, which re-executes every saved operation and confirms that the results match the model's own output. More than 6,300 models have been verified in this way so far, with more being validated all the time.
 
-This is the key differentiator from static-graph extractors like
-`torchvision.feature_extraction`, which require static computational graphs
-and cannot handle dynamic architectures.
+Beyond stress-testing TorchLens, the Menagerie aims to be a browsable gallery of every neural network architecture ever publicly described, from McCulloch and Pitts's 1943 network of threshold neurons (the earliest on record) to today's models. Each page carries the network's full computational graph. TorchLens draws it from a real forward pass, so it shows every operation the network performs, in the same notation for every architecture since 1943.
 
-**Distributed boundaries.** With `tl.distributed.arm()` enabled before rank-local
-capture, explicit in-forward `torch.distributed` Python collectives become first-class
-boundary nodes. Diagnose rank sets with `tl.merge_report(...)` and merge compatible
-rank traces with `tl.merge_ranks(...)`. Sharded tensor topologies such as DTensor/FSDP/TP
-and pipeline point-to-point graphs still refuse with typed findings; see the
-[merged-trace contract](docs/reference/merged_trace_contract.md).
+[Autonomous LLM agents are curating this collection](https://github.com/johnmarktaylor91/modelmenagerie), a methodological experiment in its own right. The architectures are also data. Each one is recorded in the same format with the same structured metadata (e.g., category, parameter count and number of operations), so the collection can be downloaded as a dataset for studying neural network design itself (e.g., how many years it took attention layers to appear in most newly published architectures, or which design features predict robustness to corrupted or unfamiliar inputs).
 
-**Multi-backend.** The same `tl.trace` API works across frameworks via
-`backend=`:
+I hope the Menagerie will be a useful public resource for demystifying the systems now poised to live alongside us for the foreseeable future.
 
-| Capability | PyTorch | JAX (preview) | tinygrad (preview) | MLX (preview) | Paddle (preview) | TensorFlow (preview) |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| Forward capture + graph/metadata | yes | yes | yes | yes | yes | yes |
-| Module hierarchy | `torch_module` | Equinox/Flax NNX `pytree_module`; raw `function_root` | `object_module`; raw `function_root` | `object_module`; raw `function_root` | `object_module`; raw `function_root` | Keras/`tf.Module` `object_module`; raw `function_root` |
-| Control-flow unroll | eager Python | `lax.scan`/`cond`/`while_loop` | lazy UOp graph | limited | dygraph/eager Python only | eager Python control flow |
-| Static-label `save=` | yes | yes | yes | yes | yes | yes |
-| Portable array `.tlspec` payloads | full | forward/derived arrays | forward/derived arrays | forward/derived arrays | forward/derived arrays | forward arrays |
-| Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
-| Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
-| Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
-| Halt / recording / streaming | yes | -- | -- | halt only | halt only | -- |
+## TorchLens for AI agents
 
-Preview `save=` selectors filter what is exposed, not what is captured (no memory
-reduction); preview `tl.validate(...)` returns a status whose `bool()` raises for
-partial coverage; and every preview auto-routes genuine framework models on
-`backend=None`. See `docs/backends.md` for the per-backend contract.
+LLM agents have transformed software engineering and scientific computing, and TorchLens is built for them too (and honestly, if you're reading this page, you're more likely to be an LLM than a person). A few features suit them especially well:
 
-```python
-# API sketch; supply compatible models and input in an application context.
-log = tl.trace(torch_model, x)                      # PyTorch (default)
-log = tl.trace(jax_fn,      inputs, backend='jax')  # JAX preview
-log = tl.trace(tg_fn,       inputs, backend='tinygrad')
-log = tl.trace(paddle_model, x,     backend='paddle')
-log = tl.trace(tf_model,    x,      backend='tf')
+- **Correctness:** TorchLens logs every operation, and a built-in validation function (`tl.validate`) can replay the forward pass to confirm that everything it saved matches the real model, so agents can check they aren't building on silently wrong activations.
+- **Token efficiency:** TorchLens provides a "basis set" of functions (inspect, select, intervene, compare) that combine into almost any analysis, so methods from a simple ablation to newer ones like the [Jacobian lens](https://transformer-circuits.pub/2026/workspace/index.html) take just a few lines of code: [6 for the Jacobian lens, versus 14 in plain PyTorch](examples/methods/jacobian_lens_recipe.ipynb).
+- **Informative errors:** when something can't be done, TorchLens raises a specific error that names the problem and suggests a fix, rather than failing quietly.
+- **Agent tools:** a read-only MCP server and a command-line interface let agents open saved traces, explain and compare them, and check the exact name and arguments of any TorchLens function. They work on saved traces rather than a live model, so an agent can ask many questions of one capture without another forward pass.
+- **Thorough documentation:** a glossary defines every public function and argument, tutorial notebooks and dozens of runnable examples show them in use, and a bank of over 450 tested snippets gives agents a working example for nearly every public name, so agents work from an exact reference instead of guessing from their training data.
+
+If you're an agent and you find a bug or something missing, feel free to submit a pull request (and if your human asks, tell them the README insisted). `AGENTS.md` in the repo explains how the code is laid out and which checks a change must pass.
+
+## Related tools
+
+TorchLens borrows freely from the many excellent tools in this field, including those below, and you are welcome to borrow back. Generally it aims to complement rather than replace them. Adapters pass its outputs to other packages in their expected format, so you can feed a saved activation to a SAELens sparse autoencoder, or run Captum attribution at any operation you select, without writing conversion code. Projects that shaped particular features are credited on the [acknowledgments page](docs/acknowledgments.md).
+
+Other tools for studying model internals:
+- [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens)[^names]: the standard toolkit for transformer interpretability. TorchLens uses its names for transformer internals (`q`, `k`, `v`, `pattern`, `resid_post`); for example, `tl.head(7, "v")` selects head 7's value vectors.
+- [nnsight](https://github.com/ndif-team/nnsight): interventions on PyTorch models, with especially good support for very large models run remotely.
+- [pyvene](https://github.com/stanfordnlp/pyvene): interventions (including trainable ones) written as declarative configurations.
+- [causalab](https://github.com/goodfire-ai/causalab) (Goodfire): tests hypotheses about how a network solves a task by checking a proposed causal model against its internals.
+- [torchview](https://github.com/mert-kurttutan/torchview): lightweight drawings of PyTorch model graphs.
+
+Tools for analyzing activations extracted by TorchLens:
+- [SAELens](https://github.com/jbloomAus/SAELens): training and loading sparse autoencoders (SAEs); TorchLens can feed saved activations straight into a pretrained SAE.
+- [Captum](https://github.com/pytorch/captum): attribution methods, which you can run at any operation you select in TorchLens, not only at module boundaries.
+- [rsatoolbox](https://github.com/rsagroup/rsatoolbox): representational similarity analysis on any saved activation.
+- [Brain-Score](https://github.com/brain-score/vision): scoring models against brain data, with TorchLens supplying the activations.
+- [scikit-learn](https://scikit-learn.org): probes, decoding and dimensionality reduction on the plain tensors and tables TorchLens gives you.
+
+Tools for viewing and sharing TorchLens traces:
+- [Netron](https://github.com/lutzroeder/netron) and [Model Explorer](https://github.com/google-ai-edge/model-explorer): interactive graph viewers that can open graphs exported from TorchLens.
+- [Hugging Face Hub](https://huggingface.co): a place to share saved traces so others can load them.
+
+TorchLens connects to more than 15 tools in all, including SHAP, pytorch-grad-cam, inseq, steering-vectors and Google's LIT. The full list is on the [connectors page](docs/bridges.md).
+
+## Citing TorchLens
+
+To cite TorchLens, you can use [this paper](https://doi.org/10.1038/s41598-023-40807-0) (and if you find TorchLens useful, a star on this repo is appreciated):
+
+Taylor, J., & Kriegeskorte, N. (2023). Extracting and visualizing hidden activations and computational graphs of PyTorch models with TorchLens. *Scientific Reports*, 13, 14375.
+
+```bibtex
+@article{taylor2023torchlens,
+  title   = {Extracting and visualizing hidden activations and computational graphs of {PyTorch} models with {TorchLens}},
+  author  = {Taylor, JohnMark and Kriegeskorte, Nikolaus},
+  journal = {Scientific Reports},
+  volume  = {13},
+  pages   = {14375},
+  year    = {2023},
+  doi     = {10.1038/s41598-023-40807-0}
+}
 ```
-
-PyTorch remains the full-feature backend. Preview backends are pinned and
-documented in [`docs/`](docs/).
-
-### 7. Profile it, and stream statistics over whole datasets
-
-Every trace already carries per-op timings, FLOPs, and memory; `profile()`
-presents them per op, module, or call, sorted and truncated how you like, and
-`evidence_labels()` names the clock and instrumentation state behind every number
-instead of just saying "measured":
-
-```python
-prof_log = tl.trace(model, torch.randn(1, 3, 64, 64))
-print(prof_log.profile(level='module', sort_by='flops', k=8))
-print(prof_log.profile().evidence_labels())
-
-# Nsight-ready: wrap each captured op in an identity-carrying NVTX range (CUDA only;
-# without CUDA, emit_nvtx=True is refused with a typed error)
-if torch.cuda.is_available():
-    nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
-                        capture=tl.options.CaptureOptions(emit_nvtx=True))
-
-# ATen level: record the operations each torch call dispatched to (opt-in; the
-# default capture installs no dispatch mode and the accessors refuse typed)
-aten_log = tl.trace(model, torch.randn(1, 3, 64, 64),
-                    capture=tl.options.CaptureOptions(aten_ops=True))
-print([row.operator for row in aten_log.ops[0].aten_ops])
-# ... and keep what each ATen call returned (snapshots, under the same save= policy)
-aten_vals = tl.trace(model, torch.randn(1, 3, 64, 64),
-                     capture=tl.options.CaptureOptions(aten_ops="values"))
-print([(row.operator, tuple(row.out.shape)) for row in aten_vals.ops[0].aten_ops])
-```
-
-Dataset-level statistics stream in constant memory -- including *exact*
-full-data linear CKA, not a minibatch approximation:
-
-```python
-stats = tl.stats.aggregate(
-    model,
-    [torch.rand(1, 3, 64, 64) for _ in range(2)],   # any iterable of inputs
-    metrics={'relu_1_2': tl.stats.Aggregator(tl.stats.Mean(), tl.stats.Norm()),
-             'output': tl.stats.Quantile()},
-)
-print(stats['relu_1_2']['Mean'], sorted(stats['output']))
-```
-
-For training loops, build the sparse recorder once and log whichever steps
-you like; discovery helpers list what there is to ask for:
-
-```python
-import torchlens.inventory as inv
-from torchlens.recording import Recorder
-
-with Recorder(model, save=tl.func('relu')) as rec:
-    for step in range(2):                    # your optimizer loop
-        rec(torch.rand(1, 3, 64, 64))        # sparse capture of this step
-
-print(inv.list_sites(model).rows[:3])        # no forward: every module address + class
-print(inv.list_sites(model, torch.randn(1, 3, 64, 64)).rows[:3])   # one forward: executed sites
-```
-
-FLOP totals follow a declared convention (fma=2 by default; `flop_convention="fma1"`
-recounts under fma=1 where a MAC split is derivable, and refuses typed where it is
-not), and custom ops get first-class cost rules:
-
-```python
-# API sketch; register in your application before tracing (process-global registry).
-from torchlens._capture.flops import register_op_rule
-register_op_rule('my_custom_op', lambda output_shape, param_shapes, args, kwargs: 0)
-```
-
-See [docs/reference/stats.md](docs/reference/stats.md) for the full streaming-stats
-surface, [docs/native-torch.md](docs/native-torch.md) for what native torch tooling is
-authoritative for (and the exact recipes we point at), and
-[docs/migration/from_hooks.md](docs/migration/from_hooks.md) for an honest two-way
-comparison with forward hooks.
-
-
-## Gallery
-
-TorchLens visualizes any architecture -- no matter how exotic. Explore the
-**[Model Menagerie](https://modelmenagerie.ai)**: a browsable atlas of **thousands of cataloged
-neural-network architecture entries** -- from McCulloch & Pitts (1943) to today's frontier
-models -- each with structured metadata and a TorchLens-rendered diagram. Thousands of them
-currently carry the replay-and-invariant verification described above.
-
-> **Early preview.** The gallery is live and growing; full-text search, a downloadable dataset, and
-> richer per-model pages are on the way.
-
-A sample across families is shown below.
-
-**Classic CNN + Vision Transformer**
-
-| GoogLeNet (inception + buffer edges) | Stable Diffusion (U-Net denoiser) | CLIP (vision + language towers) |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/googlenet.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/stable_diffusion.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/clip.jpg" height="200"> |
-
-**State-Space + Recurrence**
-
-| Mamba (selective SSM) | Recurrent Gemma (linear recurrence) | Whisper (audio encoder-decoder) |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/mamba.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/recurrent_gemma.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/whisper.jpg" height="200"> |
-
-**Mixture-of-Experts + Generative**
-
-| Mixtral (sparse MoE) | Hierarchical VAE | Perceiver |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/mixtral.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/hierarchical_vae.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/perceiver.jpg" height="200"> |
-
-**Graph Networks + Exotic**
-
-| DimeNet (molecular GNN) | CORnet-S (visual cortex, unrolled) | LLaMA (decoder-only LLM) |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/dimenet.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/cornet_s.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/llama.jpg" height="200"> |
-
-**Reinforcement Learning + Quantum ML + Scale**
-
-| Decision Transformer (offline RL) | Quantum ML circuit | 3,000-node graph (SFDP layout) |
-|:---:|:---:|:---:|
-| <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/decision_transformer.jpg" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/qml.png" height="200"> | <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/menagerie/large_graph_3k.jpg" height="200"> |
-
-
-## Pin your architecture in CI
-
-Use the provisional address-free structural hash to catch an unintended graph change without
-pinning model weights or module names:
-
-```python
-# `model` and `x` are your model and a representative example input.
-import torchlens as tl
-
-pinned = tl.fingerprint.assert_unchanged(model, x, expected=None)  # prints and returns a hash
-tl.fingerprint.assert_unchanged(model, x, pinned)  # raises if the architecture changes
-```
-
-See [`tl.fingerprint`](docs/reference/hash.md) for trace-level hashing and its structural scope.
-
-## Compatibility
-
-Before filing a bug for a model-specific failure, run the runtime compatibility
-report:
-
-```python
-report = tl.report.doctor(model=model, inputs=x)
-print(report.to_markdown())
-```
-
-`tl.report.doctor` checks the environment and inspects the model wrapper,
-modules, parameter sharing, input tensors, CUDA visibility, and common framework
-markers, then reports each row as `pass`, `known_broken`, `scope`, or `not_tested`.
-
-`torch.compile` coexists with capture. On torch >= 2.6, every capture holds the
-public `torch.compiler.set_stance("force_eager")` scoped to the forward, so
-compiled regions run their original eager Python: the interior is fully logged
-with full verified semantics, zero graph breaks or new compiles happen during
-capture, compiled caches stay intact, and wrapper install/uninstall costs a
-bounded burst of recompilations on the first compiled call after each
-capture, then steady state (measured: none on `resnet18`, six to seven frames on a tiny
-GPT-2). On torch < 2.6 the
-historical fallback holds: a Dynamo-traced region reached mid-capture is
-bypassed with a one-per-forward warning and the returned trace honestly
-contains only what ran outside it (`capture_verified=False`, reason
-`"dynamo_region_not_logged"`). TorchLens remains **not** compatible with
-TorchScript or `torch.export` -- those forwards do not run as ordinary Python,
-so the wrappers cannot intercept ops. It also has specific behaviors around
-FSDP, sparse tensors, meta tensors, quantization, and `torch.func.vmap`.
-
-See [LIMITATIONS.md](docs/LIMITATIONS.md) for the full matrix: what fails, what
-works, and the recommended workaround for each context.
-
-TorchLens recovers most detached `from torch import ...` references with a disclosed rescue
-re-run and a small mechanical belt. The historical broad `sys.modules` crawl and
-`patch_policy=` rollout are deleted, along with the former no-op arguments. For the strongest
-and simplest guarantee, call `torchlens.backends.torch.wrappers.wrap_torch()` before creating
-detached references. The optional `escape_detector="shadow"` diagnoses raw callable escapes. See
-[detached-reference handling](docs/migration/scoped_detached_patching.md) and the
-[limitations catalog](docs/reference/limitations.md).
-
-A capture leaves no TorchLens callable on the model, so pickling the WHOLE
-module (`pickle.dumps(model)` or `torch.save(model)`) works after tracing. The
-one exception is a plain attribute holding a torch function (`self.act = F.relu`)
-across a later wrap-state change: call `tl.release_model(model)` right before
-whole-model serialization to normalize it; `state_dict()` saves, traces, and
-saved activations are unaffected either way.
-
-
-## Tutorials and Docs
-
-| Resource | Description |
-|---|---|
-| [Learn TorchLens](notebooks/learn/README.md) | Start here: eleven notebooks in order, each runs on a laptop CPU in about a minute |
-| [00_quickstart.ipynb](notebooks/learn/00_quickstart.ipynb) | You have a model and want to see inside it |
-| [01_capture_and_look.ipynb](notebooks/learn/01_capture_and_look.ipynb) | A model in hand |
-| [02_address_and_read.ipynb](notebooks/learn/02_address_and_read.ipynb) | You want a number out |
-| [03_see_it.ipynb](notebooks/learn/03_see_it.ipynb) | The summary is too long to read |
-| [04_keep_what_you_need.ipynb](notebooks/learn/04_keep_what_you_need.ipynb) | Memory or time ran out |
-| [05_change_and_rerun.ipynb](notebooks/learn/05_change_and_rerun.ipynb) | Does this layer matter? |
-| [06_gradients.ipynb](notebooks/learn/06_gradients.ipynb) | What drives this unit? |
-| [07_compare_runs.ipynb](notebooks/learn/07_compare_runs.ipynb) | You ran it twice |
-| [08_semantic_shortcuts.ipynb](notebooks/learn/08_semantic_shortcuts.ipynb) | You keep typing "head 3's query" |
-| [09_scale.ipynb](notebooks/learn/09_scale.ipynb) | Thousands of batches |
-| [10_beyond_one_forward.ipynb](notebooks/learn/10_beyond_one_forward.ipynb) | Your field's experiment |
-| [torchlens_in_10_minutes.ipynb](notebooks/torchlens_in_10_minutes.ipynb) | Older tutorial: trace, index, visualize |
-| [facets_tutorial.ipynb](notebooks/facets_tutorial.ipynb) | Attention heads, LSTM facets, patching |
-| [backward_tutorial.ipynb](notebooks/backward_tutorial.ipynb) | Gradient capture and backward visualization |
-| [training_tutorial.ipynb](notebooks/training_tutorial.ipynb) | Training with captured activations |
-| [huggingface_tutorial.ipynb](notebooks/huggingface_tutorial.ipynb) | HuggingFace transformer models |
-| [fastlog_tutorial.ipynb](notebooks/fastlog_tutorial.ipynb) | High-throughput sparse recording |
-| [docs/intervention_api.md](docs/intervention_api.md) | Full selector and helper reference |
-| [docs/backward.md](docs/backward.md) | Backward capture details and limitations |
-| [docs/facets.md](docs/facets.md) | Facets, patching, and SDPA reconstruction |
-| [docs/guides/fast_paths.md](docs/guides/fast_paths.md) | Choosing a fast path: capture-free steering (`bind`), `tl.record` against `tl.trace`, cheaper traces, the fast steered rerun |
-| [docs/guides/grouping.md](docs/guides/grouping.md) | How ops group into layers and passes: the call-site rule and its case table |
-| [docs/guides/model_conveniences.md](docs/guides/model_conveniences.md) | Adding conveniences for your model: custom input preprocessors, output decoders and facets |
-| [docs/performance.md](docs/performance.md) | Speed knobs and benchmark numbers |
-| [docs/reference/debug.md](docs/reference/debug.md) | Trace diagnostics: lineage, non-finites, costs, and gradients |
-| [docs/reference/export.md](docs/reference/export.md) | Static, profiling, tabular, and tracker exports (incl. the interactive HTML viewer) |
-| [docs/reference/stats.md](docs/reference/stats.md) | Streaming dataset statistics: `tl.stats` accumulators and `tl.stats.aggregate` |
-| [docs/native-torch.md](docs/native-torch.md) | What native torch tooling is authoritative for, with recipes |
-| [docs/migration/from_hooks.md](docs/migration/from_hooks.md) | Honest two-way comparison with forward hooks |
-| [docs/reference/hash.md](docs/reference/hash.md) | Provisional structural hashes and CI architecture pins |
-| [docs/reference/attribution.md](docs/reference/attribution.md) | Native input and layer attribution methods |
-| [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |
-| [docs/reference/glossary.md](docs/reference/glossary.md) | Public terminology and stable mechanism names |
-| [docs/reference/limitations.md](docs/reference/limitations.md) | Edge scenarios, typed symptoms, and remedies |
-| [docs/reference/composition_matrix.md](docs/reference/composition_matrix.md) | Which feature pairings are verified together, refused on purpose, or not yet verified |
-| [docs/migration/landscape.md](docs/migration/landscape.md) | Comparable tools and their status, with dated sources |
-| [MIGRATIONS.md](MIGRATIONS.md) | Artifact compatibility: the pre-2.38 floor and the conditional five-year window |
-
-
-## Security
-
-Portable bundles contain a pickle file in `metadata.pkl`. It is read through a
-restricted, default-deny unpickler, and foreign callables are never imported at
-load time -- but executing what an artifact describes (running a runnable
-artifact, or opting into `trust_custom_callables=`) is code execution, and
-tracing a model runs its `forward()`. Only load bundles and trace models from
-sources you trust. See [SECURITY.md](SECURITY.md) for the full trust model,
-the supported-versions table, and dependency-advisory status (including the
-transformers 4.x advisories and their remedy).
-
-
-## Other Packages You Should Check Out
-
-TorchLens focuses on activation extraction, graph visualization, and intervention
-and intentionally omits model loading, stimulus management, and analysis pipelines.
-These packages cover that ground well:
-
-- [Cerbrec](https://cerbrec.com): interactive visualization and debugging for deep neural networks (uses TorchLens under the hood for PyTorch graph extraction)
-- [ThingsVision](https://github.com/ViCCo-Group/thingsvision): model loading, stimulus management, and representational analysis for vision models
-- [Net2Brain](https://github.com/cvai-roig-lab/Net2Brain): end-to-end pipeline for comparing DNN representations to neural data
-- [surgeon-pytorch](https://github.com/archinetai/surgeon-pytorch): lightweight activation extraction with training-loss hooks
-- [deepdive](https://github.com/ColinConwell/DeepDive): model loading and benchmarking across many model families
-- [torchvision feature_extraction](https://pytorch.org/vision/stable/feature_extraction.html): fast activation extraction for models with static computational graphs
-- [rsatoolbox](https://github.com/rsagroup/rsatoolbox): representational similarity analysis for DNN activations and brain data
-
 
 ## Acknowledgments
 
@@ -768,28 +324,12 @@ discussion and code contributions enabling PyTorch Lightning compatibility.
 Network visualizations are generated with Graphviz. Logo created by Nikolaus
 Kriegeskorte.
 
-TorchLens borrows conventions and ideas, with credit, from many tools its
-users already know. The full credit roster -- every project and paper whose
-ideas shaped a shipped feature -- is in
-[docs/acknowledgments.md](docs/acknowledgments.md).
-
-
-## Citing TorchLens
-
-To cite TorchLens, please cite
-[this paper](https://www.nature.com/articles/s41598-023-40807-0):
-
-Taylor, J., Kriegeskorte, N. Extracting and visualizing hidden activations and
-computational graphs of PyTorch models with TorchLens. *Sci Rep* 13, 14375
-(2023). https://doi.org/10.1038/s41598-023-40807-0
-
-If you find TorchLens useful, a star on this repo is appreciated.
-
+The projects and papers whose ideas shaped particular features are listed in [docs/acknowledgments.md](docs/acknowledgments.md).
 
 ## Contact
 
-TorchLens is in active development. Questions, bug reports, and suggestions are
-welcome via [email](mailto:johnmarkedwardtaylor@gmail.com),
-[Twitter](https://twitter.com/johnmark_taylor), the
-[issues page](https://github.com/johnmarktaylor91/torchlens/issues), or the
-[discussion board](https://github.com/johnmarktaylor91/torchlens/discussions).
+TorchLens is in active development. You can report bugs on the [issues page](https://github.com/johnmarktaylor91/torchlens/issues), and post questions and ideas on the [discussion board](https://github.com/johnmarktaylor91/torchlens/discussions). You can also reach me by [email](mailto:johnmarkedwardtaylor@gmail.com) or on [Twitter](https://twitter.com/johnmark_taylor).
+
+TorchLens is created and maintained by [JohnMark Taylor](https://johnmarktaylor.com).
+
+[^names]: TorchLens and TransformerLens have no common origin, believe it or not: the names were chosen independently, [eight](https://github.com/johnmarktaylor91/torchlens/commit/6ead1a7506b8) [days](https://github.com/TransformerLensOrg/TransformerLens/commit/060742892eb5) apart, in late 2022.

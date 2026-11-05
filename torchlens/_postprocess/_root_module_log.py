@@ -27,6 +27,15 @@ def _recorded_root_calls(mbd: dict[str, Any]) -> int:
     return int(mbd["module_num_calls"].get("self", 0))
 
 
+def _root_address_children(root_meta: dict[str, Any], mbd: dict[str, Any]) -> list[str]:
+    """The root's direct children by address (no dots), from its metadata when recorded."""
+
+    root_meta_children = root_meta.get("address_children")
+    if root_meta_children is None:
+        return [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
+    return [child for child in root_meta_children if child != "self" and "." not in child]
+
+
 def _root_call_build_inputs(
     self: Trace, mbd: dict[str, Any]
 ) -> tuple[dict[str, str], dict[str, list[str]]]:

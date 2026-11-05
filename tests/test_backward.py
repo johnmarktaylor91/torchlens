@@ -820,6 +820,7 @@ def test_separate_unmanaged_engine_calls_get_separate_implicit_passes() -> None:
     assert [event.pass_index for event in starts] == [1, 2]
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_replay_fork_does_not_inherit_gradient_state() -> None:
     """A replay fork starts with no captured gradient state; the source keeps its own."""
     model = _TinyBackwardModel()
@@ -841,7 +842,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     fork = trace.do(
         tl.func("relu"),
         _identity_hook,
-        intervention=tl.options.InterventionOptions(differentiable=True, confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(differentiable=True),
     )
 
     assert fork.autograd.has_grads is False
@@ -855,6 +856,7 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     assert any(param_log._grad_records for param_log in trace._param_logs.values())
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     """A seeded ``_derived_grad_payload`` never survives onto a replay fork.
 
@@ -882,7 +884,7 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     fork = trace.do(
         tl.func("relu"),
         _identity_hook,
-        intervention=tl.options.InterventionOptions(differentiable=True, confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(differentiable=True),
     )
 
     fork_param = fork._param_logs[address]

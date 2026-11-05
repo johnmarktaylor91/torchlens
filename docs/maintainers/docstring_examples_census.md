@@ -18,10 +18,9 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _episode_spec | 1 | 0 |
 | _errors | 23 | 0 |
 | _extraction | 8 | 0 |
-| _io | 17 | 0 |
+| _io | 19 | 0 |
 | _ir | 11 | 0 |
 | _merged | 12 | 0 |
-| _mutate_warnings | 1 | 0 |
 | _observability | 24 | 0 |
 | _observe | 1 | 0 |
 | _option_receipt | 1 | 0 |
@@ -53,17 +52,17 @@ and how many lack a runnable `Examples` section. Regenerate with
 | debug | 63 | 0 |
 | differential | 3 | 0 |
 | distributed | 9 | 0 |
-| errors | 30 | 0 |
+| errors | 31 | 0 |
 | examples | 1 | 0 |
 | experiment | 6 | 0 |
 | experimental | 5 | 0 |
 | export | 29 | 0 |
 | features | 5 | 0 |
 | fingerprint | 5 | 0 |
-| intervention | 95 | 0 |
+| intervention | 94 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
-| mechinterp | 48 | 0 |
+| mechinterp | 51 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
 | options | 6 | 0 |
@@ -79,6 +78,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 14 | 0 |
-| **total** | **1058** | **0** |
+| **total** | **1062** | **0** |
 
-Public callable members of those classes (methods and properties): 1488.
+Public callable members of those classes (methods and properties): 1496.

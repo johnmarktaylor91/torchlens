@@ -23,8 +23,10 @@ from torchlens.intervention.errors import HookValueError
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.types import Edit
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 #: The replay doors below edit a root capture in place on purpose.
-_CONFIRM = tl.options.InterventionOptions(confirm_mutation=True)
+_CONFIRM = tl.options.InterventionOptions()
 
 
 class _ReluNet(nn.Module):

@@ -139,7 +139,7 @@ Differentiable replay creates a new trace: `do` replays the edit onto a new fork
 (replay engine only; rerun and set-only ignore the option):
 
 ```python
-options = tl.options.InterventionOptions(differentiable=True, confirm_mutation=True)
+options = tl.options.InterventionOptions(differentiable=True)
 patched = source_trace.do("relu_3", tl.scale(0.5), intervention=options)
 patched.backward(patched[patched.output_layers[0]].out.sum())
 ```

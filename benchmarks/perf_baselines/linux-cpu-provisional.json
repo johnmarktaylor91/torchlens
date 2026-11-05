@@ -5517,6 +5517,52 @@
       "device": "cpu",
       "label": "Trace.save fresh tlspec bundle",
       "metadata": {
+        "save_path_counters": {
+          "capture": "CaptureOptions(seed=0, name='tinynet'); one save on the default portable path (saved format 3)",
+          "command": "python benchmarks/save_path_counters.py --out OUT.json",
+          "counters": {
+            "bytes_by_part": {
+              "blobs": 2035000,
+              "manifest": 10131,
+              "metadata": 221531,
+              "other": 0
+            },
+            "bytes_written": 2266662,
+            "encoder_calls": 2255,
+            "files_written": 9,
+            "fsync_calls": 14,
+            "metadata_writes": 1,
+            "read_opens": 1,
+            "timing_floats_by_file": {
+              "records/module.json": 60,
+              "records/module_call.json": 30,
+              "records/op.json": 14,
+              "records/trace.json": 33
+            },
+            "verify_reloads": 1,
+            "write_opens": 0
+          },
+          "information": {
+            "note": "information only, never gates: profiled Python calls, raw bundle bytes (they move with measured timings) and unprofiled wall-clock A/A pair, fellows cluster CPU node 2026-11-04",
+            "python_calls": [
+              900713
+            ],
+            "raw_bytes_written": [
+              2268399
+            ],
+            "wall_ms_aa_pairs": [
+              [
+                140.609,
+                139.506
+              ]
+            ]
+          },
+          "model": "tinynet",
+          "platform": "linux",
+          "python": "3.10.12",
+          "schema": "torchlens.save_path_counters.v2",
+          "torch": "2.13.0+cpu"
+        },
         "serialized_file_size_bytes": 2156074
       },
       "model": "tinynet",

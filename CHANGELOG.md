@@ -3,7 +3,91 @@
 
 ## Unreleased
 
+### Fixed
+
+- **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
+  head edits from `tl.experiment.head_ablation_candidates`) now saves at the default
+  `level="portable"`: the edit keeps its name and stores the dense bool `mask` and its
+  `mask_sha256` among its keywords (written through the tensor sidecar), and a reload applies
+  bit-identically. A malformed or tampered stored mask refuses
+  `intervention_helper_arguments_invalid` at load. An edit that needs user code still refuses
+  `intervention_spec_not_portable`. DOCUMENTED-UNSTABLE persisted form.
+
+- **capture**: `torch.get_rng_state` and `torch.random.get_rng_state` are recorded as source ops
+  with no parents, so a forward that reads the RNG state and uses the bytes gets an attributed
+  node and passes `tl.validate`. TorchLens's own RNG snapshots do not appear in the trace. The
+  private Tensor methods `_to_sparse`, `_to_sparse_csr`, `_to_sparse_csc`, `_to_sparse_bsr`,
+  `_to_sparse_bsc`, `_conj`, `_conj_physical`, `_neg_view`, `_lazy_clone`, `_addmm_activation`,
+  `_is_all_true` and `_is_any_true` are recorded like their `torch.*` twins. Before, each
+  result reached its consumer with no provenance and validation failed.
+
+- **capture**: the in-place philox fills `Tensor._philox_normal_` and `Tensor._philox_uniform_`
+  (torch 2.13+, CUDA) are recorded with the key tensor as a parent. Before, the filled tensor
+  reached its consumer with no provenance. Replays with the same key reproduce the fill exactly, and
+  `tl.validate` passes: the overwritten destination is excused like `normal_`'s, the key is
+  still perturbation-tested.
+
+- **validation**: a `uint16`, `uint32` or `uint64` parent is perturbed as an integer. Before,
+  it reached the float branch and validation crashed with a `torch.finfo` TypeError.
+
+- **validation**: FlashAttention 2 (`attn_implementation="flash_attention_2"`, the
+  `flash-attn` 2.x custom op `flash_attn::_flash_attn_forward`) passes
+  `tl.validate(scope="forward")`. Each attention call is four native sibling ops that all
+  carry q, k and v; the known-kernel table now also declares native custom ops (ruling: "(b)
+  Declare per-output dependence per kernel in a table."): the log-sum-exp and the dropout
+  mask depend on q and k, the rng state on none of q, k and v, so the perturbation check
+  excuses exactly those edges. Before, validation failed on a sibling's v edge. The attention
+  output has no row and stays fully tested; the same operator name in another namespace, a
+  parent at another position or a keyword stays strict.
+
+- **capture**: A FlashAttention 2 call with dropout and `return_attn_probs=True` now replays bit
+  for bit, so `tl.validate(scope="forward")` passes on it. Replay already restored the captured
+  CUDA generator state, which redraws the same dropout mask; what differed was the dropout mask's
+  padding: the kernel returns it rounded up to its block size and leaves the cells past the
+  sequence lengths undefined. TorchLens now zeroes those padding cells where the recorded
+  `flash_attn::_flash_attn_forward` call returns, in the capture and in the replay, so the model,
+  the trace and the replay hold the same values. The defined region and the other outputs are
+  unchanged; other operators, including the varlen entry point, are not touched. Validation still
+  compares the whole tensor.
+
+- **docs**: The FAQ, glossary, error and refusal contract and the saved-format error messages no longer
+  read like a TorchLens 3 release: saved files are described as written by torchlens 2.37 and earlier
+  or in saved format 3, and the FAQ's API-stability answer drops its placeholder and versioning
+  promise. Error codes, return values and labels are unchanged.
+
 <!-- version list -->
+
+## v2.38.1 (2026-11-04)
+
+v2.38.0 was tagged but never published to PyPI: its release checks failed. 2.38.1 is the first
+2.38 release on PyPI and carries everything listed under v2.38.0 below, plus these fixes.
+
+### Fixes
+
+- **capture**: capturing no longer fails with 0 ops after a library installs a module stub that
+  raises on attribute access (for example shap without matplotlib, imported by
+  `tl.report.doctor()`); the wrap step classifies module globals by their real type.
+- **intervention**: `trace.fork().do(selection, edit)` accepts a selection made on the parent
+  trace (for example `trace['layer4'].receptive_field.of(...)`) and resolves it on the fork by
+  site; selections from unrelated, sibling or descendant traces still refuse with
+  `selection_trace_mismatch`.
+- **intervention**: `tl.steer` infers `dim` when exactly one axis of the site matches the
+  direction's length.
+- **receptive field**: validating or querying a loaded trace that contains a matmul or attention
+  op no longer fails; operand shapes fall back to the recorded shapes.
+- **backends**: PaddlePaddle and MLX traces record the root module's class name; TensorFlow
+  parameter addresses no longer carry the Keras root-model prefix; loading a saved TensorFlow
+  trace refuses again when the TensorFlow runtime does not match; the JAX root module lists its
+  children, and a parameter held in an Equinox `Sequential` is named by its path from the owning
+  module (`layers.0.weight`), so the trace saves.
+- **docs**: the learn notebooks use `trace.ops[name]`; the FAQ's version answers are factual.
+- **viz**: a rolled drawing's header counts every pass of the layers it draws, input and output
+  nodes included (the README loop reads `8 layers (11 ops, 149 B)`), and rolled pass labels sit at
+  the end of their own edge.
+- **display**: progress bars fall back to tqdm's text bar in notebooks without ipywidgets instead
+  of printing errors on every `fork().do()`.
+- **docs**: the README's code blocks run as tests, and its printed output matches what the code
+  prints.
 
 ## v2.38.0 (2026-11-04)
 
@@ -11,6 +95,22 @@ Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; inst
 `torchlens<2.38` to read them (`pip install "torchlens<2.38"`), or capture the model again.
 
 ### Behavior changes
+
+- **viz**: rolled drawings label each edge end with its passes only when a strict subset of that
+  node's passes uses it: an end every pass uses carries no pass label (it used to print, for
+  example, `In 1-3 / Out 1-3` whenever any edge of the node varied). Loops whose edges were
+  unlabelled stay unlabelled; branching and recurrent loops lose the labels on edges every pass
+  uses and keep partial ones such as `Out 1`, `In 2` or `In 3 / Out 2`. A loop's every-pass edge
+  keeps a blank label slot when its back edge joins the same two nodes, so the two curves stay apart.
+- **viz**: no skin draws blue. Backward edges and nodes are raspberry (`#B03A6A` / `#F8E1E7`), the
+  `dark` skin is neutral grey, value ramps run pale yellow to brown, and the `colorblind` skin keeps
+  Okabe-Ito with grey weights. The default `torchlens` skin keeps the released fills. A branch
+  test names its kind and every pass's outcome on its first row (`IF: FALSE, FALSE, TRUE`) instead
+  of labelling an edge, and edge annotations are 13 pt (were 8 pt).
+- **viz**: a 0-d node's shape row reads `scalar, 4 B` instead of `(), 4 B`, and a saved 0-d value
+  prints on the next row (`= 2.31`; one value per pass on a rolled node, `= 0.87, 1.02, 0.95`).
+  If-tests keep their outcome on the first row and get no value row. `(1,)`, kwarg values such as
+  `dim=()`, parameter brackets and `Layer.__repr__` are unchanged.
 
 - **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
   written; the default never does) in place of `vis_save_only=`.
@@ -247,8 +347,12 @@ Saved files: files saved by torchlens 2.37 and earlier do not load in 2.38; inst
   verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
   before, the trace recorded the output allocation in place of the attention and validation
   failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
-  as a second output of the same call, which depends on q and k only, and forward validation
-  still reports that output's v edge as insensitive (a pinned, strict expected failure).
+  as a second output of the same call, which depends on q and k only; the known-kernel table
+  declares that per-output dependence (ruling: "(b) Declare per-output dependence per kernel
+  in a table.") and the perturbation check excuses exactly the declared edge (the
+  log-sum-exp's v edge), so the grad-enabled capture validates too. Every other edge stays
+  tested: the attention output has no row, an undeclared kernel, output or argument position
+  is strict, and a declared-dependent argument that does not move its output still fails.
   `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
 - **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
   `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python

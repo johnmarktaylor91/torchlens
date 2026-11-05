@@ -266,6 +266,35 @@ def test_tlspec_round_trip_drops_and_recomputes_view(tmp_path: Path) -> None:
     assert type(loaded_target)._PORTABLE_STATE_SPEC["_receptive_field_cache"] is FieldPolicy.DROP
 
 
+class _BatchedProductConcat(nn.Module):
+    """A same-rank batched product feeding a concatenation."""
+
+    def forward(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        """Multiply batched matrices, then join the product with a scaled copy."""
+
+        product = torch.matmul(left, right)
+        return torch.cat([product, product * 2], dim=-1)
+
+
+def test_loaded_trace_reads_operand_shapes_from_recorded_parent_shapes(tmp_path: Path) -> None:
+    """A reloaded trace solves operand-shape rules exactly as the live trace does."""
+
+    from torchlens.receptive_field._validation import check_geometric_metadata_invariants
+
+    _register_rules()
+    trace = tl.trace(_BatchedProductConcat(), (torch.randn(2, 3, 4), torch.randn(2, 4, 5)))
+    path = tmp_path / "rf-operands.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+
+    check_geometric_metadata_invariants(loaded)
+    for func_name in ("matmul", "cat"):
+        live_op = next(op for op in trace._layer_list if op.func_name == func_name)
+        loaded_op = loaded.ops[live_op.label]
+        assert _rules.operand_shapes(loaded_op) == _rules.operand_shapes(live_op)
+        assert repr(loaded_op.receptive_field.status) == repr(live_op.receptive_field.status)
+
+
 def test_registry_epoch_invalidation_refreshes_all_cached_views() -> None:
     """Refresh every populated operation slot when registration advances the epoch."""
 

@@ -53,6 +53,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
+| `_op_columns.py` | Private row-indexed column view over the `Op` row store (`OpColumns`: bound per-field getters and setters, one Python call per access on a building store; special cells delegate to the facade attribute) for postprocess passes |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
@@ -250,7 +251,7 @@ layer.ops  # dict[int, Op]
   creates cycles. There is NO `Trace.load` — loading is module-level `tl.load`
   (see the sibling `AGENTS.md`) — and `replay`/`rerun` are deprecated warning
   aliases of `push`/`run`.
-- `run(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
+- `run_transaction(inputs=...)` returns a transactional `RunResult` for live and loaded sparse providers;
   legacy `run(model, x, ...)` remains the intervention-rerun compatibility path.
 - `graph_shape_hash` is computed before `_set_tracing_finished`.
 

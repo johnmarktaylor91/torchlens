@@ -105,7 +105,7 @@ alias posture):
 
 ## run() Declared-State Restore (default behavior change)
 
-The default live `trace.run(inputs=...)` now snapshot-restores the model's declared
+The default live `trace.run_transaction(inputs=...)` now snapshot-restores the model's declared
 state (named parameters plus registered buffers, alias topology preserved) around the
 run, so repeated `run()` calls leave the model bit-identical. Previously, forward-pass
 mutations of declared state (BatchNorm running statistics, buffer counters, `no_grad`
@@ -492,9 +492,9 @@ An `on_zero_fire` value outside `"warn"`, `"error"` and `"disclose"` now refuses
 `zero_fire_policy_invalid` at every door, raised as `InvalidArgumentError` (a `ValueError`)
 instead of `BindingPreflightError`. Branch on the new code; `"warn"` is now a valid value.
 
-## A hooked `run(inputs=..., fast=True)` reports `unverifiable` (2026-10-14, verdict change)
+## A hooked `run_transaction(inputs=..., fast=True)` reports `unverifiable` (2026-10-14, verdict change)
 
-`trace.run(inputs=..., fast=True)` on a live trace that applies its staged hooks or value
+`trace.run_transaction(inputs=..., fast=True)` on a live trace that applies its staged hooks or value
 replacements used to report `path_faithfulness=verified`. Its output is an edited forward,
 not the model's own, and no hook-aware check exists yet, so the report now reads
 `unverifiable` (`poisoned=True`) with a `user_intervention_not_replayable` diagnostic

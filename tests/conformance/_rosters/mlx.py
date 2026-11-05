@@ -32,6 +32,20 @@ _RNG = np.random.default_rng(0)
 X24 = _RNG.standard_normal((2, 4)).astype(np.float32)
 W44 = (_RNG.standard_normal((4, 4)) * 0.5).astype(np.float32)
 B4 = _RNG.standard_normal((4,)).astype(np.float32)
+# loop3's input, weight and bias are multiples of 1/8 or coarser: every product and partial
+# sum of its matmul and bias add is exact in float32, so any summation order (the framework's
+# kernel or NumPy's BLAS, which differ by CPU) gives the oracle's bits.
+LOOP_X = np.array([[0.5, -1.0, 0.25, 0.75], [-0.5, 0.25, 1.0, -0.25]], dtype=np.float32)
+LOOP_W = np.array(
+    [
+        [0.5, -0.25, 0.25, 0.0],
+        [0.25, 0.5, -0.5, 0.25],
+        [-0.25, 0.25, 0.5, 0.5],
+        [0.5, 0.0, -0.25, 0.25],
+    ],
+    dtype=np.float32,
+)
+LOOP_B = np.array([0.25, -0.25, 0.125, 0.5], dtype=np.float32)
 IMG = _RNG.standard_normal((1, 6, 6, 1)).astype(np.float32)  # NHWC, MLX's layout
 
 
@@ -134,8 +148,8 @@ def _build_loop3() -> tuple[Any, Any]:
 
     import mlx.core as mx
 
-    weight = mx.array(W44)
-    bias = mx.array(B4)
+    weight = mx.array(LOOP_W)
+    bias = mx.array(LOOP_B)
 
     def loop(v: Any) -> Any:
         """Apply the shared affine-relu step three times."""
@@ -144,17 +158,17 @@ def _build_loop3() -> tuple[Any, Any]:
             v = mx.maximum(mx.matmul(v, weight) + bias, 0.0)
         return v
 
-    return loop, _x()
+    return loop, mx.array(LOOP_X)
 
 
 def _loop3_intermediates() -> dict[str, Any]:
     """Expected intermediates of the loop3 row, one list per op kind."""
 
-    h = X24
+    h = LOOP_X
     matmuls, adds, relus = [], [], []
     for _ in range(3):
-        matmuls.append(h @ W44)
-        adds.append(matmuls[-1] + B4)
+        matmuls.append(h @ LOOP_W)
+        adds.append(matmuls[-1] + LOOP_B)
         h = _relu(adds[-1])
         relus.append(h)
     return {"matmul": matmuls, "add": adds, "maximum": relus}

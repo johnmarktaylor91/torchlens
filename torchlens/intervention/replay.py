@@ -38,15 +38,15 @@ from ._param_fingerprint import (
 )
 from ._replay_cone import (
     _disclosure_label,
-    _label_key_map,
+    _replay_cone_and_maps,
     _resolve_single_origin,
+    _shared_label_key_map,
     cone_of_effect,
 )
 from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
-    _func_call_groups,
     _group_for_site,
     _group_representative,
     _record_capture_digest,
@@ -66,6 +66,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    refresh_output_derivatives,
     rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
@@ -163,7 +164,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
             message,
             code="replay_gradient_edit_unsupported",
             remedy=remedy,
-            argument="hooks_or_site",
+            argument="site",
         )
 
 
@@ -497,12 +498,12 @@ def _run_replay(
         run_ctx.pop("frontier", None)
     run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
     log.last_run = run_ctx
-    cone = cone_of_effect(log, origins)
+    cone, label_keys, call_groups = _replay_cone_and_maps(log, origins)
     state = _ReplayPass(
         log=log,
         origins=tuple(origins),
         origin_keys=frozenset(_replay_site_key(origin) for origin in origins),
-        label_keys=_label_key_map(log),
+        label_keys=label_keys,
         hook_targets=_hook_targets_by_label(log, hook_entries, strict=strict),
         preserve_origins=preserve_origins,
         strict=strict,
@@ -513,7 +514,6 @@ def _run_replay(
             state.overlay[_replay_site_key(origin)] = origin.out
 
     executed_call_ids: set[int] = set()
-    call_groups = _func_call_groups(log)
     cone_keys = {_replay_site_key(member) for member in cone}
     errors_non_fatal = 0
     loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
@@ -667,7 +667,7 @@ def _reconstruct_args_from_template(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     args = tuple(
         _resolve_arg_component(
             component,
@@ -767,7 +767,7 @@ def _boundary_slot_parent_op(
             f"{len(parents)} ({', '.join(repr(parent) for parent in parents)})."
         )
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
@@ -856,7 +856,7 @@ def _resolve_arg_component(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
         if parent_label not in trace._layer_dict_all_keys:
@@ -1229,12 +1229,8 @@ def _commit_replay_updates(
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
-                # This push re-derived the site's value from capture truth
-                # through exactly these fires, so they REPLACE the site's
-                # replay-minted node-hook records (chaining two edits yields
-                # two records, never three). Live-door records (capture
-                # facts), edge records (tier-(ii) corroboration), and
-                # records on sites this push did not fire at survive.
+                # These fires REPLACE the site's replay-minted node-hook records
+                # (docstring); live-door and edge records survive.
                 old_records = list(site.edits or ())
                 surviving = [
                     record
@@ -1263,6 +1259,9 @@ def _commit_replay_updates(
     if new_digests:
         # Rebind, never mutate: the run context may be shared with a fork.
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    refresh_output_derivatives(log, snapshots, refresh_decoded_output)  # outputs may have changed
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:

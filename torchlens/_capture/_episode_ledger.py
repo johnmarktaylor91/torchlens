@@ -1332,7 +1332,7 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
             f"wrapped-tier cost ceiling of {EPISODE_DECLARED_STEP_CEILING}. "
             "Wrapped episode capture cost is SUPERLINEAR in step count "
             "(measured gpt2-124M CPU: N=100 = 657 s / 5.4 GB peak RSS); the "
-            "guarded-fast tier (trace.run(inputs=..., fast=True), which needs "
+            "guarded-fast tier (trace.run_transaction(inputs=..., fast=True), which needs "
             "a functional save= such as save=tl.func(...) on the capture) is "
             "the engine for episode-scale re-runs. Remedy: declare fewer steps, "
             "or pass EpisodeOptions(acknowledge_step_cost=True) to accept the "

@@ -1,4 +1,4 @@
-"""``run(inputs=)`` applies a trace's staged intervention spec on the live provider.
+"""``run_transaction(inputs=)`` applies a trace's staged intervention spec on the live provider.
 
 The ordinary live door captures the new inputs under the same plan the intervened
 rerun uses, hands back a fork that adopted that capture, and settles the fire
@@ -24,6 +24,8 @@ from torchlens._selection.errors import SiteResolutionError
 from torchlens._trace_state import TraceState
 from torchlens.errors import EngineDispatchError, TorchLensWarning
 from torchlens.options import InterventionOptions
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 _DIM = 8
 
@@ -117,7 +119,7 @@ def test_live_run_inputs_applies_the_staged_hook_with_receipts_on_the_fork() -> 
     trace = _steered(model, direction)
     source_state = trace.state
 
-    result = trace.run(inputs=_x(1))
+    result = trace.run_transaction(inputs=_x(1))
 
     assert torch.allclose(result.output, _steered_by_hand(model, direction, _x(1)), atol=1e-6)
     assert result.trace is not trace
@@ -148,11 +150,11 @@ def test_live_run_inputs_repeats_on_fresh_inputs_and_after_a_fast_run() -> None:
     model, direction = _Net().eval(), torch.randn(_DIM)
     trace = _steered(model, direction)
     for seed in (1, 2):
-        plain = trace.run(inputs=_x(seed))
+        plain = trace.run_transaction(inputs=_x(seed))
         assert torch.allclose(plain.output, _steered_by_hand(model, direction, _x(seed)), atol=1e-6)
-    fast = trace.run(inputs=_x(3), fast=True)
+    fast = trace.run_transaction(inputs=_x(3), fast=True)
     assert torch.allclose(fast.output, _steered_by_hand(model, direction, _x(3)), atol=1e-6)
-    again = trace.run(inputs=_x(4))
+    again = trace.run_transaction(inputs=_x(4))
     assert torch.allclose(again.output, _steered_by_hand(model, direction, _x(4)), atol=1e-6)
     assert again.trace.last_run["engine"] == "live"
 
@@ -167,7 +169,7 @@ def test_live_run_inputs_discloses_a_staged_entry_that_fired_nowhere() -> None:
 
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        result = trace.run(inputs=_x(1, positions=2), on_divergence="return")
+        result = trace.run_transaction(inputs=_x(1, positions=2), on_divergence="return")
     assert "rerun_zero_fire" in _warning_codes(list(records))
     assert any(isinstance(record.message, TorchLensWarning) for record in records)
     ledger = result.trace.last_run
@@ -180,7 +182,9 @@ def test_live_run_inputs_discloses_a_staged_entry_that_fired_nowhere() -> None:
     assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
 
     with pytest.raises(SiteResolutionError) as refused:
-        trace.run(inputs=_x(2, positions=2), on_divergence="return", on_zero_fire="error")
+        trace.run_transaction(
+            inputs=_x(2, positions=2), on_divergence="return", on_zero_fire="error"
+        )
     assert refused.value.fields["code"] == "rerun_zero_fire"
 
 
@@ -229,13 +233,13 @@ def test_loaded_artifact_run_inputs_refuses_a_staged_user_hook(tmp_path: Path) -
     loaded = tl.load(path)
     loaded.do(
         {tl.func("relu"): tl.zero_ablate()},
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     with pytest.raises(EngineDispatchError) as refused:
-        loaded.run(inputs=x)
+        loaded.run_transaction(inputs=x)
     assert refused.value.fields["code"] == "run_staged_spec_unapplied"
     assert "detach" in refused.value.fields["remedy"]
     # Detaching the staged hook reopens the loaded run door.
-    loaded.clear_edits(tl.func("relu"), confirm_mutation=True)
-    rerun = loaded.run(inputs=x)
+    loaded.clear_edits(tl.func("relu"))
+    rerun = loaded.run_transaction(inputs=x)
     assert rerun is not None

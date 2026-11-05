@@ -89,6 +89,10 @@ class RawGraphWorkspace:
     #: with the workspace, and ``equivalence_class`` keeps its argument/parameter
     #: fingerprint for its other consumers.
     _call_site_classes: dict[str, str] = field(default_factory=dict)
+    #: ``id(callable)`` -> ``(callable, key fields)`` of the portable function
+    #: registry key derived for a C callable this capture (``_function_registry_key``),
+    #: so ops of one function derive it once. Internal and never persisted.
+    _function_key_memo: dict[int, tuple[Any, tuple[Any, ...]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

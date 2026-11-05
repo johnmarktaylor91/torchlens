@@ -78,7 +78,7 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "trace.module_collapse_order still lists every module's collapse score"
     ),
     "save_new_outs": (
-        "use trace.run(inputs=x) -- save_new_outs left the public surface; run(inputs=) is the "
+        "use trace.run_transaction(inputs=x) -- save_new_outs left the public surface; run_transaction(inputs=) is the "
         "graph-checked refresh (a changed graph raises), while run(model, x) re-captures"
     ),
     "validate_saved_outs": (

@@ -22,6 +22,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _BranchMLP(nn.Module):
     """``fc_out(relu(fc_a(h)) + fc_b(h))`` plus a sigmoid side output the loss ignores."""
@@ -286,7 +288,7 @@ def test_do_mapping_refuses_a_gradient_edit_on_replay() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.do(
             {tl.grad(relu): tl.scale(0)},
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     assert "Replay re-executes forward ops only" in str(excinfo.value)

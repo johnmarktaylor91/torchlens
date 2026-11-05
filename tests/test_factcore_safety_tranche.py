@@ -189,7 +189,7 @@ def test_run_products_have_bounded_reprs() -> None:
     model = _TinyMLP().eval()
     x = torch.randn(2, 8)
     trace = tl.trace(model, x)
-    result = trace.run(inputs=torch.randn(2, 8))
+    result = trace.run_transaction(inputs=torch.randn(2, 8))
     result_text = repr(result)
     assert result_text.startswith("RunResult(output=")
     assert "tensor(" not in result_text

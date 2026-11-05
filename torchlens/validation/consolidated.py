@@ -12,6 +12,7 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._entry_refusals import refuse_validation_scope
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
 from .._utils._display_card import render_card
@@ -552,7 +553,7 @@ def validate(
     normalized_scope = scope.lower()
     valid_scopes = {"forward", "backward", "saved", "intervention", "receptive_field"}
     if normalized_scope not in valid_scopes:
-        raise ValueError(f"scope must be one of {sorted(valid_scopes)!r}.")
+        refuse_validation_scope(scope, valid_scopes)
     _validate_scope_keywords(
         normalized_scope,
         loss_fn=loss_fn,
@@ -669,21 +670,7 @@ def validate(
 
             _trim_host_allocator()
         if passed is False:
-            # R67: the bare ``False`` used to be silent while the rich
-            # structured diagnosis sat unreferenced in the module side channel.
-            # One warning names WHAT failed and WHERE the full record lives.
-            from .diagnostics import last_validation_failure
-
-            failure = last_validation_failure()
-            detail = f" {failure.summary()}" if failure is not None else ""
-            warnings.warn(
-                f"tl.validate FAILED for scope={normalized_scope!r}.{detail} Full "
-                "structured diagnosis: "
-                "torchlens.validation.last_validation_failure() / "
-                "get_validation_diagnostics().",
-                TorchLensWarning,
-                stacklevel=user_stacklevel(),
-            )
+            _report_validation_failure(normalized_scope, verbose)
         return passed
     return _intervention_report(
         model,
@@ -693,6 +680,33 @@ def validate(
         verbose=verbose,
         validate_metadata=validate_metadata,
         save_options=save_options,
+    )
+
+
+def _report_validation_failure(normalized_scope: str, verbose: bool) -> None:
+    """Warn once that validation failed, naming the check and op; print it when verbose.
+
+    R67: the bare ``False`` used to be silent while the rich structured
+    diagnosis sat unreferenced in the module side channel. One warning names
+    WHAT failed and WHERE the full record lives. ``verbose=True`` also prints
+    the same line through the validators' verbose channel (stdout), because a
+    failure decided at a site that prints nothing (a perturbation-insensitive
+    edge, an unverified replay) otherwise left a verbose run with no output.
+    """
+
+    from .diagnostics import last_validation_failure
+
+    failure = last_validation_failure()
+    detail = f" {failure.summary()}" if failure is not None else ""
+    if verbose:
+        print(f"tl.validate FAILED for scope={normalized_scope!r}.{detail}")
+    warnings.warn(
+        f"tl.validate FAILED for scope={normalized_scope!r}.{detail} Full "
+        "structured diagnosis: "
+        "torchlens.validation.last_validation_failure() / "
+        "get_validation_diagnostics().",
+        TorchLensWarning,
+        stacklevel=user_stacklevel(),
     )
 
 

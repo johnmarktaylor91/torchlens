@@ -2,7 +2,7 @@
 task: Draw a reproducible subsample before extracting features
 one_liner: Draw the subsample yourself with a seeded generator and pass the original ids, so the artifact names the items it holds.
 canonical: tl.extract_dataset(model, stimuli[chosen], sites, path="subsample", stimulus_ids=ids)
-avoid: "Looking for sample_size= or seed= on tl.extract_dataset: it has neither, and the manifest records ids, not seeds."
+avoid: "sample_size= or seed=: neither exists; the manifest records ids."
 tier: kit
 doors: [neuroai, vision]
 related: []

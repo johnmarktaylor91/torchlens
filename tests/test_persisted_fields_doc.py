@@ -15,12 +15,21 @@ from pathlib import Path
 
 import pytest
 
+from torchlens._io import TLSPEC_VERSION
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "tools" / "docs"))
 
 import persisted_fields  # noqa: E402
 
 PAGE = REPO_ROOT / "docs" / "maintainers" / "persisted_fields.md"
+
+
+def test_generator_selects_the_active_record_contract() -> None:
+    """A record-version bump must move both generator contract inputs."""
+
+    assert persisted_fields.CONTRACT.name == f"writer_contract_v{TLSPEC_VERSION}.json"
+    assert persisted_fields.PREVIOUS_CONTRACT.name == f"writer_contract_v{TLSPEC_VERSION - 1}.json"
 
 
 def test_committed_page_equals_the_generator_output() -> None:
@@ -50,7 +59,7 @@ def test_a_changed_contract_changes_the_page(tmp_path: Path) -> None:
     record["persisted_field_names"].append("zz_added_by_test")
     record["field_policies"]["zz_added_by_test"] = "keep"
     record["field_tiers"]["zz_added_by_test"] = "fact"
-    changed = tmp_path / "writer_contract_v11.json"
+    changed = tmp_path / persisted_fields.CONTRACT.name
     changed.write_text(json.dumps(document), encoding="utf-8")
     rendered = persisted_fields.render(contract_path=changed)
     assert rendered != PAGE.read_text(encoding="utf-8")
