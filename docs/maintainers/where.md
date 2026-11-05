@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1723 modules, 698493 lines, 0 modules without a docstring.
+85 packages, 1723 modules, 698508 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -42,7 +42,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 71 | 23427 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 18 | 6476 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48692 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 104 | 48707 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1151 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 757 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 8 | 2487 |
@@ -1038,7 +1038,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (104 modules, 48692 lines)
+Computational graph visualization via Graphviz. (104 modules, 48707 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1086,7 +1086,7 @@ Computational graph visualization via Graphviz. (104 modules, 48692 lines)
 | `_header_block` | The fixed top-left block of a forward picture: the header, then the key. | 778 |
 | `_input_photo` | The input photo: an image a trace was captured from, drawn on its input node. | 98 |
 | `_intervention_sites` | Intervention-site lookup shared by the draw path and the interventions view. | 96 |
-| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 737 |
+| `_label_format` | Formatting helpers for TorchLens visualization node labels. | 752 |
 | `_label_geometry` | Plane geometry of a laid-out Graphviz drawing (points, y up), for label placement. | 220 |
 | `_label_width` | Conservative text-width metrics for sizing node labels before Graphviz lays them out. | 114 |
 | `_legend` | Legend helpers: drawn-role detection and the one compact legend table. | 375 |
