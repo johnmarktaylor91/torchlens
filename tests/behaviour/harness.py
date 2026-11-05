@@ -452,7 +452,7 @@ def _forward_match(cell: Cell) -> None:
     if cell.changes("forward_match"):
         before = cell.output_leaves(trace)
         torch.manual_seed(SEED)
-        trace.run(cell.model, cell.fresh_inputs())
+        trace = trace.run(cell.model, cell.fresh_inputs())
         diff = first_leaf_difference(before, cell.output_leaves(trace))
         if diff is not None and first_leaf_difference(cell.plain_output, _plain_forward(cell)):
             # A forward that rewrites its own state (a counter buffer, an

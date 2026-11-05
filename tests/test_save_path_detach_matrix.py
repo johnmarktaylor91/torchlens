@@ -172,7 +172,8 @@ def _site_after(path: str, model: _Net, trace: Any, x2: torch.Tensor) -> torch.T
     if path == "trace":
         return trace[_SITE].out
     if path == "legacy_run":
-        return trace.run(model, x2)[_SITE].out
+        rerun = trace.run(model, x2)  # a new Trace; keep it while reading its site
+        return rerun[_SITE].out
     if path == "run_inputs":
         # carry_state=True keeps the declared-state restore out of this
         # attachment check; the restore's own backward contract is pinned with

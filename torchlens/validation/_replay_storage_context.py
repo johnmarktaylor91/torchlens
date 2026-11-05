@@ -18,6 +18,7 @@ can round differently on a strided operand than on a contiguous one.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, cast
 
 import torch
@@ -31,7 +32,7 @@ from .._storage_bindings import (
     views_part_of_its_storage,
 )
 from .._utils._record_group_table import record_member
-from .._utils._tensor_layout import CaptureLayout, relay_to_layout
+from .._utils._tensor_layout import CaptureLayout, layout_of, relay_to_layout
 from .._utils._torch_compat import get_force_original_view_tracking, get_view_func_replay
 from .._utils.collections import assign_to_sequence_or_dict
 from ._grad_flags import _mirror_captured_requires_grad, _snapshot_grad_flags
@@ -279,6 +280,102 @@ def slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout | 
     return cast("CaptureLayout | None", getattr(component, "_capture_layout", None))
 
 
+def replayed_storage_alias(
+    written: torch.Tensor,
+    geometry: tuple[tuple[int, ...], CaptureLayout | None],
+    lineage: list[torch.Tensor | None],
+    others: list[torch.Tensor],
+) -> torch.Tensor | None:
+    """Return the replayed tensor on ``written``'s storage that a slot read.
+
+    Parameters
+    ----------
+    written:
+        The replayed output of an in-place op that wrote through a view.
+    geometry:
+        The read's shape and its recorded layout (``None`` for a row-major
+        contiguous read, whose storage offset is not recorded).
+    lineage:
+        Replayed values along the in-place op's receiver chain (the base and the
+        views it wrote through), searched first.
+    others:
+        Every other replayed differentiable value, searched when the lineage holds
+        no match. Within either pool the matches must agree on one geometry: two
+        contiguous aliases of one shape at different offsets are ambiguous.
+
+    Returns
+    -------
+    torch.Tensor | None
+        The alias, or ``None`` when the replay holds none.
+
+    Raises
+    ------
+    ValueError
+        When the matching candidates of the pool searched are ambiguous.
+    """
+
+    shape, layout = geometry
+
+    def matches(candidate: torch.Tensor | None) -> bool:
+        """Return whether ``candidate`` is on ``written``'s storage with the read geometry."""
+
+        if candidate is None or tuple(candidate.shape) != shape:
+            return False
+        same_storage = (
+            candidate.device == written.device
+            and candidate.untyped_storage().data_ptr() == written.untyped_storage().data_ptr()
+        )
+        if not same_storage:
+            return False
+        return candidate.is_contiguous() if layout is None else layout_of(candidate) == layout
+
+    for pool in (lineage, others):
+        candidates = [candidate for candidate in pool if matches(candidate)]
+        if len({cast(torch.Tensor, candidate).storage_offset() for candidate in candidates}) > 1:
+            raise ValueError("the storage alias a view write reached is ambiguous in the replay")
+        if candidates:
+            return candidates[0]
+    return None
+
+
+def storage_key(tensor: torch.Tensor) -> tuple[torch.device, int]:
+    """Return the device and storage address identifying ``tensor``'s storage."""
+
+    return tensor.device, tensor.untyped_storage().data_ptr()
+
+
+def alias_provenance_holds(
+    found: torch.Tensor, written: torch.Tensor, geometry: tuple[tuple[int, ...], Any]
+) -> bool:
+    """Return whether an alias provably reads the recorded region of the written storage.
+
+    Used where values cannot be compared (a perturbed replay): the alias must sit on
+    the very storage the in-place op's replayed output wrote, with the slot's shape,
+    and with its recorded layout (stride and storage offset) whenever one was recorded.
+    """
+
+    shape, layout = geometry
+    if storage_key(found) != storage_key(written) or tuple(found.shape) != shape:
+        return False
+    return found.is_contiguous() if layout is None else layout_of(found) == layout
+
+
+def writes_through_view(
+    slot: tuple[str, Any], receiver: torch.Tensor, enclosing: frozenset[tuple[torch.device, int]]
+) -> bool:
+    """Return whether an in-place op's slot is a write through a view to replay in place.
+
+    Only the receiver (first positional argument) of an in-place op that is a
+    non-leaf view of a replay-owned base is written in place, as capture wrote it,
+    so the write reaches the replayed base. ``enclosing`` holds the storages of an
+    enclosing replay's tensors: a nested replay never writes into them.
+    """
+
+    if slot != ("args", 0) or receiver.is_leaf or receiver._base is None:
+        return False
+    return storage_key(receiver) not in enclosing
+
+
 def _template_child(component: Any, part: Any) -> Any:
     """Step one key into a template level: an index of a sequence, a key of a mapping."""
 
@@ -288,3 +385,39 @@ def _template_child(component: Any, part: Any) -> Any:
         return component[part] if -len(component) <= part < len(component) else None
     pairs = (item for item in component if isinstance(item, tuple) and len(item) == 2)
     return next((item[1] for item in pairs if item[0] == part), None)
+
+
+_LINEAGE_BOUND = 64
+"""Longest receiver chain searched for the storage alias a view write reached."""
+
+
+def receiver_lineage(op: Any, resolve: Callable[[str], Any]) -> list[str]:
+    """Return the concrete labels along ``op``'s receiver (first argument) chain."""
+
+    labels: list[str] = []
+    current = op
+    while current is not None and len(labels) < _LINEAGE_BOUND:
+        labels.append(current.label)
+        positions = (record_member(current, "parent_arg_positions", {}) or {}).get("args", {})
+        receiver = positions.get(0)
+        current = resolve(receiver) if receiver is not None else None
+    return labels
+
+
+def rebuilt_alias(
+    written: torch.Tensor, layout: CaptureLayout | None, written_layout: CaptureLayout | None
+) -> torch.Tensor | None:
+    """Rebuild, on the written storage, an alias the replay never built.
+
+    Only when the read's full layout was recorded and the written view sits where
+    capture's receiver did (``written_layout``), so the recorded layout addresses
+    the same elements. The view is taken on the root base: ``as_strided``
+    differentiates only over the elements of the tensor it is called on, and the
+    written view covers fewer.
+    """
+
+    written_at = layout_of(written)
+    if layout is None or written_at is None or written_at != written_layout:
+        return None
+    base = written._base if written._base is not None else written
+    return base.as_strided(*layout)

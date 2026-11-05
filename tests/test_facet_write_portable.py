@@ -87,7 +87,7 @@ def test_head_ablation_saves_by_default_and_reapplies_bit_identically(tmp_path: 
     (stored,) = loaded._intervention_spec.hook_specs
     assert getattr(stored.hook, "_tl_facet_scatter", False)
     rerun = loaded.fork()
-    rerun.run(model, ids)
+    rerun = rerun.run(model, ids)
     assert torch.equal(_output(rerun), _output(session))
 
 

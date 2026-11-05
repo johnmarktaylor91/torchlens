@@ -32,7 +32,7 @@ from ..._utils.introspection import (
 from ...recording._storage_resolver import _resolve_storage
 from ...recording._types import CaptureSpec, StorageIntent
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
-from .buffer_writes import reconcile_buffer_writes
+from .buffer_writes import reconcile_buffer_writes, session_validated_buffer_address
 
 if TYPE_CHECKING:
     from torchlens.backends.torch.backend import TorchBackend
@@ -458,6 +458,45 @@ def _model_input_output_label(trace: Trace, tensor: torch.Tensor) -> str | None:
     return None
 
 
+def _source_output_label(backend: TorchBackend, trace: Trace, tensor: torch.Tensor) -> str | None:
+    """Return the source label of an unlabeled output that is a model input or held state.
+
+    A model input resolves to its input label. A module-held plain tensor is
+    the other attributable case: model preparation stamps the tensors a module
+    holds outside its registries (an anchor table built in ``__init__``, the
+    tensors of a distribution or helper object it keeps) as buffer sources, so
+    a read of one roots at a buffer node. Returned from ``forward`` with no
+    traced op touching it, such a tensor carries no label; it is logged here,
+    while the session's stamps are live, through the same source pathway as a
+    read. Only a stamp from this session with its storage unchanged qualifies,
+    so a tensor made inside ``forward`` by an unwrapped function still fails
+    attribution.
+
+    Parameters
+    ----------
+    backend:
+        Torch backend running the capture.
+    trace:
+        Active capture trace.
+    tensor:
+        Unlabeled model output tensor.
+
+    Returns
+    -------
+    str | None
+        The input or new buffer-source label, or ``None`` when neither applies.
+    """
+
+    input_label = _model_input_output_label(trace, tensor)
+    if input_label is not None:
+        return input_label
+    address = session_validated_buffer_address(trace, tensor)
+    if address is None:
+        return None
+    backend.log_source_tensor(trace, tensor, "buffer", address)
+    return _tl.get_tensor_label(tensor)
+
+
 def _same_tensor_storage_identity(left: torch.Tensor, right: torch.Tensor) -> bool:
     """Return whether two tensors are the same object or identical storage view.
 
@@ -729,7 +768,7 @@ def extract_and_mark_outputs(
                 attributable_output_tensors.append(t)
                 attributable_output_tensor_addresses.append(output_address)
                 continue
-            _label_raw = _model_input_output_label(self_trace, t)
+            _label_raw = _source_output_label(self, self_trace, t)
         if _label_raw is None:
             if getattr(self_trace, "_raw_transform_escape_detected", False):
                 continue

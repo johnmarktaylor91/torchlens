@@ -396,7 +396,7 @@ Load with `torchlens.io.load_intervention_spec(path)` and check a fresh capture 
 Append mode is for memory-constrained evaluation over compatible chunks:
 
 ```text
-trace.run(model, first_chunk)
+trace = trace.run(model, first_chunk)
 trace.append(next_chunk, model=model)
 ```
 

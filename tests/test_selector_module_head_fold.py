@@ -102,7 +102,7 @@ def test_folded_selector_writes_at_staged_and_rerun_do() -> None:
     folded_codes = _fanout_codes(
         lambda: hooked._attach_hooks(tl.module("attn") & tl.head(1), tl.zero_ablate())
     )
-    hooked.run(model, x)
+    hooked = hooked.run(model, x)
     assert torch.count_nonzero(hooked.modules["attn"].facets.head(1).q) == 0
     assert not torch.allclose(_output(hooked), clean_out)
 
@@ -110,7 +110,7 @@ def test_folded_selector_writes_at_staged_and_rerun_do() -> None:
     explicit_codes = _fanout_codes(
         lambda: explicit._attach_hooks(tl.head(1).in_module("attn"), tl.zero_ablate())
     )
-    explicit.run(model, x)
+    explicit = explicit.run(model, x)
     assert torch.equal(_output(hooked), _output(explicit))
     # The fold discloses its fan-out exactly as the explicit spelling does.
     assert folded_codes == explicit_codes == ["facet_selector_fanout"]

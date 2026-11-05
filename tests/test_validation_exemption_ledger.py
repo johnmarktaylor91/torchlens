@@ -604,6 +604,17 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
             "an index component addressing a dim of size 2 or more, a boolean mask component, and a perturbed parent at the destination or value slot"
         ),
     ),
+    Exemption(
+        code="zero_source_index_irrelevant",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._saved_value_proofs:_zero_source_add_decision",
+        refuses=(
+            "a source with any non-zero element, an alpha keyword, a perturbed parent at the "
+            "destination or source slot, and a saved output that differs from the saved "
+            "destination"
+        ),
+    ),
 )
 
 

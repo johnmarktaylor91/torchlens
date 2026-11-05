@@ -9,13 +9,18 @@ Two capture bugs made isolated replay disagree with the saved out:
   ``batch_norm`` / ``instance_norm`` as running statistics was not copied out before
   the call updated those statistics, so the producer's saved out showed the updated
   value rather than the value it produced.
+* The same deferred alias of a buffer that code outside torch dispatch then filled
+  through a zero-copy export (``data_ptr``, a storage handle, a NumPy view, DLPack),
+  as warp kernels do, showed the later write; exports now copy out pending aliases.
 """
 
 from __future__ import annotations
 
 import contextlib
+import ctypes
 from collections.abc import Iterator
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
@@ -145,3 +150,59 @@ def test_train_mode_norm_on_repeated_buffers_validates(functional: str) -> None:
     torch.manual_seed(0)
     with _payload_clone_mode(defer=True):
         assert tl.validate(_AdaptiveNormRepeat(functional).eval(), torch.randn(2, 4, 3, 3), seed=0)
+
+
+def _foreign_fill(buffer: torch.Tensor, values: torch.Tensor, route: str) -> None:
+    """Write ``values`` into ``buffer`` outside torch dispatch, through one export route."""
+
+    src = values.detach().contiguous()
+    if route == "data_ptr":
+        ctypes.memmove(buffer.data_ptr(), src.data_ptr(), src.numel() * src.element_size())
+    elif route == "untyped_storage":
+        target = buffer.untyped_storage().data_ptr()
+        ctypes.memmove(target, src.data_ptr(), src.numel() * src.element_size())
+    elif route == "numpy":
+        buffer.numpy()[...] = src.numpy()
+    else:
+        np.from_dlpack(buffer)[...] = src.numpy()
+
+
+class _ForeignKernelFill(nn.Module):
+    """Allocate an output buffer, detach it and fill it outside torch, as warp ops do."""
+
+    def __init__(self, route: str) -> None:
+        super().__init__()
+        self.route = route
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        buffer = torch.full((x.shape[0], 4), -1.0)
+        handle = buffer.detach()
+        _foreign_fill(handle, x[:, None] * torch.arange(4.0), self.route)
+        return buffer * 2
+
+
+_ROUTES = ["data_ptr", "untyped_storage", "numpy", "dlpack"]
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_foreign_fill_keeps_producer_payload(route: str) -> None:
+    """The ``full``/``detach`` saved outs keep the bytes they had before the foreign fill."""
+
+    torch.manual_seed(0)
+    x = torch.randn(5)
+    with _payload_clone_mode(defer=True):
+        deferred = tl.trace(_ForeignKernelFill(route), x)
+    with _payload_clone_mode(defer=False):
+        eager = tl.trace(_ForeignKernelFill(route), x)
+    for label in ("full_1_1:1", "detach_1_2:1"):
+        assert torch.equal(deferred[label].out, eager[label].out), label
+        assert torch.equal(deferred[label].out, torch.full((5, 4), -1.0)), label
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+def test_foreign_fill_validates(route: str) -> None:
+    """Replaying the ``detach`` reproduces its saved out under deferred payload clones."""
+
+    torch.manual_seed(0)
+    with _payload_clone_mode(defer=True):
+        assert tl.validate(_ForeignKernelFill(route), torch.randn(5), seed=0)

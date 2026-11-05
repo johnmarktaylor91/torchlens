@@ -8,6 +8,8 @@ Leaf module: it imports torch, the sparse component helpers and torch_attr only.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import torch
 
 from .._utils._sparse_parts import sparse_component_tensors, sparse_with_values
@@ -30,6 +32,35 @@ _UNSIGNED_AS_SIGNED: dict[torch.dtype, torch.dtype] = {
     )
     if (unsigned_dtype := torch_attr(unsigned)) is not None
 }
+
+
+def perturb_through_values(
+    parent: torch.Tensor, perturb: Callable[[torch.Tensor], torch.Tensor]
+) -> torch.Tensor:
+    """Apply a dense perturbation; a sparse parent gets it through its values component.
+
+    The deterministic retry strategies (minimal and unit steps, the lift) read and build
+    tensors elementwise (``full_like``, ``nextafter``, ``where``), which the sparse
+    backends do not implement. Stepping the values component keeps the layout, indices
+    and shape, so the child op still receives a well-formed sparse input and an edge the
+    child ignores still leaves its output unchanged.
+
+    Parameters
+    ----------
+    parent:
+        Saved parent tensor, strided or sparse.
+    perturb:
+        Dense perturbation to apply.
+
+    Returns
+    -------
+    torch.Tensor
+        The perturbed parent, in ``parent``'s layout.
+    """
+
+    if parent.layout is torch.strided:
+        return perturb(parent)
+    return sparse_with_values(parent, perturb(sparse_component_tensors(parent)[-1]))
 
 
 def _perturb_sparse_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:

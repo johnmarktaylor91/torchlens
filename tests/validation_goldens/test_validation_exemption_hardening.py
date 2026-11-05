@@ -2221,7 +2221,7 @@ def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:
     trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
     old_status = trace.validation_replay_status
 
-    trace.run(model, torch.ones(2, 3) * 2)
+    trace = trace.run(model, torch.ones(2, 3) * 2)
     new_status = trace.validation_replay_status
 
     assert new_status is not old_status

@@ -154,7 +154,7 @@ def test_compiled_models_unwrap_at_all_public_entry_points(tmp_path: Path) -> No
     reset_compiled_model_unwrap_warning_state()
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        log.run(torch.compile(_Tiny(), backend="eager"), input_tensor)
+        log = log.run(torch.compile(_Tiny(), backend="eager"), input_tensor)
     assert "_orig_mod" not in {module.address for module in log.modules.values()}
     assert_single_note(caught)
 

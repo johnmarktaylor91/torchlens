@@ -167,11 +167,13 @@ class ForeignTensorBetweenOutputsModel(nn.Module):
         Parameters
         ----------
         foreign_tensor:
-            Tensor that TorchLens should not attribute to a graph producer.
+            Tensor that TorchLens should not attribute to a graph producer. It is
+            held privately: model preparation stamps public module-held tensors as
+            buffer sources, which would give it real provenance.
         """
 
         super().__init__()
-        self.foreign_tensor = foreign_tensor
+        self._foreign_tensor = foreign_tensor
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return attributed, foreign, and attributed tensors.
@@ -189,17 +191,17 @@ class ForeignTensorBetweenOutputsModel(nn.Module):
 
         y1 = x + 1
         y2 = x * 2
-        return y1, self.foreign_tensor, y2
+        return y1, self._foreign_tensor, y2
 
 
 class ForeignTensorOnlyOutputModel(nn.Module):
     """Model returning an untracked foreign tensor as its sole output."""
 
     def __init__(self, foreign_tensor: torch.Tensor) -> None:
-        """Store a tensor created outside the traced model call."""
+        """Store, privately and so unstamped, a tensor created outside the traced call."""
 
         super().__init__()
-        self.foreign_tensor = foreign_tensor
+        self._foreign_tensor = foreign_tensor
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return the foreign tensor directly.
@@ -216,7 +218,7 @@ class ForeignTensorOnlyOutputModel(nn.Module):
         """
 
         del x
-        return self.foreign_tensor
+        return self._foreign_tensor
 
 
 def test_buffer_sole_output_traces_with_output_layer() -> None:
