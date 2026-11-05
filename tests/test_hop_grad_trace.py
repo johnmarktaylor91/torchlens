@@ -41,6 +41,7 @@ import torchlens as tl
 from torchlens import _capture_state_helpers, _state
 from torchlens._utils import _torch_compat
 from torchlens.backends.torch import rescue, wrappers
+from torchlens.backends.torch.completeness_witness import _CompletenessDispatchMode
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
@@ -272,10 +273,6 @@ _ALL_CASES = sorted([*_COND_CASES, *_LOOP_CASES])
 # ``map`` runs its body inside torch's own ``autograd.Function``, so its body ops
 # are logged below autograd and carry no grad, as in any custom Function forward.
 _DIFFERENTIABLE_BODY_CASES = [name for name in _ALL_CASES if name != "map"]
-# Validation runs with TorchLens's completeness dispatch mode active, and torch
-# skips its operator entry compile under any dispatch mode; ``map``'s eager grad
-# path then returns one tensor per row, so only the other operators validate.
-_VALIDATING_CASES = [name for name in _ALL_CASES if name != "map"]
 
 
 def _input(name: str) -> torch.Tensor:
@@ -414,7 +411,7 @@ def test_loop_hop_no_grad_ops_are_an_ordered_subsequence(name: str) -> None:
     assert _is_ordered_subsequence(no_grad, grad), (no_grad, grad)
 
 
-@pytest.mark.parametrize("name", _VALIDATING_CASES)
+@pytest.mark.parametrize("name", _ALL_CASES)
 def test_grad_operand_trace_validates_true(name: str) -> None:
     """``tl.validate`` holds on the grad trace, with the grad path's extra data ops."""
 
@@ -424,25 +421,20 @@ def test_grad_operand_trace_validates_true(name: str) -> None:
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is True
 
 
-def test_map_grad_validation_refuses_the_per_row_outputs() -> None:
-    """Known gap: under grad, validating ``map`` fails on the output count.
+def test_map_grad_validation_sees_the_one_stacked_output() -> None:
+    """Under grad, validating ``map`` holds with no failure recorded.
 
-    The validate capture's own completeness dispatch mode changes torch's
-    ``map`` grad path: torch skips the operator entry compile under any
-    dispatch mode, so the eager grad path returns one tensor per row, and
-    validation reports three outputs against the untraced call's one. Plain
-    capture is unaffected. The follow-up that keeps the witness's coverage of
-    the body while the entry compile runs flips this to ``True``.
+    The validate capture's completeness dispatch mode steps aside for
+    Dynamo's frame evaluation of ``map``'s entry compile and is re-entered
+    for the compiled graph's run, so the capture returns the single stacked
+    tensor the untraced call returns, and the witness still censuses the body.
     """
 
     model, x = _model("map"), _input("map")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
-    failure = tl.validation.last_validation_failure()
-    assert failure is not None
-    assert failure.check_name == "ground_truth_missing_out"
-    assert failure.extra == {"logged_output_count": 3, "ground_truth_output_count": 1}
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is True
+    assert tl.validation.last_validation_failure() is None
 
 
 @pytest.fixture
@@ -488,14 +480,17 @@ def test_while_loop_grad_trace_with_a_planted_drop_fails_validation(
         assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
 
 
-@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
-def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
-    name: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A tracing-pass guard that also swallows an eager body op fails validation.
+def _plant_over_broad_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant a tracing-pass guard that also passes any call scaling by ``2.0`` unlogged.
 
-    The planted guard passes the body's ``* 2.0`` through unlogged on the eager
-    run, the capture bug an over-broad fake-pass test would cause.
+    The body's ``* 2.0`` then runs on the eager run without being logged, the
+    capture bug an over-broad fake-pass test would cause. The rescue re-run is
+    disabled so the capture keeps the drop.
+
+    Parameters
+    ----------
+    monkeypatch:
+        The test's monkeypatch; both patches are undone at teardown.
     """
 
     real_guard = wrappers.inside_tracing_tensor_pass
@@ -521,6 +516,63 @@ def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
     monkeypatch.setattr(wrappers, "inside_tracing_tensor_pass", over_broad_guard)
+
+
+def _plant_unpaused_drop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant the over-broad guard and run the calls it swallows unpaused.
+
+    A real tracing-pass call runs paused, so the witness never counts it. A
+    wrapper that skips logging a model op does not pause, so the witness sees
+    that op's aten call with nothing logged for it: the drop the census exists
+    to name.
+
+    Parameters
+    ----------
+    monkeypatch:
+        The test's monkeypatch; every patch is undone at teardown.
+    """
+
+    _plant_over_broad_guard(monkeypatch)
+    real_call = wrappers.call_inside_tracing_pass
+
+    def unpaused_call(
+        func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> Any:
+        """Run a planted call unpaused and unlogged, and any other call as before.
+
+        Parameters
+        ----------
+        func:
+            The original torch callable.
+        args:
+            Positional arguments of the call.
+        kwargs:
+            Keyword arguments of the call.
+
+        Returns
+        -------
+        Any
+            Whatever ``func`` returns.
+        """
+
+        if any(isinstance(arg, float) and arg == 2.0 for arg in args):
+            return func(*args, **kwargs)
+        return real_call(func, args, kwargs)
+
+    monkeypatch.setattr(wrappers, "call_inside_tracing_pass", unpaused_call)
+
+
+@pytest.mark.parametrize("name", sorted(_LOOP_CASES))
+def test_loop_hop_grad_trace_with_an_over_broad_guard_fails_validation(
+    name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tracing-pass guard that also swallows an eager body op fails validation.
+
+    The planted guard passes the body's ``* 2.0`` through unlogged on the eager
+    run, the capture bug an over-broad fake-pass test would cause.
+    """
+
+    _plant_over_broad_guard(monkeypatch)
     model, x = _model(name), _input(name)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -622,6 +674,179 @@ def test_hop_entry_compile_records_the_forced_eager_ops(name: str, grad: bool) -
     with _forced_eager_capture():
         forced = _func_names(tl.trace(model, x.clone().requires_grad_(grad)))
     assert collections.Counter(lifted) == collections.Counter(forced)
+
+
+@pytest.fixture
+def witness_on() -> Iterator[None]:
+    """Run the test with the completeness witness's dispatch mode on every capture.
+
+    The wrappers are re-installed with the witness on, and re-installed with
+    the session's diagnostic modes at teardown.
+
+    Yields
+    ------
+    None
+        Nothing; the fixture is used for its side effect.
+    """
+
+    saved_escape: Any = _state._escape_detector_mode
+    saved_witness: Any = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+
+
+def _map_body_census(x: torch.Tensor) -> tuple[collections.Counter[str], tl.Trace]:
+    """Capture the ``map`` model and return the witness's census of ``map``'s kernel.
+
+    The census holds the aten calls the witness mode observed while its ``map``
+    rule ran (the body rows, plus the kernel's unstacking and stacking).
+
+    Parameters
+    ----------
+    x:
+        The model input.
+
+    Returns
+    -------
+    tuple[collections.Counter[str], tl.Trace]
+        The census by aten overload name, and the trace.
+    """
+
+    map_impl = _torch_compat.get_higher_order_operator("map", "map_impl")
+    assert map_impl is not None
+    rule = map_impl.python_key_table[_CompletenessDispatchMode]
+    real_dispatch = _CompletenessDispatchMode.__torch_dispatch__
+    inside = [False]
+    census: collections.Counter[str] = collections.Counter()
+
+    def spy_rule(mode: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run the witness's ``map`` rule, marking its census window.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        *args, **kwargs:
+            The operator's arguments.
+
+        Returns
+        -------
+        Any
+            The rule's output.
+        """
+
+        inside[0] = True
+        try:
+            return rule(mode, *args, **kwargs)
+        finally:
+            inside[0] = False
+
+    def spy_dispatch(mode: Any, func: Any, types: Any, args: Any = (), kwargs: Any = None) -> Any:
+        """Count ``func`` inside the ``map`` rule, then dispatch it as the witness does.
+
+        Parameters
+        ----------
+        mode:
+            The witness mode.
+        func:
+            The aten overload.
+        types:
+            Tensor types of the call.
+        args, kwargs:
+            The call's arguments.
+
+        Returns
+        -------
+        Any
+            The witness's result.
+        """
+
+        if inside[0]:
+            census[str(func)] += 1
+        return real_dispatch(mode, func, types, args, kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setitem(map_impl.python_key_table, _CompletenessDispatchMode, spy_rule)
+        patch.setattr(_CompletenessDispatchMode, "__torch_dispatch__", spy_dispatch)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            trace = tl.trace(_model("map"), x)
+    return census, trace
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_map_grad_witness_census_of_the_body_equals_the_forced_eager_capture() -> None:
+    """Under grad, the witness censuses ``map``'s body exactly as the forced-eager capture.
+
+    The lifted entry compile runs the compiled graph with the witness re-entered,
+    so the witness sees every aten call of the body rows; the capture returns the
+    one stacked output the untraced call returns, and is verified.
+    """
+
+    x = _input("map")
+    expected = _model("map")(x)
+    lifted, trace = _map_body_census(x.clone().requires_grad_(True))
+    try:
+        outputs = _output_values(trace)
+        verified = trace.provenance.verified
+    finally:
+        trace.cleanup()
+    with _forced_eager_capture():
+        forced, forced_trace = _map_body_census(x.clone().requires_grad_(True))
+    forced_trace.cleanup()
+    assert lifted["aten.mul.Tensor"] == 3, lifted
+    assert lifted == forced
+    assert len(outputs) == 1 and torch.equal(outputs[0], expected)
+    assert verified is True
+
+
+@pytest.mark.usefixtures("witness_on")
+def test_map_grad_planted_drop_is_named_by_the_witness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under grad, a body op the capture leaves unlogged inside ``map`` is named by the census.
+
+    The planted wrapper passes each row's ``* 2.0`` through unlogged and
+    unpaused during the compiled graph's run; the witness, re-entered for that
+    run, reports one ``aten.mul`` per row and the capture is not verified.
+    """
+
+    _plant_unpaused_drop(monkeypatch)
+    x = _input("map").requires_grad_(True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_model("map"), x)
+    try:
+        operators = [str(row["operator"]) for row in trace.completeness_diagnostics]
+        verified = trace.provenance.verified
+        outputs = len(trace.output_layers)
+    finally:
+        trace.cleanup()
+    assert operators.count("aten.mul.Tensor") == 3, operators
+    assert verified is False
+    assert outputs == 1
+
+
+def test_map_grad_validation_with_a_planted_drop_fails_on_the_census(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under grad, ``tl.validate`` fails ``map`` on the dispatch census of its dropped body ops.
+
+    Each row's unlogged ``* 2.0`` is dispatched but not captured, so the census
+    counts exactly three more dispatched ops than captured ones.
+    """
+
+    _plant_unpaused_drop(monkeypatch)
+    model, x = _model("map"), _input("map")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert tl.validate(model, x.requires_grad_(True), validate_metadata=True) is False
+    failure = tl.validation.last_validation_failure()
+    assert failure is not None
+    assert failure.check_name == "bfs_completeness", failure
+    counts = failure.extra
+    assert counts["dispatch_op_count"] - counts["captured_op_count"] == 3, counts
 
 
 @pytest.mark.parametrize("name", _ALL_CASES)

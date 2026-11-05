@@ -22,6 +22,10 @@ wrapper's eager run is captured as usual. A ``cond`` entry's eager run calls
 the user's own branch functions (``_hop_entry_compile``), so a branch that
 calls a submodule is captured through the session ``forward`` wrapper, which
 Dynamo traces as the plain ``forward`` (:func:`inside_lifted_cond_compile`).
+During a witnessed capture, a ``cond`` entry and ``map``'s entry with a grad
+operand step TorchLens's dispatch modes aside for Dynamo and run their compiled
+graph under them (:func:`_entry_modes`): Dynamo does not compile under a
+dispatch mode, and torch's eager paths cannot run these entries under grad.
 
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
 tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class) or
@@ -35,6 +39,8 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any
 
+import torch
+
 from ... import _state
 from ..._utils import _torch_compat
 from ..._utils._hop_entry_compile import hop_compile_stance_lift_scope
@@ -42,6 +48,7 @@ from ..._utils._torch_compat import (
     dynamo_is_compiling,
     get_current_dispatch_mode_stack,
     get_fake_tensor_mode_class,
+    get_higher_order_operator,
     get_tracing_tensor_types,
 )
 from ._modes import _TorchLensDispatchMode
@@ -180,24 +187,124 @@ def lift_hop_entry_compiles() -> AbstractContextManager[bool]:
     """
 
     return hop_compile_stance_lift_scope(
-        hop_internal_compile_scope, enabled=_torch_compat.HAS_SET_STANCE, own_modes=_own_mode_stack
+        hop_internal_compile_scope,
+        enabled=_torch_compat.HAS_SET_STANCE,
+        steps_aside=_entry_modes,
     )
 
 
-def _own_mode_stack() -> tuple[Any, ...] | None:
+def _entry_modes(fn: Any, args: Any) -> tuple[Any, ...]:
+    """Return the dispatch modes an entry compile steps aside and runs its graph under.
+
+    Parameters
+    ----------
+    fn:
+        The function the entry compiles.
+    args:
+        Its positional arguments.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        :func:`_cond_entry_modes` or :func:`_map_grad_entry_modes`, whichever
+        is non-empty, else ``()``.
+    """
+
+    return _cond_entry_modes(fn) or _map_grad_entry_modes(fn, args)
+
+
+def _cond_entry_modes(fn: Any) -> tuple[Any, ...]:
+    """Return the dispatch modes ``cond``'s entry compile runs its graph under.
+
+    Any ``cond`` entry, grad or not, when every mode on the stack is
+    TorchLens's own: the compiled run calls the user's own branch under them,
+    so the witness sees the predicate read and every branch op. Under any other
+    mode the entry keeps its modes in place (Dynamo does not compile; loud).
+
+    Parameters
+    ----------
+    fn:
+        The function the entry compiles (``cond``'s is defined in the module of
+        ``cond_op``'s class).
+
+    Returns
+    -------
+    tuple[Any, ...]
+        The whole dispatch-mode stack, bottom first, or ``()``.
+    """
+
+    cond_op = get_higher_order_operator("cond", "cond_op")
+    if cond_op is None or getattr(fn, "__module__", None) != type(cond_op).__module__:
+        return ()
+    return _own_mode_stack()
+
+
+def _own_mode_stack() -> tuple[Any, ...]:
     """Return the dispatch-mode stack, bottom first, when every mode on it is TorchLens's own.
 
     Returns
     -------
-    tuple[Any, ...] | None
-        The stack (empty when no mode is active), or ``None`` when a mode that
-        is not TorchLens's own is active.
+    tuple[Any, ...]
+        The stack, or ``()`` when it is empty or holds a mode that is not
+        TorchLens's own.
     """
 
-    stack = tuple(get_current_dispatch_mode_stack() or ())
-    if all(isinstance(mode, _TorchLensDispatchMode) for mode in stack):
-        return stack
-    return None
+    stack = get_current_dispatch_mode_stack()
+    if not stack or not all(isinstance(mode, _TorchLensDispatchMode) for mode in stack):
+        return ()
+    return tuple(stack)
+
+
+def _map_grad_entry_modes(fn: Any, args: Any) -> tuple[Any, ...]:
+    """Return the dispatch modes ``map``'s grad entry compile runs its graph under.
+
+    Only ``map``'s entry, with grad on and a grad-requiring operand, and only when
+    every mode on the stack is TorchLens's own: torch's eager ``map`` grad path
+    unpacks the stacked output per row, so the witness must see the compiled
+    graph's run. Every other entry keeps its modes in place (eager under them).
+
+    Parameters
+    ----------
+    fn:
+        The function the entry compiles (``map``'s is defined in the module of
+        ``map_impl``'s class).
+    args:
+        Its positional arguments; ``map`` passes the body and two tensor lists.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        The whole dispatch-mode stack, bottom first, or ``()``.
+    """
+
+    map_impl = get_higher_order_operator("map", "map_impl")
+    if map_impl is None or getattr(fn, "__module__", None) != type(map_impl).__module__:
+        return ()
+    if not torch.is_grad_enabled() or not _has_grad_operand(args):
+        return ()
+    return _own_mode_stack()
+
+
+def _has_grad_operand(args: Any) -> bool:
+    """Return whether a tensor in one of the entry's tensor lists requires grad.
+
+    Parameters
+    ----------
+    args:
+        The entry compile's positional arguments.
+
+    Returns
+    -------
+    bool
+        ``True`` when any tensor inside a list or tuple argument requires grad.
+    """
+
+    return any(
+        isinstance(value, torch.Tensor) and value.requires_grad
+        for group in args
+        if isinstance(group, (list, tuple))
+        for value in group
+    )
 
 
 def inside_tracing_tensor_pass(args: tuple[Any, ...], kwargs: dict[str, Any]) -> bool:

@@ -110,6 +110,7 @@ __all__ = [
     "HAS_FUNCTORCH_LEVEL_API",
     "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_HOP_COMPILATION_ENV",
     "HAS_GENERATOR_CLONE_STATE",
     "HAS_GENERATOR_GRAPHSAFE_GET_STATE",
     "HAS_GENERATOR_GRAPHSAFE_SET_STATE",
@@ -345,6 +346,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
+    "HAS_HOP_COMPILATION_ENV": ("torch:_higher_order_ops.utils.setup_compilation_env",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
         "torch:Tensor.has_names",
@@ -601,11 +603,12 @@ def _probe_safe_weights_only_load() -> bool:
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
 
-    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a :class:`TorchDispatchMode` is
-    active because the returned raw tensor is already associated with a base ``Tensor`` Python
-    object. Newer torch releases permit the conversion. TorchLens' completeness witness is itself a
-    dispatch mode, so this behavioral probe mirrors the dynamic-parameter logging context without
-    parsing a version string.
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
+    :class:`TorchDispatchMode` is active because the returned raw tensor is already
+    associated with a base ``Tensor`` Python object. Newer torch releases permit the
+    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
+    behavioral probe mirrors the dynamic-parameter logging context without parsing a
+    version string.
 
     Returns
     -------
@@ -684,12 +687,14 @@ _TOP_SAVED_TENSORS_DEFAULT_HOOKS_ARGS: tuple[bool, ...] | None = None
 def _probe_saved_tensors_hook_introspection() -> bool:
     """Return whether autograd default saved-tensors hooks can be peeked.
 
-    ``torch._C._autograd._top_saved_tensors_default_hooks`` returns the innermost installed default
-    pack/unpack hook pair (or ``None``) without popping it. Non-reentrant ``torch.utils.checkpoint``
-    regions install such hooks, and any value they packed re-runs user code (the checkpoint
-    RECOMPUTE) when read back, so capture-time stats collection needs this peek to know reading
-    saved values is side-effect-free. The call signature gained an ``ignore_is_tracing`` argument
-    over torch history; probe both spellings behaviorally, never a version parse.
+    ``torch._C._autograd._top_saved_tensors_default_hooks`` returns the
+    innermost installed default pack/unpack hook pair (or ``None``) without
+    popping it. Non-reentrant ``torch.utils.checkpoint`` regions install such
+    hooks, and any value they packed re-runs user code (the checkpoint
+    RECOMPUTE) when read back, so capture-time stats collection needs this
+    peek to know reading saved values is side-effect-free. The call signature
+    gained an ``ignore_is_tracing`` argument over torch history; probe both
+    spellings behaviorally, never a version parse.
 
     Returns
     -------
@@ -869,9 +874,10 @@ def _probe_transformer_activation_fastpath_flag() -> bool:
     -------
     bool
         ``True`` when a constructed layer carries ``activation_relu_or_gelu``,
-        the identity-checked (``activation is F.relu/F.gelu``) gate for the fused fastpath and
-        nested-tensor paths. The probe constructs a tiny meta-device layer under ``fork_rng`` so it
-        never touches user RNG streams or allocates real storage.
+        the identity-checked (``activation is F.relu/F.gelu``) gate for the
+        fused fastpath and nested-tensor paths. The probe constructs a tiny
+        meta-device layer under ``fork_rng`` so it never touches user RNG
+        streams or allocates real storage.
     """
 
     layer_cls = getattr(torch.nn, "TransformerEncoderLayer", None)
@@ -1269,10 +1275,12 @@ def _probe_nn_attention_module() -> bool:
     Returns
     -------
     bool
-        ``True`` when the ``torch.nn.attention`` namespace exposes ``SDPBackend`` and
-        ``sdpa_kernel``. The parent package body is dynamo-free (unlike ``torch.nn.attention.bias``,
-        see :func:`_probe_attention_causal_bias`), so it is safe to import directly. Absent on torch
-        2.1-2.2 (the namespace postdates the 2.1 floor), a healthy old install, not a degradation.
+        ``True`` when the ``torch.nn.attention`` namespace exposes
+        ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
+        dynamo-free (unlike ``torch.nn.attention.bias``, see
+        :func:`_probe_attention_causal_bias`), so it is safe to import
+        directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
+        floor), a healthy old install, not a degradation.
 
     Notes
     -----
@@ -1385,6 +1393,7 @@ HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
+HAS_HOP_COMPILATION_ENV: bool = _probe_attribute_paths("HAS_HOP_COMPILATION_ENV")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
 HAS_DYNAMO_OPTIMIZED_MODULE: bool = False
@@ -1583,6 +1592,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_FX_GRAPH_MODULE",
+    "HAS_HOP_COMPILATION_ENV",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
     "HAS_DYNAMO_OPTIMIZED_MODULE",
@@ -2461,20 +2471,10 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
 
 
 def get_higher_order_operator(module: str, attribute: str) -> Any | None:
-    """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
+    """Return operator ``attribute`` of ``torch._higher_order_ops.<module>`` (``"cond"``, ...).
 
-    Parameters
-    ----------
-    module:
-        ``torch._higher_order_ops`` submodule name (``"cond"``, ``"scan"``, ...).
-    attribute:
-        Operator attribute in that submodule (``"cond_op"``, ...).
-
-    Returns
-    -------
-    Any | None
-        The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``python_key_table`` to register a dispatch-mode rule in.
+    ``None`` when this torch lacks it or it has no ``python_key_table`` to register a
+    dispatch-mode rule in.
     """
 
     op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
@@ -2485,18 +2485,7 @@ def get_higher_order_operator(module: str, attribute: str) -> Any | None:
 
 
 def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
-    """Return a ``HigherOrderOperator``'s eager ``CompositeExplicitAutograd`` kernel.
-
-    Parameters
-    ----------
-    op:
-        Operator from :func:`get_higher_order_operator`.
-
-    Returns
-    -------
-    Callable[..., Any] | None
-        The registered Python kernel, or ``None`` when it has none.
-    """
+    """Return operator ``op``'s eager ``CompositeExplicitAutograd`` kernel, or ``None``."""
 
     return op.py_kernels.get(torch._C.DispatchKey.CompositeExplicitAutograd)
 
@@ -2504,36 +2493,40 @@ def get_higher_order_eager_kernel(op: Any) -> Callable[..., Any] | None:
 def get_scan_eager_body() -> Callable[..., Any] | None:
     """Return ``torch._higher_order_ops.scan.generic_scan``, or ``None`` when absent.
 
-    It is the body of torch's eager ``scan`` kernel without that kernel's
-    no-active-dispatch-mode assertion.
-
-    Returns
-    -------
-    Callable[..., Any] | None
-        The scan loop, or ``None`` when this torch lacks it.
+    It is torch's eager ``scan`` kernel without its no-active-dispatch-mode assertion.
     """
 
     body = _import_module_attr_or_none("torch._higher_order_ops.scan", "generic_scan")
     return body if callable(body) else None
 
 
-def swap_hop_entry_compile(replacement: Any, env: Any = None) -> tuple[Any, Any] | None:
-    """Return torch's operator entry compile and backend context, installing each non-``None`` one.
+def _swap_hop_utils_attr(name: str, replacement: Any) -> Any | None:
+    """Return ``torch._higher_order_ops.utils``'s ``name``, installing ``replacement`` if given."""
+    utils = sys.modules.get("torch._higher_order_ops.utils")
+    prior = vars(utils).get(name) if utils is not None else None
+    if callable(prior) and replacement is not None:
+        setattr(utils, name, replacement)
+    return prior if callable(prior) else None
+
+
+def swap_hop_entry_compile(replacement: Any) -> Any | None:
+    """Return torch's operator entry compile, first installing ``replacement`` unless ``None``.
 
     ``torch._higher_order_ops.utils._hop_compile_and_call``, which ``cond``, ``map``,
-    ``while_loop`` and ``scan`` enter through (``None``, nothing installed, when absent), and
-    the ``setup_compilation_env`` that yields the entry's backend (``None`` when absent).
+    ``while_loop`` and ``scan`` enter through; ``None`` (nothing installed) when absent.
     """
 
-    utils = sys.modules.get("torch._higher_order_ops.utils")
-    names = ("_hop_compile_and_call", "setup_compilation_env")
-    prior = [vars(utils).get(name) for name in names] if utils is not None else [None]
-    if not callable(prior[0]):
-        return None
-    for name, value in zip(names, (replacement, env)):
-        if value is not None:
-            setattr(utils, name, value)
-    return prior[0], prior[1] if callable(prior[1]) else None
+    return _swap_hop_utils_attr("_hop_compile_and_call", replacement)
+
+
+def swap_hop_compilation_env(replacement: Any) -> Any | None:
+    """Return the entry compile's environment factory, installing ``replacement`` if given.
+
+    ``torch._higher_order_ops.utils.setup_compilation_env`` yields the backend the
+    entry compile hands Dynamo; ``None`` when ``HAS_HOP_COMPILATION_ENV`` is False.
+    """
+
+    return _swap_hop_utils_attr("setup_compilation_env", replacement)
 
 
 def get_dtensor_shard_geometry_fn() -> Callable[..., Any] | None:
