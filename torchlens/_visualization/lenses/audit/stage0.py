@@ -427,7 +427,7 @@ def geometry_findings(dot_source: str) -> list[AuditFinding]:
     (midpoint label boxes estimated from text metrics), and endpoint-label
     collision (``headlabel``/``taillabel`` glyph boxes read EXACTLY from
     the ``_hldraw_``/``_tldraw_`` draw ops, checked against node boxes and
-    against each other -- the D03-R4 high-fan-in pileup class; the historic
+    against each other -- the high-fan-in pileup class; the historic
     two-check form was structurally blind to it).
     """
 

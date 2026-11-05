@@ -6,7 +6,7 @@ interpretations of things we do not encode. This module is the HARNESS:
 packet building (masked filenames, seeded ordering, the memo's fixed
 question-order discipline), response scoring including the nine
 zero-tolerance honesty classes, and the anchor-midpoint threshold-freezing
-arithmetic. Executing packets against fresh evaluator instances is D03's
+arithmetic. Executing packets against fresh evaluator instances is a
 delegated job with quantitative stop criteria.
 """
 

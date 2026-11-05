@@ -415,7 +415,7 @@ def _form_cells(
     edit: Any,
     declared_multi: set[str],
 ) -> tuple[list[_Candidate], list[tuple[_Candidate, str]]]:
-    """Form and resolve every cell; holes become refused cells (ruled F6).
+    """Form and resolve every cell; holes become refused cells.
 
     ``_edit_axis`` has already checked the axis kinds, so every axis other
     than ``edit_axis`` is a site axis.

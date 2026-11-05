@@ -226,10 +226,9 @@ def _revision_scoped(fn: Callable[..., Any]) -> Callable[..., Any]:
     Wraps a function whose first positional argument is the trace. The scope
     is LAZY: the first interior ``_collapse_graph_revision`` read computes
     the snapshot and every later read is served by identity, so decline
-    paths that never fingerprint pay nothing (r8, strengthened -- the
-    historical eager guard skipped the scope whenever raw ops exceeded
-    ``COLLAPSE_OPTIMIZER_MAX_OPS``, a stale mirror of the pre-U-gate
-    admission rule: an ADMITTED over-raw-ceiling trace ran the whole quality
+    paths that never fingerprint pay nothing (the historical eager guard skipped the scope
+    whenever raw ops exceeded ``COLLAPSE_OPTIMIZER_MAX_OPS``, a stale mirror of the
+    pre-U-gate admission rule: an ADMITTED over-raw-ceiling trace ran the whole quality
     planner unscoped, recomputing the O(ops) snapshot per priced box.
     Train-mode densenet201, 2,120 raw ops at U=713, measured 119x slower
     than eval mode this way and tripped the selection watchdog). Nested
@@ -476,9 +475,8 @@ def collapse_order(
 ) -> list[tuple[str, float]]:
     """Return v2 collapse diagnostics sorted by score for a policy.
 
-    The documented-inert ``weights=`` parameter is REMOVED (collapse memo
-    D9; clean-v2 hard-rename posture: no warn shim). Scores were never
-    weight-sensitive on this surface; see MIGRATIONS.md.
+    The documented-inert ``weights=`` parameter is REMOVED (hard-rename posture:
+    no warn shim). Scores were never weight-sensitive on this surface; see MIGRATIONS.md.
 
     Parameters
     ----------
@@ -1158,8 +1156,8 @@ def _split_run_by_member_uniformity(
     # consecutive equal signatures from that index. Computing one signature
     # per member and grouping equal neighbours is output-identical to the
     # historical grow-every-window scan, which recomputed signatures for
-    # every (start, end) pair — near-cubic on long runs (b6/b4-sol
-    # instrumented) — while this is linear in run length.
+    # every (start, end) pair — near-cubic on long runs (measured) — while this is
+    # linear in run length.
     total = len(run)
     if total < RUN_FOLD_MIN_LENGTH:
         return
@@ -1243,7 +1241,7 @@ def _iter_collapsible_runs(
 
     # One shared sorted index instead of a full trace.modules scan per child:
     # the per-child rescans made descendant-aware discovery Theta(S*M) in
-    # sibling count x module count. r8 R29: callers walking
+    # sibling count x module count. Callers walking
     # MANY sibling groups pass the index in, so it builds once per discovery
     # sweep instead of once per group (the cross-group rebuild was Theta(M^2)
     # in module count).
@@ -1333,7 +1331,7 @@ def _iter_collapsible_child_path_runs(
     """
 
     # Shared index: the former per-sibling _selected_descendants call scanned
-    # the whole module table once per sibling. r8 R29: callers
+    # the whole module table once per sibling. Callers
     # walking many sibling groups pass it in (once per sweep, not per group).
     if selected_index is None:
         selected_index = _selected_address_index(trace, collapse_fn)

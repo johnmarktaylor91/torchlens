@@ -182,7 +182,7 @@ def name_detail(name: str) -> dict[str, Any]:
         "doc_truncated": len(doc) > 4000,
         "example": _EXAMPLES.get(name) or _bank_example(name),
         # The SHIPPED resource, never a repo-relative path a wheel install
-        # lacks (the v1 map's dead docs pointer, agent memo 3.10 item 1).
+        # lacks (the v1 map's dead docs pointer).
         "doc_anchor": "torchlens.agent.guide()",
     }
 

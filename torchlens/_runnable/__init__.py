@@ -313,7 +313,7 @@ class RunnableErrorCode(str, Enum):
     COLLECTIVE_BOUNDARY_RUNNABLE_UNSUPPORTED = "collective_boundary_unsupported"
     HALTED_CAPTURE_NOT_RUNNABLE = "stopped_capture_unsupported"
     USER_INTERVENTION_NOT_REPLAYABLE = "user_intervention_unsupported"
-    #: PROVISIONAL SPELLING (D18, ships documented-unstable pending naming
+    #: PROVISIONAL SPELLING (ships documented-unstable pending naming
     #: ratification): the live refresh projector refused buffer-sink routing --
     #: a train-mode (value-changing) buffer writer, unproven (``None``) write
     #: evidence, a claim/evidence contradiction, or a refreshed rerun that
@@ -817,7 +817,7 @@ WITNESS_FAMILY_REGISTRY: Final[Mapping[str, FamilySpec]] = MappingProxyType(
         ),
     }
 )
-"""THE closed replay-critical witness-family registry v2 (r71 A).
+"""THE closed replay-critical witness-family registry v2.
 
 One typed :class:`FamilySpec` row per verdict-steering witness family -- the four
 direct control kinds (``scalar_bool`` / ``loop_predicate`` / ``conditional_arm_entry``
@@ -827,7 +827,7 @@ families -- and the two explicit claim-only families (``inert_sink`` /
 totality without witnesses. This registry is the ONLY dispatch authority for producer
 authoring, parser validation, and the generated mutation matrix.
 
-The agreed r71 invariant (deletion-closure): every replay-structure item that can
+The agreed invariant (deletion-closure): every replay-structure item that can
 affect a faithfulness verdict creates a typed, independently derived OBLIGATION,
 anchored to structure the replay itself consumes. Each obligation is discharged
 exactly once, by an exact witness XOR an explicit, source-linked
@@ -1314,7 +1314,7 @@ class ReplayWitnessStructure:
     is available, the container-record snapshot identities). By construction it cannot
     contain or expose ``control_witnesses``, ``coverage_gaps``,
     ``required_witness_inventory``, or ``witness_completeness``: the typed input makes
-    accidental self-referential coverage derivation impossible (r70 free-F1 root).
+    accidental self-referential coverage derivation impossible.
 
     ``container_members`` is ``None`` when the container source (the rehydrated
     ``Trace._containers`` records) is not in scope -- the pure-parse stage; the
@@ -1506,13 +1506,13 @@ NONDETERMINISTIC_SOURCE_VOCABULARY: Final[frozenset[str]] = frozenset(
 RUN_TRUNCATION_REGIME_VOCABULARY: Final[frozenset[str]] = frozenset(
     {"closure", "sequential_prefix", "live_stop_after"}
 )
-"""Closed vocabulary for ``RunTruncation.regime`` (L4 until=; [S2-PROV])."""
+"""Closed vocabulary for ``RunTruncation.regime`` (``until=``)."""
 
 
 RUN_TRUNCATION_CAUSE_VOCABULARY: Final[frozenset[str]] = frozenset(
     {"unprovable_independence", "coverage_gap", "ancestry_break"}
 )
-"""Closed cause vocabulary for the sequential-prefix fallback disclosure ([S2-PROV])."""
+"""Closed cause vocabulary for the sequential-prefix fallback disclosure."""
 
 
 @dataclass(slots=True)
@@ -1540,7 +1540,7 @@ class _RunUntilPlan:
 
 @dataclass(frozen=True, slots=True)
 class RunTruncation:
-    """Run-result truncation disclosure for ``until=`` (L4 sec 3; [S2-PROV]).
+    """Run-result truncation disclosure for ``until=``.
 
     Truncation is a RESULT/REPORT term, NEVER a capture outcome: the source
     trace's ``CaptureOutcome`` is untouched by any run, and no N-gate row
@@ -1596,16 +1596,16 @@ class RunReport:
     numeric_attestation: NumericAttestationStatus
     is_poisoned: bool
     nondeterministic_sources: tuple[str, ...]
-    #: PROVISIONAL (documented-unstable, rides naming/S2): ``True`` when the
+    #: PROVISIONAL (documented-unstable, rides naming): ``True`` when the
     #: live run was invoked with ``carry_state=True`` and declared-state
     #: mutations were deliberately left on the live model (the default run
     #: snapshot-restores declared state and reports ``False``).
     has_carried_state: bool = False
-    #: Truncation disclosure ([S2-PROV], L4 until=): ``None`` for a full run.
+    #: Truncation disclosure (``until=``): ``None`` for a full run.
     truncation: RunTruncation | None = None
-    #: Ratified flat reading surface (S2 sec 2): ``truncation is not None``.
+    #: Ratified flat reading surface: ``truncation is not None``.
     truncated: bool = False
-    #: Ratified flat reading surface (S2 sec 2): the stop-frontier site label.
+    #: Ratified flat reading surface: the stop-frontier site label.
     stopped_at: str | None = None
 
     def __repr__(self) -> str:

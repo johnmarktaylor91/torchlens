@@ -563,7 +563,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     failure cleanup and staged-hook bookkeeping).
     """
     if isinstance(site, PublicInterventionSpec):
-        # C03 spec door: do(spec) attaches the whole immutable spec (all rules or none),
+        # Spec door: do(spec) attaches the whole immutable spec (all rules or none),
         # then the selected engine propagates.
         if value_or_hook is not None:
             raise InvalidArgumentError(
@@ -642,8 +642,8 @@ def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> N
     Raises
     ------
     ModelMismatchError
-        Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root,
-        F41), then if available class or weight-fingerprint evidence differs.
+        Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root),
+        then if available class or weight-fingerprint evidence differs.
     """
     # The root entry-point fact joins this gate fail-closed: absence (a legacy
     # artifact) refuses, and a non-module_call root (``owner.generate``) refuses

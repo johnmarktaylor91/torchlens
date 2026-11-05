@@ -1152,10 +1152,10 @@ def watch(
             Demote the missing-optimizer-phase refusal to a named skip (mixed
             train/eval loops).
         event_stream:
-            A C06 chassis stream whose check verdicts serialize as
+            A chassis stream whose check verdicts serialize as
             ``torchlens/check/<name>`` rows.
         settings:
-            Advanced C06 collector plumbing (ring capacity, output_dir, ...).
+            Advanced collector plumbing (ring capacity, output_dir, ...).
         facets:
             ``grain="op"`` only: ``{op_label: splitter}`` declaring facet slices
             of op sites (``torchlens._observability.split_heads(n)`` slices

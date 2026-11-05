@@ -1011,7 +1011,7 @@ def _emit_and_finish_forward(
             )
         display_fn(SVG(graph_svg))
 
-    # r-b6 R19-6 / T9 (grind-p3): the visualizer scratch dir is created
+    # The visualizer scratch dir is created
     # LAZILY while nodes render (raw-input montages, feature maps). The root
     # is passed to the Graphviz subprocess as its working directory below,
     # never written into the source: user-saved DOT keeps only stable

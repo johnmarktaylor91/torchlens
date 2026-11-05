@@ -86,7 +86,7 @@ def _bump_deduped_edge_multiplicity(
 ) -> None:
     """Disclose multiplicity when distinct dataflow edges merge in a render.
 
-    (b6-fable carried LOW, 3rd round): a collapsed module returning TWO
+    A collapsed module returning TWO
     tensors both consumed by one exterior op rendered as ONE unlabeled edge
     — the visual dedupe silently merged genuinely distinct dataflow edges
     with no multiplicity disclosure. When a deduped edge's underlying
@@ -138,7 +138,7 @@ def _arg_edge_label_prefix() -> str:
 
 
 #: Visible fan-in at/above which a child op's argument labels relocate from
-#: ``headlabel`` to a midpoint ``label`` (FIXD03-F13). Graphviz
+#: ``headlabel`` to a midpoint ``label``. Graphviz
 #: reserves layout space ONLY for midpoint labels; every head label of a
 #: node is painted post-layout at one default radius, so they smear into
 #: one band as fan-in grows. Sweep provenance (toy N-way cat ladder, dot
@@ -302,7 +302,7 @@ def _merge_parallel_arg_midpoint(
 ) -> bool:
     """Fold a same-pair parallel arg edge into the pair's merged edge.
 
-    D03-R4, high-fan-in mode: when a collapsed source feeds one child at N
+    High-fan-in mode: when a collapsed source feeds one child at N
     argument slots, N visually identical parallel edges each carrying one
     ``arg (0, k)`` head label rendered as an unreadable smear -- and the
     per-edge indices carried no distinguishing information, because every

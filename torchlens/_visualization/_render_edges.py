@@ -1638,7 +1638,7 @@ def _label_node_arguments_if_needed(
     # High-fan-in children route their argument labels to a midpoint
     # ``label`` (reserved layout space) instead of a ``headlabel`` (painted
     # post-layout at one shared radius, where they smear into one band --
-    # D03-R4; sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
+    # sweep provenance on ``_ARG_LABEL_MIDPOINT_FANIN``).
     fan_in = _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps)
     midpoint = fan_in >= _ARG_LABEL_MIDPOINT_FANIN
     rolled = isinstance(child_node, Layer)  # rolled draws hand Layers here, unrolled ones Ops

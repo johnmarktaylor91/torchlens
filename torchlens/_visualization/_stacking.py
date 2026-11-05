@@ -6,7 +6,7 @@ timestep diagram. General over ANY annotation (field or callable), not just
 time; STRICTLY OPT-IN -- plain ``draw()`` never stacks.
 
 AUTO RESOLUTION (``stack_by=True`` / ``"auto"``) is granted ONLY under THE
-LOCKSTEP LICENSE (design memo 4.1): take all ops of multi-pass layers in
+LOCKSTEP LICENSE: take all ops of multi-pass layers in
 raw execution order; auto-annotation (``pass_index`` on multi-pass ops
 only) activates iff their pass_index sequence is GLOBALLY NON-DECREASING.
 When it holds, the trace's multi-pass execution factors into ordered

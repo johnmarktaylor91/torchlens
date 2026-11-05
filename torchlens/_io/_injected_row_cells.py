@@ -108,7 +108,7 @@ def _injection_invalid(message: str, reason: str) -> NoReturn:
 
 
 def check_injection_provenance_row(record: Any, label: str) -> None:
-    """Validate ONE injected-op identity record fail-closed (C07 grammar).
+    """Validate ONE injected-op identity record fail-closed.
 
     Shared by the layer_list surface validator in
     :mod:`torchlens._io.forgery_validation` (defense in depth --

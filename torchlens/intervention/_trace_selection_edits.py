@@ -94,7 +94,7 @@ def apply_selection_batch_do(
     engine: str,
     strict: bool,
 ) -> tuple[str, tuple[str, ...]]:
-    """Apply a selection-batch ``do([(selection, edit), ...])`` (D33, v1).
+    """Apply a selection-batch ``do([(selection, edit), ...])``.
 
     ONE atomic transaction: every pair resolves and derives its masked
     edit first, ALL hooks attach together (a refused site mid-plan

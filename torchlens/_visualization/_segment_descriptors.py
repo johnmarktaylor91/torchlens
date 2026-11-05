@@ -1,6 +1,6 @@
 """Segment descriptor construction and label derivation for collapse plans.
 
-Extracted from ``collapse_optimizer.py`` (C05 fix cycle, R43 size ratchet):
+Extracted from ``collapse_optimizer.py`` (a size ratchet):
 the family that turns a legal segment run into its renderer-facing
 ``SegmentDescriptor`` -- injective Graphviz-safe addresses, owner keys,
 spanned-module derivation, range text, and the honest ``(xN)`` labels.

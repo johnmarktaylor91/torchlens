@@ -1055,7 +1055,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
     )
 
 
-def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo D16/D24): the six declared inputs ARE the plan
+def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature: the six declared inputs ARE the plan
     source: Population,
     *,
     seed: int | str,
@@ -1295,7 +1295,7 @@ def set_direction_mean(
         Tensor-membered population supplying the coefficient evidence.
     dim:
         Explicit axis of the site value that ``direction`` lives on (the
-        D24/D25 axis law: never guessed from rank).
+        explicit axis law: never guessed from rank).
 
     Examples
     --------

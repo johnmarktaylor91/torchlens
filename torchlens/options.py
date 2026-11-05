@@ -556,7 +556,7 @@ class CaptureOptions(_OptionsDisplay):
             per initialized CUDA device; unsupported devices (CPU/MPS) get typed absence, never zeros.
         structure_only:
             Whether this capture runs under the structure-only contract
-            (DOCUMENTED-UNSTABLE surface, pending naming-session/S2 ratification;
+            (DOCUMENTED-UNSTABLE surface, pending naming-session ratification;
             no deprecation shim owed on rename). Structure-only capture records
             the op graph, module hierarchy, parameter geometry, and per-op
             shape/dtype as HYPOTHESES while every value-bearing claim is refused

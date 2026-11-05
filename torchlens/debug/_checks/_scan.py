@@ -34,7 +34,7 @@ _STATS_PER_TENSOR = 11
 
 @dataclass(frozen=True)
 class ScanRow:
-    """Health facts for one unique tensor (checks memo 4.4).
+    """Health facts for one unique tensor.
 
     ``name`` is the canonical qualified name; ``aliases`` preserves every
     other name bound to the SAME tensor object (tied weights, double-

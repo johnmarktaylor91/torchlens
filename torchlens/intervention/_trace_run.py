@@ -376,15 +376,14 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
 
     zero_fire_policy = None if on_zero_fire is MISSING else check_zero_fire_policy(on_zero_fire)
     if seed is not None:
-        # r77 nit + r79 hardening: validate ``seed`` at the run door so junk
-        # raises the typed precondition lane instead of escaping as torch's
-        # raw ``RuntimeError``. r79 extends the non-int check to the two
-        # escapes r78 found: ``bool`` (an int subclass that
+        # Validate ``seed`` at the run door so junk raises the typed precondition
+        # lane instead of escaping as torch's raw ``RuntimeError``. The non-int
+        # check also covers two escapes: ``bool`` (an int subclass that
         # ``Generator.manual_seed`` rejects) and an int outside torch's
         # accepted long range (pybind overflow). The failed call is
         # transactional either way (global torch RNG untouched).
         validate_run_seed(seed)
-    # R06: the settled-outcome gate is the FIRST authority on run(). The
+    # The settled-outcome gate is the FIRST authority on run(). The
     # outcome sidecar lives in ``__dict__`` and survives cleanup()-husking,
     # while the ``trace._runnable`` read below trips the husk
     # ``TraceCleanedUpError`` (and the analysis-load arm its capability
@@ -443,10 +442,10 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             remedy="call trace.run_transaction(inputs=...) on the loaded trace",
         )
     if use_unified_provider:
-        # C03 honesty gate, narrowed to the loaded providers: a loaded artifact
+        # Honesty gate, narrowed to the loaded providers: a loaded artifact
         # has no model to install the staged intervention spec on, and silently
         # returning an un-intervened run was a measured silent wrong answer. The
-        # live provider (fast or not) applies the spec. D1 carve-out: sticky hooks
+        # live provider (fast or not) applies the spec. Carve-out: sticky hooks
         # the selection-do() plan attached are engine-owned residue of an edit
         # already applied to the saved values; their inertness on a new-input run
         # is the PendingValueEditsWarning disclosure below, never a refusal.

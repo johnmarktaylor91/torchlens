@@ -141,7 +141,7 @@ def _setup_subgraphs(
     )
     max_call_depth = _get_max_call_depth(subgraphs, module_edge_dict, module_submodule_dict)
     # deque: list.pop(0) shifted the whole queue per module, Theta(M^2) on
-    # flat module-heavy graphs before Graphviz even ran (b4 sol MED).
+    # flat module-heavy graphs before Graphviz even ran.
     subgraph_stack: deque[list[str]] = deque([subgraph] for subgraph in subgraphs)
     call_depth = 0
     while len(subgraph_stack) > 0:
@@ -284,7 +284,7 @@ def _setup_subgraphs_recurse(
         if _module_subtree_payload_empty(
             module_edge_dict, module_submodule_dict, parent_graph_list[-1], vis_mode
         ):
-            # r-b6 R19-3 (+ r5 empty-duplicate residual): each queued path
+            # Each queued path
             # exists ONLY to nest its FINAL element -- the intermediates were
             # already emitted by earlier queue entries. Checking the current
             # node's subtree (which includes its own already-emitted payload)

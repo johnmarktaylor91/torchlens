@@ -126,7 +126,7 @@ owning input site. Carries the leaf's capture-time stride tuple. Consumed by
 :func:`_input_derived_layout_stale` as a run-time UNVERIFIABLE ceiling -- NEVER compared in
 :func:`_input_metadata_contract_checks`: a changed input layout does not PROVE the derived
 intermediate's layout differs (a ``reshape`` in between can canonicalize it), so the honest
-verdict is "cannot verify", not an observed DIVERGED contradiction (r35 three-state rule).
+verdict is "cannot verify", not an observed DIVERGED contradiction (three-state rule).
 Producer mirror: ``torchlens.backends.torch.completeness_witness.INPUT_DERIVED_LAYOUT_FACT_NAME``."""
 
 
@@ -212,10 +212,9 @@ view that changes the executed alignment class is caught.
 """
 
 
-# C3 -> r57 C3 (free_1 HIGH / sec_1 MED / corr_2 HIGH): op-agnostic
-# allocation-bomb preflight, with the size-driving-op ALLOWLIST DELETED.
+# Op-agnostic allocation-bomb preflight, with no size-driving-op ALLOWLIST.
 #
-# The op-execution literal-argument path is the seam free_1 missed: a hostile
+# The op-execution literal-argument path is the seam an allowlist-based gate missed: a hostile
 # ``.tlspec`` can edit one plaintext ``manifest.json`` numeric literal so a
 # taken-path call (``torch.zeros(10**12)``/``F.pad(x, [10**12])``/
 # ``hann_window(10**11)``/``interpolate(scale_factor=1e12)``) drives a
@@ -227,11 +226,11 @@ view that changes the executed alignment class is caught.
 # tensor operand) onto meta.
 #
 # gated the projection behind a hand-maintained ``_SIZE_DRIVING_QUALNAME_TAILS``
-# allowlist; that allowlist re-opened the class at every op it forgot (r56 found
-# ``pad``/``constant_pad_nd``/``fold``/``*_window``/``tril_indices``/``one_hot``
+# allowlist; that allowlist re-opened the class at every op it forgot (an earlier
+# version found ``pad``/``constant_pad_nd``/``fold``/``*_window``/``tril_indices``/``one_hot``
 # missing, plus a float ``interpolate(scale_factor=...)`` slipping the integer-only
 # sub-gate). The projection *mechanism* was ALREADY op-agnostic; only the GATE was
-# enumerated. r57 DELETES the allowlist entirely: ``FakeTensorMode`` projects the
+# enumerated. The allowlist is deleted entirely: ``FakeTensorMode`` projects the
 # output shape/bytes of EVERY taken-path call carrying a non-bool numeric literal
 # WITHOUT allocating (fake tensors never allocate -- factory ops included), and a
 # projected over-budget NEW allocation is refused BEFORE the real allocator runs.
@@ -271,7 +270,7 @@ class _UnreadableProjectedOutput(Exception):
     """
 
 
-# Allocator-death signatures on a raw ``RuntimeError`` message (r59 section 2.4). A
+# Allocator-death signatures on a raw ``RuntimeError`` message. A
 # projection or real call that dies of allocation cannot fail OPEN: the real op's
 # identical prelude would die the same way. These convert to a typed refusal.
 _ALLOCATOR_SIGNATURES = (
@@ -334,7 +333,7 @@ _MODULE_TRAINING_MODE_SITE_PREFIX = "module_training_mode:"
 _MAX_DECODE_NESTING_DEPTH = 200
 """Defensive run-side literal-decode nesting ceiling.
 
-W3's load-side parser (``_io/runnable_load._parse_literal``) already bounds
+The load-side parser (``_io/runnable_load._parse_literal``) already bounds
 descriptor nesting to the SAME ceiling at parse, so a legitimately-loaded
 descriptor never approaches this here. This is the belt-and-suspenders guard on
 the run-side decoder: an over-depth decode raises ``ValueError`` -- routed to the

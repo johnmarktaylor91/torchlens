@@ -206,7 +206,7 @@ def _backward_edge_attrs(
         Edge head GradFn.
     trace:
         Optional trace for accumulation-target resolution (accum-identity
-        groundwork, vizmech item 17/D30: the WGAN-GP render carried twelve
+        groundwork: the WGAN-GP render carried twelve
         IDENTICAL bare ``accum`` labels; each edge now carries its target's
         identity in SVG metadata until the annotation plan can place it).
 
@@ -355,7 +355,7 @@ def _add_combined_correspondence_edges(
 def _forward_correspondence_node_name(op: "Layer | None") -> str | None:
     """Return the forward endpoint for a combined correspondence edge.
 
-    Scoped to the MULTI-PASS case only (r18j gate rework): for a recurrent
+    Scoped to the MULTI-PASS case only for a recurrent
     aggregate ``Layer`` the specific forward *pass* a grad_fn maps to is not
     recoverable from current metadata (all passes share ``op_label`` and
     ``backward_pass_number``), so historically every grad_fn attached to ONE
@@ -601,7 +601,7 @@ def _infer_intervening_module_bfs(
     """
 
     # deque: list.pop(0) shifted the whole queue per node, Theta(V^2) on
-    # wide backward graphs for a linear BFS (b4 sol MED).
+    # wide backward graphs for a linear BFS.
     queue = deque(start_ids)
     seen: set[int] = set()
     if reverse and reverse_edges is None:

@@ -360,7 +360,7 @@ def attributed_kernel_utilization(*_args: Any, **_kwargs: Any) -> Any:
 
     The kernel-union quotient is a genuinely useful DIFFERENT metric
     -- it gets its own name and stays a typed refusal until the
-    correlation-ID device-time join lands (D22's real-GPU acceptance
+    correlation-ID device-time join lands (the real-GPU acceptance
     gate). Never renders under the letters M-F-U.
 
     Examples

@@ -219,9 +219,8 @@ def _bind_runtime_inputs(
 
     Returns the bound clone map, the ordered input contract checks, and the
     ``input_alias_topology_unresolved`` ceiling flag. Accepted
-    leaves are mirrored through the transaction ``ceiling``'s byte guard (r61
-    corr_2): a tampered input slot shape plus a runtime expanded view refuses
-    typed at ``clone_allocation_preflight`` instead of dying in the allocator.
+    leaves are mirrored through the transaction ``ceiling``'s byte guard: a tampered input slot shape plus a runtime expanded
+    view refuses typed at ``clone_allocation_preflight`` instead of dying in the allocator.
     """
 
     input_slots = tuple(
@@ -264,7 +263,7 @@ def _bind_runtime_inputs(
                 slot,
                 f"Runtime input leaf is {type(value).__name__}, expected torch.Tensor.",
             )
-        # corr2-6 phase 0: EXACT-type admission precedes every dispatchable
+        # EXACT-type admission precedes every dispatchable
         # property read. A tensor SUBCLASS routes ``shape``/``dtype``/``device``/
         # ``names`` through ``__torch_function__``, so reading any of them before
         # this gate would execute user subclass code and leak its raw exception in
@@ -427,7 +426,7 @@ def _bind_runtime_inputs(
             first_mismatch=diagnostic,
             contract_check=hard_failure,
         )
-    # r37 3-ADJ-6 (R10 ordering): alias-topology math runs BELOW the hard layout
+    # Alias-topology math runs BELOW the hard layout
     # precondition raise, so the shared byte engine's domain is admitted plain
     # strided tensors BY CONSTRUCTION -- it can never see a meta/nested/named/
     # quantized layout the gate is about to reject.
@@ -481,7 +480,7 @@ def _runtime_mirror_clone(
 ) -> torch.Tensor:
     """Defensively clone one leaf while MIRRORING its runtime autograd metadata.
 
-    corr2-7: ``detach().clone()`` strips a leaf's ``requires_grad``, so
+    ``detach().clone()`` strips a leaf's ``requires_grad``, so
     the recorded ``grad_enabled=True`` call context became semantically inert (no
     autograd history on replay) and the exact original input was needlessly
     attestation-ineligible (fingerprint flag mismatch). The runtime mirror restores
@@ -535,7 +534,7 @@ def _model_input_storage_closure(descriptor: SparseRunDescriptor) -> set[str]:
 
     A view op (``a[0]``, ``a.t()``, ``a.narrow(...)``) produces an output that SHARES STORAGE
     with its tensor input, so an in-place op on that view mutates the input's storage even
-    though the view slot has no ``version_of`` link to the input (F2-hon). The gate
+    though the view slot has no ``version_of`` link to the input. The gate
     that guards the input-aliasing fail-closed therefore follows both version chains and
     view-producing lineage from the model-input slots: a slot enters the closure if it is a
     model input, is versioned from a closure slot, or is the output of a view op whose tensor

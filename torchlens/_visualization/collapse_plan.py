@@ -226,7 +226,7 @@ class CollapseScheduleStep:
         Renderer-faithful collapse plan for this step.
     events:
         Typed condensation events this step applies on top of the previous
-        step (F11 ladder, collapse): coalesced no-op events ride the
+        step (collapse ladder): coalesced no-op events ride the
         next effective stop, so every event appears on exactly one step.
         Session-time records (:class:`~.collapse_ladder.CollapseEvent`);
         never persisted.

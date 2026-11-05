@@ -1426,8 +1426,8 @@ HAS_FLASH_ATTENTION_4_INTERFACE: bool = _probe_flash_attention_4_interface()
 HAS_FUNCTION_APPLY_SLOT: bool = isinstance(
     torch.autograd.Function.__dict__.get("apply"), (classmethod, types.ClassMethodDescriptorType)
 )
-# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
-# R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
+# ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability:
+# torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
 # a user-side limit TorchLens never degrades on, so doctor does not report it.
 ROLL_TENSOR_SHIFTS_SUPPORTED: bool = _probe_roll_tensor_shifts()
 HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspection()

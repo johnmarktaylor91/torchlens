@@ -415,7 +415,7 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     Cluster Y) with the SAME tagged-key literal vocabulary as the capture-side
     ``_record_runnable_input_literal_leaves``, so the runtime non-tensor leaf-path SET
     aligns with the recorded fact set BY CONSTRUCTION: tensor leaves are skipped,
-    namedtuples and dataclasses descend by field name (r42 corr1_2: a tensor-only
+    namedtuples and dataclasses descend by field name (a tensor-only
     dataclass input's runtime set matches the recorded empty set exactly), mappings
     descend under grammar-encodable keys (a non-encodable key collapses its whole
     subtree to one opaque leaf at the parent path, exactly as capture does),

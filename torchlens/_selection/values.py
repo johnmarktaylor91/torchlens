@@ -847,7 +847,7 @@ class _TableScoreTerm:
     """AST leaf for ReadTable-scored rank/threshold criteria.
 
     The AST holds the table object; resolution enforces trace binding
-    (foreign or stale tables refuse), single-target discipline, and the D9
+    (foreign or stale tables refuse), single-target discipline, and the
     contract/filter law for the population.
     """
 

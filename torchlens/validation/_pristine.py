@@ -93,7 +93,7 @@ def pristine_torch_oracle() -> Iterator[bool]:
         yield True
         return
 
-    # Ledger integrity (r4 census MED-1): refuse before unwrapping if any
+    # Ledger integrity: refuse before unwrapping if any
     # recorded "orig" is itself a TorchLens wrapper (by ledger identity; see the
     # module docstring) -- restoring it would bless a forward run THROUGH a wrapper.
     ledger = _state._decorated_to_orig

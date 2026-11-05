@@ -424,7 +424,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     _restore_pickled_verification(state)
     for field_name in (
         *_doors.ir().workspaces.LEGACY_TRACE_BUILD_STATE_KEYS,
-        # "_build_state": the pre-M10 flat scratchpad; the three workspace keys are its
+        # "_build_state": the old flat scratchpad; the three workspace keys are its
         # dissolved successors. All transient, all dropped on restore.
         "_build_state",
         "_raw_graph_ws",
@@ -663,7 +663,7 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     from .._postprocess._grouping_stamp import settle_loaded_grouping_policy
 
     trace.__dict__["_options_grouping_policy"] = settle_loaded_grouping_policy(trace.__dict__)
-    # F9: adopt the restored detached records into a fresh sealed core so
+    # Adopt the restored detached records into a fresh sealed core so
     # loaded traces rejoin the single-truth store (best-effort — an abort
     # preserves the coreless-island behavior; backward records stay
     # detached by design). See _data_classes/_trace_rehydrate.py.

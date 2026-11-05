@@ -1,4 +1,4 @@
-"""The native static array grid (B3, F16): budgeted, masked, motif-coded.
+"""The native static array grid: budgeted, masked, motif-coded.
 
 One HTML emitter over the ported truncation protocol
 (:mod:`._truncation`), the six-state motif vocabulary and diverging map

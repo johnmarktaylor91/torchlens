@@ -89,7 +89,7 @@ from .collapse_estimator import (
     watchdog_enabled,
 )
 from .collapse_fallback import _top_level_fallback_addresses, linear_fallback_plan
-from .collapse_ladder import collapse_schedule  # noqa: F401  (re-export; moved in F11)
+from .collapse_ladder import collapse_schedule  # noqa: F401  (re-export; moved to collapse_ladder)
 from .collapse_plan import (
     ChildSegment,
     CollapsePlan,
@@ -203,7 +203,7 @@ class OptimizerResult:
         or ``"floor_fallback"`` (the conservative plan used when the DP
         frontier is empty). A ``"floor_fallback"`` plan can be the ENTIRE
         uncollapsed graph -- callers must disclose it, never present it as
-        an optimized result (collapse memo D4: no silent floor).
+        an optimized result (no silent floor).
     k_cap_exhausted:
         True when the frontier emptied because the root's own rendered
         units exceed ``K_CAP`` -- every candidate point overshoots the cap
@@ -349,7 +349,7 @@ _RESULT_CACHE: weakref.WeakKeyDictionary[
         dict[tuple[RenderContext, str, OptimizerWeights], OptimizerResult],
     ],
 ] = weakref.WeakKeyDictionary()
-#: Traces whose over-ceiling decline already warned (r8 R60-13: declined
+#: Traces whose over-ceiling decline already warned (declined
 #: results skip the result cache -- the revision snapshot that keyed it is
 #: itself the O(N) cost being avoided -- so warn-once rides its own set).
 _CEILING_WARNED_TRACES: weakref.WeakSet = weakref.WeakSet()
@@ -396,7 +396,7 @@ def select_collapse_plan(
     """
 
     resolved_weights = OptimizerWeights() if weights is None else weights
-    # Pathological pre-gate (collapse memo D5(i), preserved): the
+    # Pathological pre-gate: the
     # revision snapshot and even the universe build are pointless on a
     # 100k-op artifact, so far-out-of-envelope traces decline outright --
     # the ONE remaining uncollapsed decline. Everything below it degrades to
@@ -423,7 +423,7 @@ def select_collapse_plan(
                     "rolled mode.",
                     code="collapse_pathological_skip",
                 ),
-                # R19 (opus b6 LOW): a fixed stacklevel resolved to TorchLens's
+                # A fixed stacklevel resolved to TorchLens's
                 # own _trace_collapse caller; blame the user's draw()/collapse_plan()
                 # line instead (the entry depth differs per public spelling).
                 stacklevel=user_stacklevel(),
@@ -580,8 +580,8 @@ def _frontier_auto_result(
     collapse_ladder.auto_from_ladder). This internal selector survives as
     the max path's substrate: _select_max_plan seeds its interval
     condensation from a band-targeted frontier cut and falls back to it
-    when max's [3,20] legal-plan band produces nothing (memo D4(d) --
-    documented, disclosed). Results never enter the public result cache.
+    when max's [3,20] legal-plan band produces nothing (documented,
+    disclosed). Results never enter the public result cache.
     ``memos`` lets the max caller share its plan-local pricing caches so one
     selection prices each module once (the once-per-address shape-lookup
     pin); ``None`` builds call-local dicts.
@@ -641,7 +641,7 @@ def _frontier_auto_result(
     if best is None:
         # No silent floor (collapse): the frontier emptied. The plan
         # served is the deterministic significance-greedy fallback
-        # (memo D5(iv)), never a bare uncollapsed wall.
+        # never a bare uncollapsed wall.
         selected, repeat_folds, plan = linear_fallback_plan(
             trace,
             context,
@@ -812,8 +812,8 @@ def select_collapse_level(
 
 # The public float schedule family (collapse_schedule, _schedule_t,
 # _collapsed_addresses_for_result, _reported_collapsed_addresses,
-# _schedule_ordered_addresses) moved to .collapse_ladder with the F11
-# typed event ladder (collapse memo item 9).
+# _schedule_ordered_addresses) moved to .collapse_ladder with the
+# typed event ladder.
 
 
 def _select_max_plan(
@@ -983,7 +983,7 @@ def _select_max_plan(
                 segments=segments,
                 level=level,
                 # Protected reasons: a fallback-tier substrate's
-                # diagnosed cause + remedy is a D4-mandated disclosure and
+                # diagnosed cause + remedy is a mandated disclosure and
                 # survives the segment condensation; a healthy substrate's
                 # scored claim no longer binds, so its reason clears.
                 reason=auto.reason if auto.planner == "floor_fallback" else None,
@@ -2350,7 +2350,7 @@ def _role_components_for_children(
     return components
 
 
-# _floor_fallback_selection retired (memo D5(iv)): the frontier-empty path
+# _floor_fallback_selection retired: the frontier-empty path
 # now serves the deterministic significance-greedy fallback in
 # collapse_fallback.linear_fallback_plan; _top_level_fallback_addresses
 # moved there with it.
@@ -3348,7 +3348,7 @@ def _instantiate_component_folded(
 def _prune_frontier(points: Sequence[Any]) -> tuple[Any, ...]:
     """Keep per-count best points under the deterministic beam cap."""
 
-    # Memo D5(iii)+(v): every frontier record passes this chokepoint, so it
+    # Every frontier record passes this chokepoint, so it
     # meters the allocation cap (memory defence) and the generous watchdog;
     # either trips FallbackDegrade, caught at the selection entry.
     charge_frontier_allocation(len(points))
@@ -3705,7 +3705,7 @@ def _root_own_unit_count(
 def _max_sibling_group_width(trace: Trace, context: RenderContext) -> int:
     """Return W: the widest rendered sibling group of the full universe.
 
-    Definition (estimator v1, memo D5(ii)): for every parent (the root
+    Definition (estimator v1): for every parent (the root
     ``self`` included), the group width is its direct child-module count
     plus the rendered units the parent owns directly; W is the maximum.
     Deterministic and cheap -- one analysis read plus the cached

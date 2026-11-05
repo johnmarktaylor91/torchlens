@@ -94,8 +94,8 @@ def assert_tag_safe(tag: str, *, site: str | None = None) -> str:
     are safe, so this branch fires only on exotic keys -- and when it fires,
     a silent rewrite would break the pasteable-leaf property (the leaf must
     paste back into ``trace[...]`` / ``named_modules()`` verbatim), so the
-    only honest behavior is a typed refusal naming the site (D4 majority;
-    The review's reversible-escape minority is recorded, not implemented).
+    only honest behavior is a typed refusal naming the site (the reversible-escape alternative
+    is recorded, not implemented).
 
     Examples
     --------

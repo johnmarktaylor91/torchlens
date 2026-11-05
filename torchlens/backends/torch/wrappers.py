@@ -1070,7 +1070,7 @@ def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]
             if watched_lazy_slots is not None and t in watched_lazy_slots:
                 late_register_forward_created_parameter(trace, t)
             continue
-        # The identity ladder + F20 lazy late-index live in
+        # The identity ladder + lazy late-index live in
         # buffer_writes.resolve_or_late_index_buffer_address.
         address = resolve_or_late_index_buffer_address(trace, t)
         if address is not None and get_tensor_label(t) is None:
@@ -1299,7 +1299,7 @@ def torch_func_decorator(
         if _is_inside_dynamo_compilation():
             return _call_inside_dynamo_region(trace, func, args, kwargs)
 
-        # F20 lazy-module completion: torch's materialization plumbing on a
+        # Lazy-module completion: torch's materialization plumbing on a
         # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
         # the materialized state registers later), as the region guards above.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):

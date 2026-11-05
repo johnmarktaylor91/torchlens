@@ -19,7 +19,7 @@ __tl_layer__ = "L5"
 
 #: Optimizer classes with day-1 adapters and their decoupled-decay truth.
 #: AdamW applies weight decay decoupled from the gradient (a rescale applied
-#: REGARDLESS of the gradient -- the measured vacuity trap of memo D2); SGD's
+#: REGARDLESS of the gradient -- the measured vacuity trap); SGD's
 #: ``weight_decay`` folds into the gradient instead.
 _KNOWN_OPTIMIZERS: dict[str, bool] = {
     "AdamW": True,

@@ -460,8 +460,8 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
     """
 
     # Reuse the static-form resolver: same accepted family (labels,
-    # module addresses, 'saved'), same typed refusals (pre-S4
-    # predicate gate, junk forms, unknown-site lookup feedback).
+    # module addresses, 'saved'), same typed refusals (predicate
+    # gate, junk forms, unknown-site lookup feedback).
     save_plan = _resolve_run_until_plan(trace, save)
     run_save_labels = frozenset(save_plan.requested_layer_labels)
     if until is not None:
@@ -579,9 +579,9 @@ def _loaded_until_cut(
     through the last call producing a requested site -- a strict superset of
     any dependency closure, parent-closed by the schedule's topological order,
     so the cut is sound by construction. The REGIME label is ``"closure"`` only
-    when that prefix IS the widened dependency closure (C1 tensor deps union C3
+    when that prefix IS the widened dependency closure (tensor deps union
     declared-state deps union control-witness deps leave no candidate skip);
-    any candidate skip is unproven independent this release (the C4
+    any candidate skip is unproven independent this release (the
     certified-fresh vocabulary is not yet shipped) and the run discloses the
     ``sequential_prefix`` regime with the ``unprovable_independence`` cause tag.
     """
@@ -710,7 +710,7 @@ def _attempt_live_forward(
         if first_failed is not None:
             # An admitted-but-inexecutable DIVERGENT input surfaces as the typed
             # PathDivergenceError carrying the first failed input check, with the
-            # native error chained as ``__cause__`` (corr2_4 on both providers).
+            # native error chained as ``__cause__`` (on both providers).
             # A native failure on a NON-divergent input re-raises raw below -- a
             # genuinely failing model is not a divergence.
             _raise_failed_contract_as_divergence(first_failed, fork=None, cause=exc)
@@ -943,7 +943,7 @@ def _finalize_full_live_run(fork: Any, ctx: _LiveFinalizeContext) -> RunResult:
             ("detail", diagnosis.detail),
             ("remedy", remedy),
         )
-    # Deephunt F2: the live report declares the capture-side host-RNG evidence (two
+    # The live report declares the capture-side host-RNG evidence (two
     # successive live runs of a host-RNG model can legitimately differ).
     return _finalize_provider_run(
         fork=fork,
@@ -1019,7 +1019,7 @@ def run_live_trace(
 ) -> RunResult:
     """Run the live-model refresh provider on a transactional fork.
 
-    corr2-5: the live provider finalizes through the SAME spine as the sparse
+    The live provider finalizes through the SAME spine as the sparse
     provider -- ``mark_trace_path_status`` (monotonic Trace poison), the shared
     divergence-policy enforcement, and the one ``_run_report`` finalizer (poison
     derived solely from the faithfulness lattice). A lossy live reconstruction

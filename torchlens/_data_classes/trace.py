@@ -3361,7 +3361,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self,
         level: str | None = None,
         *,
-        # Rebuilt grammar (summary memo 3.10). Spellings
+        # Rebuilt grammar. Spellings
         # DOCUMENTED-UNSTABLE pending naming-session ratification.
         view: str | None = None,
         depth: Any = None,

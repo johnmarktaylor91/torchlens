@@ -145,7 +145,7 @@ class ProfileReport:
         .
                 include_evidence:
                     Interleave per-cell evidence columns (``<column>_evidence``)
-                    into the frame (costreport D9's inline form). The labels are
+                    into the frame (the inline form). The labels are
                     the same :meth:`honesty` projection; the ``TOTAL`` row carries
                     no evidence labels.
 

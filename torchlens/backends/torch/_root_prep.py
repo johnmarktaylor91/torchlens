@@ -57,7 +57,7 @@ def register_bound_owner_calls(trace: Trace, model: nn.Module) -> None:
 def record_model_identity(trace: Trace, model: nn.Module) -> None:
     """Record the root's class, signatures, docstrings and source locations on ``trace``."""
 
-    # F41 bound-method roots: the synthetic TL-authored root's identity reads
+    # Bound-method roots: the synthetic TL-authored root's identity reads
     # the OWNER (type(owner).__name__, the owner's class/source metadata) and
     # the bound METHOD as the entry callable -- never the wrapper class name
     # or the string "method".

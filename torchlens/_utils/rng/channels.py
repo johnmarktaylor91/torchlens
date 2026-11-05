@@ -697,7 +697,7 @@ def call_site_argcount(frame: Any) -> int | None:
 
 
 def _subclass_overrides_reader(receiver: type, name: str, base: type) -> bool:
-    """Return whether ``receiver`` redefines ``name`` above ``base`` in its MRO (r42 hon1_1)."""
+    """Return whether ``receiver`` redefines ``name`` above ``base`` in its MRO."""
 
     for klass in receiver.__mro__:
         if klass is base:

@@ -1,4 +1,4 @@
-"""Deterministic coarse-but-legal fallback collapse planner (memo D5(iv)).
+"""Deterministic coarse-but-legal fallback collapse planner.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming sprint.
 
@@ -7,10 +7,9 @@ abandoned by the watchdog, capped by the allocation meter, or produces an
 empty frontier (the K_CAP cliff), the render must NEVER degrade to an
 uncollapsed wall — a 1,688-of-1,712-node "plan" was the silent contract
 violation the panel started from. This module builds the deterministic
-replacement by REUSING the shipped v1 significance-greedy machinery
-(memo D5(iv), review r1 3b): the revision-cached ``analyze_collapse`` scores
-order candidate module boxes, the existing readable-band policy decides how
-many to take, and the standard fold discovery adds "+N more" runs where the
+replacement by REUSING the shipped v1 significance-greedy machinery:
+the revision-cached ``analyze_collapse`` scores order candidate module boxes, the existing readable-band policy
+decides how many to take, and the standard fold discovery adds "+N more" runs where the
 raw-op count admits it. Cost is one analysis plus a bounded number of
 O(universe) plan builds; no frontier state is ever consulted, so the result
 is deterministic in (trace revision, context) alone.

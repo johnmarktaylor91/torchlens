@@ -365,7 +365,7 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
 
     ops = list(trace._layer_list)
 
-    # Deephunt F1: a value a user intervention REPLACED has no traceable function, and a
+    # A value a user intervention REPLACED has no traceable function, and a
     # value patched from another run (tl.patch_from) belongs to the donor run's inputs, so
     # a sparse replay would recompute a different computation than the captured
     # provenance; the producer refuses with a named diagnostic. Zero-fire selectors

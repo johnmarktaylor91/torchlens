@@ -262,9 +262,9 @@ class ParamGradObserved:
 @dataclass(frozen=True, slots=True)
 class BackwardPassEnd:
     """Core event marking completion of one autograd engine invocation.
-    ``close_path`` is the implicit-pass close-path disclosure (provisional spelling, DOCUMENTED-UNSTABLE pending naming-session/S2
-    routing): ``"engine_drain"`` when the queued engine final callback
-    journaled the close, ``"sync_point"`` for every backstop path, ``None``
+    ``close_path`` is the implicit-pass close-path disclosure (provisional spelling,
+    DOCUMENTED-UNSTABLE pending naming-session routing): ``"engine_drain"`` when the queued
+    engine final callback journaled the close, ``"sync_point"`` for every backstop path, ``None``
     for explicit (non-implicit) passes. Sidecar-event-only in wave 2 -- the
     projected ``BackwardPass`` record field waits for the wave-3 bump.
     """
@@ -365,7 +365,7 @@ class GradFnFired:
 @dataclass(frozen=True, slots=True)
 class CheckpointInvocationObserved:
     """Torch enrichment event minted for one classified checkpoint invocation.
-    L9 memo 2.3 (provisional spelling, DOCUMENTED-UNSTABLE): the token is a
+    Provisional spelling (DOCUMENTED-UNSTABLE): the token is a
     per-trace monotonic ordinal minted ONLY in the patched
     ``saved_tensors_hooks.__enter__`` for ``_checkpoint_hook`` instances on
     the armed owner thread outside any engine invocation. Pack counts and

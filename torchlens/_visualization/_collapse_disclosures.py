@@ -1,6 +1,6 @@
 """Human-facing collapse disclosure warnings (collapse).
 
-Extracted from ``auto_collapse.py`` (C05 fix cycle, R43 file-size ratchet):
+Extracted from ``auto_collapse.py`` (a file-size ratchet):
 the no-silent-floor rule's warning half. The typed facts ride
 ``OptimizerResult`` (``planner``/``k_cap_exhausted``/``root_own_units``) and
 the render caption carries a visible notice; these warnings are the

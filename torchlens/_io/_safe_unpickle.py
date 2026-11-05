@@ -32,7 +32,7 @@ Allowlist policy (fail-closed):
   decided by the resolved object's real module, never the pickled path, so a key
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
-  with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
+  with attacker args, so the earlier blanket "any torchlens-owned callable" policy
   was a load-time RCE: it trusted the PRIVATE ``torchlens.report._environment._module_is_installed``
   (which ``importlib.import_module``s its argument). The narrowed gate is
   deterministic (public-name + side-effect-name guard, no live-registry lookup) and
@@ -84,7 +84,7 @@ Allowlist policy (fail-closed):
 If a future legitimate class is not yet covered, loading it fails closed with a
 clear error; we NEVER admit a code-exec gadget to make a load succeed.
 
-STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (r49 storage, tensor/ndarray).
+STRICT-SUBSET OF THE TORCH ``weights_only`` BASELINE (storage, tensor/ndarray).
 This unpickler's effective admit+CONSTRUCT surface is a documented STRICT SUBSET of
 torch's ``_weights_only_unpickler._get_allowed_globals()`` baseline. The invariant is
 about CONSTRUCTION, NOT resolution: the tensor / storage / ndarray TYPE OBJECTS stay
@@ -1011,7 +1011,7 @@ class _BundleAllowlistPolicy:
                     f"{resolved_owner!r}) reached via a dotted name during trusted "
                     f"bundle metadata unpickle: {module}.{name}."
                 )
-            # PURITY PARITY (secE-1 / secE-r36-1). A callable that walked back into the
+            # PURITY PARITY. A callable that walked back into the
             # torch namespace via a dotted name -- OR a module-less C tensor method
             # (``resize_`` / ``set_`` / ``apply_`` / ``map_``) -- must be a PURE forward
             # op: ``torch`` also hosts side-effecting builtins (``torch.from_file``) and
@@ -1022,10 +1022,9 @@ class _BundleAllowlistPolicy:
             # module-less tensor method (real ``__module__ is None``), and on
             # ``"torchlens.backends.torch.wrappers"`` for ANY torch op TorchLens has
             # capture-wrapped (the near-universal live state) -- so a raw string
-            # torch/prefix check misses a wrapped ``resize_`` / ``torch.load`` (the r36
-            # hole). Mirror the torchlens-walk fix / the intervention resolver on the
-            # REAL identity: when the real owner is module-less OR torch, hold it to
-            # ``is_pure_forward_callable`` (which unwraps + covers the
+            # torch/prefix check misses a wrapped ``resize_`` / ``torch.load``. Mirror the torchlens-walk fix / the
+            # intervention resolver on the REAL identity: when the real owner is module-less OR
+            # torch, hold it to ``is_pure_forward_callable`` (which unwraps + covers the
             # tensor-method-descriptor case, the storage-unsafe / ``apply_`` / ``map_``
             # name guards, and torch name/purity). Legit foreign recipe callables/types
             # carry a real, non-torch ``__module__`` and are NOT subject to this gate.
@@ -1080,7 +1079,7 @@ class _BundleAllowlistPolicy:
         # reassemble tensors from already-resolved (allowlisted) components; any
         # class they receive as an argument was itself gated through find_class.
         #
-        # HARDENING (A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # HARDENING (default-victim RCE): the prior fast-path
         # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
         # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
         # attribute-walked, so a DOTTED name such as

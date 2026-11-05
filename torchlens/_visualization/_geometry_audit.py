@@ -74,7 +74,7 @@ DESCENT = 0.22
 PEN_EPS = 0.25
 SPLINE_SAMPLES = 24
 ELLIPSE_SAMPLES = 64
-#: Grid cell size for the candidate-pair prefilter (review r4: a 200 pt grid
+#: Grid cell size for the candidate-pair prefilter (a 200 pt grid
 #: cut 825k candidate pairs to 21k on full rolled gpt2).
 GRID_CELL_PT = 200.0
 #: Arrowhead health floor: min within-node arrowhead gap measured
@@ -623,7 +623,7 @@ def _build_grid(parsed: ParsedLayout) -> _Grid:
     return grid
 
 
-#: Endpoint-label kinds carry NO own-edge exemption (FIXD03-F13):
+#: Endpoint-label kinds carry NO own-edge exemption:
 #: graphviz paints head/tail labels post-layout beside their own spline near
 #: their own arrowhead, so "own spline/arrowhead" is exactly where this
 #: class collides -- the blanket exemption made the commonest head-label

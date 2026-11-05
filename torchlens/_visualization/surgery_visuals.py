@@ -1,11 +1,11 @@
-"""Surgery visuals: ONE mark family over C03's audit entries.
+"""Surgery visuals: ONE mark family over the intervention audit entries.
 
-The surgery memo's rendering half (foldA s5 item 11 + D17: F01 writes
-lints, renders): every visual claim here is READ from the canonical
+The rendering half of surgery (the intervention engine writes and lints,
+this module renders): every visual claim here is READ from the canonical
 intervention record landed -- per-fire :class:`FireRecord` rows on ops,
 the ``intervention_event_v2`` transaction envelopes and ``region_do`` fact
 rows on the free-form ``state_history`` stream, the closed ACT/EVENT rows in
-``trace.intervention_audit``, and F01's stage-1 injected-op records. This
+``trace.intervention_audit``, and the stage-1 injected-op records. This
 module never writes an engine file and never mints a fact: a mark either
 cites a recorded audit entry (FACT, solid border) or a declared-but-unfired
 target attribution (HEURISTIC, dashed border), and the two are never drawn
@@ -14,7 +14,7 @@ in the same style.
 Shape rules (normative, from the fold):
 
 - **One mark family, never a new view kind**: the marks ride the standard
-  ``Trace.draw`` node-spec funnel through C05's lens registry (the
+  ``Trace.draw`` node-spec funnel through the lens registry (the
   ``"surgery"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
   row registered below); there is no separate surgery picture type.
 - **Per-lane splice-box disclosure**: each transaction's disclosure box
@@ -29,10 +29,10 @@ Shape rules (normative, from the fold):
   execution-removal verbs -- that vocabulary is unrepresentable by construction
   (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
 - **The census travels with exported figures**: the per-lane census renders
-  into the figure's disclosure caption (C05's rendered-artifact rule) and
+  into the figure's disclosure caption (the rendered-artifact rule) and
   ``Trace.draw(highlight="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
-- **CREDIT rows** ride the census (D01's acknowledgment list).
+- **CREDIT rows** ride the census (the acknowledgment list).
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -85,7 +85,7 @@ MARK_KINDS: frozenset[str] = frozenset(
 #: this: fact = solid border, heuristic = dashed border.
 MARK_BASES: frozenset[str] = frozenset({"fact", "heuristic"})
 
-#: The two closed execution-effect glosses (D17 vocabulary, rendered form).
+#: The two closed execution-effect glosses (rendered form).
 _EFFECT_WORDING: Mapping[str, str] = {
     "values_replaced_after_execution": (
         "the original op ran; edited values replaced its output after execution"
@@ -180,7 +180,7 @@ class RegionFact:
 
 @dataclass(frozen=True)
 class SurgeryFacts:
-    """Everything the mark family may cite, derived from C03's record."""
+    """Everything the mark family may cite, derived from the intervention audit record."""
 
     transactions: tuple[SurgeryTransaction, ...]
     regions: tuple[RegionFact, ...]
@@ -228,7 +228,7 @@ def _envelope_rows(trace: Any) -> list[dict[str, Any]]:
 
 
 def _region_rows(trace: Any) -> list[dict[str, Any]]:
-    """The renderer-neutral region fact rows (F01 writes, reads)."""
+    """The renderer-neutral region fact rows."""
 
     return [
         row
@@ -413,7 +413,7 @@ def _declared_target_marks(
 
 
 def surgery_facts(trace: Trace) -> SurgeryFacts:
-    """Derive everything the mark family may cite from C03's audit record.
+    """Derive everything the mark family may cite from the intervention audit record.
 
     Pure read of the canonical substrate: transaction envelopes and
     ``region_do`` rows on ``state_history``, per-op FireRecords
@@ -590,7 +590,7 @@ def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -
 def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     """Resolve the surgery lens stage: marks callback + census disclosure.
 
-    Refuses typed when the headline evidence (C03 audit entries) is absent:
+    Refuses typed when the headline evidence (intervention audit entries) is absent:
     with nothing recorded, the picture would answer a different question.
     """
 
@@ -665,7 +665,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
 
 
 #: The registry row: the surgery mark family IS a lens over the standard
-#: draw surface. Headline evidence = C03's audit entries (checked by
+#: draw surface. Headline evidence = the intervention audit entries (checked by
 #: :func:`surgery_stage`; absence refuses ``surgery_evidence_missing``).
 SURGERY_LENS = register_lens(
     LensPreset(

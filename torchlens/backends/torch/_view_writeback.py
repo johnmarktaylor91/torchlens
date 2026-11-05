@@ -44,7 +44,7 @@ def view_mutation_propagation_enabled(trace: Any) -> bool:
 def _alias_shares_elements(mutated: torch.Tensor, alias: torch.Tensor, storage_ptr: Any) -> bool:
     """Return whether ``alias`` provably shares storage elements with ``mutated``.
 
-    Element-exact where provable (round-31 M4): interleaved element-disjoint
+    Element-exact where provable: interleaved element-disjoint
     views must not inherit the mutation edge. A probe failure reads as no.
     """
 

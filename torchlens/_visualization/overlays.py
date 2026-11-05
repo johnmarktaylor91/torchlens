@@ -66,7 +66,7 @@ def _lower_selection_overlay(trace: Any, overlay: Any) -> Any:
 
 
 def resolve_overlay_request(trace: Any, overlay: Any) -> Any:
-    """Validate and lower one draw request's ``node_overlay`` (leverage B8/D-4).
+    """Validate and lower one draw request's ``node_overlay``.
 
     Selection-shaped sources lower to per-site selected counts (element-mask
     law). Mapping sources are coverage-checked against the trace's realizable

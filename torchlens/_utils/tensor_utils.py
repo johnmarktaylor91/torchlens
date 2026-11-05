@@ -856,9 +856,8 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> AbstractContextManager[A
         or type(x) is torch.nn.Parameter
     ):
         return nullcontext()
-    # Deferred: backends.torch is upward of utils in the layer map (C01 item
-    # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
-    # `import torchlens` never pays for it.
+    # Deferred: backends.torch is upward of utils in the layer map; this branch is the floor-only (torch 2.1/2.2)
+    # fallback, so a plain `import torchlens` never pays for it.
     from ..backends.torch._modes import pause_own_dispatch_modes
 
     return pause_own_dispatch_modes()
@@ -1489,7 +1488,7 @@ def capture_touched_cuda(trace: Any) -> bool:
     CAPTURE having used CUDA, not on process-wide availability: a CPU-only
     trace inside a GPU training loop must not flush the caller's allocator.
 
-    Keying decision (R36 b6 pair — one fix for both directions): the stamped
+    Keying decision (one fix for both directions): the stamped
     ``forward_memory_backend`` fact reflects the MODEL device only, so it is
     a false negative for a CPU-homed model that moves tensors to CUDA inside
     ``forward`` and over-broad for non-CUDA accelerator captures whose fact
@@ -1549,7 +1548,7 @@ def _copy_tensor_payload(
         and ``"cpu_async"`` clones to CPU with ``non_blocking=True``.
     target_device:
         Optional retention device for ``"copy"`` mode: the clone materializes
-        DIRECTLY on this device in one copy (r8 b5 R35: the serial
+        DIRECTLY on this device in one copy (the serial
         ``safe_copy(...)`` then ``safe_to(...)`` idiom paid a same-device
         clone AND a cross-device move per saved activation -- a 2x transient
         peak on the source device for ``output_device=``-offloading

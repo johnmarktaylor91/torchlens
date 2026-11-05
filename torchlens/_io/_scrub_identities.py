@@ -7,7 +7,7 @@ from collections import defaultdict
 from collections.abc import Callable
 from typing import Any
 
-# Canonical remapped param barcode token (``param_000001``), for R21-1's
+# Canonical remapped param barcode token (``param_000001``), for the
 # trace-level equivalence-key ordering.
 _EQUIV_PARAM_TOKEN = re.compile(r"param_\d{6}")
 
@@ -198,7 +198,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             register_grad_id(next_id)
     for record in (*ops, *layers):
         register_grad_id(getattr(record, "grad_fn_object_id", None))
-    # grind-r5 b3 R21-1: the BACKWARD-PASS rows carry the same autograd
+    # The BACKWARD-PASS rows carry the same autograd
     # identities in ``root_grad_fn_ids``; the a169e886 dense-ordinal fix never
     # reached them, so a raw grad_fn memory address persisted verbatim into
     # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a

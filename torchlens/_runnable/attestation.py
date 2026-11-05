@@ -234,7 +234,7 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
     """Return whether declared nondeterminism reaches the byte-exact attestation claim.
 
     Seeded-RNG consumption anywhere in the replay keeps its historical
-    presence-based ineligibility (``_descriptor_has_seeded_rng``). r53 hon_2
+    presence-based ineligibility (``_descriptor_has_seeded_rng``). The check
     additionally consults the uninitialized-memory value-source classifier
     (``_nondeterministic_value_sources``): surviving ``uninitialized_alloc``
     taint that reaches an archived-activation member slot or a model output
@@ -298,7 +298,7 @@ def _nondeterministic_value_sources(
     carries only the value-source operands' taint (exact value semantics; the
     RNG fills replace uninit taint with the seeded classification through the
     ordinary seeded-consumption rule). A partial or unprovable in-place write
-    propagates (fail closed; r35 unknown-alias precedent). The whole family is
+    propagates (fail closed, as for an unknown alias). The whole family is
     clean when the recorded ambient context proves deterministic fill
     (``deterministic_algorithms`` true and ``fill_uninitialized_memory`` not
     false) and per-product when the product has zero elements.
@@ -388,7 +388,7 @@ def _nondeterministic_value_sources(
         # SIZE-argument form (``new(*sizes)`` redispatches ``aten.empty``); the
         # DATA form (``new([values])``/``new(tensor)``) is a deterministic copy
         # constructor. Decode the call's positional literal sizes and consult
-        # W1's arg-form predicate; the data form (``False``) stays clean, and an
+        # the arg-form predicate; the data form (``False``) stays clean, and an
         # undecidable form (``None`` -- a plain int-tuple, since the portable
         # grammar erases ``torch.Size``) fails CLOSED to tainted (grow-gate
         # posture). ``new`` has no aten spelling, so this Python-method surface

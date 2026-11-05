@@ -415,7 +415,7 @@ def _maybe_weightsfree_summary(
     input_size: Any,
     summary_kwargs: dict[str, Any],
 ) -> str | None:
-    """Rung-4 gate (weightsfree memo D12/face 2): auto-select or refuse.
+    """Rung-4 gate: auto-select or refuse.
 
     ``None`` on every non-meta model (the ordinary summary path proceeds).
     For an ALL-meta model: with input evidence (declared ``input_size`` or
@@ -1318,7 +1318,7 @@ def _validate_forward_pass_torch(
                 return_addresses=True,
                 allow_repeats=True,
             )
-        # b9 R74/75-1: ground-truth enumeration SHARED ITS ROOT with capture
+        # Ground-truth enumeration SHARED ITS ROOT with capture
         # (both resolve through the one backends walker), so a walker defect
         # dropped the same output leaf from both sides and validation blessed
         # a missing output. Cross-check the adapter's enumeration against the

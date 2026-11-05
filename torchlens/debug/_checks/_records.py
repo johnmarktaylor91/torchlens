@@ -1,12 +1,12 @@
-"""Immutable finding / report records for the checks kit (checks memo 4.5).
+"""Immutable finding / report records for the checks kit.
 
 Every record is a frozen dataclass with a versioned ``to_dict()`` so the
 public JSON export (``schema_version=1``) exists from day 1 while the report
-itself stays declared NON-PERSISTENT in bundles for v1 (checks memo D19):
+itself stays declared NON-PERSISTENT in bundles for v1:
 the schema version and the immutable record shape are the forward-
 compatibility hooks for a later bundle sidecar, never a migration.
 
-Evidence vocabulary law (checks memo 4.6): every gradient/parameter scalar
+Evidence vocabulary law: every gradient/parameter scalar
 that crosses any surface carries ``stage`` + ``scale_provenance``; unknown
 provenance yields UNKNOWN verdicts, never a silent pass-as-1.0. Spellings
 are DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -87,7 +87,7 @@ class CheckFinding:
     ``values`` carries the measured numbers (already-reduced floats only);
     ``param_names`` the offending parameter/site names with every alias of a tied
     tensor preserved; ``follow_up`` the call that localizes the culprit
-    (memo D3: the finding names a cone, the frontier names the culprit).
+    (the finding names a cone, the frontier names the culprit).
 
     Examples
     --------

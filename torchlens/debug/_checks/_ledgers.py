@@ -1,9 +1,9 @@
-"""Skip/scale, clip, and watchdog ledgers (checks memo D10 / D11 / D12).
+"""Skip/scale, clip, and watchdog ledgers.
 
 The AMP skip ledger counts GradScaler scale DECREMENTS -- ``update()``
 multiplies by ``backoff_factor`` exactly once per skipped attempt, so
 reading ``get_scale()`` once per backward yields the exact skip and attempt
-counts with ZERO loop edits (memo D10; E31 measured 4/4 configurations).
+counts with ZERO loop edits (measured on 4 of 4 configurations).
 Fire-count subtraction is WRONG under gradient accumulation by construction
 (19 reported vs 1 true skip at K=4) and is locked out by test so it cannot
 return as an optimization.
@@ -12,7 +12,7 @@ Preconditions ship as first-class disclosures, never assumptions: a
 ``scaler=`` handle, canonical ``update()`` cadence, and static accumulation.
 Hook-only evidence labels attempt GROUPING ``inferred``; caller
 ``global_step`` and exact grouping remain the explicit boundary's unique
-property (memo D18, the review's standing distinction in DR-4).
+property.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from typing import Any
 __tl_layer__ = "L5"
 
 #: Relative tolerance for the tier-(c) post-clip constancy signature and the
-#: tier-(b) saturation comparison (memo D12: a hint, never a pass).
+#: tier-(b) saturation comparison (a hint, never a pass).
 _CLIP_CONSTANCY_RTOL = 1e-6
 
 #: Window length of accepted steps the constancy signature needs before the

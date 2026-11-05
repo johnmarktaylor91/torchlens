@@ -151,7 +151,7 @@ def _validate_passes(passes: Any, producer: str) -> tuple[int, ...] | None:
 
 
 #: Machinery layer types the intervention engine itself inserts. Excluded
-#: from delta populations by disclosure (leverage D-7: painting TorchLens's
+#: from delta populations by disclosure (painting TorchLens's
 #: own replacement op as a changed model site misleads), never refused.
 _MACHINERY_LAYER_TYPES = frozenset({"interventionreplacement"})
 

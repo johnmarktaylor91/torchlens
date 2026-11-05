@@ -840,7 +840,7 @@ def _build_module_logs(self: "Trace") -> None:
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
     for te in self._layer_list:
-        # B3R7-R05-1: iterate the fed-call fact directly; the old
+        # Iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
         for call_label in te.input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
@@ -1435,7 +1435,7 @@ def _set_tracing_finished(self: "Trace") -> None:
 def _finalize_streamed_bundle(self: "Trace") -> None:
     """Step 18: Finalize any in-progress streamed tensor bundle.
 
-    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18): an UNSETTLED trace (the
+    Streamed bundles ENTER SETTLEMENT: an UNSETTLED trace (the
     step-18 call, before ``settle_completed``) only STAGES the bundle in the temp
     directory, and the publish happens at the settlement seam in ``_capture/trace.py``
     with the settled capture-outcome attestation. A SETTLED trace (the deferred
@@ -1620,7 +1620,7 @@ def _reuse_streamed_blob_ids(
 
     skipped_blob_ids: set[str] = set()
     for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
-        # One lazy snapshot per layer (r8 R29); the four keys are distinct, so it never goes stale.
+        # One lazy snapshot per layer; the four keys are distinct, so it never goes stale.
         scrubbed_items: dict[str, Any] | None = None
         for tensor_field, pending_field in (
             ("out", "_pending_blob_id"),

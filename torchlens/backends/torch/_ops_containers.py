@@ -599,7 +599,7 @@ def _prove_registered_lossless(
         if isinstance(instance_dict, dict) and any(
             item is not None for item in instance_dict.values()
         ):
-            # r37 3-ADJ-3: registration without the explicit state_complete
+            # Registration without the explicit state_complete
             # declaration cannot prove the hooks round-trip this instance's
             # extra state -- refuse at save rather than drop it on replay.
             return False, f"registered_container_instance_state:{type(value).__qualname__}"

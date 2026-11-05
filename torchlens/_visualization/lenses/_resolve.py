@@ -4,7 +4,7 @@ The one front door that turns (trace, lens row, explicit user kwargs, skin)
 into concrete ``Trace.draw`` parameters, enforcing the themes memo's
 honesty terms:
 
-- Defaults-not-overrides with the full precedence chain (C05's
+- Defaults-not-overrides with the full precedence chain (the
   ``resolve_lens_request`` merge; ``preset_spec_fn`` composes BEFORE the
   user's ``node_spec_fn``, which keeps the last word).
 - HEADLINE / SECONDARY semantics: missing headline evidence refuses
@@ -60,8 +60,8 @@ LENS_DETAIL_CEILING = 2000
 #: Lenses the legibility gate ruled legend-DEPENDENT: naive readers could
 #: not identify the channel without the legend, so explicit
 #: ``show_legend=False`` refuses typed citing the gate result. EMPTY until
-#: the battery rules a lens in (the mechanism ships entry-dark; D03 runs
-#: the battery).
+#: the battery rules a lens in (the mechanism ships entry-dark; the battery
+#: runs separately).
 LEGEND_DEPENDENT_LENSES: set[str] = set()
 
 #: Request-field name -> Trace.draw kwarg name, where they differ.
@@ -522,7 +522,7 @@ def _perf_stage(
     coverage = source_coverage(trace, source.member)
     build.disclosure.append(
         # The reconciling phrase: the encoding legend counts VISIBLE nodes,
-        # this line counts ops -- two denominators, one picture (D03 AMBER).
+        # this line counts ops -- two denominators, one picture.
         f"coverage: encoded {coverage.encoded} of {coverage.total} ops ({source.member}); "
         "the legend counts visible nodes, which can each aggregate several ops"
     )

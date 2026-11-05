@@ -602,7 +602,7 @@ def _resolve_allowlisted_namespace_key(key: FunctionRegistryKey) -> Callable[...
         return None
     resolved: Any = None
     if root is not None:
-        # r49 secF_1: the top-level ``torch`` root resolves through ``torch_attr``
+        # The top-level ``torch`` root resolves through ``torch_attr``
         # (identifier-only ``torch.__dict__`` read) so an attacker qualname (``onnx`` /
         # ``_dynamo``) cannot fire torch's PEP-562 lazy ``__getattr__`` before the purity
         # gate below rejects it. Other fixed roots carry no lazy hazard.

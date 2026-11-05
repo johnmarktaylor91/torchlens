@@ -19,7 +19,7 @@ with its counterpart one to one. Different inputs are comparable by design
 input digest still guards is graph divergence: with the same model object
 the model-axis floor passes even when data-dependent control flow took
 different branches, and only same-input pairs may differ by edits alone.
-The persisted digest carrier is the A-GATE/digest slice (after C07-X);
+The persisted digest carrier is the digest slice;
 :func:`_input_value_digest` is that carrier's live derivation.
 """
 
@@ -77,9 +77,9 @@ class _GateRequirement:
         check: proven-equal input values, or, when the inputs differ or are
         unproven, equal graph-shape hashes. An identity relationship
         (``same_object`` / ``same_model_at_capture``) is never accepted as
-        proof of input equality or of line-up (foldB D6 path 1), and the
+        proof of input equality or of line-up, and the
         shape-level ``input_signature_hash`` is never consulted
-        (foldB D6 path 2: it is value-blind).
+        (it is value-blind).
     """
 
     model_floor_rank: int
