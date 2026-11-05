@@ -10,6 +10,7 @@ exact sum, and ``size_by`` accepts the same builtin tokens as ``color_by``.
 from __future__ import annotations
 
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -106,8 +107,9 @@ def test_size_by_bytes_matches_activation_memory_field(
 
 def test_size_by_bytes_legend_uses_byte_units(nested_log: tl.Trace, tmp_path: Path) -> None:
     svg = _draw(nested_log, tmp_path, size_by="bytes")
-    assert "size_by: bytes" in svg
-    assert " B" in svg or "KiB" in svg or "kB" in svg or "KB" in svg
+    key = re.search(r"size: output bytes, ([^<]*?) \.\.\. ([^<]*?)<", svg)
+    assert key is not None, "no size key line"
+    assert all(re.search(r"\d (B|KB|MB)$", end) for end in key.groups()), key.groups()
 
 
 # ---------------------------------------------------------------------------

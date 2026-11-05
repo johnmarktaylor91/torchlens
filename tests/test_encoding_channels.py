@@ -441,7 +441,8 @@ def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Pa
         state = _state(varying_log)
         assert layer.layer_label not in state.colors, source
         assert NOTE_FIRST_PASS_ONLY in state.notes, source
-        assert "first-pass-only field" in dot, source
+        # The note lives on the encoding state; the drawing carries no method text.
+        assert "first-pass-only field" not in dot, source
 
 
 def test_mirrored_per_call_enumeration_matches_live_mirror_spec() -> None:
