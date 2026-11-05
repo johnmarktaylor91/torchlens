@@ -459,15 +459,13 @@ def _patched_read(handle: _RowOpRecord, name: str) -> Any:
     return _FAST_READS[name](handle)
 
 
-def _fast_property(name: str, read: Any) -> property:
-    """Return the handle property answering ``name`` in one call, without a failed lookup.
+def _derived_fast_property(name: str, read: Any) -> property | None:
+    """Return the property for a set cell read as a frozenset or a constant, else None.
 
-    The order is ``__getattr__``'s: the built record, then an amendment overlay,
-    then the row (a cell read inline, a residual slot inline, else ``read``).
+    The same order as ``_fast_property``: the built record, then an amendment
+    overlay, then the frozenset of the set cell or the constant.
     """
 
-    cell_name = getattr(read, "_cell_name", None)
-    rest_slot = getattr(read, "_rest_slot", None)
     frozen_cell = getattr(read, "_frozen_cell", None)
     constant = getattr(read, "_constant", None)
     if frozen_cell is not None:
@@ -497,6 +495,22 @@ def _fast_property(name: str, read: Any) -> property:
             return value
 
         return property(get_constant, doc=f"Record read ``{name}`` (constant ``{value!r}``).")
+    return None
+
+
+def _fast_property(name: str, read: Any) -> property:
+    """Return the handle property answering ``name`` in one call, without a failed lookup.
+
+    The order is ``__getattr__``'s: the built record, then an amendment overlay,
+    then the row (a cell read inline, a residual slot inline, a set cell or a
+    constant through ``_derived_fast_property``, else ``read``).
+    """
+
+    derived = _derived_fast_property(name, read)
+    if derived is not None:
+        return derived
+    cell_name = getattr(read, "_cell_name", None)
+    rest_slot = getattr(read, "_rest_slot", None)
     if cell_name is not None:
 
         def get_cell(handle: _RowOpRecord) -> Any:
