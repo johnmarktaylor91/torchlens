@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .groups import GroupRef, MembershipGroups
-from .op_store import _CSR, _MISSING
+from .op_store import _CSR, _MISSING, PooledCell
 
 if TYPE_CHECKING:
     from .core import TraceCore
@@ -202,6 +202,17 @@ def convert_row_cells(
                 row_cells[fid] = frozenset_view(value, pool)
 
 
+def _unpooled(cell: Any) -> Any:
+    """Return a staging cell's value, reading through a shared ``PooledCell``.
+
+    Sibling output rows of one multi-output call (``torch.lstm``,
+    ``torch.mkldnn_rnn_layer``) share one pooled ``parent_arg_positions`` cell; the
+    edge freeze must attribute their occurrences from it like a plain dict.
+    """
+
+    return cell.prototype if isinstance(cell, PooledCell) else cell
+
+
 def freeze_op_relation_views(
     core: TraceCore,
     store: OpRowStore,
@@ -280,7 +291,7 @@ def freeze_op_relation_views(
         parents = row_cells[parents_fid]
         if parents is _MISSING or not parents:
             continue
-        pap = row_cells[pap_fid]
+        pap = _unpooled(row_cells[pap_fid])
         positions_by_parent: dict[str, list[Any]] = {}
         if isinstance(pap, dict):
             for domain in ("args", "kwargs"):
@@ -293,12 +304,8 @@ def freeze_op_relation_views(
             source = row_of_label.get(parent_label)
             if source is None:
                 continue
-            occurrences = positions_by_parent.get(parent_label)
-            if occurrences:
-                for occurrence in occurrences:
-                    edges.add(source, row, arg_position=occurrence)
-            else:
-                edges.add(source, row, arg_position=None)
+            for occurrence in positions_by_parent.get(parent_label) or (None,):
+                edges.add(source, row, arg_position=occurrence)
     stats.edges = len(edges)
     edges.freeze(n_rows, n_rows)
 

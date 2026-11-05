@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from torchlens.bundle import AmbiguousLabelError
-
 from ..bundle import Bundle
 
-__all__ = ["AmbiguousLabelError", "Bundle"]
+__all__ = ["Bundle"]

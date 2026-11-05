@@ -1,6 +1,5 @@
 """Shared operation fields and tensor variation tracking."""
 
-from collections import defaultdict
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
@@ -67,6 +66,9 @@ from .tensor_tracking import (
 
 # Transform-boundary config attribute; its builder kwargs are snapshotted per op.
 _TRANSFORM_CONFIG = "__tl_transform_config__"
+# Marks "no transform config on this function"; most ops have none, and the fresh
+# empty dict they record needs no snapshot.
+_NO_CONFIG = object()
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -84,18 +86,13 @@ __all__ = (
 
 
 def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
-    """Seed the gradient fields every op starts with before any backward pass."""
-    # Grad info
-    fields_dict["grad"] = None
-    fields_dict["transformed_grad"] = None
+    """Record whether this op saves gradients.
+
+    The per-gradient placeholders (``grad``, ``grad_shape``, ``gradient_memory`` and
+    their ``transformed_`` forms) are not written: the freeze never reads them and
+    the op defaults supply them.
+    """
     fields_dict["save_grads"] = self._options_save_grads not in (None, False)
-    fields_dict["has_grad"] = False
-    fields_dict["grad_shape"] = None
-    fields_dict["transformed_grad_shape"] = None
-    fields_dict["grad_dtype"] = None
-    fields_dict["transformed_grad_dtype"] = None
-    fields_dict["gradient_memory"] = 0
-    fields_dict["transformed_gradient_memory"] = None
 
 
 def _unvalidated_provenance(
@@ -254,12 +251,12 @@ def _build_shared_fields_dict(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    # Separate tensor args (graph edges) from non-tensor args (metadata, equivalence
-    # hashing); the latter are op-time snapshots, safe from later caller mutation.
+    # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
     call = _SlotCall(func, func_name, args, kwargs)
     slots = snapshot_arg_slots(self, call, arg_tensors)
-    parent_layer_labels = parents_from_slots(self, slots, arg_tensors)
+    # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
+    parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
@@ -272,11 +269,9 @@ def _build_shared_fields_dict(
     fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
-    fields_dict["edits"] = []
     _set_arg_template_fields(self, fields_dict, call)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
-    fields_dict["multi_output_name"] = None
 
     _set_grad_info_fields(self, fields_dict)
 
@@ -298,7 +293,6 @@ def _build_shared_fields_dict(
         call_site_out=call_site_out,
     )
     self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
-    fields_dict["var_names"] = []
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state
@@ -334,7 +328,8 @@ def _build_shared_fields_dict(
         func_name if is_transform else None
     )
     fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
-    fields_dict["transform_config"] = snapshot_mutable_arg(getattr(func, _TRANSFORM_CONFIG, {}))
+    config = getattr(func, _TRANSFORM_CONFIG, _NO_CONFIG)
+    fields_dict["transform_config"] = {} if config is _NO_CONFIG else snapshot_mutable_arg(config)
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
@@ -605,22 +600,15 @@ def _build_module_context_fields(
     arg_tensors: list[torch.Tensor],
     parent_layer_entries: list[Op],
 ) -> None:
-    """Populate module nesting, address, and input/output status fields."""
+    """Populate the module nesting fields (``module``, ``modules``)."""
     modules = _snapshot_exhaustive_module_stack(self)
     module = modules[-1] if modules else None
 
     fields_dict["module"] = module
     fields_dict["modules"] = modules
-    # B3R7-R05-1: same containment fact as ``modules`` (relabeled together at
-    # step 11), never the fed-call stack -- that is ``input_to_module_calls``.
-    fields_dict["module_call_stack"] = list(modules)
-    fields_dict["module_entry_arg_keys"] = defaultdict(list)
-    fields_dict["input_to_module_calls"] = []
-    fields_dict["output_of_modules"] = []
-    fields_dict["output_of_module_calls"] = []
-    fields_dict["is_module_output"] = False
-    fields_dict["is_atomic_module"] = False
-    fields_dict["atomic_module_call"] = None
+    # The module-I/O placeholders (``module_call_stack``, ``input_to_module_calls``,
+    # ``output_of_modules`` and the rest) are not written: the freeze never reads
+    # them and postprocess derives them from the records.
 
 
 # Late imports: the split modules of this package import one another (cycles), so each

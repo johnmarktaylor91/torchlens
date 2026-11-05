@@ -79,8 +79,8 @@ def test_flagship_gallery_end_to_end(tmp_path: Path) -> None:
 
     # ---- persistence ---------------------------------------------------------
     bundle_path = tmp_path / "sweep_bundle"
-    # Head ablation is a facet-slice write, which only the audit level records.
-    bundle.save(str(bundle_path), level="audit")
+    # Head ablation is a facet-slice write; the default (portable) save records it.
+    bundle.save(str(bundle_path))
     loaded = tl.load(str(bundle_path))
     loaded_view = loaded.effects()
     assert [row.to_payload() for row in loaded_view.rows] == [row.to_payload() for row in view.rows]
