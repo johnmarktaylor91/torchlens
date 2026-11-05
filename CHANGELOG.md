@@ -3,6 +3,35 @@
 
 ## Unreleased
 
+### Security
+
+Load bundles and artifacts from untrusted sources only with this version or later. Earlier
+releases could be made to do more than replay tensor operations when loading or running a
+crafted file. These load paths are fixed:
+
+- **replay**: running a loaded bundle (`tl.load(path).run(...)`) could make TorchLens build a
+  tensor from a raw memory address taken from the bundle, which can crash the interpreter or
+  touch arbitrary memory. Replay now refuses every tensor and storage constructor that accepts
+  a raw address, and any bundle-supplied argument that names one. Affects 2.32.1 through
+  2.38.1.
+- **replay**: replay now refuses torch kernels that skip their own memory bounds checks.
+  Affects earlier releases.
+- **extraction**: opening a dataset-extraction artifact, including through `tl.load(dir)`, could
+  read files outside the artifact directory. Shards are now read only from inside it, under
+  the names TorchLens writes. Affects 2.35.0 and later (through plain `tl.load` since 2.38.0).
+- **extraction, pyreft bridge**: on torch 2.5.1 or older, whose safe-load mode can be bypassed
+  (CVE-2025-32434), reading a `.pt` extraction shard or a pyreft weight file could run code.
+  TorchLens now refuses to read these files on those torch versions. Affects 2.35.0 and later
+  for shards, 2.38.0 and later for pyreft weight files.
+- **images**: images stored in a bundle are decoded only as PNG or JPEG, the formats TorchLens
+  writes. Before, any format the installed Pillow could open was decoded, including formats
+  that hand the data to an external program. Affects 2.20.0 and later.
+- **loading**: a crafted bundle could make `tl.load` hang. Affects 2.17.0 and later.
+- **loading**: malformed bundle metadata (an unlisted runnable file, out-of-range numbers, an
+  oversized tensor shape) now refuses with a typed load error instead of being read, crashing
+  or loading a wrong value. Affects 2.38.0 and later for the unlisted file and the shape check,
+  and earlier releases for the numbers.
+
 ### Fixed
 
 - **intervention**: an element-masked builtin edit (`fork.do(tl.units(site, mask), verb)`, the
