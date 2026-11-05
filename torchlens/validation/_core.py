@@ -2005,7 +2005,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
 
 
 def _foreach_sibling_attributes_slot(
-    self: Trace,
+    self: "Trace",
     target_layer: Op,
     arg_type: str,
     argloc_key: Any,
