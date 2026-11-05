@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1593 modules, 680234 lines, 0 modules without a docstring.
+83 packages, 1593 modules, 680325 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6505 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8512 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57337 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 122 | 57428 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9166 |
@@ -1348,7 +1348,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (122 modules, 57337 lines)
+Torch backend implementation package for TorchLens capture. (122 modules, 57428 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1364,16 +1364,16 @@ Torch backend implementation package for TorchLens capture. (122 modules, 57337 
 | `_completeness_boundaries` | Audited wrapper boundaries and input sites. | 352 |
 | `_completeness_cross_thread` | Cross-thread and scalar escape observation. | 476 |
 | `_completeness_dispatch` | Dispatch census and runnable-ledger processing. | 801 |
-| `_completeness_dispatch_names` | Dispatch operator naming and callsite helpers. | 618 |
+| `_completeness_dispatch_names` | Dispatch operator naming and callsite helpers. | 676 |
 | `_completeness_escape_state` | Host-escape state and caller authorization. | 416 |
 | `_completeness_finalize` | Witness finalization and capture scope. | 625 |
 | `_completeness_hop` | Higher-order-operator rules for the completeness witness's dispatch mode. | 211 |
 | `_completeness_metadata` | Input and state metadata witness bookkeeping. | 773 |
 | `_completeness_origins` | Tensor-origin classification and propagation. | 528 |
 | `_completeness_patches` | Scoped tensor and metadata observer patches. | 754 |
-| `_completeness_storage` | Storage observation and scalar-escape helpers. | 870 |
-| `_completeness_types` | State and value types shared by completeness-witness slices. | 305 |
-| `_consumer_kind` | Raise-time branch-kind classification for a scalar escape. | 29 |
+| `_completeness_storage` | Storage observation and scalar-escape helpers. | 866 |
+| `_completeness_types` | State and value types shared by completeness-witness slices. | 307 |
+| `_consumer_kind` | Raise-time branch-kind classification for a scalar escape. | 64 |
 | `_escape_detection_fields` | Field table copying escape/completeness diagnostics from a trace onto a fastlog recording. | 33 |
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
