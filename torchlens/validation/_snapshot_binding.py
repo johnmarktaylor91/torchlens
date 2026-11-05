@@ -114,21 +114,33 @@ def snapshot_binding_explained(
     if same_geometry and tensor_nanequal(snapshot, saved, allow_tolerance=False):
         return True
     if record_member(parent_layer, "is_inplace", False):
-        if _write_alias_geometry(snapshot, parent_layer, saved_out, resolve):
-            return True
-        return snapshot.dtype == saved.dtype and _slots_marked(
-            target_layer, parent_layer, resolve, getattr(marks, "alias_slots", None) or {}
+        return _write_alias_geometry(snapshot, parent_layer, saved_out, resolve) or (
+            snapshot.dtype == saved.dtype
+            and _slots_marked(
+                target_layer, parent_layer, resolve, getattr(marks, "alias_slots", None) or {}
+            )
         )
-    if not same_geometry:
-        return False
-    if _consumed_write_reaches(target_layer, parent_layer, resolve):
-        return True
-    if record_member(parent_layer, "_label_raw", None) in (
-        getattr(marks, "unrecorded_writes", None) or ()
-    ):
-        return True
-    return _slots_marked(
-        target_layer, parent_layer, resolve, getattr(marks, "written_slots", None) or {}
+    return same_geometry and _recorded_write_reaches(target_layer, parent_layer, resolve, marks)
+
+
+def _recorded_write_reaches(
+    target_layer: Op, parent_layer: Op, resolve: Callable[[str], Any], marks: Any
+) -> bool:
+    """Return whether a write the graph or capture recorded explains a non-in-place parent's snapshot.
+
+    The child consumes an in-place write through the parent's lineage, or the parent's
+    tensor was an input of a disclosed unrecordable mutating call (``source_provenance``
+    fails that run), or capture marked the snapshot as a foreign write for exactly the
+    child's current slots.
+    """
+
+    unrecorded = getattr(marks, "unrecorded_writes", None) or ()
+    return (
+        _consumed_write_reaches(target_layer, parent_layer, resolve)
+        or record_member(parent_layer, "_label_raw", None) in unrecorded
+        or _slots_marked(
+            target_layer, parent_layer, resolve, getattr(marks, "written_slots", None) or {}
+        )
     )
 
 
