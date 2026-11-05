@@ -6712,6 +6712,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/torch/_completeness_hop.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "input_ancestors",
   "file": "torchlens/backends/torch/_completeness_metadata.py",
