@@ -1475,7 +1475,7 @@ class TestRegistryLedgerMechanismIsRedCapable:
         planted = dict(ex.STRUCTURAL_ARG_POSITIONS)
         planted["take_along_dim"] = {1}
         violations = structural_position_violations(planted, STRUCTURAL_POSITION_LEDGER)
-        assert any("bucketize" in violation for violation in violations)
+        assert any("take_along_dim" in violation for violation in violations)
 
     def test_planting_the_where_condition_mask_is_reported(self) -> None:
         """``where`` arg 0 is the condition mask -- an unaudited entry."""

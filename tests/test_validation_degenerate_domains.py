@@ -203,7 +203,7 @@ class _CtcHead(nn.Module):
 
         log_probs = self.proj(feats).log_softmax(-1).transpose(0, 1)
         target_lengths = (feats[:, 0, 0] * 0).long() + torch.tensor(self.lengths)
-        input_lengths = [feats.shape[1]] * feats.shape[0]
+        input_lengths = torch.full((feats.shape[0],), feats.shape[1], dtype=torch.long)
         return F.ctc_loss(log_probs, self.targets, input_lengths, target_lengths, reduction="sum")
 
 
