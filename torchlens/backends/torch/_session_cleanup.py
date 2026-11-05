@@ -68,6 +68,12 @@ _WRAPPED_LINK_LIMIT = 8
 _LIBRARY_PACKAGE_ROOTS = frozenset(
     {"torch", "torchlens", "builtins", *getattr(sys, "stdlib_module_names", ())}
 )
+#: Exact scalar leaf types the walk never descends into, and the sequence types it
+#: iterates. Module constants, not tuple literals at the call site: a literal of
+#: names is built again on every visit, and the walk visits every reachable object
+#: of every forward and helper twice per capture (snapshot and clear).
+_WALK_SCALAR_TYPES = (str, bytes, int, float, bool)
+_WALK_SEQUENCE_TYPES = (list, tuple, set, frozenset, deque)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -190,7 +196,7 @@ def _clear_session_tensor_metadata(
     action = clear_meta if visit is None else visit
     if value is None or _is_isinstance_hostile_deprecation_shim(value):
         return
-    if isinstance(value, (str, bytes, int, float, bool)):
+    if isinstance(value, _WALK_SCALAR_TYPES):
         return
     if isinstance(value, ModuleType):
         _clear_module_namespace_tensor_metadata(value, seen, depth, action, visit)
@@ -277,7 +283,7 @@ def _clear_reachable_tensor_metadata(
     # shim answers with a FutureWarning -- the recursion's entry guard
     # never runs for inline-skipped items, so this check must stay hostile-safe.
     # Non-exact scalar subclasses fall through to the guarded recursive call.
-    _scalar_leaves = (str, bytes, int, float, bool)
+    _scalar_leaves = _WALK_SCALAR_TYPES
     if isinstance(value, dict):
         for key, item in value.items():
             if key is not None and type(key) not in _scalar_leaves:
@@ -285,7 +291,7 @@ def _clear_reachable_tensor_metadata(
             if item is not None and type(item) not in _scalar_leaves:
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
         return
-    if isinstance(value, (list, tuple, set, frozenset, deque)):
+    if isinstance(value, _WALK_SEQUENCE_TYPES):
         for item in value:
             if item is not None and type(item) not in _scalar_leaves:
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
@@ -392,8 +398,9 @@ def _clear_callable_link_tensor_metadata(
 
     defaults = getattr(link, "__defaults__", None) or ()
     _clear_session_tensor_metadata(defaults, seen, visit=visit)
-    kwdefaults = getattr(link, "__kwdefaults__", None) or {}
-    _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
+    kwdefaults = getattr(link, "__kwdefaults__", None)
+    if kwdefaults:
+        _clear_session_tensor_metadata(kwdefaults, seen, visit=visit)
     closure = getattr(link, "__closure__", None) or ()
     for cell in closure:
         try:
@@ -457,17 +464,18 @@ def _clear_callable_session_tensor_metadata(
 
 
 def _code_names(code: types.CodeType) -> Iterator[str]:
-    """Yield the names a code object and its nested code (comprehensions, lambdas) load."""
+    """Yield the names a code object and its nested code (comprehensions, lambdas) load.
 
-    pending = [code]
-    seen_codes: set[int] = set()
-    while pending:
-        current = pending.pop()
-        if id(current) in seen_codes:
-            continue
-        seen_codes.add(id(current))
-        yield from current.co_names
-        pending.extend(const for const in current.co_consts if type(const) is types.CodeType)
+    Depth first, the forward's own names first and nested code last-to-first. A
+    code object's constants are an acyclic compile-time tree, so the walk needs no
+    stack or visited set; it builds no container because it runs for every forward
+    and helper the walk follows, twice per capture (snapshot and clear).
+    """
+
+    yield from code.co_names
+    for const in reversed(code.co_consts):
+        if type(const) is types.CodeType:
+            yield from _code_names(const)
 
 
 def _user_helper(value: Any) -> types.FunctionType | None:
