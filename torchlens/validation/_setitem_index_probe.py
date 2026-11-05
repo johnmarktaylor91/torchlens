@@ -188,9 +188,10 @@ def _setitem_call(
         position = key[1]
         components = index[:position] + (parent_values,) + index[position + 1 :]
     dims = _index_component_dims(destination.ndim, components)
-    if dims is None or dims[position] is None:
+    dim = None if dims is None else dims[position]
+    if dim is None:
         return None
-    domain_size = int(destination.shape[dims[position]])
+    domain_size = int(destination.shape[dim])
     if domain_size < 2:
         return None
     return destination, components, position, args[2], domain_size
