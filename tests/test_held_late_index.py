@@ -19,6 +19,7 @@ import copy
 import warnings
 from typing import Any
 
+import pytest
 import torch
 from _stale_holders import OpaqueCallable
 from torch import nn
@@ -193,3 +194,33 @@ def test_tensor_first_seen_mid_forward_is_not_late_indexed() -> None:
         warnings.simplefilter("ignore")  # the escape's provenance warning is not under test
         trace = tl.trace(_MidForwardEscape(stale_mul), torch.randn(4))
     assert _buffer_addresses(trace) == []
+
+
+class _PrivateRebind(nn.Module):
+    """A private pre-forward tensor whose storage ``set_`` rebinds to input-derived data."""
+
+    def __init__(self, read_first: bool) -> None:
+        super().__init__()
+        self.read_first = read_first
+        self._state = torch.rand(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        before = self._state * 1 if self.read_first else x
+        with torch.no_grad():
+            self._state.set_(x * 3)
+        return before + self._state
+
+
+@pytest.mark.parametrize("read_first", [False, True], ids=["set_first", "read_then_set"])
+def test_set_rebound_private_tensor_reads_from_the_set_output(read_first: bool) -> None:
+    """After ``set_`` the read links to the ``set_`` output and is input-derived, not a clean source."""
+
+    torch.manual_seed(0)
+    x = torch.randn(4)
+    trace = tl.trace(_PrivateRebind(read_first), x)
+    (set_op,) = [op for op in trace._layer_list if op.type == "set"]
+    (add_op,) = [op for op in trace._layer_list if op.type == "add"]
+    assert set_op.layer_label in add_op.parents
+    assert set_op.has_input_ancestor and add_op.has_input_ancestor
+    assert set(_buffer_addresses(trace)) == {"_state"}
+    assert tl.validate(_PrivateRebind(read_first), x, scope="forward") is True
