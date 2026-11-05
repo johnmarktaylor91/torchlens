@@ -420,9 +420,7 @@ def _telemetry_trace() -> tl.Trace:
     torch.manual_seed(0)
     return telemetry._profile_trace_with_cuda_kernels(
         lambda: tl.trace(
-            nn.Linear(2, 2),
-            torch.ones(2, 2),
-            capture=tl.options.CaptureOptions(aten_ops=True),
+            nn.Linear(2, 2), torch.ones(2, 2), capture=tl.options.CaptureOptions(aten_ops=True)
         )
     )
 

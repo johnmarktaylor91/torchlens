@@ -608,11 +608,7 @@ def _may_box_expanded(trace: Trace, address: str, signal: Any, boxes: set[str]) 
 
 
 def _has_expanded_twin(
-    trace: Trace,
-    signal: Any,
-    siblings: list[str],
-    boxes: set[str],
-    signals: Mapping[str, Any],
+    trace: Trace, signal: Any, siblings: list[str], boxes: set[str], signals: Mapping[str, Any]
 ) -> bool:
     """Return whether a sibling with the same structure is also fully expanded."""
 
@@ -696,14 +692,7 @@ def _identical_run(
         return ()
     analysis, hidden_counts, total_units = legality
     run = _optimizer()._legal_plan_child_segment_run(
-        trace,
-        context,
-        analysis,
-        nodes,
-        start,
-        hidden_counts,
-        total_units,
-        dominance_limit=0.75,
+        trace, context, analysis, nodes, start, hidden_counts, total_units, dominance_limit=0.75
     )
     if not run:
         return ()

@@ -555,10 +555,7 @@ def test_concat_preserves_source_chronology_across_lanes() -> None:
     source.append_module_prep(_merge_prep_event("b"))
     source.append_intervention(
         InterventionAppliedEvent(
-            label_raw="edit_raw",
-            kind="replaced",
-            origin="raw_forward_hook",
-            timestamp=1.0,
+            label_raw="edit_raw", kind="replaced", origin="raw_forward_hook", timestamp=1.0
         )
     )
     source.append_pre_hook(_merge_pre_hook_event("y"))
@@ -604,10 +601,7 @@ def test_concat_rejects_invalid_source_sequencing() -> None:
         source = CaptureEvents()
         source.append_intervention(
             InterventionAppliedEvent(
-                label_raw="edited_raw",
-                kind="replaced",
-                origin="raw_forward_hook",
-                timestamp=1.0,
+                label_raw="edited_raw", kind="replaced", origin="raw_forward_hook", timestamp=1.0
             )
         )
         source.append_pre_hook(_merge_pre_hook_event("mod"))

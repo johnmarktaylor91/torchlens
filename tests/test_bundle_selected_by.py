@@ -66,11 +66,7 @@ def _evidence() -> dict[str, object]:
 
 def test_round_trip_keeps_the_row(tmp_path: Path, model: _TinyLM) -> None:
     bundle = _routed(model).relate(
-        "selected_by",
-        "writer",
-        "router",
-        chosen="lookup",
-        candidates=["lookup", "none"],
+        "selected_by", "writer", "router", chosen="lookup", candidates=["lookup", "none"]
     )
     bundle.save(tmp_path / "routed.tlspec")
     manifest = json.loads((tmp_path / "routed.tlspec" / "manifest.json").read_text())
@@ -153,10 +149,7 @@ def test_graph_edge_names_the_decision() -> None:
     from torchlens._visualization._bundle_graph import _relation_edge_label
 
     row = MemberRelationRow(
-        kind="selected_by",
-        from_member="writer",
-        to_member="router",
-        params={"chosen": 1},
+        kind="selected_by", from_member="writer", to_member="router", params={"chosen": 1}
     )
     label, checked = _relation_edge_label(row)
     assert label.splitlines() == ["selected_by", "chose 1"] and not checked

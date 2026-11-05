@@ -149,9 +149,7 @@ def test_cache_len_is_deleted_from_the_grammar() -> None:
 @pytest.mark.smoke
 def test_carried_state_witness_channel_keyed_shape() -> None:
     row = _row(
-        0,
-        entry_state_digest={"kv_cache": "sha256:aa"},
-        exit_state_digest={"kv_cache": "sha256:bb"},
+        0, entry_state_digest={"kv_cache": "sha256:aa"}, exit_state_digest={"kv_cache": "sha256:bb"}
     )
     rebuilt = EpisodeLedgerRow.from_payload(row.to_payload())
     assert rebuilt.entry_state_digest == {"kv_cache": "sha256:aa"}

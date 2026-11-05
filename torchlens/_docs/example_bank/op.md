@@ -631,13 +631,13 @@ class AddOnes(torch.nn.Module):
         return x + torch.ones(4)
 trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.ops["ones_1_1"], trace.ops["add_1_2"]
-print("is_internal_source", ones.is_internal_source)
-print("is_internally_initialized", ones.is_internally_initialized)
+print("is_internal_source", ones.graph.is_internal_source)
+print("is_internally_initialized", ones.call.is_internally_initialized)
 print("is_constant", ones.is_constant, add.is_constant)
-print("internal_source_parents", add.internal_source_parents)
-print("internal_source_ancestors", add.internal_source_ancestors)
-print("has_internal_source_ancestor", add.has_internal_source_ancestor)
-print("tl_authored_root", ones.tl_authored_root)
+print("internal_source_parents", add.graph.internal_source_parents)
+print("internal_source_ancestors", add.graph.internal_source_ancestors)
+print("has_internal_source_ancestor", add.graph.has_internal_source_ancestor)
+print("tl_authored_root", ones.call.tl_authored_root)
 # Output:
 # is_internal_source True
 # is_internally_initialized True
@@ -725,9 +725,9 @@ print("input_to_module_calls", op.module_context.input_to_module_calls)
 print("is_module_input", op.module_context.is_module_input)
 print("module_entry_arg_keys", dict(op.module_context.entry_arg_keys))
 fc1 = trace.ops["linear_1_1"]
-print("output_of_modules", fc1.output_of_modules)
-print("output_of_module_calls", fc1.output_of_module_calls)
-print("is_module_output", fc1.is_module_output)
+print("output_of_modules", fc1.module_context.output_of_modules)
+print("output_of_module_calls", fc1.module_context.output_of_module_calls)
+print("is_module_output", fc1.module_context.is_module_output)
 # Output:
 # input_to_modules ['fc2']
 # input_to_module_calls ('fc2:1',)

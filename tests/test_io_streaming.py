@@ -339,9 +339,7 @@ def test_streaming_write_blob_baseexception_marks_partial_and_is_sweepable(
         return original_write_tensor_blob(self, **kwargs)
 
     monkeypatch.setattr(
-        streaming_module.BundleStreamWriter,
-        "_write_tensor_blob",
-        _raise_system_exit_once,
+        streaming_module.BundleStreamWriter, "_write_tensor_blob", _raise_system_exit_once
     )
 
     with pytest.raises(SystemExit):

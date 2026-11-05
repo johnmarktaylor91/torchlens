@@ -581,8 +581,7 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
         entries = real(*args, **kwargs)
         return [
             dataclasses.replace(
-                entry,
-                metadata={**dict(entry.metadata), "rule_id": spec.rules[0].rule_id},
+                entry, metadata={**dict(entry.metadata), "rule_id": spec.rules[0].rule_id}
             )
             for entry in entries
         ]

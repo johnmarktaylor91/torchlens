@@ -43,7 +43,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     params = sorted(
         (state.get("_param_logs") or {}).values(),
         key=lambda param: (
-            str(record_member(param, "address", "")),
+            str(getattr(param, "address", "")),
             str(getattr(param, "name", "")),
         ),
     )
@@ -142,21 +142,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
             record.equivalence_class = remap_barcode_text(equivalence_class)
         if isinstance(equivalence_class, str) and isinstance(record.equivalence_class, str):
             equivalence_class_map[equivalence_class] = record.equivalence_class
-        # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
-        # multi-pass accessor raises InvalidArgumentError (a ValueError, which
-        # getattr does not swallow), so probing before the gate broke every
-        # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
-        # `parent_param_ops` row; only Op-side records reach the getattr.
-        record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
-        parent_param_ops = (
-            record_member(record, "parent_param_ops", None)
-            if "parent_param_ops" in record_spec
-            else None
-        )
-        if isinstance(parent_param_ops, dict):
-            record.parent_param_ops = {
-                remap_barcode_text(key): value for key, value in parent_param_ops.items()
-            }
+        _remap_parent_param_ops(record, remap_barcode_text)
 
     equivalence_groups = state.get("_graph_op_equivalence_classes")
     if isinstance(equivalence_groups, dict):
@@ -196,7 +182,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     for grad_id in grad_fn_logs:
         register_grad_id(grad_id)
     for grad_fn in grad_fn_logs.values():
-        register_grad_id(record_member(grad_fn, "grad_fn_object_id", None))
+        register_grad_id(getattr(grad_fn, "grad_fn_object_id", None))
         register_grad_id(getattr(grad_fn, "creator_object_id", None))
         for next_id in getattr(grad_fn, "next_grad_fn_ids", ()) or ():
             register_grad_id(next_id)
@@ -242,6 +228,26 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
 
     for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
         state[object_id_key] = 1 if state.get(object_id_key) is not None else None
+
+
+def _remap_parent_param_ops(record: Any, remap_barcode_text: Callable[[Any], Any]) -> None:
+    """Remap the parameter-barcode keys of one record's ``parent_param_ops``."""
+
+    # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
+    # multi-pass accessor raises InvalidArgumentError (a ValueError, which
+    # getattr does not swallow), so probing before the gate broke every
+    # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
+    # `parent_param_ops` row; only Op-side records reach the getattr.
+    record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
+    parent_param_ops = (
+        record_member(record, "parent_param_ops", None)
+        if "parent_param_ops" in record_spec
+        else None
+    )
+    if isinstance(parent_param_ops, dict):
+        record.parent_param_ops = {
+            remap_barcode_text(key): value for key, value in parent_param_ops.items()
+        }
 
 
 def _canonicalize_param_links(

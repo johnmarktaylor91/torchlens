@@ -47,9 +47,9 @@ from typing import TYPE_CHECKING, Any, Literal, overload
 import torch
 
 from .._utils._record_group_table import record_member
-from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
 from ._display import selection_card, selection_repr, site_card, site_repr
+from ._entry_order import _graph_entry_order
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
@@ -152,49 +152,6 @@ class Site:
 
     __repr__ = site_repr
     __str__ = site_card
-
-
-def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in canonical deterministic order (sorted by site key)."""
-
-    return tuple(sorted(entries, key=lambda entry: (entry.kind, tuple(map(str, entry.key)))))
-
-
-def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
-    """Return entries in GRAPH ORDER (F10; lovely matrix row, bug 14).
-
-    ACT entries order by the trace's execution order of their
-    ``(layer_label, pass_index)`` address — a resolved selection reads in
-    the order the network ran, not in lexicographic site-key order
-    (``relu_1_10`` no longer sorts before ``relu_1_2``). PARAM/EDGE
-    entries (and any address the trace cannot place) keep the canonical
-    site-key sort, appended after placed entries deterministically.
-    """
-
-    placed = _canonical_entry_order(entries)
-
-    def _execution_order() -> dict[tuple[Any, ...], int]:
-        """Map each ``(layer_label, pass_index)`` address to its graph step."""
-
-        return {
-            (op.layer_label, op.pass_number): step
-            for step, op in enumerate(trace._layer_list or ())
-        }
-
-    order = fail_open(_execution_order, lambda _error: {})
-    if not order:
-        return placed
-
-    def sort_key(indexed: tuple[int, Site]) -> tuple[int, int, int]:
-        """Graph step first; unplaced entries keep canonical order after."""
-
-        position, entry = indexed
-        step = order.get(tuple(entry.key)) if entry.kind == "ACT" else None
-        if step is None:
-            return (1, position, 0)
-        return (0, step, position)
-
-    return tuple(entry for _, entry in sorted(enumerate(placed), key=sort_key))
 
 
 def _entry_label(trace: Any, entry: Site) -> str:
@@ -1207,7 +1164,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
     target = None
     for param in getattr(trace, "params", ()):
-        if record_member(param, "address", None) == node.name or param.name == node.name:
+        if getattr(param, "address", None) == node.name or param.name == node.name:
             target = param
             break
     if target is None:
@@ -1234,7 +1191,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
                 site=node.name,
             )
         mask = _mask_from_dense(shape, node.mask.bool())
-    address = record_member(target, "address", None) or target.name
+    address = getattr(target, "address", None) or target.name
     entry = Site(
         kind="PARAM",
         key=(address,),

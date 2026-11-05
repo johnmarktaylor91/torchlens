@@ -202,9 +202,7 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
     trace = tl.trace(
-        _SubclassCtorModel(),
-        torch.ones(2, 3),
-        capture=tl.options.CaptureOptions(aten_ops=True),
+        _SubclassCtorModel(), torch.ones(2, 3), capture=tl.options.CaptureOptions(aten_ops=True)
     )
     profile = trace._primitive_op_profile
 
@@ -291,9 +289,7 @@ def test_slash_module_address_does_not_enter_parent_or_opaque_aten_labels() -> N
     """Slash remains legal in module addresses and absent from wave-0 parent labels."""
 
     trace = tl.trace(
-        _SlashModuleModel(),
-        torch.ones(2),
-        capture=tl.options.CaptureOptions(aten_ops=True),
+        _SlashModuleModel(), torch.ones(2), capture=tl.options.CaptureOptions(aten_ops=True)
     )
 
     module_addresses = list(trace.modules.keys())

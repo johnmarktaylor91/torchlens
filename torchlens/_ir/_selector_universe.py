@@ -497,7 +497,7 @@ def _grad_fn_forward_op(site: Any) -> Any:
     every forward selector kind evaluates against.
     """
 
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+    from torchlens._data_classes._grad_fn_pass import _pass_op_for_grad_fn
 
     op = site.op
     pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
@@ -518,7 +518,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     gradient edit was a silent no-op).
     """
 
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
+    from torchlens._data_classes._grad_fn_pass import _pass_op_for_grad_fn
 
     trace = site.trace
     if trace is None:

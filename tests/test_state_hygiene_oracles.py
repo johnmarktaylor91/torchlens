@@ -304,10 +304,7 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
         trace = tl.trace(model, x, intervene=spec)
         torch.testing.assert_close(trace.output_ops[0].out, want)
         recorded = tl.record(
-            model,
-            x,
-            intervene=spec,
-            recording=tl.options.RecordingOptions(default_op=True),
+            model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
         ).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
@@ -721,9 +718,7 @@ def _raw_event(
         layer_type=layer_type,
         function=SimpleNamespace(func_name=layer_type, func_qualname=layer_type),
         output=SimpleNamespace(
-            tensor=torch.empty(shape, dtype=dtype),
-            container_path=None,
-            container_spec=None,
+            tensor=torch.empty(shape, dtype=dtype), container_path=None, container_spec=None
         ),
         parents=[SimpleNamespace(parent_label_raw=parent) for parent in parents],
         modules=(),

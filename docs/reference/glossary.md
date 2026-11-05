@@ -513,9 +513,9 @@ and may be renamed or removed without a compatibility alias.
 places a unique marker around each redispatched ATen call and joins CUDA runtime calls to kernels
 and memory copies through Kineto correlation identifiers; it never joins by operator or launch-name
 substring. The relation persists in the artifact's kernel annotation, but this release has no
-public reader for it: the former `Op.gpu_kernels` and `AtenOp.gpu_kernels` views are removed and
-refuse with the typed `facade_redirect` error. A public kernel-recording switch is planned for a
-later release.
+public reader for it: the former per-op and per-call kernel views are removed (see
+[deprecations](deprecations.md)) and refuse with the typed `facade_redirect` error. A public
+kernel-recording switch is planned for a later release.
 
 An unavailable profiler session returns one fact-free row with
 `attribution_status="unavailable"`; it never reports zero kernels. When a parent has a

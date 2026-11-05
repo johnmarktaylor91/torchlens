@@ -21,6 +21,7 @@ from .._ir.selector_eval import (
 from .._trace_core.label_cells import shared_site_index
 from .._utils._record_group_table import record_member
 from ._display import site_table_card, site_table_repr
+from ._resolver_records import _multi_match_message, _site_record
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -348,14 +349,6 @@ def _resolve_facet_sites(
     return facets
 
 
-def _site_record(site: Any) -> Any:
-    """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
-
-    from .._semantic.facets import Facet
-
-    return site.spec.home if isinstance(site, Facet) else site
-
-
 #: Active :func:`_label_index_scope` indexes by ``id(log)``: ``(log, sites, len, index)``.
 _LABEL_INDEXES: ContextVar[dict[int, tuple[Any, Sequence[Site], int, Any]] | None] = ContextVar(
     "torchlens_label_indexes", default=None
@@ -433,46 +426,6 @@ def _indexed_label_match(
         cached = (log, sites, len(sites), index)
         indexes[id(log)] = cached
     return cast("tuple[Site, ...]", cached[3].get(str(selector.selector_value), ()))
-
-
-def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
-    """Return the multi-match warning text for a resolved site set.
-
-    A set holding a synthetic model-output alias (``output_N``) together with
-    the op it aliases does not fan out: a value edit applied at both sites
-    compounds on the one returned value, so the warning says so.
-
-    Parameters
-    ----------
-    query:
-        Selector input as the caller spelled it.
-    matched:
-        Resolved sites, in execution order.
-
-    Returns
-    -------
-    str
-        Warning message.
-    """
-
-    records = [_site_record(site) for site in matched]
-    matched_labels = {getattr(site, "layer_label", None) for site in records}
-    pairs = [
-        (str(getattr(site, "layer_label", None)), str(parent))
-        for site in records
-        if getattr(site, "is_output", False)
-        for parent in (getattr(site, "parents", ()) or ())
-        if parent in matched_labels
-    ]
-    if not pairs:
-        return f"selector {query!r} matched {len(matched)} sites and will fan out."
-    named = ", ".join(f"{alias!r} aliases {producer!r}" for alias, producer in pairs)
-    return (
-        f"selector {query!r} matched {len(matched)} sites, including a model-output alias "
-        f"and the op it aliases ({named}); a value edit applied at both compounds on the "
-        "same returned value instead of reaching independent sites. Narrow the selector to "
-        "the producing op."
-    )
 
 
 def find_sites(

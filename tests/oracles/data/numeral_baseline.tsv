@@ -2732,7 +2732,6 @@ docs-md	docs/maintainers/where.md	101
 docs-md	docs/maintainers/where.md	1016
 docs-md	docs/maintainers/where.md	102
 docs-md	docs/maintainers/where.md	103
-docs-md	docs/maintainers/where.md	1031
 docs-md	docs/maintainers/where.md	1032
 docs-md	docs/maintainers/where.md	104
 docs-md	docs/maintainers/where.md	1042
@@ -2855,7 +2854,6 @@ docs-md	docs/maintainers/where.md	163
 docs-md	docs/maintainers/where.md	164
 docs-md	docs/maintainers/where.md	1649
 docs-md	docs/maintainers/where.md	165
-docs-md	docs/maintainers/where.md	1656
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	168
 docs-md	docs/maintainers/where.md	169
@@ -2871,7 +2869,6 @@ docs-md	docs/maintainers/where.md	1749
 docs-md	docs/maintainers/where.md	175
 docs-md	docs/maintainers/where.md	176
 docs-md	docs/maintainers/where.md	177
-docs-md	docs/maintainers/where.md	1772
 docs-md	docs/maintainers/where.md	178
 docs-md	docs/maintainers/where.md	179
 docs-md	docs/maintainers/where.md	18
@@ -3091,7 +3088,6 @@ docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	367
 docs-md	docs/maintainers/where.md	369
-docs-md	docs/maintainers/where.md	37
 docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
@@ -3419,7 +3415,6 @@ docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	870
 docs-md	docs/maintainers/where.md	875
 docs-md	docs/maintainers/where.md	88
-docs-md	docs/maintainers/where.md	887
 docs-md	docs/maintainers/where.md	89
 docs-md	docs/maintainers/where.md	891
 docs-md	docs/maintainers/where.md	90
@@ -5810,6 +5805,7 @@ package-docstrings	torchlens/_io/_load_validators.py	10
 package-docstrings	torchlens/_io/_load_validators.py	102
 package-docstrings	torchlens/_io/_load_validators.py	3.0
 package-docstrings	torchlens/_io/_load_validators.py	43
+package-docstrings	torchlens/_io/_provenance_git.py	21
 package-docstrings	torchlens/_io/_root_manifest.py	2.16
 package-docstrings	torchlens/_io/_runtime_identity.py	3.0
 package-docstrings	torchlens/_io/_runtime_identity.py	440
@@ -5839,7 +5835,6 @@ package-docstrings	torchlens/_io/bundle.py	1_1
 package-docstrings	torchlens/_io/bundle.py	2.16
 package-docstrings	torchlens/_io/bundle.py	2.31.0
 package-docstrings	torchlens/_io/bundle.py	2.38
-package-docstrings	torchlens/_io/bundle.py	21
 package-docstrings	torchlens/_io/bundle.py	2_3
 package-docstrings	torchlens/_io/bundle.py	3.0
 package-docstrings	torchlens/_io/bundle.py	3.3
@@ -6214,6 +6209,8 @@ package-docstrings	torchlens/_postprocess/__init__.py	20
 package-docstrings	torchlens/_postprocess/__init__.py	20,
 package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_buffer_addresses.py	83
+package-docstrings	torchlens/_postprocess/_column_passes_graph.py	15
+package-docstrings	torchlens/_postprocess/_column_passes_graph.py	52
 package-docstrings	torchlens/_postprocess/_conditional_records.py	24
 package-docstrings	torchlens/_postprocess/_conditional_records.py	60
 package-docstrings	torchlens/_postprocess/_grouping_stamp.py	4.3
@@ -6253,12 +6250,10 @@ package-docstrings	torchlens/_postprocess/finalization.py	17
 package-docstrings	torchlens/_postprocess/finalization.py	18
 package-docstrings	torchlens/_postprocess/finalization.py	19
 package-docstrings	torchlens/_postprocess/finalization.py	20
-package-docstrings	torchlens/_postprocess/finalization.py	52
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78
 package-docstrings	torchlens/_postprocess/graph_traversal.py	13
 package-docstrings	torchlens/_postprocess/graph_traversal.py	5.0
-package-docstrings	torchlens/_postprocess/graph_traversal.py	52
 package-docstrings	torchlens/_postprocess/graph_traversal.py	53
 package-docstrings	torchlens/_postprocess/labeling.py	1,3
 package-docstrings	torchlens/_postprocess/labeling.py	10
@@ -6479,12 +6474,9 @@ package-docstrings	torchlens/_selection/graph.py	2_3
 package-docstrings	torchlens/_selection/module_alias_guard.py	3.7
 package-docstrings	torchlens/_selection/resolver.py	1.6
 package-docstrings	torchlens/_selection/resolver.py	42
-package-docstrings	torchlens/_selection/selection.py	10
 package-docstrings	torchlens/_selection/selection.py	108
-package-docstrings	torchlens/_selection/selection.py	14
 package-docstrings	torchlens/_selection/selection.py	17
 package-docstrings	torchlens/_selection/selection.py	1_1
-package-docstrings	torchlens/_selection/selection.py	1_10
 package-docstrings	torchlens/_selection/selection.py	1_2
 package-docstrings	torchlens/_selection/selection.py	2_3
 package-docstrings	torchlens/_selection/selector_base.py	1.4

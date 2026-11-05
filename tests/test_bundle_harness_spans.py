@@ -68,9 +68,7 @@ def _member(model: torch.nn.Module, ids: list[int], **binding: Any) -> tl.Trace:
     trace = tl.trace(model, torch.tensor([ids]))
     if binding:
         attach_sidecar(
-            trace,
-            TOKEN_BOUNDARY_FAMILY_ID,
-            {"stream": "input", "batch_row": 0, **binding},
+            trace, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, **binding}
         )
     return trace
 
@@ -121,9 +119,7 @@ def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
     options = tl.options.CaptureOptions()
     draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=[])
     attach_sidecar(
-        draft,
-        TOKEN_BOUNDARY_FAMILY_ID,
-        {"stream": "input", "batch_row": 0, "completion": [3, 7]},
+        draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
     bundle = Bundle({"draft": draft, "critique": _member(model, _CRITIQUE_IDS)})
     with pytest.raises(BundleRelationError) as excinfo:

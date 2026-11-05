@@ -17,7 +17,6 @@ import os
 import pickle
 import platform
 import shutil
-import subprocess
 import sys
 import uuid
 import warnings
@@ -75,6 +74,7 @@ from ._durability import (
 from ._extra_files import _warn_extra_files
 from ._load_validators import MODEL_FREE_TLSPEC_KINDS, load_model_free_tlspec
 from ._pickle_prescan import OpcodeCeilingExceeded
+from ._provenance_git import _git_commit_hash
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
@@ -3194,52 +3194,6 @@ def _torchlens_package_dir() -> Path:
     """Return the torchlens package directory (provenance root for the git probe)."""
 
     return Path(__file__).resolve().parent.parent
-
-
-def _git_commit_hash(cwd: Path) -> str | None:
-    """Return the Git commit for ``cwd`` with a short best-effort timeout.
-
-    R21-2: the provenance git commit is resolved from the TORCHLENS package
-    directory, not ``Path.cwd()``. Stamping the working directory's repository
-    recorded the USER's unrelated repo commit (a privacy leak) and made the same
-    capture saved from two directories differ (an ambient-environment dependence in a
-    supposedly portable artifact). Resolving from the package dir yields torchlens's
-    own commit for a dev/editable install and ``None`` for a released wheel (whose
-    ``torchlens_version`` already identifies it) -- deterministic either way.
-
-    Parameters
-    ----------
-    cwd:
-        Directory whose repository HEAD is probed (the torchlens package dir).
-
-    Returns
-    -------
-    str | None
-        Full commit hash, or ``None`` on any failure or timeout.
-    """
-
-    try:
-        # R40: routed through the ONE bounded spawn seam so the timeout path
-        # tears down the whole process group instead of orphaning a wedged
-        # git helper's grandchildren.
-        from .._utils._subprocess import run_bounded_subprocess
-
-        completed = run_bounded_subprocess(
-            ["git", "rev-parse", "HEAD"],
-            cwd=cwd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=0.25,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    commit = completed.stdout.strip()
-    if completed.returncode != 0 or not 7 <= len(commit) <= 64:
-        return None
-    if any(character not in "0123456789abcdef" for character in commit.lower()):
-        return None
-    return commit
 
 
 def _validate_activation_transform_outputs(

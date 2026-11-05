@@ -36,16 +36,15 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
-from ._utils._record_group_table import record_member
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
 from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import restores_rng_streams, set_random_seed
+from ._validation_divergence import _first_reproducibility_divergence
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -770,47 +769,6 @@ def _restore_validation_replay_state(
         restores.callback(
             restore_snapshot_if_changed, model, state_dict, restore_state_dict_resilient
         )
-
-
-def _layer_signature(layer: Any) -> tuple[Any, ...]:
-    """Cheap structural signature of one layer record for divergence hints."""
-
-    return (
-        record_type(layer, None),
-        getattr(layer, "func_name", None),
-        len(getattr(layer, "parents", ()) or ()),
-        bool(getattr(layer, "is_output", False)),
-        bool(record_member(layer, "is_buffer", False)),
-    )
-
-
-def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
-    """Return a concise first-difference hint for two validation traces.
-
-    Parameters
-    ----------
-    left:
-        First validation trace.
-    right:
-        Second validation trace.
-
-    Returns
-    -------
-    str | None
-        Human-readable first divergence hint, or ``None`` when no cheap hint is
-        available.
-    """
-
-    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
-        if _layer_signature(left_layer) != _layer_signature(right_layer):
-            return (
-                f"first divergence at op index {index}: "
-                f"{getattr(left_layer, 'func_name', None)!r} vs "
-                f"{getattr(right_layer, 'func_name', None)!r}"
-            )
-    if len(left._layer_list) != len(right._layer_list):
-        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
-    return None
 
 
 def _warn_if_validation_trace_not_reproducible(

@@ -238,8 +238,7 @@ def test_entrypoint_activation_warns_and_skips_broken_plugin(
             return [point for point in self if point.group == group]
 
     monkeypatch.setattr(
-        "torchlens._semantic.recipes.metadata.entry_points",
-        lambda: _EntryPoints([broken]),
+        "torchlens._semantic.recipes.metadata.entry_points", lambda: _EntryPoints([broken])
     )
     with pytest.warns(UserWarning, match="Skipping broken torchlens.recipes entry point"):
         activated = activate_entrypoint_recipes()

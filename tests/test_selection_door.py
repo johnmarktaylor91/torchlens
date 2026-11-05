@@ -97,9 +97,7 @@ def test_site_record_on_edge_rows_is_the_edge_use_record() -> None:
 
     torch.manual_seed(0)
     replayable = tl.trace(
-        _TwoRelu(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(replayable=True),
+        _TwoRelu(), torch.randn(3, 4), capture=tl.options.CaptureOptions(replayable=True)
     )
     relu_op = next(op for op in replayable.ops if op.func_name == "relu")
     use = relu_op.edge_uses[0]

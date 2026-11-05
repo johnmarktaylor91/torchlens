@@ -524,6 +524,38 @@ def _check_call_site_contract(self: "Trace", classes: dict[str, str]) -> None:
         raise MetadataInvariantError("call_site_contract", violation)
 
 
+def _memoized_recurrent_labels(
+    recurrent_labels_memo: dict[int, tuple[Any, tuple[str, ...]]],
+    raw_recurrent_labels: Any,
+) -> tuple[str, ...]:
+    """Return ``raw_recurrent_labels`` as a tuple, shared across ops of one layer.
+
+    Parameters
+    ----------
+    recurrent_labels_memo:
+        Memo keyed by the id of the raw ``recurrent_ops`` container; each value
+        keeps the container alive alongside its tuple.
+    raw_recurrent_labels:
+        One op's raw ``recurrent_ops`` container.
+
+    Returns
+    -------
+    tuple[str, ...]
+        The recurrent labels as a tuple.
+    """
+
+    recurrent_labels_cached = recurrent_labels_memo.get(id(raw_recurrent_labels))
+    if recurrent_labels_cached is None:
+        recurrent_labels = tuple(raw_recurrent_labels)
+        recurrent_labels_memo[id(raw_recurrent_labels)] = (
+            raw_recurrent_labels,
+            recurrent_labels,
+        )
+    else:
+        recurrent_labels = recurrent_labels_cached[1]
+    return recurrent_labels
+
+
 def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
     """Build the backend-neutral recurrence graph from Trace postprocess state.
 
@@ -572,16 +604,9 @@ def _build_recurrence_grouping_graph(self: "Trace") -> RecurrenceGroupingGraph:
             )
         else:
             equivalent_labels = equivalent_labels_cached[1]
-        raw_recurrent_labels = node._slot("recurrent_ops")
-        recurrent_labels_cached = recurrent_labels_memo.get(id(raw_recurrent_labels))
-        if recurrent_labels_cached is None:
-            recurrent_labels = tuple(raw_recurrent_labels)
-            recurrent_labels_memo[id(raw_recurrent_labels)] = (
-                raw_recurrent_labels,
-                recurrent_labels,
-            )
-        else:
-            recurrent_labels = recurrent_labels_cached[1]
+        recurrent_labels = _memoized_recurrent_labels(
+            recurrent_labels_memo, node._slot("recurrent_ops")
+        )
         is_pruned = bool(record_member(node, "is_orphan", False))
         retain = not is_pruned
         if retain:

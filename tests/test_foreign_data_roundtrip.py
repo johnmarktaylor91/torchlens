@@ -136,10 +136,7 @@ def _validate(model: nn.Module, x: torch.Tensor) -> bool:
         pytest.param(_numpy_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke),
         (_numpy_transpose_round_trip, RESOLUTION_VIEW, "detach"),
         pytest.param(
-            _dlpack_capsule_round_trip,
-            RESOLUTION_VIEW,
-            "detach",
-            marks=pytest.mark.smoke,
+            _dlpack_capsule_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke
         ),
         pytest.param(_tolist_round_trip, RESOLUTION_COPY, "detach", marks=pytest.mark.smoke),
     ],
