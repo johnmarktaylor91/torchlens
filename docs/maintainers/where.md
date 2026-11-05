@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1730 modules, 701847 lines, 0 modules without a docstring.
+85 packages, 1730 modules, 701853 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 85 | 35187 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 85 | 35194 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -94,14 +94,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Experiment-tracker integration: one watch engine produces tensor-free statistics records, and sinks (TensorBoard, Weights & Biases, JSONL... | 15 | 5231 |
 | `torchlens.transformer` | Static transformer pictures: token-labeled attention heatmaps, logit-lens and per-token loss strips, and attention annotated with measure... | 15 | 5407 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 34065 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 84 | 34064 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 10 | 2755 |
 
 ## Modules by package
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35187 lines)
+TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35194 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -178,7 +178,7 @@ TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35187 li
 | `_user_public_impls` | Private implementations for public user-facing utility commands. | 1517 |
 | `_validation_argument_references` | Parameter arguments that forward validation's own capture keeps by reference. | 762 |
 | `_validation_divergence` | First-divergence hints between two validation traces of one model. | 52 |
-| `_validation_entry_options` | Torch-only keywords of the forward validation doors: check, collect and route them. | 79 |
+| `_validation_entry_options` | Torch-only keywords of the forward validation doors: check, collect and route them. | 86 |
 | `_validation_state_snapshot` | Restore snapshots and copy-failure reporting for forward validation. | 421 |
 | `_validation_status` | Replay-validation status objects. | 770 |
 | `dataset_extraction` | Batched dataset extraction with a self-describing, resumable disk artifact. | 787 |
@@ -2318,7 +2318,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 34065 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (84 modules, 34064 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2328,7 +2328,7 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 | `_backward_state` | Model-state guards and parameter-gradient evidence for backward validation. | 250 |
 | `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 111 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 257 |
-| `_consolidated` | Consolidated validation entry point for TorchLens 2.0. | 813 |
+| `_consolidated` | Consolidated validation entry point for TorchLens 2.0. | 812 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 41 |
 | `_core` | Core validation logic for verifying saved activations. | 3684 |
 | `_core_arg_slots` | Slot-level evidence readers for the unattributed-arg-slot sweep. | 101 |
