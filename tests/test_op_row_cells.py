@@ -1,16 +1,19 @@
 """Shadow parity for the row-direct op writer (capture C2a).
 
-``op_row_cells`` computes an op's record-sourced store cells straight from the
-capture draft, without building the journal ``OpRecord``. These tests run it in
-shadow at every exhaustive commit, beside the real freeze, and require its cells
-to equal ``scatter_record_to_cells`` of the frozen record cell for cell (same
-keys, same value types, equal values) at that same moment, on models that
+``op_row_cells`` computes an op's layout-stored cells straight from the capture
+draft, without building the journal ``OpRecord``. These tests run it in shadow
+at every exhaustive commit, beside the real freeze, and require its cells to
+equal the layout projection of ``scatter_record_to_cells`` of the frozen record
+(what ``Op.__init__`` stores) cell for cell (same keys, same value types, equal
+values) at that same moment, and to write into an ``OpRowStore`` row that reads
+back the same objects, on models that
 exercise in-place ops, buffer updates, out= writes, ``.data`` rebinds, mutated
 list arguments, mid-forward parameter updates, multi-output calls and loops.
 """
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Iterator
 from typing import Any
 
@@ -19,9 +22,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._data_classes.op import _OP_PROPERTY_BACKED_FIELD_NAMES, _OP_STORE_LAYOUT
 from torchlens._ir.op_record import IngestExtras
 from torchlens._ir.op_record_scatter import scatter_record_to_cells
-from torchlens._trace_core.op_store import _MISSING
+from torchlens._trace_core.op_store import _MISSING, OpRowStore
 from torchlens.backends.torch import ops as torch_ops
 from torchlens.backends.torch._ops_row_cells import op_row_cells, write_op_row
 
@@ -165,11 +169,43 @@ def _cell_mismatches(expected: dict[str, Any], actual: dict[str, Any]) -> list[s
     ]
 
 
+def _layout_projection(cells: dict[str, Any]) -> dict[str, Any]:
+    """Project scatter cells onto the stored layout exactly as ``Op.__init__`` stores them."""
+
+    projected = {
+        name: value for name, value in cells.items() if name not in _OP_PROPERTY_BACKED_FIELD_NAMES
+    }
+    source_trace = cells["source_trace"]
+    projected["_source_trace_ref"] = None if source_trace is None else weakref.ref(source_trace)
+    projected["_is_in_conditional_body"] = cells["is_in_conditional_body"]
+    return projected
+
+
+def _readback_mismatches(store: OpRowStore, cells: dict[str, Any]) -> list[str]:
+    """Write ``cells`` as one row and list the names that do not read back as the same object."""
+
+    try:
+        row = write_op_row(store, cells)
+    except KeyError as error:
+        return [f"not a layout field: {error}"]
+    fid_by_name = _OP_STORE_LAYOUT.fid_by_name
+    bad = [name for name in cells if store.cell_get(row, fid_by_name[name]) is not cells[name]]
+    unset = [
+        name
+        for name, fid in fid_by_name.items()
+        if name not in cells and store.cell_get(row, fid) is not _MISSING
+    ]
+    return bad + unset
+
+
 @pytest.fixture
-def shadow_commits(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, list[str], int]]]:
+def shadow_commits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[list[tuple[str, list[str], list[str]]]]:
     """Run ``op_row_cells`` in shadow beside every exhaustive freeze; yield the comparisons."""
 
-    seen: list[tuple[str, list[str], int]] = []
+    seen: list[tuple[str, list[str], list[str]]] = []
+    store = OpRowStore(_OP_STORE_LAYOUT)
     real_freeze = torch_ops.ExhaustiveOpDraft.freeze
 
     def shadow_freeze(draft: Any) -> Any:
@@ -179,14 +215,13 @@ def shadow_commits(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, 
         direct = op_row_cells(
             draft.trace,
             draft.fields_dict,
-            draft.tensor,
             draft.fire_results,
-            module_stack=draft.module_stack,
             call_ref_box=box,
         )
         record = real_freeze(draft)
-        expected = scatter_record_to_cells(record, IngestExtras(), draft.trace)
-        seen.append((record.label_raw, _cell_mismatches(expected, direct), len(direct)))
+        expected = _layout_projection(scatter_record_to_cells(record, IngestExtras(), draft.trace))
+        mismatches = _cell_mismatches(expected, direct)
+        seen.append((record.label_raw, mismatches, _readback_mismatches(store, direct)))
         return record
 
     monkeypatch.setattr(torch_ops.ExhaustiveOpDraft, "freeze", shadow_freeze)
@@ -195,12 +230,12 @@ def shadow_commits(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[tuple[str, 
 
 @pytest.mark.parametrize(("name", "model_cls", "shape"), _SUBJECTS, ids=[s[0] for s in _SUBJECTS])
 def test_op_row_cells_equal_scatter_of_frozen_record(
-    shadow_commits: list[tuple[str, list[str], int]],
+    shadow_commits: list[tuple[str, list[str], list[str]]],
     name: str,
     model_cls: type[nn.Module],
     shape: tuple[int, ...],
 ) -> None:
-    """Every committed op's direct cells equal the scatter of its frozen record."""
+    """Every committed op's direct cells equal its frozen record's stored cells and write as a row."""
 
     torch.manual_seed(0)
     model = model_cls()
@@ -208,13 +243,12 @@ def test_op_row_cells_equal_scatter_of_frozen_record(
     assert shadow_commits, f"{name}: no exhaustive commit was observed"
     bad = [(label, names) for label, names, _ in shadow_commits if names]
     assert bad == [], f"{name}: cell mismatches {bad[:5]}"
+    unread = [(label, names) for label, _, names in shadow_commits if names]
+    assert unread == [], f"{name}: row write or read-back mismatches {unread[:5]}"
 
 
 def test_write_op_row_places_cells_in_layout_order() -> None:
     """``write_op_row`` appends one row with each cell at its layout slot, the rest unset."""
-
-    from torchlens._data_classes.op import _OP_STORE_LAYOUT
-    from torchlens._trace_core.op_store import OpRowStore
 
     store = OpRowStore(_OP_STORE_LAYOUT)
     fid_by_name = _OP_STORE_LAYOUT.fid_by_name
