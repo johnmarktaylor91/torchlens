@@ -9698,9 +9698,9 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/repgeom/_node_visuals.py",
+  "file": "torchlens/repgeom/_node_keys.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 1,
   "via_getattr": true
  },
  {
