@@ -159,7 +159,7 @@ def _extend_grad_fn_graph_relations(
     co_parent_ids: dict[int, None] = dict.fromkeys(new_ids)
     for child_id in [*new_ids, *touched_child_ids]:
         child = grad_fn_logs[child_id]
-        child._graph_siblings = _sibling_labels(child.label, child.parents, children_of)
+        child.siblings = _sibling_labels(child.label, child.parents, children_of)
         if child_id in touched_child_ids:
             co_parent_ids.update(dict.fromkeys(label_to_id[label] for label in child.parents))
     for object_id in co_parent_ids:
@@ -263,9 +263,9 @@ def _rename_appended_labels(
             if child is None or child_id in new_id_set:
                 continue
             child.parents = renamed(child.parents)
-            child._graph_siblings = renamed(child.graph.siblings)
+            child.siblings = renamed(child.siblings)
             for parent_label in child.parents:
                 parent_id = label_to_id[parent_label]
                 if parent_id not in new_id_set:
                     parent = grad_fn_logs[parent_id]
-                    parent._graph_co_parents = renamed(parent.graph.co_parents)
+                    parent.co_parents = renamed(parent.co_parents)
