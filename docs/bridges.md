@@ -17,7 +17,7 @@ Two kinds of tool need no connector at all. Plain tensors and tables (every
 saved activation is a `torch.Tensor`; `tl.export.csv` and `tl.export.parquet`
 write tables) go straight into scikit-learn, pandas or numpy. Tools that are
 alternative ways into a network rather than consumers of its record, such as
-TransformerLens, nnsight (as a live tracer), pyvene and torchview, have no
+TransformerLens, nnsight's live tracer (its offline connector is listed below), pyvene and torchview, have no
 connector; TorchLens's `torchlens.mechinterp` kit is modelled on
 TransformerLens's and is documented in [the mech-interp reference](reference/mechinterp.md).
 
@@ -213,34 +213,37 @@ recorded stimulus ids as coordinates and provenance in `attrs`.
 ### steering-vectors
 
 [steering-vectors/steering-vectors](https://github.com/steering-vectors/steering-vectors).
-Trains the package's own steering vector from saved activations of positive
-and negative prompts, without re-running the model.
+Hands a direction fitted from saved activations of positive and negative
+prompts (`tl.intervention.fit_direction`, no re-run of the model) to the
+package as its own `SteeringVector`.
 
-- `tl.bridge.steering_vectors.vector(log, positive_site, negative_site=None, *, negative_log=None, read_token_index=-1, attention_mask=None, negative_attention_mask=None, trainer=None, layer=None, layer_type="decoder_block", **kwargs)`.
-  The negative prompts usually live in a second trace (`negative_log=`); one
-  token per prompt is read before training (`-1` is the last real token,
-  padding-aware when a mask is known); `layer=` also returns a real
-  `SteeringVector`. Bit-identical to `train_steering_vector` with
-  `read_token_index=-1, batch_size=1`.
+- `tl.bridge.steering_vectors.from_direction(direction, *, layer=None, layer_type="decoder_block")`
+  returns a real `steering_vectors.SteeringVector` holding `direction.vector`;
+  `direction.to_steering_vectors()` is the same call. The layer is the site
+  label's trailing index unless `layer=` is given; a different explicit index
+  refuses with `direction_layer_mismatch`. Applied with the same multiplier,
+  the library object gives the native `tl.steer` logits.
 - Extra: `steering`.
 
 ### repeng
 
 [vgel/repeng](https://github.com/vgel/repeng). Builds a `repeng.ControlVector`
-from contrastive saved activations, replicating `read_representations`.
+from a direction fitted on contrastive saved activations.
 
-- `tl.bridge.repeng.control_vector(log, positive_site, negative_site=None, *, layer, negative_log=None, read_token_index=-1, attention_mask=None, negative_attention_mask=None, method="pca_diff", model_type=None)`.
-  repeng's layer `i` reads the output of `model.layers.<i>`, except the last
+- `tl.bridge.repeng.from_direction(direction, *, layer=None, model_type=None)`
+  returns a `repeng.ControlVector` holding `direction.vector`
+  (`direction.to_repeng()` is the same call). repeng's layer `i` reads the output of `model.layers.<i>`, except the last
   layer, where Hugging Face returns the final-norm output (`model.norm`).
 - Extra: `repeng`.
 
 ### dialz
 
 [Dialz](https://github.com/cardiffnlp/dialz). Builds a `dialz.SteeringVector`
-the same way, against `dialz.vector.read_representations`.
+the same way.
 
-- `tl.bridge.dialz.vector(log, positive_site, negative_site=None, *, layer, negative_log=None, read_token_index=-1, attention_mask=None, negative_attention_mask=None, method=None, model_type=None)`;
-  `method=None` follows the installed release's default.
+- `tl.bridge.dialz.from_direction(direction, *, layer=None, model_type=None)`
+  returns a `dialz.SteeringVector` holding `direction.vector`
+  (`direction.to_dialz()` is the same call).
 - Extra: `dialz` (Python below 3.13).
 
 ### LIT (Learning Interpretability Tool)
@@ -481,6 +484,7 @@ pytorch-grad-cam, inseq, rsatoolbox, Brain-Score, xarray, steering-vectors,
 repeng, dialz, LIT, nnsight, Hugging Face transformers and timm, Hugging Face
 Trainer, PyTorch Lightning, torchextractor, depyf, the PyTorch profiler,
 Netron, Model Explorer, TensorBoard, Weights & Biases, MLflow, Aim,
-speedscope, treescope, lovely-tensors, torchshow, the Hugging Face Hub and
+speedscope and the other profiler-trace viewers (Chrome tracing, Perfetto,
+flame graphs), treescope, lovely-tensors, torchshow, the Hugging Face Hub and
 MCP. Which projects shaped TorchLens's own features, as opposed to receiving
 its output, is on the [acknowledgments page](acknowledgments.md).
