@@ -218,7 +218,7 @@ def _repin_rebound_receiver(self: "Trace", args: tuple[Any, ...], tensor: torch.
     """Re-pin a rebound registered buffer receiver to its pre-call label; return whether it did.
 
     The caller checks the call is a rebind (``set_``, ``share_memory_``). Such a call moves
-    the receiver onto another storage, so after the call the r85 storage gate refuses the
+    the receiver onto another storage, so after the call the session storage gate refuses the
     label the receiver carried INTO the call. That label is still the right parent of the
     receiver slot: the call consumed the pre-call value, which its buffer source saved
     before the call. Re-logging the receiver as a new buffer source here would bind the
@@ -267,7 +267,7 @@ def _build_shared_fields_dict(
             continue
         if func_name in _RECEIVER_REBIND_NAMES and _repin_rebound_receiver(self, args, tensor):
             continue
-        # r81: never source-log a "buffer" off a raw static stamp (stale cross-capture, or
+        # Never source-log a "buffer" off a raw static stamp (stale cross-capture, or
         # storage rebound to input data); the session belt checks object and storage.
         buffer_address = resolve_or_late_index_buffer_address(self, tensor)
         if buffer_address is not None:
@@ -320,7 +320,7 @@ def _build_shared_fields_dict(
     fields_dict["func_duration"] = exec_ctx.time_elapsed
     fields_dict["func_rng_states"] = exec_ctx.rng_states
     fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-    # Exact-name lookup first (add / add_ / __add__ differ, W3 F9); the stripped key is a
+    # Exact-name lookup first (add / add_ / __add__ differ); the stripped key is a
     # fallback for non-dunder names only, so an opaque dunder never borrows a namesake's.
     _op_arg_names = _st._arg_names.get(func_name)
     if _op_arg_names is None:
