@@ -448,6 +448,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # through to a generic NotImplementedError instead). Build-dependent,
         # so mirror the live post-snapshot capability.
         "HAS_META_ITEM_GUARD": tc.HAS_META_ITEM_GUARD,
+        # torch builds compiled against NumPy 1.x (torch 2.1-2.2) lose the
+        # torch<->numpy bridge under NumPy 2. Every CI row pairs a working
+        # build, but the value is environment-dependent: mirror it.
+        "HAS_NUMPY_BRIDGE": tc.HAS_NUMPY_BRIDGE,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.
