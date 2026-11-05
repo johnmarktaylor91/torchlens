@@ -1,6 +1,6 @@
 """Shared operation fields and tensor variation tracking."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -26,6 +26,8 @@ from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     mutated_parameter_label,
+    raw_tensor_label,
+    session_meta_is_anchored,
     set_tensor_label,
 )
 from ..._utils._tl_collective import _async_collective_elem
@@ -56,7 +58,11 @@ from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
 )
-from .buffer_writes import resolve_or_late_index_buffer_address, session_validated_buffer_address
+from .buffer_writes import (
+    _RECEIVER_REBIND_NAMES,
+    resolve_or_late_index_buffer_address,
+    session_validated_buffer_address,
+)
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
@@ -208,6 +214,61 @@ def _set_arg_template_fields(
         )
 
 
+def _rebound_buffer_receiver_label(
+    self: "Trace", func_name: str, args: tuple[Any, ...], tensor: torch.Tensor
+) -> str | None:
+    """Return the pre-call label of a registered buffer this very call rebound, else ``None``.
+
+    ``buffer.set_(...)`` (and ``share_memory_``) moves the receiver onto another
+    storage, so after the call the r85 storage gate refuses the label the
+    receiver carried INTO the call. That label is still the right parent of
+    the receiver slot: the call consumed the pre-call value, which its buffer
+    source saved before the call. Re-logging the receiver as a new buffer
+    source here would bind the slot to the post-call value. Only the receiver
+    of a rebind call qualifies, only with a current-session stamp, and only
+    when it still resolves to a registered buffer; the output relabel that
+    follows re-stamps it with the call's own label. The stamp is read raw only
+    after the session-anchor check, so a foreign stamp is never trusted.
+    """
+
+    if func_name not in _RECEIVER_REBIND_NAMES or not args or tensor is not args[0]:
+        return None
+    label = raw_tensor_label(tensor)
+    if label is None or not session_meta_is_anchored(get_tensor_meta(tensor)):
+        return None
+    if resolve_or_late_index_buffer_address(self, tensor) is None:
+        return None
+    return label
+
+
+def _log_unlabeled_arg_sources(
+    self: "Trace",
+    func_name: str,
+    args: tuple[Any, ...],
+    tensors_to_resolve: Iterable[torch.Tensor],
+) -> None:
+    """Source-log each unlabeled argument as a buffer or closure constant."""
+
+    for tensor in tensors_to_resolve:
+        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+            continue
+        rebound_label = _rebound_buffer_receiver_label(self, func_name, args, tensor)
+        if rebound_label is not None:
+            # Re-pin the receiver's own pre-call label to the storage this call bound.
+            set_tensor_label(tensor, rebound_label)
+            continue
+        # r81: never source-log a "buffer" off the raw static stamp -- a stale
+        # cross-capture stamp (F1) or a legitimately stamped receiver whose
+        # storage was rebound to input data mid-forward (F2) would re-root an
+        # input-derived value as internal state. The session belt validates
+        # object + storage identity; the tracker fallback is storage-anchored.
+        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
+        if buffer_address is not None:
+            log_source_tensor(self, tensor, "buffer", buffer_address)
+        else:
+            log_closure_constant_if_known(self, tensor)
+
+
 def _build_shared_fields_dict(
     self: "Trace",
     func: Callable[..., Any],
@@ -236,19 +297,7 @@ def _build_shared_fields_dict(
     # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
     arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
-    for tensor in tensors_to_resolve:
-        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
-            continue
-        # r81: never source-log a "buffer" off the raw static stamp -- a stale
-        # cross-capture stamp (F1) or a legitimately stamped receiver whose
-        # storage was rebound to input data mid-forward (F2) would re-root an
-        # input-derived value as internal state. The session belt validates
-        # object + storage identity; the tracker fallback is storage-anchored.
-        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
-        if buffer_address is not None:
-            log_source_tensor(self, tensor, "buffer", buffer_address)
-        else:
-            log_closure_constant_if_known(self, tensor)
+    _log_unlabeled_arg_sources(self, func_name, args, tensors_to_resolve)
 
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
