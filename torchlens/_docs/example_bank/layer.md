@@ -138,7 +138,7 @@ print("source_trace", layer.source_trace is trace)
 ### layer-tensor-facts
 Shape, dtype and memory of a looped layer: per layer, with totals over all passes.
 
-- covers: `Layer.shape`, `Layer.dtype`, `Layer.shape_summary`, `Layer.output_device`, `Layer.device_ref`, `Layer.dtype_ref`, `Layer.cost.activation_memory`, `Layer.cost.total_activation_memory`, `Layer.cost.autograd_memory`, `Layer.cost.total_autograd_memory`, `Layer.autograd.num_autograd_tensors`, `Layer.detach_saved_activations`
+- covers: `Layer.shape`, `Layer.dtype`, `Layer.shape_summary`, `Layer.device_ref`, `Layer.dtype_ref`, `Layer.cost.activation_memory`, `Layer.cost.total_activation_memory`, `Layer.cost.autograd_memory`, `Layer.cost.total_autograd_memory`, `Layer.autograd.num_autograd_tensors`, `Layer.detach_saved_activations`
 - tasks: inspect-layer, memory
 - fixture: loop
 
@@ -148,7 +148,6 @@ layer = trace.layers["tanh_1_2"]
 print("shape", tuple(layer.shape))
 print("dtype", layer.dtype)
 print("shape_summary", layer.shape_summary)
-print("output_device", layer.output_device)
 print("device_ref", layer.device_ref)
 print("dtype_ref", layer.dtype_ref)
 print("activation_memory", layer.cost.activation_memory)
@@ -161,7 +160,6 @@ print("detach_saved_activations", layer.detach_saved_activations)
 # shape (2, 4)
 # dtype torch.float32
 # shape_summary None
-# output_device same
 # device_ref cpu
 # dtype_ref torch.float32
 # activation_memory 32 B
@@ -175,7 +173,7 @@ print("detach_saved_activations", layer.detach_saved_activations)
 ### layer-activation-transform
 An activation transform stores a changed copy of the saved output (single-pass layer).
 
-- covers: `Layer.activation_transform`, `Layer.payload.transformed_out`, `Layer.payload.transformed_out_shape`, `Layer.payload.transformed_out_dtype`, `Layer.cost.transformed_activation_memory`
+- covers: `Layer.payload.transformed_out`, `Layer.payload.transformed_out_shape`, `Layer.payload.transformed_out_dtype`, `Layer.cost.transformed_activation_memory`
 - tasks: transform-activations
 - fixture: toy
 
@@ -183,13 +181,11 @@ An activation transform stores a changed copy of the saved output (single-pass l
 opts = tl.options.CaptureOptions(activation_transform=lambda t: t.mean(dim=0))
 trace = tl.trace(model, x, capture=opts)
 layer = trace.layers["relu_1_2"]
-print("activation_transform", callable(layer.activation_transform))
 print("transformed_out", tuple(layer.payload.transformed_out.shape))
 print("transformed_out_shape", tuple(layer.payload.transformed_out_shape))
 print("transformed_out_dtype", layer.payload.transformed_out_dtype)
 print("transformed_activation_memory", layer.cost.transformed_activation_memory)
 # Output:
-# activation_transform True
 # transformed_out (8,)
 # transformed_out_shape (8,)
 # transformed_out_dtype torch.float32
@@ -232,7 +228,7 @@ print("is_inplace", layer.is_inplace)
 ### layer-grad-fn
 The autograd node of a looped layer, read from its first pass (per layer).
 
-- covers: `Layer.autograd.grad_fn_class_name`, `Layer.autograd.grad_fn_class_qualname`, `Layer.autograd.grad_fn_handle`, `Layer.grad_fn_object_id`
+- covers: `Layer.autograd.grad_fn_class_name`, `Layer.autograd.grad_fn_class_qualname`, `Layer.autograd.grad_fn_handle`
 - tasks: autograd, inspect-layer
 - fixture: loop
 
@@ -242,12 +238,10 @@ layer = trace.layers["linear_1_1"]
 print("grad_fn_class_name", layer.autograd.grad_fn_class_name)
 print("grad_fn_class_qualname", layer.autograd.grad_fn_class_qualname)
 print("grad_fn_handle", type(layer.autograd.grad_fn_handle).__name__)
-print("grad_fn_object_id", isinstance(layer.grad_fn_object_id, int))
 # Output:
 # grad_fn_class_name AddmmBackward0
 # grad_fn_class_qualname builtins.AddmmBackward0
 # grad_fn_handle AddmmBackward0
-# grad_fn_object_id True
 ```
 
 ### layer-grad-fn-after-backward
@@ -423,7 +417,7 @@ print("parents", layer.parents)
 print("children", layer.children)
 print("has_parents", layer.graph.has_parents)
 print("has_children", layer.graph.has_children)
-print("siblings", layer.graph.siblings)
+print("siblings", layer.siblings)
 print("has_siblings", layer.graph.has_siblings)
 print("co_parents", layer.graph.co_parents)
 print("has_co_parents", layer.graph.has_co_parents)
@@ -527,7 +521,7 @@ print("has_input_ancestor", layer.graph.has_input_ancestor)
 ### layer-internal-source
 A tensor made inside `forward` is an internal-source layer, not an input.
 
-- covers: `Layer.graph.is_internal_source`, `Layer.internal_source_parents`, `Layer.graph.has_input_ancestor`
+- covers: `Layer.graph.is_internal_source`, `Layer.graph.has_input_ancestor`
 - tasks: graph, internal-source
 - fixture: none
 
@@ -539,11 +533,9 @@ trace = tl.trace(AddOnes(), torch.randn(2, 4))
 ones, add = trace.layers["ones_1_1"], trace.layers["add_1_2"]
 print("is_internal_source", ones.graph.is_internal_source, add.graph.is_internal_source)
 print("has_input_ancestor", ones.graph.has_input_ancestor, add.graph.has_input_ancestor)
-print("internal_source_parents", add.internal_source_parents)
 # Output:
 # is_internal_source True False
 # has_input_ancestor False True
-# internal_source_parents ('ones_1_1',)
 ```
 
 ## Modules
@@ -551,7 +543,7 @@ print("internal_source_parents", add.internal_source_parents)
 ### layer-module-facts
 Which module a single-pass layer runs inside and which module calls it feeds or ends.
 
-- covers: `Layer.module`, `Layer.modules`, `Layer.module_call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
+- covers: `Layer.module`, `Layer.modules`, `Layer.module_context.call_stack`, `Layer.module_context.call_depth`, `Layer.in_submodule`, `Layer.module_context.is_atomic_module`, `Layer.leaf_module_ops`, `Layer.module_context.output_of_modules`, `Layer.module_context.output_of_module_calls`, `Layer.input_to_module_calls`
 - tasks: modules, inspect-layer
 - fixture: toy
 

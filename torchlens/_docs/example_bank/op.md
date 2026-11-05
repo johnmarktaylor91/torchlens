@@ -117,7 +117,7 @@ print("source_trace", op.source_trace is trace)
 ### op-out-facts
 The saved output tensor of one op and its description (per op).
 
-- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.output_device`, `Op.has_saved_activation`, `Op.detach_saved_activations`, `Op.cost.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
+- covers: `Op.out`, `Op.shape`, `Op.dtype`, `Op.has_saved_activation`, `Op.detach_saved_activations`, `Op.cost.activation_memory`, `Op.device_ref`, `Op.dtype_ref`
 - tasks: inspect-op, read-activation
 - fixture: toy
 
@@ -127,7 +127,6 @@ op = trace.ops["relu_1_2"]
 print("out", tuple(op.out.shape), bool((op.out >= 0).all()))
 print("shape", tuple(op.shape))
 print("dtype", op.dtype)
-print("output_device", op.output_device)
 print("has_saved_activation", op.has_saved_activation)
 print("detach_saved_activations", op.detach_saved_activations)
 print("activation_memory", op.cost.activation_memory)
@@ -137,7 +136,6 @@ print("dtype_ref", op.dtype_ref)
 # out (3, 8) True
 # shape (3, 8)
 # dtype torch.float32
-# output_device same
 # has_saved_activation True
 # detach_saved_activations False
 # activation_memory 96 B
@@ -165,7 +163,7 @@ print("num_autograd_tensors", op.autograd.num_autograd_tensors)
 ### op-activation-transform
 An activation transform stores a changed copy beside the raw output (per op).
 
-- covers: `Op.activation_transform`, `Op.payload.transformed_out`, `Op.payload.transformed_out_shape`, `Op.payload.transformed_out_dtype`, `Op.cost.transformed_activation_memory`
+- covers: `Op.payload.transformed_out`, `Op.payload.transformed_out_shape`, `Op.payload.transformed_out_dtype`, `Op.cost.transformed_activation_memory`
 - tasks: transform-activations
 - fixture: toy
 
@@ -173,13 +171,11 @@ An activation transform stores a changed copy beside the raw output (per op).
 opts = tl.options.CaptureOptions(activation_transform=lambda t: t.mean(dim=0))
 trace = tl.trace(model, x, capture=opts)
 op = trace.ops["relu_1_2"]
-print("activation_transform", callable(op.activation_transform))
 print("transformed_out", tuple(op.payload.transformed_out.shape))
 print("transformed_out_shape", tuple(op.payload.transformed_out_shape))
 print("transformed_out_dtype", op.payload.transformed_out_dtype)
 print("transformed_activation_memory", op.cost.transformed_activation_memory)
 # Output:
-# activation_transform True
 # transformed_out (8,)
 # transformed_out_shape (8,)
 # transformed_out_dtype torch.float32
@@ -378,7 +374,7 @@ print(frame.call_line.strip())
 ### op-grad-fn
 The autograd node behind an op's output (per op; the live handle is not saved to disk).
 
-- covers: `Op.autograd.grad_fn_class_name`, `Op.autograd.grad_fn_class_qualname`, `Op.autograd.grad_fn_handle`, `Op.grad_fn_object_id`
+- covers: `Op.autograd.grad_fn_class_name`, `Op.autograd.grad_fn_class_qualname`, `Op.autograd.grad_fn_handle`
 - tasks: autograd, inspect-op
 - fixture: toy
 
@@ -388,12 +384,10 @@ op = trace.ops["linear_1_1"]
 print("grad_fn_class_name", op.autograd.grad_fn_class_name)
 print("grad_fn_class_qualname", op.autograd.grad_fn_class_qualname)
 print("grad_fn_handle", type(op.autograd.grad_fn_handle).__name__)
-print("grad_fn_object_id", isinstance(op.grad_fn_object_id, int))
 # Output:
 # grad_fn_class_name AddmmBackward0
 # grad_fn_class_qualname builtins.AddmmBackward0
 # grad_fn_handle AddmmBackward0
-# grad_fn_object_id True
 ```
 
 ### op-grad-fn-after-backward
@@ -985,7 +979,7 @@ trace = tl.trace(torch.nn.BatchNorm1d(4), torch.randn(8, 4))
 for label in trace.op_labels:
     op = trace.ops[label]
     if op.graph.is_buffer:
-        print(label, op.buffer_address, op.is_buffer_source, op.graph.buffer_pass, op.buffer_write_kind,
+        print(label, op.buffer_address, op.is_buffer_source, op.buffer_pass, op.buffer_write_kind,
               op.graph.buffer_source, op.buffer_value_changed, op.buffer_replay_validated,
               op.graph.buffer_source_func_name)
 # Output:
