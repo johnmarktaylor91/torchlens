@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ...intervention.types import ArgComponent, CapturedArgTemplate, LiteralValue, ParentRef
 from ._ops_arguments import (
     _capture_layout,
     _classify_arg_component,
@@ -51,6 +50,7 @@ from .buffer_writes import session_validated_buffer_address
 if TYPE_CHECKING:
     from ..._data_classes.op import Op
     from ..._data_classes.trace import Trace
+    from ...intervention.types import ArgComponent, CapturedArgTemplate
 
 SlotKey = tuple[str, Any]
 
@@ -350,6 +350,9 @@ class _TemplateWalk:
     def component(self, value: Any, slot_key: SlotKey | None) -> ArgComponent:
         """Classify one argument value, reading tensor labels from the snapshot."""
 
+        # Deferred: intervention vocabulary sits above the backend layer.
+        from ...intervention.types import LiteralValue, ParentRef
+
         if slot_key is None:
             return _classify_arg_component(value, self.notes, self.trace)
         if isinstance(value, torch.Tensor):
@@ -378,6 +381,8 @@ def templates_from_slots(
     trace: Trace, call: _SlotCall, slots: tuple[_ArgSlot, ...]
 ) -> CapturedArgTemplate:
     """Build the call's replay template; same values as ``_build_args_template``."""
+
+    from ...intervention.types import CapturedArgTemplate
 
     walk = _TemplateWalk(trace, {(slot.kind, slot.key): slot for slot in slots}, [])
     args = tuple(walk.component(arg, ("args", index)) for index, arg in enumerate(call.args))

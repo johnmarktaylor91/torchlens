@@ -92,7 +92,7 @@ class _OutDataModel(nn.Module):
         for _ in range(2):
             h = self.lin(h).tanh()
         dest = torch.empty_like(h)
-        torch.add(h, x, out=dest)
+        torch.add(h.detach(), x, out=dest)
         z = dest * 2
         z.data = h.detach() + 1
         return z + dest
@@ -182,7 +182,7 @@ def _derived_fields(model_cls: type[nn.Module], shape: tuple[int, ...]) -> list[
     trace = tl.trace(model, x)
     return [
         (
-            op.label_raw,
+            index,
             list(op.parents),
             {kind: dict(op.parent_arg_positions[kind]) for kind in ("args", "kwargs")},
             tuple(op.unattributed_tensor_args),
@@ -190,7 +190,7 @@ def _derived_fields(model_cls: type[nn.Module], shape: tuple[int, ...]) -> list[
             _norm_template(op.args_template),
             _norm_template(op.kwargs_template),
         )
-        for op in trace.ops
+        for index, op in enumerate(trace.ops)
     ]
 
 
