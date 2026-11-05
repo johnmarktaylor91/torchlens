@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..._data_classes.op import _OP_PROPERTY_BACKED_FIELD_NAMES, _OP_STORE_LAYOUT
+from ..._data_classes.op import _OP_STORE_LAYOUT
 from ..._ir._row_journal import _RowJournal, _RowOpRecord, _RowResidual
 from ..._trace_core.op_store import OpRowStore
 from ._ops_arguments import _build_edge_use_records
@@ -81,8 +81,7 @@ def commit_row_record(draft: ExhaustiveOpDraft) -> _RowOpRecord:
 
     Reads what ``_op_record_from_log`` reads off the draft. The function-call
     ref is resolved once through the call box (sibling outputs share it as the
-    freeze shares it), then the cells are written from the same draft, less the
-    property-backed names the row layout does not store.
+    freeze shares it), then the cells are written from the same draft.
     """
 
     trace, fields_dict = draft.trace, draft.fields_dict
@@ -91,6 +90,4 @@ def commit_row_record(draft: ExhaustiveOpDraft) -> _RowOpRecord:
     function = _resolve_call_function_ref(fields_dict, box)
     rest = _residual_from_draft(draft, function)
     cells = op_row_cells(trace, fields_dict, draft.fire_results, box)
-    for name in _OP_PROPERTY_BACKED_FIELD_NAMES:
-        cells.pop(name, None)  # computed by Op properties; the row layout stores none of them
     return journal.handle(write_op_row(journal.store, cells), rest)
