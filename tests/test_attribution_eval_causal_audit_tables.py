@@ -29,6 +29,7 @@ from torch import Tensor, nn
 import torchlens as tl
 import torchlens.attribution as attribution
 import torchlens.mechinterp
+from tests.support.gradient_edge_guard import requires_gradient_edge
 from torchlens.mechinterp._records import ContributionScores
 
 # Stated before the first run. The integer-valued float64 models are exact: measured effects,
@@ -285,6 +286,7 @@ def _read(model: nn.Module, x: Tensor = X, reduce: str | None = "sum", **kwargs:
     )
 
 
+@requires_gradient_edge
 def test_read_element_rows_measure_the_closed_form() -> None:
     """Element-grain rows: each element's ablation effect equals its activation times gradient."""
 
@@ -301,6 +303,7 @@ def test_read_element_rows_measure_the_closed_form() -> None:
     assert audit.extra["grain"] == "element"
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["other_seed", "no_target", "not_a_seed", "other_inputs"])
 def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     """A target that is not the table's seed, or a table from other inputs, refuses."""
@@ -322,6 +325,7 @@ def test_read_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["edge_rows", "two_targets", "grad_method"])
 def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
     """Several targets and non-effect reads refuse; EDGE rows mixed into an ACT table refuse.
@@ -352,6 +356,7 @@ def test_read_unsupported_tables_refuse_and_the_remedy_runs(kind: str) -> None:
     assert isinstance(fixed, attribution.CausalAudit) and fixed.rank_agreement == 1.0
 
 
+@requires_gradient_edge
 def test_read_rows_without_a_score_are_reported_apart() -> None:
     """A row the read could not score (status not ok) is listed, not ablated."""
 

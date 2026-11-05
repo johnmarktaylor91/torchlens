@@ -1029,7 +1029,7 @@ def _finish_format3_trace(
     if manifest.get("disclosures") is not None:
         format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:
-        trace._intervention_spec = _finish_format3_recipe(root)
+        trace._intervention_spec = _finish_format3_recipe(root, trace)
     return trace
 
 
@@ -1056,14 +1056,14 @@ def _finish_format3_bundle(
     return bundle
 
 
-def _finish_format3_recipe(root: Path) -> InterventionSpec:
+def _finish_format3_recipe(root: Path, trace: Trace | None = None) -> InterventionSpec:
     """Stage the recipe ``intervention.json`` describes (design section 8): the intervention
-    package rebuilds built-in edits through the helper registry; a callable placeholder becomes
-    an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
+    package rebuilds built-in edits (facet writes rebound on ``trace``); a callable placeholder
+    becomes an audit-only ``Edit`` listed in ``metadata["recipe_placeholders"]`` (rerun refuses)."""
 
     from ..intervention.save import _load_trace_recipe_spec
 
-    return _load_trace_recipe_spec(root)
+    return _load_trace_recipe_spec(root, trace)
 
 
 format3_reader.install_load_hooks(

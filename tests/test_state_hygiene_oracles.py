@@ -783,7 +783,7 @@ _REPLAY = tl.options.InterventionOptions(engine="replay")
 _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], str | None]]] = {
     "run": (lambda t, m, x: t.run(m, x), _NOT_PERSISTED),
     "run_append": (
-        lambda t, m, x: t.run(m, x, replay=tl.options.ReplayOptions(append=True)),
+        lambda t, m, x: t.append(x, model=m),
         _NOT_PERSISTED,
     ),
     "run_chunked": (

@@ -1,5 +1,6 @@
 """Contract tests for the trace-free RenderIR renderer boundary."""
 
+import importlib
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,11 @@ from torchlens._visualization.renderers import (
     UnsupportedRendererCapabilityError,
 )
 from torchlens._visualization.request import RenderContext, RenderTarget
+
+# ``_render_entrypoints`` star-imports the render modules. Loaded for the first time inside a test
+# that has patched one of their names, it copies the patch, and ``monkeypatch`` never restores
+# that copy; so load it before any test here patches.
+importlib.import_module("torchlens._visualization._render_entrypoints")
 
 
 def _raise_legacy_entrypoint(*args: object, **kwargs: object) -> None:
