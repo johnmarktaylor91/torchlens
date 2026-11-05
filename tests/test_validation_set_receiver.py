@@ -399,3 +399,30 @@ def test_restore_rebinds_moved_or_reshaped_state_before_loading_values(
         failing_model_deepcopy.append(model_cls)
         assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
         _assert_restored(model, objects, values)
+
+
+@pytest.mark.parametrize("model_cls", [_GrowBuffer, _SetToNothing, _SetToStorageView])
+def test_set_receiver_binds_to_the_buffer_value_it_held_before_the_call(
+    model_cls: type[nn.Module],
+) -> None:
+    """The receiver slot of ``set_`` reads the buffer source saved before the call.
+
+    The rebind moves the receiver to another storage, so the post-call label
+    gate refuses its stamp; the receiver must keep its own pre-call source
+    rather than gain a second buffer source holding the post-call value.
+    """
+
+    torch.manual_seed(0)
+    model = model_cls()
+    before = model.b.detach().clone()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.rand(4), capture=CaptureOptions(save_args=True), save="all")
+    try:
+        set_op = next(op for op in trace._layer_list if op.func_name == "set_")
+        receiver_label = set_op.call.parent_arg_positions["args"][0]
+        source = trace[receiver_label]
+        assert torch.equal(source.out, before)
+        assert [label for label in set_op.parents if label.startswith("buffer")] == [receiver_label]
+    finally:
+        trace.cleanup()
