@@ -3325,7 +3325,7 @@ docs-md	docs/maintainers/where.md	324
 docs-md	docs/maintainers/where.md	326
 docs-md	docs/maintainers/where.md	327
 docs-md	docs/maintainers/where.md	328
-docs-md	docs/maintainers/where.md	32894
+docs-md	docs/maintainers/where.md	32906
 docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
@@ -3635,7 +3635,7 @@ docs-md	docs/maintainers/where.md	69
 docs-md	docs/maintainers/where.md	690
 docs-md	docs/maintainers/where.md	691
 docs-md	docs/maintainers/where.md	692
-docs-md	docs/maintainers/where.md	693200
+docs-md	docs/maintainers/where.md	693212
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	695
 docs-md	docs/maintainers/where.md	6957
@@ -9340,6 +9340,9 @@ package-docstrings	torchlens/validation/_reduction_depth.py	32
 package-docstrings	torchlens/validation/_replay_grad_fidelity.py	64
 package-docstrings	torchlens/validation/_saved_value_proofs.py	43
 package-docstrings	torchlens/validation/_shift_probe.py	1.0
+package-docstrings	torchlens/validation/_shift_probe.py	16
+package-docstrings	torchlens/validation/_shift_probe.py	32
+package-docstrings	torchlens/validation/_shift_probe.py	64
 package-docstrings	torchlens/validation/_value_predicates.py	43
 package-docstrings	torchlens/validation/backward.py	10
 package-docstrings	torchlens/validation/backward.py	11
