@@ -14,7 +14,7 @@ from __future__ import annotations
 _OUT = "use .out (the saved output tensor)"
 _PARENTS = "use .parents (labels of the ops feeding this one; .get_parents() returns objects)"
 _CHILDREN = "use .children (labels of the ops this one feeds; .get_children() returns objects)"
-_ADDRESS = "use .address (innermost module name; None for top-level forward code)"
+_MODULE = "use .module (innermost module call as 'address:call'; None for top-level forward code)"
 _LAYERS = "iterate trace.layers (every op in execution order) or index trace[label]"
 
 #: Hints shared by ops, layers and modules (per-op and per-module readers).
@@ -29,10 +29,10 @@ _ENTRY_HINTS: dict[str, str] = {
     "parent_ops": _PARENTS,
     "child_layers": _CHILDREN,
     "child_ops": _CHILDREN,
-    "containing_module": _ADDRESS,
+    "containing_module": _MODULE,
     "containing_modules": "use .modules (every enclosing module call, outermost first)",
-    "module_address": _ADDRESS,
-    "module_name": _ADDRESS,
+    "module_address": _MODULE,
+    "module_name": _MODULE,
     "function": "use .func_name (the function's name, e.g. 'linear' or 'softmax')",
     "func": "use .func_name (the function's name, e.g. 'linear' or 'softmax')",
     "op_name": "use .func_name for the function or .label for the op's own name",
