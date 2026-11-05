@@ -5,7 +5,9 @@ child op's output cannot move (a saturated activation, the flat side of a
 rounding step, a zero base under a positive exponent, a Bernoulli probability
 already at its draw). ``_perturb_domain_sensitive_parent_values`` returns a
 valid alternate parent value for those ops so the perturbation check keeps
-its meaning; the helpers below build each family's values. Split from
+its meaning; the helpers below build each family's values. A fully saturated
+``sigmoid``/``tanh``/``erf`` gets a zero input, and a tensor ``clamp`` bound
+that never binds is moved past the value it bounds (``_crossing_perturbations``). Split from
 ``validation/core.py`` (file-cap row), which calls the entry point from its
 parent perturbation.
 """
@@ -54,11 +56,8 @@ def _perturb_domain_sensitive_parent_values(
         stay inside a saturated/invalid region, otherwise ``None``.
     """
 
-    if layer.func_name in _SET_TEST_CROSSING_VALUES:
-        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
-    clamp_bound = clamp_bound_crossing_values(layer, parent_label, parent_values)
-    if clamp_bound is not None:
-        return clamp_bound
+    if (early := _early_crossing_values(layer, parent_label, parent_values)) is not None:
+        return early
     if not parent_values.is_floating_point():
         return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
@@ -105,6 +104,70 @@ _SET_TEST_CROSSING_VALUES = {
 """Ops whose operands get purpose-built values: set and tolerance tests get values that
 flip each element's result; ``masked_scatter`` gets a mask with the same true count and
 ``ctc_loss`` length vectors rotated across the batch (same sum, same values)."""
+
+
+#: Smooth activations that round to a constant far from zero -> their two saturation levels.
+_SATURATION_LEVELS: dict[str, tuple[float, float]] = {
+    **dict.fromkeys(("sigmoid", "sigmoid_", "expit", "special_expit"), (0.0, 1.0)),
+    **dict.fromkeys(("tanh", "tanh_", "erf", "erf_", "special_erf"), (-1.0, 1.0)),
+}
+
+
+def _early_crossing_values(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> torch.Tensor | None:
+    """Return set-test values, a moved tensor clamp bound, or a fully saturated activation's input.
+
+    The set and tolerance tests (``_SET_TEST_CROSSING_VALUES``) answer for their ops
+    outright; no later rule names those ops, so a ``None`` from them ends the same way.
+
+    A ``sigmoid`` input above about 17 (``tanh`` above about 9, ``erf`` above about 4)
+    rounds to exactly the saturation level in float32, so when every saved output element
+    sits at a level, the range draw and the step ladder all stay saturated and a live edge
+    looks dead. Zero is inside every responsive region (``sigmoid(0) = 0.5``,
+    ``tanh(0) = erf(0) = 0``), so a zero input moves every saturated element. Outputs with
+    any unsaturated element keep the generic draw.
+
+    Parameters
+    ----------
+    layer:
+        Child op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved parent tensor values.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The crossing values, or ``None`` when neither rule applies.
+    """
+
+    if layer.func_name in _SET_TEST_CROSSING_VALUES:
+        return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
+    clamp_bound = clamp_bound_crossing_values(layer, parent_label, parent_values)
+    if clamp_bound is not None:
+        return clamp_bound
+    levels = _SATURATION_LEVELS.get(layer.func_name)
+    if levels is None or not parent_values.is_floating_point():
+        return None
+    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return None
+    if not _output_fully_saturated(getattr(layer, "out", None), levels):
+        return None
+    return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
+
+
+def _output_fully_saturated(output: Any, levels: tuple[float, float]) -> bool:
+    """Return whether every finite element of ``output`` sits at a saturation level (one at least)."""
+
+    if not isinstance(output, torch.Tensor) or output.numel() == 0:
+        return False
+    if not output.is_floating_point():
+        return False
+    finite = torch.isfinite(output)
+    at_level = (output == levels[0]) | (output == levels[1])
+    return bool(finite.any()) and bool((at_level | ~finite).all())
 
 
 def _integer_saturation_crossing_values(
