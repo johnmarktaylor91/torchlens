@@ -555,11 +555,27 @@ def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
     assert _backward_verdict(_AliasRead(_ALIAS_READS[read])) is True
 
 
-def _disjoint_sibling_view(y: torch.Tensor) -> torch.Tensor:
-    """Take a sibling view, write a column view it does not overlap, read the sibling."""
+def _interleaved_sibling_view(y: torch.Tensor) -> torch.Tensor:
+    """Take a sibling column view, write a column it does not share, read the sibling.
+
+    The two column views interleave in storage, so the base-label move cannot
+    prove them disjoint and relabels the sibling as if it overlapped.
+    """
 
     sibling = y[:, 0:2]
     y[:, 5:6].add_(0.25)
+    return sibling
+
+
+def _disjoint_sibling_view(y: torch.Tensor) -> torch.Tensor:
+    """Take a sibling row view, write another row in place, read the sibling.
+
+    The rows occupy disjoint byte ranges, so the base-label move leaves the
+    sibling's label alone.
+    """
+
+    sibling = y[0:1]
+    y[2:3].add_(0.25)
     return sibling
 
 
@@ -583,6 +599,7 @@ def _written_twice(y: torch.Tensor) -> torch.Tensor:
 
 _SIBLING_READS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
     "overlapping": _sibling_view,
+    "interleaved": _interleaved_sibling_view,
     "disjoint": _disjoint_sibling_view,
 }
 
@@ -638,19 +655,23 @@ def test_a_pre_write_disjoint_sibling_handle_fails_both_entry_points(
 ) -> None:
     """Both entry points reject a disjoint sibling's op left on its pre-write node.
 
-    The write does not overlap the sibling, so no label moves and the sibling's
-    reader is its forward child in both captures; the pre-write node is never
-    visited, so the missing backpointer raises in both.
+    The written row and the sibling row share no bytes, so no label moves and the
+    sibling's reader is its forward child in both captures; the pre-write node is
+    never visited, so the missing backpointer raises in both.
     """
 
     _keep_siblings_on_pre_write_nodes(monkeypatch)
     _assert_both_entry_points_reject(lambda: _AliasRead(_disjoint_sibling_view), "getitem")
 
 
-def test_a_pre_write_overlapping_sibling_handle_fails_backward_validation(
-    monkeypatch: pytest.MonkeyPatch,
+_RELABELED_SIBLINGS = ["overlapping", "interleaved"]
+
+
+@pytest.mark.parametrize("read", _RELABELED_SIBLINGS)
+def test_a_pre_write_relabeled_sibling_handle_fails_backward_validation(
+    monkeypatch: pytest.MonkeyPatch, read: str
 ) -> None:
-    """Backward validation rejects an overlapping sibling's op left on its pre-write node.
+    """Backward validation rejects a relabeled sibling's op left on its pre-write node.
 
     Validation's capture keeps the historical topology (no base-label move), so
     the sibling's reader is its forward child and the unvisited pre-write node
@@ -658,26 +679,28 @@ def test_a_pre_write_overlapping_sibling_handle_fails_backward_validation(
     """
 
     _keep_siblings_on_pre_write_nodes(monkeypatch)
-    assert _backward_verdict(_AliasRead(_sibling_view)) == "MetadataInvariantError"
+    assert _backward_verdict(_AliasRead(_SIBLING_READS[read])) == "MetadataInvariantError"
 
 
-def test_managed_backward_blind_spot_accepts_a_pre_write_overlapping_sibling_handle(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("read", _RELABELED_SIBLINGS)
+def test_managed_backward_blind_spot_accepts_a_pre_write_relabeled_sibling_handle(
+    monkeypatch: pytest.MonkeyPatch, read: str
 ) -> None:
     """Known blind spot of the managed check, pinned; not desired behaviour.
 
-    The managed capture moves an overlapping alias's label to the in-place op, so
-    the sibling's reader becomes the writer's child and the sibling's op has no
-    forward children. The dead-branch carve-out then excuses whatever unvisited
-    node the op records, so the managed invariant cannot reject this planted wrong
-    binding (backward validation does, see the test above). A stricter carve-out
-    would also reject a correct capture: an overlapping sibling held across the
-    write but never read again while the written view is read
+    The managed capture moves the label of an alias it cannot prove disjoint from
+    the write (an overlapping sibling, or an interleaved column) to the in-place
+    op, so the sibling's reader becomes the writer's child and the sibling's op
+    has no forward children. The dead-branch carve-out then excuses whatever
+    unvisited node the op records, so the managed invariant cannot reject this
+    planted wrong binding (backward validation does, see the test above). A
+    stricter carve-out would also reject a correct capture: an overlapping sibling
+    held across the write but never read again while the written view is read
     (``test_a_dead_overlapping_sibling_passes_both_entry_points``).
     """
 
     _keep_siblings_on_pre_write_nodes(monkeypatch)
-    trace = _traced_backward(_AliasRead(_sibling_view))
+    trace = _traced_backward(_AliasRead(_SIBLING_READS[read]))
     _check_backward_graph_invariants(trace)
     assert _sibling_layer(trace).autograd.grad_fn is None
 
