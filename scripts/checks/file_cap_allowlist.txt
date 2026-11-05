@@ -589,7 +589,7 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2031
+torchlens/_visualization/_render_nodes.py	2030
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	217
 torchlens/_visualization/_render_nodes.py::_build_layer_node	151
@@ -964,8 +964,8 @@ torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	117
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	82
 torchlens/backends/torch/wrappers.py::decorate_all_once	67
-torchlens/backends/torch/wrappers.py::torch_func_decorator	789
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	635
+torchlens/backends/torch/wrappers.py::torch_func_decorator	788
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	633
 torchlens/bridge/_sae_export.py::write_delphi	92
 torchlens/bridge/_sae_export.py::write_sae_dashboard	111
 torchlens/bridge/_sae_latents.py::logged_splice_trace	84

@@ -237,22 +237,31 @@ class _TwoViewsWritten(nn.Module):
         return second.mul_(2.0).sum()
 
 
-def test_second_write_by_another_view_is_not_rebound() -> None:
+def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyPatch) -> None:
     """A view taken before an earlier write of its base is not moved by its own write.
 
     The second view's node reads the base's node from before the first write, so
     the second write's ``CopySlices`` (which reads the first write's) did not take
-    its place; the rebind proves nothing and leaves the record alone.
+    its place; the rebind proves nothing and leaves the record alone. The handle
+    index is read during capture, right after each rebind.
     """
 
+    rebind = param_mutation.rebind_rebased_view_producers
+    after_each_write: list[list[str]] = []
+
+    def _spy(trace: tl.Trace, receiver: torch.Tensor) -> None:
+        rebind(trace, receiver)
+        handles = trace.capture_events.grad_fn_handles_by_label_raw.values()
+        after_each_write.append([type(node).__name__ for node in handles])
+
+    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _spy)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.trace(_TwoViewsWritten(), _input().requires_grad_(True))
-    raw = trace.capture_events.grad_fn_handles_by_label_raw
-    getitem_nodes = sorted(
-        type(node).__name__ for key, node in raw.items() if "getitem" in str(key)
-    )
-    assert getitem_nodes == ["CopySlices", "SliceBackward0"]
+        tl.trace(_TwoViewsWritten(), _input().requires_grad_(True))
+    first_write, second_write = after_each_write
+    assert first_write.count("CopySlices") == 1
+    assert second_write.count("CopySlices") == 1
+    assert second_write.count("SliceBackward0") == 1
 
 
 def _write_then_handles(

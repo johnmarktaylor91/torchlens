@@ -316,7 +316,7 @@ def _op_segment_label(
 
     first = endpoint(labels[0], concrete[0])
     last = endpoint(labels[-1], concrete[-1])
-    return f"{first} ... {last} -- {len(labels)} ops"
+    return f"{first} ... {last} -- {len(labels):,} ops"
 
 
 def _segment_owner_key(
@@ -438,7 +438,7 @@ def _child_segment_label(
     range_text = _child_segment_range_text(addresses)
     contents = format_collapsed_module_contents(num_layers, num_buffers)
     return (
-        f"{range_text} -- {len(addresses)} blocks, {contents}, "
+        f"{range_text} -- {len(addresses):,} blocks, {contents}, "
         f"{_format_param_count(num_params)} params"
     )
 
