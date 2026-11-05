@@ -1323,9 +1323,7 @@ def is_pure_forward_callable(func: Callable[..., Any]) -> bool:
     # the allowlisted ``torch`` namespace cannot slip; no-signature C ops fall through.
     if _signature_invokes_callable(real):
         return False
-    # r50/r64: deny the RAW-POINTER family structurally (``_raw_pointer_denial``) and
-    # BOUNDS-UNCHECKED kernels BEFORE the module gate, whose bare ``torch`` / ``torch._C``
-    # prefixes admit deeper submodules.
+    # r50/r64: deny RAW-POINTER and BOUNDS-UNCHECKED kernels before the module gate.
     if _unchecked.is_unchecked_memory_kernel(real):
         return False
     if _rawptr.is_raw_pointer_risk(real, _ALLOWED_FORWARD_OP_MODULES):
