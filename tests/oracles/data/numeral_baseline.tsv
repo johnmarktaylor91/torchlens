@@ -3079,8 +3079,11 @@ docs-md	docs/maintainers/where.md	1636
 docs-md	docs/maintainers/where.md	164
 docs-md	docs/maintainers/where.md	1649
 docs-md	docs/maintainers/where.md	165
+docs-md	docs/maintainers/where.md	1652
 docs-md	docs/maintainers/where.md	166
 docs-md	docs/maintainers/where.md	1662
+docs-md	docs/maintainers/where.md	1660
+docs-md	docs/maintainers/where.md	1667
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	1670
 docs-md	docs/maintainers/where.md	1675
@@ -3312,6 +3315,7 @@ docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	312
 docs-md	docs/maintainers/where.md	3130
 docs-md	docs/maintainers/where.md	314
+docs-md	docs/maintainers/where.md	3147
 docs-md	docs/maintainers/where.md	315
 docs-md	docs/maintainers/where.md	316
 docs-md	docs/maintainers/where.md	317
@@ -3319,6 +3323,7 @@ docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
 docs-md	docs/maintainers/where.md	32
 docs-md	docs/maintainers/where.md	321
+docs-md	docs/maintainers/where.md	322
 docs-md	docs/maintainers/where.md	323
 docs-md	docs/maintainers/where.md	324
 docs-md	docs/maintainers/where.md	32422
@@ -3331,6 +3336,8 @@ docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	333
 docs-md	docs/maintainers/where.md	3334
+docs-md	docs/maintainers/where.md	33014
+docs-md	docs/maintainers/where.md	332
 docs-md	docs/maintainers/where.md	334
 docs-md	docs/maintainers/where.md	336
 docs-md	docs/maintainers/where.md	338
@@ -3377,6 +3384,7 @@ docs-md	docs/maintainers/where.md	373
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
 docs-md	docs/maintainers/where.md	376
+docs-md	docs/maintainers/where.md	3765
 docs-md	docs/maintainers/where.md	377
 docs-md	docs/maintainers/where.md	378
 docs-md	docs/maintainers/where.md	379
@@ -3562,6 +3570,8 @@ docs-md	docs/maintainers/where.md	570
 docs-md	docs/maintainers/where.md	572
 docs-md	docs/maintainers/where.md	575
 docs-md	docs/maintainers/where.md	57640
+docs-md	docs/maintainers/where.md	57388
+docs-md	docs/maintainers/where.md	574
 docs-md	docs/maintainers/where.md	577
 docs-md	docs/maintainers/where.md	579
 docs-md	docs/maintainers/where.md	58
@@ -3621,6 +3631,7 @@ docs-md	docs/maintainers/where.md	6499
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
+docs-md	docs/maintainers/where.md	655
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	657
 docs-md	docs/maintainers/where.md	66
@@ -3638,9 +3649,13 @@ docs-md	docs/maintainers/where.md	679
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	681
 docs-md	docs/maintainers/where.md	687
+docs-md	docs/maintainers/where.md	688
+docs-md	docs/maintainers/where.md	689
 docs-md	docs/maintainers/where.md	69
 docs-md	docs/maintainers/where.md	690
 docs-md	docs/maintainers/where.md	691
+docs-md	docs/maintainers/where.md	692
+docs-md	docs/maintainers/where.md	693328
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	696
 docs-md	docs/maintainers/where.md	696847
@@ -3761,6 +3776,7 @@ docs-md	docs/maintainers/where.md	88
 docs-md	docs/maintainers/where.md	8861
 docs-md	docs/maintainers/where.md	89
 docs-md	docs/maintainers/where.md	891
+docs-md	docs/maintainers/where.md	8963
 docs-md	docs/maintainers/where.md	898
 docs-md	docs/maintainers/where.md	90
 docs-md	docs/maintainers/where.md	900
@@ -9320,6 +9336,7 @@ package-docstrings	torchlens/validation/_core.py	34
 package-docstrings	torchlens/validation/_core.py	35
 package-docstrings	torchlens/validation/_core.py	64
 package-docstrings	torchlens/validation/_crossing_perturbations.py	0..10
+package-docstrings	torchlens/validation/_crossing_perturbations.py	64
 package-docstrings	torchlens/validation/_destination_coverage.py	256
 package-docstrings	torchlens/validation/_destination_coverage.py	43
 package-docstrings	torchlens/validation/_diagnostics.py	1,64,7,7
@@ -9332,6 +9349,7 @@ package-docstrings	torchlens/validation/_diagnostics.py	3_4
 package-docstrings	torchlens/validation/_diagnostics.py	43
 package-docstrings	torchlens/validation/_diagnostics.py	64
 package-docstrings	torchlens/validation/_domain_perturbations.py	17
+package-docstrings	torchlens/validation/_domain_perturbations.py	32,
 package-docstrings	torchlens/validation/_edge_boundary.py	2.9
 package-docstrings	torchlens/validation/_edge_boundary.py	4.3
 package-docstrings	torchlens/validation/_exemptions.py	2026
@@ -9400,6 +9418,9 @@ package-docstrings	torchlens/validation/_reduction_depth.py	32
 package-docstrings	torchlens/validation/_replay_grad_fidelity.py	64
 package-docstrings	torchlens/validation/_saved_value_proofs.py	43
 package-docstrings	torchlens/validation/_shift_probe.py	1.0
+package-docstrings	torchlens/validation/_shift_probe.py	16
+package-docstrings	torchlens/validation/_shift_probe.py	32
+package-docstrings	torchlens/validation/_shift_probe.py	64
 package-docstrings	torchlens/validation/_value_predicates.py	43
 package-docstrings	torchlens/viz/__init__.py	12.0
 package-docstrings	torchlens/viz/_batch_summary.py	64
@@ -10354,6 +10375,7 @@ test-docstrings	tests/test_io_streaming.py	62
 test-docstrings	tests/test_jax_backend_hardening.py	32
 test-docstrings	tests/test_jax_protocol_p2.py	11
 test-docstrings	tests/test_jax_protocol_p2.py	32
+test-docstrings	tests/test_jax_replay_probes.py	100
 test-docstrings	tests/test_kernel_telemetry.py	2.1
 test-docstrings	tests/test_large_graphs.py	100
 test-docstrings	tests/test_large_graphs.py	120

@@ -93,8 +93,9 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_takes_single_entry_probe,
 )
+from ._native_index_perturbation import native_index_perturbation
 from ._non_pass_record import record_replay_exception as _record_replay_exception
-from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs
+from ._perturb import _UNSIGNED_AS_SIGNED, _perturb_layer_outs, perturb_through_values
 from ._pre_replay import (
     CoreBindings,
     _is_provable_functionless_source_or_boundary,
@@ -128,7 +129,7 @@ from ._saved_outs_steps import (
     _reset_run_diagnostics,
 )
 from ._script_metadata_proof import script_metadata_only_proof
-from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
+from ._shift_probe import NON_UNIFORM_STRATEGIES, non_uniform_probe_values, value_step_strategies
 from ._source_provenance import check_source_provenance
 from ._status import ValidationStatus
 
@@ -3103,9 +3104,6 @@ def _prepare_input_args_for_validating_layer(
     tuple[dict[str, Any] | None, str | None]
         Replay argument dictionary, plus an optional unverified reason when the
         replay inputs cannot be reconstructed.
-
-    Returns:
-        Tuple of prepared replay args and an optional unverified reason code.
     """
     if layer_to_validate_parents_for.call.saved_args is None:
         return None, "missing_saved_args"
@@ -3118,7 +3116,6 @@ def _prepare_input_args_for_validating_layer(
     _restore_live_parameter_args_for_replay(input_args, layer_to_validate_parents_for)
 
     # Swap in saved parent outs:
-
     for arg_type in ["args", "kwargs"]:
         for (
             key,
@@ -3136,10 +3133,7 @@ def _prepare_input_args_for_validating_layer(
                 ]
             else:
                 if _is_buffer_version_parent(parent_layer) and not _buffer_parent_source_equal(
-                    parent_layer,
-                    input_args,
-                    arg_type,
-                    key,
+                    parent_layer, input_args, arg_type, key
                 ):
                     raise ValueError(
                         "Validation cannot source-match buffer-version parent "
@@ -3155,11 +3149,16 @@ def _prepare_input_args_for_validating_layer(
                 input_args, arg_type, key, parent_values.detach().clone()
             )
             if parent_layer_arg in layers_to_perturb:
-                if perturb_strategy == "default":
+                native = native_index_perturbation(
+                    layer_to_validate_parents_for, arg_type, key, parent_values, perturb_strategy
+                )
+                if native is not None and native.values is None:
+                    return None, native.reason
+                if native is not None:
+                    parent_layer_func_values = native.values
+                elif perturb_strategy == "default":
                     parent_layer_func_values = _perturb_parent_values_for_layer(
-                        layer_to_validate_parents_for,
-                        parent_layer_arg,
-                        parent_values,
+                        layer_to_validate_parents_for, parent_layer_arg, parent_values
                     )
                 elif perturb_strategy == _INDEX_SINGLE_ENTRY_STRATEGY:
                     single_entry = index_domain_single_entry_values(
@@ -3169,8 +3168,8 @@ def _prepare_input_args_for_validating_layer(
                         return None, "no_index_single_entry_perturbation"
                     parent_layer_func_values = single_entry
                 else:
-                    parent_layer_func_values = _directional_step_perturb(
-                        parent_values, perturb_strategy
+                    parent_layer_func_values = perturb_through_values(
+                        parent_values, lambda v: _directional_step_perturb(v, perturb_strategy)
                     )
             else:
                 parent_layer_func_values = parent_values
@@ -3435,7 +3434,7 @@ def _value_retry_strategies(layer: Op) -> list[str]:
         Minimal steps, unit steps and the lift, then the bool or discretizing ladders.
     """
 
-    strategies = list(VALUE_STEP_STRATEGIES)
+    strategies = value_step_strategies(layer)
     if getattr(layer, "dtype", None) == torch.bool:
         # R08: a bool-output child is a THRESHOLD op — small steps routinely
         # fail to cross it, which the blanket ``discrete_bool_output``
@@ -3524,8 +3523,8 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
             return torch.full_like(tensor, float("nan"))
         return _directional_step_perturb(tensor, "step_up")
 
-    if strategy == LIFT_MIN_ENTRY_STRATEGY:
-        return lift_min_entry_values(tensor, fallback=_directional_step_perturb)
+    if strategy in NON_UNIFORM_STRATEGIES:
+        return non_uniform_probe_values(tensor, strategy, fallback=_directional_step_perturb)
     if strategy.startswith(("unit_step_up", "unit_step_down")):
         base_strategy, _, magnitude_text = strategy.partition(":")
         magnitude = float(magnitude_text) if magnitude_text else 1.0

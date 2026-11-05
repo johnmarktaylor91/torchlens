@@ -473,23 +473,6 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         refuses="the arg-1 scores, whose values order and gate every kept box",
     ),
     StructuralPositionExemption(
-        func_name="deform_conv2d",
-        positions=frozenset({1}),
-        contract=_C2,
-        proof_kind="vehicle_limited",
-        justification=(
-            "the arg-1 sampling offsets ARE value-sensitive, but out-of-domain offsets "
-            "index outside the feature map inside the native kernel and can segfault, "
-            "so the vehicle cannot perturb them safely; forward replay still re-runs "
-            "the real call from the saved offsets. Input, weight, bias, and modulation "
-            "mask stay strictly perturbation-tested"
-        ),
-        refuses=(
-            "the arg-0 input and the weight/bias/mask arguments, whose values flow "
-            "arithmetically into every output element"
-        ),
-    ),
-    StructuralPositionExemption(
         func_name="roi_align",
         positions=frozenset({1}),
         contract=_C2,
@@ -1057,7 +1040,6 @@ STRUCTURAL_KWARG_ALIAS_LEDGER: dict[str, dict[int, frozenset[str]]] = {
     # torchvision coordinate args (b1p2 D2 narrowing): keyword spellings of
     # the SAME audited positions above, nothing wider.
     "nms": {0: frozenset({"boxes"})},
-    "deform_conv2d": {1: frozenset({"offset"})},
     "roi_align": {1: frozenset({"boxes", "rois"})},
     "roi_pool": {1: frozenset({"boxes", "rois"})},
     "ps_roi_align": {1: frozenset({"boxes", "rois"})},
