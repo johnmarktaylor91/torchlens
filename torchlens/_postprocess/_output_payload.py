@@ -150,4 +150,4 @@ def _trace_payloads_detached(trace: Any) -> bool:
 
     if trace._options_detach_saved_activations:
         return True
-    return getattr(trace, "_cooked_from", None) is not None
+    return trace._cooked_from is not None

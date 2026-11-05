@@ -552,6 +552,8 @@ class Trace(TraceOutputMixin, TraceLike):
     (1, 4, 8, 8)
     """
 
+    _cooked_from: str | None = None  # "recording" on a Trace that Recording.to_trace cooked
+
     @property
     def readiness(self) -> "ReadinessReport | None":
         """Return non-executing sparse-run readiness for a loaded artifact.
@@ -919,9 +921,7 @@ class Trace(TraceOutputMixin, TraceLike):
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """
-        # Callables are effectively immutable - deepcopy is unnecessary.
-
-        # General info
+        # General info. Callables are effectively immutable - deepcopy is unnecessary.
         self.name: str | None = None
         self._source_class_name = model_class_name
         self.model_name = model_class_name
