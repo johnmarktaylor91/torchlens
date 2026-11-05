@@ -13,13 +13,11 @@ import html
 import os
 import re
 import subprocess
-import warnings
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .._utils.display import atomic_write_text, user_stacklevel
-from ..errors._base import TorchLensWarning
+from .._utils.display import atomic_write_text
 from . import _render_utils
 from ._edit_highlighter import HighlighterStyle, highlight_svg
 from ._loop_edges import reports_route_failure, without_compass_ports
@@ -83,7 +81,7 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
             cwd=str(root) if root else None,
         )
 
-    drawn = _without_missing_pictures(dot, root)
+    drawn, missing = _without_missing_pictures(dot, root)
     completed = run(drawn)
     if reports_route_failure(completed.stderr) and (
         (portless := without_compass_ports(drawn)) != drawn
@@ -92,7 +90,13 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
         # keep the portless layout only when it routes cleanly.
         retry = run(portless)
         completed = completed if reports_route_failure(retry.stderr) else retry
-    surface_layout_stderr(completed.stderr, engine="dot")
+    stderr = completed.stderr
+    if missing:
+        # Graphviz itself reported a missing node image as a stderr warning before the
+        # pictures moved into HTML labels; report the dropped ones through that same warning.
+        reported = stderr.decode("utf-8", "replace") if isinstance(stderr, bytes) else stderr or ""
+        stderr = f"{_missing_pictures_note(missing)}\n{reported}"
+    surface_layout_stderr(stderr, engine="dot")
     payload = bytes(completed.stdout)
     if fileformat != "svg":
         return payload
@@ -103,8 +107,8 @@ def render_detached_dot(dot: str, fileformat: str, image_root: str | None = None
 _PICTURE_ROW = re.compile(r'<TR><TD[^>]*><IMG SRC="([^"]*)"[^>]*/></TD></TR>')
 
 
-def _without_missing_pictures(dot: str, root: Path | None) -> str:
-    """Drop node picture rows whose file is gone, with one warning naming them.
+def _without_missing_pictures(dot: str, root: Path | None) -> tuple[str, tuple[str, ...]]:
+    """Drop node picture rows whose file is gone; return the source and the missing names.
 
     A drawing's pictures live in its trace's scratch folder, which goes when
     the trace is collected; Graphviz refuses an HTML label whose image file is
@@ -127,19 +131,17 @@ def _without_missing_pictures(dot: str, root: Path | None) -> str:
         missing.append(source)
         return ""
 
-    trimmed = _PICTURE_ROW.sub(keep_present, dot)
-    if missing:
-        warnings.warn(
-            TorchLensWarning(
-                f"Drawing pictures {missing!r} are missing: the trace that held them was "
-                "collected, taking its scratch folder with it, so the drawing renders "
-                "without them. Remedy: keep the trace alive while you display or save "
-                "its drawing",
-                code="layout_engine_stderr",
-            ),
-            stacklevel=user_stacklevel(),
-        )
-    return trimmed
+    return _PICTURE_ROW.sub(keep_present, dot), tuple(missing)
+
+
+def _missing_pictures_note(missing: tuple[str, ...]) -> str:
+    """Name the dropped pictures and why they are gone, for the layout warning."""
+
+    return (
+        f"drawing pictures {list(missing)!r} are missing because the trace that held "
+        "them was collected, taking its scratch folder with it; the drawing renders "
+        "without them (keep the trace alive while you display or save its drawing)."
+    )
 
 
 def _inline_svg_file_local_images(svg_path: str, image_root: Path | None = None) -> None:
