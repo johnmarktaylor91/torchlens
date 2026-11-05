@@ -12,6 +12,7 @@ from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
 from torchlens._utils._display_errors import lookup_message
+from torchlens.attribution._cam_grid import _layer_tensor
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -87,8 +88,7 @@ class _LayerCapture:
             If the layer emitted a non-tensor output.
         """
 
-        if isinstance(output, tuple | list) and len(output) == 1:
-            output = output[0]
+        output = _layer_tensor(output)
         if not isinstance(output, Tensor):
             raise AttributionError("target layer must return a tensor activation")
         if not any(output is existing for existing in self.activations):

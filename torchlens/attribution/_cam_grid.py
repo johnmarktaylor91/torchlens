@@ -337,6 +337,19 @@ def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
     }
 
 
+def _layer_tensor(output: Any) -> Any:
+    """Return the activation a layer hook records for ``output``.
+
+    A one-element tuple or list stands for its element (transformers' older
+    ``ViTLayer`` returns ``(hidden_states,)``); any other value is returned
+    as it is, and callers refuse or skip it when it is not a tensor.
+    """
+
+    if isinstance(output, tuple | list) and len(output) == 1:
+        return output[0]
+    return output
+
+
 def _module_output_label(graph: _TraceGraph, layer: str) -> str | None:
     """Return the op that is ``layer``'s output in its single call, or ``None``."""
 
