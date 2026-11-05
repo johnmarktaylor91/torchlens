@@ -287,13 +287,34 @@ def _diagnostic_counts() -> dict[str, int]:
         "s18_total_sites": len(warns),
         "s18_uncoded_sites": sum(1 for site in warns if not site.has_code),
         "s18_contract_rows": len(table),
+        "public_builtin_raise_sites": len(_censuses.public_builtin_raise_sites()),
     }
 
 
+#: every row of the ratchet ledger; a committed row outside this set is refused,
+#: never silently dropped (teach ``_diagnostic_counts`` the new row first).
+RATCHET_KEYS = (
+    "s17_total_sites",
+    "s17_uncoded_sites",
+    "s17_unclassified_sites",
+    "s18_total_sites",
+    "s18_uncoded_sites",
+    "s18_contract_rows",
+    "public_builtin_raise_sites",
+)
+RATCHETS_PATH = "tests/composition_expectations/data/diagnostic_ratchets.tsv"
+
+
 def render_ratchets(repo: Path) -> str:
-    path = "tests/composition_expectations/data/diagnostic_ratchets.tsv"
+    text = _read(repo, RATCHETS_PATH)
+    unknown = sorted(set(single(keyed_tsv_rows(text))) - set(RATCHET_KEYS))
+    if unknown:
+        raise LedgerRefusal(
+            f"{RATCHETS_PATH}: rows {unknown} have no regenerator; add them to "
+            "_diagnostic_counts and RATCHET_KEYS in scripts/regen_ledgers.py"
+        )
     live = {k: str(v) for k, v in _diagnostic_counts().items()}
-    return rewrite_keyed_tsv(_read(repo, path), live)
+    return rewrite_keyed_tsv(text, live)
 
 
 def render_universes(repo: Path) -> str:
@@ -367,7 +388,12 @@ def guard_allowlist(
 
 
 #: shrink-only metrics; a total may rise only when its companions do not.
-_CEILINGS = ("s17_uncoded_sites", "s17_unclassified_sites", "s18_uncoded_sites")
+_CEILINGS = (
+    "s17_uncoded_sites",
+    "s17_unclassified_sites",
+    "s18_uncoded_sites",
+    "public_builtin_raise_sites",
+)
 _FLOORS = ("s18_contract_rows",)
 _TOTALS = {
     "s17_total_sites": ("s17_uncoded_sites", "s17_unclassified_sites"),

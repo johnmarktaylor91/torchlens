@@ -175,3 +175,21 @@ def test_report_prints_moved_rows_as_deltas_and_unfilled_reasons_are_refused(
         rl.load_deltas([pasted])
     pasted.write_text(delta_rows[0].replace("<why>", "one more line") + "\n")
     assert rl.load_deltas([pasted])[0].lane == "3"
+
+
+def test_the_ratchet_regenerator_covers_every_committed_ratchet_row() -> None:
+    """A ratchet row the step cannot regenerate would be dropped; the key sets must match."""
+
+    repo = _SCRIPT.parents[1]
+    committed = rl.keyed_tsv_rows((repo / rl.RATCHETS_PATH).read_text(encoding="utf-8"))
+    assert set(committed) == set(rl.RATCHET_KEYS)
+    assert "public_builtin_raise_sites" in rl._CEILINGS
+
+
+def test_an_unknown_ratchet_row_is_refused_not_dropped(tmp_path: Path) -> None:
+    ledger = tmp_path / rl.RATCHETS_PATH
+    ledger.parent.mkdir(parents=True)
+    rows = "".join(f"{key}\t1\n" for key in rl.RATCHET_KEYS)
+    ledger.write_text(_HEADER + rows + "brand_new_ratchet\t0\n", encoding="utf-8")
+    with pytest.raises(rl.LedgerRefusal, match="brand_new_ratchet"):
+        rl.render_ratchets(tmp_path)
