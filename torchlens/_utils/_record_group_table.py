@@ -481,7 +481,8 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
     True
     """
 
-    stored = _resolve_stored_member(type(obj), name)
+    cls: Any = type(obj)  # typeshed's cache key is Hashable, which ``type[Any]`` is not
+    stored = _resolve_stored_member(cls, name)
     if stored is None:
         return _record_member_via_view(obj, name, default)
     try:
