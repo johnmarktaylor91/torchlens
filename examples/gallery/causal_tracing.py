@@ -343,7 +343,7 @@ def mlp_addresses(trace: Any) -> list[str]:
 
 
 def restore(corrupt: Any, wrapped: EmbedsGPT2, prepared: dict[str, Any], edits: dict) -> Any:
-    """Fork the corrupted trace, stage one restoring edit per MLP address, rerun it."""
+    """Fork the corrupted trace, attach one restoring edit per MLP address, rerun it."""
 
     restored = corrupt.fork("restore")
     hooks = [

@@ -132,7 +132,7 @@ def test_forked_module_edit_has_the_capture_time_shape() -> None:
 
     # The replacement is reachable by every label spelling and sits after the last op.
     assert fork[replacement.label] is replacement
-    assert fork[replacement.layer_label] is replacement
+    assert fork.ops[replacement.layer_label] is replacement
     index = [op.label for op in fork._layer_list]
     assert index.index(replacement.label) == index.index(last_op.label) + 1
     # Consumers of the module's output now read the replacement.
