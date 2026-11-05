@@ -46,6 +46,20 @@ class _LooseTuple(tuple):
     """A tuple subclass built from one iterable, so the rebuild takes the fallback."""
 
 
+class _PinnedTuple(tuple):
+    """A tuple subclass whose constructor takes three items: it cannot be rebuilt."""
+
+    def __new__(cls, first: Any, second: Any, _tag: Any) -> "_PinnedTuple":
+        return super().__new__(cls, (first, second))
+
+
+class _PinnedSet(frozenset):
+    """A frozenset subclass whose constructor takes two items: it cannot be rebuilt."""
+
+    def __new__(cls, first: Any, second: Any) -> "_PinnedSet":
+        return super().__new__(cls, (first, second))
+
+
 class _Holder:
     """A custom object: a tensor inside it is the disclosed residual."""
 
@@ -83,25 +97,56 @@ def _assert_last_owner_evicts_nested_tensors() -> None:
     holder = _Holder(torch.ones(1))
     for fid, value in enumerate((cyclic, deep, holder, (1, "a"))):
         store.cell_set(2, fid, value)
+    sub_cycle = _ListSub([torch.ones(1)])
+    sub_cycle.append(sub_cycle)
+    dict_cycle: collections.OrderedDict[str, Any] = collections.OrderedDict(t=torch.ones(1))
+    dict_cycle["self"] = dict_cycle
+    pinned = _PinnedTuple(torch.ones(1), 1, "tag")
+    pinned_set = _PinnedSet(torch.ones(1), 1)
+    ceiling_tuple: Any = (torch.ones(1),)
+    ceiling_pair: Any = _Pair(torch.ones(1), 0)
+    for _ in range(_EVICT_WALK_DEPTH_CEILING):
+        ceiling_tuple, ceiling_pair = [ceiling_tuple], [ceiling_pair]
+    later_cells = (
+        sub_cycle,
+        dict_cycle,
+        pinned,
+        pinned_set,
+        ceiling_tuple,
+        ceiling_pair,
+        (tensors[0], "meta"),
+        ((torch.ones(1),), 1),
+    )
+    for index, value in enumerate(later_cells):
+        store.cell_set(index // 4, index % 4, value)
 
     owner = _Owner()
     store.adopt_payload_owner(owner)
     store.release_payload_owner(owner)
 
     assert store._payload_owner_count == 0
-    assert store.cell_get(0, 0) is None
-    pair = store.cell_get(0, 1)
-    assert type(pair) is _Pair and pair == (None, "meta")
-    assert store.cell_get(0, 2) == {"x", None}
-    ordered = store.cell_get(0, 3)
-    assert type(ordered) is collections.OrderedDict and ordered == {"k": None}
-    assert store.cell_get(1, 0) == frozenset({None})
-    sub_list = store.cell_get(1, 1)
-    assert type(sub_list) is _ListSub and sub_list == [None, 1]
-    loose = store.cell_get(1, 2)
-    assert type(loose) is _LooseTuple and loose == (None, 2)
-    records = store.cell_get(1, 3)
-    assert type(records) is RecordTuple and records == (None,) and records.title == "Ops"
+    base = [store._columns[index % 4].values[index // 4] for index in range(8)]
+    assert base[0] is None
+    assert type(base[1]) is _Pair and base[1] == (None, "meta")
+    assert base[2] == {"x", None}
+    assert type(base[3]) is collections.OrderedDict and base[3] == {"k": None}
+    assert base[4] == frozenset({None})
+    assert type(base[5]) is _ListSub and base[5] == [None, 1]
+    assert type(base[6]) is _LooseTuple and base[6] == (None, 2)
+    assert type(base[7]) is RecordTuple and base[7] == (None,) and base[7].title == "Ops"
+    assert sub_cycle[0] is None and sub_cycle[1] is sub_cycle
+    assert dict_cycle["t"] is None and dict_cycle["self"] is dict_cycle
+    assert store.cell_get(0, 2) is pinned and isinstance(pinned[0], torch.Tensor), (
+        "a tuple subclass that cannot be rebuilt keeps its payload"
+    )
+    assert store.cell_get(0, 3) is pinned_set
+    ceiling_tuple_cell, ceiling_pair_cell = store.cell_get(1, 0), store.cell_get(1, 1)
+    for _ in range(_EVICT_WALK_DEPTH_CEILING):
+        ceiling_tuple_cell, ceiling_pair_cell = ceiling_tuple_cell[0], ceiling_pair_cell[0]
+    assert isinstance(ceiling_tuple_cell[0], torch.Tensor)
+    assert isinstance(ceiling_pair_cell.left, torch.Tensor)
+    assert store.cell_get(1, 2) == (None, "meta")
+    assert store.cell_get(1, 3) == ((None,), 1)
     evicted_cycle = store.cell_get(2, 0)
     assert evicted_cycle[0] is None and evicted_cycle[1] is evicted_cycle
     innermost = store.cell_get(2, 1)
