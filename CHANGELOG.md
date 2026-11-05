@@ -21847,8 +21847,6 @@ Quality gates: ruff PASS, mypy PASS (153 src clean), Tier-1 smoke 143/143, Tier-
 Phase 9 — launch-blocking hero demo. Side-by-side comparison of two ModelLogs in a Bundle with
   delta-colored aligned pairs.
 
-UX brief: examples/demos/bundle_diff_UX_brief.md (acceptance contract).
-
 Renderer: torchlens/visualization/bundle_diff.py. - bundle.show_diff(metric, layout) via
   Bundle.__getattr__ (preserves 25-method budget). - tl.viz.bundle_diff(bundle, ...) static helper.
   - Graphviz layout, cluster-per-side, paper theme default. - max_pairs default 16 hits ~50KB target
