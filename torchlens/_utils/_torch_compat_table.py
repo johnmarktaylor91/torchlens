@@ -204,6 +204,11 @@ _ROWS: tuple[CapabilityRow, ...] = (
         ),
     ),
     _row("HAS_GRADIENT_EDGE", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
+    # Read from torch/_higher_order_ops/utils.py at each measured release tag.
+    _row(
+        "HAS_HOP_COMPILATION_ENV",
+        absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1", "2.6.0", "2.7.1", "2.8.0", "2.9.1"),
+    ),
     _row("HAS_JIT_BOOLEAN_DISPATCH_TABLE"),
     _row("HAS_JIT_BUILTIN_TABLE"),
     _row("HAS_JIT_OVERLOAD_RESOLVER"),

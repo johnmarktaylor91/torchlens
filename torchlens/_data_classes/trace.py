@@ -805,6 +805,7 @@ class Trace(TraceOutputMixin, TraceLike):
     _receptive_field_solution: Any
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
+    _cooked_from: str | None = None  # "recording" on a Trace that Recording.to_trace cooked
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = TRACE_PORTABLE_STATE_SPEC
     _FIELD_POLICY = build_record_field_policy_table(
@@ -919,9 +920,7 @@ class Trace(TraceOutputMixin, TraceLike):
             layer_visualizers: Optional mapping of selectors to visualizer callables.
             save_visualizations: Whether rendered visualizations should persist in bundles.
         """
-        # Callables are effectively immutable - deepcopy is unnecessary.
-
-        # General info
+        # General info. Callables are effectively immutable - deepcopy is unnecessary.
         self.name: str | None = None
         self._source_class_name = model_class_name
         self.model_name = model_class_name

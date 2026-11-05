@@ -433,6 +433,8 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_FLASH_ATTENTION_4_INTERFACE": tc.HAS_FLASH_ATTENTION_4_INTERFACE,
         # Function.apply: a Python classmethod through torch 2.13, the C descriptor from 2.14.
         "HAS_FUNCTION_APPLY_SLOT": True,
+        # The HOP entry compile's environment factory (torch 2.13); mirror the live value.
+        "HAS_HOP_COMPILATION_ENV": tc.HAS_HOP_COMPILATION_ENV,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,

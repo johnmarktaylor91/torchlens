@@ -238,7 +238,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "_cost_backward_peak_memory": StorageBinding(StorageKind.SCALAR),
     "_provenance_backward_memory_backend": StorageBinding(StorageKind.SCALAR),
     "backward_peak_memory_reason": StorageBinding(StorageKind.SCALAR),
-    "_cooked_from": StorageBinding(StorageKind.RUNTIME),
+    "_cooked_from": StorageBinding(StorageKind.RUNTIME, annotation='str | None'),
     "_capture_phase": StorageBinding(StorageKind.RUNTIME),
     "_settlement_ops_committed": StorageBinding(StorageKind.RUNTIME),
     "_stop_requested": StorageBinding(StorageKind.RUNTIME),
