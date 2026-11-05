@@ -1,16 +1,27 @@
 {
-  "carried_files": 1796,
-  "files": 1804,
+  "carried_files": 5,
+  "files": 1899,
   "inputs": [
-    "mc202-serial.xml",
-    "mc202.xml"
+    "mp-tdr4-mat0-1-mat0.xml",
+    "mp-tdr4-mat1-1-mat1.xml",
+    "mp-tdr4-r61-1-r61.xml",
+    "mp-tdr4-s2-1-shard-2.xml",
+    "mp-tdr4-s3-1-shard-3.xml",
+    "mp-tdr4-s4-1-shard-4.xml",
+    "mp-tdr4-s5-1-shard-5.xml",
+    "mp-tdr4-s6-1-shard-6.xml",
+    "mp-tdr4-s7-1-shard-7.xml",
+    "mp-tdr4-serial-1-serial.xml",
+    "mp-tdr4-s8-2-shard-8.xml",
+    "mp-tdr4-s9-2-shard-9.xml",
+    "clean-install-from-s8-1.xml"
   ],
   "instrumented": false,
-  "measured_on": "2026-11-04",
-  "note": "tier-durations-regen-3: C-202 (host-reds-retire) test files and _fresh_plant importers re-measured on train f105a8934b",
+  "measured_on": "2026-11-05",
+  "note": "full suite on the final train (mq-b44 5598d6bfb9 + da7a4cac10), 10 shards + serial, axon and runpod, 2026-11-05; shards 8-9 from axon re-runs; test_real_world_models carried from regen-3",
   "pruned_missing_files": 0,
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
-  "source_commit": "786ec197fe",
-  "tests": 21513,
+  "source_commit": "cbde1c7f73",
+  "tests": 23080,
   "workers": 4
 }
