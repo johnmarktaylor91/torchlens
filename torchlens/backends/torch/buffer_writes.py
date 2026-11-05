@@ -1755,9 +1755,8 @@ def resolve_or_late_index_buffer_address(trace: Trace, tensor: torch.Tensor) -> 
     """
 
     if _is_uninitialized_param(tensor):
-        # A pending lazy buffer can reach a wrapped call during torch's OWN
-        # lazy pre-hook (the ``.data`` device read inside
-        # ``UninitializedBuffer.materialize``); it has no storage to read.
+        # A pending lazy buffer can reach a wrapped call during torch's OWN lazy pre-hook
+        # (the ``.data`` read inside ``UninitializedBuffer.materialize``): no storage.
         return None
     address = session_validated_buffer_address(trace, tensor)
     if address is None:

@@ -3100,7 +3100,7 @@
   "field": "modules",
   "file": "torchlens/_plain_attr_fidelity.py",
   "has_default": false,
-  "sites": 7,
+  "sites": 8,
   "via_getattr": false
  },
  {

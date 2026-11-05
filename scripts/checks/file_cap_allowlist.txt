@@ -60,7 +60,7 @@ torchlens/_capture/structure_only.py::discharge_against	90
 torchlens/_capture/structure_only.py::require_structure_only_capability	63
 torchlens/_capture_fingerprint.py::_attribute_state_fragment	114
 torchlens/_capture_fingerprint.py::_forward_input_fragment	63
-torchlens/_capture_state_helpers.py	2302
+torchlens/_capture_state_helpers.py	2299
 torchlens/_capture_state_helpers.py::_move_tensors_to_device	62
 torchlens/_capture_state_helpers.py::_move_tensors_to_device_inner	227
 torchlens/_capture_state_helpers.py::_plain_attr_values_equal	107
@@ -907,7 +907,7 @@ torchlens/backends/torch/backward.py::_walk_and_hook_backward_graph	202
 torchlens/backends/torch/backward.py::install_autograd_wrappers	102
 torchlens/backends/torch/backward.py::log_recording_backward	81
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1770
+torchlens/backends/torch/buffer_writes.py	1769
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
