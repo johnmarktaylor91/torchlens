@@ -23,6 +23,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import TraceCaptureError
 from torchlens._utils import _autograd_view_nodes, _torch_compat
 from torchlens.backends.torch import _user_grad_fn, param_mutation
 from torchlens.errors._validation import MetadataInvariantError
@@ -129,27 +130,36 @@ def _eager_error(write: Callable[[torch.Tensor], torch.Tensor]) -> str | None:
     return None
 
 
+_MULTI_OUTPUT_NODES = {"SplitBackward0", "SplitWithSizesBackward0", "UnbindBackward0"}
+
+
 @pytest.mark.parametrize("kind", sorted(_MULTI_OUTPUT))
 def test_multi_output_siblings_unread_after_a_write_capture_under_warnings_as_errors(
-    kind: str,
+    kind: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Outputs held but never read after the write: eager runs, so capture must too.
 
-    Capture reads each output's ``grad_fn`` while proving the sibling rebind;
-    torch refuses that read for a multi-output view of a written base. The read
-    is guarded, so the capture neither raises nor warns, the outputs' op keeps
-    its pre-write node, and the writer is bound to ``CopySlices``.
+    Capture reads each overlapping output's ``grad_fn`` when it hooks the
+    written base's aliases and when it proves the sibling rebind; torch refuses
+    that read for a multi-output view of a written base. Both reads are guarded,
+    so the capture neither raises nor warns, the outputs' op keeps its pre-write
+    node, and the writer is bound to ``CopySlices``.
     """
 
     write = _write_beside(kind, read_after=False)
     assert _eager_error(write) is None
+    calls = _spy_rebind(monkeypatch)
     trace = _strict_trace(write)
     _check_backward_graph_invariants(trace)
     assert _writer(trace).autograd.grad_fn.class_name == "CopySlices"
-    (multi,) = _layers(trace, (kind,))
-    assert multi.autograd.grad_fn is None or not multi.autograd.grad_fn.class_name.startswith(
-        "AsStrided"
-    )
+    multi = [
+        label
+        for before, _ in calls
+        for label, node in before.items()
+        if type(node).__name__ in _MULTI_OUTPUT_NODES
+    ]
+    assert multi
+    assert all(after[label] is before[label] for before, after in calls for label in multi)
     assert _backward_verdict(write) is True
 
 
@@ -159,9 +169,10 @@ def test_multi_output_sibling_read_after_a_write_raises_as_eager_does(kind: str)
 
     write = _write_beside(kind, read_after=True)
     eager = _eager_error(write)
-    assert eager is not None and "multiple views" in eager
-    with pytest.raises(RuntimeError, match="multiple views"):
+    assert eager is not None and "its base or another view of its base" in eager
+    with pytest.raises(TraceCaptureError, match="its base or another view of its base") as info:
         _quiet_trace(write)
+    assert isinstance(info.value.__cause__, RuntimeError)
 
 
 @pytest.mark.parametrize("kind", sorted(_MULTI_OUTPUT))
@@ -170,13 +181,14 @@ def test_write_through_a_multi_output_view_raises_as_eager_does(kind: str) -> No
 
     write = _write_through_output(kind)
     eager = _eager_error(write)
-    assert eager is not None and "multiple views" in eager
-    with pytest.raises(RuntimeError, match="multiple views"):
+    assert eager is not None and "is being modified inplace" in eager
+    with pytest.raises(TraceCaptureError, match="is being modified inplace") as info:
         _quiet_trace(write)
+    assert isinstance(info.value.__cause__, RuntimeError)
 
 
-def test_a_warning_on_the_sibling_grad_fn_read_refuses_the_sibling() -> None:
-    """A warning on the read is recorded, never shown or raised, and refuses the sibling."""
+def test_a_warning_or_error_on_the_grad_fn_read_refuses_the_tensor() -> None:
+    """A warning on the read is recorded, never shown or raised, and refuses like a raise."""
 
     class _WarnsOnRead:
         @property
@@ -191,8 +203,9 @@ def test_a_warning_on_the_sibling_grad_fn_read_refuses_the_sibling() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        assert _user_grad_fn._read_sibling_grad_fn(_WarnsOnRead()) is None
-        assert _user_grad_fn._read_sibling_grad_fn(_RaisesOnRead()) is None
+        assert _user_grad_fn.grad_fn_read_refused(_WarnsOnRead())
+        assert _user_grad_fn.grad_fn_read_refused(_RaisesOnRead())
+        assert not _user_grad_fn.grad_fn_read_refused(torch.ones(2, requires_grad=True) * 2.0)
 
 
 # --- proof refusals for one sibling ---
@@ -248,16 +261,16 @@ def test_a_sibling_the_write_reads_keeps_its_node() -> None:
 
 
 def _sibling_of_another_base(y: torch.Tensor) -> torch.Tensor:
-    """Two bases from one node (``std_mean``): write a view of one, read a view of the other."""
+    """Two bases from one node (``var_mean``): write a view of one, read a view of the other."""
 
-    std, mean = torch.std_mean(y, dim=1, keepdim=True)
+    var, mean = torch.var_mean(y, dim=1, keepdim=True)
     sibling = mean[0:2]
-    std[1:2].add_(0.25)
-    return sibling * 2.0 + std[0:2]
+    var[1:2].add_(0.25)
+    return sibling * 2.0 + var[0:2]
 
 
 def test_a_view_of_another_base_keeps_its_node() -> None:
-    """Both bases' chains reach the same ``StdMeanBackward0``; the other base's view stays."""
+    """Both bases' chains reach the same ``VarMeanBackward0``; the other base's view stays."""
 
     trace = _quiet_trace(_sibling_of_another_base)
     _check_backward_graph_invariants(trace)
@@ -272,10 +285,10 @@ def test_a_view_of_another_base_is_not_a_sibling() -> None:
     """The base check refuses a view of another output of the same node."""
 
     y = torch.randn(3, 8, requires_grad=True) * 1.0
-    std, mean = torch.std_mean(y, dim=1, keepdim=True)
-    receiver = std[1:2]
-    assert not _user_grad_fn._is_other_grad_view_of(mean[0:2], receiver, std)
-    assert _user_grad_fn._is_other_grad_view_of(std[0:1], receiver, std)
+    var, mean = torch.var_mean(y, dim=1, keepdim=True)
+    receiver = var[1:2]
+    assert not _user_grad_fn._is_other_grad_view_of(mean[0:2], receiver, var)
+    assert _user_grad_fn._is_other_grad_view_of(var[0:1], receiver, var)
 
 
 class _SliceFn(torch.autograd.Function):
