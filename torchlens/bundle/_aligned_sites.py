@@ -4,7 +4,10 @@ Bundle site reads (``rank_changes``, ``compare``) pair each reference op with
 its counterpart in every member through the supergraph's structural alignment,
 never by literal label: a capture-time module edit inserts an
 ``interventionreplacement`` op and renumbers every later op, so a label join
-silently dropped exactly the ops the edit changed.
+silently dropped exactly the ops the edit changed. The replacement op itself
+is read at the site it replaced (``_data_classes._module_edit_sites``): the
+edited module's last op compares the replacement's value and keys the row,
+and the replacement has no row of its own.
 """
 
 from __future__ import annotations
@@ -12,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
+from .._data_classes._module_edit_sites import edited_stand_in, replaced_site
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
 from ..intervention._super.super_op import SuperOp
@@ -56,7 +60,8 @@ def site_row_key(site: Any) -> str:
     """Return the row key of one site in ``compare`` and ``rank_changes``.
 
     A multi-pass op has one row per pass, keyed by the pass-qualified label
-    (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
+    (``tanh_1_1:2``); a single-pass op keeps its bare layer label. A module
+    edit's replacement op keys to the row of the op it replaced.
 
     Parameters
     ----------
@@ -69,6 +74,7 @@ def site_row_key(site: Any) -> str:
         The row key.
     """
 
+    site = replaced_site(site)
     layer_label = str(site.layer_label)
     if int(getattr(site, "num_passes", 1) or 1) > 1:
         return f"{layer_label}:{site.pass_number}"
@@ -106,7 +112,8 @@ def resolve_aligned_site(
     Returns
     -------
     dict[str, Any] | None
-        Member name to resolved op, or ``None`` when any member lacks the site
+        Member name to resolved op (a module edit's replacement op where the
+        member edited the site), or ``None`` when any member lacks the site
         (it is then not a common site).
     """
 
@@ -119,7 +126,7 @@ def resolve_aligned_site(
         try:
             target = _exact_label(counterparts.get(name, base) + suffix)
             table = _resolve_sites(log, target, max_fanout=1)
-            resolved[name] = table.first()
+            resolved[name] = edited_stand_in(table.first(), log)
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             return None
     return resolved

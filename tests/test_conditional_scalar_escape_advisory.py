@@ -51,6 +51,44 @@ class IfAndRealEscape(nn.Module):
         return h * scale
 
 
+class ReadmeLoop(nn.Module):
+    """The README ``Loop`` example verbatim: one ``if`` on a 0-dim bool, then a loop."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.sum() < 0:  # branch
+            x = -x
+        for _ in range(2):  # 2 passes
+            x = self.fc2(torch.relu(self.fc1(x)))
+        return x
+
+
+#: The same model as source text, run with no file and no ``linecache`` entry
+#: behind it (``exec`` of a string, as stdin and ``python -c`` do).
+_README_LOOP_SOURCE = """
+import torch
+from torch import nn
+
+
+class Loop(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+
+    def forward(self, x):
+        if x.sum() < 0:     # branch
+            x = -x
+        for _ in range(2):  # 2 passes
+            x = self.fc2(torch.relu(self.fc1(x)))
+        return x
+"""
+
+
 class Truthiness(nn.Module):
     """``if tensor:`` on a float scalar: not a recorded conditional test."""
 
@@ -99,6 +137,38 @@ def test_real_escape_still_warns_beside_a_recorded_if() -> None:
             number for number, text in enumerate(handle, start=1) if "# REAL_ESCAPE_LINE" in text
         )
     assert rows[0]["first_location"].endswith(f":{real_line}")
+
+
+def test_readme_loop_from_a_file_records_the_branch_and_stays_quiet() -> None:
+    trace, escape_warnings = _capture(ReadmeLoop())
+    assert len(trace.graph.conditionals) == 1
+    assert escape_warnings == []
+    assert _escape_rows(trace) == []
+
+
+def test_readme_loop_without_a_source_file_warns_and_names_the_cause() -> None:
+    namespace: dict[str, Any] = {}
+    exec(compile(_README_LOOP_SOURCE, "<readme>", "exec"), namespace)
+    trace, escape_warnings = _capture(namespace["Loop"]())
+    # No file to parse: step 5 records no conditional, so the warning is true.
+    assert len(trace.graph.conditionals) == 0
+    assert len(escape_warnings) == 1
+    text = str(escape_warnings[0].message)
+    branch_line = _README_LOOP_SOURCE.splitlines().index("        if x.sum() < 0:     # branch") + 1
+    assert f"first at <readme>:{branch_line}." in text
+    assert "1 of these reads are bool tests in code with no readable source file" in text
+    assert "not in trace.graph.conditionals" in text
+    rows = _escape_rows(trace)
+    assert [row["count"] for row in rows] == [1]
+    assert rows[0]["first_location"] == f"<readme>:{branch_line}"
+    assert "no readable source file" in rows[0]["message"]
+
+
+def test_genuine_float_escape_text_says_what_is_missing() -> None:
+    _, escape_warnings = _capture(IfAndRealEscape())
+    text = str(escape_warnings[0].message)
+    assert "has no edge back to the tensor" in text
+    assert "no readable source file" not in text
 
 
 def test_non_bool_truthiness_still_warns() -> None:

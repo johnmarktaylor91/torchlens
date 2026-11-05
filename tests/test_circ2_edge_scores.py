@@ -32,6 +32,7 @@ from support.eap_fixture import CLEAN, CORRUPT, Fixture, fixture_metric
 
 import torchlens as tl
 import torchlens.mechinterp
+from tests.support.gradient_edge_guard import requires_gradient_edge
 
 # ``heavy`` is applied per test: one test below is ``slow`` (a tier never combined with heavy).
 
@@ -126,6 +127,7 @@ def _logit_difference(logits: torch.Tensor) -> torch.Tensor:
     return logits[:, -1, 1] - logits[:, -1, 2]
 
 
+@requires_gradient_edge
 @pytest.mark.heavy
 def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
     """EAP and EAP-IG (m = 1, 5) equal the plain-PyTorch treeified reference per edge.

@@ -40,8 +40,8 @@ omitted entirely: `selectors.py` (site selectors incl. `without_op`),
 - `_topology/` - Supergraph, SupergraphNode, TopologyDiff, `build_supergraph()`, and
   `compare_topology()`.
 - `_metrics.py` - tensor distance metrics shared by Super* diff helpers.
-- `bundle.py` - compatibility shim for the top-level `tl.Bundle` type and
-  `AmbiguousLabelError`.
+- `bundle.py` - compatibility shim for the top-level `tl.Bundle` type
+  (`AmbiguousLabelError` lives only in `tl.errors`).
 
 ## Bundle Super Rules
 Every sub-Trace accessor has a Bundle counterpart. `bundle.ops`, `bundle.layers`,
