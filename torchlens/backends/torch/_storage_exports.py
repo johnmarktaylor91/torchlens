@@ -6,8 +6,12 @@ copies it out only before a wrapped call that can write that storage. A raw poin
 torch dispatch write the bytes later (a warp or numba kernel, ctypes, an ndarray
 assignment) with no interception and no version bump, so the saved out would show the
 later write. The wrapper of each export method therefore copies out the pending
-aliases of the receiver's storage before handing it over, for user calls only:
-TorchLens's own bookkeeping reads run paused or under the internal-read marker.
+aliases of the receiver's storage before handing it over, for calls the model makes
+while its forward is being logged (TorchLens's own bookkeeping reads run paused or
+under the internal-read marker). After the capture returns, TorchLens's postprocess
+reads storage pointers unmarked, so exports there are not intercepted: a foreign
+write into a live tensor after capture can still reach a saved out that aliases it,
+as can a write through a pointer the model took before the payload was deferred.
 """
 
 from __future__ import annotations
@@ -45,7 +49,7 @@ def materialize_deferred_for_export(args: Sequence[Any]) -> None:
         Positional arguments of the export call; the receiver is ``args[0]``.
     """
 
-    if not _DEFER_PENDING or not args or _state._pause_depth > 0:
+    if not _DEFER_PENDING or not args or not _state._logging_enabled or _state._pause_depth:
         return
     if getattr(_internal_read_state, "depth", 0):
         return

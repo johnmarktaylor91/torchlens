@@ -907,9 +907,9 @@ _PAYLOAD_MEMORY_FORMAT = torch.preserve_format
 #
 # Host-level writes bypass torch dispatch (raw ``data_ptr()``/numpy/DLPack buffer
 # writes, ctypes, foreign kernels) and bump no version, so the wrapper of every
-# zero-copy export copies out the receiver's pending aliases before handing the
-# storage over (``backends/torch/_storage_exports.py``). Residual: a pointer taken
-# BEFORE the payload was deferred. Deferral stays gated to plain captures (no
+# zero-copy export made by the logged forward copies out the receiver's pending
+# aliases first (``backends/torch/_storage_exports.py``, residuals listed there).
+# Deferral stays gated to plain captures (no
 # runnable witnesses, backward capture or transforms armed).
 #
 # GRAPH-CONNECTED PAYLOADS (the default ``tl.trace(model, x)`` regime)
