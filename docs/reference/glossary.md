@@ -1336,8 +1336,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   builtin tokens (`"time"`, `"bytes"`, `"flops"`, ... with the same meaning and units), the
   closed `"dims"` shape token (numel of the non-batch output shape), or a callable
   `node -> scalar`. Collapsed boxes and segments size from the same exact member-op sums as
-  `color_by`. Sizes are label-aware: the median label box among encoded nodes (or a node's
-  own label box when larger) is the smallest-value size and the largest value gets 4x that area. Emitted sizes are width/height
+  `color_by`. The value alone sets a node's size:
+  equal values draw equal sizes whatever the label lengths. Every encoded node scales one shared
+  base box, the smallest that still holds every node's label at its value (widened for ellipses
+  and other non-box shapes), and the largest value gets 4x the smallest's area. Emitted sizes are width/height
   MINIMUMS under `fixedsize=false`: a label can never be truncated by an encoding and fonts never
   scale. Strictly opt-in — plain `draw()` keeps
   uniform boxes. On rolled multi-pass layers size REFUSES where color degrades
@@ -3093,8 +3095,9 @@ deprecation shim owed*
   `"debug"` (what is broken?), `"speed"` (where does time go?), `"dims"` (what shape is the
   data?), `"transformer"` (how is attention wired?), `"memory"` (what is big in bytes?),
   `"sequence"` (how do the passes unfold?), `"compute"` (where are the FLOPs?) and
-  `"interventions"` (what did the edits change?). Each view prints its caption lines under
-  the header block, starting with `view: <name> -- <question>`. Keywords you pass win over
+  `"interventions"` (what did the edits change?). Each view prints any caption lines it needs
+  under the header block, which names the model, the drawn count and size, the parameters
+  (compact from 1,000, `11.7M params`) and, on an edited trace, one edit line. Keywords you pass win over
   the view's own settings, so combinations are spelled with keywords, for example
   `trace.draw(view="debug", show_edge_shapes=True)`. `theme=` stays the colour skin and
   composes with any view; `"speed"`, `"memory"` and `"compute"` turn on the
@@ -6552,7 +6555,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `idempotent=` | constructor keyword of `tl.agent.AgentToolSpec` (default `True`) |
 | `identifier=` | keyword of `tl.bridge.brain_score.activations_extractor` (keyword-only; default `None`): Brain-Score activations identifier; defaults to the model class name, matching `PytorchWrapper`; constructor keyword of `tl.postprocessing.ResolvedPostprocessing` (required): Model, weights, label bank, or default-policy identifier |
 | `ids=` | constructor keyword of `tl.transformer.TokenAxis` (default `None`): Optional tokenizer ids aligned with `tokens` |
-| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional local image path used by the existing `NodeSpec.image` render hook; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
+| `image=` | keyword of `ReceptiveFieldView.show` (keyword-only; default `None`): Optional source image override; keyword of `Trace.annotate` (keyword-only; default `None`): Optional picture for the selected nodes: an image file path or a PIL image; keyword of `tl.attribution.grad_cam` (keyword-only; default `None`): Optional source image override for the rendered overlay; keyword of `tl.bridge.transformers.trace_image` (required): PIL image or non-empty list of PIL images |
 | `images=` | keyword of `tl.viz.image_scatter` (keyword-only; default `None`): Optional PIL images to paste at scatter positions; keyword of `tl.viz.montage` (required): Input images to render |
 | `in_progress=` | keyword of `tl.dataset_extraction.open_extraction` (keyword-only; default `False`): Open a still-writing artifact's trusted committed prefix; `reader.refresh()` rescans |
 | `include_activations=` | keyword of `Trace.save` (keyword-only; default `False`): Archive exactly the capture-time `save=`-selected payloads for inspection and eligible byte-exact attestation; those payloads never seed execution; keyword of `Recording.save` (keyword-only; default `False`) |

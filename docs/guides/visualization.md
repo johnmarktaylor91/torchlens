@@ -32,7 +32,8 @@ program to be installed.
 
 The graph flows from the input at the bottom to the output at the top. The header in the top
 left corner names the model and counts what was drawn: 10 operations whose outputs total
-18.9 KiB, and 1,610 parameters, all trainable. Each thick-bordered box is one module call: here
+18.9 KiB, and 1.61K parameters, all trainable. Counts from 1,000 up print compact in the
+parameter line (`11.7M params`), and op counts from 10,000 up (`12.3K ops`). Each thick-bordered box is one module call: here
 `@features` (an `nn.Sequential`) holds two `ConvBlock` modules, `@features.0` and
 `@features.1`. The name under each box's address is the module's class.
 
@@ -257,8 +258,8 @@ one question.
 | `trace.draw(view="compute")` | where are the FLOPs? |
 | `trace.draw(view="interventions")` | what did the edits change? |
 
-Each view prints its caption lines under the header block, starting with
-`view: <name> -- <question>`. Leaving `view=` unset draws the plain graph, which already shows
+Each view prints any caption lines it needs under the header block (the header itself names
+the model, the drawn count and size, and the parameters). Leaving `view=` unset draws the plain graph, which already shows
 every operation. Any keyword you pass wins over the view's own settings, so combinations are
 spelled with keywords, for example `trace.draw(view="debug", show_edge_shapes=True)`, and
 `theme=` (see [Themes](#themes)) changes the colours of any view.
@@ -282,8 +283,8 @@ the nodes by time, bytes or FLOPs.
 ### What an edit changed: `view="interventions"`
 
 After an edit (here, zeroing the output of `fc1` on a fork of the trace), the edited node is
-marked in purple with the edit's name, and the header counts the edits and warns that values
-after the edit are counterfactual, not what the model computed:
+marked in purple with the edit's name, and the header counts the edits in one line
+(`1 edit: Δ zero_ablate on linear_1_1`); the capture facts stay on `edited.outcome`:
 
 ```text
 edited = trace.fork()
@@ -332,9 +333,9 @@ high values (slow, big) on a light page.
 
 `trace.draw(color_by='time', size_by='bytes')`
 
-Nodes with no value for the source are left unfilled; the method comment says how many were
-encoded. `size_scale=` chooses how values map to area (the method comment names the mapping in
-use).
+Nodes with no value for the source are left unfilled. `size_scale=` chooses how values map
+to area. A sized node's size comes from its value alone: two nodes with the same value draw the
+same size however long their labels, and every label still fits.
 
 ## Direction
 
@@ -431,6 +432,11 @@ These keywords of `Trace.draw` are not pictured above:
 | `stack_by`, `node_overlay` | stack repeated structure into columns; add an overlay row of scores to each node |
 | `node_spec_fn`, `collapsed_node_spec_fn`, `backward_node_spec_fn` | a function that restyles each node |
 | `graph_overrides`, `node_overrides`, `edge_overrides`, `module_overrides` | raw Graphviz attributes for the graph, edges and module boxes |
+
+To put a picture on a node, annotate it before drawing: `trace.annotate(label, image=...)`
+takes a path to any image file Pillow can open (PNG, JPEG, WebP, ...) or a PIL image. A PNG
+file is drawn as it is; any other picture is drawn from a PNG copy, because some Graphviz
+builds cannot read JPEG node images.
 
 The [glossary](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/glossary.md)
 lists every keyword with its accepted values.

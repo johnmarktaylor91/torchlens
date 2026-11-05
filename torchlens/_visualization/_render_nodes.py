@@ -4,6 +4,7 @@
 
 import re as _re
 
+from .._data_classes._annotation_image import drawable_annotation_image
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
 from ._bool_outcomes import bool_node_fill, bool_value_line
@@ -615,6 +616,8 @@ def _build_layer_node(
     if isinstance(visualizer_path, str) and visualizer_path.lower().endswith(".png"):
         default_spec = default_spec.replace(image=visualizer_path)
     annotation_image = _annotation_image_path_for_node(self, node)
+    if annotation_image is not None:  # Graphviz gets a PNG whatever the source format
+        annotation_image = drawable_annotation_image(self, annotation_image)
     if annotation_image is not None:
         default_spec = default_spec.replace(image=annotation_image)
     if theme is not None:

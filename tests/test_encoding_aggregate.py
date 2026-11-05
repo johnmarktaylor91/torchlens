@@ -209,37 +209,40 @@ def test_final_sizes_fit_labels_and_scale_from_a_shared_base(
     floor = estimate_label_box(["x"], DEFAULT_FONT_PT)
     for size in finals.values():
         assert size[0] >= floor[0] and size[1] >= floor[1]
-    # Area / base area is exactly 1 + f * (M - 1) for every node; nodes that share
-    # the median base are therefore ordered by value.
+    # Area / base area is exactly 1 + f * (M - 1) for every node, all from one shared
+    # base, so area is ordered by value.
     bases = {}
     for key, size in finals.items():
         factor = math.sqrt(1.0 + state.size_fractions[key] * (SIZE_BY_MAX_AREA_MULT - 1.0))
-        bases[key] = (round(size[0] / factor, 2), round(size[1] / factor, 2))
-    shared = max(set(bases.values()), key=list(bases.values()).count)
-    order = sorted(
-        (key for key in finals if bases[key] == shared), key=lambda key: state.size_fractions[key]
-    )
+        bases[key] = (size[0] / factor, size[1] / factor)
+    first = next(iter(bases.values()))
+    for base in bases.values():
+        assert base == pytest.approx(first, abs=2e-3)
+    order = sorted(finals, key=lambda key: state.size_fractions[key])
     areas = [finals[key][0] * finals[key][1] for key in order]
     assert len(order) >= 2
     assert all(b >= a - 1e-6 for a, b in zip(areas, areas[1:], strict=False))
 
 
-def test_one_long_label_does_not_inflate_every_node() -> None:
+def test_equal_values_get_equal_sizes_whatever_the_label() -> None:
     from types import SimpleNamespace
 
-    from torchlens._visualization._encoding_size_layout import layout_encoded_sizes
+    from torchlens._visualization._encoding_size_layout import (
+        layout_encoded_sizes,
+        node_size_needed,
+    )
 
     short = ("op_1", "(2, 8)")
-    long_row = ("op_9", "x" * 120)
+    long_row = ("op_9", "(2, 8)", "x" * 120)
     state = SimpleNamespace(
-        size_fractions={"a": 0.0, "b": 0.0, "c": 1.0, "d": 0.5},
+        size_fractions={"a": 0.0, "b": 0.0, "c": 1.0, "d": 1.0},
         sizes={},
         unit_keys={},
         final_sizes={},
         aggregates=SimpleNamespace(
             segments=(
                 SimpleNamespace(key="a", label_lines=short),
-                SimpleNamespace(key="b", label_lines=short),
+                SimpleNamespace(key="b", label_lines=long_row),
                 SimpleNamespace(key="c", label_lines=short),
                 SimpleNamespace(key="d", label_lines=long_row),
             )
@@ -247,13 +250,25 @@ def test_one_long_label_does_not_inflate_every_node() -> None:
     )
     layout_encoded_sizes((), state, SimpleNamespace(font_size=None))
     finals = state.final_sizes
-    short_box = estimate_label_box(short, DEFAULT_FONT_PT)
-    long_box = estimate_label_box(long_row, DEFAULT_FONT_PT)
-    assert finals["a"][0] == pytest.approx(short_box[0], abs=1e-3)
+    # The encoded value alone sets the size: equal values, equal boxes.
+    assert finals["a"] == finals["b"]
+    assert finals["c"] == finals["d"]
     assert finals["c"][0] * finals["c"][1] == pytest.approx(
         SIZE_BY_MAX_AREA_MULT * finals["a"][0] * finals["a"][1], rel=1e-2
     )
-    assert finals["d"][0] >= long_box[0]
+    # The smallest box still holds the longest label (segments draw as boxes).
+    need = node_size_needed(estimate_label_box(long_row, DEFAULT_FONT_PT), "box")
+    assert finals["b"][0] >= need[0] - 1e-3 and finals["b"][1] >= need[1] - 1e-3
+
+
+def test_ellipse_needs_more_room_than_a_box() -> None:
+    from torchlens._visualization._encoding_size_layout import node_size_needed
+
+    box = estimate_label_box(["relu_1_2", "(3, 8)"], DEFAULT_FONT_PT)
+    assert node_size_needed(box, "box") == box
+    oval = node_size_needed(box, "oval")
+    assert oval[0] == pytest.approx(box[0] * math.sqrt(2.0))
+    assert node_size_needed(box, None) == oval
 
 
 def test_label_box_ignores_markup() -> None:

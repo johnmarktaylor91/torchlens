@@ -272,18 +272,20 @@ def make_change_box_spec_fn(report: ChangeReport) -> CollapsedNodeSpecFn | None:
 
 
 def change_key_rows(report: ChangeReport, heuristic_count: int) -> tuple[str, ...]:
-    """The caption's outline key, and why changed ops may be missing."""
+    """The caption's facts about the edit marks: an inferred site, and why changed ops may be missing.
 
-    extra: tuple[str, ...]
-    if report.unavailable is not None:
-        key, extra = "purple outline: edited", (report.unavailable,)
-    elif report.changed_count:
-        key, extra = "purple outline: edited; light purple: changed by the edit", ()
-    else:
-        key, extra = "purple outline: edited", ("no other op's saved value changed",)
+    The colour chips of the key name the edited and changed marks, so no
+    outline legend line is drawn.
+    """
+
+    rows: list[str] = []
     if heuristic_count:
-        key += "; dashed outline: edit site inferred, not recorded"
-    return (key, *extra)
+        rows.append("dashed outline: edit site inferred, not recorded")
+    if report.unavailable is not None:
+        rows.append(report.unavailable)
+    elif not report.changed_count:
+        rows.append("no other op's saved value changed")
+    return tuple(rows)
 
 
 def change_census_rows(report: ChangeReport) -> tuple[str, ...]:

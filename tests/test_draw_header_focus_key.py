@@ -39,8 +39,9 @@ from torchlens._visualization._header_block import (
     drawn_count_line,
     drawn_module_marks,
     key_swatches,
+    params_caption_detail,
 )
-from torchlens._visualization._label_format import binary_size, format_memory
+from torchlens._visualization._label_format import binary_size, compact_count, format_memory
 from torchlens._visualization.modes import _compact_size
 from torchlens._visualization.overlays import format_overlay_value
 from torchlens._visualization.themes import (
@@ -207,7 +208,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert int(count.replace(",", "")) == len(sized)
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
     assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
-    assert f"{trace.num_params:,} params" in dot
+    assert f"{compact_count(trace.num_params, full_below=1000)} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
 
@@ -262,6 +263,35 @@ def test_rolled_count_line_keeps_singular_forms() -> None:
     assert drawn_count_line(None, one_op, "unrolled") == "1 op (16 B)"  # type: ignore[arg-type]
     box = SimpleNamespace(units=(_count_unit("module_box", op),))
     assert drawn_count_line(None, box, "rolled") == "1 node (16 B)"  # type: ignore[arg-type]
+
+
+def test_header_counts_print_compact_from_ten_thousand() -> None:
+    op = SimpleNamespace(activation_memory=0)
+    many = SimpleNamespace(units=tuple(_count_unit("raw_op", op) for _ in range(12_345)))
+    assert drawn_count_line(None, many, "unrolled") == "12.3K ops (0 B)"  # type: ignore[arg-type]
+    some = SimpleNamespace(units=tuple(_count_unit("raw_op", op) for _ in range(9_999)))
+    assert drawn_count_line(None, some, "unrolled") == "9,999 ops (0 B)"  # type: ignore[arg-type]
+
+
+def _param_trace(total: int, trainable: int) -> SimpleNamespace:
+    return SimpleNamespace(
+        num_params=total,
+        num_params_trainable=trainable,
+        num_params_frozen=total - trainable,
+        _cost_total_param_memory=total * 4,
+    )
+
+
+def test_header_params_print_compact_from_one_thousand() -> None:
+    assert params_caption_detail(_param_trace(11_689_512, 11_689_512)) == (  # type: ignore[arg-type]
+        "11.7M params (44.6 MB, all trainable)"
+    )
+    assert params_caption_detail(_param_trace(86_567_656, 0)).startswith("86.6M params (")  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(1_610, 1_610)).startswith("1.61K params (")  # type: ignore[arg-type]
+    assert params_caption_detail(_param_trace(999, 999)) == "999 params (3.9 KB, all trainable)"  # type: ignore[arg-type]
+    mixed = params_caption_detail(_param_trace(2_000_000, 1_500))  # type: ignore[arg-type]
+    assert mixed.endswith(", 1.5K/2M trainable)"), mixed
+    assert compact_count(1_610) == "1610"  # node labels keep the full count below 10,000
 
 
 @pytest.mark.parametrize("rolled", [False, True])

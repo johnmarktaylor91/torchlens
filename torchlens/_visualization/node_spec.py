@@ -10,6 +10,7 @@ render node internals and may not ride a vocabulary module under Rule V3).
 
 from __future__ import annotations
 
+import os
 from html import escape
 from typing import TYPE_CHECKING, Any, cast
 
@@ -67,7 +68,9 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
     Returns
     -------
     str | None
-        Image path stored in ``annotations["user"]["image"]``, if present.
+        Image path stored in ``annotations["user"]["image"]``, if present and
+        the file still exists (a loaded trace can name a picture that is gone;
+        such a node is drawn without it and is not an image node).
     """
 
     from ._render_nodes import BoundaryNode, _layer_log_for_node
@@ -87,7 +90,7 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
         if not isinstance(user_annotations, dict):
             continue
         image = user_annotations.get("image")
-        if isinstance(image, str) and image:
+        if isinstance(image, str) and image and os.path.isfile(image):
             return image
     return None
 
