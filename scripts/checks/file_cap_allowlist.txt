@@ -431,7 +431,7 @@ torchlens/_runnable/state_context.py::_ambient_execution_context_restored	109
 torchlens/_runnable/state_context.py::_call_execution_context_entered	78
 torchlens/_runnable/state_context.py::_pre_call_contract_checks	79
 torchlens/_runnable/state_context.py::_state_contract_checks	131
-torchlens/_runnable/transaction.py	1259
+torchlens/_runnable/transaction.py	1257
 torchlens/_runnable/transaction.py::_execute_loaded_sparse_transaction	362
 torchlens/_runnable/transaction.py::run_live_trace	97
 torchlens/_runnable/verification.py::_attestation_state_matches	61

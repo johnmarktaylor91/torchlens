@@ -710,6 +710,8 @@ def _run_result_fork(trace: Any) -> Any:
     Every run door that writes a result fork goes through here.
     """
 
+    from ..intervention._helper_fingerprint import alias_staged_helpers  # L4 helper, kept lazy
+
     fork = trace._fork_trace(name=_run_fork_name(trace))
     alias_staged_helpers(trace._intervention_spec, fork._intervention_spec)
     return fork
@@ -761,7 +763,6 @@ def running_result(trace: Any) -> Any | None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ..intervention._helper_fingerprint import alias_staged_helpers  # noqa: E402
 from .execution import (  # noqa: E402
     _ALLOWED_TORCH_SYMBOL_TYPES,
     _MAX_DECODE_NESTING_DEPTH,

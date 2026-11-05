@@ -495,8 +495,6 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
 def _validated_until_tokens(until: Any) -> list[Any]:
     """Normalize the until= selection to tokens; refuse empty/non-static forms."""
 
-    from .._errors import InvalidArgumentError
-
     tokens = list(until) if isinstance(until, (list, tuple, set, frozenset)) else [until]
     if not tokens:
         raise InvalidArgumentError(
