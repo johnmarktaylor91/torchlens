@@ -1551,7 +1551,7 @@ jobs:
 
           model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.ReLU(), nn.Flatten(), nn.LazyLinear(5))
           trace = tl.trace(model, torch.randn(2, 3, 8, 8), save=tl.func("relu"))
-          assert trace.backend == "torch"
+          assert trace.provenance.backend == "torch"
           assert len(trace.layer_labels) > 0, "no layers captured"
           relu = trace["relu_1_2"]
           assert relu.out is not None
