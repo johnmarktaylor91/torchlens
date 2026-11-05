@@ -152,7 +152,7 @@ def _covers_set_storage(snapshot: torch.Tensor, parent_layer: Op) -> bool:
 
     if record_member(parent_layer, "func_name", None) != "set_":
         return False
-    saved_args = record_member(parent_layer, "saved_args", None) or ()
+    saved_args: tuple[Any, ...] = tuple(record_member(parent_layer, "saved_args", None) or ())
     storage = saved_args[1] if len(saved_args) > 1 else None
     return isinstance(storage, torch.UntypedStorage) and (
         snapshot.numel() * snapshot.element_size() == storage.nbytes()
