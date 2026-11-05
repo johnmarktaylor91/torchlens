@@ -239,9 +239,9 @@ class ParameterArgumentReferences:
                 return None
             digest = _value_digest(saved_value)
         if pending_key is not None:
-            return self._pending_value_alias(
-                tensor, saved_value, parent_label, target, pending_key, digest
-            )
+            if target is not None:
+                return None
+            return self._pending_value_alias(tensor, saved_value, parent_label, pending_key, digest)
         alias = _alias_like_copy(tensor, saved_value)
         if alias is None:
             return None
@@ -257,7 +257,6 @@ class ParameterArgumentReferences:
         tensor: torch.Tensor,
         saved_value: torch.Tensor,
         parent_label: str,
-        target: torch.device | None,
         key: Any,
         digest: bytes,
     ) -> torch.Tensor | None:
@@ -268,14 +267,14 @@ class ParameterArgumentReferences:
         would be, so any intercepted write to that tensor first rebinds it to
         fresh storage holding the pre-write bytes, together with the payload.
         Like the deferred copy it replaces, it is a plain detached tensor, so
-        a copy that would require grad, or one kept on another device, is
-        refused. Its version counter is the live tensor's, which legal writes
+        a copy that would require grad is refused (one kept on another device
+        is refused by the caller). Its version counter is the live tensor's, which legal writes
         move, so :meth:`first_change` checks it differently (see
         :func:`_pending_alias_change`); ``digest`` is the digest of the bytes it
         stands for, checked by :meth:`first_digest_change` as for every alias.
         """
 
-        if target is not None or (tensor.requires_grad and torch.is_grad_enabled()):
+        if tensor.requires_grad and torch.is_grad_enabled():
             return None
         alias = _tensor_utils._try_defer_payload_alias(saved_value)
         if alias is None:

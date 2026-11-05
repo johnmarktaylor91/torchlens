@@ -600,10 +600,12 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
             }
             if key == "alias":
                 diagnostics.extend(get_validation_diagnostics(trace) or ())
+                # The in-place receiver itself is saved after the write copied the payload
+                # out, so it takes the exclusive-copy path; the three readers were registered.
                 copied_out.extend(
                     not _shares_parent_output(value, parent)
-                    for _, parent, value in _parent_slots(trace)
-                    if parent.layer_label.startswith("relu")
+                    for op, parent, value in _parent_slots(trace)
+                    if parent.layer_label.startswith("relu") and op.func_name != "mul_"
                 )
 
         return record
@@ -630,7 +632,7 @@ def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
         assert torch.equal(values["alias"][key], relu), key
     # Copied out by the write, the aliases still match the digest of their pre-write bytes:
     # validation's first attempt stands, with no rerun.
-    assert copied_out and all(copied_out), copied_out
+    assert len(copied_out) == 3 and all(copied_out), copied_out
     assert not [d for d in diagnostics if d.check_name == arg_references.FALLBACK_CHECK]
 
 
@@ -960,3 +962,81 @@ def test_an_exception_while_aliasing_falls_back_to_the_copy(
     assert _validate(model, x, observe) is copy_verdict is True
     assert raised, "the planted exception never ran: inconclusive"
     assert shared and not any(shared), shared
+
+
+def _registered_alias(
+    guard: arg_references.ParameterArgumentReferences, live: torch.Tensor
+) -> tuple[torch.Tensor | None, torch.Tensor]:
+    """Defer ``live``'s payload, then ask ``guard`` for an argument alias of it."""
+
+    from torchlens._utils import tensor_utils
+
+    with _state.pause_logging():
+        tensor_utils.arm_deferred_payload_window(frozenset())
+        try:
+            payload = tensor_utils._try_defer_payload_alias(live)
+            assert payload is not None
+            alias = guard.value_alias(live.clone(), payload, "p")
+        finally:
+            tensor_utils.disarm_deferred_payload_window()
+    return alias, payload
+
+
+def test_a_write_the_registry_never_sees_is_named_by_the_version_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from torchlens._utils import tensor_utils
+
+    live = torch.randn(5)
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    alias, _ = _registered_alias(guard, live)
+    assert alias is not None and guard.first_change() is None
+    # An in-place write no wrapper announces: the clone-on-write interception is skipped,
+    # so the alias stays on the live storage and its bytes change with a version bump.
+    monkeypatch.setattr(tensor_utils, "_DEFER_BUSY", True)
+    live.add_(1.0)
+    monkeypatch.setattr(tensor_utils, "_DEFER_BUSY", False)
+    assert alias.untyped_storage().data_ptr() == live.untyped_storage().data_ptr()
+    change = guard.first_change()
+    assert change is not None and "without interception" in change, change
+
+
+def test_a_host_write_into_a_registered_alias_moves_its_digest_not_its_version() -> None:
+    live = torch.randn(5)
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    alias, _ = _registered_alias(guard, live)
+    assert alias is not None and guard.first_digest_change() is None
+    live.detach().numpy()[0] += 1.0
+    assert guard.first_change() is None
+    change = guard.first_digest_change()
+    assert change is not None and "without a version change" in change, change
+
+
+def test_the_pending_alias_refusals_fall_back_to_the_copy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from torchlens._utils import tensor_utils
+
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    live = torch.randn(5)
+    alias, payload = _registered_alias(guard, live)
+    assert alias is not None, "the unrefused case must alias: inconclusive"
+    with _state.pause_logging():
+        # Window unarmed: the registry refuses to mint, so the argument is copied.
+        assert guard.value_alias(live.clone(), payload, "p") is None
+        # A copy that would require grad cannot be a detached registry alias.
+        tensor_utils.arm_deferred_payload_window(frozenset())
+        try:
+            with torch.enable_grad():
+                assert guard.value_alias(live.clone().requires_grad_(), payload, "p") is None
+            # Kept on another device (an offloading output_device): refused.
+            offload = arg_references.ParameterArgumentReferences(
+                {}, None, "meta", alias_saved_values=True
+            )
+            assert offload.value_alias(live.clone(), payload, "p") is None
+        finally:
+            tensor_utils.disarm_deferred_payload_window()
+    # Storage that cannot be identified refuses before anything is minted.
+    monkeypatch.setattr(tensor_utils, "_deferred_storage_key", lambda tensor: None)
+    with _state.pause_logging():
+        assert guard.value_alias(live.clone(), payload, "p") is None
