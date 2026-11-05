@@ -678,7 +678,7 @@ def test_without_a_capability_the_carve_out_outcome_is_pinned(capability_gap: st
 
     trace = _traced_backward(_ConsumedBeforeWrite())
     writer = _only_layer(trace, ("add_",))
-    assert writer.grad_fn_class_name != "CopySlices"
+    assert writer.autograd.grad_fn_class_name != "CopySlices"
     schemas_off = _CAPABILITY_GAPS[capability_gap][1]
     assert _view_write_gradient_runs_through_copy_slices(trace, writer) is not schemas_off
     with pytest.raises(MetadataInvariantError, match="add_"):
@@ -689,8 +689,9 @@ def test_without_a_capability_the_carve_out_outcome_is_pinned(capability_gap: st
 class _BufferWriteBesideDeadInplace(nn.Module):
     """Write into a view of a buffer that needs no grad, and leave a non-view in-place op dead.
 
-    The buffer's ``CopySlices`` has no prior node, so the write is never bound
-    and backward visits a ``CopySlices`` that no op records.
+    The buffer's ``CopySlices`` has no prior node, so the write is never bound.
+    Reading the written view (not the buffer) keeps the writer on a visited node
+    while backward also visits the buffer's ``CopySlices``, which no op records.
     """
 
     def __init__(self) -> None:
@@ -700,14 +701,14 @@ class _BufferWriteBesideDeadInplace(nn.Module):
         self.side = nn.Linear(8, 8)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return a sum over the buffer and the projection; ``dead`` feeds nothing."""
+        """Return a sum over the written view and the projection; ``dead`` feeds nothing."""
 
         h = self.lin(x)
-        buffer = torch.zeros(3, 8)
-        buffer[:, 0:1].copy_(h[:, 0:1])
+        column = torch.zeros(3, 8)[:, 0:1]
+        column.copy_(h[:, 0:1])
         dead = self.side(x)
         dead.mul_(2.0)
-        return buffer.sum() + h.sum()
+        return column.sum() + h.sum()
 
 
 def test_an_unowned_copy_slices_leaves_a_dead_non_view_write_excused() -> None:
