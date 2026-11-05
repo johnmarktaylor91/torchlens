@@ -1738,7 +1738,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
         ("torchlens/_json_safe.py", "__all__"),
-        ("torchlens/viz/node_plots.py", "__all__"),
+        ("torchlens/viz/_node_plots.py", "__all__"),
         ("torchlens/_utils/torchvision_weights.py", "__all__"),
         ("torchlens/postprocessing/__init__.py", "__all__"),
         ("torchlens/preprocessing/_declared_transform.py", "__all__"),

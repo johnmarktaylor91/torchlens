@@ -439,10 +439,9 @@ def _record_site_key(record: Any) -> str:
     Returns
     -------
     str
-        The ``site_key`` value, or ``"unavailable(<reason>)"`` -- keyless
-        legacy artifacts and within-call-recurrence layer ambiguity refuse
-        typed upstream, and the handoff records the fact instead of
-        fabricating an identity.
+        The ``site_key`` value, or ``"unavailable(<reason>)"`` -- keyless legacy artifacts
+        and within-call-recurrence layer ambiguity refuse typed upstream, and the handoff
+        records the fact instead of fabricating an identity.
     """
 
     try:

@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._utils._record_group_table import record_member
+from .._utils._uninit_alloc import (
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -22,8 +28,6 @@ def _child_edge_totally_overwrites(self: Trace, walked_label: str, child_label: 
     SOURCE of the writer (``dst.copy_(walked)``). Unknown or partial in-place
     writers never stop the walk (fail closed).
     """
-
-    from .._utils._uninit_alloc import qualname_is_uninit_total_writer
 
     op = self._raw_graph_ws.raw_layer_dict.get(child_label)
     if op is None:
@@ -91,12 +95,6 @@ def _orphan_is_uninit_alloc_source(self: Trace, op: Any) -> bool:
     when either shape is unreadable. The whole family is clean when the
     capture-time ambient snapshot proves deterministic fill.
     """
-
-    from .._utils._uninit_alloc import (
-        deterministic_fill_governs,
-        qualname_is_uninit_growth_resize,
-        qualname_is_uninitialized_alloc,
-    )
 
     func_id = record_member(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)

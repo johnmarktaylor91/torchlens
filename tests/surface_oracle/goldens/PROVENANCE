@@ -2152,21 +2152,99 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 4f322f1f9dfe3dbf2d0777da3ba29fdaced21c3f (dirty)
 recorded: 2026-11-05T03:38:36.521914+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.264446+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.326064+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.397183+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.466545+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.533836+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
 reason: ValidationStatus defining module moved to torchlens._validation_status (layering lane)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
 source: f6ae26bcda99def1c59502a065c1acf765517f7c (dirty)
 recorded: 2026-11-03T21:42:44.602187+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:37.983109+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:38.118781+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:38.281187+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:38.514737+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:38.830533+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: C-263 fixq3: fixq2 bc2a2ef2c9 merged with train 4590c7cde2 (C-249 homes and hoists, C-263 group spellings)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2268a75b526582c1d616838b2900c89454e96edf (dirty)
+recorded: 2026-11-05T08:37:39.356636+00:00
