@@ -30,7 +30,7 @@ from .._vocab.node_spec import (  # noqa: F401
 from ._intervention_sites import (  # noqa: F401
     _forward_site,
     _site_sort_key,
-    intervention_sites_for_log,
+    intervention_sites_for_log as _sites_for_log,
 )
 from ._render_names import _SPEC_SLOT_RENDERED_NODE
 
@@ -190,6 +190,25 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
         if key not in INTERVENTION_OVERRIDE_KEYS
         and key not in (LENS_CAPTION_KEY, LENS_BANNER_OMIT_KEY)
     }
+
+
+def intervention_sites_for_log(trace: Trace) -> list[Op]:
+    """Resolve intervention spec targets to layer-pass records.
+
+    Parameters
+    ----------
+    trace:
+        Log whose intervention spec should be inspected.
+
+    Returns
+    -------
+    list[Op]
+        Distinct intervention sites in execution order.
+    """
+
+    from .._selection.resolver import _resolve_sites
+
+    return _sites_for_log(trace, _resolve_sites)
 
 
 def intervention_site_and_cone_labels(

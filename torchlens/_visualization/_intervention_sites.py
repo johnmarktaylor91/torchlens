@@ -8,6 +8,7 @@ and its census can use it without importing the render stack.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from .._utils._multipass_access import get_multipass_attr
@@ -17,13 +18,18 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 
-def intervention_sites_for_log(trace: Trace) -> list[Op]:
+def intervention_sites_for_log(
+    trace: Trace, resolve_sites: Callable[..., Any] | None = None
+) -> list[Op]:
     """Resolve intervention spec targets to layer-pass records.
 
     Parameters
     ----------
     trace:
         Log whose intervention spec should be inspected.
+    resolve_sites:
+        ``_selection.resolver._resolve_sites`` when the caller holds it;
+        otherwise the trace's own ``_resolve_sites`` (the same call).
 
     Returns
     -------
@@ -44,8 +50,13 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
         return []
 
     by_label: dict[str, Op] = {}
+    fanout = max(1, len(trace._layer_list))
     for target in targets:
-        table = trace._resolve_sites(target, max_fanout=max(1, len(trace._layer_list)))
+        table = (
+            trace._resolve_sites(target, max_fanout=fanout)
+            if resolve_sites is None
+            else resolve_sites(trace, target, max_fanout=fanout)
+        )
         for site in table:
             forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so
