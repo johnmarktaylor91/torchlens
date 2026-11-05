@@ -22,7 +22,9 @@ call: ``func_call_id`` is None) and are not counted as ops.
 from __future__ import annotations
 
 import dis
+import importlib
 import os
+import subprocess
 import sys
 import threading
 from collections.abc import Callable
@@ -54,10 +56,24 @@ _BUILD_OPCODES = frozenset(
 # environment (torch 2.13.0+cpu). Trace = capture plus postprocess. The trace
 # builds pin is the higher of the serial (982.50) and xdist (984.04) runs; each
 # pin is the printed two-decimal value plus 0.01 (the print rounds).
+# The container-builds test measures in a fresh interpreter with a fixed hash
+# seed, so earlier tests in the same worker cannot move it: a worker that has
+# imported a ``torch.distributed`` namespace (the capability snapshot's forced
+# probes do) runs the capture's sharded-tensor scan, which an ordinary process
+# skips. A second fresh measurement imports those namespaces first and has its
+# own pin, so a regression in that state still fails.
 _MAX_TRACE_CALLS_PER_OP = 3337.07
 _MAX_TRACE_BUILDS_PER_OP = 984.05
+_MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED = 984.05
 _MAX_COMMIT_CALLS_PER_OP = 35.72
 _MAX_COMMIT_BUILDS_PER_OP = 30.91
+#: The namespaces a worker held when the capability snapshot had run before the pin.
+_DISTRIBUTED_NAMESPACES = (
+    "torch.distributed._shard",
+    "torch.distributed.device_mesh",
+    "torch.distributed.tensor",
+)
+_FRESH_MARK = "[row-commit-fresh]"
 
 
 def _tiny_gpt2_generate() -> tuple[Callable[..., Any], torch.Tensor, dict[str, Any]]:
@@ -193,17 +209,53 @@ def test_gpt2_generate_python_calls_per_op(monkeypatch: pytest.MonkeyPatch) -> N
     assert commit_per_op <= _MAX_COMMIT_CALLS_PER_OP
 
 
-def test_gpt2_generate_container_builds_per_op(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Container builds by TorchLens code per op, whole trace and commit alone, stay at the pins."""
+def _fresh_container_builds_per_op(*preimport: str) -> tuple[float, float]:
+    """Run the container-builds measurement in a fresh interpreter; return trace and commit per op.
 
-    window = _measure(monkeypatch, _install_build_counter)
-    trace_per_op = window.trace / window.ops
-    commit_per_op = window.commit / window.ops
+    ``preimport`` names modules imported before the measurement. The child runs
+    this file as a script with ``PYTHONHASHSEED`` fixed, so the count does not
+    depend on what earlier tests left in the worker or on set iteration order.
+    """
+
+    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    proc = subprocess.run(
+        [sys.executable, __file__, *preimport],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        env=env,
+    )
+    assert proc.returncode == 0, proc.stderr[-4000:]
+    lines = [line for line in proc.stdout.splitlines() if line.startswith(_FRESH_MARK)]
+    assert len(lines) == 1, proc.stdout[-4000:]
+    trace_text, commit_text = lines[0].split()[1:3]
+    return float(trace_text), float(commit_text)
+
+
+def _print_builds(label: str, trace_per_op: float, commit_per_op: float) -> None:
+    """Print one measured pair in the two-decimal form the pins are read from."""
+
     print(
-        f"[row-commit] ops={window.ops} trace_builds_per_op={trace_per_op:.2f} "
+        f"[row-commit] {label} trace_builds_per_op={trace_per_op:.2f} "
         f"commit_builds_per_op={commit_per_op:.2f}"
     )
+
+
+def test_gpt2_generate_container_builds_per_op() -> None:
+    """Container builds by TorchLens code per op, whole trace and commit alone, stay at the pins."""
+
+    trace_per_op, commit_per_op = _fresh_container_builds_per_op()
+    _print_builds("fresh", trace_per_op, commit_per_op)
     assert trace_per_op <= _MAX_TRACE_BUILDS_PER_OP
+    assert commit_per_op <= _MAX_COMMIT_BUILDS_PER_OP
+
+
+def test_gpt2_generate_container_builds_per_op_with_distributed_imported() -> None:
+    """With the ``torch.distributed`` namespaces imported, trace builds per op stay at their pin."""
+
+    trace_per_op, commit_per_op = _fresh_container_builds_per_op(*_DISTRIBUTED_NAMESPACES)
+    _print_builds("distributed-imported", trace_per_op, commit_per_op)
+    assert trace_per_op <= _MAX_TRACE_BUILDS_PER_OP_DISTRIBUTED
     assert commit_per_op <= _MAX_COMMIT_BUILDS_PER_OP
 
 
@@ -237,3 +289,17 @@ def test_gpt2_generate_whole_trace_builds_no_public_group_view(
     monkeypatch.setattr(_RecordGroup, "__init__", real_init)
     del traced
     assert built == [], f"{len(built)} group views built: {sorted(set(built))}"
+
+
+def _measure_in_this_process(preimport: list[str]) -> None:
+    """Script entry of :func:`_fresh_container_builds_per_op`: import, measure, print one line."""
+
+    for name in preimport:
+        importlib.import_module(name)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        window = _measure(monkeypatch, _install_build_counter)
+    print(f"{_FRESH_MARK} {window.trace / window.ops!r} {window.commit / window.ops!r}")
+
+
+if __name__ == "__main__":
+    _measure_in_this_process(sys.argv[1:])
