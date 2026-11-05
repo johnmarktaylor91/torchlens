@@ -159,6 +159,57 @@ def probe_sparse_spsolve_cuda() -> bool:
     return _solves_identity_system(spsolve, "cuda")
 
 
+def probe_reduce_tuple_dim() -> bool:
+    """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
+
+    Returns
+    -------
+    bool
+        ``True`` when a boolean tensor's ``.any(dim=(0, 1))`` accepts a tuple
+        of axes directly (added torch 2.2; torch 2.1 only accepts a single
+        int). Absence is a healthy old install: :func:`tensor_any_over_dims`
+        falls back to sequential single-axis reduction.
+    """
+
+    probe = torch.zeros((2, 2), dtype=torch.bool)
+    try:
+        probe.any(dim=(0, 1))
+    except TypeError:
+        return False
+    return True
+
+
+def probe_meta_item_guard() -> bool:
+    """Return whether ``Tensor.item()`` raises its own guard on meta tensors.
+
+    Returns
+    -------
+    bool
+        ``True`` when calling ``.item()`` (or any other scalar extraction,
+        e.g. ``bool()``) on a meta tensor raises a plain ``RuntimeError``
+        carrying torch's own "Tensor.item() cannot be called on meta
+        tensors" guard. torch 2.1-2.2 have no such guard: the call instead
+        falls all the way through to the aten dispatcher's generic
+        ``NotImplementedError`` ("... not implemented for this backend").
+        TorchLens's structure-only forward-boundary backstop
+        (``backends/torch/structure_only_belt.py``) classifies a caught
+        ``NotImplementedError`` as ``meta_kernel_unavailable`` and a generic
+        ``RuntimeError`` as ``value_dependent_branch_unsupported`` by
+        raising-frame PROVENANCE, never message text -- correctly, since
+        the two exception FAMILIES genuinely differ here. Absence is a
+        healthy old install surfacing the honest alternate typed refusal,
+        not a TorchLens degradation.
+    """
+
+    try:
+        torch.ones((), device="meta").item()
+    except NotImplementedError:
+        return False
+    except RuntimeError:
+        return True
+    return False
+
+
 def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -> bool:
     """Solve a tiny CSR identity system; ``False`` only on torch's no-cuDSS refusal.
 

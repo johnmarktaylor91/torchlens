@@ -181,6 +181,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_FUNCOL_MODULE"),
     _row("HAS_FUNCOL_WAIT_INTERPOSITION", absent_on=("2.1.2",)),
     _row("HAS_FUNCTORCH_APIS"),
+    _row("HAS_FUNCTORCH_INTERPRETER_STACK_API"),
     _row("HAS_FUNCTORCH_LEVEL_API", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_FUNCTORCH_WRAPPED_TENSOR_API"),
     _row("HAS_FX_GRAPH_MODULE"),

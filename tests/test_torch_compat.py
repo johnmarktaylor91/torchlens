@@ -236,7 +236,7 @@ def test_accumulate_grad_absence_uses_name_matching(monkeypatch: pytest.MonkeyPa
 @pytest.mark.parametrize(
     ("helper_name", "flag_name", "expected"),
     [
-        ("get_functorch_maybe_current_level", "HAS_FUNCTORCH_LEVEL_API", None),
+        ("get_functorch_transform_probe", "HAS_FUNCTORCH_INTERPRETER_STACK_API", None),
         ("get_functorch_wrapped_tensor_checker", "HAS_FUNCTORCH_WRAPPED_TENSOR_API", None),
         ("get_fx_graph_module_type", "HAS_FX_GRAPH_MODULE", None),
     ],
@@ -254,6 +254,36 @@ def test_nested_private_helper_absence_marks_capability(
     with pytest.warns(UserWarning, match=flag_name):
         assert getattr(tc, helper_name)() is expected
     assert getattr(tc, flag_name) is False
+
+
+def test_functorch_transform_probe_falls_back_to_the_interpreter_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without ``maybe_current_level`` (torch 2.1, 2.2) the probe reads the interpreter stack."""
+
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_LEVEL_API")
+    _reset_capability(monkeypatch, "HAS_FUNCTORCH_INTERPRETER_STACK_API")
+    monkeypatch.setitem(
+        tc._ATTRIBUTE_PROBES, "HAS_FUNCTORCH_LEVEL_API", ("torch:_C._functorch.absent_level_api",)
+    )
+    monkeypatch.delenv("TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS", raising=False)
+    with warnings.catch_warnings():
+        # The fallback is no degradation: an absent level API alone stays silent.
+        warnings.simplefilter("error", tc.TorchCapabilityWarning)
+        probe = tc.get_functorch_transform_probe()
+    assert probe is not None
+    assert probe() is None
+    inside: list[object] = []
+
+    def row_fn(row: torch.Tensor) -> torch.Tensor:
+        """Record the probe's answer inside the transform."""
+
+        inside.append(probe())
+        return row
+
+    torch.func.vmap(row_fn)(torch.ones(2, 3))
+    assert inside and all(level is not None for level in inside)
+    assert tc.HAS_FUNCTORCH_INTERPRETER_STACK_API is True
 
 
 @pytest.mark.parametrize(
@@ -314,6 +344,7 @@ def test_private_torch_capability_flags_present_on_supported_range() -> None:
         "HAS_TORCH_FUNC",
         "HAS_FUNCTORCH_APIS",
         "HAS_FUNCTORCH_LEVEL_API",
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API",
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
         "HAS_JIT_BUILTIN_TABLE",
         "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
@@ -362,6 +393,7 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TORCH_FUNC": True,
         "HAS_FUNCTORCH_APIS": True,
         "HAS_FUNCTORCH_LEVEL_API": _HAS_FUNCTORCH_LEVEL_API,
+        "HAS_FUNCTORCH_INTERPRETER_STACK_API": True,
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API": True,
         "HAS_JIT_BUILTIN_TABLE": True,
         # fix-capture-r3 R56: TorchScript compatibility while wrapped needs the
