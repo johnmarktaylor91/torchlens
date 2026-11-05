@@ -775,7 +775,7 @@ expert contributions from routing indices alone.
   async and sync bundles are byte-identical. `to_disk(async_writes=False)` restores synchronous
   writes; `tl.record` streaming stays synchronous and refuses an explicit `True`.
 - A STREAMED (`to_disk`) TRACE DOES NOT RUN: every `trace.run(...)` door (`run(model, x)`,
-  `inputs=`, `fast=True`, append) refuses `trace_option_unsupported`, since a run would re-capture
+  `inputs=`, `fast=True`) and `trace.append(x, model=model)` refuse `trace_option_unsupported`, since a run would re-capture
   every payload into RAM while the bundle kept the first capture (behaviour-net IO-8). Capture
   again with `to_disk` to a new path or without `to_disk` and run that trace; a trace loaded from
   the bundle keeps its loaded providers. `Trace.save` / `Bundle.save` to an existing path refuse

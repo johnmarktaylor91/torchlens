@@ -6985,14 +6985,6 @@
  },
  {
   "ambiguous": false,
-  "field": "has_internal_source_ancestor",
-  "file": "torchlens/backends/torch/_ops_predicate_events.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "is_edited",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": true,

@@ -273,10 +273,8 @@ def _emit_exhaustive_operation_events(
             )
         fire_results = _pop_tensor_live_fire_results(out_tensor)
         if fire_results:
+            # The record's ``edits`` derive from ``fire_results`` at scatter.
             fields_dict_onetensor["fire_results"] = fire_results
-            fields_dict_onetensor["edits"] = [
-                result.fire_record for result in fire_results if result.fire_record is not None
-            ]
             fields_dict_onetensor["is_edited"] = any(result.replaced for result in fire_results)
         if getattr(self, "is_replayable", False):
             fields_dict_onetensor["_edge_uses"] = _build_edge_use_records(

@@ -3,7 +3,7 @@
 What this demonstrates
 ----------------------
 Capture one small batch, then append another compatible batch with
-``rerun(..., append=True)``. Append requires the same graph shape and
+``trace.append(batch, model=model)``. Append requires the same graph shape and
 batch-independent helpers.
 
 How to run
@@ -53,7 +53,7 @@ def main() -> None:
         inputs=first,
         intervention=tl.options.InterventionOptions(),
     )
-    log.run(model, second, replay=tl.options.ReplayOptions(append=True))
+    log.append(second, model=model)
 
     output = log.output_ops[-1].out
     assert output.shape[0] == first.shape[0] + second.shape[0]
