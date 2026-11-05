@@ -29,10 +29,12 @@ from tests.real_model.r0.expectations import (
     SHAPE_SPEC_OVERRIDES,
     WRONG_PAYLOAD_MANIFEST,
     WRONG_PAYLOAD_OWNER,
+    expectation_for_fingerprint,
     expected_n_ops,
     load_expectations,
 )
 from tests.real_model.r0.families import STRUCTURAL_FIXTURES, build_structural
+from tests.support.hf_capabilities import sdpa_mask_builder
 
 pytestmark = [pytest.mark.real_model, pytest.mark.real_class]
 
@@ -83,7 +85,14 @@ def _deep_sweep(family, impl, r0_capture):
     """Every per-(family, impl) sweep assertion, in dependency order."""
 
     cap = r0_capture(family, impl)
-    expected = EXPECTATIONS[family][impl]
+    fingerprint = None
+    if hasattr(cap.model, "config"):
+        from tests.real_model.registry import resolved_config_fingerprint
+
+        fingerprint = resolved_config_fingerprint(model=cap.model)
+    expected = expectation_for_fingerprint(
+        EXPECTATIONS[family][impl], fingerprint, sdpa_mask_builder()
+    )
 
     # 1. Capture honesty: the outcome settled COMPLETE.
     assert cap.trace.outcome.status.name == "COMPLETE"
@@ -169,14 +178,11 @@ def _deep_sweep(family, impl, r0_capture):
     )
 
     # 5. Op-count golden, keyed on the resolved-config fingerprint.
-    if hasattr(cap.model, "config"):
-        from tests.real_model.registry import resolved_config_fingerprint
-
+    if fingerprint is not None:
         assert expected.get("fingerprint"), (
             f"{family}/{impl}: the committed expectation carries no fingerprint;"
             " regenerate expectations_r0.json deliberately."
         )
-        fingerprint = resolved_config_fingerprint(model=cap.model)
         if fingerprint != expected["fingerprint"]:
             pytest.fail(
                 f"{family}/{impl}: resolved-config fingerprint drifted"

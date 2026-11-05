@@ -667,7 +667,7 @@ torchlens/attribution/_gradient_shap.py::gradient_shap	233
 torchlens/attribution/_guided.py::_modified_backward_attribution	128
 torchlens/attribution/_layer.py	1222
 torchlens/attribution/_layer.py::_capture_layer_activation	70
-torchlens/attribution/_layer.py::_capture_layer_activation_for_leaves	79
+torchlens/attribution/_layer.py::_capture_layer_activation_for_leaves	78
 torchlens/attribution/_layer.py::_layer_path_run	207
 torchlens/attribution/_layer.py::layer_attribution	66
 torchlens/attribution/_layer.py::layer_conductance	122

@@ -19,6 +19,7 @@ import torch
 import torchlens as tl
 import torchlens.errors
 import torchlens.transformer as tviz
+from tests.support.hf_capabilities import from_pretrained_dtype_kwargs
 
 transformers = pytest.importorskip("transformers")
 
@@ -281,7 +282,9 @@ def test_qwen_gqa_disclosure(tmp_path) -> None:
 
     tokenizer = transformers.AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
     model = transformers.AutoModelForCausalLM.from_pretrained(
-        "Qwen/Qwen2.5-0.5B-Instruct", attn_implementation="eager", dtype=torch.float32
+        "Qwen/Qwen2.5-0.5B-Instruct",
+        attn_implementation="eager",
+        **from_pretrained_dtype_kwargs(torch.float32),
     ).eval()
     input_ids = tokenizer(PROMPT, return_tensors="pt").input_ids
 

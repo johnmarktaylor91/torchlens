@@ -21,6 +21,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.hf_capabilities import causal_lm_returns_cache_object
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._utils.collections import _path_component_key
 from torchlens.options import CaptureOptions
@@ -65,6 +66,16 @@ def _capture(model: Any, x: torch.Tensor, **options: Any) -> Any:
         return tl.trace(model, x, capture=CaptureOptions(**options))
 
 
+def _assert_logits_match_live(model: Any, input_ids: torch.Tensor, output: Any) -> None:
+    """Assert the run's output carries the logits a fresh live forward produces."""
+
+    with torch.no_grad():
+        live = model(input_ids)
+    # The approximation is keyed by the typed ``HFKey`` path components, not plain str.
+    logits = next(value for key, value in output.items() if _path_component_key(key) == "logits")
+    assert torch.allclose(logits, live.logits, atol=1e-5)
+
+
 # Kept: sole branch coverage of _utils/collections.py; the catch of its regression fault.
 def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_ids) -> None:
     """H1 row 1: KV cache on (the HF default), default capture -> UNVERIFIABLE with the
@@ -73,6 +84,13 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
     model = _tiny_gpt2(use_cache=True)
     trace = _capture(model, input_ids)
     result = trace.run_transaction(inputs=input_ids)
+    if not causal_lm_returns_cache_object():
+        # 4.x returns the cache as nested ``(key, value)`` tuples of tensors, which
+        # the output contract rebuilds: the same default run settles VERIFIED.
+        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+        assert result.report.is_poisoned is False
+        _assert_logits_match_live(model, input_ids, result.output)
+        return
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     check = _reconstruction_check(result.report)
     assert not check.passed
@@ -83,13 +101,7 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
     assert "use_cache=False" in details["remedy"]
     assert "return_dict=False" in details["remedy"]
     # The best-effort output still carries the logits the fresh forward produced.
-    with torch.no_grad():
-        live = model(input_ids)
-    # The approximation is keyed by the typed ``HFKey`` path components, not plain str.
-    logits = next(
-        value for key, value in result.output.items() if _path_component_key(key) == "logits"
-    )
-    assert torch.allclose(logits, live.logits, atol=1e-5)
+    _assert_logits_match_live(model, input_ids, result.output)
 
 
 # Kept: sole branch coverage of _data_classes/container.py, _ir/_container_type_probes.py, _ir/container_registry.py and more; a sole mutation kill.

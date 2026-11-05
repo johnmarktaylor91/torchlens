@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests.support.hf_capabilities import causal_lm_returns_cache_object
 from torchlens.errors import PayloadUnavailableError
 
 DOT_AVAILABLE = shutil.which("dot") is not None
@@ -283,7 +284,18 @@ def test_nodes_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: Pat
 def test_reconstruct_output_on_an_opaque_cache_names_the_real_cause() -> None:
     """With container structure captured, the refusal names the opaque member, not the option."""
 
-    trace = tl.trace(_tiny_gpt2(), torch.randint(0, 50, (1, 5)), capture=STRUCTURE)
+    model = _tiny_gpt2()
+    input_ids = torch.randint(0, 50, (1, 5))
+    trace = tl.trace(model, input_ids, capture=STRUCTURE)
+
+    if not causal_lm_returns_cache_object():
+        # 4.x returns the cache as nested ``(key, value)`` tuples of tensors: nothing
+        # in the output is opaque, so the captured structure rebuilds the output.
+        rebuilt = trace.reconstruct_output()
+        with torch.no_grad():
+            live = model(input_ids)
+        assert torch.allclose(rebuilt["logits"], live.logits, atol=1e-5)
+        return
 
     with pytest.raises(PayloadUnavailableError) as excinfo:
         trace.reconstruct_output()

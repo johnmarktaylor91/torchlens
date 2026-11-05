@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1608 modules, 683816 lines, 0 modules without a docstring.
+83 packages, 1608 modules, 683838 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -32,10 +32,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 40 | 18557 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
-| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14959 |
+| `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14962 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10583 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7268 |
-| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3064 |
+| `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3068 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 59 | 18920 |
@@ -49,7 +49,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 4 | 197 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 16 | 5694 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
-| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15092 |
+| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15107 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2542 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3863 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 18 | 7001 |
@@ -736,7 +736,7 @@ Private registry kernel package (architecture ; never public API). (3 modules, 5
 
 ### `torchlens._runnable`
 
-Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 14959 lines)
+Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 14962 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -755,7 +755,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (20 modules, 14
 | `retention` | What a loaded-sparse run retains, and the run-prep and bind bounds that follow from it. | 515 |
 | `seam` | Narrow ownership seam between ''Trace'' and sparse runnable internals. | 197 |
 | `state` | Non-executing state binding and allocation for sparse runnable traces. | 2786 |
-| `state_context` | State contracts and captured execution contexts. | 614 |
+| `state_context` | State contracts and captured execution contexts. | 617 |
 | `state_live` | Live-model state restore for the run and capture brackets. | 435 |
 | `transaction` | Loaded-sparse transaction execution and allocation checks. | 1265 |
 | `verification` | Seed, RNG, attestation, and fork utilities. | 715 |
@@ -812,7 +812,7 @@ Semantic facet views for TorchLens records. (14 modules, 7268 lines)
 
 ### `torchlens._semantic.recipes`
 
-Built-in TorchLens semantic facet recipes. (9 modules, 3064 lines)
+Built-in TorchLens semantic facet recipes. (9 modules, 3068 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -823,7 +823,7 @@ Built-in TorchLens semantic facet recipes. (9 modules, 3064 lines)
 | `lm_head` | Built-in semantic recipes for language-model unembedding heads. | 353 |
 | `mlp` | Built-in semantic recipes for MLP and FFN modules. | 91 |
 | `norm` | Built-in semantic recipes for normalization modules. | 81 |
-| `residual` | Built-in semantic recipes for transformer residual stream facets. | 420 |
+| `residual` | Built-in semantic recipes for transformer residual stream facets. | 424 |
 | `vision_head` | Built-in semantic recipes for vision-model output heads. | 429 |
 
 ### `torchlens._snoop`
@@ -1152,7 +1152,7 @@ The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.name
 
 ### `torchlens.attribution`
 
-Input-attribution methods for TorchLens. (31 modules, 15092 lines)
+Input-attribution methods for TorchLens. (31 modules, 15107 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1164,8 +1164,8 @@ Input-attribution methods for TorchLens. (31 modules, 15092 lines)
 | `_audit_sites` | The causal audit's plan for claims spread over several sites. | 229 |
 | `_binder` | The attribution wrapping contract: primitive + sugar, one private binder. | 256 |
 | `_cam` | Native Grad-CAM for TorchLens: feature maps, token grids and integer-input grids. | 318 |
-| `_cam_choice` | Automatic Grad-CAM layer choice from a metadata-only trace. | 303 |
-| `_cam_grid` | Token-grid derivation for native Grad-CAM on vision transformers. | 519 |
+| `_cam_choice` | Automatic Grad-CAM layer choice from a metadata-only trace. | 305 |
+| `_cam_grid` | Token-grid derivation for native Grad-CAM on vision transformers. | 532 |
 | `_causal_audit` | The causal audit of an internal attribution: ablate what it ranks, measure the effect. | 609 |
 | `_core` | Native input-attribution methods for TorchLens. | 1518 |
 | `_curve_settings` | Settings of the deletion and insertion curves: feature grouping, baselines, steps. | 230 |

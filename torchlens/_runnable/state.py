@@ -1680,9 +1680,9 @@ def _name_contract(
 
     module_path, separator, leaf_name = state_dict_name.rpartition(".")
     canonical_module = module_path if separator else "self"
-    if leaf_name == "weight":
+    if leaf_name == "weight" and slot_role is not TensorSlotRole.BUFFER:
         roles = frozenset({StateSlotRole.WEIGHT, StateSlotRole.NORM_SCALE})
-    elif leaf_name == "bias":
+    elif leaf_name == "bias" and slot_role is not TensorSlotRole.BUFFER:
         roles = frozenset({StateSlotRole.BIAS, StateSlotRole.NORM_OFFSET})
     elif leaf_name == "running_mean":
         roles = frozenset({StateSlotRole.RUNNING_MEAN})
