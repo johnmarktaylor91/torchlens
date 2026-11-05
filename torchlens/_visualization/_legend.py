@@ -65,8 +65,8 @@ class LegendRow:
         shape vocabulary (``"cylinder node"``) or an edge-style note; on a
         ramp row, the label at the bar's high end.
     ramp:
-        Colour-bar segment fills (``"low:high"`` gradient pairs); non-empty
-        draws ``text``, the bar, then ``hint`` on one row.
+        Colour-bar segment fills, low value first; non-empty draws ``text``,
+        the bar, then ``hint`` on one row.
     """
 
     text: str
@@ -292,9 +292,7 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
             )
         for row in section.rows:
             if row.ramp:
-                from ._encoding_key import ramp_row_html
-
-                cells.append(ramp_row_html(row, size, font_color, border_color))
+                cells.append(_ramp_row(row, theme))
                 continue
             text = html_escape(row.text)
             if row.hint is not None:
@@ -315,6 +313,22 @@ def build_legend_table_label(sections: tuple[LegendSection, ...], theme: Visuali
     return (
         f'<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3" '
         f'COLOR="{border_color}">' + "".join(cells) + "</TABLE>>"
+    )
+
+
+def _ramp_row(row: LegendRow, theme: VisualizationTheme) -> str:
+    """Return the key's colour-bar row, measured in the skin's key face."""
+
+    from ._encoding_key import ramp_row_html
+    from ._header_block import _text_width
+
+    size = theme.typography.secondary_size
+    bold = "bold" in theme.typography.family.lower()
+    return ramp_row_html(
+        row,
+        theme.typography.secondary_pt,
+        (theme.default_font, theme.default_border),
+        lambda text: _text_width(text, size, bold),
     )
 
 

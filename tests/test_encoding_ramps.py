@@ -109,8 +109,9 @@ def test_plain_key_draws_bar_and_size_line(tiny_log: tl.Trace, tmp_path: Path) -
     graph_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
     comment, drawn = graph_line.split(" label=", 1)
     state = tiny_log._last_encoding_state
-    assert drawn.count('FIXEDSIZE="TRUE" WIDTH="9" HEIGHT="10"') == 8
-    assert f'BGCOLOR="{state.ramp_color(0.0)}:' in drawn
+    assert drawn.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
+    assert f'BGCOLOR="{state.ramp_color(0.0)}"' in drawn
+    assert f'BGCOLOR="{state.ramp_color(1.0)}"' in drawn
     assert "output bytes: " in drawn
     assert "size: output bytes, " in drawn and " ... " in drawn
     for jargon in ("min-max", "eligible", "clamped", "size_by:", "color_by:", "sqrt("):
@@ -131,5 +132,5 @@ def test_show_legend_false_draws_no_key_but_keeps_the_record(
     dot = tiny_log.draw(
         color_by="bytes", show_legend=False, path=str(tmp_path / "g"), file_format="svg"
     ).dot
-    assert 'WIDTH="9" HEIGHT="10"' not in dot
+    assert 'WIDTH="5" HEIGHT="10" BGCOLOR=' not in dot
     assert "encoding method: color_by: bytes" in dot

@@ -70,8 +70,8 @@ def test_log_legend_labels_match_their_swatches() -> None:
     assert isinstance(key, RampKey)
     assert (key.low_text, key.high_text) == ("<lambda>: 1", "100")
     # The bar's ends are the encoded ends of the ramp.
-    assert key.fills[0].split(":")[0] == state.ramp_color(0.0)
-    assert key.fills[-1].split(":")[1] == state.ramp_color(1.0)
+    assert key.fills[0] == state.ramp_color(0.0)
+    assert key.fills[-1] == state.ramp_color(1.0)
 
 
 def test_pass_number_is_the_per_pass_color_source() -> None:

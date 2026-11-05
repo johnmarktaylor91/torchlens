@@ -273,9 +273,9 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     for role_fill in ('"#98FB98"', '"#ff9999"', '"#009E73"', '"#D55E00"'):
         assert role_fill not in drawn, role_fill  # no input/output role fill
     assert ">input<" not in label and ">output<" not in label
-    # The plain key: "output bytes: <low>", an 8-segment colour bar, "<high>".
+    # The plain key: "output bytes: <low>", a 16-segment colour bar, "<high>".
     assert "output bytes: " in label
-    assert label.count('FIXEDSIZE="TRUE" WIDTH="9" HEIGHT="10"') == 8
+    assert label.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
     # No method wording is drawn; it rides in the graph comment instead.
     drawn_label = label.split(" label=", 1)[1]
     for jargon in ("linear min-max", "eligible", "color_by:", "TorchLens encoding"):
