@@ -1678,11 +1678,22 @@ def _name_contract(
 ) -> tuple[str, frozenset[StateSlotRole]]:
     """Infer the module-path and allowed semantic roles from a canonical state name."""
 
-    from .state_context import _allowed_state_roles
-
     module_path, separator, leaf_name = state_dict_name.rpartition(".")
     canonical_module = module_path if separator else "self"
-    roles = _allowed_state_roles(leaf_name, slot_role)
+    if leaf_name == "weight" and slot_role is not TensorSlotRole.BUFFER:
+        roles = frozenset({StateSlotRole.WEIGHT, StateSlotRole.NORM_SCALE})
+    elif leaf_name == "bias" and slot_role is not TensorSlotRole.BUFFER:
+        roles = frozenset({StateSlotRole.BIAS, StateSlotRole.NORM_OFFSET})
+    elif leaf_name == "running_mean":
+        roles = frozenset({StateSlotRole.RUNNING_MEAN})
+    elif leaf_name == "running_var":
+        roles = frozenset({StateSlotRole.RUNNING_VAR})
+    elif leaf_name in {"num_batches_tracked", "counter"}:
+        roles = frozenset({StateSlotRole.COUNTER})
+    elif slot_role is TensorSlotRole.BUFFER:
+        roles = frozenset({StateSlotRole.GENERIC_BUFFER})
+    else:
+        roles = frozenset({StateSlotRole.WEIGHT})
     return canonical_module, roles
 
 
