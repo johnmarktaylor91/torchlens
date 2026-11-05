@@ -615,6 +615,69 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
             "destination"
         ),
     ),
+    Exemption(
+        code="setitem_empty_write",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_setitem_empty_write_decision",
+        refuses=(
+            "a mask with any True entry, a non-integer perturbed component (a mask, float or uint8), a perturbed parent at the destination or value slot or in two slots, and a saved output that differs from the saved destination"
+        ),
+    ),
+    Exemption(
+        code="setitem_destination_holds_value",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_setitem_held_value_decision",
+        refuses=(
+            "any addressable destination element that differs from the written value, a non-uniform or non-finite value, a perturbed parent at the destination or value slot or in two slots, and a saved output that differs from the saved destination"
+        ),
+    ),
+    Exemption(
+        code="clamp_equal_bounds",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_clamp_equal_bounds_decision",
+        refuses=(
+            "unequal or non-finite bounds, a multi-element tensor bound, a perturbed bound, and a saved output that differs from the bound anywhere"
+        ),
+    ),
+    Exemption(
+        code="spmm_empty_sparse_operand",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_spmm_empty_sparse_decision",
+        refuses=(
+            "a sparse operand with any stored entry, a dense first operand, a perturbed sparse operand, and a saved output with any non-zero element"
+        ),
+    ),
+    Exemption(
+        code="masked_scatter_all_true_mask",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_masked_scatter_all_true_decision",
+        refuses=(
+            "a mask with any False element, a non-bool mask, a perturbed mask or source, and a saved output that differs from the source in order"
+        ),
+    ),
+    Exemption(
+        code="embedding_bag_sum_placeholder_output",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_embedding_bag_sum_placeholder_decision",
+        refuses=(
+            "mean or max mode, the pooled and offset2bag outputs, a perturbed weight or offsets, and a saved output with any non-zero element"
+        ),
+    ),
+    Exemption(
+        code="deform_conv2d_unused_mask",
+        tier="posthoc",
+        contract="C2 perturbation sensitivity",
+        proof="torchlens.validation._unread_value_proofs:_deform_conv2d_unused_mask_decision",
+        refuses=(
+            "a saved use_mask that is not exactly False and a perturbed parent at any slot other than the mask"
+        ),
+    ),
 )
 
 

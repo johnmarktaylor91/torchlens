@@ -230,7 +230,9 @@ def _spmm_empty_sparse_decision(
     if keys != {1} or len(args) < 2:
         return _NOT_PROVED
     sparse, dense, out = args[0], args[1], getattr(layer, "out", None)
-    if not all(isinstance(value, torch.Tensor) for value in (sparse, dense, out)):
+    if not isinstance(sparse, torch.Tensor) or not isinstance(dense, torch.Tensor):
+        return _NOT_PROVED
+    if not isinstance(out, torch.Tensor):
         return _NOT_PROVED
     if sparse.layout == torch.strided or dense.layout != torch.strided:
         return _NOT_PROVED
@@ -254,7 +256,9 @@ def _masked_scatter_all_true_decision(
     if keys != {0} or len(args) < 3:
         return _NOT_PROVED
     mask, source, out = args[1], args[2], getattr(layer, "out", None)
-    if not all(isinstance(value, torch.Tensor) for value in (mask, source, out)):
+    if not isinstance(mask, torch.Tensor) or not isinstance(source, torch.Tensor):
+        return _NOT_PROVED
+    if not isinstance(out, torch.Tensor):
         return _NOT_PROVED
     if mask.dtype != torch.bool or out.numel() == 0 or source.numel() < out.numel():
         return _NOT_PROVED
