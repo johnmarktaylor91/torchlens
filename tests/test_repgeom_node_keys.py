@@ -87,11 +87,11 @@ def _annotated_trace(model: nn.Module, save: Any) -> tl.Trace:
 
 
 def _per_call_output_trace() -> tl.Trace:
-    """Capture the shared block and annotate each call's output pass separately.
+    """Capture the shared block and store distinct coordinates on each call's output pass.
 
-    ``tl.module("block")`` on a module called twice names the whole multi-pass
-    output layer, which ``mds_evolution`` refuses; each call's output pass is
-    selected by its pass-qualified label instead.
+    Both call outputs are passes of one layer, and ``mds_evolution`` takes one
+    pass per layer in a call, so the coordinates are stored directly under the
+    ``mds:op:<pass label>`` keys the producer writes.
     """
 
     torch.manual_seed(1105)
@@ -99,8 +99,10 @@ def _per_call_output_trace() -> tl.Trace:
     calls = trace.modules["block"].calls
     outputs = [str(label) for index in range(len(calls)) for label in calls[index].output_ops]
     assert len(outputs) == 2
-    selection = tl.label(outputs[0]) | tl.label(outputs[1])
-    repgeom.mds_evolution(trace, save=selection, min_stimuli=_N_STIMULI)
+    generator = torch.Generator().manual_seed(1105)
+    trace._annotation_blobs = dict(trace._annotation_blobs or {})
+    for label in outputs:
+        trace._annotation_blobs[f"mds:op:{label}"] = torch.randn(_N_STIMULI, 2, generator=generator)
     return trace
 
 
