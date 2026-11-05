@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import zlib
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -303,6 +304,56 @@ def compare_model_identity(recorded: Any, current: Any) -> str | None:
     return None
 
 
+#: The only shard names a writer produces (``shard_filename``); a ledger row naming
+#: anything else (an absolute path, ``..``, a subdirectory) is hostile input.
+_SHARD_NAME = re.compile(r"batch_[0-9]{5,}\.(?:pt|safetensors)")
+
+
+def _refuse_ledger_entry(problem: str, **context: object) -> ExtractionArtifactError:
+    """Build the typed refusal for a ledger entry that escapes the container."""
+
+    return ExtractionArtifactError(
+        problem,
+        code="extraction_ledger_invalid",
+        remedy="load only artifacts you trust, or re-extract into a fresh directory",
+        **context,
+    )
+
+
+def _ledger_present(ledger_path: Path) -> bool:
+    """Return whether the ledger exists, refusing a symlinked or non-regular ledger."""
+
+    if ledger_path.is_symlink() or (ledger_path.exists() and not ledger_path.is_file()):
+        raise _refuse_ledger_entry(
+            f"Extraction ledger {str(ledger_path)!r} is a symlink or not a regular file.",
+            ledger_path=str(ledger_path),
+        )
+    return ledger_path.exists()
+
+
+def _trusted_shard_path(container: Path, row: Mapping[str, Any]) -> Path:
+    """Resolve one ledger row's shard file inside ``container``, fail closed.
+
+    Every downstream reader joins ``row["file"]`` to the container, so this is the one
+    containment check: the name must be a bare writer-shaped shard name, and the file
+    must not be a symlink (a symlinked shard reads any file on disk).
+    """
+
+    name = row.get("file")
+    if not isinstance(name, str) or _SHARD_NAME.fullmatch(name) is None:
+        raise _refuse_ledger_entry(
+            f"Ledger row (index {row.get('index')!r}) names shard {name!r}, which is not "
+            "a bare batch_NNNNN.pt/.safetensors name inside the artifact.",
+            shard=repr(name)[:120],
+        )
+    shard_path = container / name
+    if shard_path.is_symlink():
+        raise _refuse_ledger_entry(
+            f"Ledgered shard {name!r} is a symlink; shards must be regular files.", shard=name
+        )
+    return shard_path
+
+
 def read_trusted_rows(container: Path) -> list[dict[str, Any]]:
     """Read the ledger in LEDGER ORDER and verify the trusted prefix.
 
@@ -329,7 +380,7 @@ def read_trusted_rows(container: Path) -> list[dict[str, Any]]:
     """
 
     ledger_path = container / LEDGER_FILENAME
-    if not ledger_path.exists():
+    if not _ledger_present(ledger_path):
         return []
     raw_lines = ledger_path.read_bytes().split(b"\n")
     if raw_lines and raw_lines[-1] == b"":
@@ -357,7 +408,7 @@ def read_trusted_rows(container: Path) -> list[dict[str, Any]]:
             ) from exc
         rows.append(row)
     for row in rows:
-        shard_path = container / str(row.get("file", ""))
+        shard_path = _trusted_shard_path(container, row)
         expected = row.get("byte_size")
         if not shard_path.is_file() or (
             isinstance(expected, int) and shard_path.stat().st_size != expected

@@ -22,6 +22,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._torch_compat import HAS_SAFE_WEIGHTS_ONLY_LOAD
 from .ragged import RaggedBatch
 
 __tl_layer__ = "L5"
@@ -219,6 +220,15 @@ def _read_pt_shard(path: Path, keys: list[str] | None) -> dict[str, torch.Tensor
     # torch<2.3's mmap path requires a literal str filename (``ValueError: f
     # must be a string filename``); a plain str is accepted on every
     # supported torch version, so this is not a version branch.
+    if not HAS_SAFE_WEIGHTS_ONLY_LOAD:
+        # CVE-2025-32434: ``weights_only=True`` is bypassable on torch <= 2.5.1, and a shard
+        # is artifact bytes, so on such a torch a ``.pt`` shard is never unpickled.
+        raise InvalidArgumentError(
+            f"Refusing to read .pt shard {path.name!r}: this torch's weights_only loader is "
+            "not safe against crafted files (CVE-2025-32434).",
+            code="extraction_pt_shard_unsafe_torch",
+            remedy="upgrade torch to 2.6 or newer, or re-extract with shard_format='safetensors'",
+        )
     raw = torch.load(str(path), weights_only=True, mmap=True)
     out: dict[str, torch.Tensor | RaggedBatch] = {}
     for key, value in raw.items():

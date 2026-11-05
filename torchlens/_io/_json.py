@@ -87,6 +87,18 @@ def _fd_size(handle: IO[Any]) -> int | None:
         return None
 
 
+def _open_regular(path: Path) -> IO[bytes]:
+    """Open ``path`` for reading only if it is a regular file (never a FIFO or device).
+
+    A FIFO named like a JSON file would block ``open()`` forever and a character device
+    would stream without end; both refuse as ``OSError`` before anything is opened.
+    """
+
+    if path.exists() and not path.is_file():
+        raise OSError(f"{path} is not a regular file")
+    return path.open("rb")
+
+
 def _bounded_read_bytes(handle: IO[bytes], max_bytes: int) -> bytes:
     """Read up to ``max_bytes`` bytes, allocating the FILE size, not the ceiling.
 
@@ -351,7 +363,7 @@ def read_bounded(
         handlers at each call site catch it unchanged.
     """
 
-    with path.open("rb") as handle:
+    with _open_regular(path) as handle:
         data = _bounded_read_bytes(handle, max_bytes)
     try:
         text = data.decode(encoding)
@@ -388,5 +400,5 @@ def read_bytes_bounded(path: Path, *, max_bytes: int = _MAX_JSON_BYTES) -> bytes
         When the payload exceeds ``max_bytes``.
     """
 
-    with path.open("rb") as handle:
+    with _open_regular(path) as handle:
         return _bounded_read_bytes(handle, max_bytes)
