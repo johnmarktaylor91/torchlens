@@ -14,7 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
-from ._consumer_kind import _classify_consumer_kind
+from ._consumer_kind import _classify_consumer_kind, _source_unreadable
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -40,6 +40,7 @@ __all__ = (
     "_is_buffer_state_view_dispatch",
     "_dispatch_callsite",
     "_first_scalar_escape_source",
+    "_scalar_escape_advisory_texts",
     "_external_warning_stacklevel",
     "_iter_dispatch_tensors",
 )
@@ -470,7 +471,13 @@ def _first_scalar_escape_source() -> tuple[str | None, int | None]:
     try:
         frame = frame.f_back if frame is not None else None
         while frame is not None:
-            filename = Path(frame.f_code.co_filename).resolve()
+            raw = frame.f_code.co_filename
+            if raw.startswith("<") and raw.endswith(">"):
+                # A pseudo-filename (``<stdin>``, ``<string>``, a cell name) is
+                # never TorchLens and names no file: resolving it would invent
+                # a path under the working directory.
+                return raw, frame.f_lineno
+            filename = Path(raw).resolve()
             try:
                 filename.relative_to(_TORCHLENS_ROOT)
             except ValueError:
@@ -494,6 +501,9 @@ def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> N
     ``Conditional`` (same receiver rule, ``is_scalar_bool``, and the same AST
     lookup). Every other read counts, including ``if x.sum():`` truthiness,
     ``while`` and ``assert`` tests, and reads the lookup cannot tie to one test.
+    Such a bool read in code with no readable source file (a string passed to
+    ``exec``, stdin, a notebook cell) counts AND is tallied apart: step 5 cannot
+    record its branch either, and the advisory names that cause.
 
     Parameters
     ----------
@@ -511,9 +521,55 @@ def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> N
             kind = _classify_consumer_kind(filename, line)
             if kind in _RECORDED_CONDITIONAL_TEST_KINDS:
                 return
+            if _source_unreadable(filename):
+                state.unreadable_source_count += 1
     state.count += 1
     if state.first_file is None:
         state.first_file, state.first_line = _first_scalar_escape_source()
+
+
+def _scalar_escape_advisory_texts(state: Any, location: str) -> tuple[str, str]:
+    """Return the persisted row message and the warning text for one capture.
+
+    Both say what is missing: the trace keeps the ops that produced the value,
+    but whatever Python then computed or decided with it has no edge back to
+    the tensor, and a branch it decided is not a recorded conditional. When
+    some reads were bool tests in code whose source cannot be read, the text
+    names that cause, since running from a ``.py`` file records those branches.
+
+    Parameters
+    ----------
+    state:
+        Per-capture ``_PlainScalarEscapeState`` aggregate (``count`` >= 1).
+    location:
+        Display form of the first escape site.
+
+    Returns
+    -------
+    tuple[str, str]
+        ``(row_message, warning_text)``.
+    """
+
+    missing = (
+        "what Python computed or decided with the value has no edge back to the "
+        "tensor, and a branch it decided is not in trace.graph.conditionals"
+    )
+    unreadable = ""
+    if state.unreadable_source_count:
+        unreadable = (
+            f"; {state.unreadable_source_count} of these reads are bool tests in code with no "
+            "readable source file (exec of a string, stdin or a notebook cell), so their "
+            "branches could not be recorded; run the code from a .py file to record them"
+        )
+    row_message = (
+        f"tensor-to-Python scalar escape(s) observed during capture; {missing}{unreadable}"
+    )
+    warning_text = (
+        f"TorchLens observed {state.count} tensor-to-Python scalar escape(s) during "
+        f"capture; first at {location}. In the trace, {missing}{unreadable}. Keep the "
+        "value as a tensor or pass it as an explicit input."
+    )
+    return row_message, warning_text
 
 
 def _external_warning_stacklevel() -> int:
