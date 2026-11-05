@@ -172,7 +172,8 @@ def test_annotate_rerun_preserves_user_annotations_and_refreshes_internals() -> 
     result = trace.run(model, x + 0.125)
     rerun_relu = result[result[tl.func("relu")].labels[0]]
 
-    assert result is trace
+    assert result is not trace
+    assert trace.annotations["user"] == {"trace_note": "keep"}
     assert result.annotations["user"] == {"trace_note": "keep"}
     assert result.provenance.input_annotations["user"] == {"input_note": "keep"}
     assert result._annotation_blobs is not None

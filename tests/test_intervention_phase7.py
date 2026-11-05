@@ -140,7 +140,7 @@ def test_rerun_with_hook_updates_downstream_out() -> None:
         hook=_zero_hook,
     )
 
-    log.run(ReluAdd(), x)
+    log = log.run(ReluAdd(), x)
 
     relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
@@ -166,7 +166,7 @@ def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
     gate["active"] = False
 
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
-        log.run(model, x + 1)
+        log = log.run(model, x + 1)
 
     assert log.last_run["hooks_fired"] == 0
     assert log.last_run["hooks_unfired"] == 1
@@ -181,7 +181,7 @@ def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        log.run(model, torch.randn(2, 3))
+        log = log.run(model, torch.randn(2, 3))
 
     assert not any("fired at zero sites" in str(item.message) for item in caught)
     assert log.last_run["hooks_fired"] >= 1
@@ -216,7 +216,7 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
 
     with pytest.warns(ControlFlowDivergenceWarning):
-        log.run(BranchModel(), negative)
+        log = log.run(BranchModel(), negative)
 
     assert log.provenance.fingerprint != original_hash
     assert log._raw_event_shape_hash != original_raw_hash  # noqa: SLF001
@@ -233,7 +233,7 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
 
     assert len(log.saved_ops) == 0
 
-    log.run(ReluAdd(), x + 1)
+    log = log.run(ReluAdd(), x + 1)
 
     assert len(log.saved_ops) == 0
     assert log.last_run["engine"] == "rerun"
@@ -247,12 +247,15 @@ def test_rerun_fast_refresh_repopulates_child_versions() -> None:
     new_x = torch.tensor([-5.0, 1.0])
     log = tl.trace(InplaceVersionModel(), x, capture=tl.options.CaptureOptions(save_args=True))
     add_site = log["add_1_1"]
-    original_add_site_id = id(add_site)
+    source_versions = add_site.out_versions_by_child["relu_1_2"].clone()
+    source = log
 
-    log.run(InplaceVersionModel(), new_x)
+    log = log.run(InplaceVersionModel(), new_x)
 
     refreshed_add_site = log["add_1_1"]
-    assert id(refreshed_add_site) == original_add_site_id
+    assert refreshed_add_site is not add_site  # the run returns a new Trace
+    assert source["add_1_1"] is add_site
+    assert torch.equal(add_site.out_versions_by_child["relu_1_2"], source_versions)
     assert log.last_run["fast_refresh"] is True
     assert torch.equal(
         refreshed_add_site.out_versions_by_child["relu_1_2"],
@@ -344,7 +347,7 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     )
     assert log._layer_logs["add_1_3"].num_passes == 2
 
-    log.run(model, new_x)
+    log = log.run(model, new_x)
 
     assert log.last_run["fast_refresh"] is True
     first_pass, second_pass = (log["add_1_3:1"], log["add_1_3:2"])

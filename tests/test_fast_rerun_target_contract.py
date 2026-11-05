@@ -127,7 +127,7 @@ def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> No
         fork.run_transaction(inputs=_inputs(1), fast=True)
     assert unsteered.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
 
-    fork.run(model, _inputs(0))
+    fork = fork.run(model, _inputs(0))
     x = _inputs(3)
     assert torch.equal(
         fork.run_transaction(inputs=x, fast=True).output.detach(), _eager_zeroed_fc1(model, x)

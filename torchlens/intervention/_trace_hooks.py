@@ -20,6 +20,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable.verification import running_result
 from .._selection.resolver import _label_index_scope
 from ._edit_guards import refuse_chunked_batch_coupling, warn_if_root_mutation
 from ._facet_union import split_facet_union_entries
@@ -134,5 +135,8 @@ def clear_hooks(trace: Trace) -> Trace:
     mark_intervention_spec_mutated(trace)
     # Removal takes effect at once, in a rerun or backward pass in progress.
     retire_live_hook_handles(handles_before)
+    mirror = running_result(trace)  # a positional run in progress writes a fork
+    if mirror is not None:
+        clear_hooks(mirror)
     record_operation(trace, "clear_hooks")
     return trace

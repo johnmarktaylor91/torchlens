@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._utils._record_group_table import record_member
+from ._column_passes_graph import log_internally_terminated_tensor
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -86,6 +87,13 @@ def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set
     set[str]
         Reachable raw labels expanded so multi-output wrapper calls are kept
         atomically.
+
+    A sibling kept this way is flooded like any reached node, so an unused
+    output of a kept call (the ``sign`` of ``torch.slogdet(weight)`` when only
+    ``logabsdet`` is read, on a call with no recorded parents) is logged as an
+    internal sink and seeds validation's backward walk. Before, it stayed in
+    the graph unflooded: neither a sink nor reachable from one, so the
+    completeness check could never reach it.
     """
 
     func_groups: dict[int, set[str]] = {}
@@ -102,9 +110,35 @@ def _expand_seen_nodes_to_complete_func_call_groups(self: Trace, nodes_seen: set
         changed = False
         for raw_labels in func_groups.values():
             if expanded_seen.intersection(raw_labels) and not raw_labels.issubset(expanded_seen):
+                added = raw_labels - expanded_seen
                 expanded_seen.update(raw_labels)
+                _flood_kept_siblings(self, sorted(added), expanded_seen)
                 changed = True
     return expanded_seen
+
+
+def _flood_kept_siblings(trace: Trace, added: list[str], seen: set[str]) -> None:
+    """Flood from siblings kept with their call group, through not-yet-seen nodes only.
+
+    Applies the main flood's rule to what it never visited: a non-output node
+    with no children is logged as an internal sink. ``seen`` grows in place.
+    """
+
+    raw_layer_dict = trace._raw_graph_ws.raw_layer_dict
+    seen_sinks = set(trace.internal_sink_ops)
+    seen_bools = set(trace.internally_terminated_bool_ops)
+    stack = list(added)
+    while stack:
+        label = stack.pop()
+        entry = raw_layer_dict[label]
+        if len(entry.children) == 0 and not entry.is_output:
+            log_internally_terminated_tensor(
+                trace, label, seen_sink_labels=seen_sinks, seen_terminated_bool_labels=seen_bools
+            )
+        for next_label in [*entry.children, *entry.parents]:
+            if next_label not in seen:
+                seen.add(next_label)
+                stack.append(next_label)
 
 
 def _remember_orphan_rows(self: Trace, orphan_nodes: set[str]) -> None:

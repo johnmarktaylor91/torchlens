@@ -1732,8 +1732,8 @@ def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
     }
 
 
-def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
-    """The lift changes exactly one entry, to a strict maximum, and keeps dtype."""
+def test_lift_min_entry_lifts_floats_and_swaps_integer_extremes() -> None:
+    """Floats lift one entry to a strict maximum; integers swap min and max in the saved set."""
 
     from torchlens.validation._core import _directional_step_perturb
 
@@ -1744,9 +1744,41 @@ def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
     assert lifted[0, 1].item() == 5.0 + 7.0
     constant = torch.zeros(3)
     assert _directional_step_perturb(constant, "lift_min_entry").tolist() == [1.0, 0.0, 0.0]
-    # Non-floating parents and unrepresentable lifts take the minimal step.
+    # Integer parents swap their first minimum and first maximum, so every
+    # value stays one the saved call already accepted (an id never exceeds the
+    # saved maximum) while the argmax moves; bool parents flip one entry; a
+    # constant integer tensor has nothing to swap and takes the minimal step.
     integers = torch.tensor([1, 2])
-    assert torch.equal(_directional_step_perturb(integers, "lift_min_entry"), integers + 1)
+    assert _directional_step_perturb(integers, "lift_min_entry").tolist() == [2, 1]
+    ids = torch.tensor([[7, 3, 9, 3, 9]])
+    swapped = _directional_step_perturb(ids, "lift_min_entry")
+    assert swapped.tolist() == [[7, 9, 3, 3, 9]]
+    assert swapped.dtype == ids.dtype
+    assert int(swapped.argmax()) != int(ids.argmax())
+    assert sorted(swapped.flatten().tolist()) == sorted(ids.flatten().tolist())
+    small = torch.tensor([0, 200], dtype=torch.uint8)
+    assert _directional_step_perturb(small, "lift_min_entry").tolist() == [200, 0]
+    constant_ids = torch.tensor([4, 4])
+    assert torch.equal(
+        _directional_step_perturb(constant_ids, "lift_min_entry"),
+        _directional_step_perturb(constant_ids, "step_up"),
+    )
+    wide_unsigned = getattr(torch, "uint32", None)
+    if wide_unsigned is not None:
+        # uint16/32/64 arrive as signed views and swap like any integer.
+        wide = torch.tensor([1, 3], dtype=torch.int32).view(wide_unsigned)
+        wide_swapped = _directional_step_perturb(wide, "lift_min_entry")
+        assert wide_swapped.dtype == wide_unsigned
+        assert wide_swapped.view(torch.int32).tolist() == [3, 1]
+    flags = torch.tensor([True, False])
+    assert _directional_step_perturb(flags, "lift_min_entry").tolist() == [True, True]
+    all_true = torch.tensor([True, True])
+    assert _directional_step_perturb(all_true, "lift_min_entry").tolist() == [False, True]
+    complex_values = torch.tensor([1 + 1j, 2 - 1j])
+    assert torch.equal(
+        _directional_step_perturb(complex_values, "lift_min_entry"),
+        _directional_step_perturb(complex_values, "step_up"),
+    )
     huge = torch.tensor([-3.0e38, 3.0e38])
     assert torch.equal(
         _directional_step_perturb(huge, "lift_min_entry"),

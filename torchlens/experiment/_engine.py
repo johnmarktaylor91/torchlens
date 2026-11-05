@@ -49,6 +49,7 @@ from ..intervention._audit import (
 )
 from ..intervention._masked_edit import _derive_masked_edit
 from ..intervention._spec import Recipe, when
+from ..intervention._trace_run import rerun_in_place
 from ..intervention._types import Edit
 from ..intervention.errors import SelectorCapabilityError
 from ..options import CaptureOptions
@@ -333,8 +334,8 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + _attach_hooks + run). Site-key terms cannot be matched
-    mid-attach (final structural numbering is absent), so they ride the
+    rerun door (fork + _attach_hooks + in-place run). Site-key terms cannot be
+    matched mid-attach (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
     member's own envelope EVENT row stamps lane="capture"; escalation is
@@ -345,18 +346,13 @@ def _run_live_candidate(
         member = baseline.fork(name=candidate.candidate_id)
         member._attach_hooks(spec)
         started = time.monotonic()
-        member.run(model, x)
+        rerun_in_place(member, model, x)
         _record_run_envelope(member, spec, started=started)
         return member, "live_hook"
     except SelectorCapabilityError:
         from .._user_public_impls import trace as _trace
 
-        member = _trace(
-            model,
-            x,
-            capture=_capture_options_like(baseline),
-            intervene=spec,
-        )
+        member = _trace(model, x, capture=_capture_options_like(baseline), intervene=spec)
         return member, "capture"
 
 

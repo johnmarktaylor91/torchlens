@@ -49,6 +49,7 @@ from ._spec import (
     site_signal,
     split_site_by_signal,
 )
+from ._trace_run import rerun_in_place
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 
 if TYPE_CHECKING:
@@ -359,7 +360,7 @@ def arm_signal_plan(
     if engine == "rerun":
         forced = force_backward_ready(trace)
         drop_inherited_backward(trace)
-        trace.run(model, x, replay=ReplayOptions(strict=strict))
+        rerun_in_place(trace, model, x, replay=ReplayOptions(strict=strict))
     assert plan.backward is not None
     site, edit = plan.backward
     with internal_mutation():

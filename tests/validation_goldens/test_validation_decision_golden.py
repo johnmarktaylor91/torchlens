@@ -534,7 +534,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
         torch.zeros_like(relu_pass.out),
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    edited.run(intervention, x_intervention)
+    edited = edited.run(intervention, x_intervention)
 
     torch.manual_seed(15)
     empty_like = TinyEmptyLike().eval()

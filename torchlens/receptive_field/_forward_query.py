@@ -31,7 +31,11 @@ from ._query import (
     _WalkStep,
 )
 from ._query_causal import EXTENDED_KINDS, map_extended_to_child
-from ._query_maps import _call_interval_callback, map_transposed_convolution_index_set
+from ._query_maps import (
+    _call_interval_callback,
+    map_transposed_convolution_index_set,
+    widen_channel_axis,
+)
 from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import ReceptiveFieldBox, ReceptiveFieldDirection
@@ -350,6 +354,10 @@ def _map_window_edges_forward(
             )
         mapped[child_start + local_axis] = image
         exact = exact and callback_exact and image.exact
+    # Mirror of the reverse walk: only a declared channel-mixing rule widens it.
+    if parent_start >= 1 and parent_sets[parent_start - 1] is not None:
+        dependency = str(result.values.get("channel_dependency", "pointwise"))
+        exact = widen_channel_axis(mapped, child.shape, child_start - 1, dependency) and exact
     return tuple(mapped), exact
 
 

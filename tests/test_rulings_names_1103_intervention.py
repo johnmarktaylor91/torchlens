@@ -117,7 +117,9 @@ def test_run_model_and_x_are_positional_only() -> None:
         log.run(model=ReluAdd(), x=x)
     with pytest.raises(TypeError):
         log.run(ReluAdd(), x=x)
-    assert log.run(ReluAdd(), x) is log
+    result = log.run(ReluAdd(), x)
+    assert isinstance(result, tl.Trace)
+    assert result is not log
 
 
 def test_run_inputs_transaction_returns_run_result() -> None:

@@ -681,7 +681,7 @@ class _FastLiveSession(_NestedEventTracker):
         Every result write (payloads, truncation, ledger, state) lands on the
         target; the source is only read. The explicit ``fast=True`` door passes
         a fork so the source stays untouched; the legacy rerun door passes
-        nothing and refreshes the trace in place.
+        nothing because it already runs on its own result fork.
         """
 
         self.trace = trace

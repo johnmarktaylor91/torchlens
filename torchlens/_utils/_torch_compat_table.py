@@ -233,6 +233,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_NAMED_TENSOR_API", absent_on=("2.13.0",)),
     _row("HAS_NN_ATTENTION_MODULE", absent_on=("2.1.2", "2.2.2")),
     _row("HAS_NODE_PREHOOK"),
+    _row("HAS_NODE_SEQUENCE_NR", measured=False),
     _row("HAS_ORIGINAL_VIEW_TRACKING", measured=False),
     _row(
         "HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE",

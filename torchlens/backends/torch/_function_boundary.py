@@ -132,6 +132,12 @@ def unlogged_wrapper_name(func_name: str) -> str:
     return f"torch_func:{func_name}:not_logged"
 
 
+def inside_function_apply() -> bool:
+    """Return whether a ``Function.apply`` forward is running under capture."""
+
+    return bool(_FRAMES)
+
+
 def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
     """Record an export: for the innermost live ``apply`` frame, else the departure journal.
 

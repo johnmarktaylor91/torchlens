@@ -55,6 +55,27 @@ def probe_cached_untyped_storage_wrapper() -> bool:
     return first is second
 
 
+def probe_node_sequence_nr() -> bool:
+    """Return whether autograd nodes expose their creation order (``Node._sequence_nr()``).
+
+    The in-place view-write rebind proves that a ``CopySlices`` node belongs to the
+    write that just ran by comparing creation order with every recorded node.
+
+    Returns
+    -------
+    bool
+        ``True`` when a fresh node answers ``_sequence_nr()`` with an ``int``.
+    """
+
+    try:
+        with torch.enable_grad():
+            node = (torch.ones(1, requires_grad=True) * 2.0).grad_fn
+        read = getattr(node, "_sequence_nr", None)
+        return callable(read) and isinstance(read(), int)
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+
+
 def probe_cpu_half_kernels() -> bool:
     """Return whether common CPU kernels accept Half-dtype operands.
 
