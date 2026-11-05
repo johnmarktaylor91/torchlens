@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ._crossing_perturbations import (
+    clamp_bound_crossing_values,
     integer_clamp_crossing_values,
     integer_extrema_crossing_values,
     isclose_tolerance_crossing_values,
@@ -55,6 +56,9 @@ def _perturb_domain_sensitive_parent_values(
 
     if layer.func_name in _SET_TEST_CROSSING_VALUES:
         return _SET_TEST_CROSSING_VALUES[layer.func_name](layer, parent_label, parent_values)
+    clamp_bound = clamp_bound_crossing_values(layer, parent_label, parent_values)
+    if clamp_bound is not None:
+        return clamp_bound
     if not parent_values.is_floating_point():
         return _integer_saturation_crossing_values(layer, parent_label, parent_values)
     if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):

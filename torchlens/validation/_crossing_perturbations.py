@@ -1,4 +1,4 @@
-"""Boundary-crossing parent perturbations for ``isclose`` and integer saturation.
+"""Boundary-crossing parent perturbations for ``isclose``, saturation and clamp bounds.
 
 ``isclose(input, other)`` moves only when an element enters or leaves the
 tolerance band around its comparand, and an integer ``clamp``/``maximum``/
@@ -11,6 +11,10 @@ before they are returned; the perturbation check itself is unchanged and still
 requires the replayed output to differ from the saved one, so a recorded parent
 that does not feed the op still fails. Same style as
 ``_membership_perturbation.py`` for ``isin``.
+
+A tensor ``clamp`` bound (``min=``/``max=`` given as a tensor) that never binds
+moves the output only once it passes the value it bounds, so the bound is moved
+one step past ``max(x, lo)`` (below ``min(max(x, lo), hi)``) at every element.
 """
 
 from __future__ import annotations
@@ -242,3 +246,142 @@ def _fitting(
     if not bool(moved.all()) or bool((candidate < info.min).any() | (candidate > info.max).any()):
         return None
     return candidate.to(parent_values.dtype)
+
+
+_CLAMP_RANGE = ((1, "min", "lower"), (2, "max", "upper"))
+#: ``clamp``-family spellings -> their bound slots as (position, keyword, role).
+CLAMP_BOUND_SLOTS: dict[str, tuple[tuple[int, str, str], ...]] = {
+    **dict.fromkeys(("clamp", "clamp_", "clip", "clip_"), _CLAMP_RANGE),
+    **dict.fromkeys(("clamp_min", "clamp_min_"), ((1, "min", "lower"),)),
+    **dict.fromkeys(("clamp_max", "clamp_max_"), ((1, "max", "upper"),)),
+}
+
+
+def clamp_bound_crossing_values(
+    layer: Op, parent_label: str, parent_values: torch.Tensor
+) -> torch.Tensor | None:
+    """Return a tensor clamp bound moved past the value it bounds, at every element.
+
+    ``clamp(x, lo, hi)`` is ``min(max(x, lo), hi)``. A tensor bound that never binds
+    (a ``0`` floor under positive inputs, an ``inf`` ceiling) stays inactive under the
+    generic draw, which samples near the bound's own values. A lower bound set one
+    step above ``max(x, lo)`` (an upper bound one step below ``min(max(x, lo), hi)``)
+    binds at every element, so the output moves wherever the other bound does not
+    already fix it. Where the other bound fixes the output everywhere the edge is
+    dead, the output stays put and the perturbation check still fails.
+
+    Parameters
+    ----------
+    layer:
+        Clamp-family op being replayed.
+    parent_label:
+        Parent label selected for perturbation.
+    parent_values:
+        Saved bound tensor.
+
+    Returns
+    -------
+    torch.Tensor or None
+        The moved bound, or ``None`` when the parent is not exactly one tensor bound,
+        the bounded input is not a real numeric tensor, the bound cannot be reduced
+        from the broadcast shape, or no element can move within the dtype.
+    """
+
+    role = _clamp_bound_role(layer, parent_label)
+    if role is None or not _is_real_numeric(parent_values):
+        return None
+    bound = parent_values.detach()
+    try:
+        bounded = _clamp_bounded_value(layer, role)
+        if bounded is None:
+            return None
+        if role == "lower":
+            reached = _reduce_to_shape(torch.maximum(bounded, bound), bound.shape, torch.amax)
+        else:
+            reached = _reduce_to_shape(torch.minimum(bounded, bound), bound.shape, torch.amin)
+    except RuntimeError:
+        # Bounds on another device or of a dtype the extrema kernels refuse.
+        return None
+    if reached is None or not _integer_step_fits(reached, role):
+        return None
+    step = _bound_step(reached)
+    candidate = (reached + step if role == "lower" else reached - step).to(bound.dtype)
+    representable = torch.isfinite(candidate) if candidate.is_floating_point() else None
+    if representable is not None:
+        candidate = torch.where(representable, candidate, bound)
+    if torch.equal(candidate, bound):
+        return None
+    return candidate
+
+
+def _clamp_bound_role(layer: Op, parent_label: str) -> str | None:
+    """Return ``"lower"``/``"upper"`` when the parent fills exactly one clamp bound slot only."""
+
+    slots = CLAMP_BOUND_SLOTS.get(getattr(layer, "func_name", None) or "")
+    if slots is None:
+        return None
+    positions = getattr(layer, "parent_arg_positions", None) or {}
+    arg_slots = [k for k, v in positions.get("args", {}).items() if v == parent_label]
+    kwarg_slots = [k for k, v in positions.get("kwargs", {}).items() if v == parent_label]
+    roles = [role for pos, key, role in slots if pos in arg_slots or key in kwarg_slots]
+    if len(roles) != 1 or len(arg_slots) + len(kwarg_slots) != 1:
+        return None
+    return roles[0]
+
+
+def _clamp_saved_slot(layer: Op, position: int, keyword: str) -> Any:
+    """Return the saved clamp argument at ``position`` or ``keyword`` (``None`` when absent)."""
+
+    args = tuple(getattr(layer, "saved_args", None) or ())
+    kwargs = getattr(layer, "saved_kwargs", None) or {}
+    if keyword in kwargs:
+        return kwargs[keyword]
+    return args[position] if len(args) > position else None
+
+
+def _clamp_bounded_value(layer: Op, role: str) -> torch.Tensor | None:
+    """Return the value the perturbed bound acts on: ``x``, or ``max(x, lo)`` for an upper bound."""
+
+    bounded = _clamp_saved_slot(layer, 0, "input")
+    if not isinstance(bounded, torch.Tensor) or not _is_real_numeric(bounded):
+        return None
+    bounded = bounded.detach()
+    lower = _clamp_saved_slot(layer, 1, "min") if role == "upper" else None
+    if role == "upper" and CLAMP_BOUND_SLOTS[layer.func_name] == _CLAMP_RANGE:
+        if isinstance(lower, torch.Tensor):
+            return torch.maximum(bounded, lower.detach().to(bounded.device))
+        if isinstance(lower, (int, float)) and not isinstance(lower, bool):
+            return torch.clamp(bounded, min=lower)
+    return bounded
+
+
+def _reduce_to_shape(values: torch.Tensor, shape: torch.Size, reduce: Any) -> torch.Tensor | None:
+    """Reduce a broadcast result back to ``shape`` with ``reduce`` over the broadcast dims."""
+
+    lead = values.ndim - len(shape)
+    if lead < 0:
+        return None
+    if lead:
+        values = reduce(values, dim=tuple(range(lead)))
+    dims = tuple(i for i, size in enumerate(shape) if size == 1 and values.shape[i] != 1)
+    if dims:
+        values = reduce(values, dim=dims, keepdim=True)
+    return values if values.shape == shape else None
+
+
+def _integer_step_fits(reached: torch.Tensor, role: str) -> bool:
+    """Return whether a one-unit integer step away from ``reached`` stays in its dtype."""
+
+    if reached.is_floating_point():
+        return True
+    info = torch.iinfo(reached.dtype)
+    edge = info.max if role == "lower" else info.min
+    return not bool((reached == edge).any())
+
+
+def _bound_step(reached: torch.Tensor) -> torch.Tensor | int:
+    """Return a step that moves every element of ``reached`` in its own dtype."""
+
+    if not reached.is_floating_point():
+        return 1
+    return torch.clamp(reached.abs() * 0.01, min=1.0)
