@@ -35,6 +35,9 @@ _EMBEDDING_BAG_PADDING_SLOT = 8
 #: Ops whose size arguments may be traced 0-d tensors next to a ``-1`` wildcard.
 _RESHAPE_FUNCS = frozenset({"view", "reshape"})
 
+#: Constructors whose integer indices parent must stay inside the captured size.
+_SPARSE_COO_FUNCS = frozenset({"sparse_coo_tensor", "_sparse_coo_tensor_unsafe"})
+
 _INTEGER_DTYPES = frozenset({torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8})
 
 
@@ -69,7 +72,60 @@ def structural_domain_values(
         return reshape_size_values(layer, parent_label, parent_values)
     if layer.func_name == "repeat_interleave" and _occupies(layer, parent_label, 1, "repeats"):
         return repeats_with_fixed_total_values(layer, parent_values)
+    if layer.func_name in _SPARSE_COO_FUNCS and _occupies(layer, parent_label, 0, "indices"):
+        return sparse_indices_values(layer, parent_values)
     return None
+
+
+def sparse_indices_values(layer: Op, indices: torch.Tensor) -> torch.Tensor | None:
+    """Move one sparse coordinate to the next position inside its dimension.
+
+    ``sparse_coo_tensor(indices, values, size)`` requires every row ``d`` of the
+    ``(ndim, nnz)`` indices to lie in ``[0, size[d])``. A draw or a +1/-1 step
+    on the whole tensor crosses that bound; rotating one coordinate by one
+    inside its dimension (``(v + 1) % size[d]``) keeps the call valid and
+    moves one stored value, so a dense read of the output changes.
+
+    Parameters
+    ----------
+    layer:
+        The ``sparse_coo_tensor`` op.
+    indices:
+        Saved 2-D indices parent.
+
+    Returns
+    -------
+    torch.Tensor or None
+        Indices with one coordinate rotated, or ``None`` when the size was not
+        captured, nothing is stored, or every dimension has extent 1.
+    """
+
+    size = _sparse_size(layer)
+    if size is None or indices.ndim != 2 or indices.shape[1] == 0:
+        return None
+    if indices.shape[0] > len(size):
+        return None
+    for row in range(indices.shape[0]):
+        extent = size[row]
+        if extent > 1:
+            moved = indices.detach().clone()
+            moved[row, 0] = (int(moved[row, 0]) + 1) % extent
+            return moved
+    return None
+
+
+def _sparse_size(layer: Op) -> list[int] | None:
+    """Return the captured ``size`` of a ``sparse_coo_tensor`` call as ints."""
+
+    kwargs = layer.call.saved_kwargs or {}
+    args: Sequence[Any] = layer.call.saved_args or ()
+    raw = kwargs.get("size", args[2] if len(args) > 2 else None)
+    if not isinstance(raw, (list, tuple, torch.Size)):
+        return None
+    size = [_as_int(value) for value in raw]
+    if any(value is None for value in size):
+        return None
+    return [int(value) for value in size if value is not None]
 
 
 def repeats_with_fixed_total_values(layer: Op, repeats: torch.Tensor) -> torch.Tensor | None:

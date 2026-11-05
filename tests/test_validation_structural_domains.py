@@ -188,6 +188,31 @@ def test_repeats_edge_with_pinned_total_is_verified_and_a_frozen_replay_still_fa
     assert frozen.decision == "failed", (frozen.decision, frozen.reason)
 
 
+class _SparseAdjacency(nn.Module):
+    """OpenHGNN-style adjacency: ``sparse_coo_tensor`` sized independently of its indices."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        torch.manual_seed(0)
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, edge_index: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+        adj = torch.sparse_coo_tensor(edge_index, torch.ones(edge_index.shape[1]), (5, 3))
+        return torch.sparse.mm(adj, self.lin(x))
+
+
+def test_sparse_indices_edge_is_verified_and_a_frozen_replay_still_fails() -> None:
+    inputs = [torch.tensor([[0, 1, 4, 3], [2, 2, 0, 1]]), torch.randn(3, 4)]
+    trace = _capture(_SparseAdjacency().eval(), inputs)
+    op = _op(trace, "sparse_coo_tensor")
+    indices_label = op.call.parent_arg_positions["args"][0]
+    verified = _perturb(trace, op, indices_label)
+    assert verified.decision == "validated", (verified.decision, verified.reason)
+    _freeze(op)
+    frozen = _perturb(trace, op, indices_label)
+    assert frozen.decision == "failed", (frozen.decision, frozen.reason)
+
+
 def test_shape_read_view_validates_and_walks_the_receptive_field() -> None:
     model, inputs = _ShapeReadView().eval(), [torch.ones(1, 12, dtype=torch.long)]
     trace = tl.trace(model, inputs)
