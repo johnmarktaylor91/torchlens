@@ -57,7 +57,6 @@ def _ledger(container: Path, rows: list[dict[str, Any]]) -> None:
     (container / "ledger.jsonl").write_text(text, encoding="utf-8")
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("kind", ["absolute", "dotdot", "subdir"])
 def test_ledger_row_naming_a_file_outside_the_artifact_refuses(tmp_path: Path, kind: str) -> None:
     """A ``file`` cell naming an absolute path or ``..`` refuses before any read."""
@@ -191,7 +190,6 @@ def _encoded(fmt: str) -> bytes:
     return buffer.getvalue()
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("fmt", ["GIF", "BMP", "TIFF"])
 def test_image_payload_outside_png_jpeg_is_not_decoded(fmt: str) -> None:
     """Only PNG and JPEG reach a decoder; any other format stays the inert raw dict."""
@@ -324,7 +322,6 @@ def test_bounds_unchecked_kernels_are_denied(path: str) -> None:
     assert not is_pure_forward_callable(value), f"{path} admitted"
 
 
-@pytest.mark.smoke
 def test_no_admitted_callable_is_bounds_unchecked() -> None:
     """RUNTIME enumeration of the replay roots: nothing admitted matches the rule."""
 
@@ -459,7 +456,6 @@ def test_unsafe_suffix_sparse_constructors_are_denied() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_json_huge_integer_and_float_overflow_refuse_typed() -> None:
     """A 5000-digit integer and ``1e999`` refuse as ``JSONDecodeError``, not a raw crash."""
 
