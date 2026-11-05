@@ -50,7 +50,7 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
 
     outpath = str(tmp_path / stem)
     trace.draw(
-        highlight="interventions",
+        view="interventions",
         path=outpath,
         file_format="svg",
     )
@@ -79,7 +79,7 @@ def test_distilgpt2_replay_fork_census_and_splice_box(tmp_path) -> None:
     assert _REPLAY_WORDING in census_text
     assert _LIVE_WORDING not in census_text
     svg, sidecar = _render_with_sidecar(fork, tmp_path, "distilgpt2_replay")
-    assert "surgery census" in svg
+    assert "edit record" in svg
     assert _REPLAY_WORDING in sidecar
     assert _LIVE_WORDING not in sidecar
     _assert_no_banned_verbs(svg)
@@ -119,7 +119,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
     assert _LIVE_WORDING in census_text
     assert _REPLAY_WORDING not in census_text
     svg, sidecar = _render_with_sidecar(log, tmp_path, "resnet50_splice")
-    assert "surgery census" in svg
+    assert "edit record" in svg
     assert "splice_module" in sidecar
     _assert_no_banned_verbs(sidecar)
 
@@ -146,7 +146,7 @@ def test_distilgpt2_live_lane_census_and_splice_box(tmp_path) -> None:
     assert _LIVE_WORDING in census_text
     assert _REPLAY_WORDING not in census_text
     svg, sidecar = _render_with_sidecar(log, tmp_path, "distilgpt2_live")
-    assert "surgery census" in svg
+    assert "edit record" in svg
     assert _REPLAY_WORDING not in sidecar
     assert _LIVE_WORDING in sidecar
     _assert_no_banned_verbs(svg)

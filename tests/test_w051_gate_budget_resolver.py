@@ -55,7 +55,7 @@ def test_two_point_schedule_serves_the_compacting_stop(tiny_log: Any, monkeypatc
     assert budget.visible_count == 4
     assert budget.draw_kwargs == {"collapse": 1.0}
     assert not budget.in_band
-    assert "lens_budget_band_missed" in codes
+    assert "view_budget_band_missed" in codes
     assert any("the nearest is shown" in line for line in budget.disclosure)
 
 
@@ -67,7 +67,7 @@ def test_nearest_compacting_stop_wins_among_compacting_stops(
     _install_schedule(monkeypatch, 282, 230, 4)
     budget, codes = _resolve_with_warnings(tiny_log)
     assert budget.visible_count == 230
-    assert "lens_budget_band_missed" in codes
+    assert "view_budget_band_missed" in codes
 
 
 def test_in_band_stop_is_still_preferred(tiny_log: Any, monkeypatch: Any) -> None:
@@ -77,7 +77,7 @@ def test_in_band_stop_is_still_preferred(tiny_log: Any, monkeypatch: Any) -> Non
     budget, codes = _resolve_with_warnings(tiny_log)
     assert budget.visible_count == 160
     assert budget.in_band
-    assert "lens_budget_band_missed" not in codes
+    assert "view_budget_band_missed" not in codes
 
 
 def test_schedule_without_compacting_stop_serves_the_full_graph_disclosed(
@@ -89,4 +89,4 @@ def test_schedule_without_compacting_stop_serves_the_full_graph_disclosed(
     budget, codes = _resolve_with_warnings(tiny_log)
     assert budget.visible_count == 282
     assert not budget.in_band
-    assert "lens_budget_band_missed" in codes
+    assert "view_budget_band_missed" in codes

@@ -167,7 +167,7 @@ def resolve_budget(
         The dial, its draw kwargs, and the mandatory disclosure lines. When
         no dial can satisfy every constraint the nearest candidate is
         returned with ``in_band=False`` and a coded warning
-        (``lens_budget_band_missed``) -- disclosed, never silent.
+        (``view_budget_band_missed``) -- disclosed, never silent.
     """
 
     from .._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
@@ -252,7 +252,7 @@ def resolve_budget(
             f"visible at collapse={step.t:g}, full graph {full_visible}). "
             "Remedy: focus the render with module= or depth=, or pass "
             "an explicit collapse= override.",
-            code="lens_budget_band_missed",
+            code="view_budget_band_missed",
         ),
         stacklevel=3,
     )
@@ -316,7 +316,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
                 f"depth={best_depth} (~{best_estimate} visible units, "
                 "estimate). Remedy: focus the render with module= or pass an "
                 "explicit depth=.",
-                code="lens_budget_above_ceiling_fallback",
+                code="view_budget_above_ceiling_fallback",
             ),
             stacklevel=3,
         )

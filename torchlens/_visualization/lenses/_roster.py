@@ -1,20 +1,20 @@
-"""The lens roster: registry rows, tiers and subjects.
+"""The premade-view roster (the private lens registry): rows, tiers and subjects.
 
-The public door is ``Trace.draw(lens=...)`` (``_visualization/_lens_door.py``),
-whose allowed values are spelled in ``torchlens._literals.DrawLensLiteral``.
+The public door is ``Trace.draw(view=...)`` (``_visualization/_view_door.py``),
+whose allowed values are spelled in ``torchlens._literals.DrawViewLiteral``.
 
 The inclusion rule (themes memo section 3): a preset earns a registry ROW
 iff it has (a) its own HEADLINE evidence requirement -- a capture-time field
 whose absence makes the picture answer a different question -- AND (b) its
-own disclosure text. Combinations (a lens plus extra draw keywords, such as
-``lens="debug", show_edge_shapes=True``) are spelled with keywords, not rows.
+own disclosure text. Combinations (a view plus extra draw keywords, such as
+``view="debug", show_edge_shapes=True``) are spelled with keywords, not rows.
 
-Tiers: CORE-6 = overview, blueprint, debug, speed, dims, transformer.
-EXTENDED-3 = memory, sequence, compute. The tenth row, ``interventions``,
+Tiers: CORE-5 = overview, debug, speed, dims, transformer.
+EXTENDED-3 = memory, sequence, compute. The ninth row, ``interventions``,
 registers in ``surgery_visuals``.
 
-``overview`` and ``blueprint`` were registered by the C05 substrate
-(``theme_registry``); this module registers the remaining seven and the
+``overview`` is registered by the C05 substrate (``theme_registry``); this
+module registers the remaining seven and the
 roster-level tables. Import is idempotent per process (the registry refuses
 double registration; this module registers once at first import).
 """
@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 #: CORE-6: a CORE row failing its full stratum at freeze blocks the release.
-CORE_LENSES = ("overview", "blueprint", "debug", "speed", "dims", "transformer")
+CORE_LENSES = ("overview", "debug", "speed", "dims", "transformer")
 
 #: EXTENDED-3: ship iff their strata pass; individual drop to wave 2 with
 #: the named promotion path (memo section 10), never silent.
@@ -50,7 +50,7 @@ PERF_FAMILIES: Mapping[str, str] = MappingProxyType(
 
 #: Subject requirements (refusal taxonomy, memo section 2 item 5):
 #: transformer and sequence refuse on factual absence of SUBJECT, with the
-#: teaching escape to theme='overview'.
+#: teaching escape to view='overview'.
 LENS_SUBJECTS: Mapping[str, str] = MappingProxyType(
     {"transformer": "attention_structure", "sequence": "multi_pass"}
 )

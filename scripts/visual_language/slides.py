@@ -706,8 +706,8 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "b",
                 "FlowReshape",
-                call="lens",
-                kwargs={"lens": "overview", "display_filter": "@exclude_reshapes"},
+                call="view",
+                kwargs={"view": "overview", "display_filter": "@exclude_reshapes"},
                 label="a lens with a display filter",
             ),
         ),
@@ -764,7 +764,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                kwargs={"lens": "interventions"},
+                kwargs={"view": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -966,9 +966,9 @@ SLIDES: tuple[Slide, ...] = (
         "refuse when evidence is missing.",
         layout="grid",
         panels=(
-            Panel("a", "Flow", call="lens", kwargs={"lens": "overview"}, label="overview"),
-            Panel("b", "Flow", call="lens", kwargs={"lens": "speed"}, label="speed"),
-            Panel("c", "Flow", call="lens", kwargs={"lens": "dims"}, label="dims"),
+            Panel("a", "Flow", call="view", kwargs={"view": "overview"}, label="overview"),
+            Panel("b", "Flow", call="view", kwargs={"view": "speed"}, label="speed"),
+            Panel("c", "Flow", call="view", kwargs={"view": "dims"}, label="dims"),
         ),
         cells=(
             Cell("a", "node(text~tanh)", "overview"),
@@ -988,9 +988,9 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Nonfinite",
-                call="lens",
+                call="view",
                 capture={"save": "@unsaved_abs"},
-                kwargs={"lens": "debug", "node_label_fields": ["label"]},
+                kwargs={"view": "debug", "node_label_fields": ["label"]},
             ),
         ),
         cells=(
@@ -1362,8 +1362,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Edits",
-        "intervention_mode, lens='interventions'",
-        ("intervention_mode", "show_cone", "lens"),
+        "intervention_mode, view='interventions'",
+        ("intervention_mode", "show_cone", "view"),
     ),
     (
         "Measurements",

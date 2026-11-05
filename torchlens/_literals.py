@@ -13,10 +13,9 @@ VisDirectionLiteral = Literal["bottomup", "topdown", "leftright", "rightleft"]
 VisNodePlacementLiteral = Literal["auto", "dot", "rank"]
 VisRendererLiteral = Literal["graphviz"]
 VisInterventionModeLiteral = Literal["node_mark", "as_node"]
-#: ``Trace.draw(lens=...)`` values: the one place they are spelled.
-DrawLensLiteral = Literal[
+#: ``Trace.draw(view=...)`` values: the one place they are spelled.
+DrawViewLiteral = Literal[
     "overview",
-    "blueprint",
     "debug",
     "speed",
     "dims",

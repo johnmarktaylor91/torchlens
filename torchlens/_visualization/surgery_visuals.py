@@ -30,7 +30,7 @@ Shape rules (normative, from the fold):
   (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
 - **The census travels with exported figures**: a short form of the census
   (one line per edit, in its own lane's wording) renders under the figure's
-  header, and ``Trace.draw(lens="interventions")`` (:func:`draw_interventions`)
+  header, and ``Trace.draw(view="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
 - **CREDIT rows** ride the full census text (D01's acknowledgment list), not
   the figure.
@@ -641,17 +641,17 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
     facts = surgery_facts(trace)
     if not facts.has_evidence:
         raise InvalidArgumentError(
-            "the surgery lens found no intervention audit entries on this "
+            "the interventions view found no intervention audit entries on this "
             "trace: no transaction envelopes, no region rows, no fire "
             "records, no injected ops -- there is no recorded surgery to "
             "render",
             code="surgery_evidence_missing",
             remedy=(
                 "run an edit first (fork.do(...), tl.trace(..., intervene=...), "
-                "spec.bind(model), or a region do), or leave lens= unset "
+                "spec.bind(model), or a region do), or leave view= unset "
                 "for an un-operated picture"
             ),
-            argument="lens",
+            argument="view",
         )
     census = surgery_census(trace)
     lines = census.caption_lines()
@@ -666,7 +666,7 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
 def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
     """Draw ``trace`` under the surgery lens; the census travels with it.
 
-    The body of ``Trace.draw(lens="interventions")``: a thin door over
+    The body of ``Trace.draw(view="interventions")``: a thin door over
     the standard lens resolution (never a new view kind). The marks and the
     caption census render through ``Trace.draw``, and when a figure lands on
     disk the full census text is written beside it as

@@ -1,9 +1,9 @@
-"""``Trace.draw(lens=...)``: the public door to the premade drawing styles.
+"""``Trace.draw(view=...)``: the public door to the premade views.
 
-Each allowed value names one registered lens row; this module checks the
-value and forwards the caller's explicit draw keywords to the lens resolver.
-It never renders. The allowed values are spelled once, in
-:data:`torchlens._literals.DrawLensLiteral`.
+Each allowed value names one registered view row (the private ``lenses``
+registry); this module checks the value and forwards the caller's explicit
+draw keywords to the resolver. It never renders. The allowed values are
+spelled once, in :data:`torchlens._literals.DrawViewLiteral`.
 """
 
 from __future__ import annotations
@@ -13,51 +13,51 @@ from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, get_args
 
 from .._errors import InvalidArgumentError
-from .._literals import DrawLensLiteral
+from .._literals import DrawViewLiteral
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
-#: Allowed ``lens=`` values, in the order the refusal lists them.
-LENS_VALUES: tuple[str, ...] = get_args(DrawLensLiteral)
+#: Allowed ``view=`` values, in the order the refusal lists them.
+VIEW_VALUES: tuple[str, ...] = get_args(DrawViewLiteral)
 
-#: ``Trace.draw`` parameters that never forward to the lens resolver.
-_NOT_FORWARDED = frozenset({"self", "trace", "lens"})
+#: ``Trace.draw`` parameters that never forward to the view resolver.
+_NOT_FORWARDED = frozenset({"self", "trace", "view"})
 
 
-def check_lens(lens: object) -> str:
-    """Return ``lens`` when it names a public lens, else refuse typed.
+def check_view(view: object) -> str:
+    """Return ``view`` when it names a public view, else refuse typed.
 
     Parameters
     ----------
-    lens:
-        The requested lens name.
+    view:
+        The requested view name.
 
     Returns
     -------
     str
-        The lens name, unchanged.
+        The view name, unchanged.
 
     Raises
     ------
     InvalidArgumentError
-        ``draw_lens_invalid`` naming every allowed value.
+        ``draw_view_invalid`` naming every allowed value.
 
     Examples
     --------
-    >>> from torchlens._visualization._lens_door import check_lens
-    >>> check_lens("speed")
+    >>> from torchlens._visualization._view_door import check_view
+    >>> check_view("speed")
     'speed'
     """
 
-    if isinstance(lens, str) and lens in LENS_VALUES:
-        return lens
-    allowed = ", ".join(repr(value) for value in LENS_VALUES)
+    if isinstance(view, str) and view in VIEW_VALUES:
+        return view
+    allowed = ", ".join(repr(value) for value in VIEW_VALUES)
     raise InvalidArgumentError(
-        f"lens must be one of {allowed}; received {lens!r}",
-        code="draw_lens_invalid",
-        remedy=f"pass one of {allowed}, or leave lens unset for the plain drawing",
-        argument="lens",
+        f"view must be one of {allowed}; received {view!r}",
+        code="draw_view_invalid",
+        remedy=f"pass one of {allowed}, or leave view unset for the plain drawing",
+        argument="view",
     )
 
 
@@ -76,9 +76,9 @@ def explicit_draw_kwargs(
 ) -> dict[str, Any]:
     """Collect the draw keywords whose value differs from the signature default.
 
-    The lens resolver gives explicit keywords precedence over lens members,
+    The view resolver gives explicit keywords precedence over view members,
     so only the values the caller actually chose may forward; a default must
-    not override a lens member.
+    not override a view member.
 
     Parameters
     ----------
@@ -95,10 +95,10 @@ def explicit_draw_kwargs(
 
     Examples
     --------
-    >>> from torchlens._visualization._lens_door import explicit_draw_kwargs
-    >>> def draw(path=None, *, theme="torchlens", lens=None):
+    >>> from torchlens._visualization._view_door import explicit_draw_kwargs
+    >>> def draw(path=None, *, theme="torchlens", view=None):
     ...     return explicit_draw_kwargs(draw, locals())
-    >>> draw(theme="paper", lens="speed")
+    >>> draw(theme="paper", view="speed")
     {'theme': 'paper'}
     """
 
@@ -112,18 +112,18 @@ def explicit_draw_kwargs(
     return explicit
 
 
-def draw_lens(trace: Trace, lens: object, user_kwargs: Mapping[str, Any]) -> Any:
-    """Draw ``trace`` through the named lens.
+def draw_view(trace: Trace, view: object, user_kwargs: Mapping[str, Any]) -> Any:
+    """Draw ``trace`` as the named premade view.
 
     Parameters
     ----------
     trace:
         The trace to draw.
-    lens:
-        The requested lens; checked against :data:`LENS_VALUES`.
+    view:
+        The requested view; checked against :data:`VIEW_VALUES`.
     user_kwargs:
         The caller's explicit ``Trace.draw`` keywords; they win over the
-        lens's own settings.
+        view's own settings.
 
     Returns
     -------
@@ -132,12 +132,12 @@ def draw_lens(trace: Trace, lens: object, user_kwargs: Mapping[str, Any]) -> Any
 
     Examples
     --------
-    >>> drawing = trace.draw(lens="speed", file_format="svg")  # doctest: +SKIP
+    >>> drawing = trace.draw(view="speed", file_format="svg")  # doctest: +SKIP
     """
 
-    name = check_lens(lens)
+    name = check_view(view)
     if name == "interventions":
-        # The intervention lens writes its census beside the figure.
+        # The interventions view writes its census beside the figure.
         from .surgery_visuals import draw_interventions
 
         return draw_interventions(trace, user_kwargs)

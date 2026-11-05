@@ -13,8 +13,8 @@ honesty terms:
 - View-aware source-family resolution (N16) with the zero-coverage refusal
   and the mandatory rolled aggregation line.
 - The visible-detail budget resolver (N10) for rows that compact.
-- Refusal taxonomy (memo section 2 item 5): overview/blueprint never
-  refuse; speed/memory/compute/dims refuse on missing EVIDENCE;
+- Refusal taxonomy (memo section 2 item 5): overview never
+  refuses; speed/memory/compute/dims refuse on missing EVIDENCE;
   transformer/sequence refuse on factual absence of SUBJECT. Every refusal
   names the remedy.
 - Disclosure is a RENDERED artifact: the assembled disclosure lines ship as
@@ -147,17 +147,17 @@ def _check_subject(trace: Trace, lens: LensPreset) -> None:
     if subject == "attention_structure" and not has_attention_subject(trace):
         raise InvalidArgumentError(
             "no attention structure detected in this trace; the transformer "
-            "lens never draws an ordinary graph under a domain name",
-            code="lens_attention_subject_absent",
-            remedy="leave lens= unset, or pass lens='overview', for a domain-neutral picture",
-            argument="lens",
+            "view never draws an ordinary graph under a domain name",
+            code="view_attention_subject_absent",
+            remedy="leave view= unset, or pass view='overview', for a domain-neutral picture",
+            argument="view",
         )
     if subject == "multi_pass" and not _has_multipass_subject(trace):
         raise InvalidArgumentError(
             "no layer with weights runs more than once in this trace; nothing to sequence",
-            code="lens_single_pass_no_sequence",
-            remedy="leave lens= unset, or pass lens='overview', for a domain-neutral picture",
-            argument="lens",
+            code="view_single_pass_no_sequence",
+            remedy="leave view= unset, or pass view='overview', for a domain-neutral picture",
+            argument="view",
         )
 
 
@@ -183,17 +183,17 @@ def _resolve_perf_source(
     if coverage.encoded == 0:
         family = source.family
         if coverage.total == 0 or _no_member_anywhere(trace, family_token):
-            code = "lens_headline_evidence_missing"
+            code = "view_headline_evidence_missing"
         else:
-            code = "lens_source_zero_coverage"
+            code = "view_source_zero_coverage"
         raise InvalidArgumentError(
-            f"the {lens.name!r} lens needs {family.name} evidence "
+            f"the {lens.name!r} view needs {family.name} evidence "
             f"({source.member}) and this capture has none: 0 of "
             f"{coverage.total} ops carry it -- the picture would answer a "
             "different question under a populated legend",
             code=code,
             remedy=family.capture_remedy,
-            argument="lens",
+            argument="view",
         )
     from ._families import records_for_member, safe_label
 
@@ -387,10 +387,10 @@ def _warn_secondary(lens_name: str, member: str, why: str) -> str:
     notice = f"{member} degraded: {why}"
     warnings.warn(
         TorchLensWarning(
-            f"lens {lens_name!r} SECONDARY member {member} degraded: {why}. "
-            "Remedy: the lens renders without it; re-capture or adjust the "
-            "view to restore the member.",
-            code="lens_secondary_degraded",
+            f"view {lens_name!r} SECONDARY member {member} degraded: {why}. "
+            "Remedy: the view renders without it; re-capture or adjust the "
+            "draw keywords to restore the member.",
+            code="view_secondary_degraded",
         ),
         stacklevel=4,
     )
@@ -439,25 +439,25 @@ def _entry_gates(trace: Trace, lens: LensPreset, user_kwargs: dict[str, Any]) ->
     # -- Legend-dependence gate (mechanism; populated by the battery). -----
     if lens.name in LEGEND_DEPENDENT_LENSES and user_kwargs.get("show_legend", True) is False:
         raise InvalidArgumentError(
-            f"the legibility gate ruled the {lens.name!r} lens "
+            f"the legibility gate ruled the {lens.name!r} view "
             "legend-DEPENDENT (naive readers could not identify the channel "
-            "without it); explicit show_legend=False is refused for this lens",
-            code="lens_legend_suppression_refused",
-            remedy="drop show_legend=False, or use a lens the gate ruled legend-optional",
+            "without it); explicit show_legend=False is refused for this view",
+            code="view_legend_suppression_refused",
+            remedy="drop show_legend=False, or use a view the gate ruled legend-optional",
             argument="show_legend",
         )
 
     # -- Detail ceiling for the collapse='none' rows (debug, dims). --------
     if lens.name in ("debug", "dims") and len(trace._layer_list) > LENS_DETAIL_CEILING:
         raise InvalidArgumentError(
-            f"the {lens.name!r} lens renders uncollapsed and this "
+            f"the {lens.name!r} view renders uncollapsed and this "
             f"trace has {len(trace._layer_list)} ops (ceiling {LENS_DETAIL_CEILING})",
-            code="lens_above_detail_budget",
+            code="view_above_detail_budget",
             remedy=(
                 "focus the render (module= or a Selection region), or pass an "
                 "explicit collapse= override at your own risk"
             ),
-            argument="lens",
+            argument="view",
         )
 
 
@@ -526,10 +526,10 @@ def _debug_stage(trace: Trace, lens: LensPreset, build: _LensBuild) -> Nonfinite
         warnings.warn(
             TorchLensWarning(
                 "nonfinite status: NOT CHECKED -- no saved payloads to "
-                "examine; the debug lens renders without per-node status "
+                "examine; the debug view renders without per-node status "
                 "motifs. Remedy: re-capture with saved payloads or "
                 "CaptureOptions(on_nonfinite='track').",
-                code="lens_nonfinite_not_checked",
+                code="view_nonfinite_not_checked",
             ),
             stacklevel=3,
         )
@@ -669,7 +669,7 @@ def _start_build(trace: Trace, lens: LensPreset, request_kwargs: dict[str, Any])
         effective=effective,
         user_kwargs=request_kwargs,
         view=str(effective.get("vis_mode", _effective_view(lens, request_kwargs))),
-        disclosure=[f"lens: {lens.name} -- {lens.question}"],
+        disclosure=[f"view: {lens.name} -- {lens.question}"],
     )
     if lens.preset_spec_fn is not None:
         build.preset_fns.append(lens.preset_spec_fn)

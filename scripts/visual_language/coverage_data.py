@@ -395,7 +395,6 @@ ROWS: Mapping[str, Row] = {
         "lenses._roster:ROSTER",
         variants=("overview", "speed", "dims", "debug"),
         caption_variants=(
-            "blueprint",
             "transformer",
             "memory",
             "sequence",

@@ -161,7 +161,7 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
 
 #: Where ``Selection`` and ``Selector`` are defined. The lens layer identifies
 #: them by class, not by import: the selection package reaches the records,
-#: and the records reach this layer through ``Trace.draw(lens=...)``.
+#: and the records reach this layer through ``Trace.draw(view=...)``.
 _SELECTION_MODULE = __name__.partition("._visualization")[0] + "._selection.selection"
 
 

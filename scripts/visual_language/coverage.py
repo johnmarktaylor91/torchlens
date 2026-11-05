@@ -74,7 +74,7 @@ DRAW_ENTRY_POINTS: Mapping[str, str] = {
 }
 CALL_ENTRY = {
     "draw": "Trace.draw",
-    "lens": "Trace.draw",
+    "view": "Trace.draw",
     # The backward and combined pictures are graph= values of the one draw door.
     "draw_backward": "Trace.draw",
     "draw_combined": "Trace.draw",

@@ -235,6 +235,32 @@ module on the other side. The reading key at the top is on by default for a focu
 
 ## Ready-made views
 
+`view=` picks a premade view: a bundle of draw settings plus a caption, each built to answer
+one question.
+
+| Call | Question it answers |
+|---|---|
+| `trace.draw(view="overview")` | what is this model? |
+| `trace.draw(view="debug")` | what is broken? |
+| `trace.draw(view="speed")` | where does time go? |
+| `trace.draw(view="dims")` | what shape is the data? |
+| `trace.draw(view="transformer")` | how is attention wired? |
+| `trace.draw(view="memory")` | what is big in bytes? |
+| `trace.draw(view="sequence")` | how do the passes unfold? |
+| `trace.draw(view="compute")` | where are the FLOPs? |
+| `trace.draw(view="interventions")` | what did the edits change? |
+
+Each view prints its caption lines under the header block, starting with
+`view: <name> -- <question>`. Leaving `view=` unset draws the plain graph, which already shows
+every operation. Any keyword you pass wins over the view's own settings, so combinations are
+spelled with keywords, for example `trace.draw(view="debug", show_edge_shapes=True)`, and
+`theme=` (see [Themes](#themes)) changes the colours of any view.
+
+A view checks that the trace holds what it needs and refuses with a remedy when it does not:
+`"speed"` needs timings, `"transformer"` needs attention modules and `"sequence"` needs more
+than one pass. `"transformer"` draws the first repeated block that holds attention (for GPT-2,
+`transformer.h.0`) and names it in the caption; pass `module=` to choose another.
+
 ### Profiling: `node_style="profiling"`
 
 [![The CNN with timing, memory and source rows on every node](../images/visualization/profiling.png)](../images/visualization/profiling.png)
@@ -243,8 +269,10 @@ module on the other side. The reading key at the top is on by default for a focu
 
 Each node gains rows for how long the operation took (`t=`), the size of its output (`out=`),
 the line of code that called it (`call=`) and the function that line is in (`fn=`).
+`view="speed"`, `view="memory"` and `view="compute"` turn these rows on themselves and color
+the nodes by time, bytes or FLOPs.
 
-### What an edit changed: `highlight="interventions"`
+### What an edit changed: `view="interventions"`
 
 After an edit (here, zeroing the output of `fc1` on a fork of the trace), the edited node is
 marked in purple with the edit's name, and the header counts the edits and warns that values
@@ -269,14 +297,14 @@ edit: everything whose value the edit could have changed.
 The shading is drawn into SVG directly; for PNG and PDF output it needs the optional
 `cairosvg` package, and without it TorchLens warns and draws the edit marks alone.
 
-`highlight="interventions"` draws the full record of every edit: each edited node is marked
-(a solid border is a recorded fact, a dashed one an inferred attribution), and the caption
-lists each edit, how it was applied and the audit record behind it. The full record is also
-written beside the image as `<path>.census.txt`.
+`view="interventions"` draws the record of every edit: each edited node is marked (a solid
+border is a recorded edit, a dashed one an inferred site), and the caption prints a short
+edit record. The full record is written beside the image as `<path>.census.txt`. A trace with
+no recorded edit refuses with `surgery_evidence_missing`.
 
 [![The intervention view, with its caption](../images/visualization/interventions.png)](../images/visualization/interventions.png)
 
-`edited.draw(highlight='interventions')`
+`edited.draw(view='interventions')`
 
 ## Color and size by any value
 
