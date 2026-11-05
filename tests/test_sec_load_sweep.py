@@ -387,10 +387,9 @@ def test_registry_resolver_refuses_unchecked_kernels(qualname: str, trust: bool)
     earlier, untrusted, for a different reason).
     """
 
-    from torchlens.intervention.types import FunctionRegistryKey
-
     from torchlens.errors import UntrustedCallableError
     from torchlens.intervention._resolver_registry import resolve_function_registry_key
+    from torchlens.intervention._types import FunctionRegistryKey
 
     key = FunctionRegistryKey("torch", qualname, "function")
     with pytest.raises(UntrustedCallableError) as info:

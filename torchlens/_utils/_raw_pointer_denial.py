@@ -77,7 +77,7 @@ from typing import Any
 
 import torch
 
-from ..errors.runnable import RunPreconditionError
+from ..errors._runnable import RunPreconditionError
 from ._torch_symbols import torch_attr
 
 __tl_layer__ = "L0"

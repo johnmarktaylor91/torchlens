@@ -49,7 +49,7 @@ from torchlens.trackers import HistoryReader
 
 # The package re-exports the recover() FUNCTION under the module's name, so the module
 # (and its strict ``load``) comes from the import system directly.
-recover_module = importlib.import_module("torchlens.recording.recover")
+recover_module = importlib.import_module("torchlens.recording._recover")
 
 needs_symlinks = pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
 needs_fifo = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs POSIX FIFOs")
