@@ -5315,3 +5315,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: a50456f208782c640065d60eacee40f226aa735d (dirty)
 recorded: 2026-11-05T10:14:04.876402+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: validation copy closure rebinding
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 63aa8874677ce40cba6e5de4774822801caf819d (dirty)
+recorded: 2026-11-05T10:39:28.894119+00:00
