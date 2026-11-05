@@ -21,7 +21,7 @@ from .._ir.selector_eval import (
 from .._trace_core.label_cells import shared_site_index
 from .._utils._record_group_table import record_member
 from ._display import site_table_card, site_table_repr
-from ._resolver_records import _multi_match_message, _site_record
+from ._resolver_messages import _multi_match_message
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -291,7 +291,7 @@ def _resolve_sites(
     refuse_excess_fanout(selector, matched, max_fanout)
     if len(matched) > 1:
         warnings.warn(
-            _multi_match_message(selector, matched),
+            _multi_match_message(selector, [_site_record(site) for site in matched]),
             MultiMatchWarning,
             stacklevel=2,
         )
@@ -347,6 +347,14 @@ def _resolve_facet_sites(
             selector=repr(query),
         )
     return facets
+
+
+def _site_record(site: Any) -> Any:
+    """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
+
+    from .._semantic.facets import Facet
+
+    return site.spec.home if isinstance(site, Facet) else site
 
 
 #: Active :func:`_label_index_scope` indexes by ``id(log)``: ``(log, sites, len, index)``.

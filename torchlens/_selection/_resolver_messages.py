@@ -1,4 +1,7 @@
-"""Site-record reads and multi-match wording for the selector resolver."""
+"""Multi-match warning wording for the selector resolver.
+
+Imports nothing at runtime, so it adds no module to an import cycle.
+"""
 
 from __future__ import annotations
 
@@ -6,18 +9,10 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .resolver import SelectorInput, Site
+    from .resolver import SelectorInput
 
 
-def _site_record(site: Any) -> Any:
-    """Return the record a table entry describes: the home op of a ``Facet``, else itself."""
-
-    from .._semantic.facets import Facet
-
-    return site.spec.home if isinstance(site, Facet) else site
-
-
-def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
+def _multi_match_message(query: SelectorInput, records: Sequence[Any]) -> str:
     """Return the multi-match warning text for a resolved site set.
 
     A set holding a synthetic model-output alias (``output_N``) together with
@@ -28,8 +23,9 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
     ----------
     query:
         Selector input as the caller spelled it.
-    matched:
-        Resolved sites, in execution order.
+    records:
+        The record each resolved site describes (``resolver._site_record``), in
+        execution order.
 
     Returns
     -------
@@ -37,7 +33,6 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
         Warning message.
     """
 
-    records = [_site_record(site) for site in matched]
     matched_labels = {getattr(site, "layer_label", None) for site in records}
     pairs = [
         (str(getattr(site, "layer_label", None)), str(parent))
@@ -47,10 +42,10 @@ def _multi_match_message(query: SelectorInput, matched: Sequence[Site]) -> str:
         if parent in matched_labels
     ]
     if not pairs:
-        return f"selector {query!r} matched {len(matched)} sites and will fan out."
+        return f"selector {query!r} matched {len(records)} sites and will fan out."
     named = ", ".join(f"{alias!r} aliases {producer!r}" for alias, producer in pairs)
     return (
-        f"selector {query!r} matched {len(matched)} sites, including a model-output alias "
+        f"selector {query!r} matched {len(records)} sites, including a model-output alias "
         f"and the op it aliases ({named}); a value edit applied at both compounds on the "
         "same returned value instead of reaching independent sites. Narrow the selector to "
         "the producing op."
