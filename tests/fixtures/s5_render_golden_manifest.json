@@ -3,27 +3,27 @@
     "conv_plateau": {
       "auto": {
         "dot_len": 20216,
-        "dot_sha256": "252d2d69f9fb5836b0e67ff40b557e06418d0979e0b4447e83fb4e8a20c68a8b",
+        "dot_sha256": "f5a3f3423bfb992090dc3074462be29f01d48887043b203ede9de956295c9c69",
         "plan_repr_len": 33,
         "plan_sha256": "e21dc3167adb91d926521d6aa628ace154437747dfe64760508efe5f0db8ba9f"
       },
       "max": {
         "dot_len": 7736,
-        "dot_sha256": "f027dce546ceacb1c3e055778878d7bdb39aa77863b2e5d7cd4f4dc69b424869",
+        "dot_sha256": "1dbe76f142d526fe87a2febdc4ce7ebddea17b669ea9bfa342a9fa1fd073bce9",
         "plan_repr_len": 46,
         "plan_sha256": "9d912701a8e82c002c9fe64edc5e62df46d3875bdc7b06d7d975b8520f6c4fc4"
       },
       "none_default": {
         "dot_len": 20203,
-        "dot_sha256": "4f5c1e0338275564c35a3c9e902a99987566919e04661f7e7c4bd525e622667e"
+        "dot_sha256": "b951e0e270124c2bd5fff0d4950183403300f4c3dad25586ae2dff92bfb69c52"
       },
       "none_fold_False": {
         "dot_len": 20203,
-        "dot_sha256": "4f5c1e0338275564c35a3c9e902a99987566919e04661f7e7c4bd525e622667e"
+        "dot_sha256": "b951e0e270124c2bd5fff0d4950183403300f4c3dad25586ae2dff92bfb69c52"
       },
       "none_fold_True": {
         "dot_len": 3190,
-        "dot_sha256": "093239e63a89b052f35202a7ec6b5fcc1721258855be65fa43e151dbb2f23d36"
+        "dot_sha256": "cb98911f6fc2ee286ad5919e9ccdde9bc8506bc39c193df9104a278b7f6c4f6f"
       }
     },
     "repeated_residual": {
@@ -54,28 +54,28 @@
     },
     "torchvision_resnet18": {
       "auto": {
-        "dot_len": 7696,
-        "dot_sha256": "1238db1b90254856055d84f0b3d03594933b1927c0ef1b40165db54abfbdf4a8",
+        "dot_len": 7710,
+        "dot_sha256": "00335b26a0439a8c2ffa02293b58cfd15ce6cc476062dc130f1790d7b86c46e7",
         "plan_repr_len": 46,
         "plan_sha256": "3a7d17ee672e09a76535f1cfa008d7b3faadf231a829908de129c3ba7b922518"
       },
       "max": {
-        "dot_len": 5963,
-        "dot_sha256": "07e6d61cb5db0f9d87b89d52de86097e4b4495653c53c15a3e2e79093283c81a",
+        "dot_len": 5972,
+        "dot_sha256": "a9bf25870db66873dfbd5e3ed6d57e6da26ec738ffc377a2d7866ceb91f7a50d",
         "plan_repr_len": 63,
         "plan_sha256": "66ea1572f9347e5f8f7986ec47905d6059bc056f37b6a4ed8f6f6aad4589796b"
       },
       "none_default": {
-        "dot_len": 46279,
-        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
+        "dot_len": 46409,
+        "dot_sha256": "60169d78384a637ad7125f530395f2a3ba19b1ce17616fb24e7a1a0b6b2a60c1"
       },
       "none_fold_False": {
-        "dot_len": 46279,
-        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
+        "dot_len": 46409,
+        "dot_sha256": "60169d78384a637ad7125f530395f2a3ba19b1ce17616fb24e7a1a0b6b2a60c1"
       },
       "none_fold_True": {
-        "dot_len": 46279,
-        "dot_sha256": "eb5cda6b15e1086103b039dfbb5a8fa946d474789e43a01060ea10b5ba55e371"
+        "dot_len": 46409,
+        "dot_sha256": "60169d78384a637ad7125f530395f2a3ba19b1ce17616fb24e7a1a0b6b2a60c1"
       }
     },
     "uniform_stack": {
