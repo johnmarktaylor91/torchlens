@@ -10,24 +10,24 @@
 <title>SmallCNN</title>
 <polygon fill="white" stroke="none" points="-4,4 -4,-1766.05 390.28,-1766.05 390.28,4 -4,4"/>
 <text xml:space="preserve" text-anchor="start" x="10" y="-1743.75" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">SmallCNN</text>
-<text xml:space="preserve" text-anchor="start" x="10" y="-1729.75" font-family="Helvetica,sans-Serif" font-size="14.00">11 ops (31.3 KB)</text>
-<text xml:space="preserve" text-anchor="start" x="10" y="-1715.75" font-family="Helvetica,sans-Serif" font-size="14.00">6.36K params (24.9 KB, all trainable)</text>
+<text xml:space="preserve" text-anchor="start" x="10" y="-1729.75" font-family="Helvetica,sans-Serif" font-size="14.00">11 ops (32.1 KB)</text>
+<text xml:space="preserve" text-anchor="start" x="10" y="-1715.75" font-family="Helvetica,sans-Serif" font-size="14.00">6.36K params (25.4 KB, all trainable)</text>
 <polygon fill="none" stroke="black" points="10,-1690.8 10,-1710.05 232,-1710.05 232,-1690.8 10,-1690.8"/>
-<text xml:space="preserve" text-anchor="start" x="14" y="-1697.8" font-family="Helvetica,sans-Serif" font-size="10.00">size: output elements, 10 ... 2048</text>
+<text xml:space="preserve" text-anchor="start" x="14" y="-1697.8" font-family="Helvetica,sans-Serif" font-size="10.00">size: output elements, 10 ... 2,048</text>
 <!-- input_1pass1 -->
 <g id="node1" class="node">
 <title>input_1pass1</title>
-<ellipse fill="#98fb98" stroke="black" cx="193.14" cy="-62.75" rx="148.75" ry="62.75"/>
+<ellipse fill="#98fb98" stroke="black" cx="193.14" cy="-62.75" rx="161.24" ry="62.75"/>
 <text xml:space="preserve" text-anchor="start" x="169.14" y="-76.95" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">input_1</text>
-<text xml:space="preserve" text-anchor="start" x="136.52" y="-59" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 16, 16), 3 KB</text>
+<text xml:space="preserve" text-anchor="start" x="130.89" y="-59" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 3, 16, 16), 3.1 KB</text>
 <text xml:space="preserve" text-anchor="start" x="166.14" y="-40" font-family="Helvetica,sans-Serif" font-size="14.00">@input.x</text>
 </g>
 <!-- conv2d_1_1pass1 -->
 <g id="node2" class="node">
 <title>conv2d_1_1pass1</title>
-<polygon fill="#d9d9d9" stroke="black" points="360.32,-302.54 25.96,-302.54 25.96,-161.5 360.32,-161.5 360.32,-302.54"/>
+<polygon fill="#d9d9d9" stroke="black" points="374.36,-302.54 11.92,-302.54 11.92,-161.5 374.36,-161.5 374.36,-302.54"/>
 <text xml:space="preserve" text-anchor="start" x="154.52" y="-265.22" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_1_1</text>
-<text xml:space="preserve" text-anchor="start" x="136.52" y="-247.27" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8 KB</text>
+<text xml:space="preserve" text-anchor="start" x="130.89" y="-247.27" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8.2 KB</text>
 <text xml:space="preserve" text-anchor="start" x="91.52" y="-228.27" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="84.39" y="-209.27" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (8, 3, 3, 3) · bias (8,)</text>
 <text xml:space="preserve" text-anchor="start" x="168.02" y="-190.27" font-family="Helvetica,sans-Serif" font-size="14.00">@conv1</text>
@@ -41,9 +41,9 @@
 <!-- relu_1_2pass1 -->
 <g id="node3" class="node">
 <title>relu_1_2pass1</title>
-<ellipse fill="white" stroke="black" cx="193.14" cy="-409.07" rx="167.18" ry="70.52"/>
+<ellipse fill="white" stroke="black" cx="193.14" cy="-409.07" rx="181.22" ry="70.52"/>
 <text xml:space="preserve" text-anchor="start" x="165.77" y="-413.77" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_1_2</text>
-<text xml:space="preserve" text-anchor="start" x="136.52" y="-395.82" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8 KB</text>
+<text xml:space="preserve" text-anchor="start" x="130.89" y="-395.82" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 8, 16, 16), 8.2 KB</text>
 </g>
 <!-- conv2d_1_1pass1&#45;&gt;relu_1_2pass1 -->
 <g id="edge2" class="edge">
@@ -56,7 +56,7 @@
 <title>conv2d_2_3pass1</title>
 <polygon fill="#d9d9d9" stroke="black" points="386.28,-645.12 0,-645.12 0,-515.59 386.28,-515.59 386.28,-645.12"/>
 <text xml:space="preserve" text-anchor="start" x="154.52" y="-613.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_2_3</text>
-<text xml:space="preserve" text-anchor="start" x="140.27" y="-595.61" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4 KB</text>
+<text xml:space="preserve" text-anchor="start" x="134.64" y="-595.61" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4.1 KB</text>
 <text xml:space="preserve" text-anchor="start" x="51.39" y="-576.61" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="76.89" y="-557.61" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (16, 8, 3, 3) · bias (16,)</text>
 <text xml:space="preserve" text-anchor="start" x="168.02" y="-538.61" font-family="Helvetica,sans-Serif" font-size="14.00">@conv2</text>
@@ -70,9 +70,9 @@
 <!-- relu_2_4pass1 -->
 <g id="node5" class="node">
 <title>relu_2_4pass1</title>
-<ellipse fill="white" stroke="black" cx="193.14" cy="-745.88" rx="153.47" ry="64.76"/>
+<ellipse fill="white" stroke="black" cx="193.14" cy="-745.88" rx="166.32" ry="64.76"/>
 <text xml:space="preserve" text-anchor="start" x="165.77" y="-750.58" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_2_4</text>
-<text xml:space="preserve" text-anchor="start" x="140.27" y="-732.63" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4 KB</text>
+<text xml:space="preserve" text-anchor="start" x="134.64" y="-732.63" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 16, 8, 8), 4.1 KB</text>
 </g>
 <!-- conv2d_2_3pass1&#45;&gt;relu_2_4pass1 -->
 <g id="edge4" class="edge">
@@ -99,7 +99,7 @@
 <!-- relu_3_6pass1 -->
 <g id="node7" class="node">
 <title>relu_3_6pass1</title>
-<ellipse fill="white" stroke="black" cx="193.14" cy="-1063.66" rx="142.96" ry="60.34"/>
+<ellipse fill="white" stroke="black" cx="193.14" cy="-1063.66" rx="154.94" ry="60.34"/>
 <text xml:space="preserve" text-anchor="start" x="165.77" y="-1068.36" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">relu_3_6</text>
 <text xml:space="preserve" text-anchor="start" x="140.27" y="-1050.41" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32, 4, 4), 2 KB</text>
 </g>
@@ -112,7 +112,7 @@
 <!-- adaptiveavgpool2d_1_7pass1 -->
 <g id="node8" class="node">
 <title>adaptiveavgpool2d_1_7pass1</title>
-<polygon fill="white" stroke="black" points="314.82,-1262.66 71.46,-1262.66 71.46,-1159.99 314.82,-1159.99 314.82,-1262.66"/>
+<polygon fill="white" stroke="black" points="325.01,-1262.66 61.27,-1262.66 61.27,-1159.99 325.01,-1159.99 325.01,-1262.66"/>
 <text xml:space="preserve" text-anchor="start" x="117.02" y="-1235.03" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_7</text>
 <text xml:space="preserve" text-anchor="start" x="137.27" y="-1217.08" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32, 1, 1), 128 B</text>
 <text xml:space="preserve" text-anchor="start" x="150.77" y="-1198.08" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=1</text>
@@ -127,7 +127,7 @@
 <!-- flatten_1_8pass1 -->
 <g id="node9" class="node">
 <title>flatten_1_8pass1</title>
-<ellipse fill="white" stroke="black" cx="193.14" cy="-1350" rx="121.68" ry="51.34"/>
+<ellipse fill="white" stroke="black" cx="193.14" cy="-1350" rx="131.87" ry="51.34"/>
 <text xml:space="preserve" text-anchor="start" x="157.89" y="-1354.7" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_8</text>
 <text xml:space="preserve" text-anchor="start" x="152.27" y="-1336.75" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 32), 128 B</text>
 </g>
@@ -155,7 +155,7 @@
 <!-- output_1pass1 -->
 <g id="node11" class="node">
 <title>output_1pass1</title>
-<ellipse fill="#ff9999" stroke="black" cx="193.14" cy="-1628.96" rx="118.22" ry="55.84"/>
+<ellipse fill="#ff9999" stroke="black" cx="193.14" cy="-1628.96" rx="128.12" ry="55.84"/>
 <text xml:space="preserve" text-anchor="start" x="164.64" y="-1643.16" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">output_1</text>
 <text xml:space="preserve" text-anchor="start" x="156.02" y="-1625.21" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 10), 40 B</text>
 <text xml:space="preserve" text-anchor="start" x="167.27" y="-1606.21" font-family="Helvetica,sans-Serif" font-size="14.00">@output</text>

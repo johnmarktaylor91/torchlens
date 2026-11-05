@@ -7,6 +7,7 @@ import re as _re
 from .._data_classes._annotation_image import drawable_annotation_image
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from .._utils._display_numbers import format_percent
 from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils._record_group_table import record_member
 from ..viz import _batch_summary as batch_summary
@@ -1177,7 +1178,7 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         lines.extend(
             f"{int(row.get('rank', 0))}. "
             f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
-            f"{float(row.get('prob', 0.0)):.0%}"
+            f"{format_percent(float(row.get('prob', 0.0)))}"
             for row in item_rows
         )
     if not rows:
@@ -1225,10 +1226,8 @@ def _format_label_score_row(label: Any, score: int | float) -> str:
     """
 
     label_text = _truncate_raw_input_text(str(label), limit=48)
-    if 0 <= float(score) <= 1:
-        score_text = f"{float(score):.0%}"
-    else:
-        score_text = f"{float(score):.3g}"
+    value = float(score)
+    score_text = format_percent(value) if 0 <= value <= 1 else f"{value:.3g}"
     return f"{label_text} {score_text}"
 
 
