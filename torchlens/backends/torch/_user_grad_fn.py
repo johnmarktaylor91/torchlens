@@ -111,17 +111,22 @@ def _is_view_backward_class(class_name: str) -> bool:
     if match is None:
         return False
     snake = re.sub(r"(?<!^)(?=[A-Z])", "_", match.group(1)).lower()
-    for op_name in (snake, f"_{snake}"):
-        try:
-            packet = getattr(torch.ops.aten, op_name)
-            schemas = [getattr(packet, overload)._schema for overload in packet.overloads()]
-        except (AttributeError, RuntimeError):
-            continue
-        for schema in schemas:
-            aliases = [arg.alias_info for arg in schema.arguments if arg.alias_info is not None]
-            if any(not alias.is_write for alias in aliases):
-                return True
-    return False
+    return _aten_op_is_view(snake) or _aten_op_is_view(f"_{snake}")
+
+
+def _aten_op_is_view(op_name: str) -> bool:
+    """Return whether ``aten::<op_name>`` has a schema whose result aliases an input unwritten."""
+
+    try:
+        packet = getattr(torch.ops.aten, op_name)
+        schemas = [getattr(packet, overload)._schema for overload in packet.overloads()]
+    except (AttributeError, RuntimeError):
+        return False
+    return any(
+        arg.alias_info is not None and not arg.alias_info.is_write
+        for schema in schemas
+        for arg in schema.arguments
+    )
 
 
 def _sequence_nr(node: Any) -> int | None:
