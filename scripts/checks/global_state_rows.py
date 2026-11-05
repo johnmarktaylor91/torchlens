@@ -26,6 +26,21 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # Function.apply frame, pushed and popped around that one apply call.
         ("torchlens/backends/torch/_function_boundary.py", "_FRAMES"),
         ("torchlens/backends/torch/_torch_ops_calls.py", "_SUPPRESS_DEPTH"),
+        # Operator entry compile depth: incremented/decremented in
+        # hop_internal_compile_scope's try/finally around one lifted compile; a
+        # survivor would let a later user compile region pass through unlogged
+        # whenever Dynamo traces, instead of being detected.
+        ("torchlens/backends/torch/_tracing_pass.py", "hop_compile_depth"),
+        # Innermost lifted entry is a cond whose real run calls the user's
+        # branches: saved and restored in hop_internal_compile_scope's
+        # try/finally; a survivor would let Dynamo trace a session forward
+        # unlogged outside that cond's compile.
+        ("torchlens/backends/torch/_tracing_pass.py", "cond_entry_innermost"),
+        # Whether the running capture lifted the operator entry compile: saved
+        # and restored in lift_hop_entry_compiles' try/finally; a survivor set
+        # would let a later unlifted capture pass a grad map's tracing pass
+        # through (per-row outputs) instead of failing loudly.
+        ("torchlens/backends/torch/_tracing_pass.py", "hop_entry_lifted"),
         # Governed-artifact-load window depth: incremented/decremented in the
         # governed_artifact_load() try/finally around .tlspec restore frames;
         # a survivor past the load window would arm the unknown-field refusal

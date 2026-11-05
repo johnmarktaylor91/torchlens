@@ -20,6 +20,12 @@ GitHub renders them as the first impression).
 widget state and other run-to-run noise scrubbed (``_scrub_outputs``); every other notebook is
 committed without outputs (``tests/test_notebook_output_policy.py``).
 
+Notebooks in ``HEAVY_NOTEBOOKS`` each run for minutes (batched backward passes through
+GPT-2 small, or a long concept-erasure sweep). Two of them sharing a 4-CPU runner each slow
+several-fold (past the cell timeout), so the runner executes the light notebooks in the ``-j`` pool first and then each heavy
+notebook alone, one at a time. The per-cell and whole-notebook timeouts are the same for
+both, so a heavy notebook that slows down still fails.
+
 Exit status: 0 when every selected notebook ran clean, 1 otherwise.
 """
 
@@ -56,6 +62,17 @@ STORED_OUTPUT_NOTEBOOKS = (
     "examples/workflows/multi_call_bundle.ipynb",
     "examples/workflows/paired_prompt_patching.ipynb",
     "examples/methods/jacobian_lens_recipe.ipynb",
+)
+# Run alone, after the parallel pool: each runs for minutes, and sharing a 4-CPU runner with
+# another of them pushed each past the 600 s cell timeout (the LEACE recipe also took about
+# 450 s inside the pool, three quarters of the cap).
+HEAVY_NOTEBOOKS = frozenset(
+    {
+        "examples/methods/attribution_graph_transcoders_recipe.ipynb",
+        "examples/methods/eap_ig_circuit_recipe.ipynb",
+        "examples/methods/jacobian_lens_recipe.ipynb",
+        "examples/methods/leace_concept_erasure_recipe.ipynb",
+    }
 )
 DEFAULT_CELL_TIMEOUT = 600
 DEFAULT_NOTEBOOK_TIMEOUT = 1200
@@ -236,6 +253,34 @@ def _run_child(path: Path, args: argparse.Namespace) -> NotebookResult:
     return NotebookResult(rel, "crash", seconds, None, detail)
 
 
+def _split_heavy(paths: list[Path]) -> tuple[list[Path], list[Path]]:
+    """Split the selected notebooks into the parallel pool and the heavy ones run alone.
+
+    Parameters
+    ----------
+    paths:
+        Selected notebooks, in run order.
+
+    Returns
+    -------
+    tuple[list[Path], list[Path]]
+        The light notebooks and the ``HEAVY_NOTEBOOKS`` members, each in the given order.
+    """
+
+    light: list[Path] = []
+    heavy: list[Path] = []
+    for path in paths:
+        rel = path.resolve().relative_to(REPO_ROOT).as_posix()
+        (heavy if rel in HEAVY_NOTEBOOKS else light).append(path)
+    return light, heavy
+
+
+def _print_result(result: NotebookResult) -> None:
+    """Print the one-line status of a finished notebook."""
+
+    print(f"NB {result.status:7s} {result.seconds:7.1f}s {result.path}", flush=True)
+
+
 def _report(results: list[NotebookResult]) -> int:
     """Print one line per notebook plus the failure details; return the exit status."""
 
@@ -276,11 +321,16 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("MPLBACKEND", "Agg")
     default = [REPO_ROOT / rel for rel in STORED_OUTPUT_NOTEBOOKS] if args.write_outputs else None
     paths = args.paths or default or user_notebooks()
+    light, heavy = _split_heavy(list(paths))
+    results = []
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
-        results = []
-        for result in pool.map(lambda path: _run_child(path, args), paths):
-            print(f"NB {result.status:7s} {result.seconds:7.1f}s {result.path}", flush=True)
+        for result in pool.map(lambda path: _run_child(path, args), light):
+            _print_result(result)
             results.append(result)
+    for path in heavy:  # one at a time, with the pool drained
+        result = _run_child(path, args)
+        _print_result(result)
+        results.append(result)
     return _report(results)
 
 
