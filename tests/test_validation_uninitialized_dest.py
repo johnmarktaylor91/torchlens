@@ -35,6 +35,7 @@ import torch.nn as nn
 from torchlens._capture.run_entry import _run_model_and_save_specified_outs
 from torchlens._user_funcs import _validate_forward_pass_torch
 from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._destination_coverage import same_saved_values
 from torchlens.validation._diagnostics import (
     CHECK_PERTURBATION,
     CHECK_REPLAY,
@@ -90,6 +91,40 @@ def test_uninitialized_origin_does_not_follow_inplace_write_chain() -> None:
     assert _uninitialized_value_origin(trace["ic2"], trace) is False
 
 
+def test_uninitialized_origin_recognizes_parentless_torch_empty() -> None:
+    """``torch.empty``-family allocations are uninitialized; writes over them are not.
+
+    ``torch.empty`` takes no tensor input, so it is absent from the skip-validation
+    registry; the destination walk must still treat it like ``empty_like``. A
+    hypothetical ``empty`` record WITH a tensor parent is not the factory and stays
+    strict, and the no-chaining guard holds for a ``torch.empty`` buffer too.
+    """
+
+    trace = {
+        "alloc": _fake_op("empty"),
+        "set1": _fake_op("__setitem__", dest_label="alloc"),
+    }
+    assert _uninitialized_value_origin(trace["alloc"], trace) is True
+    assert _uninitialized_value_origin(_fake_op("empty_strided"), trace) is True
+    assert _uninitialized_value_origin(trace["set1"], trace) is False
+    with_parent = SimpleNamespace(func_name="empty", parents=("x",), parent_arg_positions={})
+    assert _uninitialized_value_origin(with_parent, trace) is False
+
+
+def test_same_saved_values_matches_nan_only_at_the_same_positions() -> None:
+    """Destination identity treats NaN as equal to NaN and nothing else as equal."""
+
+    nan = float("nan")
+    saved = torch.tensor([1.0, nan, 3.0])
+    assert same_saved_values(saved.clone(), saved)
+    assert not same_saved_values(torch.tensor([1.0, 2.0, 3.0]), saved)
+    assert not same_saved_values(torch.tensor([nan, 2.0, 3.0]), saved)
+    assert not same_saved_values(torch.tensor([1.0, nan, 4.0]), saved)
+    assert not same_saved_values(saved.double(), saved)
+    assert same_saved_values(torch.tensor([1, 2]), torch.tensor([1, 2]))
+    assert not same_saved_values(torch.tensor([1, 2]), torch.tensor([1, 3]))
+
+
 # ---------------------------------------------------------------------------
 # End-to-end: benign uninitialized-dest models validate; real-data stays strict
 # ---------------------------------------------------------------------------
@@ -111,6 +146,34 @@ def test_index_copy_chain_into_new_empty_validates() -> None:
     model.eval()
     x = torch.randn(4, 8)
     result, failure = _validate_with_failure(model, x)
+    assert result is True
+    assert failure is None
+
+
+def test_torch_empty_destination_full_overwrite_validates() -> None:
+    """A ``torch.empty`` buffer whose only column is overwritten validates.
+
+    The tabular-embedding idiom ``enc = torch.empty(n, cols, d)`` followed by one
+    ``enc[:, i, :] = mlp_i(...)`` per column fully overwrites the buffer when there
+    is a single column, so perturbing the allocation cannot move the output. The
+    saved garbage often holds NaN, which once defeated the destination-identity
+    proof, and ``torch.empty`` was not recognized as uninitialized memory.
+    """
+
+    class EmptyColumnFill(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.mlp = nn.Linear(1, 8)
+
+        def forward(self, xc: torch.Tensor) -> torch.Tensor:
+            enc = torch.empty(xc.shape[0], xc.shape[1], 8)
+            for i in range(xc.shape[1]):
+                enc[:, i, :] = self.mlp(xc[:, i : i + 1])
+            return enc * 2
+
+    torch.manual_seed(0)
+    model = EmptyColumnFill().eval()
+    result, failure = _validate_with_failure(model, torch.randn(5, 1))
     assert result is True
     assert failure is None
 

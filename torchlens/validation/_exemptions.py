@@ -44,6 +44,8 @@ from ._destination_coverage import (
     _replacement_fits_selection,
     _scatter_index_fully_overwrites_dim,
     _setitem_index_targets_are_unique,
+    is_uninitialized_allocation_factory,
+    same_saved_values,
 )
 from ._exemption_table import (
     declared_custom_check_symbols,
@@ -313,12 +315,10 @@ def _uninitialized_value_origin(op: Any, source_trace: Any, depth: int = 0) -> b
     compatibility but are no longer used to recurse.
     """
 
-    if op is None:
-        return False
     # Same per-call proof as the replay-skip consumer: a value-bearing
-    # new(tensor)/new(data) result is REAL data, never uninitialized
-    # allocation memory (R08-1 sibling site).
-    return uninitialized_by_design_applies(op)
+    # new(tensor)/new(data) result is REAL data (R08-1 sibling site). A parentless
+    # torch.empty-family allocation is uninitialized memory too.
+    return uninitialized_by_design_applies(op) or is_uninitialized_allocation_factory(op)
 
 
 def _perturbed_parent_is_uninitialized_setitem_dest(
@@ -494,7 +494,7 @@ def _setitem_destination_coverage_is_total(
         return False
     # Value identity is device-independent; an output_device capture keeps the
     # perturbed parent's payload off the destination's device.
-    if not torch.equal(perturbed_tensor.to(destination.device), destination):
+    if not same_saved_values(perturbed_tensor, destination):
         return False
     try:
         selected = destination[index]
@@ -579,7 +579,7 @@ def _check_scatter_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
     if scatter_components is None:
         return False
     dest, dim, index = scatter_components
-    if not torch.equal(perturbed_tensor.to(dest.device), dest):
+    if not same_saved_values(perturbed_tensor, dest):
         return False
     return _scatter_index_fully_overwrites_dim(dest, dim, index)
 

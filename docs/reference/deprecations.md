@@ -97,6 +97,8 @@ unaffected.
 | Old name | New name | Status |
 | --- | --- | --- |
 | `capture_output_structure` | `capture_container_structure` | removed |
+| `show_containers="auto"` | `show_containers="collapsed"` | removed |
+| `show_containers="cluster"` | `show_containers="nodes"` | removed |
 | `layers_to_save` | `save=...` | removed |
 | `random_seed` | grouped capture options | removed |
 | `save_grads` | backward capture options | removed |
