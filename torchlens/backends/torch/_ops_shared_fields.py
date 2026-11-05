@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from ... import _state as _st
+from ..._capture._arg_snapshot import snapshot_mutable_arg, split_non_tensor_args
 from ..._capture.arg_positions import (
     _normalize_func_name,
 )
@@ -46,6 +47,9 @@ from .tensor_tracking import (
     _get_equivalence_class,
     _make_raw_param_group_barcode,
 )
+
+# Transform-boundary config attribute; its builder kwargs are snapshotted per op.
+_TRANSFORM_CONFIG = "__tl_transform_config__"
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -156,10 +160,9 @@ def _build_shared_fields_dict(
         else:
             log_closure_constant_if_known(self, tensor)
 
-    # Separate tensor args (which define graph edges) from non-tensor args
-    # (which become metadata and feed into equivalence_class hashing).
-    non_tensor_args = [arg for arg in args if not _check_if_tensor_arg(arg)]
-    non_tensor_kwargs = {key: val for key, val in kwargs.items() if not _check_if_tensor_arg(val)}
+    # Separate tensor args (graph edges) from non-tensor args (metadata, equivalence
+    # hashing); the latter are op-time snapshots, safe from later caller mutation.
+    non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
     # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
     live_labels = get_live_label_list(arg_tensors, self.capture_events.live_index.by_raw_label)
     parent_layer_labels = list(dict.fromkeys(live_labels))
@@ -237,7 +240,7 @@ def _build_shared_fields_dict(
         func_name if is_transform else None
     )
     fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
-    fields_dict["transform_config"] = dict(getattr(func, "__tl_transform_config__", {}))
+    fields_dict["transform_config"] = snapshot_mutable_arg(getattr(func, _TRANSFORM_CONFIG, {}))
     fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
     fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
     fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)

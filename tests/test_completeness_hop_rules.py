@@ -343,7 +343,10 @@ _HOP_DISPATCHED = sorted(set(_HOP_FORWARDS) - {"associative_scan"})
 
 Generic-mode ``associative_scan`` on CPU runs its combine loop in Python without
 dispatching ``associative_scan_op`` (its capture validates True with no witness
-rule at all), so its planted drop says nothing about the HOP rules.
+rule at all), so its planted drop says nothing about the HOP rules. Its combine
+function runs inside ``torch.vmap``, which TorchLens records as a boundary op
+whose interior is not censused by design; ``tests/test_vmap_boundary_replay.py``
+checks that boundary instead.
 """
 
 
