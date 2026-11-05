@@ -41,11 +41,15 @@ HOOK_STACK_FIXTURES = {
 #   older: attn_output.transpose(0, 1).contiguous().view(...)   -> contiguous + view
 #   newer: attn_output.transpose(0, 1).reshape(...)             -> a single reshape
 # TorchLens faithfully records whichever ops torch actually calls, so one op fewer
-# appears and every later op ordinal shifts by one. Both spellings are pinned
-# BYTE-EXACTLY in their own golden rather than either snapshot being loosened, so the
-# equality tripwire stays fully armed on both sides of the torch matrix.
+# appears and every later op ordinal shifts by one. The weights path also scales the
+# query two ways:
+#   older: q_scaled = q / math.sqrt(E)                 -> __truediv__ (the 2.1 floor)
+#   newer: q_scaled = q * math.sqrt(1.0 / float(E))    -> __mul__
+# Each spelling torch has shipped is pinned BYTE-EXACTLY in its own golden rather than
+# any snapshot being loosened, so the equality tripwire stays fully armed across the
+# torch matrix. The base golden is the legacy reshape with the multiplied scale.
 TORCH_VARIANT_FIXTURES = {
-    "multihead_attention_demo": "torch_fused_reshape",
+    "multihead_attention_demo": ("torch_fused_reshape", "torch_div_scale"),
 }
 
 
@@ -86,6 +90,51 @@ def _torch_fuses_mha_output_reshape() -> bool:
         "transpose/contiguous/view chain); "
         "re-audit the multihead_attention_demo golden instead of trusting either variant"
     )
+
+
+def _torch_divides_mha_query_scale() -> bool:
+    """Report whether torch scales the MHA weights-path query by dividing by sqrt(E).
+
+    Like :func:`_torch_fuses_mha_output_reshape`, a probe of torch's own source rather
+    than a version check, failing loudly on a spelling it does not recognize.
+
+    Returns
+    -------
+    bool
+        True for ``q / math.sqrt(E)``, False for ``q * math.sqrt(1.0 / float(E))``.
+    """
+
+    source = inspect.getsource(torch.nn.functional.multi_head_attention_forward)
+    if re.search(r"q_scaled\s*=\s*q\s*/\s*math\.sqrt\(\s*E\s*\)", source):
+        return True
+    if re.search(
+        r"q_scaled\s*=\s*q\s*\*\s*math\.sqrt\(\s*1\.0\s*/\s*float\(\s*E\s*\)\s*\)", source
+    ):
+        return False
+    raise AssertionError(
+        "torch.nn.functional.multi_head_attention_forward scales its query in a way this "
+        "probe does not recognize (neither q / math.sqrt(E) nor "
+        "q * math.sqrt(1.0 / float(E))); re-audit the multihead_attention_demo golden"
+    )
+
+
+def _mha_variant_suffix() -> str | None:
+    """Return the golden suffix for this torch's MHA spelling (``None`` for the base).
+
+    Raises
+    ------
+    AssertionError
+        For a combination no golden pins (the fused reshape with the divided scale has
+        never shipped), so a new torch spelling is audited instead of guessed.
+    """
+
+    fused, divided = _torch_fuses_mha_output_reshape(), _torch_divides_mha_query_scale()
+    if fused and divided:
+        raise AssertionError(
+            "torch fuses the MHA output reshape AND divides the query scale; no "
+            "multihead_attention_demo golden pins that combination, re-audit the fixture"
+        )
+    return "torch_fused_reshape" if fused else "torch_div_scale" if divided else None
 
 
 def test_mha_probe_recognizes_exact_legacy_output_chain(
@@ -134,6 +183,50 @@ def multi_head_attention_forward():
         _torch_fuses_mha_output_reshape()
 
 
+_LEGACY_OUTPUT = (
+    "    attn_output = attn_output.transpose(0, 1).contiguous().view(tgt_len * bsz, embed_dim)\n"
+)
+_FUSED_OUTPUT = "    attn_output = attn_output.transpose(0, 1).reshape(tgt_len * bsz, embed_dim)\n"
+_DIVIDED_SCALE = "    q_scaled = q / math.sqrt(E)\n"
+_MULTIPLIED_SCALE = "    q_scaled = q * math.sqrt(1.0 / float(E))\n"
+
+
+@pytest.mark.parametrize(
+    ("scale", "output", "expected"),
+    [
+        (_MULTIPLIED_SCALE, _LEGACY_OUTPUT, None),
+        (_MULTIPLIED_SCALE, _FUSED_OUTPUT, "torch_fused_reshape"),
+        (_DIVIDED_SCALE, _LEGACY_OUTPUT, "torch_div_scale"),
+    ],
+    ids=["legacy-reshape-mul", "fused-reshape-mul", "legacy-reshape-div"],
+)
+def test_mha_variant_follows_both_spellings(
+    monkeypatch: pytest.MonkeyPatch, scale: str, output: str, expected: str | None
+) -> None:
+    """Each shipped pair of spellings selects its own golden."""
+
+    source = "def multi_head_attention_forward():\n" + scale + output
+    monkeypatch.setattr(inspect, "getsource", lambda _object: source)
+
+    assert _mha_variant_suffix() == expected
+
+
+def test_mha_variant_refuses_unpinned_and_unknown_scales(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fused reshape with a divided scale, or an unknown scale, fails closed."""
+
+    sources = {
+        "pins that combination": _DIVIDED_SCALE + _FUSED_OUTPUT,
+        "scales its query in a way": "    q_scaled = q * (E ** -0.5)\n" + _LEGACY_OUTPUT,
+    }
+    for match, body in sources.items():
+        source = "def multi_head_attention_forward():\n" + body
+        monkeypatch.setattr(inspect, "getsource", lambda _object, source=source: source)
+        with pytest.raises(AssertionError, match=match):
+            _mha_variant_suffix()
+
+
 def _snapshot_path(fixture_name: str) -> Path:
     """Resolve the golden path for a fixture, honoring torch-spelling variants.
 
@@ -148,8 +241,8 @@ def _snapshot_path(fixture_name: str) -> Path:
         Path of the golden this environment must match exactly.
     """
 
-    suffix = TORCH_VARIANT_FIXTURES.get(fixture_name)
-    if suffix is not None and _torch_fuses_mha_output_reshape():
+    suffix = _mha_variant_suffix() if fixture_name in TORCH_VARIANT_FIXTURES else None
+    if suffix is not None:
         return SNAPSHOT_DIR / f"{fixture_name}.{suffix}.json"
     return SNAPSHOT_DIR / f"{fixture_name}.json"
 
@@ -212,24 +305,26 @@ def _assert_synthetic_replacement_present(actual: dict[str, Any], fixture_name: 
 
 
 def test_torch_variant_goldens_are_all_present_and_distinct() -> None:
-    """Both spellings of every torch-variant fixture are pinned on disk.
+    """Every spelling of every torch-variant fixture is pinned on disk.
 
     A missing variant golden would fail closed at comparison time (the
-    generate path is flag-gated), but pinning both files exist and genuinely
-    differ keeps the variant registry honest: an identical pair means the
-    variant is pointless and its registry row is stale.
+    generate path is flag-gated), but pinning that all files exist and
+    pairwise differ keeps the variant registry honest: an identical pair
+    means a variant is pointless and its registry row is stale.
     """
 
-    for fixture_name, suffix in TORCH_VARIANT_FIXTURES.items():
+    for fixture_name, suffixes in TORCH_VARIANT_FIXTURES.items():
         base = SNAPSHOT_DIR / f"{fixture_name}.json"
-        variant = SNAPSHOT_DIR / f"{fixture_name}.{suffix}.json"
-        assert base.exists(), f"missing baseline golden {base}"
-        assert variant.exists(), f"missing torch-variant golden {variant}"
-        assert json.loads(base.read_text()) != json.loads(variant.read_text()), (
-            f"{fixture_name} variant goldens are identical; the variant is pointless "
-            "and should be deleted along with its registry entry"
-        )
-        assert _snapshot_path(fixture_name) in {base, variant}
+        variants = [SNAPSHOT_DIR / f"{fixture_name}.{suffix}.json" for suffix in suffixes]
+        for path in (base, *variants):
+            assert path.exists(), f"missing torch-variant golden {path}"
+        contents = [json.loads(path.read_text()) for path in (base, *variants)]
+        for index, content in enumerate(contents):
+            assert content not in contents[index + 1 :], (
+                f"{fixture_name} variant goldens are identical; the variant is pointless "
+                "and should be deleted along with its registry entry"
+            )
+        assert _snapshot_path(fixture_name) in {base, *variants}
 
 
 @pytest.mark.parametrize("builder", ALL_FIXTURES, ids=lambda builder: builder.__name__)

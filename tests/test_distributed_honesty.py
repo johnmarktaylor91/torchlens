@@ -496,3 +496,43 @@ def test_real_dense_model_still_captures_with_distributed_initialized(
             trace = tl.trace(model, x)
     assert trace.num_params == sum(p.numel() for p in model.parameters())
     assert any("linear" in label for label in trace.layer_labels)
+
+
+def test_out_of_band_fire_results_skip_the_storage_and_die_with_the_tensor() -> None:
+    """The fallback record is keyed on the tensor and never written onto its storage.
+
+    torch 2.1 hands out a fresh storage wrapper per ``untyped_storage()`` call and
+    crashes on a weak reference to one, so a storage-held record is lost there; the
+    tensor-keyed record must also drop itself when the tensor is reclaimed.
+    """
+    import gc
+
+    from torchlens.backends.torch import _ops_interventions
+
+    class RejectingTensor(torch.Tensor):
+        """Tensor subclass that rejects TorchLens fire-result attributes."""
+
+        def __setattr__(self, name: str, value: Any) -> None:
+            """Reject only the transient intervention-evidence attribute."""
+
+            if name == "_tl_live_fire_results":
+                raise RuntimeError("dynamic attributes disabled")
+            super().__setattr__(name, value)
+
+    tensor = torch.ones(2).as_subclass(RejectingTensor)
+    tensor_id = id(tensor)
+    marker = object()
+    _set_tensor_live_fire_results(tensor, (marker,))  # type: ignore[arg-type]
+    assert not hasattr(tensor.untyped_storage(), "_tl_live_fire_results_by_tensor_id")
+    assert _ops_interventions._peek_out_of_band_fire_results(tensor) == (marker,)
+    del tensor
+    gc.collect()
+    assert tensor_id not in _ops_interventions._OUT_OF_BAND_FIRE_RESULTS
+
+
+# ---------------------------------------------------------------------------
+# Synthesized-signal detection (structural fallback branches)
+# ---------------------------------------------------------------------------
+
+
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _distributed.py.

@@ -615,7 +615,7 @@ result = tl.load(sys.argv[1]).run_transaction(inputs=torch.tensor([1.0, 2.0], de
 after = get_current_function_mode_stack()
 assert result.report.path_faithfulness.value == "verified", result.report.path_faithfulness
 assert after == [], after
-assert str(torch.get_default_device()) == "cpu"
+assert str(torch.empty(0).device) == "cpu"  # the factory default device (any torch)
 print("CORR2_3_OK")
 """
 

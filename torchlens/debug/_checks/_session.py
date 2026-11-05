@@ -40,6 +40,7 @@ import torch
 
 from ... import _state
 from ..._observability._chassis import EventStream, ObserverEvent
+from ..._utils._optimizer_hooks import register_step_hooks
 from ...errors._base import TorchLensWarning
 from ._adapters import OptimizerFacts, optimizer_facts
 from ._constants import WATCHDOG_FACTOR
@@ -584,9 +585,8 @@ class ChecksSession:
                 self._handles.append(handle)
                 watched.append((name, param))
             self._watched_cache = watched
-            for optimizer in self._optimizers:
-                self._handles.append(optimizer.register_step_pre_hook(self._step_pre_hook))
-                self._handles.append(optimizer.register_step_post_hook(self._step_post_hook))
+            for opt in self._optimizers:
+                self._handles += register_step_hooks(opt, self._step_pre_hook, self._step_post_hook)
             if self._frozen is not None:
                 self._baseline_frozen()
         except Exception:

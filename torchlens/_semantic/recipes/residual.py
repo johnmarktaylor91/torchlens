@@ -16,7 +16,11 @@ from ._helpers import (
 
 _RESIDUAL_FACETS = ("resid_pre", "resid_mid", "resid_post")
 _ATTENTION_CHILD_NAMES = ("attn", "attention", "self_attn", "self_attention")
-_MLP_CHILD_NAMES = ("mlp", "feed_forward", "ffn", "intermediate", "output")
+#: ``output`` is not feed-forward evidence: BERT-style layers pair it with
+#: ``intermediate`` (already evidence), and an attention wrapper holding an
+#: ``attention`` core plus an ``output`` projection (transformers 4.x
+#: ``ViTAttention``) is not a block -- its residual adds live in the layer.
+_MLP_CHILD_NAMES = ("mlp", "feed_forward", "ffn", "intermediate")
 #: Unfused feed-forward evidence: blocks (OPT's ``OPTDecoderLayer``, and its
 #: relatives) that hold the two MLP projections as DIRECT children instead of
 #: wrapping them in an ``mlp`` submodule. Both must be present.

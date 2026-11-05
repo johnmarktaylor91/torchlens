@@ -46,6 +46,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.hf_capabilities import moe_router_aux_loss_runs_on_cpu
 from torchlens.backends.torch._foreign_data import (
     FLASH_ATTENTION_4_EXIT,
     FLASH_ATTENTION_4_INTERFACE_MODULE,
@@ -119,20 +120,33 @@ def _router_logits(output: Any) -> list[torch.Tensor]:
 @pytest.mark.heavy
 @pytest.mark.parametrize("family", ["mixtral", "qwen2_moe", "olmoe"])
 def test_router_logit_outputs_capture_exactly_and_validate(family: str) -> None:
-    """``output_router_logits=True`` traces to the exact return and replays."""
+    """``output_router_logits=True`` traces to the exact return and replays.
+
+    Where the family's CausalLM cannot compute its router auxiliary loss on
+    CPU (the 4.x olmoe and qwen2_moe loss indexes by a CPU device's ``None``
+    index), the upstream call itself raises ``TypeError``; that refusal is
+    asserted, and the router-logit capture is proven on the decoder the
+    CausalLM wraps, which returns the same per-layer router logits without
+    the loss.
+    """
 
     model = _moe_model(family)
     input_ids = torch.randint(0, 128, (1, 7), generator=torch.Generator().manual_seed(1))
     kwargs = {"input_ids": input_ids, "output_router_logits": True}
+    target, leaf = model, "logits"
+    if not moe_router_aux_loss_runs_on_cpu(family):
+        with torch.no_grad(), pytest.raises(TypeError, match="NoneType"):
+            model(**kwargs)
+        target, leaf = model.model, "last_hidden_state"
     with torch.no_grad():
-        direct = model(**kwargs)
+        direct = target(**kwargs)
     direct_router = _router_logits(direct)
     assert len(direct_router) == 2, "precondition: one router-logit tensor per MoE layer"
 
-    trace = tl.trace(model, (), input_kwargs=dict(kwargs))
+    trace = tl.trace(target, (), input_kwargs=dict(kwargs))
     try:
         assert trace.outcome.status.name == "COMPLETE"
-        assert torch.equal(trace.output.logits, direct.logits)
+        assert torch.equal(getattr(trace.output, leaf), getattr(direct, leaf))
         traced_router = _router_logits(trace.output)
         assert len(traced_router) == len(direct_router)
         assert all(torch.equal(a, b) for a, b in zip(traced_router, direct_router, strict=True))
@@ -143,7 +157,7 @@ def test_router_logit_outputs_capture_exactly_and_validate(family: str) -> None:
             ), "a router-logit tensor is missing from the trace's output ops"
     finally:
         trace.cleanup()
-    assert tl.validate(model, (), dict(kwargs), scope="forward") is True
+    assert tl.validate(target, (), dict(kwargs), scope="forward") is True
 
 
 class _ShardedMLP(torch.nn.Module):
