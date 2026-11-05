@@ -768,7 +768,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `selection_batch_pair_invalid` | A selection-batch `do()` input is malformed: a second edit argument beside the pair list, or a batch mixing Selections with legacy selector sites (two engines under one call) (edits) | Pass only `[(selection, edit), ...]` pairs, every first slot a Selection |
 | `jax_control_flow_invalid` | JAX control-flow mode is unknown | Choose `reject`, `unroll`, or `region` |
 | `layer_pass_ambiguous` | Per-pass field read on a multi-pass layer | Access the field on one pass via `.ops[k]` |
-| `layer_site_ambiguous` | A single site key was asked of a layer spanning multiple structural sites (extraction site metadata, the I-S3' site invariant) (spelling provisional pending the vocabulary amendment) | Read the per-pass key via `.ops[k].graph.site_key` |
+| `layer_site_ambiguous` | A single site key was asked of a layer spanning multiple structural sites (extraction site metadata, the site invariant) (spelling provisional pending the vocabulary amendment) | Read the per-pass key via `.ops[k].graph.site_key` |
 | `link_format_invalid` | Source-link format is unknown | Choose `terminal`, `html`, or `text` |
 | `jax_unroll_range_invalid` | JAX unroll limit is below one | Pass a positive integer |
 | `jax_unroll_type_invalid` | JAX unroll limit is not an integer | Pass a positive integer |
