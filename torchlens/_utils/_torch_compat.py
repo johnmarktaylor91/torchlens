@@ -1070,16 +1070,12 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
 def get_torch_cpp_extension_support(*, force_probe: bool = False) -> bool:
     """Return whether ``torch.utils.cpp_extension`` imports cleanly, lazily (see the leaf).
 
-    Parameters
-    ----------
-    force_probe:
-        Run the probe even when cached. Diagnostic surfaces set this; nothing imports the
-        extension builder (and setuptools with it) on a plain ``import torchlens``.
-
     Returns
     -------
     bool
-        ``HAS_TORCH_CPP_EXTENSION``, cached after the first call.
+        ``HAS_TORCH_CPP_EXTENSION``, cached after the first call; ``force_probe``
+        (diagnostic surfaces) reruns it. A plain ``import torchlens`` never imports
+        the extension builder (or setuptools with it).
     """
 
     global HAS_TORCH_CPP_EXTENSION, _TORCH_CPP_EXTENSION_PROBED
