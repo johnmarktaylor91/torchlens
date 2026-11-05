@@ -106,13 +106,13 @@ class _SiblingViewAfterWrite(nn.Module):
 class _SiblingViewReturnedAfterWrite(nn.Module):
     """Two views of one tensor returned after a write through the first (a planner's head)."""
 
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Scale ``y[:, :2]`` in place, return it, its sibling ``y[:, 2:3]`` and a fresh tensor."""
 
         y = x * 2.0
         first, sibling = y[:, :2], y[:, 2:3]
         first *= 3.0
-        return {"first": first, "sibling": sibling, "fresh": x[:, 3:4] + 1.0}
+        return first, sibling, torch.add(x[:, 3:4], 1.0)
 
 
 def _trace(model: nn.Module, x: torch.Tensor) -> Any:
