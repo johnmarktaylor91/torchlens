@@ -884,7 +884,7 @@ torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	144
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	142
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	107
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	71
@@ -941,7 +941,7 @@ torchlens/backends/torch/model_prep.py::_create_session_param_logs	97
 torchlens/backends/torch/model_prep.py::_ensure_module_output_tensor_logged	319
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper	101
 torchlens/backends/torch/model_prep.py::_make_user_forward_hook_wrapper.wrapped_hook	79
-torchlens/backends/torch/model_prep.py::_prepare_model_session	130
+torchlens/backends/torch/model_prep.py::_prepare_model_session	127
 torchlens/backends/torch/model_prep.py::_record_module_entry_metadata	163
 torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	177
 torchlens/backends/torch/model_prep.py::module_forward_decorator	145
