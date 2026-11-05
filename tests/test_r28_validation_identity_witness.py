@@ -172,20 +172,14 @@ def drop_edge_injector(
     return arm
 
 
-def _parent_out_is_bool(_label: str, entry: Any) -> bool:
-    """Return whether the candidate parent's output is a bool tensor.
-
-    Reads the parent's recorded ``dtype``, which capture keeps for every op, not
-    its saved ``out``: validation's reproducibility re-trace saves only the
-    outputs its structure hash reads, so a predicate on the saved value would
-    drop the edge in the first capture and keep it in the re-trace.
-    """
-
-    return getattr(entry, "dtype", None) == torch.bool
-
-
 def _parent_label_prefix(prefix: str) -> Callable[..., bool]:
-    """Return a predicate matching parent labels by prefix."""
+    """Return a predicate matching parent labels by prefix.
+
+    Labels are capture metadata kept for every op. A predicate on a parent's saved
+    ``out`` would not do: validation's reproducibility re-trace saves only the
+    outputs its structure hash reads, so it would drop the edge in the first
+    capture and keep it in the re-trace.
+    """
 
     def pred(label: str, _entry: Any) -> bool:
         """Match the injected parent label."""
@@ -198,7 +192,7 @@ def _parent_label_prefix(prefix: str) -> Callable[..., bool]:
 @pytest.mark.parametrize(
     "model,func_name,pred_factory",
     [
-        (_MaskedFillBoolMask, "masked_fill", lambda: _parent_out_is_bool),
+        (_MaskedFillBoolMask, "masked_fill", lambda: _parent_label_prefix("gt_")),
         (_MulByAllOnes, "__mul__", lambda: _parent_label_prefix("add_")),
         (_AddAllZeros, "__add__", lambda: _parent_label_prefix("mul_")),
     ],
@@ -231,7 +225,7 @@ def test_fn_capture_witness_records_dropped_edge_positions(
 
     torch.manual_seed(0)
     x = torch.randn(4)
-    state = drop_edge_injector("masked_fill", _parent_out_is_bool)
+    state = drop_edge_injector("masked_fill", _parent_label_prefix("gt_"))
     trace = tl.trace(_MaskedFillBoolMask().eval(), x)
     masked_op = next(op for op in trace.ops if op.func_name == "masked_fill")
 
