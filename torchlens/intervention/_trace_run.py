@@ -31,7 +31,11 @@ from .._data_classes._trace_rerun_state import (
 from .._data_classes.trace import _USE_STORED_TRANSFORM
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
-from .._fast_live_steer import refusal_code, refuse_unfired_fast_run, stages_user_entries
+from .._fast_live_steer import (
+    legacy_rerun_tries_fast_engine,
+    refusal_code,
+    refuse_unfired_fast_run,
+)
 from .._fast_run import (
     _FastLiveSession,
     _FastSparseSession,
@@ -675,12 +679,18 @@ def _live_rerun_engine(
     a native forward with the staged spec applied at real module boundaries,
     guarded by the sealed call fingerprint;
     any typed refusal falls back to the capture rerun with the code in
-    ``last_run``. A trace with nothing staged keeps the capture rerun.
+    ``last_run``. A trace that saved a selection of sites takes it edited or
+    not; a save-everything trace with nothing staged keeps the capture rerun
+    (:func:`legacy_rerun_tries_fast_engine`).
     """
 
     run_model, transformed_input, user_input = call
     fast_refused: str | None = None
-    if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(result):
+    if (
+        chunk_paths is None
+        and replay_options.chunk_size is None
+        and legacy_rerun_tries_fast_engine(result)
+    ):
         fast_done, fast_refused = try_guarded_fast_rerun(
             result, run_model, transformed_input, output_transform=output_transform
         )

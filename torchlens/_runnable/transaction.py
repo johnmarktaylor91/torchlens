@@ -427,7 +427,7 @@ def _execute_loaded_sparse_transaction(
     )
 
 
-def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
+def _resolve_run_until_plan(trace: Any, until: Any, *, argument: str = "until") -> _RunUntilPlan:
     """Resolve one static-form ``until=`` selection against the source trace.
 
     Accepts the static site-selection forms (final layer labels, module
@@ -437,7 +437,7 @@ def _resolve_run_until_plan(trace: Any, until: Any) -> _RunUntilPlan:
     typed. Unknown labels surface the standard typed lookup refusal.
     """
 
-    tokens = _validated_until_tokens(until)
+    tokens = _validated_until_tokens(until, argument=argument)
     resolved: list[Any] = []
     requested: list[str] = []
     requested_layer_labels: list[str] = []
@@ -468,7 +468,7 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
     # Reuse the static-form resolver: same accepted family (labels,
     # module addresses, 'saved'), same typed refusals (predicate
     # gate, junk forms, unknown-site lookup feedback).
-    save_plan = _resolve_run_until_plan(trace, save)
+    save_plan = _resolve_run_until_plan(trace, save, argument="save")
     run_save_labels = frozenset(save_plan.requested_layer_labels)
     if until is not None:
         until_preview = _resolve_run_until_plan(trace, until)
@@ -492,22 +492,22 @@ def _resolve_run_save_labels(trace: Any, save: Any, until: Any) -> frozenset[str
     return run_save_labels
 
 
-def _validated_until_tokens(until: Any) -> list[Any]:
-    """Normalize the until= selection to tokens; refuse empty/non-static forms."""
+def _validated_until_tokens(until: Any, *, argument: str = "until") -> list[Any]:
+    """Normalize the until= or run-time save= selection to tokens; refuse empty/non-static forms."""
 
     tokens = list(until) if isinstance(until, (list, tuple, set, frozenset)) else [until]
     if not tokens:
         raise InvalidArgumentError(
-            "until= received an empty selection; pass at least one layer label, "
+            f"{argument}= received an empty selection; pass at least one layer label, "
             "module address, or the literal 'saved'",
             code="run_until_form_invalid",
             remedy="pass a non-empty static site selection",
-            argument="until",
+            argument=argument,
         )
     for token in tokens:
         if callable(token) or hasattr(token, "__torchlens_predicate__"):
             raise RunCapabilityUnavailableError(
-                "Predicate/selector forms of until= are gated on the S4 predicate "
+                f"Predicate/selector forms of {argument}= are gated on the S4 predicate "
                 "contract merge and refuse typed until it lands; the static forms "
                 "(layer labels, module addresses, 'saved') are available now.",
                 code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
@@ -516,11 +516,11 @@ def _validated_until_tokens(until: Any) -> list[Any]:
             )
         if not isinstance(token, str):
             raise InvalidArgumentError(
-                f"until= accepts layer-label/module-address strings or 'saved'; "
+                f"{argument}= accepts layer-label/module-address strings or 'saved'; "
                 f"got {type(token).__name__!r}",
                 code="run_until_form_invalid",
                 remedy="pass static layer labels, module addresses, or 'saved'",
-                argument="until",
+                argument=argument,
             )
     return tokens
 

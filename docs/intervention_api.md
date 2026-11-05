@@ -6,7 +6,8 @@ replay and bundles.
 To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
 model output is `recording.output`) when you need activations too, or rerun a steered trace with
-`trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
+`trace.run(model, x)` (the guarded fast engine on a selective-save trace, with the spec applied
+when it targets modules; see the glossary
 entry "Guarded fast rerun"). `x`, like the `inputs` of `tl.record`, takes every input form
 `tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string,
 PIL image or modality dict (`{"text": ..., "image": ...}`), resolved with the model's own

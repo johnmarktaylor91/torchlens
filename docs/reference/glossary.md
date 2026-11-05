@@ -542,7 +542,8 @@ alias. No validation or honesty tripwire may be weakened.
     and, under `save_mode="copy"`, that some row beneath each saved op equals the op's `out`.
   - Reruns: a `run()` refresh re-records the profile against the new input, so values follow
     `Op.out`. The fast tier (`run_transaction(inputs=..., fast=True)`, and the guarded fast
-    rerun behind `run(model, x)` with staged hooks) never re-records ATen values, so it refuses
+    rerun behind `run(model, x)` on a selective-save trace) never re-records ATen values, so it
+    refuses
     a values capture with `run_capability_unavailable` at stage
     `fast_run_aten_values_unsupported` and the legacy door falls back to the capture engine.
 
@@ -1961,14 +1962,16 @@ query and key/value head counts refuse `mi_kv_heads_not_grouped`.
     reported as control-flow divergence, while a changed op, edge, shape or batch size still is.
 
 **Guarded fast rerun** *(spellings documented-unstable)*
-: The fast engine a steered rerun takes when the trace's staged intervention spec targets only
-  plain module selectors (`tl.module(...)` / module-address hooks, no `set()` value
-  replacements). It runs a native forward with the staged hooks fired at each targeted module's
-  exit and forward hooks refreshing the saved sites, so the rerun costs close to a plain hooked
-  forward instead of a full capture.
-  - Legacy door: `trace.run(model, x)` on a trace with a staged intervention tries it first (a
-    trace with nothing staged keeps the capture rerun) and falls back to the capture engine on
-    any typed refusal.
+: The fast engine a rerun takes on a trace that saved a selection of sites, when nothing is
+  staged or the staged intervention spec targets only plain module selectors (`tl.module(...)` /
+  module-address hooks, no `set()` value replacements). It runs a native forward with the staged
+  hooks, if any, fired at each targeted module's exit and forward hooks refreshing the saved
+  sites, so the rerun costs close to a plain hooked forward instead of a full capture.
+  - Legacy door: `trace.run(model, x)` tries it first on a trace that saved a selection (edited
+    or not) or stages an intervention, and falls back to the capture engine on any typed
+    refusal. A trace that saved every activation with nothing staged keeps the capture rerun
+    (`engine` `rerun`, `fast_refused` None): its value is every op's record, which only a
+    capture produces.
   - Explicit door: `trace.run_transaction(inputs=..., fast=True)` on a live or loaded-activation
     trace applies the staged spec through it.
   - Without `fast=True`: the plain `trace.run_transaction(inputs=...)` on a live trace applies

@@ -261,17 +261,20 @@ processes one token, so the package matters much less for `bind` with `generate(
 
 ## Trace once, then rerun
 
-Capturing one trace and re-running it for each new input is cheap for steered generation when
-the staged intervention targets plain module selectors (`tl.module(...)`): both `run` doors
-below then take the [guarded fast steered rerun](#fast-steered-rerun). The other reuse paths
-apply a staged intervention through a full capture, refuse a change in input, or replay over
-the captured graph.
+Capturing one trace and re-running it for each new input is cheap when the capture saved a
+selection of sites (`save=tl.module(...)` or `tl.func(...)`): `trace.run(model, x)` and
+`trace.run_transaction(inputs=x, fast=True)` then take the [guarded fast rerun](#fast-steered-rerun),
+edited or not, and a staged intervention rides along when it targets plain module selectors
+(`tl.module(...)`). A trace that saved every activation recaptures on `trace.run`: its value is
+every op's record, and only a capture records ops; a native forward with hooks refreshes saved
+sites. The other reuse paths apply a staged intervention through a full capture, refuse a change
+in input, or replay over the captured graph.
 
 | Reuse path | What it does | What it refuses or costs |
 | --- | --- | --- |
 | `trace.run_transaction(inputs=x)` | A fresh verified execution of the recorded program; with a staged intervention, a refresh capture that applies it (`last_run["engine"] == "live"`, fire receipts on `last_run`) | A full capture, not a native forward, and the verdict is `unverifiable` when staged edits applied; refuses `run_staged_spec_unapplied` only on a loaded artifact |
 | `trace.run_transaction(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
-| `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, writing the saved sites into a new Trace | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
+| `trace.run(model, x)` on a trace that saved a selection | The guarded fast rerun: the native forward with the staged hooks, if any, writing the saved sites into a new Trace | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat, with or without a staged edit. When a guard refuses (a changed call structure, a value replacement, a non-module target) it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]`. A save-everything trace with nothing staged always recaptures (`engine` `rerun`, `fast_refused` None) |
 | `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Works on every `tl.trace` capture (the per-op argument templates it needs are always recorded; `replayable=True` is for runnable saves and costs about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
@@ -282,9 +285,11 @@ when you want the full record of one forward, then work with that trace.
 
 ## Fast steered rerun
 
-On a trace captured with an `intervene=` spec that targets plain module selectors
-(`tl.module(...)`), `trace.run(model, x)` and `trace.run_transaction(inputs=x, fast=True)` do not recapture:
-they run the model's native forward with the staged hooks and refresh the saved sites. The input may grow
+On a trace that saved a selection of sites, `trace.run(model, x)` and
+`trace.run_transaction(inputs=x, fast=True)` do not recapture: they run the model's native forward
+and refresh the saved sites, with the staged hooks fired at their modules when the capture (or a
+later `do`) staged an `intervene=` spec that targets plain module selectors (`tl.module(...)`). An
+unedited rerun is the same engine with no hooks staged. The input may grow
 from step to step, as in generation, as long as the model makes the same sequence of torch calls
 and module entries; a structural fingerprint sealed at capture checks that after every run.
 
@@ -342,8 +347,12 @@ output ops, but it is not required. A changed number of output tensors still ref
 - **Fallback.** When a guard refuses, `trace.run(model, x)` falls back to the capture engine,
   which still gives the right answer, and records why. `last_run["engine"]` is `"guarded_fast"`
   when the fast engine ran and `"rerun"` after a fallback, and `last_run["fast_refused"]` names
-  the refusing guard as `"<code>:<stage>"` (it is `None` on a fast run). The explicit
+  the refusing guard as `"<code>:<stage>"` (it is `None` on a fast run, and `None` on a
+  save-everything trace with nothing staged, where the fast engine is not tried). The explicit
   `trace.run_transaction(inputs=x, fast=True)` raises instead of falling back.
+- **Early stop.** `trace.run_transaction(inputs=x, fast=True, until=<a saved module>)` ends the
+  native forward after that module; `trace.run(model, x)` has no stop argument and runs the
+  whole forward.
 - **What still takes the capture engine.** Value replacements (`set()`) and non-module targets
   (`fast_rerun_target_unsupported`), hooks attached after a plain capture or cleared after a
   steered one, which recapture once to record the current plan and are eligible afterwards

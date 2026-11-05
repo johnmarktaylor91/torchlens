@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import enum
+import types
+import weakref
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -56,9 +59,29 @@ __all__ = [
 ]
 
 
-#: Values ``copy.deepcopy`` returns unchanged, so a rerun refresh hands them over as they are.
+#: Values ``copy.deepcopy`` returns unchanged, so a rerun refresh hands them over as they are:
+#: the immutable scalars, ``copy``'s own atomic kinds (types, functions, ranges, weak
+#: references, ``Ellipsis``), and torch's dtype and device singletons.
 _ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
-    {type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device}
+    {
+        type(None),
+        bool,
+        int,
+        float,
+        complex,
+        str,
+        bytes,
+        type,
+        range,
+        slice,
+        type(Ellipsis),
+        type(NotImplemented),
+        types.FunctionType,
+        types.BuiltinFunctionType,
+        weakref.ref,
+        torch.dtype,
+        torch.device,
+    }
 )
 
 
@@ -429,6 +452,10 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
 
     if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
         return value
+    if isinstance(value, enum.Enum):
+        return value  # a member's deep copy is itself
+    if isinstance(value, (set, frozenset)):
+        return type(value)(copy_rerun_value(trace, item) for item in value)
     if isinstance(value, list):
         return [copy_rerun_value(trace, item) for item in value]
     if isinstance(value, tuple):

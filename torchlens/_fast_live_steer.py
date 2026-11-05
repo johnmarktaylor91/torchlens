@@ -178,15 +178,38 @@ def _staged_user_hook_specs(trace: Any) -> list[Any]:
 
 
 def stages_user_entries(trace: Any) -> bool:
-    """Return whether ``trace`` stages a user intervention entry (hook or value replacement).
-
-    Only a steered rerun takes the guarded fast engine from the legacy door; a
-    trace with nothing staged keeps the capture rerun, whose refreshed graph and
-    ``last_run`` ledger callers already rely on.
-    """
+    """Return whether ``trace`` stages a user intervention entry (hook or value replacement)."""
 
     spec = trace._intervention_spec
     return bool(_staged_user_hook_specs(trace)) or bool(getattr(spec, "target_value_specs", None))
+
+
+def saved_a_selection(trace: Any) -> bool:
+    """Return whether the capture left at least one non-boundary op without a saved activation.
+
+    A trace that saved every op is the record of every op, and only the capture
+    engine re-records ops; a trace that saved a selection of sites is refreshed
+    at those sites by the guarded fast engine.
+    """
+
+    return any(
+        not bool(getattr(op, "has_saved_activation", False))
+        for op in trace._layer_list
+        if op.type not in ("input", "output")
+    )
+
+
+def legacy_rerun_tries_fast_engine(trace: Any) -> bool:
+    """Return whether ``trace.run(model, x)`` tries the guarded fast engine before recapturing.
+
+    The fast engine runs the model's native forward and refreshes the saved
+    sites, so it serves a trace that saved a selection of sites (edited or
+    not) and a trace with staged entries, whose plan lowers to module hooks.
+    A save-everything trace with nothing staged keeps the capture rerun: its
+    value is every op's record, which only a capture produces.
+    """
+
+    return stages_user_entries(trace) or saved_a_selection(trace)
 
 
 def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:

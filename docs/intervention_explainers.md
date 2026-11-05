@@ -78,7 +78,8 @@ an edit without propagating it, and `trace.clear_edits(site)` detaches a sticky 
 
 `trace.run(model, x)` re-executes the model under the trace's active intervention spec. Use it when
 the intervention may affect Python control flow, module behavior, randomness, or anything else the
-saved graph cannot reconstruct. A module-targeted spec reruns through a guarded fast engine and
+saved graph cannot reconstruct. On a trace that saved a selection of sites the rerun takes the
+guarded fast engine (a native forward with the module-targeted spec applied at its modules) and
 falls back to the capture engine when a guard refuses; `trace.last_run` says which engine ran.
 
 The older `replay()` and `rerun()` spellings are removed; `do()` and `run()` replace them, and `do`
