@@ -161,9 +161,7 @@ def try_guarded_fast_rerun(
     trace:
         Result fork carrying the staged spec; this door refreshes it in place on success.
     model:
-        The model the caller passed (or the trace's retained live model); a
-        compiled wrapper is unwrapped to its eager source module, as the
-        capture rerun does.
+        The model passed (or the retained live model); a compiled wrapper runs its eager source.
     inputs:
         Transformed forward input.
     output_transform:
