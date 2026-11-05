@@ -507,6 +507,29 @@ def _wrapped_links(func: Any) -> list[Any]:
     return links
 
 
+#: The ``torch.autograd.Function`` methods ``apply`` runs during the forward.
+_AUTOGRAD_FUNCTION_STEPS = ("forward", "setup_context")
+
+
+def _autograd_function_steps(value: Any) -> tuple[types.FunctionType, ...]:
+    """Return the user ``forward``/``setup_context`` a named ``autograd.Function`` class runs.
+
+    ``MyFunction.apply(x)`` runs the class's static ``forward`` from inside torch, so
+    the module-level state that ``forward`` reads (L-GATr's sparse geometric product
+    reads an ``lru_cache`` of index and sign tables) is reached through no function
+    the forward names. Only user subclasses count; torch's own are library code.
+    """
+
+    if not (
+        isinstance(value, type)
+        and issubclass(value, torch.autograd.Function)
+        and _user_class(value)
+    ):
+        return ()
+    steps = (_class_helper(value, name) for name in _AUTOGRAD_FUNCTION_STEPS)
+    return tuple(step for step in steps if step is not None)
+
+
 def _class_helper(owner: type, name: str) -> types.FunctionType | None:
     """Return the user function ``owner`` resolves ``name`` to, ``self.<name>``'s method."""
 
@@ -596,6 +619,8 @@ def _walk_named_globals(
         helper = _user_helper(value) if hops > 0 else None
         if helper is None:
             _clear_session_tensor_metadata(value, seen, visit=visit)
+            for apply_step in _autograd_function_steps(value) if hops > 0 else ():
+                _walk_user_helper(apply_step, methods, seen, visit, hops)
         else:
             _walk_user_helper(helper, methods, seen, visit, hops)
 

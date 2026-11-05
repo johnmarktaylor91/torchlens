@@ -110,6 +110,61 @@ def test_lru_cache_behind_a_wraps_decorated_helper_is_a_constant_source() -> Non
     assert tl.validate(model, x, scope="forward") is True
 
 
+# L-GATr's sparse path: the cached tables are read inside a custom autograd.Function.
+_GP = torch.randn(4, 4)
+_GP_SIGNS = _GP.sign().squeeze(0)
+
+
+@functools.lru_cache
+def _sparse_gp_signs(device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+    return _GP_SIGNS.to(device=device, dtype=dtype)
+
+
+class _GeometricProductSparse(torch.autograd.Function):
+    """Reads the cached signs in its static ``forward``, which ``apply`` runs."""
+
+    @staticmethod
+    def forward(x: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
+        signs = _sparse_gp_signs(x.device, x.dtype)
+        return signs * x
+
+    @staticmethod
+    def setup_context(ctx, inputs, output):  # type: ignore[no-untyped-def,override]
+        return None
+
+    @staticmethod
+    def backward(ctx, grad):  # type: ignore[no-untyped-def,override]
+        return grad
+
+
+def _gp_sparse(x: torch.Tensor) -> torch.Tensor:
+    return _GeometricProductSparse.apply(x)
+
+
+@_passthrough_decorator
+def _geometric_product(x: torch.Tensor) -> torch.Tensor:
+    return _gp_sparse(x)
+
+
+class _LgatrSparseStandIn(nn.Module):
+    """``forward -> @wraps _geometric_product -> _gp_sparse -> Function.apply -> lru cache``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return _geometric_product(self.proj(x))
+
+
+def test_cache_read_inside_a_custom_autograd_function_is_a_constant_source() -> None:
+    torch.manual_seed(0)
+    x = torch.randn(4, 4)
+    model = _warm(_LgatrSparseStandIn(), x)
+    assert "constant" in _types(tl.trace(model, x))
+    assert tl.validate(model, x, scope="forward") is True
+
+
 # Equiformer: a decorated forward, then three plain helpers down to a global dict.
 _JD = {1: torch.randn(4, 4), 2: torch.randn(4, 4)}
 
