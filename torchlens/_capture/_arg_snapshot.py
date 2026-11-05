@@ -28,6 +28,8 @@ _ATOMIC_TYPES = frozenset(
 )
 # Exact container types whose own ``copy`` method keeps the type.
 _PLAIN_CONTAINERS = frozenset({list, dict, set})
+# Every value outside these types is kept by reference without a look inside.
+_CONTAINER_TYPES = (list, dict, set, bytearray, tuple)
 
 
 def snapshot_mutable_arg(value: Any) -> Any:
@@ -65,15 +67,20 @@ def split_non_tensor_args(
         passed through ``snapshot_mutable_arg``.
     """
     # Hot path (every captured op): plain loops instead of comprehensions, and the
-    # scalar / flat-scalar-tuple test inlined, so the common call makes no Python call
-    # but this one. The two loops repeat the test because a helper would cost a call.
+    # keep-as-is test (a scalar, a non-container, a tuple of scalars) inlined, so the
+    # common call makes no Python call but this one. Both loops repeat the test
+    # because a helper would cost a call; it decides exactly what ``_snapshot`` would.
     atomic = _ATOMIC_TYPES
+    containers = _CONTAINER_TYPES
     positional: list[Any] = []
     for arg in args:
         if is_tensor(arg):
             continue
-        arg_type = type(arg)
-        if arg_type in atomic or (arg_type is tuple and atomic.issuperset(map(type, arg))):
+        if (
+            type(arg) in atomic
+            or not isinstance(arg, containers)
+            or (isinstance(arg, tuple) and atomic.issuperset(map(type, arg)))
+        ):
             positional.append(arg)
         else:
             positional.append(_snapshot(arg, None))
@@ -81,8 +88,11 @@ def split_non_tensor_args(
     for key, value in kwargs.items():
         if is_tensor(value):
             continue
-        value_type = type(value)
-        if value_type in atomic or (value_type is tuple and atomic.issuperset(map(type, value))):
+        if (
+            type(value) in atomic
+            or not isinstance(value, containers)
+            or (isinstance(value, tuple) and atomic.issuperset(map(type, value)))
+        ):
             keyword[key] = value
         else:
             keyword[key] = _snapshot(value, None)
@@ -108,7 +118,7 @@ def _snapshot(value: Any, memo: dict[int, Any] | None) -> Any:
             return memo[id(value)]
         return _copy_container(value, memo)
     if isinstance(value, tuple):
-        if type(value) is tuple and _ATOMIC_TYPES.issuperset(map(type, value)):
+        if _ATOMIC_TYPES.issuperset(map(type, value)):
             return value
         return _snapshot_tuple(value, memo)
     return value

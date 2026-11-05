@@ -203,11 +203,12 @@ def _snapshot_module_calls(run: Callable[[], object]) -> list[str]:
 
 
 def test_common_arguments_cost_no_snapshot_calls() -> None:
-    """Scalars, flat tuples, strings and empty kwargs are kept with no call past the split."""
+    """Scalars, flat tuples, sizes, dtypes and empty kwargs cost no call past the split."""
     from torchlens._capture._arg_snapshot import split_non_tensor_args
 
     shape = (2, 3, 4)
-    args = (torch.ones(1), shape, 1, 2.5, "mean", None, slice(None), Ellipsis)
+    size = torch.Size([2, 3])
+    args = (torch.ones(1), shape, 1, 2.5, "mean", None, slice(None), Ellipsis, size, torch.float32)
     result: list[tuple[list[object], dict[str, object]]] = []
     calls = _snapshot_module_calls(
         lambda: result.append(
@@ -216,8 +217,9 @@ def test_common_arguments_cost_no_snapshot_calls() -> None:
     )
     assert calls == ["split_non_tensor_args"]
     ((positional, keyword),) = result
-    assert positional == [shape, 1, 2.5, "mean", None, slice(None), Ellipsis]
+    assert positional == [shape, 1, 2.5, "mean", None, slice(None), Ellipsis, size, torch.float32]
     assert positional[0] is shape
+    assert positional[7] is size
     assert keyword == {}
 
 
