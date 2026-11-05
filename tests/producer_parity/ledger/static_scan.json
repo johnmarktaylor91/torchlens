@@ -4481,6 +4481,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_utils/_kernel_probes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_utils/_onramp.py",
   "has_default": false,
@@ -4500,7 +4508,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 15,
+  "sites": 18,
   "via_getattr": false
  },
  {
