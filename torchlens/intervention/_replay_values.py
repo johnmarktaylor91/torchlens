@@ -215,7 +215,7 @@ def refresh_output_derivatives(
     refresh_decoded_output(log)
     for label, before in snapshots.items():
         site = log._layer_dict_all_keys[label]
-        is_output = site.is_output or site.is_output_parent
+        is_output = site.is_output or site.graph.is_output_parent
         if is_output and not _same_value(before.get("out"), site.out):
             mark_transformed_output_stale(log)
             return

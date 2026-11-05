@@ -583,7 +583,7 @@ print("max_distance_from_input", op.graph.max_distance_from_input)
 print("min_distance_to_output", op.graph.min_distance_to_output)
 print("max_distance_to_output", op.graph.max_distance_to_output)
 print("is_orphan", op.graph.is_orphan)
-print("is_internal_sink", op.graph.is_internal_sink)
+print("is_internal_sink", op.is_internal_sink)
 # Output:
 # input_ancestors frozenset({'input_1'})
 # output_descendants frozenset({'output_1'})

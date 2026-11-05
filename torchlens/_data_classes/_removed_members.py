@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from .._utils._record_group_table import OP_MOVED_MEMBERS
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 
 _GPU_KERNELS_REMEDY = (
     "GPU kernel recording is not public in this release; a capture switch for it "
@@ -22,7 +22,13 @@ _GPU_KERNELS_REMEDY = (
 
 #: Removed public member spellings per record class name -> remedy text.
 REMOVED_MEMBERS: Mapping[str, Mapping[str, str]] = {
-    "Op": {"gpu_kernels": _GPU_KERNELS_REMEDY, **OP_MOVED_MEMBERS},
+    "Op": {
+        # Removed by the do fold (remove-and-rename, no alias).
+        "attach_hooks": "use op.do(hook, ...) -- do stages the hook",
+        "set": removed_set_remedy("Op", "op", "value"),
+        "gpu_kernels": _GPU_KERNELS_REMEDY,
+        **OP_MOVED_MEMBERS,
+    },
     "AtenOp": {"gpu_kernels": _GPU_KERNELS_REMEDY},
 }
 
