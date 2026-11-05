@@ -857,7 +857,7 @@ torchlens/backends/torch/_ops_containers.py::_prove_runnable_output_lossless_ung
 torchlens/backends/torch/_ops_containers.py::_walk_supported_output_container	81
 torchlens/backends/torch/_ops_containers.py::runnable_output_losslessness	61
 torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
-torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	172
+torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	170
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
 torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
@@ -877,7 +877,7 @@ torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	151
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	146
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	62
@@ -953,12 +953,12 @@ torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
-torchlens/backends/torch/tensor_tracking.py	1656
+torchlens/backends/torch/tensor_tracking.py	1655
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	83
 torchlens/backends/torch/tensor_tracking.py::_build_grad_payloads	61
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
-torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
+torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	61
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
 torchlens/backends/torch/wrappers.py	2846
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
