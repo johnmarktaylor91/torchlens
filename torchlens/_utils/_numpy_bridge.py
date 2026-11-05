@@ -20,7 +20,7 @@ import torch
 from . import _torch_compat
 from ._torch_compat import get_numpy_bridge_support
 from ._torch_symbols import torch_dtype_named
-from .tensor_leaves import copy_host_bytes, flat_byte_view
+from .tensor_leaves import copy_host_bytes, flat_byte_view, tensor_payload_bytes
 
 
 def _bridge_works() -> bool:
@@ -79,6 +79,33 @@ def tensor_to_numpy(tensor: torch.Tensor, *, force: bool = False) -> Any:
     host = tensor.detach().resolve_conj().resolve_neg().cpu().contiguous()
     payload = bytearray(copy_host_bytes(flat_byte_view(host)))
     return np.frombuffer(payload, dtype=numpy_dtype).reshape(tuple(tensor.shape))
+
+
+def tensor_numpy_bytes(tensor: torch.Tensor) -> bytes:
+    """Return ``tensor.cpu().numpy().tobytes()``, also when torch's NumPy bridge is broken.
+
+    Tries the NumPy read first and probes the bridge only after it raises, so a
+    working bridge makes exactly the historical calls and never runs the probe
+    (the RNG digest reads a generator's state this way inside a capture).
+
+    Parameters
+    ----------
+    tensor:
+        Dense strided tensor whose dtype NumPy can represent.
+
+    Returns
+    -------
+    bytes
+        The tensor's contiguous payload bytes.
+    """
+
+    host = tensor.cpu()
+    try:
+        return host.numpy().tobytes()
+    except RuntimeError:
+        if _bridge_works():
+            raise
+        return tensor_payload_bytes(host)
 
 
 def tensor_from_numpy(array: Any) -> torch.Tensor:

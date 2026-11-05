@@ -151,6 +151,35 @@ def test_bridge_probe_latches_after_one_call(monkeypatch: pytest.MonkeyPatch) ->
     assert calls == 1
 
 
+def test_tensor_numpy_bytes_probes_only_after_a_failed_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The RNG digest's state read never probes on a working bridge; it falls back on a broken one.
+
+    A probe inside a capture adds its torch calls to the user's trace and to the
+    per-op Python-call census, so the working-bridge read must be the plain
+    ``.cpu().numpy().tobytes()`` with no probe at all.
+    """
+
+    from torchlens._utils import _kernel_probes
+
+    state = torch.Generator().get_state()
+    if _kernel_probes.probe_numpy_bridge():
+
+        def _no_probe() -> bool:
+            """Fail when the probe runs."""
+
+            raise AssertionError("bridge probe ran although .numpy() works")
+
+        monkeypatch.setattr(_kernel_probes, "probe_numpy_bridge", _no_probe)
+        monkeypatch.setattr(tc, "_NUMPY_BRIDGE_PROBED", False)
+        assert bridge.tensor_numpy_bytes(state) == state.numpy().tobytes()
+        monkeypatch.undo()
+    _break_bridge(monkeypatch)
+    assert bridge.tensor_numpy_bytes(state) == _reference_bytes(state)
+    assert tc.HAS_NUMPY_BRIDGE is False
+
+
 def test_live_environment_flag_matches_the_real_bridge() -> None:
     """On any install, the flag agrees with what the bridge really does."""
 
