@@ -256,7 +256,7 @@ def _count_unit(kind: str, node: object) -> SimpleNamespace:
 
 
 def test_rolled_count_line_keeps_singular_forms() -> None:
-    op = SimpleNamespace(activation_memory=16)
+    op = SimpleNamespace(cost=SimpleNamespace(activation_memory=16))
     one = SimpleNamespace(units=(_count_unit("raw_op", SimpleNamespace(ops={"a:1": op})),))
     assert drawn_count_line(None, one, "rolled") == "1 layer (1 op, 16 B)"  # type: ignore[arg-type]
     # In the unrolled view the drawn node is the op itself.

@@ -243,7 +243,7 @@ def test_tinygrad_validation_fails_when_commutative_arg_positions_swap() -> None
 
     trace = tl.trace(two_parent_add, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
     merge = next(op for op in trace._layer_list if op.type == "add" and len(set(op.parents)) == 2)
-    args = merge.parent_arg_positions["args"]
+    args = merge.call.parent_arg_positions["args"]
     assert sorted(args) == [0, 1] and args[0] != args[1]
     args[0], args[1] = args[1], args[0]
 

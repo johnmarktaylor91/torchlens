@@ -16,6 +16,7 @@ import torchlens._postprocess.graph_traversal as graph_traversal_module
 from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
+from torchlens._utils._record_group_table import record_member
 from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
@@ -451,9 +452,10 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     )
 
     first_saved_layer = _saved_layers(trace)[0]
-    assert first_saved_layer.out_ref is not None
-    assert first_saved_layer.out_ref.source_bundle_path == bundle_path
-    assert ".tmp." not in str(first_saved_layer.out_ref.source_bundle_path)
+    out_ref = record_member(first_saved_layer, "out_ref", None)
+    assert out_ref is not None
+    assert out_ref.source_bundle_path == bundle_path
+    assert ".tmp." not in str(out_ref.source_bundle_path)
 
 
 def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -> None:
@@ -583,10 +585,11 @@ def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path:
     output_op = trace.output_ops[0]
     assert tuple(output_op.payload.materialize_out().shape) == (2, 3)
     assert torch.equal(output_op.payload.materialize_out(), expected)
-    refs = [op.out_ref.blob_id for op in trace.ops if op.out_ref is not None]
+    out_refs = [record_member(op, "out_ref", None) for op in trace.ops]
+    refs = [ref.blob_id for ref in out_refs if ref is not None]
     assert len(refs) == len(set(refs))
     loaded = tl.load(bundle_path)
-    assert torch.equal(loaded.output_ops[0].materialize_out(), expected)
+    assert torch.equal(loaded.output_ops[0].payload.materialize_out(), expected)
     resaved_path = tmp_path / "stream-resaved.tlspec"
     trace.save(resaved_path)
     resaved = tl.load(resaved_path)

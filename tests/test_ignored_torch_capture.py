@@ -334,7 +334,7 @@ def test_planted_key_blind_philox_fill_fails_perturbation(method: str) -> None:
     trace = tl.trace(model, inputs, capture=CaptureOptions(save_args=True, seed=0), save="all")
     try:
         fill = next(op for op in trace._layer_list if op.func_name == method)
-        key_label = fill.parent_arg_positions["args"][1]
+        key_label = fill.call.parent_arg_positions["args"][1]
         frozen = fill.out.detach().clone()
 
         def key_blind_fill(*args: object, **kwargs: object) -> torch.Tensor:

@@ -13,6 +13,7 @@ import pytest
 import torchlens as tl
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.tensor_policy import FailReason, Ok
+from torchlens._utils._record_group_table import record_member
 from torchlens.backends.jax import capabilities
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError
 
@@ -487,7 +488,7 @@ def test_jax_old_style_prng_key_tlspec_round_trips_as_uint32_array(tmp_path: Pat
     # the input's entries are found through its lazy ref's payload file. The
     # internal ``_raw`` capture sentinel is stripped from every preview layer
     # label before it reaches a public surface; the real final label is bare.
-    input_ref = tl.load(path, lazy=True).ops["input_1_1:1"].out_ref
+    input_ref = record_member(tl.load(path, lazy=True).ops["input_1_1:1"], "out_ref")
     input_entries = [
         entry for entry in manifest["body_index"] if entry["filename"] == input_ref.relative_path
     ]

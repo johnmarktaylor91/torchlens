@@ -431,7 +431,7 @@ def test_undeclared_kernel_unmoved_sibling_output_still_fails() -> None:
     trace = _capture(model, x)
     try:
         lse = _siblings(trace)[1]
-        assert lse.transform_config["function"] == _UndeclaredTwoOutputKernel.__qualname__
+        assert lse.call.func_transform_config["function"] == _UndeclaredTwoOutputKernel.__qualname__
         assert declared_output_dependence(lse) is None
         assert failure.op_label == lse.label, failure
         assert failure.extra["perturbed_parents"] == [_parent_at(lse, 2)], failure
@@ -446,7 +446,7 @@ def test_position_outside_the_row_stays_strict() -> None:
     trace = _capture(_KernelModel(_FourArgDeclaredName, extra=True), torch.randn(3, 4))
     try:
         lse = _siblings(trace)[1]
-        assert sorted(lse.parent_arg_positions["args"]) == [0, 1, 2, 3]
+        assert sorted(lse.call.parent_arg_positions["args"]) == [0, 1, 2, 3]
         assert _check_perturbation_exemptions(trace, lse, [_parent_at(lse, 3)]) is False
         assert _decision(trace, lse, _parent_at(lse, 2)) == _EXEMPT
         _freeze(lse)
@@ -679,7 +679,9 @@ def test_undeclared_custom_op_unmoved_sibling_output_still_fails(undeclared_fa2_
         row = known_native_custom_op_output_dependence(
             FLASH_ATTENTION_2_CUSTOM_OP, FLASH_ATTENTION_2_FUNC_NAME, failed.multi_output_index
         )
-        position_of = {label: pos for pos, label in failed.parent_arg_positions["args"].items()}
+        position_of = {
+            label: pos for pos, label in failed.call.parent_arg_positions["args"].items()
+        }
         perturbed = failure.extra["perturbed_parents"]
         assert row is not None and perturbed, failure
         assert all(row.independent_of(position_of[label]) for label in perturbed), failure

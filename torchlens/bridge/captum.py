@@ -300,7 +300,7 @@ def layer(trace: Any, site: Any, *, pass_index: int | None = None) -> nn.Module:
             if exc.fields.get("code") not in _PROBE_FALLBACK_CODES:
                 raise
     resolved = _pick_pass(resolve_one_site(trace, site), site, pass_index)
-    site_key = str(resolved.site_key)
+    site_key = str(record_member(resolved, "site_key"))
     return _SiteProbe(
         source_model(trace),
         site_key,

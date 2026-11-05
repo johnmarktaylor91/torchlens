@@ -426,7 +426,7 @@ def test_known_foreign_kernel_owns_its_interior_dispatches(monkeypatch: pytest.M
         if entry["owner_wrapper"] == FOREIGN_FUNCTION_WRAPPER_NAME
     ]
     assert len(boundary_rows) == 1
-    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].func_call_id
+    assert boundary_rows[0]["owner_func_call_id"] == _boundary_ops(trace)[0].call.call_id
     assert boundary_rows[0]["capture_accounted"] is True
     assert not any(
         entry["owner_func_name"] in {"empty", "detach"}

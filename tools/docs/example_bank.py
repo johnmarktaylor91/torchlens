@@ -369,6 +369,33 @@ def _inventory_rows() -> list[dict[str, Any]]:
     return rows
 
 
+def _member_spellings() -> dict[str, dict[str, str | None]]:
+    """Return, per record class, each regrouped flat member and its public spelling.
+
+    The lockstep inventory lists an Op or Layer member by its persisted flat name;
+    the public spelling is ``group.leaf``, the renamed flat name, or ``None`` when the
+    member was removed (imports torchlens).
+    """
+
+    from torchlens._utils._record_group_table import LAYER_MEMBER_MOVES, OP_MEMBER_MOVES
+
+    spellings: dict[str, dict[str, str | None]] = {}
+    for owner, moves in (("Op", OP_MEMBER_MOVES), ("Layer", LAYER_MEMBER_MOVES)):
+        spellings[owner] = {
+            old: None if group == "removed" else leaf if group == "rename" else f"{group}.{leaf}"
+            for old, group, leaf in moves
+        }
+    return spellings
+
+
+def _member_name(row: dict[str, Any], spellings: dict[str, dict[str, str | None]]) -> str | None:
+    """Return ``Class.member`` as the public surface spells it, or ``None`` when removed."""
+
+    owner = row["owner"].rsplit(":", 1)[1]
+    spelled = spellings.get(owner, {}).get(row["name"], row["name"])
+    return None if spelled is None else f"{owner}.{spelled}"
+
+
 def owed_names(rows: list[dict[str, Any]]) -> dict[str, str]:
     """Return the public names the bank owes an example, with their kind.
 
@@ -384,22 +411,25 @@ def owed_names(rows: list[dict[str, Any]]) -> dict[str, str]:
         ``Class.member`` names of the core classes (``member <subkind>``).
     """
 
+    spellings = _member_spellings()
     owed: dict[str, str] = {}
     for row in rows:
         if row["kind"] == "root":
             owed[row["path"]] = f"root {row['subkind']}"
         elif row["kind"] == "member" and row["owner"] in CORE_OWNERS:
-            owed[f"{row['owner'].rsplit(':', 1)[1]}.{row['name']}"] = f"member {row['subkind']}"
+            name = _member_name(row, spellings)
+            if name is not None:
+                owed[name] = f"member {row['subkind']}"
     return owed
 
 
 def known_names(rows: list[dict[str, Any]]) -> set[str]:
     """Return every name a ``covers`` field may spell (root, export, Class.member)."""
 
+    spellings = _member_spellings()
     names = {row["path"] for row in rows if row["kind"] in {"root", "export"}}
-    names |= {
-        f"{row['owner'].rsplit(':', 1)[1]}.{row['name']}" for row in rows if row["kind"] == "member"
-    }
+    members = (_member_name(row, spellings) for row in rows if row["kind"] == "member")
+    names |= {name for name in members if name is not None}
     return names
 
 
@@ -430,13 +460,19 @@ def coverage_rows(
         Sorted by name; an empty id list means the bank has no example for it.
     """
 
+    from torchlens._utils._record_group_table import ACTIVE_GROUPS as groups
+
     covered: dict[str, list[str]] = {}
     for example in examples:
         for name in example.covers:
             covered.setdefault(name, []).append(example.id)
     result = []
     for name, kind in sorted(owed_names(rows).items()):
-        ids = _module_covered(name, covered) if kind == "root module" else covered.get(name, [])
+        # A root module, and a record's concern group (``Layer.cost``), is covered by any
+        # example of a name inside it.
+        owner, _, leaf = name.partition(".")
+        nested = kind == "root module" or (owner in {"Op", "Layer"} and leaf in groups)
+        ids = _module_covered(name, covered) if nested else covered.get(name, [])
         result.append((name, kind, ids))
     return result
 

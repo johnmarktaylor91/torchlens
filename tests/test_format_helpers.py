@@ -87,7 +87,7 @@ def test_scalar_value_line_claims_nothing_it_cannot_read() -> None:
     """No row for a terminal test, an unsaved pass, or a tensor with dimensions."""
 
     test_node = _scalar_pass(True)
-    test_node.shape, test_node._control_flow_is_terminal_bool = (), True
+    test_node.shape, test_node.is_terminal_bool = (), True
     assert scalar_value_line(test_node) is None
     unsaved = _scalar_pass(1.0, saved=False)
     unsaved.shape, unsaved.is_terminal_bool = (), False
