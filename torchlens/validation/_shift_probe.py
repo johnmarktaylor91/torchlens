@@ -7,8 +7,9 @@ saturated (one-hot) softmax only the random draw could then move the argmax,
 and an unlucky draw false-FAILed the real edge. ``lift_min_entry_values``
 backs the ``lift_min_entry`` retry rung in ``core.py``; this module also owns
 the value-step rung list, so the probe and its place in the order live together.
-The same holds for integer and bool parents (the lift moves an ``argmax`` over
-token ids and flips one entry of a counted mask), for grouping children (the
+The same holds for integer and bool parents (integers swap their smallest and
+largest entries, which moves an ``argmax`` over token ids without leaving the
+saved values, and bools flip one entry of a counted mask), for grouping children (the
 ``unique`` family, whose counts only a merge of two entries moves) and for
 children that read a parent's shape only (a one-entry trim).
 """
@@ -48,8 +49,8 @@ NON_UNIFORM_STRATEGIES = frozenset(
 _EMBEDDING_BAG_AUX_OUTPUTS = frozenset({1, 2, 3})
 
 #: Children that group equal entries: their counts and inverse outputs read how
-#: entries partition into equal runs or classes, which every shift and the
-#: lift preserve when the entries are distinct (``unique_consecutive([0, 1,
+#: entries partition into equal runs or classes, which every shift, the lift
+#: and the integer swap preserve when the entries are distinct (``unique_consecutive([0, 1,
 #: 2])`` keeps counts ``[1, 1, 1]``). Only a merge of two entries moves them.
 _GROUPING_FUNC_NAMES = frozenset(
     {
@@ -174,8 +175,8 @@ def lift_min_entry_values(
 ) -> torch.Tensor:
     """Return a tensor whose smallest entry is lifted above its largest.
 
-    Integer tensors lift the same way and bool tensors flip one entry (see
-    the helpers below). Lifting the minimum finite entry to ``max + max(max - min, 1)`` makes it
+    Integer tensors swap their smallest and largest entries instead, and bool
+    tensors flip one entry (see the helpers below). Lifting the minimum finite entry to ``max + max(max - min, 1)`` makes it
     the strict maximum of every slice that contains it, along any dim, so a
     softmax over a dim of size >= 2 changes its output there. The lifted
     entry exceeds the parent's maximum by its own value range (or the 1.0 unit
@@ -193,18 +194,21 @@ def lift_min_entry_values(
     Returns
     -------
     torch.Tensor
-        Tensor of the same shape and dtype differing in exactly one entry, or
-        the minimal ``step_up`` when the probe cannot apply: a complex, wide
-        unsigned or empty tensor, no finite entry, a lifted value the dtype cannot
-        represent, or one the dtype rounds back onto the saved entry.
+        Tensor of the same shape and dtype differing in exactly one entry (two
+        for the integer swap), or the minimal ``step_up`` when the probe cannot
+        apply: a complex or empty tensor, a constant integer tensor, no finite
+        entry, a lifted value the dtype cannot represent, or one the dtype
+        rounds back onto the saved entry. ``core._directional_step_perturb``
+        hands uint16/32/64 parents over as their signed views, so they take the
+        integer swap on the signed bit patterns.
     """
 
     if tensor.numel() == 0:
         return fallback(tensor, "step_up")
     if tensor.dtype is torch.bool:
         return _flip_one_bool_entry(tensor, fallback)
-    if _is_lifted_integer_dtype(tensor.dtype):
-        return _lift_min_integer_entry(tensor, fallback)
+    if _is_swapped_integer_dtype(tensor.dtype):
+        return _swap_integer_extremes(tensor, fallback)
     if not tensor.is_floating_point():
         return fallback(tensor, "step_up")
     finite = torch.isfinite(tensor)
@@ -220,40 +224,48 @@ def lift_min_entry_values(
     return _set_one_entry(tensor, flat_index, lifted_value, fallback)
 
 
-#: Integer dtypes the lift handles (bool and the wide unsigned types take the minimal step).
-_LIFTED_INTEGER_DTYPES = frozenset({torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64})
+#: Integer dtypes that take the min/max swap. The wide unsigned types arrive as
+#: their signed views (``core._directional_step_perturb``), so they swap too.
+_SWAPPED_INTEGER_DTYPES = frozenset(
+    {torch.uint8, torch.int8, torch.int16, torch.int32, torch.int64}
+)
 
 
-def _is_lifted_integer_dtype(dtype: torch.dtype) -> bool:
-    """Return whether the lift handles ``dtype`` as an integer."""
+def _is_swapped_integer_dtype(dtype: torch.dtype) -> bool:
+    """Return whether the probe handles ``dtype`` as an integer (the min/max swap)."""
 
-    return dtype in _LIFTED_INTEGER_DTYPES
+    return dtype in _SWAPPED_INTEGER_DTYPES
 
 
-def _lift_min_integer_entry(
+def _swap_integer_extremes(
     tensor: torch.Tensor,
     fallback: Callable[[torch.Tensor, str], torch.Tensor],
 ) -> torch.Tensor:
-    """Return an integer tensor whose smallest entry is lifted above its largest.
+    """Return an integer tensor with its first smallest and first largest entries swapped.
 
-    The integer form of the float lift: the minimum entry becomes
-    ``max + max(max - min, 1)``, computed in Python ints, so an order-reading
-    child (``argmax``, ``argsort``, ``sort`` indices, ``topk`` indices) sees a
-    new strict maximum. Every uniform step preserves the order of an integer
-    parent (token ids feeding ``argmax`` for an end-of-sequence position), so
-    without this rung only the random draw could move such a child. A lift the
-    dtype cannot represent takes the minimal ``step_up``.
+    The integer form of the lift. The smallest entry takes the largest value
+    and the largest takes the smallest, so an order-reading child (``argmax``,
+    ``argsort``, ``sort`` indices, ``topk`` indices) sees its first maximum
+    move while every entry stays inside the set of saved values. That keeps the
+    probe inside any index domain the saved call already satisfied: an id
+    parent of ``embedding_bag``, ``take`` or ``__getitem__`` never receives a
+    value above the saved maximum, so no table bound is crossed (on CUDA an
+    out-of-range id is a fatal device-side assert, not an absorbed raise).
+    Every uniform step preserves the order of an integer parent (token ids
+    feeding ``argmax`` for an end-of-sequence position), so without this rung
+    only the random draw could move such a child. A constant tensor has nothing
+    to swap and takes the minimal ``step_up``, a rung the ladder already ran.
     """
 
-    info = torch.iinfo(tensor.dtype)
     flat = tensor.reshape(-1)
-    flat_index = int(flat.argmin())
-    low = int(flat[flat_index])
-    high = int(flat.max())
-    lifted_value = high + max(high - low, 1)
-    if lifted_value > info.max:
+    low_index = int(flat.argmin())
+    high_index = int(flat.argmax())
+    low = flat[low_index].item()
+    high = flat[high_index].item()
+    if low == high:
         return fallback(tensor, "step_up")
-    return _set_one_entry(tensor, flat_index, lifted_value, fallback)
+    swapped = _set_one_entry(tensor, low_index, high, fallback)
+    return _set_one_entry(swapped, high_index, low, fallback)
 
 
 def _flip_one_bool_entry(

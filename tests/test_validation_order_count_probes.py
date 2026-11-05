@@ -4,8 +4,9 @@ Every uniform retry step preserves what an order-reading or counting child
 reads: adding one to every token id keeps the ``argmax`` position, and
 ``logical_not`` keeps the true count of a balanced mask. A real edge then
 passed only when the random draw happened to move the child, and an unlucky
-draw false-failed it. The ``lift_min_entry`` rung now lifts the smallest
-integer entry above the largest and flips one bool entry, and the unique
+draw false-failed it. The ``lift_min_entry`` rung now swaps the smallest and
+largest integer entries (every value stays in the saved set, so an index
+parent stays in its domain) and flips one bool entry, and the unique
 family gets a ``merge_adjacent_entry`` rung: the counts of distinct entries
 (``unique_consecutive([0, 1, 2])`` counts ``[1, 1, 1]``) survive every shift
 and the lift, and move only when two entries merge. Children that read only a
