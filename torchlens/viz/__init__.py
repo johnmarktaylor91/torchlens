@@ -11,6 +11,7 @@ from typing import Any
 import torch
 
 from .._entry_refusals import refuse_viz_shape
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
 from . import batch_summary as _batch_summary, nodes
@@ -157,6 +158,6 @@ def causal_trace_heatmap(
     if ax is None:
         _fig, ax = plt.subplots()
     axes: Any = ax
-    image = axes.imshow(data.detach().cpu().numpy(), cmap=cmap, aspect="auto")
+    image = axes.imshow(tensor_to_numpy(data.detach()), cmap=cmap, aspect="auto")
     axes.figure.colorbar(image, ax=axes)
     return axes

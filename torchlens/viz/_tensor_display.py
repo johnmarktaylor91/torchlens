@@ -7,6 +7,7 @@ from typing import Any, Literal
 import torch
 
 from .._utils._multipass_access import is_multipass_layer
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._rgb_scale import rgb_unit_hwc
 
 TensorShowMethod = Literal["auto", "heatmap", "channels", "rgb", "hist"]
@@ -227,13 +228,13 @@ def show_tensor(
 
     if resolved_method == "hist":
         fig, ax = plt.subplots()
-        ax.hist(data.flatten().numpy(), **kwargs)
+        ax.hist(tensor_to_numpy(data.flatten()), **kwargs)
         ax.set_title(getattr(log_entry, "layer_label", "Tensor"))
         return fig
 
     if resolved_method == "rgb":
         fig, ax = plt.subplots()
-        ax.imshow(rgb_unit_hwc(data[0] if data.ndim == 4 else data).numpy(), **kwargs)
+        ax.imshow(tensor_to_numpy(rgb_unit_hwc(data[0] if data.ndim == 4 else data)), **kwargs)
         ax.axis("off")
         return fig
 
@@ -256,7 +257,9 @@ def show_tensor(
         for index in range(channels):
             ax = axes[0][index]
             ax.imshow(
-                _clip_outliers(channel_data[index], outlier_perc).numpy(), cmap=cmap, **kwargs
+                tensor_to_numpy(_clip_outliers(channel_data[index], outlier_perc)),
+                cmap=cmap,
+                **kwargs,
             )
             ax.axis("off")
             ax.set_title(str(index))
@@ -264,6 +267,6 @@ def show_tensor(
 
     heatmap_data = _clip_outliers(_to_2d(data), outlier_perc)
     fig, ax = plt.subplots()
-    ax.imshow(heatmap_data.numpy(), cmap=cmap, aspect="auto", **kwargs)
+    ax.imshow(tensor_to_numpy(heatmap_data), cmap=cmap, aspect="auto", **kwargs)
     ax.set_title(getattr(log_entry, "layer_label", "Tensor"))
     return fig

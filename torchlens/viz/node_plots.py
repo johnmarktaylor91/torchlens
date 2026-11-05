@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from .. import _entry_refusals as _refusals
+from .._utils._numpy_bridge import tensor_to_numpy
 
 # Historical import homes: the axis-selection internals moved to
 # _heatmap_axes.py in the file-size split; existing tests import them here.
@@ -521,7 +522,7 @@ def _as_numpy(value: Any) -> np.ndarray:
     """
 
     if hasattr(value, "detach") and hasattr(value, "cpu") and hasattr(value, "numpy"):
-        return cast(Any, value).detach().cpu().numpy()
+        return tensor_to_numpy(cast(Any, value).detach())
     return np.asarray(value)
 
 

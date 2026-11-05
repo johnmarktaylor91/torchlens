@@ -80,6 +80,7 @@ from typing import Any, Literal
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
 from .population import OneDatum, PerRowDatums, Population
@@ -157,7 +158,7 @@ def _feed_datum(hasher: hashlib._Hash, value: Any) -> None:
         cpu = value.detach().to("cpu")
         if cpu.dtype == torch.bfloat16:
             cpu = cpu.to(torch.float32)
-        hasher.update(cpu.contiguous().numpy().tobytes())
+        hasher.update(tensor_payload_bytes(cpu.contiguous()))
         return
     if isinstance(value, OneDatum):
         hasher.update(b"O")
@@ -1403,7 +1404,7 @@ def set_direction_mean(
 
     from .helpers import _helper_spec
 
-    direction_digest = hashlib.sha256(unit.contiguous().numpy().tobytes()).hexdigest()[:16]
+    direction_digest = hashlib.sha256(tensor_payload_bytes(unit.contiguous())).hexdigest()[:16]
     return _helper_spec(
         "set_direction_mean",
         kwargs={

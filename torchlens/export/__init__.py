@@ -27,6 +27,7 @@ from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._entry_refusals import require_xarray_presentations
 from .._io._json import loads_bounded
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.display import atomic_write_text
 from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
@@ -803,7 +804,7 @@ def xarray(trace: Any) -> Any:
         out = getattr(layer, "out", None)
         if not isinstance(out, torch.Tensor):
             continue
-        values = out.detach().cpu().numpy()
+        values = tensor_to_numpy(out.detach())
         # Batch-2 buffer ruling (option c): a buffer is module state with no
         # presentation axis; it exports as its own variable, on save-all and
         # partial traces alike.

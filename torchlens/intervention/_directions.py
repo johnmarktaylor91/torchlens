@@ -40,6 +40,7 @@ import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._selection.subspace import BasisProvenance, _basis_digest
+from .._utils.tensor_leaves import tensor_payload_bytes
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -366,7 +367,7 @@ def fit_direction(
     rows_digest = hashlib.sha256()
     for rows in (positive, negative):
         rows_digest.update(repr(tuple(rows.shape)).encode())
-        rows_digest.update(rows.detach().cpu().double().numpy().tobytes())
+        rows_digest.update(tensor_payload_bytes(rows.detach().cpu().double()))
     site_name = str(label)
     origin = (
         f"fit_direction(site={site_name!r}, method={method!r}, "

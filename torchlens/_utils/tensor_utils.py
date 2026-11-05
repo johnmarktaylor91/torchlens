@@ -26,6 +26,7 @@ from typing import Any, Literal, cast, get_args
 import torch
 
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
+from ._numpy_bridge import tensor_to_numpy
 from ._sparse_parts import sparse_component_tensors
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
@@ -1843,7 +1844,7 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
             # would log a real "detach" op and consume a raw-op-counter slot,
             # leaving a graph orphan and staling any raw labels recorded just
             # before this repr fired. Keep it inside the paused block.
-            n = cpu_data.detach().numpy()
+            n = tensor_to_numpy(cpu_data.detach())
         np_str = getattr(n, func_name)()
         # Cosmetic: replace "array" with "tensor" to match PyTorch style.
         np_str = np_str.replace("array", "tensor")

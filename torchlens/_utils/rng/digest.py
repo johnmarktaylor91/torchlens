@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from ..tensor_leaves import tensor_payload_bytes
 from .inventory_types import (
     _NotADigestableRng,
 )
@@ -109,7 +110,7 @@ def _digest_rng_instance(holder: Any) -> str:
         # before/after sweeps witness any draw thread-independently. A
         # state-read failure propagates to the fail-closed inventory
         # error path, downgrading completeness rather than reading clean.
-        state_bytes = holder.get_state().cpu().numpy().tobytes()
+        state_bytes = tensor_payload_bytes(holder.get_state().cpu())
         return exact(("torch.Generator", str(holder.device), state_bytes))
     if isinstance(holder, random.Random):
         try:

@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import torch
 
-from ._utils.tensor_leaves import flat_byte_view
+from ._utils._torch_compat import get_numpy_bridge_support
+from ._utils.tensor_leaves import copy_host_bytes, flat_byte_view
 
 
 def to_cpu_contiguous(tensor: torch.Tensor) -> torch.Tensor:
@@ -82,7 +83,9 @@ def digest_byte_view(tensor: torch.Tensor) -> memoryview:
     view. The flat view comes from ``_utils.tensor_leaves.flat_byte_view``
     (stride-safe for one-element tensors). The returned memoryview keeps the
     backing ndarray (and thus the transport tensor's storage) alive; no
-    whole-payload byte copy is made.
+    whole-payload byte copy is made, except when ``HAS_NUMPY_BRIDGE`` is False
+    (torch compiled against NumPy 1.x under NumPy 2), where the bytes are
+    copied without NumPy.
 
     Parameters
     ----------
@@ -95,4 +98,7 @@ def digest_byte_view(tensor: torch.Tensor) -> memoryview:
         Read-through byte view of the CPU-contiguous logical payload.
     """
 
-    return flat_byte_view(to_cpu_contiguous(tensor)).numpy().data
+    flat = flat_byte_view(to_cpu_contiguous(tensor))
+    if get_numpy_bridge_support():
+        return flat.numpy().data
+    return memoryview(copy_host_bytes(flat))

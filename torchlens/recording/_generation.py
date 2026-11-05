@@ -30,6 +30,7 @@ from torch import nn
 
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import normalize_selector_like
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ._capture_door import _capture_without_seed, _unfold_capture_options
 from ._generation_options import GenerationOptions
 from ._generation_stream import TokenSeries, _StepSink, site_selector
@@ -389,7 +390,7 @@ def preflight_generation(
 def _rng_digest() -> str:
     """Return a short digest of the CPU torch RNG state."""
 
-    state = torch.default_generator.get_state().numpy().tobytes()
+    state = tensor_payload_bytes(torch.default_generator.get_state())
     return hashlib.sha256(state).hexdigest()[:16]
 
 

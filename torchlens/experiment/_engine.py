@@ -31,6 +31,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
@@ -267,7 +268,7 @@ def _unit_digest_part(entry: Any) -> Any:
     mask = entry.mask
     if bool(mask.all()):
         return label
-    packed = mask.reshape(-1).cpu().numpy().tobytes()
+    packed = tensor_payload_bytes(mask.reshape(-1).cpu())
     return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
 
 

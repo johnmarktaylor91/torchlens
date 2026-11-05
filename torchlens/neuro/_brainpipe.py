@@ -41,6 +41,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._utils._numpy_bridge import tensor_to_numpy
 
 __tl_layer__ = "L6"
 
@@ -876,7 +877,7 @@ def export_npz(
     arrays: dict[str, np.ndarray] = {}
     for label, value in dict(mapping).items():
         if isinstance(value, torch.Tensor):
-            array = value.detach().cpu().numpy()
+            array = tensor_to_numpy(value.detach())
         else:
             array = np.asarray(value)
         if array.dtype == object:

@@ -1,0 +1,104 @@
+"""Bridge-aware tensor/NumPy conversion (the one authority).
+
+Product code turns a tensor into a NumPy array, or an array into a tensor,
+through :func:`tensor_to_numpy` and :func:`tensor_from_numpy`; byte copies go
+through ``tensor_leaves.copy_host_bytes``. On a working torch/NumPy bridge each is exactly the historical call. When
+``HAS_NUMPY_BRIDGE`` is False (a torch build compiled against NumPy 1.x, torch
+2.1 and 2.2, running under NumPy 2, where every bridge call raises "Numpy is
+not available") each falls back to a NumPy-free byte copy, so digests,
+exports and plots keep working instead of failing deep inside a call.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+import torch
+
+from ._torch_compat import get_numpy_bridge_support
+from ._torch_symbols import torch_dtype_named
+from .tensor_leaves import copy_host_bytes, flat_byte_view
+
+
+def tensor_to_numpy(tensor: torch.Tensor, *, force: bool = False) -> Any:
+    """Return ``tensor.cpu().numpy()``, also when torch's NumPy bridge is broken.
+
+    With a working bridge this is exactly ``tensor.cpu().numpy()`` (same
+    strides, same refusals). When ``HAS_NUMPY_BRIDGE`` is False the array is
+    rebuilt by NumPy itself from a byte copy of the CPU-contiguous logical
+    payload, so export, plot and analysis paths keep working instead of
+    raising "Numpy is not available".
+
+    Parameters
+    ----------
+    tensor:
+        Dense strided tensor whose dtype NumPy can represent.
+    force:
+        On a working bridge, call ``tensor.numpy(force=True)`` (detach, move to
+        CPU, resolve conj/neg bits) instead of ``tensor.cpu().numpy()``. The
+        fallback always does all of that.
+
+    Returns
+    -------
+    numpy.ndarray
+        Host array with the tensor's shape, dtype and values.
+
+    Raises
+    ------
+    TypeError
+        When NumPy has no matching dtype (bf16, fp8), as ``Tensor.numpy`` does.
+    """
+
+    if get_numpy_bridge_support():
+        return tensor.numpy(force=True) if force else tensor.cpu().numpy()
+    dtype_name = str(tensor.dtype).removeprefix("torch.")
+    try:
+        numpy_dtype = np.dtype(dtype_name)
+    except TypeError as exc:
+        raise TypeError(f"Got unsupported ScalarType {dtype_name}") from exc
+    host = tensor.detach().resolve_conj().resolve_neg().cpu().contiguous()
+    payload = bytearray(copy_host_bytes(flat_byte_view(host)))
+    return np.frombuffer(payload, dtype=numpy_dtype).reshape(tuple(tensor.shape))
+
+
+def tensor_from_numpy(array: Any) -> torch.Tensor:
+    """Return ``torch.from_numpy(array)``, also when torch's NumPy bridge is broken.
+
+    With a working bridge this is exactly ``torch.from_numpy`` (zero-copy, the
+    tensor shares the array's memory). When ``HAS_NUMPY_BRIDGE`` is False the
+    tensor is built from a byte copy through the buffer protocol
+    (``torch.frombuffer``), so it does NOT share memory with ``array``.
+
+    Parameters
+    ----------
+    array:
+        A ``numpy.ndarray`` whose dtype torch can represent.
+
+    Returns
+    -------
+    torch.Tensor
+        CPU tensor with the array's shape, dtype and values.
+
+    Raises
+    ------
+    TypeError
+        When torch has no matching dtype, as ``torch.from_numpy`` does.
+    """
+
+    if get_numpy_bridge_support():
+        return torch.from_numpy(array)
+    # ``np.ascontiguousarray`` promotes 0-d input to shape (1,): keep the
+    # caller's shape explicitly.
+    shape = tuple(np.shape(array))
+    contiguous = np.ascontiguousarray(array)
+    torch_dtype = torch_dtype_named(contiguous.dtype.name)
+    if torch_dtype is None:
+        raise TypeError(
+            f"can't convert np.ndarray of type numpy.{contiguous.dtype.name}; torch has "
+            "no matching dtype"
+        )
+    if contiguous.size == 0:
+        return torch.empty(shape, dtype=torch_dtype)
+    flat = torch.frombuffer(bytearray(contiguous.tobytes()), dtype=torch_dtype)
+    return flat.reshape(shape)

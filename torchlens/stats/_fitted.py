@@ -28,6 +28,7 @@ from typing import Any, cast
 import torch
 
 from .._errors import _actionable_message, _ActionableErrorMixin
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..errors._base import ConfigurationError
 
 __tl_layer__ = "L5"
@@ -110,7 +111,7 @@ def fitted_digest(
     hasher = hashlib.sha256()
     hasher.update(header)
     for tensor in (components, mean, explained_variance):
-        hasher.update(tensor.detach().to("cpu", torch.float64).contiguous().numpy().tobytes())
+        hasher.update(tensor_payload_bytes(tensor.detach().to("cpu", torch.float64).contiguous()))
     return "sha256:" + hasher.hexdigest()
 
 

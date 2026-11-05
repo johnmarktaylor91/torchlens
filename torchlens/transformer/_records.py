@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ._errors import refuse
 from ._wording import (
     PROVENANCE_RECONSTRUCTED,
@@ -109,7 +110,7 @@ def tensor_fingerprint(tensor: torch.Tensor) -> str:
     work = tensor.detach().to(torch.float32).cpu().contiguous()
     digest = hashlib.sha256()
     digest.update(repr(tuple(work.shape)).encode())
-    digest.update(work.numpy().tobytes())
+    digest.update(tensor_payload_bytes(work))
     return f"sha256:{digest.hexdigest()}"
 
 

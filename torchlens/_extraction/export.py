@@ -39,6 +39,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.hashing import sha256_file
 from .context import sanitize_key
 from .ragged import RaggedBatch
@@ -402,7 +403,7 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
             tensor, conversion = _widen_for_export(key, payload, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            array = tensor.cpu().numpy()
+            array = tensor_to_numpy(tensor)
             if dense_target is None:
                 shape = (reader.n_stimuli,) + array.shape[1:]
                 dense_target = np.lib.format.open_memmap(
@@ -421,8 +422,10 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
             values, conversion = _widen_for_export(key, merged.values, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            np.save(temp / f"{stem}__values.npy", values.cpu().numpy(), allow_pickle=False)
-            np.save(temp / f"{stem}__offsets.npy", merged.offsets.cpu().numpy(), allow_pickle=False)
+            np.save(temp / f"{stem}__values.npy", tensor_to_numpy(values), allow_pickle=False)
+            np.save(
+                temp / f"{stem}__offsets.npy", tensor_to_numpy(merged.offsets), allow_pickle=False
+            )
             shapes = np.array([list(s) for s in merged.row_shapes], dtype=np.int64)
             np.save(temp / f"{stem}__shapes.npy", shapes, allow_pickle=False)
             members.extend(
@@ -505,7 +508,7 @@ def _export_hdf5(job: _ExportJob) -> list[dict[str, Any]]:
                 tensor, conversion = _widen_for_export(key, payload, widen_unsupported)
                 if conversion:
                     conversions[key] = conversion
-                array = tensor.cpu().numpy()
+                array = tensor_to_numpy(tensor)
                 if dataset is None:
                     dataset = handle.create_dataset(
                         stem,
@@ -525,8 +528,8 @@ def _export_hdf5(job: _ExportJob) -> list[dict[str, Any]]:
                     conversions[key] = conversion
                 group = handle.create_group(stem)
                 group.attrs["torchlens_key"] = key
-                group.create_dataset("values", data=values.cpu().numpy())
-                group.create_dataset("offsets", data=merged.offsets.cpu().numpy())
+                group.create_dataset("values", data=tensor_to_numpy(values))
+                group.create_dataset("offsets", data=tensor_to_numpy(merged.offsets))
                 group.create_dataset(
                     "shapes",
                     data=[list(shape) for shape in merged.row_shapes],
@@ -576,14 +579,14 @@ def _export_mat(job: _ExportJob) -> list[dict[str, Any]]:
             values, conversion = _widen_for_export(key, materialized.values, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            payload[f"{stem}__values"] = values.cpu().numpy()
-            payload[f"{stem}__offsets"] = materialized.offsets.cpu().numpy()
+            payload[f"{stem}__values"] = tensor_to_numpy(values)
+            payload[f"{stem}__offsets"] = tensor_to_numpy(materialized.offsets)
             payload[f"{stem}__shapes"] = [list(shape) for shape in materialized.row_shapes]
         else:
             tensor, conversion = _widen_for_export(key, materialized, widen_unsupported)
             if conversion:
                 conversions[key] = conversion
-            payload[stem] = tensor.cpu().numpy()
+            payload[stem] = tensor_to_numpy(tensor)
     filename = "extraction.mat"
     scipy_io.savemat(temp / filename, payload, do_compression=False)
     return _member_rows(temp, "|".join(selected), [filename], "mat_v5_file", ledger)

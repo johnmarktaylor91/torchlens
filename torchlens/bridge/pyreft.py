@@ -46,6 +46,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._json import loads_bounded, read_bytes_bounded
+from .._utils.tensor_leaves import tensor_payload_bytes
 
 __all__ = ["LoreftArtifact", "read"]
 
@@ -82,7 +83,7 @@ def _float64_sha256(tensor: torch.Tensor) -> str:
     """Return the sha256 of a tensor's float64 bytes (row-major, no header)."""
 
     data = tensor.detach().to(torch.float64).cpu().contiguous()
-    return hashlib.sha256(data.numpy().tobytes()).hexdigest()
+    return hashlib.sha256(tensor_payload_bytes(data)).hexdigest()
 
 
 @dataclasses.dataclass(frozen=True)

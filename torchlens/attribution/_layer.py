@@ -45,6 +45,8 @@ from torchlens.attribution._steps import (
 from torchlens.receptive_field._viz import _blend_heatmap
 from torchlens.viz import node_plots
 
+from .._utils._numpy_bridge import tensor_to_numpy
+
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 
 # D21 (attrib memo): a layer-space completeness residual is expected near zero
@@ -870,10 +872,10 @@ def _cam_base_image(spatial_reference: Tensor, image: Image.Image | None) -> Ima
         low = channels.amin()
         high = channels.amax()
         normalized = torch.zeros_like(channels) if high == low else (channels - low) / (high - low)
-        array = (normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8).numpy()
+        array = tensor_to_numpy((normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8))
         return Image.fromarray(array, mode="RGB")
     reduced = data.abs().mean(dim=0) if data.ndim == 3 else data.abs()
-    return node_plots.heatmap(reduced.numpy(), width=width, height=height, cmap="gray")
+    return node_plots.heatmap(tensor_to_numpy(reduced), width=width, height=height, cmap="gray")
 
 
 def _cam_overlay(
@@ -909,7 +911,9 @@ def _cam_overlay(
         raise AttributionError("alpha must be between 0 and 1")
     base = _cam_base_image(spatial_reference, image)
     data = native_cam.detach().float().cpu().mean(dim=(0, 1))
-    heatmap = node_plots.heatmap(data.numpy(), width=base.width, height=base.height, cmap=cmap)
+    heatmap = node_plots.heatmap(
+        tensor_to_numpy(data), width=base.width, height=base.height, cmap=cmap
+    )
     native_height, native_width = (int(value) for value in native_cam.shape[-2:])
     disclosure = f"CAM native map: {native_height}x{native_width}; display interpolated"
     return _blend_heatmap(base, heatmap, alpha=alpha, disclosure=disclosure)

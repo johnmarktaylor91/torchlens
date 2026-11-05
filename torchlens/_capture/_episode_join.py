@@ -48,6 +48,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ._episode_derivation import _declaration_error, _flat_cpu_snapshot
 
 if TYPE_CHECKING:
@@ -234,7 +235,7 @@ def _tensor_digest(value: Any) -> str:
     hasher.update(str(value.dtype).encode("utf-8"))
     hasher.update(str(tuple(value.shape)).encode("utf-8"))
     if flat.numel():
-        hasher.update(flat.view(torch.uint8).numpy().tobytes())
+        hasher.update(tensor_payload_bytes(flat.view(torch.uint8)))
     return f"sha256:{hasher.hexdigest()}"
 
 

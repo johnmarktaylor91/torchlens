@@ -318,3 +318,11 @@
   forward or wrap the foreign step in an `autograd.Function`. `.item()`, `int()`, `float()`
   and `bool()` are control-flow scalars under the completeness witness's scalar belt and are
   deliberately not departures.
+- torch 2.1 and 2.2 wheels were compiled against NumPy 1: under NumPy 2 they import, but
+  `torch.from_numpy`, `Tensor.numpy()` and `np.asarray(tensor)` raise `RuntimeError: Numpy is not
+  available` (torch 2.3+ is fine). The lazy `HAS_NUMPY_BRIDGE` flag in `_utils/_torch_compat.py`
+  names that state. Product code that needs a tensor's bytes or a host array goes through
+  `tensor_payload_bytes` or `copy_host_bytes` (`_utils/tensor_leaves.py`), `digest_byte_view`
+  (`_transport.py`), or `tensor_to_numpy` and `tensor_from_numpy` (`_utils/_numpy_bridge.py`),
+  never a bare `.numpy()` or `torch.from_numpy`; each falls back to a NumPy-free byte copy.
+  Pinned in `tests/test_numpy_bridge_compat.py`.
