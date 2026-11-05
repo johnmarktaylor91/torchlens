@@ -73,8 +73,10 @@ def _is_conditional_test(location: tuple[str, int]) -> bool:
 def _layer_counter(trace: Any) -> int | None:
     """Return the trace's raw layer counter, or None when it is not readable."""
 
-    graph_ws = getattr(trace, "_raw_graph_ws", None)
-    counter = getattr(graph_ws, "layer_counter", None)
+    try:
+        counter = trace._raw_graph_ws.layer_counter
+    except AttributeError:
+        return None
     return counter if isinstance(counter, int) else None
 
 

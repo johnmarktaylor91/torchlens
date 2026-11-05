@@ -1245,11 +1245,11 @@
         "tests/surface_oracle/test_surface_oracle.py",
         "tests/test_buffer_datamodel.py",
         "tests/test_bug_fixes_phase14.py",
-        "tests/test_capture_row_commit_cost.py",
         "tests/test_conditional_lifecycle.py",
         "tests/test_norm_zero_weight_proof.py",
         "tests/test_postprocess_r14a_regressions.py",
-        "tests/test_r18h_introspect_hash.py"
+        "tests/test_r18h_introspect_hash.py",
+        "tests/test_selective_save_zero_match_warning.py"
       ],
       "torchlens/_data_classes/_record_groups.py": [
         "tests/test_buffer_datamodel.py",
@@ -9289,6 +9289,11 @@
         "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_wrapper_teardown_hygiene.py"
       ],
+      "torchlens/backends/torch/_bool_check_records.py": [
+        "tests/test_torch_compat.py",
+        "tests/test_validation_bool_check_records.py",
+        "tests/test_w1f3_observer_failopen.py"
+      ],
       "torchlens/backends/torch/_boundary_types.py": [
         "tests/real_model/test_compat_matrix_rows.py",
         "tests/test_differential_oracle_authority.py",
@@ -9436,7 +9441,8 @@
         "tests/test_conditional_scalar_escape_advisory.py",
         "tests/test_framework_filename_verdict_bound.py",
         "tests/test_lazy_materialize_census.py",
-        "tests/test_structure_only_teaching.py"
+        "tests/test_structure_only_teaching.py",
+        "tests/test_validation_bool_check_records.py"
       ],
       "torchlens/backends/torch/_escape_detection_fields.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -9901,13 +9907,13 @@
       ],
       "torchlens/backends/torch/_ops_row_journal.py": [
         "tests/test_capture_fields_dict_prune.py",
-        "tests/test_capture_row_commit_cost.py",
         "tests/test_capture_row_journal.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
         "tests/test_row_direct_import_cycle.py",
-        "tests/test_scaling_ladder.py"
+        "tests/test_scaling_ladder.py",
+        "tests/test_view_write_call_alias_edges.py"
       ],
       "torchlens/backends/torch/_ops_saved_arg_copies.py": [
         "tests/test_capture_guard_transactionality.py",
@@ -9950,13 +9956,13 @@
         "tests/test_tlspec_runnable_output_honesty.py"
       ],
       "torchlens/backends/torch/_param_fingerprint.py": [
-        "tests/test_capture_row_commit_cost.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_conditional_integration.py",
         "tests/test_gc.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
         "tests/test_scaling_ladder.py",
+        "tests/test_ssot_drift_gates.py",
         "tests/test_view_write_call_alias_edges.py"
       ],
       "torchlens/backends/torch/_parent_arg_containers.py": [
@@ -10040,13 +10046,13 @@
         "tests/test_wrong_trace_cache_cluster.py"
       ],
       "torchlens/backends/torch/_same_object_handoff.py": [
-        "tests/test_capture_row_commit_cost.py",
         "tests/test_capture_same_object_reference.py",
         "tests/test_capture_targets.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
         "tests/test_scaling_ladder.py",
+        "tests/test_view_write_base_and_view_one_call.py",
         "tests/test_w3_capture_hardening.py"
       ],
       "torchlens/backends/torch/_script_boundary.py": [
@@ -10375,7 +10381,7 @@
       ],
       "torchlens/backends/torch/module_stack.py": [
         "tests/test_capture_failure_reporting.py",
-        "tests/test_capture_row_commit_cost.py",
+        "tests/test_capture_same_object_reference.py",
         "tests/test_capture_settlement.py",
         "tests/test_conditional_integration.py",
         "tests/test_fastlog/test_dispatch_smoke.py",
@@ -10394,14 +10400,14 @@
         "tests/test_wrong_trace_cache_cluster.py"
       ],
       "torchlens/backends/torch/ops.py": [
-        "tests/test_capture_row_commit_cost.py",
         "tests/test_capture_unification_p3a.py",
         "tests/test_findfix_input_ops_dump.py",
         "tests/test_livecheck_module_exit_only.py",
         "tests/test_op_row_cells.py",
         "tests/test_ops_arg_slots.py",
         "tests/test_scaling_ladder.py",
-        "tests/test_trace_boundary_ops_multipass.py"
+        "tests/test_trace_boundary_ops_multipass.py",
+        "tests/test_view_write_call_alias_edges.py"
       ],
       "torchlens/backends/torch/param_mutation.py": [
         "tests/test_forward_created_parameters.py",
@@ -11164,14 +11170,14 @@
         "tests/test_validation_index_domain_in_range.py"
       ],
       "torchlens/debug/_checks/_records.py": [
-        "tests/real_model/test_hon_checks_lr_scheduler.py",
         "tests/test_checks_kit_events.py",
         "tests/test_checks_kit_nonfinite.py",
         "tests/test_checks_kit_param_checks.py",
         "tests/test_checks_kit_provocations.py",
         "tests/test_checks_kit_range_seam.py",
         "tests/test_checks_kit_scan.py",
-        "tests/test_checks_kit_session.py"
+        "tests/test_checks_kit_session.py",
+        "tests/test_validation_bool_check_records.py"
       ],
       "torchlens/debug/_checks/_scan.py": [
         "tests/test_alias_scan_scaling.py",
@@ -11552,8 +11558,8 @@
       "torchlens/errors/_validation.py": [
         "tests/test_backward_p7_validation.py",
         "tests/test_validation.py",
+        "tests/test_validation_bool_check_records.py",
         "tests/test_validation_hardening.py",
-        "tests/test_validation_index_domain_in_range.py",
         "tests/test_validation_key_forgery.py",
         "tests/test_validation_module_call_counts.py",
         "tests/test_valmem_validation_memory.py",
@@ -12151,7 +12157,7 @@
       ],
       "torchlens/intervention/_hooks_support.py": [
         "tests/test_backward_intervention.py",
-        "tests/test_capture_row_commit_cost.py",
+        "tests/test_capture_unification_p3a.py",
         "tests/test_distributed_honesty.py",
         "tests/test_grad_site_hooks.py",
         "tests/test_intervention_phase3.py",
@@ -13542,9 +13548,9 @@
         "tests/test_backward_p7_validation.py",
         "tests/test_rf_ext_validation.py",
         "tests/test_validation.py",
+        "tests/test_validation_bool_check_records.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_index_domain_in_range.py",
-        "tests/test_validation_module_call_counts.py",
         "tests/test_valmem_validation_memory.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
