@@ -12,8 +12,8 @@ DeferredWarnings = list[tuple[Any, Any, tuple[Any, ...], dict[str, Any]]]
 
 
 @contextmanager
-def defer_warning_category(category: type[Warning], deferred: DeferredWarnings) -> Iterator[None]:
-    """Hold back warnings of ``category`` in ``deferred``; forward everything else.
+def defer_warning_category(held: type[Warning], deferred: DeferredWarnings) -> Iterator[None]:
+    """Hold back warnings of category ``held`` in ``deferred``; forward everything else.
 
     The hold sits behind the warnings filters (only warnings that would be
     shown reach it). The caller decides afterwards: drop the parked warnings
@@ -22,7 +22,7 @@ def defer_warning_category(category: type[Warning], deferred: DeferredWarnings) 
 
     Parameters
     ----------
-    category:
+    held:
         Warning class (and subclasses) to park.
     deferred:
         List the parked ``showwarning`` calls are appended to.
@@ -35,13 +35,13 @@ def defer_warning_category(category: type[Warning], deferred: DeferredWarnings) 
 
     forward = warnings.showwarning
 
-    def hold(message: Any, shown_category: Any, *args: Any, **kwargs: Any) -> None:
-        """Park ``category`` warnings in ``deferred``; forward the rest."""
+    def hold(message: Any, category: Any, *args: Any, **kwargs: Any) -> None:
+        """Park ``held`` warnings in ``deferred``; forward the rest."""
 
-        if isinstance(shown_category, type) and issubclass(shown_category, category):
-            deferred.append((message, shown_category, args, kwargs))
+        if isinstance(category, type) and issubclass(category, held):
+            deferred.append((message, category, args, kwargs))
             return
-        forward(message, shown_category, *args, **kwargs)
+        forward(message, category, *args, **kwargs)
 
     warnings.showwarning = hold
     try:
