@@ -31,9 +31,10 @@ program to be installed.
 `trace.draw()`
 
 The graph flows from the input at the bottom to the output at the top. The header in the top
-left corner names the model and counts the traced network: 10 operations whose outputs total
-18.9 KB, and 1.61K parameters, all trainable. The count is the network's whatever the drawing
-collapses: a `depth=1` drawing of the same model still says 10 operations. Counts from 1,000 up print compact in the
+left corner names the model and counts the traced network: 12 operations whose outputs total
+18.9 KB (two of them, the batch norms' step-counter updates, are hidden with the buffers), and
+1.61K parameters, all trainable. The count is the network's whatever the drawing collapses: a
+`depth=1` drawing of the same model still says 12 operations. Counts from 1,000 up print compact in the
 parameter line (`11.7M params`), and op counts from 10,000 up (`12.3K ops`). Each thick-bordered box is one module call: here
 `@features` (an `nn.Sequential`) holds two `ConvBlock` modules, `@features.0` and
 `@features.1`. The name under each box's address is the module's class.
