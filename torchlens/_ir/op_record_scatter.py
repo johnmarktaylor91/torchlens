@@ -626,9 +626,12 @@ def _write_overlay_cells(row: Any, f: Any, record: OpRecord) -> None:
         row[f["_pending_transformed_out_blob_id"]] = (
             blob_ref.blob_id if isinstance(blob_ref, portable) else None
         )
-    # A row build always sets the graph and policy facets, so read them directly.
-    graph, policy_facet = record.graph, record.policy_facet
-    assert graph is not None and policy_facet is not None
-    row[f["is_output_parent"]] = graph.is_output_parent
-    policy = policy_facet.policy
-    row[f["save_grads"]] = None if policy is None else policy.save_grad
+    # A row build always sets the graph and policy facets; read them directly
+    # (no helper call) and leave a cell as it is when its facet is absent.
+    graph = record.graph
+    if graph is not None:
+        row[f["is_output_parent"]] = graph.is_output_parent
+    policy_facet = record.policy_facet
+    if policy_facet is not None:
+        policy = policy_facet.policy
+        row[f["save_grads"]] = None if policy is None else policy.save_grad
