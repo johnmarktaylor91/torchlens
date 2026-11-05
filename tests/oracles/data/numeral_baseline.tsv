@@ -606,6 +606,8 @@ docs-md	docs/benchmarks/capture.md	0.8.1
 docs-md	docs/benchmarks/capture.md	0.8.1,
 docs-md	docs/benchmarks/capture.md	0.8.1.
 docs-md	docs/benchmarks/capture.md	0.82
+docs-md	docs/benchmarks/capture.md	0.84
+docs-md	docs/benchmarks/capture.md	0.88
 docs-md	docs/benchmarks/capture.md	0.9.0
 docs-md	docs/benchmarks/capture.md	0.9.0.
 docs-md	docs/benchmarks/capture.md	1,000
@@ -623,6 +625,7 @@ docs-md	docs/benchmarks/capture.md	1.09
 docs-md	docs/benchmarks/capture.md	1.11
 docs-md	docs/benchmarks/capture.md	1.13
 docs-md	docs/benchmarks/capture.md	1.14
+docs-md	docs/benchmarks/capture.md	1.15
 docs-md	docs/benchmarks/capture.md	1.19
 docs-md	docs/benchmarks/capture.md	1.20
 docs-md	docs/benchmarks/capture.md	1.23
@@ -648,6 +651,7 @@ docs-md	docs/benchmarks/capture.md	1.52
 docs-md	docs/benchmarks/capture.md	1.53
 docs-md	docs/benchmarks/capture.md	1.54
 docs-md	docs/benchmarks/capture.md	1.57
+docs-md	docs/benchmarks/capture.md	1.59
 docs-md	docs/benchmarks/capture.md	1.61
 docs-md	docs/benchmarks/capture.md	1.62
 docs-md	docs/benchmarks/capture.md	1.63
@@ -669,6 +673,7 @@ docs-md	docs/benchmarks/capture.md	1.91
 docs-md	docs/benchmarks/capture.md	1.99
 docs-md	docs/benchmarks/capture.md	10.
 docs-md	docs/benchmarks/capture.md	10.21
+docs-md	docs/benchmarks/capture.md	10.40
 docs-md	docs/benchmarks/capture.md	10.54
 docs-md	docs/benchmarks/capture.md	10.61
 docs-md	docs/benchmarks/capture.md	10.73
@@ -712,6 +717,7 @@ docs-md	docs/benchmarks/capture.md	14.21
 docs-md	docs/benchmarks/capture.md	14.26
 docs-md	docs/benchmarks/capture.md	14.32
 docs-md	docs/benchmarks/capture.md	14.39
+docs-md	docs/benchmarks/capture.md	14.42
 docs-md	docs/benchmarks/capture.md	14.56
 docs-md	docs/benchmarks/capture.md	14.64
 docs-md	docs/benchmarks/capture.md	14.81
@@ -756,6 +762,7 @@ docs-md	docs/benchmarks/capture.md	169
 docs-md	docs/benchmarks/capture.md	17
 docs-md	docs/benchmarks/capture.md	17.01
 docs-md	docs/benchmarks/capture.md	17.29
+docs-md	docs/benchmarks/capture.md	17.56
 docs-md	docs/benchmarks/capture.md	17.80
 docs-md	docs/benchmarks/capture.md	17.96
 docs-md	docs/benchmarks/capture.md	173
@@ -823,6 +830,7 @@ docs-md	docs/benchmarks/capture.md	20
 docs-md	docs/benchmarks/capture.md	20.05
 docs-md	docs/benchmarks/capture.md	20.20
 docs-md	docs/benchmarks/capture.md	20.30
+docs-md	docs/benchmarks/capture.md	20.47
 docs-md	docs/benchmarks/capture.md	20.50
 docs-md	docs/benchmarks/capture.md	20.51
 docs-md	docs/benchmarks/capture.md	20.67
@@ -832,6 +840,7 @@ docs-md	docs/benchmarks/capture.md	202.53
 docs-md	docs/benchmarks/capture.md	2026
 docs-md	docs/benchmarks/capture.md	2080
 docs-md	docs/benchmarks/capture.md	21
+docs-md	docs/benchmarks/capture.md	21,
 docs-md	docs/benchmarks/capture.md	21.36
 docs-md	docs/benchmarks/capture.md	219.81
 docs-md	docs/benchmarks/capture.md	22.00
@@ -865,6 +874,7 @@ docs-md	docs/benchmarks/capture.md	26.70
 docs-md	docs/benchmarks/capture.md	26.74
 docs-md	docs/benchmarks/capture.md	26.78
 docs-md	docs/benchmarks/capture.md	26.80
+docs-md	docs/benchmarks/capture.md	26.85
 docs-md	docs/benchmarks/capture.md	26.92
 docs-md	docs/benchmarks/capture.md	26.96
 docs-md	docs/benchmarks/capture.md	260
@@ -882,6 +892,7 @@ docs-md	docs/benchmarks/capture.md	28.00
 docs-md	docs/benchmarks/capture.md	28.76
 docs-md	docs/benchmarks/capture.md	29.30
 docs-md	docs/benchmarks/capture.md	29.87
+docs-md	docs/benchmarks/capture.md	290.84
 docs-md	docs/benchmarks/capture.md	296
 docs-md	docs/benchmarks/capture.md	3.00
 docs-md	docs/benchmarks/capture.md	3.02
@@ -898,8 +909,10 @@ docs-md	docs/benchmarks/capture.md	3.22
 docs-md	docs/benchmarks/capture.md	3.23
 docs-md	docs/benchmarks/capture.md	3.29
 docs-md	docs/benchmarks/capture.md	3.30
+docs-md	docs/benchmarks/capture.md	3.31
 docs-md	docs/benchmarks/capture.md	3.32
 docs-md	docs/benchmarks/capture.md	3.36
+docs-md	docs/benchmarks/capture.md	3.37
 docs-md	docs/benchmarks/capture.md	3.4
 docs-md	docs/benchmarks/capture.md	3.40
 docs-md	docs/benchmarks/capture.md	3.44
@@ -1008,6 +1021,7 @@ docs-md	docs/benchmarks/capture.md	452.97
 docs-md	docs/benchmarks/capture.md	454
 docs-md	docs/benchmarks/capture.md	458
 docs-md	docs/benchmarks/capture.md	46
+docs-md	docs/benchmarks/capture.md	46.3
 docs-md	docs/benchmarks/capture.md	466.61
 docs-md	docs/benchmarks/capture.md	47
 docs-md	docs/benchmarks/capture.md	47.24
@@ -1024,8 +1038,11 @@ docs-md	docs/benchmarks/capture.md	49.85
 docs-md	docs/benchmarks/capture.md	49.86
 docs-md	docs/benchmarks/capture.md	49.97
 docs-md	docs/benchmarks/capture.md	494.10
+docs-md	docs/benchmarks/capture.md	498
+docs-md	docs/benchmarks/capture.md	5.08
 docs-md	docs/benchmarks/capture.md	5.18.0,
 docs-md	docs/benchmarks/capture.md	5.26
+docs-md	docs/benchmarks/capture.md	5.27
 docs-md	docs/benchmarks/capture.md	5.3
 docs-md	docs/benchmarks/capture.md	5.42
 docs-md	docs/benchmarks/capture.md	5.5
@@ -1054,6 +1071,8 @@ docs-md	docs/benchmarks/capture.md	58
 docs-md	docs/benchmarks/capture.md	58.35
 docs-md	docs/benchmarks/capture.md	58.65
 docs-md	docs/benchmarks/capture.md	58.84
+docs-md	docs/benchmarks/capture.md	58.86
+docs-md	docs/benchmarks/capture.md	583.57
 docs-md	docs/benchmarks/capture.md	59.79
 docs-md	docs/benchmarks/capture.md	6.16
 docs-md	docs/benchmarks/capture.md	6.2
@@ -1071,12 +1090,14 @@ docs-md	docs/benchmarks/capture.md	60.71
 docs-md	docs/benchmarks/capture.md	6126
 docs-md	docs/benchmarks/capture.md	62
 docs-md	docs/benchmarks/capture.md	622.50
+docs-md	docs/benchmarks/capture.md	627.8
 docs-md	docs/benchmarks/capture.md	637.45
 docs-md	docs/benchmarks/capture.md	64
 docs-md	docs/benchmarks/capture.md	640.23
 docs-md	docs/benchmarks/capture.md	65.84
 docs-md	docs/benchmarks/capture.md	66.08
 docs-md	docs/benchmarks/capture.md	66.79
+docs-md	docs/benchmarks/capture.md	66.93
 docs-md	docs/benchmarks/capture.md	665.18
 docs-md	docs/benchmarks/capture.md	67.09
 docs-md	docs/benchmarks/capture.md	67.78
@@ -1084,6 +1105,7 @@ docs-md	docs/benchmarks/capture.md	681.98
 docs-md	docs/benchmarks/capture.md	684.49
 docs-md	docs/benchmarks/capture.md	692.01
 docs-md	docs/benchmarks/capture.md	693.68
+docs-md	docs/benchmarks/capture.md	694.92
 docs-md	docs/benchmarks/capture.md	696
 docs-md	docs/benchmarks/capture.md	7.07
 docs-md	docs/benchmarks/capture.md	7.16

@@ -255,6 +255,41 @@ process.
 | LSTM tagger, CPU, one sequence of 32 tokens, one process | the same with `until="embed"` | 0.77 ms |
 | LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until="embed")`, without `fast=True` | 51.97 ms |
 
+### Replaying a saved trace without the model
+
+A trace captured with `CaptureOptions(replayable=True)` and saved with
+`trace.save(path, level="runnable", include_weights=True)` can be loaded with `tl.load(path)` and
+run on new input with `loaded.run_transaction(inputs=new_x)`, with no model object. Without
+`include_weights=True` the file holds no weights and the replay runs on a fresh random
+initialization (TorchLens warns `runnable_random_init_run`). With the weights, the replay's
+output equalled `model(new_x)` (largest absolute difference 0 on ResNet-18 and GPT-2 small, 3e-08
+on the LSTM tagger), and every run reported path faithfulness `verified` with the state taken from
+the file. Measured on 2026-11-05 on a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 21, same build as above, in one process per model (median
+of up to 15 samples, GPT-2 up to 5). The worker was busier than for the rows above, so compare
+these rows with each other only.
+
+| Workload (model, device, repeats) | Tool | Median |
+| --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 20.47 ms |
+| ResNet-18, CPU, one 64x64 image, one process | fresh `tl.trace(model, x)` | 694.92 ms |
+| ResNet-18, CPU, one 64x64 image, one process | fresh capture with `CaptureOptions(replayable=True)` | 3.37 s |
+| ResNet-18, CPU, one 64x64 image, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 583.57 ms |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 2.34 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh `tl.trace(model, x)` | 5.27 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 17.56 s |
+| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 10.40 s |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.59 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh `tl.trace(model, x)` | 66.93 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 290.84 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 58.86 ms |
+
+One-time costs per model: ResNet-18 save with weights 5.08 s (a 46.3 MiB file) and load 3.31 s;
+GPT-2 small 26.85 s (627.8 MiB) and 14.42 s; LSTM tagger 1.15 s (1.7 MiB) and 498 ms. The replay
+costs about what a fresh trace does on ResNet-18 and the LSTM tagger (0.84 and 0.88 times) and
+about twice a fresh trace on GPT-2 small; the replayable capture itself is 4 to 5 times a default
+trace. GPT-2 small saves only with `use_cache=False`: with the default key-value cache the save is
+refused (`output_container_contract_missing`).
+
 ## Edit sweeps with a recording per edit
 
 What it does: one `tl.record(..., intervene=tl.when(...))` or one

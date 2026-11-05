@@ -481,10 +481,74 @@
   {
    "section": "until_lstm-tagger",
    "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until=\"embed\")`, without `fast=True` | 51.97 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 20.47 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | fresh `tl.trace(model, x)` | 694.92 ms |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | fresh capture with `CaptureOptions(replayable=True)` | 3.37 s |"
+  },
+  {
+   "section": "replay_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 583.57 ms |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 2.34 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh `tl.trace(model, x)` | 5.27 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 17.56 s |"
+  },
+  {
+   "section": "replay_gpt2-small",
+   "text": "| GPT-2 small (random weights, no key-value cache), CPU, one forward of 16 sequences of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 10.40 s |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.59 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh `tl.trace(model, x)` | 66.93 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | fresh capture with `CaptureOptions(replayable=True)` | 290.84 ms |"
+  },
+  {
+   "section": "replay_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | replay of the loaded runnable file on new input, `loaded.run_transaction(inputs=new_x)` | 58.86 ms |"
   }
  ],
  "early_stop": {
   "equality": "the stopped site equals a fresh tl.trace of the new input (max abs diff 0) on all three models",
   "engine": "guarded_fast with fast=True"
+ },
+ "model_free_replay": {
+  "host": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average 14 to 21",
+  "route": "tl.trace(model, x, capture=CaptureOptions(replayable=True)); trace.save(path, level='runnable', include_weights=True); tl.load(path).run_transaction(inputs=new_x)",
+  "one_time": {
+   "resnet18": "save with weights 5.08 s (46.3 MiB), load 3.31 s",
+   "gpt2-small": "save with weights 26.85 s (627.8 MiB), load 14.42 s",
+   "lstm-tagger": "save with weights 1.15 s (1.7 MiB), load 498 ms"
+  },
+  "equality_vs_model_new_x": {
+   "resnet18": "max abs diff 0",
+   "gpt2-small": "max abs diff 0",
+   "lstm-tagger": "max abs diff 3e-08"
+  },
+  "report": "path_faithfulness verified, numeric_attestation not_applicable, state_source embedded_capture_state on all three",
+  "warnings": "none from the replay; GPT-2's default trace warned that it kept 1.46 GiB of saved activations"
  }
 }
