@@ -35,8 +35,17 @@ from ..._utils._tensor_label import (
     session_storage_alias_candidates,
     storage_alias_index_key,
 )
+from ..._utils._torch_compat import get_tensorbase_class
+from .._entry_refusals import require_tensorbase_class
 
 _USER_GRAD_FN_ATTR = "tl_user_grad_fn"
+
+# The C getset originals of ``_base`` and ``requires_grad``: TorchLens's own reads
+# through them run no TorchLens frame, log no op and record no witnessed input fact
+# (capture wraps and shadows these names on ``torch.Tensor``, never on the C class).
+_TENSORBASE_CLS = require_tensorbase_class(get_tensorbase_class())
+_VIEW_BASE_OF = _TENSORBASE_CLS._base.__get__
+_REQUIRES_GRAD_OF = _TENSORBASE_CLS.requires_grad.__get__
 
 # Bound on the view-chain walk below (view chains are short; the bound only keeps
 # a malformed graph from looping).
@@ -315,15 +324,15 @@ def grad_fn_read_refused(t: Any) -> bool:
     raise, answers ``True``: the caller refuses the tensor (fail closed).
 
     The ordinary path costs nothing: autograd regenerates (and so checks) a
-    node only for a backward view (``_is_view()``) that has a node or whose
-    base requires grad, and these plain attribute reads never regenerate it,
-    so any other tensor answers ``False`` without the recorded read.
+    node only for a backward view (``_base`` set) that has a node or whose base
+    requires grad. The C originals read both without regenerating it, so any
+    other tensor answers ``False`` without the recorded read.
     """
 
-    if isinstance(t, torch.Tensor) and not (
-        t._is_view() and (t.requires_grad or t._base.requires_grad)
-    ):
-        return False
+    if isinstance(t, torch.Tensor):
+        base = _VIEW_BASE_OF(t)
+        if base is None or not (_REQUIRES_GRAD_OF(t) or _REQUIRES_GRAD_OF(base)):
+            return False
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
