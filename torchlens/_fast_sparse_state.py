@@ -27,6 +27,7 @@ from ._runnable.call_outputs import _mutation_target_slot_id
 from ._runnable.execution import _VIEW_OP_QUALNAMES
 from ._runnable.state_context import _call_execution_context_entered
 from ._runnable.verification import _decode_literal
+from ._utils._sparse_invariant_guard import call_with_sparse_invariants
 from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
@@ -229,9 +230,9 @@ class _CompiledSparseCall:
             _write_argument(args, kwargs, path, value)
         try:
             if not self.requires_context:
-                return self.func(*args, **kwargs)
+                return call_with_sparse_invariants(self.func, args, kwargs)
             with _call_execution_context_entered(self.descriptor.execution_context):
-                return self.func(*args, **kwargs)
+                return call_with_sparse_invariants(self.func, args, kwargs)
         except RunCapabilityUnavailableError:
             raise
         except Exception as exc:
