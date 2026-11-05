@@ -253,9 +253,8 @@ def _remap_parent_param_ops(record: Any, remap_barcode_text: Callable[[Any], Any
         else None
     )
     if isinstance(parent_param_ops, dict):
-        record.parent_param_ops = {
-            remap_barcode_text(key): value for key, value in parent_param_ops.items()
-        }
+        remapped = {remap_barcode_text(key): value for key, value in parent_param_ops.items()}
+        setattr(record, record_storage_attr(record, "parent_param_ops"), remapped)
 
 
 def _canonicalize_param_links(
