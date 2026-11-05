@@ -10,8 +10,10 @@ parameters). These tests pin the fixes and their narrowness.
 
 from __future__ import annotations
 
+import collections
 import copy
 import io
+import random
 import threading
 import types
 from typing import Any
@@ -21,6 +23,7 @@ import pytest
 import torch
 from torch import nn
 
+import torchlens as tl
 import torchlens._user_public_impls as user_public_impls
 from torchlens._capture_state_helpers import (
     _ModuleTreePlainAttrSnapshot,
@@ -349,7 +352,9 @@ def test_rich_plain_state_validates_through_live_model_fallback() -> None:
     model = RichPlainStateModel(uncopyable=True)
     snapshot = _ModuleTreePlainAttrSnapshot(model)
     assert snapshot.is_complete, snapshot.unsupported_attr_paths
-    pe, cfg = model.pe, model.cfg
+    pe, cfg, rng = model.pe, model.cfg, model.rng
+    pe_before = pe.clone()
+    rng_before = rng.get_state(legacy=False)
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
         assert (
             user_public_impls._validate_forward_pass_torch(
@@ -357,7 +362,12 @@ def test_rich_plain_state_validates_through_live_model_fallback() -> None:
             )
             is True
         )
-    assert model.pe is pe and model.cfg is cfg
+    # Same objects, holding their pre-forward values: the forwards scaled pe and
+    # bumped cfg in place, and validation put both back.
+    assert model.pe is pe and torch.equal(pe, pe_before)
+    assert model.cfg is cfg and vars(cfg) == {"scale": 0.5, "calls": 0}
+    assert model.rng is rng and rng.get_state(legacy=False)["state"] == rng_before["state"]
+    assert model._dtype is torch.float32 and model.F is torch.nn.functional
 
 
 def test_in_place_writes_to_rich_plain_state_are_restored_in_place() -> None:
@@ -445,3 +455,96 @@ def test_cyclic_objects_and_simple_namespaces_are_restored() -> None:
     assert module.group is group and [e.index for e in group.elements] == [0, 1]
     assert all(element.group is group for element in group.elements)
     assert module.config is config and vars(config) == {"depth": 2, "names": ["a"]}
+
+
+class _MutatedStateModel(nn.Module):
+    """Uncopyable model whose forward reads one plain attribute, then mutates it.
+
+    The output depends on the attribute's value before the mutation, so the
+    logged run and the replay reproduce the ground truth only if validation
+    restores the attribute between the runs.
+    """
+
+    def __init__(self, kind: str) -> None:
+        """Build the attribute of the requested kind."""
+
+        super().__init__()
+        self.kind = kind
+        self.lin = nn.Linear(3, 3)
+        self.state = _MUTATED_STATE_BUILDERS[kind]()
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> _MutatedStateModel:
+        """Refuse deepcopy so validation takes the live-model fallback."""
+
+        raise RuntimeError("this model cannot be deep-copied")
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Shift the linear output by a value read from the state, then mutate it."""
+
+        if self.kind == "torch_device":  # immutable: the mutation is a reassignment
+            value = 2.0 if self.state.index is None else 3.0
+            self.state = torch.device("cpu", 0)
+            return self.lin(x) + value
+        return self.lin(x) + _read_then_mutate(self.kind, self.state)
+
+
+_MUTATED_STATE_BUILDERS: dict[str, Any] = {
+    "deque": lambda: collections.deque([1.0, 2.0], maxlen=8),
+    "torch_generator": lambda: torch.Generator().manual_seed(3),
+    "random_random": lambda: random.Random(5),
+    "numpy_generator": lambda: np.random.default_rng(7),
+    "numpy_array": lambda: np.arange(4, dtype=np.float64),
+    "torch_device": lambda: torch.device("cpu"),
+}
+
+
+def _read_then_mutate(kind: str, state: Any) -> float:
+    """Return a value the state holds now and leave the state changed."""
+
+    if kind == "deque":
+        value = float(len(state))
+        state.append(9.0)
+    elif kind == "torch_generator":
+        value = float(state.initial_seed())
+        state.manual_seed(state.initial_seed() + 1)
+    elif kind in ("random_random", "numpy_generator"):
+        value = float(state.random())
+    elif kind == "numpy_array":
+        value = float(state[0])
+        state += 1.0
+    else:
+        raise AssertionError(kind)
+    return value
+
+
+def _state_fingerprint(state: Any) -> Any:
+    """Return a value-comparable picture of the state's contents."""
+
+    if isinstance(state, collections.deque):
+        return (list(state), state.maxlen)
+    if isinstance(state, torch.Generator):
+        return (state.initial_seed(), state.get_state().tolist())
+    if isinstance(state, random.Random):
+        return state.getstate()
+    if isinstance(state, np.random.Generator):
+        return repr(state.bit_generator.state)
+    if isinstance(state, np.ndarray):
+        return state.tolist()
+    return state
+
+
+@pytest.mark.parametrize("kind", sorted(_MUTATED_STATE_BUILDERS))
+def test_tl_validate_restores_mutated_rich_state_on_the_live_fallback(kind: str) -> None:
+    """Each rich kind a forward mutates is put back, as the same object, by tl.validate."""
+
+    torch.manual_seed(0)
+    model = _MutatedStateModel(kind)
+    state = model.state
+    before = _state_fingerprint(state)
+    with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):
+        assert tl.validate(model, torch.randn(2, 3), scope="forward") is True
+    if kind == "torch_device":
+        assert model.state == before and model.state.index is None
+    else:
+        assert model.state is state
+        assert _state_fingerprint(state) == before
