@@ -47,8 +47,9 @@ class _Mlp(nn.Module):
 def _node(source: str, name: str) -> str:
     """Return one node's DOT statement."""
 
-    match = re.search(rf"^\s*{re.escape(name)} \[.*?\]\n", source, re.M | re.S)
-    assert match is not None, f"no node {name} in the DOT"
+    match = re.search(rf'^\t"?{re.escape(name)}(?:pass1)?"? \[.*?\]\n', source, re.M | re.S)
+    names = re.findall(r'^\t"?(\w+)"? \[', source, re.M)
+    assert match is not None, f"no node {name} in the DOT; nodes: {names}"
     return match.group(0)
 
 
