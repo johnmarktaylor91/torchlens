@@ -175,8 +175,8 @@ def _evict_payloads_in_subclass(
 # The three sweeps below skip, without a call, every member whose type is in
 # ``inert`` and every exact tuple whose members all are (tensor shapes, label
 # pairs, tuples of TorchLens records): the walk would return each unchanged.
-# The skip is inlined in each loop on purpose: a shared helper would cost the
-# call it exists to save.
+# The skip is inlined in each loop on purpose (a helper would cost the call it
+# saves); it raises their cyclomatic complexity (tuple sweep 15), kept for the hot path.
 
 
 def _evict_payloads_in_list(
