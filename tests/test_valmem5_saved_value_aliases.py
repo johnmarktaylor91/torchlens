@@ -14,7 +14,13 @@ that saved output instead of a second copy. These tests pin, on the CPU:
   dropped (a planted capture bug);
 * replay never writes through an alias (versions and bytes are unchanged after
   validation, with in-place ops consuming aliased arguments), and a write into
-  an alias during the capture makes validation rerun with every argument copied.
+  an alias during the capture makes validation rerun with every argument copied;
+* with grad disabled, where the parent's saved output is still a pending
+  clone-on-write alias of the live tensor, the argument's alias is registered
+  under the same key: a no-grad fan-out holds fewer saved-argument storages, an
+  in-place write after the save copies the pre-write bytes out of both, the
+  storage-alias label scan never sees the alias and the graph is unchanged, the
+  planted negatives still fail, and a write into the alias reruns validation.
 """
 
 from __future__ import annotations
@@ -30,6 +36,7 @@ from torch import nn
 import torchlens.backends.torch._ops_exhaustive
 import torchlens.backends.torch._ops_predicate_events
 import torchlens.backends.torch._ops_shared_fields
+import torchlens.backends.torch.wrappers
 from torchlens import _state, _user_public_impls, _validation_argument_references as arg_references
 from torchlens.validation.diagnostics import get_validation_diagnostics
 
@@ -457,3 +464,262 @@ def test_the_guard_refuses_unequal_bytes_signed_zero_and_partial_storage() -> No
     with _state.pause_logging():
         assert off.value_alias(saved.clone(), saved, "p") is None
     assert guard.first_change() is None
+
+
+# ---------------------------------------------------------------------------
+# Parents saved with grad disabled: their saved output is still a pending
+# clone-on-write alias of the live tensor, so the argument's alias is
+# registered under the same clone-on-write key.
+# ---------------------------------------------------------------------------
+
+
+class _NoGradFanOut(nn.Module):
+    """A no-grad fan-out; ``write_after`` scales the shared activation in place afterwards."""
+
+    def __init__(self, write_after: bool) -> None:
+        super().__init__()
+        self.lin = nn.Linear(16, 16)
+        self.write_after = write_after
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            hidden = torch.relu(self.lin(x))
+            doubled = hidden * 2.0
+            shifted = hidden + 1.0
+            joined = torch.cat([doubled, shifted, hidden], dim=1)
+            if self.write_after:
+                hidden.mul_(0.5)
+            return joined.sum(dim=1, keepdim=True) + hidden.sum(dim=1, keepdim=True)
+
+
+def _count_pending_aliases(monkeypatch: pytest.MonkeyPatch) -> list[torch.Tensor]:
+    """Record each argument alias registered under its parent's clone-on-write key."""
+
+    original = arg_references.ParameterArgumentReferences._pending_value_alias
+    taken: list[torch.Tensor] = []
+
+    def counted(self: Any, tensor: Any, saved_value: Any, parent_label: str, *rest: Any) -> Any:
+        alias = original(self, tensor, saved_value, parent_label, *rest)
+        if alias is not None:
+            taken.append(alias)
+        return alias
+
+    monkeypatch.setattr(arg_references.ParameterArgumentReferences, "_pending_value_alias", counted)
+    return taken
+
+
+def _graph(trace: Any) -> list[tuple[Any, ...]]:
+    """Every op's label, function, parents and children, in capture order."""
+
+    return [
+        (
+            op.layer_label,
+            op.func_name,
+            tuple(getattr(op, "parents", ()) or ()),
+            tuple(getattr(op, "children", ()) or ()),
+        )
+        for op in trace._layer_list
+    ]
+
+
+def test_a_no_grad_fan_out_holds_fewer_saved_argument_storages(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    taken = _count_pending_aliases(monkeypatch)
+    counts: dict[str, tuple[int, int]] = {}
+    graphs: dict[str, list[tuple[Any, ...]]] = {}
+
+    def observe(key: str) -> Callable[[Any], None]:
+        def record(trace: Any) -> None:
+            counts[key] = _saved_arg_only_storage(trace, model)
+            graphs[key] = _graph(trace)
+
+        return record
+
+    torch.manual_seed(0)
+    model = _NoGradFanOut(write_after=False)
+    x = torch.randn(8, 16)
+    copy_verdict = _validate(model, x, observe("copy"), copy_only=True)
+    assert not taken
+    alias_verdict = _validate(model, x, observe("alias"))
+    assert copy_verdict is True
+    assert alias_verdict is copy_verdict
+    assert len(taken) >= 4, taken
+    assert counts["alias"][0] < counts["copy"][0], counts
+    assert counts["alias"][1] < counts["copy"][1], counts
+    assert graphs["alias"] == graphs["copy"]
+
+
+def test_an_in_place_write_after_save_copies_the_pre_write_bytes_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    taken = _count_pending_aliases(monkeypatch)
+    values: dict[str, dict[tuple[str, str], torch.Tensor]] = {}
+    graphs: dict[str, list[tuple[Any, ...]]] = {}
+    original_scan = torchlens.backends.torch.wrappers.overlapping_labeled_aliases
+    scans: list[list[Any]] = []
+
+    def scan(mutated: torch.Tensor, exclude_label: str | None) -> list[tuple[torch.Tensor, str]]:
+        """Record what the storage-alias label scan finds for each in-place write."""
+
+        found = original_scan(mutated, exclude_label)
+        scans.append([alias for alias, _ in found])
+        return found
+
+    monkeypatch.setattr(torchlens.backends.torch.wrappers, "overlapping_labeled_aliases", scan)
+
+    def observe(key: str) -> Callable[[Any], None]:
+        def record(trace: Any) -> None:
+            graphs[key] = _graph(trace)
+            values[key] = {
+                (op.layer_label, parent.layer_label): value.detach().clone()
+                for op, parent, value in _parent_slots(trace)
+            }
+
+        return record
+
+    torch.manual_seed(0)
+    model = _NoGradFanOut(write_after=True)
+    x = torch.randn(8, 16)
+    copy_verdict = _validate(model, x, observe("copy"), copy_only=True)
+    alias_verdict = _validate(model, x, observe("alias"))
+    assert copy_verdict is True
+    assert alias_verdict is copy_verdict
+    assert len(taken) >= 4, taken
+    assert scans, "the in-place write never ran the storage-alias scan: inconclusive"
+    for found in scans:
+        assert not any(alias is registered for alias in found for registered in taken)
+    assert graphs["alias"] == graphs["copy"]
+    assert values["alias"].keys() == values["copy"].keys()
+    for key, copied in values["copy"].items():
+        assert torch.equal(values["alias"][key], copied), key
+    relu = torch.relu(model.lin(x)).detach()
+    readers = [key for key in values["alias"] if key[1].startswith("relu")]
+    assert readers, values["alias"].keys()
+    for key in readers:
+        assert torch.equal(values["alias"][key], relu), key
+
+
+@pytest.mark.parametrize("planted", ["wrong-parent", "dropped-version-record"])
+def test_planted_capture_bugs_still_fail_with_grad_disabled(
+    monkeypatch: pytest.MonkeyPatch, planted: str
+) -> None:
+    hits: list[str] = []
+    if planted == "wrong-parent":
+        _plant_wrong_parent(monkeypatch, hits)
+        model: nn.Module = _NoGradWrapper(_Different())
+        x = torch.randn(6)
+    else:
+
+        def drop_version(self: Any, parent_label: str, *args: Any, **kwargs: Any) -> None:
+            hits.append(parent_label)
+
+        monkeypatch.setattr(
+            torchlens.backends.torch._ops_shared_fields,
+            "_get_parent_output_version_snapshot",
+            drop_version,
+        )
+        model = _NoGradWrapper(_UntracedWrite())
+        x = torch.randn(3, 4)
+    torch.manual_seed(0)
+    assert _validate(model, x, lambda trace: None, copy_only=True) is False
+    assert _validate(model, x, lambda trace: None) is False
+    assert hits, "the planted bug never ran: inconclusive"
+
+
+class _NoGradWrapper(nn.Module):
+    """Run a wrapped module's forward with grad disabled."""
+
+    def __init__(self, inner: nn.Module) -> None:
+        super().__init__()
+        self.inner = inner
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            return self.inner(x)
+
+
+def _plant_wrong_parent(monkeypatch: pytest.MonkeyPatch, hits: list[str]) -> None:
+    """Record the mul's relu parent as the other relu, whose values differ."""
+
+    original = torchlens.backends.torch._ops_predicate_events._build_graph_relationship_fields
+
+    def patched(self: Any, fields_dict: dict[str, Any], *args: Any) -> Any:
+        result = original(self, fields_dict, *args)
+        if fields_dict.get("func_name") != "__mul__":
+            return result
+        live = self.capture_events.live_index.by_raw_label
+        replacements = [label for label in live if label.startswith("relu_2")]
+        positions = fields_dict.get("parent_arg_positions") or {}
+        for domain in ("args", "kwargs"):
+            for key, label in list((positions.get(domain) or {}).items()):
+                if replacements and label.startswith("relu_1"):
+                    positions[domain][key] = replacements[0]
+                    hits.append(label)
+        parents = fields_dict.get("parents") or []
+        for index, label in enumerate(list(parents)):
+            if replacements and label.startswith("relu_1"):
+                parents[index] = replacements[0]
+        return result
+
+    for module in (
+        torchlens.backends.torch._ops_predicate_events,
+        torchlens.backends.torch._ops_exhaustive,
+        torchlens.backends.torch._ops_shared_fields,
+    ):
+        monkeypatch.setattr(module, "_build_graph_relationship_fields", patched)
+
+
+def test_a_write_into_a_registered_alias_reruns_with_every_argument_copied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = arg_references.ParameterArgumentReferences._pending_value_alias
+    written: list[str] = []
+
+    def write_first(self: Any, tensor: Any, saved_value: Any, parent_label: str, *rest: Any) -> Any:
+        alias = original(self, tensor, saved_value, parent_label, *rest)
+        if alias is not None and not written:
+            alias.add_(1.0)
+            written.append(parent_label)
+        return alias
+
+    monkeypatch.setattr(
+        arg_references.ParameterArgumentReferences, "_pending_value_alias", write_first
+    )
+    diagnostics: list[Any] = []
+    torch.manual_seed(0)
+    model = _NoGradFanOut(write_after=False)
+    verdict = _validate(
+        model, torch.randn(8, 16), lambda t: diagnostics.extend(get_validation_diagnostics(t))
+    )
+    assert written, "no alias was registered: inconclusive"
+    assert verdict is True
+    fallbacks = [d for d in diagnostics if d.check_name == arg_references.FALLBACK_CHECK]
+    assert len(fallbacks) == 1, diagnostics
+    assert "saved output" in fallbacks[0].extra["reason"]
+
+
+def test_the_registered_alias_check_reads_the_registry_state() -> None:
+    from torchlens._utils import tensor_utils
+
+    live = torch.randn(5)
+    guard = arg_references.ParameterArgumentReferences({}, alias_saved_values=True)
+    with _state.pause_logging():
+        tensor_utils.arm_deferred_payload_window(frozenset())
+        try:
+            payload = tensor_utils._try_defer_payload_alias(live)
+            assert payload is not None
+            alias = guard.value_alias(live.clone(), payload, "p")
+        finally:
+            tensor_utils.disarm_deferred_payload_window()
+    assert alias is not None and guard.is_value_alias(alias)
+    assert alias.untyped_storage().data_ptr() == live.untyped_storage().data_ptr()
+    assert guard.first_change() is None
+    before = live.clone()
+    tensor_utils.materialize_deferred_for_call([live])
+    live.mul_(2.0)
+    assert alias.untyped_storage().data_ptr() != live.untyped_storage().data_ptr()
+    assert torch.equal(alias, before) and torch.equal(payload, before)
+    assert guard.first_change() is None
+    alias.add_(1.0)
+    assert guard.first_change() is not None
