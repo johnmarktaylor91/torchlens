@@ -69,7 +69,9 @@ def _count_real_calls(tensor: torch.Tensor) -> torch.Tensor:
     """Return a copy of ``tensor`` through a custom op that counts its real calls.
 
     The op's fake kernel (Dynamo's trace and torch's fake passes) does not
-    count, so the counter reads how often the branch really ran.
+    count, so the counter reads how often the branch really ran. The test
+    defines the op first (:func:`_define_count_op`): a definition inside
+    Dynamo's trace would break the graph.
 
     Parameters
     ----------
@@ -82,8 +84,6 @@ def _count_real_calls(tensor: torch.Tensor) -> torch.Tensor:
         A copy of ``tensor``.
     """
 
-    if not _COUNT_OP:
-        _COUNT_OP.append(_define_count_op())
     return _COUNT_OP[0](tensor)
 
 
@@ -156,7 +156,13 @@ def _define_count_op() -> Callable[[torch.Tensor], torch.Tensor]:
 class _ClosureCond(nn.Module):
     """``cond`` whose true branch calls ``self.lin``, so its parameters are closure tensors."""
 
-    def __init__(self, body: str = "call", take_true: bool = True, mul: _Mul | None = None) -> None:
+    def __init__(
+        self,
+        body: str = "call",
+        take_true: bool = True,
+        mul: _Mul | None = None,
+        nested: bool = False,
+    ) -> None:
         """Build the submodule and choose the true branch's body.
 
         Parameters
@@ -168,6 +174,9 @@ class _ClosureCond(nn.Module):
             Whether the predicate holds for positive inputs.
         mul:
             Multiply the ``"mul"`` body calls.
+        nested:
+            Pass ``cond`` plain functions defined in ``forward`` instead of
+            bound methods.
         """
 
         super().__init__()
@@ -177,6 +186,7 @@ class _ClosureCond(nn.Module):
         self.body = body
         self.take_true = take_true
         self.mul = mul
+        self.nested = nested
 
     def _true_branch(self, t: torch.Tensor) -> torch.Tensor:
         """Run the chosen body through ``self.lin``.
@@ -230,11 +240,49 @@ class _ClosureCond(nn.Module):
         Returns
         -------
         torch.Tensor
-            The taken branch's output plus one.
+            The taken branch's output plus one; for the ``"dropout"`` body,
+            dropped out again after the ``cond`` so the output also reads the
+            RNG state the branch left.
         """
 
         pred = x.sum() > 0 if self.take_true else x.sum() < -1e9
-        return self.cond(pred, self._true_branch, self._false_branch, (x,)) + 1
+        if not self.nested:
+            out = self.cond(pred, self._true_branch, self._false_branch, (x,)) + 1
+            return F.dropout(out, p=0.5, training=True) if self.body == "dropout" else out
+
+        def true_fn(t: torch.Tensor) -> torch.Tensor:
+            """Call the true branch through ``self``.
+
+            Parameters
+            ----------
+            t:
+                Operand.
+
+            Returns
+            -------
+            torch.Tensor
+                The true branch's output.
+            """
+
+            return self._true_branch(t)
+
+        def false_fn(t: torch.Tensor) -> torch.Tensor:
+            """Call the false branch through ``self``.
+
+            Parameters
+            ----------
+            t:
+                Operand.
+
+            Returns
+            -------
+            torch.Tensor
+                The false branch's output.
+            """
+
+            return self._false_branch(t)
+
+        return self.cond(pred, true_fn, false_fn, (x,)) + 1
 
 
 def _input(grad: bool = True) -> torch.Tensor:
@@ -357,22 +405,29 @@ def test_closure_param_cond_grads_equal_eager(take_true: bool) -> None:
 
 
 def test_closure_param_cond_runs_the_branch_once_with_eager_rng() -> None:
-    """A dropout branch gives the eager output and leaves the eager RNG state."""
+    """A dropout branch draws eager's masks, and the capture leaves the caller's RNG state.
+
+    The capture reseeds torch with its ``seed`` for its own forward and restores
+    the caller's state after (:class:`CaptureOptions`), so ``seed=7`` matches
+    an eager call after ``torch.manual_seed(7)``. The second dropout, after the
+    ``cond``, draws from the state the branch left: a second run of the branch
+    would shift both masks.
+    """
 
     model, x = _ClosureCond("dropout"), _input()
     torch.manual_seed(7)
     untraced = model(x)
-    eager_state = torch.get_rng_state()
-    torch.manual_seed(7)
-    trace = tl.trace(model, x, save="all")
-    traced_state = torch.get_rng_state()
+    caller_state = torch.get_rng_state()
+    trace = tl.trace(model, x, save="all", capture=CaptureOptions(seed=7))
     assert torch.equal(_output(trace).detach(), untraced.detach())
-    assert torch.equal(traced_state, eager_state)
+    assert torch.equal(torch.get_rng_state(), caller_state)
 
 
 def test_closure_param_cond_runs_the_branch_once_by_count() -> None:
     """The branch's real-call counter reads one per forward, as in eager."""
 
+    if not _COUNT_OP:
+        _COUNT_OP.append(_define_count_op())
     model, x = _ClosureCond("count"), _input()
     _REAL_CALLS[0] = 0
     untraced = model(x)
@@ -386,9 +441,15 @@ def test_closure_param_cond_runs_the_branch_once_by_count() -> None:
 @pytest.mark.parametrize("grad", [True, False])
 @pytest.mark.parametrize("take_true", [True, False])
 def test_closure_param_cond_validates_true(take_true: bool, grad: bool) -> None:
-    """``tl.validate`` holds on the closure-parameter ``cond``."""
+    """``tl.validate`` holds on the closure-parameter ``cond``.
 
-    model, x = _ClosureCond(take_true=take_true), _input(grad)
+    The branches are plain functions: under validation's completeness check
+    torch runs ``cond`` without compiling it, and with a grad operand its
+    autograd retraces each branch with ``make_fx``, which cannot take a bound
+    method (it counts ``self`` as an operand).
+    """
+
+    model, x = _ClosureCond(take_true=take_true, nested=True), _input(grad)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, validate_metadata=True) is True
@@ -427,7 +488,7 @@ def test_closure_param_cond_with_a_planted_drop_fails_validation(
     """
 
     monkeypatch.setattr(rescue, "_escape_signal", lambda trace: None)
-    model, x = _ClosureCond("mul", mul=raw_mul), _input(grad)
+    model, x = _ClosureCond("mul", mul=raw_mul, nested=True), _input(grad)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, validate_metadata=True) is False
