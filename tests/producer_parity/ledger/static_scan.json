@@ -5426,6 +5426,22 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/_visualization/lenses/_attention.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/lenses/_attention.py",
+  "has_default": true,
+  "sites": 3,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/_visualization/lenses/_budget.py",
   "has_default": true,
   "sites": 1,
@@ -5437,22 +5453,6 @@
   "file": "torchlens/_visualization/lenses/_filter.py",
   "has_default": true,
   "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/lenses/_resolve.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_visualization/lenses/_resolve.py",
-  "has_default": true,
-  "sites": 2,
   "via_getattr": true
  },
  {
@@ -5509,6 +5509,14 @@
   "file": "torchlens/_visualization/source_graph.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_visualization/surgery_visuals.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
