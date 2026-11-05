@@ -18,7 +18,10 @@ operands and gives ``map`` its stacked output). That compile is let through
 (``_hop_entry_compile.hop_compile_stance_lift_scope``) inside
 :func:`hop_internal_compile_scope`; while Dynamo traces it, the wrappers call
 the original unlogged (:func:`inside_hop_internal_compile`), and the compiled
-wrapper's eager run is captured as usual.
+wrapper's eager run is captured as usual. A ``cond`` entry's eager run calls
+the user's own branch functions (``_hop_entry_compile``), so a branch that
+calls a submodule is captured through the session ``forward`` wrapper, which
+Dynamo traces as the plain ``forward`` (:func:`inside_lifted_cond_compile`).
 
 Every torch-private lookup routes through ``_torch_compat`` (the tracing
 tensor classes, the dispatch-mode stack and the ``FakeTensorMode`` class) or
@@ -46,6 +49,7 @@ __all__ = (
     "call_inside_tracing_pass",
     "hop_internal_compile_scope",
     "inside_hop_internal_compile",
+    "inside_lifted_cond_compile",
     "inside_tracing_tensor_pass",
     "lift_hop_entry_compiles",
 )
@@ -53,6 +57,11 @@ __all__ = (
 #: Depth of TorchLens-lifted higher-order-operator entry compiles in progress;
 #: the wrappers' hot path tests it before anything else (zero outside them).
 hop_compile_depth = 0
+
+#: Whether the innermost lifted entry compile is a ``cond`` whose eager run
+#: calls the user's own branches; only then may Dynamo trace a module's plain
+#: ``forward`` in place of the session wrapper.
+cond_entry_innermost = False
 
 
 def _is_tracing_value(value: Any, tracing_types: tuple[type[Any], ...]) -> bool:
@@ -100,8 +109,14 @@ def _fake_tensor_mode_active() -> bool:
 
 
 @contextmanager
-def hop_internal_compile_scope() -> Iterator[None]:
+def hop_internal_compile_scope(cond_branches: bool = False) -> Iterator[None]:
     """Mark one higher-order-operator entry compile that TorchLens let run.
+
+    Parameters
+    ----------
+    cond_branches:
+        Whether the entry is a ``cond`` whose eager run calls the user's own
+        branch functions; it sets :data:`cond_entry_innermost` for the scope.
 
     Yields
     ------
@@ -109,12 +124,15 @@ def hop_internal_compile_scope() -> Iterator[None]:
         While the scope is open :data:`hop_compile_depth` is above zero.
     """
 
-    global hop_compile_depth
+    global hop_compile_depth, cond_entry_innermost
+    saved_cond = cond_entry_innermost
     hop_compile_depth += 1
+    cond_entry_innermost = cond_branches
     try:
         yield
     finally:
         hop_compile_depth -= 1
+        cond_entry_innermost = saved_cond
 
 
 def inside_hop_internal_compile() -> bool:
@@ -132,6 +150,22 @@ def inside_hop_internal_compile() -> bool:
     """
 
     return hop_compile_depth > 0 and dynamo_is_compiling()
+
+
+def inside_lifted_cond_compile() -> bool:
+    """Return whether Dynamo is tracing a lifted ``cond`` entry whose eager run calls the user's branches.
+
+    Returns
+    -------
+    bool
+        ``True`` only inside :func:`inside_hop_internal_compile` with
+        :data:`cond_entry_innermost` set. A module ``forward`` may then be
+        traced unlogged: the branch's eager run re-enters the session wrapper
+        and is captured. Outside it (eager calls, user compile regions, other
+        operators' entries) the session wrapper runs as usual.
+    """
+
+    return cond_entry_innermost and inside_hop_internal_compile()
 
 
 def lift_hop_entry_compiles() -> AbstractContextManager[bool]:

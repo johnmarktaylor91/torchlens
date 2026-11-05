@@ -601,12 +601,11 @@ def _probe_safe_weights_only_load() -> bool:
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
     """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
 
-    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
-    :class:`TorchDispatchMode` is active because the returned raw tensor is already
-    associated with a base ``Tensor`` Python object. Newer torch releases permit the
-    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
-    behavioral probe mirrors the dynamic-parameter logging context without parsing a
-    version string.
+    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a :class:`TorchDispatchMode` is
+    active because the returned raw tensor is already associated with a base ``Tensor`` Python
+    object. Newer torch releases permit the conversion. TorchLens' completeness witness is itself a
+    dispatch mode, so this behavioral probe mirrors the dynamic-parameter logging context without
+    parsing a version string.
 
     Returns
     -------
@@ -685,14 +684,12 @@ _TOP_SAVED_TENSORS_DEFAULT_HOOKS_ARGS: tuple[bool, ...] | None = None
 def _probe_saved_tensors_hook_introspection() -> bool:
     """Return whether autograd default saved-tensors hooks can be peeked.
 
-    ``torch._C._autograd._top_saved_tensors_default_hooks`` returns the
-    innermost installed default pack/unpack hook pair (or ``None``) without
-    popping it. Non-reentrant ``torch.utils.checkpoint`` regions install such
-    hooks, and any value they packed re-runs user code (the checkpoint
-    RECOMPUTE) when read back, so capture-time stats collection needs this
-    peek to know reading saved values is side-effect-free. The call signature
-    gained an ``ignore_is_tracing`` argument over torch history; probe both
-    spellings behaviorally, never a version parse.
+    ``torch._C._autograd._top_saved_tensors_default_hooks`` returns the innermost installed default
+    pack/unpack hook pair (or ``None``) without popping it. Non-reentrant ``torch.utils.checkpoint``
+    regions install such hooks, and any value they packed re-runs user code (the checkpoint
+    RECOMPUTE) when read back, so capture-time stats collection needs this peek to know reading
+    saved values is side-effect-free. The call signature gained an ``ignore_is_tracing`` argument
+    over torch history; probe both spellings behaviorally, never a version parse.
 
     Returns
     -------
@@ -872,10 +869,9 @@ def _probe_transformer_activation_fastpath_flag() -> bool:
     -------
     bool
         ``True`` when a constructed layer carries ``activation_relu_or_gelu``,
-        the identity-checked (``activation is F.relu/F.gelu``) gate for the
-        fused fastpath and nested-tensor paths. The probe constructs a tiny
-        meta-device layer under ``fork_rng`` so it never touches user RNG
-        streams or allocates real storage.
+        the identity-checked (``activation is F.relu/F.gelu``) gate for the fused fastpath and
+        nested-tensor paths. The probe constructs a tiny meta-device layer under ``fork_rng`` so it
+        never touches user RNG streams or allocates real storage.
     """
 
     layer_cls = getattr(torch.nn, "TransformerEncoderLayer", None)
@@ -1273,12 +1269,10 @@ def _probe_nn_attention_module() -> bool:
     Returns
     -------
     bool
-        ``True`` when the ``torch.nn.attention`` namespace exposes
-        ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
-        dynamo-free (unlike ``torch.nn.attention.bias``, see
-        :func:`_probe_attention_causal_bias`), so it is safe to import
-        directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
-        floor), a healthy old install, not a degradation.
+        ``True`` when the ``torch.nn.attention`` namespace exposes ``SDPBackend`` and
+        ``sdpa_kernel``. The parent package body is dynamo-free (unlike ``torch.nn.attention.bias``,
+        see :func:`_probe_attention_causal_bias`), so it is safe to import directly. Absent on torch
+        2.1-2.2 (the namespace postdates the 2.1 floor), a healthy old install, not a degradation.
 
     Notes
     -----
@@ -2523,18 +2517,23 @@ def get_scan_eager_body() -> Callable[..., Any] | None:
     return body if callable(body) else None
 
 
-def swap_hop_entry_compile(replacement: Any) -> Any | None:
-    """Return torch's operator entry compile, first installing ``replacement`` unless ``None``.
+def swap_hop_entry_compile(replacement: Any, env: Any = None) -> tuple[Any, Any] | None:
+    """Return torch's operator entry compile and backend context, installing each non-``None`` one.
 
     ``torch._higher_order_ops.utils._hop_compile_and_call``, which ``cond``, ``map``,
-    ``while_loop`` and ``scan`` enter through; ``None`` (nothing installed) when absent.
+    ``while_loop`` and ``scan`` enter through (``None``, nothing installed, when absent), and
+    the ``setup_compilation_env`` that yields the entry's backend (``None`` when absent).
     """
 
     utils = sys.modules.get("torch._higher_order_ops.utils")
-    prior = vars(utils).get("_hop_compile_and_call") if utils is not None else None
-    if callable(prior) and replacement is not None:
-        setattr(utils, "_hop_compile_and_call", replacement)
-    return prior if callable(prior) else None
+    names = ("_hop_compile_and_call", "setup_compilation_env")
+    prior = [vars(utils).get(name) for name in names] if utils is not None else [None]
+    if not callable(prior[0]):
+        return None
+    for name, value in zip(names, (replacement, env)):
+        if value is not None:
+            setattr(utils, name, value)
+    return prior[0], prior[1] if callable(prior[1]) else None
 
 
 def get_dtensor_shard_geometry_fn() -> Callable[..., Any] | None:
