@@ -119,3 +119,16 @@ def test_component_spec_keys_keep_the_persisted_intervention_module_path() -> No
         assert f"{cls.__module__}.{cls.__qualname__}" not in tables
         assert tables[persisted] == committed[persisted]
     assert writer_contract_digest() == _document(V12_CONTRACT)["writer_contract_digest"]
+
+
+def test_format3_class_paths_keep_the_persisted_intervention_module_path() -> None:
+    """Saved files name Edit and FireRecord by the persisted path, which resolves back."""
+
+    from torchlens._io.format3.values import class_path, record_type_table
+    from torchlens.intervention._types import Edit, FireRecord
+
+    table = record_type_table()
+    for cls in (Edit, FireRecord):
+        path = f"torchlens.intervention.types.{cls.__qualname__}"
+        assert class_path(cls) == path
+        assert table[path] is cls
