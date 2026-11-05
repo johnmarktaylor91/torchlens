@@ -337,7 +337,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 4600 -> 4450 (cond-validate): the runnable alias resolver moved to its own
     # module _utils/_runnable_alias_resolver.py, making room for the HOP rule
     # accessors; measured 4398.
-    "torchlens/_utils/_torch_compat.py": 4450,
+    "torchlens/_utils/_torch_compat.py": 4350,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
