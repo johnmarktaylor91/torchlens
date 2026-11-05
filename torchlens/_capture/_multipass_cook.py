@@ -22,9 +22,9 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from .._errors import CaptureNotActiveError
-from .._ir._row_journal import journal_record
 from .._ir.op_record import OpRecord
 from .._ir.predicate import ModuleStackFrame, RecordContext
+from .._ir.refs import journal_record
 
 if TYPE_CHECKING:
     from .session import CapturedRunCore

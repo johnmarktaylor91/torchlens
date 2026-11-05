@@ -47,7 +47,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._ir._row_journal import journal_record
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import OpEvent
 from torchlens._ir.op_record import (
@@ -57,6 +56,7 @@ from torchlens._ir.op_record import (
     OpRecord,
     apply_patch_items,
 )
+from torchlens._ir.refs import journal_record
 
 # Journal SHAPES for the fold-routing tests (P7 deleted the legacy torch
 # producer): "decomposed" = captured OpRecord rows; "legacy" = genuine compat

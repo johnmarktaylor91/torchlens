@@ -6,8 +6,8 @@ import gc
 from collections.abc import Iterable
 from typing import Any, Final, Protocol, TypeVar, cast, runtime_checkable
 
-from torchlens._ir._row_journal import journal_record
 from torchlens._ir.capture_events import CaptureEvents
+from torchlens._ir.refs import journal_record
 
 from ._errors import CaptureNotActiveError
 

@@ -43,6 +43,7 @@ from .op_record import (
     TransformFacet,
     record_with_path_updates,
 )
+from .refs import journal_record
 
 __all__: tuple[str, ...] = ()
 
@@ -247,14 +248,6 @@ def _overlay_known(patch: dict[str, Any]) -> bool:
     """Return whether every overlay path is one the fast reads honour."""
 
     return all(path in _OVERLAY_PATHS for path in patch)
-
-
-def journal_record(event: Any) -> Any:
-    """Return ``event``'s full record when it is a row handle, else ``event`` itself."""
-
-    if type(event) is _RowOpRecord:
-        return event.materialize()
-    return event
 
 
 def _parent_edges(
