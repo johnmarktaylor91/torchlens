@@ -7112,6 +7112,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/torch/_ops_saved_arg_copies.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": false,
   "field": "backend_semantics",
   "file": "torchlens/backends/torch/_ops_shared_fields.py",

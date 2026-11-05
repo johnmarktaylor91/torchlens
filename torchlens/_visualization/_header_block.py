@@ -47,7 +47,7 @@ from ._endpoint_rings import endpoint_ring_swatch
 from ._focus_scope import focus_address, scope_caption_head
 from ._fonts import _FONT_DIR
 from ._frame_penwidth import MODULE_PENWIDTH
-from ._label_format import compact_count, format_memory, header_count
+from ._label_format import format_memory, header_count, param_count
 from ._render_common import (
     BOOL_NODE_COLOR,
     BUFFER_NODE_COLOR,
@@ -128,19 +128,19 @@ def params_caption_detail(trace: Trace) -> str:
     """Return the header's parameter line, for example ``11.7M params (44.6 MB, all trainable)``.
 
     Counts from 1,000 up print compact (``124M params``); the exact count stays
-    on ``trace.num_params``. The memory uses the binary unit of its 1024 divisor.
+    on ``trace.num_params``. The memory is decimal (KB, MB; divisor 1000).
     """
 
     total = int(trace.num_params)
     if total == 0:
         return "0 params"
     memory = format_memory(trace._cost_total_param_memory)
-    count = compact_count(total, full_below=1000)
+    count = param_count(total)
     if trace.num_params_frozen == 0:
         return f"{count} params ({memory}, all trainable)"
     if trace.num_params_trainable == 0:
         return f"{count} params ({memory}, all frozen)"
-    trainable = compact_count(int(trace.num_params_trainable), full_below=1000)
+    trainable = param_count(int(trace.num_params_trainable))
     return f"{count} params ({memory}, {trainable}/{count} trainable)"
 
 
