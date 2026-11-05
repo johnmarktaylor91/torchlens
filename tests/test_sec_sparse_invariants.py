@@ -464,7 +464,7 @@ def test_validate_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path)
         f"""
         import warnings, torch, torchlens as tl
         ref = torch.load({str(tmp_path / "ref.pt")!r})
-        import torchlens.validation.core as core
+        import torchlens.validation._core as core
         filed = core.note_replay_exception
         def note(exc):
             print("REPLAY-EXC", type(exc).__name__, exc)
