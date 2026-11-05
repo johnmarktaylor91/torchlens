@@ -197,9 +197,18 @@ def test_unrolled_multicall_boxes_each_draw_their_own_call(tmp_path: Path) -> No
         collapsed_node_spec_fn=tl.viz.nodes.mds_scatter(thumbnail_size=24, canvas_size=120),
     )
 
-    images = _node_images(output_path.read_text(encoding="utf-8"))
-    assert sorted(images) == ["blockpass1", "blockpass2"]
-    assert len(set(images.values())) == 2
+    svg_text = output_path.read_text(encoding="utf-8")
+    assert sorted(_node_images(svg_text)) == ["blockpass1", "blockpass2"]
+    calls = trace.modules["block"].calls
+    blocks = {
+        title.group(1): block
+        for block in svg_text.split("<!-- ")
+        if (title := re.search(r"<title>([^<]+)</title>", block)) is not None
+    }
+    # The two point-cloud fallbacks may look alike; the tooltip names the key each box drew.
+    for index, title in enumerate(["blockpass1", "blockpass2"]):
+        (output_label,) = calls[index].output_ops
+        assert f"MDS thumbnail scatter for op:{output_label} " in blocks[title]
 
 
 def test_rolled_multicall_box_has_no_single_output(tmp_path: Path) -> None:
