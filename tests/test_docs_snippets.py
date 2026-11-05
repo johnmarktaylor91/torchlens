@@ -204,7 +204,12 @@ def _run_doc_block(file_name: str, block_index: int, code: str, tmp_path: Path) 
     missing = _missing_imported_modules(ast.parse(code)) + _missing_extra_modules(code)
     if missing:
         pytest.skip(f"doc snippet imports uninstalled optional dependencies: {missing}")
-    exec(compiled, namespace)
+    from tests.support.capability_routes import capability_route
+
+    # A fence needing a torch surface this build lacks (one-backward reads without
+    # GradientEdge) stops at its named refusal; any other exception fails here.
+    with capability_route():
+        exec(compiled, namespace)
 
 
 @pytest.mark.parametrize(
