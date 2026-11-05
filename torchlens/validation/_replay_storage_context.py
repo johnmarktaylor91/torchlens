@@ -244,7 +244,7 @@ def relay_to_captured_layout(layer: Any, arg_type: str, key: Any, value: Any) ->
 
     if not isinstance(value, torch.Tensor):
         return value
-    layout = _slot_capture_layout(layer, arg_type, key)
+    layout = slot_capture_layout(layer, arg_type, key)
     if layout is None:
         return value
     if not value.requires_grad:
@@ -262,7 +262,7 @@ def relay_to_captured_layout(layer: Any, arg_type: str, key: Any, value: Any) ->
         return relay_to_layout(grad_leaf.contiguous(), layout)
 
 
-def _slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout | None:
+def slot_capture_layout(layer: Any, arg_type: str, key: Any) -> CaptureLayout | None:
     """Return the layout recorded for one parent slot on the op's argument template."""
 
     # Read by attribute: importing the template types here would join this module

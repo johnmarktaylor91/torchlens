@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
-from torchlens.intervention.types import CapturedArgTemplate, ParentRef
+from torchlens.intervention._types import CapturedArgTemplate, ParentRef
 
 
 class _GEGLU(nn.Module):
