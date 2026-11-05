@@ -344,9 +344,8 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1761
+torchlens/_postprocess/finalization.py	1555
 torchlens/_postprocess/finalization.py::_build_conditional_records	159
-torchlens/_postprocess/finalization.py::_build_layer_logs	113
 torchlens/_postprocess/finalization.py::_build_module_logs	206
 torchlens/_postprocess/finalization.py::_build_root_module_log	102
 torchlens/_postprocess/finalization.py::_build_submodule_call_logs	116
