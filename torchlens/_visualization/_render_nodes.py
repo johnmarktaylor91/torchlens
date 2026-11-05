@@ -617,7 +617,9 @@ def _build_layer_node(
         default_spec = default_spec.replace(image=visualizer_path)
     annotation_image = _annotation_image_path_for_node(self, node)
     if annotation_image is not None:  # Graphviz gets a PNG whatever the source format
-        default_spec = default_spec.replace(image=drawable_annotation_image(self, annotation_image))
+        annotation_image = drawable_annotation_image(self, annotation_image)
+    if annotation_image is not None:
+        default_spec = default_spec.replace(image=annotation_image)
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:

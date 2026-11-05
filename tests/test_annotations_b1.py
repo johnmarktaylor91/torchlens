@@ -231,8 +231,8 @@ def test_annotation_image_sets_nodespec_image_hook(tmp_path: Path) -> None:
     assert "annotation_images" not in dot  # a PNG is drawn as is, never copied
 
 
-def _drawn_image_sources(trace: Trace, tmp_path: Path) -> list[str]:
-    """Draw ``trace`` and return every node-image path in its DOT source.
+def _drawn_image_sources(trace: Trace, tmp_path: Path) -> list[Path]:
+    """Draw ``trace`` and return every node-image file its DOT source names.
 
     Parameters
     ----------
@@ -243,14 +243,16 @@ def _drawn_image_sources(trace: Trace, tmp_path: Path) -> list[str]:
 
     Returns
     -------
-    list[str]
-        The ``SRC`` of every ``<IMG>`` cell in the DOT source.
+    list[Path]
+        The ``SRC`` of every ``<IMG>`` cell, resolved the way Graphviz resolves
+        it (a relative path names a file in the trace's visualizer folder).
     """
 
     import re
 
     dot = trace.draw(file_format="svg", path=str(tmp_path / "graph")).dot
-    return re.findall(r'<IMG SRC="([^"]+)"', dot)
+    root = Path(trace._visualizer_dir)
+    return [root / src for src in re.findall(r'<IMG SRC="([^"]+)"', dot)]
 
 
 def test_jpeg_annotation_draws_from_a_png_copy(tmp_path: Path) -> None:
@@ -268,7 +270,7 @@ def test_jpeg_annotation_draws_from_a_png_copy(tmp_path: Path) -> None:
 
     sources = _drawn_image_sources(trace, tmp_path)
     assert len(sources) == 1, sources
-    png_path = Path(sources[0])
+    png_path = sources[0]
     assert png_path.suffix == ".png" and png_path.is_file(), sources
     assert png_path.parent == Path(trace._visualizer_dir) / "annotation_images"
     with image_module.open(png_path) as drawn:
@@ -287,9 +289,15 @@ def test_pil_image_annotation_draws_from_a_png(tmp_path: Path) -> None:
     relu = trace[trace[tl.func("relu")].labels[0]]
     stored = Path(relu.annotations["user"]["image"])
     assert stored.suffix == ".png" and stored.is_file()
-    assert _drawn_image_sources(trace, tmp_path) == [str(stored)]
+    assert _drawn_image_sources(trace, tmp_path) == [stored]
     with image_module.open(stored) as drawn:
         assert drawn.mode == "RGB" and drawn.size == (6, 5)
+
+    trace.save(tmp_path / "pil.tlspec")
+    loaded = tl.load(tmp_path / "pil.tlspec")
+    loaded_sources = _drawn_image_sources(loaded, tmp_path)
+    assert len(loaded_sources) == 1 and loaded_sources[0].is_file(), loaded_sources
+    assert loaded_sources[0].parent == Path(loaded._visualizer_dir) / "annotation_images"
 
 
 @pytest.mark.parametrize("kind", ["not-an-image", "missing"])
@@ -311,7 +319,8 @@ def test_unreadable_annotation_image_refuses_typed(tmp_path: Path, kind: str) ->
 
 
 def test_saved_jpeg_annotation_keeps_the_path_not_the_pixels(tmp_path: Path) -> None:
-    """A saved trace carries the annotation path only and draws again after loading."""
+    """A saved trace carries the annotation path only, draws after loading, and
+    drops a picture whose file is gone instead of failing the render."""
 
     from PIL import Image as image_module
 
@@ -338,5 +347,7 @@ def test_saved_jpeg_annotation_keeps_the_path_not_the_pixels(tmp_path: Path) -> 
     loaded_relu = loaded[loaded[tl.func("relu")].labels[0]]
     assert loaded_relu.annotations["user"]["image"] == str(jpeg_path)
     sources = _drawn_image_sources(loaded, tmp_path)
-    assert len(sources) == 1 and sources[0].endswith(".png"), sources
-    assert Path(sources[0]).is_file()
+    assert len(sources) == 1 and sources[0].suffix == ".png" and sources[0].is_file(), sources
+
+    jpeg_path.unlink()
+    assert _drawn_image_sources(tl.load(tmp_path / "annotated.tlspec"), tmp_path) == []
