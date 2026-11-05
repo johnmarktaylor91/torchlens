@@ -31,11 +31,11 @@ per-library shim: the wrapper re-offers a fully declined dispatch under its
 own identity, and unwrap aliases such tables generically (``_protocol_redispatch``). A fourth normalization rides along:
 ``torch.overrides.resolve_name`` keys its cached index by the pre-warm
 originals, so a wrapper argument resolved to ``None`` -- the shim retries a
-miss with the ledger original. A fifth normalizes TorchScript's overload
-resolver (``torch.jit._script._get_overloads``): it is the one recursive
-compilation entry that skips ``__prepare_scriptable__``, so a wrapped
-overloaded functional compiled its original source against the wrapper's
-globals. The standing installed-tree grep gate lives
+miss with the ledger original. A fifth normalizes TorchScript's recursive
+compilation entries that skip ``__prepare_scriptable__`` (the overload
+resolver, and on torch 2.1 ``try_compile_fn``), so a wrapped functional
+never compiles its original source against the wrapper's globals
+(``_jit_identity_shims``). The standing installed-tree grep gate lives
 in ``tests/test_wrap_state_compat.py``; the ``nested/_internal`` NJT
 identity reads it surfaces are a documented unshimmed residual (nested
 jagged tensors are not supported capture inputs). An eighth normalizes the
@@ -91,6 +91,7 @@ from ._identity_shim_views import (
     _LedgerResolvingTable,
     _resolve,
 )
+from ._jit_identity_shims import install_jit_entry_shims
 
 __all__ = [
     "identity_shims_installed",
@@ -691,52 +692,14 @@ def _install_resolve_name_shim(records: list[tuple[Any, str, Any]]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Site 5: torch.jit._script._get_overloads
+# Site 5: TorchScript's recursive-compilation entries (``_jit_identity_shims``)
 # ---------------------------------------------------------------------------
 
 
 def _install_jit_overload_shim(records: list[tuple[Any, str, Any]]) -> None:
-    """Shim TorchScript's overload resolver to the wrapper's original basis.
+    """Shim TorchScript's wrapper-blind compilation entries (see ``_jit_identity_shims``)."""
 
-    The C++ sugared-value layer resolves a called functional to the CURRENT
-    namespace object (the torchlens wrapper) and hands it to
-    ``torch.jit._script._get_overloads`` — the one recursive-compilation entry
-    that does NOT honor ``__prepare_scriptable__``. It then compiled the
-    ORIGINAL source (``inspect.unwrap`` follows ``__wrapped__``) against the
-    WRAPPER's globals, so every overloaded pure-Python functional
-    (``F.interpolate``, ``F.adaptive_avg_pool2d/3d``) failed to script with
-    ``undefined value math`` while wrappers were installed. Normalizing a
-    torchlens wrapper to its original before delegating hands torch a
-    self-consistent (source, globals) pair; every other caller is untouched.
-    """
-
-    module = _torch_compat.get_jit_overload_resolver_module()
-    if module is None:
-        return
-    orig_get_overloads = vars(module).get("_get_overloads")
-    if orig_get_overloads is None or _is_shimmed(orig_get_overloads):
-        return
-
-    @functools.wraps(orig_get_overloads)
-    def get_overloads_shim(obj: Any) -> Any:
-        """Resolve a torchlens wrapper to its original before overload lookup.
-
-        Keyed on LEDGER IDENTITY, never on ``__tl_*`` attribute presence: a
-        foreign ``@functools.wraps(F.relu)`` wrapper inherits the torchlens
-        ``__dict__`` markers (``__tl_wrapper_name__``,
-        ``__prepare_scriptable__``), and the attribute-keyed check silently
-        swapped such a wrapper for the pristine original -- dropping the
-        foreign behavior from overload resolution (b8-fable R56,
-        attribute-vs-identity anti-pattern).
-        """
-        original = _state._decorated_to_orig.get(id(obj))
-        if original is not None:
-            obj = original
-        return orig_get_overloads(obj)
-
-    _register_shim(get_overloads_shim)
-    module._get_overloads = get_overloads_shim
-    records.append((module, "_get_overloads", orig_get_overloads))
+    install_jit_entry_shims(records, register_shim=_register_shim, is_shimmed=_is_shimmed)
 
 
 # ---------------------------------------------------------------------------
