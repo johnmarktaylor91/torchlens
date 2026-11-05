@@ -179,3 +179,15 @@ def _clone_frozen_record(value: Any, **changes: Any) -> Any:
     for name in names:
         object.__setattr__(clone, name, changes[name] if name in changes else getattr(value, name))
     return clone
+
+
+def journal_record(event: Any) -> Any:
+    """Return ``event``'s full record when it is a row handle, else ``event`` itself.
+
+    Row handles (``_row_journal._RowOpRecord``) are the only journal entries
+    whose class defines ``materialize``. Checking the class, not the instance,
+    avoids the record's strict ``__getattr__``, and lets the capture journal and
+    the captured-run views unwrap handles without importing ``_row_journal``.
+    """
+
+    return event.materialize() if hasattr(type(event), "materialize") else event

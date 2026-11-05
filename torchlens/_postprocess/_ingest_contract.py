@@ -77,6 +77,9 @@ class IngestInputs:
       ``trace._phase_timings`` directly.
     * ``scatter_options`` — mechanically inventoried trace-level options the
       converters read (closed by the same instrumentation gate).
+    * ``capture_rows`` — ``id(record) -> capture row`` for the journal records
+      whose exhaustive capture rows ingest adopts as their op store rows
+      (capture C2c; empty for every other producer).
     """
 
     journal: JournalView
@@ -92,6 +95,7 @@ class IngestInputs:
     input_layers_initial: tuple[str, ...]
     timing_sink: Callable[[str, float], None]
     scatter_options: Mapping[str, Any] = field(default_factory=dict)
+    capture_rows: Mapping[int, list[Any]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,4 +148,5 @@ INGEST_CONTRACT_ROWS: tuple[tuple[str, str], ...] = (
     ("input_layers_initial", "read-only dedup baseline; X4"),
     ("timing_sink", "declared timing disposition; X3"),
     ("scatter_options", "mechanically inventoried option reads"),
+    ("capture_rows", "capture rows ingest adopts, keyed by record id (C2c)"),
 )

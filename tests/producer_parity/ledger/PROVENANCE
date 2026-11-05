@@ -5211,3 +5211,83 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 52696d3648ba53af4c35ef573933899af2d3cd7e (dirty)
 recorded: 2026-11-05T06:46:44.004314+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture C2b row-backed journal: new read sites in _ir/_row_journal.py (row handle fast reads and the lazy record build) and backends/torch/_ops_row_journal.py (commit-time residual snapshot); _function_boundary.py label and parent reads moved off record.core onto the flat names; journal_record unwraps added in _ir/capture_events.py, _captured_run.py, _postprocess/__init__.py, _capture/_multipass_cook.py and _partial/__init__.py; reviewed against the C2b diff over C2a 39a39ec7ed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bb87e1c8f845b712602c7ce2cf16e5e3daf7c628 (dirty)
+recorded: 2026-11-05T01:10:02.252467+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture C2b row-backed journal: new read sites in _ir/_row_journal.py (row handle fast reads and the lazy record build) and backends/torch/_ops_row_journal.py (commit-time residual snapshot); _function_boundary.py label and parent reads moved off record.core onto the flat names; journal_record unwraps added in _ir/capture_events.py, _captured_run.py, _postprocess/__init__.py, _capture/_multipass_cook.py and _partial/__init__.py; reviewed against the C2b diff over C2a 39a39ec7ed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bb87e1c8f845b712602c7ce2cf16e5e3daf7c628 (dirty)
+recorded: 2026-11-05T01:10:09.416544+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-scc-exit import-cycle exit, pure moves: the freeze ref builders (_tensor_ref_from_fields, _module_frames_from_fields, _param_refs_from_fields, _function_call_ref_from_fields, _resolve_call_function_ref, _exhaustive_freeze_refs, _exhaustive_output_ref, _exhaustive_capture_policy) move from backends/torch/_ops_capture_records.py and _copy_parent_arg_positions from _ops_container_base.py into the new backends/torch/_ops_freeze_refs.py; the edge-use read (_edge_uses, parent_arg_positions, _label_raw, func_call_id, func_name) moves from backends/torch/_ops_row_journal.py to ExhaustiveOpDraft.freeze in ops.py; _resolve_dtype moves from _postprocess/_materialize.py to _utils/_torch_symbols.py; journal_record moves from _ir/_row_journal.py to _ir/refs.py; reviewed against the diff over C2b 3ca77b89c5
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f0dccac9c96a2b368d4f485f47e8366b6519d5a8 (dirty)
+recorded: 2026-11-05T01:55:55.790415+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-scc-exit import-cycle exit, pure moves: the freeze ref builders (_tensor_ref_from_fields, _module_frames_from_fields, _param_refs_from_fields, _function_call_ref_from_fields, _resolve_call_function_ref, _exhaustive_freeze_refs, _exhaustive_output_ref, _exhaustive_capture_policy) move from backends/torch/_ops_capture_records.py and _copy_parent_arg_positions from _ops_container_base.py into the new backends/torch/_ops_freeze_refs.py; the edge-use read (_edge_uses, parent_arg_positions, _label_raw, func_call_id, func_name) moves from backends/torch/_ops_row_journal.py to ExhaustiveOpDraft.freeze in ops.py; _resolve_dtype moves from _postprocess/_materialize.py to _utils/_torch_symbols.py; journal_record moves from _ir/_row_journal.py to _ir/refs.py; reviewed against the diff over C2b 3ca77b89c5
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f0dccac9c96a2b368d4f485f47e8366b6519d5a8 (dirty)
+recorded: 2026-11-05T01:56:00.604655+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost refreshes the ledger for the row-direct series (C2c row ingest, C2b row commit, this lane), which moved read sites without a refresh: C2c's capture-row hand-off moves the label_raw (3), layer_type (1) and raw_index (1) reads from _postprocess/_materialize.py into _postprocess/_row_ingest.py and reads construction_done there to mark an ingested row; the row commit writes the function-call cells in _ops_row_cells._fill_function, which reads func_call_id from the shared call ref; this lane only reshapes the commit and handle reads (inline row reads, _fast_property branches, list comprehensions) and adds or drops no field; reviewed against the diff over the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6967818cb73e4942e4cb43b98f0085a49fc26ff6 (dirty)
+recorded: 2026-11-05T03:40:09.180620+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost refreshes the ledger for the row-direct series (C2c row ingest, C2b row commit, this lane), which moved read sites without a refresh: C2c's capture-row hand-off moves the label_raw (3), layer_type (1) and raw_index (1) reads from _postprocess/_materialize.py into _postprocess/_row_ingest.py and reads construction_done there to mark an ingested row; the row commit writes the function-call cells in _ops_row_cells._fill_function, which reads func_call_id from the shared call ref; this lane only reshapes the commit and handle reads (inline row reads, _fast_property branches, list comprehensions) and adds or drops no field; reviewed against the diff over the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6967818cb73e4942e4cb43b98f0085a49fc26ff6 (dirty)
+recorded: 2026-11-05T03:40:15.942426+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost refreshes the ledger for the row-direct series (C2c row ingest, C2b row commit, this lane), which moved read sites without a refresh: C2c's capture-row hand-off moves the label_raw (3), layer_type (1) and raw_index (1) reads from _postprocess/_materialize.py into _postprocess/_row_ingest.py and reads construction_done there to mark an ingested row; the row commit writes the function-call cells through op_record_scatter._write_function_ref_cells (the former _function_ref_cells, same reads); this lane only reshapes the commit and handle reads (inline row reads, _fast_property branches, list comprehensions) and adds or drops no field; reviewed against the diff over the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 18ae1697f874d9cf770b9b5a8c425744c7fb6ee0 (dirty)
+recorded: 2026-11-05T04:04:43.540279+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost refreshes the ledger for the row-direct series (C2c row ingest, C2b row commit, this lane), which moved read sites without a refresh: C2c's capture-row hand-off moves the label_raw (3), layer_type (1) and raw_index (1) reads from _postprocess/_materialize.py into _postprocess/_row_ingest.py and reads construction_done there to mark an ingested row; the row commit writes the function-call cells through op_record_scatter._write_function_ref_cells (the former _function_ref_cells, same reads); this lane only reshapes the commit and handle reads (inline row reads, _fast_property branches, list comprehensions) and adds or drops no field; reviewed against the diff over the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 18ae1697f874d9cf770b9b5a8c425744c7fb6ee0 (dirty)
+recorded: 2026-11-05T04:04:50.817949+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost: ingest now takes capture rows amended by an output promotion and rewrites their overlay cells through op_record_scatter._write_overlay_cells (licensed reader of core.output), so the output-cell read sites in op_record_scatter gain the new writer; no producer or consumer semantics change (alias records match a real row build field by field).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 522d5372ae417c906393ba516c342427b7efa7f3 (dirty)
+recorded: 2026-11-05T05:02:05.779459+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: c2-commit-cost: ingest now takes capture rows amended by an output promotion and rewrites their overlay cells through op_record_scatter._write_overlay_cells (licensed reader of core.output), so the output-cell read sites in op_record_scatter gain the new writer; no producer or consumer semantics change (alias records match a real row build field by field).
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 522d5372ae417c906393ba516c342427b7efa7f3 (dirty)
+recorded: 2026-11-05T05:02:11.721489+00:00
