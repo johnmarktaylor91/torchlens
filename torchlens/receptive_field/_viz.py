@@ -381,8 +381,9 @@ def _base_image(
         from ..repgeom import _matching_pil_image_batch
 
         batch = _matching_pil_image_batch(getattr(trace, "input", None), descriptor.input_shape[0])
-        if batch:
-            return batch[0].convert("RGB")
+        photo = _aligned_photo(trace, batch[0], descriptor, rendered_axes) if batch else None
+        if photo is not None:
+            return photo
         try:
             input_op = trace[descriptor.input_op_label]
             tensor = input_op.out
@@ -395,6 +396,35 @@ def _base_image(
         32 if len(rendered_axes) == 1 else max(1, int(descriptor.input_shape[rendered_axes[0]]))
     )
     return Image.new("RGB", (width, height), "white")
+
+
+def _aligned_photo(
+    trace: Any, photo: Image.Image, descriptor: ReceptiveField, axes: tuple[int, ...]
+) -> Image.Image | None:
+    """Return a captured photo in model-input pixel space, or ``None`` when it cannot align.
+
+    The box is drawn in model-input coordinates scaled to the base image, so a photo is a
+    usable base only at the input's spatial size: as captured, or after replaying the
+    trace's declared resize and center crop (geometry only, never normalization). Anything
+    else keeps the tensor rendering rather than drawing the box in the wrong place.
+    """
+
+    if len(axes) != 2:
+        return None
+    size = (int(descriptor.input_shape[axes[1]]), int(descriptor.input_shape[axes[0]]))
+    rgb = photo.convert("RGB")
+    if rgb.size == size:
+        return rgb
+    from ..preprocessing._card import declared_from_record
+    from ..preprocessing._declared_transform import geometry_from_declared
+
+    record = getattr(getattr(trace, "provenance", None), "input_preprocessor", None)
+    declared = declared_from_record(record)
+    geometry = None if declared is None else geometry_from_declared(declared)
+    replayed = None if geometry is None else geometry(rgb)
+    if isinstance(replayed, Image.Image) and replayed.size == size:
+        return replayed.convert("RGB")
+    return None
 
 
 def _tensor_image(
