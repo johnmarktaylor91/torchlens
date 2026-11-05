@@ -702,11 +702,14 @@ def _node_layout(
 
 @dataclass(frozen=True)
 class _WriteSources:
-    """What one written MLP output contributes as sources."""
+    """What one written MLP output contributes as sources.
 
-    node_idx: torch.Tensor
-    pos_idx: torch.Tensor
-    vectors: torch.Tensor | None
+    ``by_position`` holds, per position with active features, the feature
+    node indices and their vectors stacked as rows, so a chunk's edges from
+    those features are one matrix product per position.
+    """
+
+    by_position: tuple[tuple[int, torch.Tensor, torch.Tensor], ...]
     error: torch.Tensor
     bias: torch.Tensor | None
 
@@ -720,17 +723,32 @@ def _write_sources(
     for write in sites.writes:
         payload = read_payload(sites.payloads, sites.writes[write], "MLP output").to(dtype)
         error = payload - _reconstruction(readers, found, write, payload.shape, dtype)
-        pairs = _feature_vectors(readers, found, write)
         out.append(
             _WriteSources(
-                torch.tensor([node for node, _p, _v in pairs], dtype=torch.long),
-                torch.tensor([position for _n, position, _v in pairs], dtype=torch.long),
-                torch.stack([vector.to(dtype) for _n, _p, vector in pairs]) if pairs else None,
+                _by_position(_feature_vectors(readers, found, write), dtype),
                 error,
                 _decoder_bias(readers, write, dtype),
             )
         )
     return out
+
+
+def _by_position(
+    pairs: list[tuple[int, int, torch.Tensor]], dtype: torch.dtype
+) -> tuple[tuple[int, torch.Tensor, torch.Tensor], ...]:
+    """Group ``(node, position, vector)`` triples by position, in first-seen order."""
+
+    grouped: dict[int, list[tuple[int, torch.Tensor]]] = {}
+    for node, position, vector in pairs:
+        grouped.setdefault(int(position), []).append((node, vector))
+    return tuple(
+        (
+            position,
+            torch.tensor([node for node, _v in members], dtype=torch.long),
+            torch.stack([vector.to(dtype) for _n, vector in members]),
+        )
+        for position, members in grouped.items()
+    )
 
 
 def _edges(  # noqa: PLR0913 -- the build's parts the contraction reads
@@ -760,10 +778,11 @@ def _edges(  # noqa: PLR0913 -- the build's parts the contraction reads
         incoming = torch.zeros(grads.shape[0], n_nodes, dtype=dtype)
         for w_number, source in enumerate(writes):
             grad = grads[:, w_number]
-            if source.vectors is not None:
-                incoming.index_add_(
-                    1, source.node_idx, (grad[:, source.pos_idx] * source.vectors).sum(dim=-1)
-                )
+            # One (chunk, width) x (width, features) product per position: the
+            # gathered (chunk, features, width) product this replaces moved
+            # gigabytes per chunk on a GPT-2-sized prompt.
+            for position, node_idx, vectors in source.by_position:
+                incoming.index_add_(1, node_idx, grad[:, position] @ vectors.T)
             first = starts.error + w_number * n_pos
             incoming[:, first : first + n_pos] = (grad * source.error).sum(dim=-1)
             if source.bias is not None:
