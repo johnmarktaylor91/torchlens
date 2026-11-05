@@ -224,21 +224,7 @@ def _classify_arg_component(
     if isinstance(label, str):
         return ParentRef(label, _capture_layout=_capture_layout(value))
     if isinstance(value, torch.Tensor):
-        if isinstance(value, torch.nn.Parameter):
-            # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
-            # session cleanup strips the weak registry meta before a deferred save,
-            # so the template itself must carry the capture-time identity.
-            param_meta = get_param_meta(value)
-            param_barcode = getattr(param_meta, "param_barcode", None)
-            return LiteralTensor(
-                value,
-                param_barcode=str(param_barcode) if param_barcode is not None else None,
-                _capture_param_fingerprint=param_fingerprint(
-                    value, getattr(param_meta, "param_address", None)
-                ),
-            )
-        with pause_logging():
-            return LiteralTensor(safe_copy(value))
+        return _unlabeled_tensor_literal(value)
     if _literal_value_supported(value):
         return LiteralValue(value)
     if isinstance(value, (list, tuple)):
@@ -247,6 +233,31 @@ def _classify_arg_component(
         return tuple(
             (key, _classify_arg_component(item, notes, trace)) for key, item in value.items()
         )
+    return _unsupported_component(value, notes)
+
+
+def _unlabeled_tensor_literal(value: torch.Tensor) -> LiteralTensor:
+    """Template a tensor argument that has no live parent label as a literal."""
+
+    if isinstance(value, torch.nn.Parameter):
+        # r75 F2: snapshot the model-prep barcode NOW (model provably alive) --
+        # session cleanup strips the weak registry meta before a deferred save,
+        # so the template itself must carry the capture-time identity.
+        param_meta = get_param_meta(value)
+        param_barcode = getattr(param_meta, "param_barcode", None)
+        return LiteralTensor(
+            value,
+            param_barcode=str(param_barcode) if param_barcode is not None else None,
+            _capture_param_fingerprint=param_fingerprint(
+                value, getattr(param_meta, "param_address", None)
+            ),
+        )
+    with pause_logging():
+        return LiteralTensor(safe_copy(value))
+
+
+def _unsupported_component(value: Any, notes: list[str]) -> Unsupported:
+    """Template an argument value replay cannot store, noting why."""
 
     reason = f"unsupported argument type {type(value).__module__}.{type(value).__qualname__}"
     notes.append(reason)

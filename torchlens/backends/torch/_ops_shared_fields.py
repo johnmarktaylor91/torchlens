@@ -30,8 +30,16 @@ from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._completeness_origins import internal_scalar_read
+from ._ops_arg_slots import (
+    _ArgSlot,
+    _SlotCall,
+    parents_from_slots,
+    snapshot_arg_slots,
+    templates_from_slots,
+    templates_requested,
+    witness_from_slots,
+)
 from ._tl import (
-    get_live_label_list,
     get_tensor_label,
     set_tensor_label,
 )
@@ -84,19 +92,14 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
 def _set_arg_template_fields(
     self: "Trace",
     fields_dict: dict[str, Any],
-    func: Callable[..., Any],
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
+    call: _SlotCall,
+    slots: tuple[_ArgSlot, ...],
 ) -> None:
     """Seed the replay argument templates and the portable function identity of one call."""
-    should_capture_template = bool(
-        getattr(self, "is_replayable", False) or self._options_save_arg_templates
-    )
-    if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
+    if templates_requested(self):
+        captured_template = templates_from_slots(self, call, slots)
         fields_dict["args_template"] = captured_template
-        fields_dict["kwargs_template"] = captured_template if kwargs else None
+        fields_dict["kwargs_template"] = captured_template if call.kwargs else None
         # The portable function identity is what lets a LOADED bundle resolve its
         # callables for validation; a default capture records templates only for
         # in-process replay, so it keeps the default bundle's identity-free contract.
@@ -112,7 +115,9 @@ def _set_arg_template_fields(
         # identity lets replay validation resolve the callable on a loaded
         # bundle (``validation/_loaded_callables.py``), which carries no callables.
         fields_dict["func_id"] = (
-            _function_registry_key(func, func_name, self) if self._options_save_args else None
+            _function_registry_key(call.func, call.func_name, self)
+            if self._options_save_args
+            else None
         )
 
 
@@ -163,9 +168,9 @@ def _build_shared_fields_dict(
     # Separate tensor args (graph edges) from non-tensor args (metadata, equivalence
     # hashing); the latter are op-time snapshots, safe from later caller mutation.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
-    parent_layer_labels = get_live_label_list(
-        arg_tensors, self.capture_events.live_index.by_raw_label
-    )
+    call = _SlotCall(func, func_name, args, kwargs)
+    slots = snapshot_arg_slots(self, call, arg_tensors)
+    parent_layer_labels = parents_from_slots(self, slots, arg_tensors)
     parent_layer_entries = [
         cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
         for label in parent_layer_labels
@@ -179,7 +184,7 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
     fields_dict["edits"] = []
-    _set_arg_template_fields(self, fields_dict, func, func_name, args, kwargs)
+    _set_arg_template_fields(self, fields_dict, call, slots)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None
@@ -247,13 +252,8 @@ def _build_shared_fields_dict(
     (
         fields_dict["unattributed_tensor_args"],
         fields_dict["dropped_edge_tensor_args"],
-    ) = _unattributed_tensor_arg_positions(
-        self,
-        args,
-        kwargs,
-        func_name,
-        fields_dict["parent_arg_positions"],
-        fields_dict["parent_params"],
+    ) = witness_from_slots(
+        self, call, fields_dict["parent_arg_positions"], fields_dict["parent_params"]
     )
 
     # Function config — lightweight hyperparameter extraction, always on.
@@ -537,16 +537,12 @@ def _build_module_context_fields(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_arguments import (  # noqa: E402
-    _build_args_template,
     _function_registry_key,
 )
 from ._ops_capture_records import (  # noqa: E402
     _bind_writeback_receiver_label,
     _record_label_version_snapshot,
     _snapshot_exhaustive_module_stack,
-)
-from ._ops_emission import (  # noqa: E402
-    _unattributed_tensor_arg_positions,
 )
 from ._ops_exhaustive import (  # noqa: E402
     _check_if_tensor_arg,

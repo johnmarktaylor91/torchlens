@@ -1250,15 +1250,10 @@ def _locate_parent_tensors_in_args(
 ) -> dict[str, dict[Any, str]]:
     """Map each parent tensor to its position in the function's args/kwargs.
 
-    Supports up to 2 levels of nesting:
-      - Top-level: ``args[i]`` maps to key ``i``
-      - Nested: ``args[i][j]`` maps to key ``(i, j)``
-    Deeper nesting is not tracked (would require recursive search).
-
-    This mapping is stored as ``parent_arg_positions`` on the child's log
-    entry, and is used by:
-      - ``_get_parent_contents``: to retrieve pre-call parent values from arg_copies
-      - Validation replay: to reconstruct the function call
+    Two levels of nesting: ``args[i]`` maps to key ``i``, ``args[i][j]`` to ``(i, j)``.
+    Stored as the child's ``parent_arg_positions``; ``_get_parent_contents`` reads
+    pre-call parent values with it and validation replay rebuilds the call from it.
+    Labels come from the op's argument slot snapshot when one was taken.
 
     Returns:
         ``{"args": {pos: label, ...}, "kwargs": {key: label, ...}}``
@@ -1266,6 +1261,10 @@ def _locate_parent_tensors_in_args(
     tensor_all_arg_positions: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
     if not parent_log_entries:
         return tensor_all_arg_positions
+    from ._ops_arg_slots import current_arg_slots, parent_arg_positions_from_slots
+
+    if (slots := current_arg_slots(self, args, kwargs)) is not None:
+        return parent_arg_positions_from_slots(slots, parent_log_entries)
 
     positions_by_label: dict[str, dict[str, list[Any]]] = {
         parent_entry._label_raw: {"args": [], "kwargs": []} for parent_entry in parent_log_entries
