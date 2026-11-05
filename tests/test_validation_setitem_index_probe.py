@@ -102,8 +102,11 @@ def test_write_into_rows_already_holding_the_value_validates(probe_calls) -> Non
 
 
 def test_permuted_rows_writing_one_scalar_validate() -> None:
-    torch.manual_seed(0)
-    assert tl.validate(RowColumnWrite(), torch.randn(2, 20), scope="forward") is True
+    """Seed 3 draws the row swap, which writes the same two cells; the probe moves one row."""
+
+    torch.manual_seed(3)
+    x = torch.randn(2, 20)
+    assert tl.validate(RowColumnWrite(), x, scope="forward", seed=3) is True
 
 
 def test_dead_setitem_index_edge_still_fails(probe_calls) -> None:
