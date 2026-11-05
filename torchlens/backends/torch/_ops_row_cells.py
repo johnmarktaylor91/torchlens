@@ -7,18 +7,24 @@ ingest scatters the record back into cells (``scatter_record_to_cells``).
 record; :func:`write_op_row` appends them as one layout-ordered row.
 
 The value contract is exact: for the same draft (fields dict, fire results,
-call box), ``op_row_cells`` returns
-``scatter_record_to_cells(_op_record_from_log(...), IngestExtras(), trace)``
+call box), ``op_row_cells`` returns the layout projection of
+``scatter_record_to_cells(_op_record_from_log(...), IngestExtras(), trace)``,
 key for key and value for value (types included), evaluated at the same
-moment. Facet presence is mirrored: a facet the freeze would omit reads the
-checked-in ``FACET_DEFAULTS`` value, as the scatter does. The shared
-function-call ref goes through ``_resolve_call_function_ref`` so sibling
-outputs of one call share it exactly as the freeze does (the call box is
-updated the same way).
+moment. The layout projection is what ``Op.__init__`` stores: names backed by
+``Op`` properties are not cells (``input_ops`` and the other input summaries
+are dropped), ``source_trace`` is stored as the ``_source_trace_ref`` weak
+reference and ``is_in_conditional_body`` as the ``_is_in_conditional_body``
+cell, so every returned name is a field of ``_OP_STORE_LAYOUT`` and
+:func:`write_op_row` accepts the result as is. Facet presence is mirrored: a
+facet the freeze would omit reads the checked-in ``FACET_DEFAULTS`` value, as
+the scatter does. The shared function-call ref goes through
+``_resolve_call_function_ref`` so sibling outputs of one call share it exactly
+as the freeze does (the call box is updated the same way).
 """
 
 from __future__ import annotations
 
+import weakref
 from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
@@ -232,7 +238,7 @@ def _core_graph_cells(trace: Trace, fields_dict: Mapping[str, Any]) -> dict[str,
         "type": layer_type,
         "type_index": fields_dict["type_index"],
         "pass_number": fields_dict["pass_number"],
-        "source_trace": trace,
+        "_source_trace_ref": weakref.ref(trace),
         "_tracing_finished": fields_dict["_tracing_finished"],
         "_construction_done": fields_dict["_construction_done"],
         "save_grads": fields_dict["save_grads"],
@@ -266,12 +272,6 @@ _SCALAR_CONSTANT_CELLS: tuple[tuple[str, Any], ...] = (
     ("layer_label", None),
     ("short_layer_label", None),
     ("num_passes", 1),
-    ("input_ops", None),
-    ("input_activations", None),
-    ("input_shapes", None),
-    ("input_dtypes", None),
-    ("input_memory", None),
-    ("num_inputs", None),
     ("grad", None),
     ("transformed_grad", None),
     ("has_grad", False),
@@ -303,7 +303,7 @@ _SCALAR_CONSTANT_CELLS: tuple[tuple[str, Any], ...] = (
     ("conditional_wrapper_kind", None),
     ("terminal_conditional_id", None),
     ("terminal_bool_for", None),
-    ("is_in_conditional_body", False),
+    ("_is_in_conditional_body", False),
     ("conditional_branch_depth", 0),
     ("_address_normalized", None),
     ("fx_qualpath", None),
@@ -350,7 +350,7 @@ def op_row_cells(
     fire_results: tuple[FireResult, ...] = (),
     call_ref_box: list[FunctionCallRef] | None = None,
 ) -> dict[str, Any]:
-    """Return one exhaustive op's record-sourced store cells without building its record.
+    """Return one exhaustive op's layout-stored cells without building its record.
 
     Parameters
     ----------
@@ -366,7 +366,8 @@ def op_row_cells(
     Returns
     -------
     dict[str, Any]
-        Cell name to value, equal to the scatter of the frozen record.
+        Layout field name to value: the layout projection of the scatter of
+        the frozen record (see the module docstring).
     """
 
     facet_cells = _facet_value_cells(fields_dict, fire_results)
