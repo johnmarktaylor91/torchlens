@@ -57,6 +57,7 @@ _SDPA = "torchlens.validation._sdpa_value_proofs:"
 _SAVED = "torchlens.validation._saved_value_proofs:"
 _SAVED_TESTS = "tests/test_validation_saved_value_proofs.py::"
 _ZERO_SOURCE = "tests/test_validation_zero_source_add.py::"
+_DEGENERATE = "tests/test_validation_degenerate_domains.py::"
 _SINGLE_KEY = _GAP + "test_sdpa_single_key_edge_is_exempted"
 _NON_FINITE = _VHARD + "test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output"
 
@@ -544,6 +545,17 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         (
             _SAVED_TESTS + "test_index_into_size_one_dim_is_exempt",
             _SAVED_TESTS + "test_index_into_wider_dim_still_fails_when_frozen",
+        ),
+    ),
+    _decision(
+        "setitem_empty_mask_value",
+        ("posthoc", _C2),
+        _SAVED + "setitem_empty_mask_value_decision",
+        "the value of a setitem whose saved index holds a bool mask with no True entry and "
+        "whose saved output equals the saved destination",
+        (
+            _DEGENERATE + "test_setitem_value_under_an_all_false_mask_is_exempt",
+            _DEGENERATE + "test_setitem_value_under_a_live_mask_still_fails_when_frozen",
         ),
     ),
     _decision(

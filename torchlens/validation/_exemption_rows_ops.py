@@ -17,6 +17,7 @@ _SLOTS = "tests/test_validation_structural_slots.py::"
 _KERNEL = "tests/test_foreign_kernel_dependence.py::"
 _MASKS = "tests/test_validation_mask_builder_table.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
+_DEGENERATE = "tests/test_validation_degenerate_domains.py::"
 _EX = "torchlens.validation._exemptions:"
 _CORE = "torchlens.validation._core:"
 
@@ -414,12 +415,56 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
             "gather",
             "index_select",
             "cross_entropy",
+            "index_add",
+            "index_add_",
+            "index_copy",
+            "index_copy_",
+            "index_fill",
+            "index_fill_",
+            "take_along_dim",
+            "nll_loss",
         ),
         "_check_index_domain_degenerate",
         "an index parent whose domain has n <= 1 valid values or zero in-domain entries",
         "value-irrelevance is forced by the domain constraint, not assumed; any perturbable "
         "domain runs the strict in-domain rotation check",
         _TIGHTENING + "test_dead_embedding_index_edge_now_fails",
+    ),
+    _custom(
+        ("masked_scatter", "masked_scatter_", "maskedscatter"),
+        "check_masked_scatter_empty_source_exempt",
+        "the mask parent when the saved source is empty, so the all-False mask is the "
+        "only valid mask",
+        "degenerate domain: the source must hold at least one element per "
+        "True mask entry; the input, the source and a mask over a non-empty source stay strict",
+        _DEGENERATE + "test_masked_scatter_mask_over_a_live_source_still_fails_when_frozen",
+    ),
+    _custom(
+        "ctc_loss",
+        "check_ctc_single_target_length_exempt",
+        "the target_lengths parent of a batch of one with batched log_probs and "
+        "concatenated 1-D targets",
+        "degenerate domain: concatenated targets force sum(target_lengths) "
+        "== targets.numel(); padded targets, input lengths and batches of two or more stay "
+        "strict",
+        _DEGENERATE + "test_ctc_target_lengths_of_a_batch_of_two_still_fail_when_frozen",
+    ),
+    _custom(
+        ("conv_transpose1d", "conv_transpose2d", "conv_transpose3d"),
+        "check_conv_transpose_unit_output_padding_exempt",
+        "the output_padding parent when every saved stride and dilation is 1 and the saved "
+        "padding is 0",
+        "degenerate domain: output_padding must be below the stride or the "
+        "dilation, so 0 is the only valid value; any stride or dilation above 1 stays strict",
+        _DEGENERATE + "test_conv_transpose_output_padding_under_stride_two_is_not_exempt",
+    ),
+    _custom(
+        "argsort",
+        "check_argsort_singleton_dim_exempt",
+        "the input parent of an argsort over a dim of size 1 whose saved output is all zero",
+        "degenerate domain: sorting one element returns index 0 for every "
+        "input; a sorted dim of two or more stays strict",
+        _DEGENERATE + "test_argsort_over_two_elements_still_fails_when_frozen",
     ),
     _custom(
         "where",
