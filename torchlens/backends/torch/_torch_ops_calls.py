@@ -47,6 +47,7 @@ from ..._utils._tensor_label import get_tensor_label
 from ._foreign_data import (
     CALL_OPERATOR_ATTR,
     FLASH_ATTENTION_2_CUSTOM_OP,
+    foreign_journal,
     recorded_custom_op_name,
 )
 
@@ -296,7 +297,9 @@ def _returning_mutated_receiver(call_operator: Callable[..., Any]) -> Callable[.
     return _call_returning_receiver
 
 
-def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
+def _disclose_unrecorded_mutation(
+    trace: Any, op: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> None:
     """Queue a ``source_provenance`` gap for a mutating operator call left out of the graph.
 
     The provenance disclosure step (``source_provenance._warn_unattributed_tensor_args``) pops the
@@ -309,7 +312,19 @@ def _disclose_unrecorded_mutation(trace: Any, op: Any) -> None:
         Active capture trace.
     op:
         The operator that wrote an argument it does not return.
+    args, kwargs:
+        The call's arguments. Their labels (top level and one list deep) go to the
+        journal's ``unrecorded_writes``: a later reader of a written argument holds a value
+        its recorded parent never produced, and the snapshot tripwire leaves that run to the
+        ``source_provenance`` failure this disclosure causes.
     """
+
+    written = foreign_journal(trace).unrecorded_writes
+    for value in (*args, *kwargs.values()):
+        for item in value if isinstance(value, (list, tuple)) else (value,):
+            label = get_tensor_label(item) if isinstance(item, torch.Tensor) else None
+            if label is not None:
+                written.add(label)
 
     trace.__dict__.setdefault("_unrecorded_operator_mutations", []).append(
         f"{_qualified_name(op) or _recorded_op_name(op)} (wrote an argument it does not "
@@ -460,16 +475,16 @@ def _make_recording_call(original: Callable[..., Any]) -> Callable[..., Any]:
             if get_tensor_label(args[0]) == label_before:
                 # No op relabelled the receiver: the write is not in the graph (the
                 # operator's body logged other ops, so the in-place record was skipped).
-                _disclose_unrecorded_mutation(trace, self)
+                _disclose_unrecorded_mutation(trace, self, args, kwargs)
             return None
         if mutation == _MUTATION_UNKNOWN:
             result = decorated(*args, **kwargs)
             if result is None:
-                _disclose_unrecorded_mutation(trace, self)
+                _disclose_unrecorded_mutation(trace, self, args, kwargs)
             return result
         # Writes another argument, an argument no return aliases, a list receiver, or a
         # receiver passed by keyword.
-        _disclose_unrecorded_mutation(trace, self)
+        _disclose_unrecorded_mutation(trace, self, args, kwargs)
         return original(self, *args, **kwargs)
 
     _recording_call.__tl_torch_ops_recorder__ = True  # type: ignore[attr-defined]

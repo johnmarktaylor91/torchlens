@@ -53,7 +53,7 @@ from ._ops_arg_slots import (
     parents_from_slots,
     templates_requested,
 )
-from ._storage_exports import note_foreign_written_snapshot
+from ._storage_exports import note_alias_rebound_snapshot, note_foreign_written_snapshot
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,
@@ -476,6 +476,15 @@ def _mark_foreign_written_snapshot(
         note_foreign_written_snapshot(
             self, parent_label, child_entry._label_raw, positions, live_call
         )
+        if _VIEW_MUTATION_RELABELS:
+            note_alias_rebound_snapshot(
+                self,
+                parent_label,
+                child_entry._label_raw,
+                positions,
+                live_call,
+                _VIEW_MUTATION_RELABELS,
+            )
 
 
 def _get_parent_output_version_snapshot(

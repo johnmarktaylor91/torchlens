@@ -118,18 +118,23 @@ class ForeignJournal:
     alive, and an expired reference never lets a reused pointer fake an export.
     ``written_slots`` maps ``(parent raw label, child raw label)`` of a by-value
     snapshot whose slots held the parent's own tensor on an exported storage to the
-    parent's bound argument slots; forward validation reads it. Postprocess step 3
-    keeps only the marks.
+    parent's bound argument slots; ``alias_slots`` likewise marks slots holding an alias
+    a view write relabeled onto the parent; ``unrecorded_writes`` holds the raw labels a
+    disclosed unrecordable mutating call received. Forward validation reads the marks;
+    postprocess step 3 keeps only them.
     """
 
     departures: list[Departure] = field(default_factory=list)
     exported: dict[tuple[str, int], Any] = field(default_factory=dict)
     written_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
+    alias_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
+    unrecorded_writes: set[str] = field(default_factory=set)
 
     def end_capture(self) -> ForeignJournal | None:
-        """Return the journal postprocess keeps: the slot marks only, or ``None``."""
+        """Return the journal postprocess keeps: the marks only, or ``None``."""
 
-        return ForeignJournal(written_slots=self.written_slots) if self.written_slots else None
+        marks = (self.written_slots, self.alias_slots, self.unrecorded_writes)
+        return ForeignJournal([], {}, *marks) if any(marks) else None
 
 
 def foreign_journal(trace: Any) -> ForeignJournal:

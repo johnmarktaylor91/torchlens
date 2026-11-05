@@ -89,6 +89,19 @@ class _TwoInplaceDifferentShapes(nn.Module):
         return torch.sub(p, q)
 
 
+class _SiblingViewAfterWrite(nn.Module):
+    """A sibling view of another shape, taken before a write through a view, read after it."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Write into ``y[:, 3:5]``, then subtract a fresh tensor from the sibling ``y[:, 2:6]``."""
+
+        y = x * 2.0
+        sibling = y[:, 2:6]
+        other = x[:, 0:4] + 1.0
+        y[:, 3:5].mul_(3.0)
+        return torch.sub(sibling, other)
+
+
 def _trace(model: nn.Module, x: torch.Tensor) -> Any:
     """Capture ``model`` with saved arguments, as validation does."""
 
@@ -169,6 +182,7 @@ _PLANTS: dict[str, tuple[type[nn.Module], Callable[[Any], None]]] = {
         _TwoInplaceDifferentShapes,
         _swap("sub", 0, 1),
     ),
+    "sibling_alias_and_fresh_operand_swapped": (_SiblingViewAfterWrite, _swap("sub", 0, 1)),
 }
 
 
@@ -315,3 +329,35 @@ def test_known_blind_spot_base_and_same_shape_view_swapped() -> None:
     assert snapshot_binding_explained(
         child, parent, _saved_out_payload, lambda label: _op_for_validation_label(trace, label)
     )
+
+
+def test_sibling_alias_snapshot_is_explained_only_by_its_capture_mark() -> None:
+    """A write's reader of a sibling view needs capture's alias mark for exactly its slots."""
+
+    from torchlens.validation._core import _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    trace = _trace(_SiblingViewAfterWrite(), torch.randn(3, 8))
+    child = _op(trace, "sub")
+    parent = _op_for_validation_label(trace, child.call.parent_arg_positions["args"][0])
+    assert parent.is_inplace
+
+    def explained(**marks: Any) -> bool:
+        """Run the tripwire on the sibling slot with ``marks``."""
+
+        return snapshot_binding_explained(
+            child,
+            parent,
+            _saved_out_payload,
+            lambda label: _op_for_validation_label(trace, label),
+            **marks,
+        )
+
+    marks = trace.__dict__["_foreign_departures"].alias_slots
+    assert explained(alias_slots=marks)
+    assert not explained()
+    assert not explained(alias_slots={key: frozenset({("args", 1)}) for key in marks})
+    versions = parent.out_versions_by_child
+    key = next(k for k in (child.label, child.layer_label) if k in versions)
+    versions[key] = versions[key].double()
+    assert not explained(alias_slots=marks)

@@ -339,6 +339,43 @@ class _UnreturnedWriteModel(nn.Module):
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_unrecorded_write_reader_is_left_to_the_disclosure_only_for_its_inputs() -> None:
+    """The snapshot tripwire leaves a reader of an unrecordably written tensor to
+    ``source_provenance`` only when the disclosed call received that very tensor."""
+
+    from torchlens.validation._core import _op_for_validation_label, _saved_out_payload
+    from torchlens.validation._snapshot_binding import snapshot_binding_explained
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(
+            _UnreturnedWriteModel("mut_ret"),
+            torch.randn(3, 4),
+            capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
+        )
+    add = next(op for op in trace.ops if op.func_name == "__add__")
+    parent = _op_for_validation_label(trace, add.call.parent_arg_positions["args"][0])
+    assert parent.func_name == "clone" and not parent.is_inplace
+
+    def explained(written: frozenset[str]) -> bool:
+        """Run the tripwire on the add's first slot with ``written`` as the disclosed inputs."""
+
+        return snapshot_binding_explained(
+            add,
+            parent,
+            _saved_out_payload,
+            lambda label: _op_for_validation_label(trace, label),
+            unrecorded_writes=written,
+        )
+
+    written = frozenset(trace.__dict__["_foreign_departures"].unrecorded_writes)
+    assert parent._label_raw in written
+    assert explained(written)
+    assert not explained(frozenset())
+    assert not explained(written - {parent._label_raw})
+
+
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("op_name", ["mut_ret", "buf_ret"])
 def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
     """A write beside a fresh return used to validate True with a pre-mutation graph."""

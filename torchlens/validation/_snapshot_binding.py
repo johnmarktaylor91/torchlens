@@ -17,7 +17,10 @@ A differing snapshot is explained when
   the view it wrote through is bound to the write, and its value is that alias, not
   the written view; the snapshot has the write's dtype and the shape of an op on the
   write's receiver chain, or, for ``set_(storage, ...)``, exactly the bytes of the
-  storage it bound the receiver to (content is not compared); or
+  storage it bound the receiver to (content is not compared); or capture marked every
+  slot bound to the write as holding an alias the write relabeled onto it (a sibling view
+  taken off the receiver chain, ``backends/torch/_storage_exports.py``), and the snapshot
+  has the write's dtype; or
 - the parent is not an in-place op, the snapshot has the parent's shape and dtype
   (an in-place write never changes either), and an in-place op the child ALSO
   consumes wrote through the parent's lineage: the call reads a base together
@@ -30,7 +33,11 @@ A differing snapshot is explained when
   (``backends/torch/_storage_exports.py``), and capture sets it only when each slot
   held the parent's own tensor on that exported storage; a parent bound to any other
   slots, or a snapshot without the mark, is not explained by it. A loaded trace carries
-  no marks, and marks are not invalidated by later edits of a parent's snapshots.
+  no marks, and marks are not invalidated by later edits of a parent's snapshots; or
+- the parent is not an in-place op, the snapshot has the parent's shape and dtype, and
+  the parent's tensor went into a mutating operator call capture could not record and
+  disclosed (``backends/torch/_torch_ops_calls.py``): that disclosure is a
+  ``source_provenance`` gap, so the run fails there with the cause named.
 
 Anything else is a binding the recorded graph cannot produce, and argument logging
 fails. The check only adds failures; it never validates what failed before.
@@ -38,7 +45,7 @@ fails. The check only adds failures; it never validates what failed before.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Set as AbstractSet
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -71,6 +78,9 @@ def snapshot_binding_explained(
     saved_out: Callable[[Op], Any],
     resolve: Callable[[str], Any],
     foreign_written: Mapping[tuple[str, str], frozenset[tuple[str, Any]]] | None = None,
+    *,
+    alias_slots: Mapping[tuple[str, str], frozenset[tuple[str, Any]]] | None = None,
+    unrecorded_writes: AbstractSet[str] = frozenset(),
 ) -> bool:
     """Return whether ``parent_layer``'s snapshot for ``target_layer`` follows from the graph.
 
@@ -87,6 +97,10 @@ def snapshot_binding_explained(
     foreign_written:
         The trace's foreign-write marks: ``(parent raw label, child raw label)`` to
         the parent's bound slots at capture; ``None`` when there are none.
+    alias_slots:
+        The trace's alias-relabel marks, keyed and valued like ``foreign_written``.
+    unrecorded_writes:
+        Raw labels of tensors passed to a disclosed unrecordable mutating call.
 
     Returns
     -------
@@ -104,12 +118,18 @@ def snapshot_binding_explained(
     if same_geometry and tensor_nanequal(snapshot, saved, allow_tolerance=False):
         return True
     if record_member(parent_layer, "is_inplace", False):
-        return _write_alias_geometry(snapshot, parent_layer, saved_out, resolve)
+        if _write_alias_geometry(snapshot, parent_layer, saved_out, resolve):
+            return True
+        return snapshot.dtype == saved.dtype and _slots_marked(
+            target_layer, parent_layer, resolve, alias_slots or {}
+        )
     if not same_geometry:
         return False
     if _consumed_write_reaches(target_layer, parent_layer, resolve):
         return True
-    return _foreign_write_marked(target_layer, parent_layer, resolve, foreign_written or {})
+    if record_member(parent_layer, "_label_raw", None) in unrecorded_writes:
+        return True
+    return _slots_marked(target_layer, parent_layer, resolve, foreign_written or {})
 
 
 def _write_alias_geometry(
@@ -159,19 +179,19 @@ def _covers_set_storage(snapshot: torch.Tensor, parent_layer: Op) -> bool:
     )
 
 
-def _foreign_write_marked(
+def _slots_marked(
     target_layer: Op,
     parent_layer: Op,
     resolve: Callable[[str], Any],
-    foreign_written: Mapping[tuple[str, str], frozenset[tuple[str, Any]]],
+    marks: Mapping[tuple[str, str], frozenset[tuple[str, Any]]],
 ) -> bool:
-    """Return whether capture marked this snapshot as a foreign write for its current slots."""
+    """Return whether capture marked this snapshot (foreign write or alias relabel) for its current slots."""
 
     key = (
         record_member(parent_layer, "_label_raw", None),
         record_member(target_layer, "_label_raw", None),
     )
-    marked = foreign_written.get(key)
+    marked = marks.get(key)
     return bool(marked) and marked == _bound_slots(target_layer, parent_layer, resolve)
 
 

@@ -280,12 +280,15 @@ def _parent_arg_evidence(
         if key in versions:
             # A snapshot is the bound slot's content, so it agrees with any binding;
             # it stands as evidence only when the recorded graph explains it.
+            marks = trace.__dict__.get("_foreign_departures")
             if not snapshot_binding_explained(
                 target_layer,
                 parent_layer,
                 _saved_out_payload,
                 lambda label: _op_for_validation_label(trace, label),
-                getattr(trace.__dict__.get("_foreign_departures"), "written_slots", None),
+                getattr(marks, "written_slots", None),
+                alias_slots=getattr(marks, "alias_slots", None),
+                unrecorded_writes=getattr(marks, "unrecorded_writes", None) or frozenset(),
             ):
                 return ValidationCheckResult.failed_result("arg_logging_mismatch")
             return versions[key], None

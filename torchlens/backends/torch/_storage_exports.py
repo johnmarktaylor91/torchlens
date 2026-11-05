@@ -39,6 +39,7 @@ from torch.multiprocessing.reductions import StorageWeakRef
 from ... import _state
 from ..._utils._internal_read import _internal_read_state
 from ..._utils._tensor_label import (
+    active_label_session_token,
     get_tensor_meta,
     raw_tensor_label,
     session_label_storage_intact,
@@ -211,3 +212,42 @@ def note_foreign_written_snapshot(
         for kind, pos in slots
     ):
         journal.written_slots[(parent_label, child_label)] = frozenset(slots)
+
+
+def note_alias_rebound_snapshot(
+    trace: Any,
+    parent_label: str,
+    child_label: str,
+    parent_arg_positions: Mapping[str, Mapping[Any, str]],
+    live_call: tuple[Sequence[Any], Mapping[str, Any]],
+    relabels: Mapping[Any, tuple[Any, ...]],
+) -> None:
+    """Mark a parent's version snapshot whose slots hold aliases a view write relabeled.
+
+    An in-place write through a view relabels every live alias whose storage overlaps
+    the write onto the in-place op (``wrappers._propagate_mutation_label_to_storage_aliases``),
+    so a reader of a sibling view taken off the write's receiver chain is bound to the
+    write and its snapshot has the sibling's shape. ``relabels`` is that propagation's
+    record (``ops._VIEW_MUTATION_RELABELS``: tensor to ``(session token, prior label,
+    label it was given, ...)``). The mark is set only when every slot bound to the parent
+    holds a tensor this session's propagation relabeled onto exactly this parent; any
+    other slot content is a binding the propagation does not explain.
+    """
+
+    token = active_label_session_token()
+    sources = {"args": live_call[0], "kwargs": live_call[1]}
+    slots = [
+        (kind, position)
+        for kind in ("args", "kwargs")
+        for position, label in (parent_arg_positions.get(kind) or {}).items()
+        if label == parent_label
+    ]
+
+    def relabeled_onto_parent(value: Any) -> bool:
+        """Return whether the propagation of this session relabeled ``value`` onto the parent."""
+
+        entry = relabels.get(value) if isinstance(value, torch.Tensor) else None
+        return entry is not None and entry[0] == token and entry[2] == parent_label
+
+    if slots and all(relabeled_onto_parent(_slot_value(sources[k], p)) for k, p in slots):
+        foreign_journal(trace).alias_slots[(parent_label, child_label)] = frozenset(slots)
