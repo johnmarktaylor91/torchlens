@@ -106,6 +106,9 @@ _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
     "roi_pool": frozenset({1}),
     "ps_roi_align": frozenset({1}),
     "ps_roi_pool": frozenset({1}),
+    "_view_func": frozenset({0}),
+    "_view_func_unsafe": frozenset({0}),
+    "_rev_view_func_unsafe": frozenset({0}),
 }
 _KWARG_ALIAS_MEMBERS: dict[str, dict[int, frozenset[str]]] = {
     "_pack_padded_sequence": {1: frozenset({"lengths"})},

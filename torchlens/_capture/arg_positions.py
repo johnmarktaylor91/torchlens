@@ -1350,14 +1350,14 @@ _FACTORY_FUNCS = [
     "eye",
     "full",
     "empty",
-    # Size/stride/layout-only allocators (no tensor operand): torch.empty_strided
-    # and torch.empty_permuted, seen in real captures on the nightly fast tier.
+    # Size/stride/layout-only allocators with no tensor operand (nightly fast-tier captures).
     "emptystrided",
     "emptypermuted",
     # NOTE: not "tensor": ``torch.tensor(data)`` accepts a tensor ``data`` (torch warns but
     # executes), a real data-lineage edge, so it gets an explicit spec below (round-22 F6).
     "astensor",
     "getrngstate",  # torch.get_rng_state: reads the CPU generator, no tensor operand
+    "makedeptoken",  # torch._make_dep_token: an export dependency token, no tensor operand
     "fromnumpy",
     "fromfile",
     "scalartensor",

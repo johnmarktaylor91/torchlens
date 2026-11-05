@@ -280,6 +280,26 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
             "when the same parent also fills arg 1 (x.view_as(x))"
         ),
     ),
+    # Lead 3 ruling, 4 Nov 2026 2:31 PM PT (view-func-replay): torch reads only the
+    # receiver's view chain (view_func_impl / rev_view_func_impl in
+    # torch/csrc/autograd/python_variable.cpp).
+    *(
+        StructuralPositionExemption(
+            func_name=_view_method,
+            positions=frozenset({0}),
+            contract=_C2,
+            proof_kind="value_irrelevance_proved",
+            justification=(
+                f"Tensor.{_view_method} replays the receiver's recorded view chain; torch "
+                "reads the receiver's view functions and geometry, never its elements"
+            ),
+            refuses=(
+                "arg 1, the new base (or new view) whose values are the output values; a "
+                "replay that ignores it fails the perturbation check"
+            ),
+        )
+        for _view_method in ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe")
+    ),
     StructuralPositionExemption(
         func_name="resize_as_",
         positions=frozenset({1}),

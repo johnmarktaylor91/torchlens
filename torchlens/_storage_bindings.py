@@ -16,6 +16,10 @@ the original storage alive and remembers the offset, size and stride, and
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from contextlib import AbstractContextManager
+from typing import Any
+
 import torch
 from torch import nn
 
@@ -29,6 +33,50 @@ Capture saves the receiver through :func:`copy_with_storage_context` (the
 save budget charges the whole storage, as it already projects) and validation
 replays the call on a clone of that context.
 """
+
+VIEW_CONTEXT_RECEIVER_FUNCS = frozenset(
+    {"_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"}
+)
+"""View-function methods whose receiver is saved with its view context.
+
+Torch reads only the receiver's view chain, never its values, and returns ``None``
+for a receiver that is not a view (``view_func_impl`` and ``rev_view_func_impl`` in
+``torch/csrc/autograd/python_variable.cpp``), so a compact clone cannot replay the
+call. Capture saves the receiver rebuilt on a private copy of its base
+(:func:`copy_with_view_context`) and validation rebuilds it the same way before
+the call.
+"""
+
+
+STORAGE_CONTEXT_NEW_VIEW_FUNCS = frozenset({"_rev_view_func_unsafe"})
+"""View-function methods whose new view (positional argument 1) is saved with its whole storage.
+
+``_rev_view_func_unsafe`` maps its new view back to the base geometry; a reverse
+``select`` or ``slice`` is an ``as_strided`` over the new view's storage, so it reads
+bytes outside the new view's own elements and a compact clone cannot replay it.
+"""
+
+
+def storage_context_arg_index(func_name: str | None) -> int | None:
+    """Return the positional argument of ``func_name`` saved with its whole storage, if any.
+
+    Parameters
+    ----------
+    func_name:
+        Name of the captured function.
+
+    Returns
+    -------
+    int | None
+        ``0`` for a :data:`STORAGE_CONTEXT_RECEIVER_FUNCS` receiver, ``1`` for a
+        :data:`STORAGE_CONTEXT_NEW_VIEW_FUNCS` new view, else ``None``.
+    """
+
+    if func_name in STORAGE_CONTEXT_RECEIVER_FUNCS:
+        return 0
+    if func_name in STORAGE_CONTEXT_NEW_VIEW_FUNCS:
+        return 1
+    return None
 
 
 def holds_rebindable_storage(tensor: torch.Tensor) -> bool:
@@ -160,3 +208,67 @@ def copy_with_storage_context(tensor: torch.Tensor) -> torch.Tensor:
     if tensor.requires_grad:
         copy.requires_grad_(True)
     return copy
+
+
+def has_view_geometry_of(rebuilt: torch.Tensor, recorded: torch.Tensor) -> bool:
+    """Return whether ``rebuilt`` is a view with ``recorded``'s view geometry.
+
+    Parameters
+    ----------
+    rebuilt:
+        A receiver rebuilt from a saved view context.
+    recorded:
+        The receiver it stands for.
+
+    Returns
+    -------
+    bool
+        ``True`` when both are views with the same shape, strides and storage offset.
+    """
+
+    return (
+        rebuilt._is_view()
+        and recorded._is_view()
+        and rebuilt.size() == recorded.size()
+        and rebuilt.stride() == recorded.stride()
+        and rebuilt.storage_offset() == recorded.storage_offset()
+    )
+
+
+def copy_with_view_context(
+    tensor: torch.Tensor,
+    force_tracking: Callable[[bool], AbstractContextManager[Any]] | None,
+) -> torch.Tensor:
+    """Copy a view together with a private copy of its base, keeping the view relation.
+
+    The base is copied with its whole storage (:func:`copy_with_storage_context`)
+    and the receiver's own view function replays its view chain onto that copy
+    under original-view tracking, so the copy carries the same view chain for a
+    later ``_view_func`` or ``_rev_view_func_unsafe`` call. A receiver without a
+    view chain (a ``None`` from torch) or one whose chain does not rebuild its
+    geometry gets a compact detached clone, which replay refuses. So does every
+    receiver when ``force_tracking`` is ``None`` (torch lacks original-view
+    tracking): replay then fails loudly instead of running without it.
+
+    Parameters
+    ----------
+    tensor:
+        The receiver of a :data:`VIEW_CONTEXT_RECEIVER_FUNCS` call.
+    force_tracking:
+        Autograd's original-view-tracking context manager, which the caller
+        takes from the capability accessor ``get_force_original_view_tracking``
+        (``None`` when ``HAS_ORIGINAL_VIEW_TRACKING`` reads ``False``).
+
+    Returns
+    -------
+    torch.Tensor
+        The rebuilt view, or a compact detached clone as described above.
+    """
+
+    if force_tracking is not None and tensor._is_view() and tensor._base is not None:
+        base_copy = copy_with_storage_context(tensor._base.detach())
+        with force_tracking(True):
+            rebuilt = tensor._view_func_unsafe(base_copy)
+        if isinstance(rebuilt, torch.Tensor) and has_view_geometry_of(rebuilt, tensor):
+            return rebuilt
+    return tensor.detach().clone()
