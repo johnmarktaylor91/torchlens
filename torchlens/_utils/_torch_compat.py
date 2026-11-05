@@ -49,7 +49,6 @@ from importlib.machinery import PathFinder
 from typing import Any
 
 import torch
-from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
@@ -221,39 +220,6 @@ TorchCapabilitySnapshot = dict[str, bool]
 
 _CAPABILITY_WARNING_ENV = "TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS"
 _warned_missing_capabilities: set[str] = set()
-
-
-class _ParameterAsSubclassProbeMode(TorchDispatchMode):
-    """Redispatch operations unchanged for the Parameter subclass capability probe."""
-
-    def __torch_dispatch__(
-        self,
-        func: Any,
-        types: tuple[type[Any], ...],
-        args: tuple[Any, ...] = (),
-        kwargs: dict[str, Any] | None = None,
-    ) -> Any:
-        """Redispatch one probe operation without changing its result.
-
-        Parameters
-        ----------
-        func:
-            Dispatcher operator invoked by the probe.
-        types:
-            Participating tensor subclass types.
-        args:
-            Positional operator arguments.
-        kwargs:
-            Keyword operator arguments.
-
-        Returns
-        -------
-        Any
-            Unmodified operator result.
-        """
-
-        del types
-        return func(*args, **(kwargs or {}))
 
 
 def _probe_device_type_arg_supported() -> bool:
@@ -603,84 +569,21 @@ def _probe_safe_weights_only_load() -> bool:
 
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
-    """Return whether Parameter-to-Tensor subclass conversion works in a dispatch mode.
+    """Return whether ``Parameter.as_subclass(torch.Tensor)`` works in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 rejects ``Parameter.as_subclass(torch.Tensor)`` while a
-    :class:`TorchDispatchMode` is active because the returned raw tensor is already
-    associated with a base ``Tensor`` Python object. Newer torch releases permit the
-    conversion. TorchLens' completeness witness is itself a dispatch mode, so this
-    behavioral probe mirrors the dynamic-parameter logging context without parsing a
-    version string.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    parameter = torch.nn.Parameter(torch.empty(0))
-    try:
-        with _ParameterAsSubclassProbeMode():
-            plain_tensor = parameter.as_subclass(torch.Tensor)
-    except (RuntimeError, TypeError):
-        return False
-    return type(plain_tensor) is torch.Tensor
-
-
-class _SubclassCtorProbe(torch.Tensor):
-    """Plain strict Tensor subclass used only by the ctor-in-mode probe below."""
+    return bool(_real_op_probe_leaf().probe_parameter_as_subclass_in_dispatch_mode())
 
 
 def _probe_subclass_ctor_in_dispatch_mode() -> bool:
-    """Return whether constructing a STRICT Tensor subclass works in a dispatch mode.
+    """Return whether a strict Tensor subclass can be built in a dispatch mode (see the leaf)."""
 
-    Torch 2.1 and 2.2 reject ``Tensor.as_subclass``/``_make_subclass`` (and the
-    equivalent ``__new__`` path) into a custom (non-``torch.Tensor``) subclass
-    while a :class:`TorchDispatchMode` is active: "Creating a new Tensor
-    subclass X but the raw Tensor object is already associated to a python
-    object of type Tensor." This reproduces on stock torch with a no-op mode
-    (TorchLens's own wrapping is not the cause); newer torch permits the
-    conversion. TorchLens's completeness witness and intervention-ready
-    captures are themselves dispatch modes, so call sites that construct or
-    convert into a strict subclass while one is active need this behavioral
-    probe rather than a parsed version string. Sibling probe (Parameter-to-
-    Tensor, the opposite direction, also version-gated but independently):
-    :func:`_probe_parameter_as_subclass_in_dispatch_mode`.
-
-    Returns
-    -------
-    bool
-        ``True`` when the conversion succeeds inside a redispatching mode.
-    """
-
-    base = torch.empty(0)
-    try:
-        with _ParameterAsSubclassProbeMode():
-            converted = base.as_subclass(_SubclassCtorProbe)
-    except (RuntimeError, TypeError):
-        return False
-    return type(converted) is _SubclassCtorProbe
+    return bool(_real_op_probe_leaf().probe_subclass_ctor_in_dispatch_mode())
 
 
 def _probe_roll_tensor_shifts() -> bool:
-    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts``.
+    """Return whether ``torch.roll`` accepts a bare 0-dim tensor ``shifts`` (see the leaf)."""
 
-    Older torch (verified: 2.8 rejects with ``RuntimeError: shifts required``;
-    2.13 accepts) does not unpack a 0-dim tensor passed as the ``shifts``
-    argument itself; the tuple spelling ``shifts=(tensor,)`` is accepted
-    everywhere. Behavioral probe on a 1-element tensor, never a version parse.
-
-    Returns
-    -------
-    bool
-        ``True`` when the bare tensor ``shifts`` spelling executes.
-    """
-
-    try:
-        torch.roll(torch.zeros(2), shifts=torch.zeros((), dtype=torch.long))  # type: ignore[arg-type]
-    except (RuntimeError, TypeError):
-        return False
-    return True
+    return bool(_real_op_probe_leaf().probe_roll_tensor_shifts())
 
 
 _TOP_SAVED_TENSORS_DEFAULT_HOOKS_ARGS: tuple[bool, ...] | None = None
@@ -2439,6 +2342,30 @@ def get_fake_tensor_mode_class() -> type[Any] | None:
     return _FAKE_TENSOR_MODE_CLS
 
 
+def stripped_step_hook_wrapper(optimizer: Any) -> Callable[..., Any] | None:
+    """Return torch's step-hook wrapper when ``optimizer``'s class step lost it.
+
+    Torch runs ``register_step_pre_hook``/``register_step_post_hook`` hooks from the
+    ``Optimizer.profile_hook_step`` wrapper it puts on each optimizer class (marked
+    ``step.hooked``). On torch 2.1 the first ``torch.compile`` swaps every optimizer
+    class's step for the unwrapped function, still marked hooked, so those hooks
+    never fire again in the process. Fallback: ``_optimizer_hooks`` binds this
+    wrapper on the instance while a TorchLens session holds the optimizer.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        ``Optimizer.profile_hook_step``, or ``None`` while the class step runs hooks
+        (or was never hooked by torch).
+    """
+
+    wrap = getattr(torch.optim.Optimizer, "profile_hook_step", None)
+    step = getattr(type(optimizer), "step", None)
+    if not callable(wrap) or not getattr(step, "hooked", False):
+        return None
+    return wrap if getattr(step, "__code__", None) is not wrap(len).__code__ else None
+
+
 def get_higher_order_operator(module: str, attribute: str) -> Any | None:
     """Return a ``torch._higher_order_ops`` operator that has a per-mode rule table.
 
@@ -2452,11 +2379,13 @@ def get_higher_order_operator(module: str, attribute: str) -> Any | None:
     Returns
     -------
     Any | None
-        The ``HigherOrderOperator``, or ``None`` when this torch lacks it or it has
-        no ``python_key_table`` to register a dispatch-mode rule in.
+        The ``HigherOrderOperator``, or ``None`` when this torch lacks it, its module
+        is not imported yet (an operator cannot run before its module is imported, and
+        importing ``cond`` imports ``torch._dynamo`` on torch 2.1), or it has no
+        ``python_key_table`` to register a dispatch-mode rule in.
     """
 
-    op = _import_module_attr_or_none(f"torch._higher_order_ops.{module}", attribute)
+    op = getattr(sys.modules.get(f"torch._higher_order_ops.{module}"), attribute, None)
     hop_type = _nested_getattr_or_none(torch, ["_ops", "HigherOrderOperator"])
     if not isinstance(hop_type, type) or not isinstance(op, hop_type):
         return None
@@ -3537,11 +3466,15 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
     global HAS_TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES, _TRACING_TENSOR_TYPES_PROBED
 
     if not _TRACING_TENSOR_TYPES_PROBED:
-        candidate_modules = tuple(name for name, _attr in _TRACING_TENSOR_CANDIDATES)
-        if not force_probe and not any(name in sys.modules for name in candidate_modules):
+        # Per module: one loaded candidate never imports another (torch 2.1 loads
+        # fake_tensor without functional_tensor); the latch closes once all are read.
+        loaded = [
+            pair for pair in _TRACING_TENSOR_CANDIDATES if force_probe or pair[0] in sys.modules
+        ]
+        if not loaded:
             return ()
         found: list[type[Any]] = []
-        for module_name, attr_name in _TRACING_TENSOR_CANDIDATES:
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3550,7 +3483,7 @@ def get_tracing_tensor_types(*, force_probe: bool = False) -> tuple[type[Any], .
                 found.append(candidate)
         _TRACING_TENSOR_TYPES = tuple(found)
         HAS_TRACING_TENSOR_TYPES = bool(_TRACING_TENSOR_TYPES)
-        _TRACING_TENSOR_TYPES_PROBED = True
+        _TRACING_TENSOR_TYPES_PROBED = len(loaded) == len(_TRACING_TENSOR_CANDIDATES)
     if not _TRACING_TENSOR_TYPES:
         mark_torch_capability_missing(
             "HAS_TRACING_TENSOR_TYPES",

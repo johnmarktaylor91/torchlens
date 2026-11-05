@@ -178,7 +178,7 @@ def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
     if cond_op is not None:
         rules.append((cond_op, _cond_rule))
     scan_op = get_higher_order_operator("scan", "scan_op")
-    generic_scan = get_scan_eager_body()
+    generic_scan = None if scan_op is None else get_scan_eager_body()
     if scan_op is not None and generic_scan is not None:
         rules.append((scan_op, _scan_rule_from(generic_scan)))
     for module, attribute in _DENSE_UNDER_MODE:
@@ -192,6 +192,13 @@ def _witness_hop_rules() -> list[tuple[Any, _HopRule]]:
 def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple[str, ...]:
     """Register the HOP rules for ``mode_type`` (idempotent).
 
+    Only operators whose ``torch._higher_order_ops`` module is already imported
+    resolve (see ``get_higher_order_operator``): on torch 2.1, importing ``cond``
+    imports ``torch._dynamo``, and an operator cannot run before its module is
+    imported. While any operator is unresolved, the mode re-runs this registration
+    on every entry (``_TorchLensDispatchMode.__enter__``), so an operator imported
+    after TorchLens has its rule before a forward under the mode can call it.
+
     Parameters
     ----------
     mode_type:
@@ -204,8 +211,11 @@ def register_witness_hop_rules(mode_type: type[_TorchLensDispatchMode]) -> tuple
     """
 
     registered: list[str] = []
-    for op, rule in _witness_hop_rules():
+    rules = _witness_hop_rules()
+    for op, rule in rules:
         if mode_type not in op.python_key_table:
             op.py_impl(mode_type)(rule)
         registered.append(str(op.name()))
+    unresolved = len(rules) < 2 + len(_DENSE_UNDER_MODE)
+    mode_type._hop_rules_pending = register_witness_hop_rules if unresolved else None
     return tuple(registered)

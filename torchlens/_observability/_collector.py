@@ -33,6 +33,7 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._utils._optimizer_hooks import register_step_hooks
 from ._artifact import CommittedBlock, HistoryWriter, RamRing
 from ._chassis import EventStream, ObserverEvent
 from ._errors import HistoryArtifactError, WatchLifecycleError, WatchPlanError
@@ -595,11 +596,10 @@ class HistoryCollector:
                 module = self._module_refs[module_id]
                 self._hook_handles.append(module.register_forward_hook(self._observer_hook(slot)))
             if optimizer is not None:
-                self._optimizer_handles.append(
-                    optimizer.register_step_pre_hook(self._optimizer_pre_hook)
-                )
-                self._optimizer_handles.append(
-                    optimizer.register_step_post_hook(self._optimizer_post_hook)
+                self._optimizer_handles.extend(
+                    register_step_hooks(
+                        optimizer, self._optimizer_pre_hook, self._optimizer_post_hook
+                    )
                 )
         except BaseException:
             self.detach()
