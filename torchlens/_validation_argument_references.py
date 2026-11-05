@@ -60,7 +60,10 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from ._utils import tensor_utils as _tensor_utils
 from ._utils._internal_read import internal_scalar_read
+from ._utils._tensor_label import get_tensor_label, set_tensor_label
+from ._utils.tensor_leaves import flat_byte_view
 
 FALLBACK_CHECK = "validation_parameter_reference_fallback"
 CONSUMED_DEVICE_ATTR = "_torchlens_saved_arg_consumed_device"
@@ -209,8 +212,6 @@ class ParameterArgumentReferences:
         alias = _alias_like_copy(tensor, saved_value)
         if alias is None:
             return None
-        from ._utils._tensor_label import get_tensor_label, set_tensor_label
-
         label = get_tensor_label(tensor)
         if label is not None:
             set_tensor_label(alias, label)
@@ -410,10 +411,8 @@ def _is_pending_deferred_payload(saved_value: torch.Tensor) -> bool:
     an alias taken from it would keep reading the live tensor.
     """
 
-    from ._utils import tensor_utils
-
-    key = tensor_utils._deferred_storage_key(saved_value)
-    return key is None or key in tensor_utils._DEFER_PENDING
+    key = _tensor_utils._deferred_storage_key(saved_value)
+    return key is None or key in _tensor_utils._DEFER_PENDING
 
 
 def _detached_on(tensor: torch.Tensor, device: torch.device) -> torch.Tensor:
@@ -438,17 +437,19 @@ def _alias_like_copy(tensor: torch.Tensor, saved_value: torch.Tensor) -> torch.T
         return saved_value.detach()
     if not saved_value.requires_grad:
         return None
-    from ._utils.tensor_utils import _mint_graph_connected_alias
-
-    return _mint_graph_connected_alias(saved_value)
+    return _tensor_utils._mint_graph_connected_alias(saved_value)
 
 
 def _same_bits(tensor: torch.Tensor, saved_value: torch.Tensor) -> bool:
     """Whether two tensors of identical layout hold the same bytes, compared bit for bit."""
 
-    from .validation._live_model_state import _tensor_bits_equal
-
-    return _tensor_bits_equal(tensor, saved_value)
+    try:
+        with torch.no_grad():
+            return bool(
+                torch.equal(flat_byte_view(tensor.detach()), flat_byte_view(saved_value.detach()))
+            )
+    except (RuntimeError, TypeError, NotImplementedError):
+        return False
 
 
 def _record_fallback(trace: Any, reason: str) -> None:
