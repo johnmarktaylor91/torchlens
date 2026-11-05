@@ -281,10 +281,12 @@ def causal_mask_function(batch_idx, head_idx, q_idx, kv_idx):
 """
 
 
-def _fake_masking_utils(head_read: str) -> types.ModuleType:
-    """Return a module named ``transformers.masking_utils`` (not registered) from fake source."""
+def _fake_masking_utils(
+    head_read: str, name: str = "transformers.masking_utils"
+) -> types.ModuleType:
+    """Return a module called ``name`` (not registered) built from the fake source."""
 
-    module = types.ModuleType("transformers.masking_utils")
+    module = types.ModuleType(name)
     module.__dict__["torch"] = torch
     exec(_FAKE_MASKING_UTILS.replace("HEAD_READ", head_read), module.__dict__)
     return module
@@ -346,6 +348,16 @@ def test_a_table_function_edited_to_read_head_loses_the_excuse() -> None:
     assert builder_unread_positions(faithful.and_masks(faithful.causal_mask_function)) == {1}
     assert builder_unread_positions(edited.causal_mask_function) == frozenset()
     assert builder_unread_positions(edited.and_masks(edited.causal_mask_function)) == frozenset()
+
+
+def test_the_same_builders_defined_outside_masking_utils_declare_nothing() -> None:
+    """Identity is per module: a user module defining the table's names gets no excuse."""
+
+    from torchlens.validation._mask_builder_dependence import builder_unread_positions
+
+    user = _fake_masking_utils("0", name="user_masks")
+    assert builder_unread_positions(user.causal_mask_function) == frozenset()
+    assert builder_unread_positions(user.and_masks(user.causal_mask_function)) == frozenset()
 
 
 def test_vmapped_callable_walks_only_instrumented_vmap_layers() -> None:
