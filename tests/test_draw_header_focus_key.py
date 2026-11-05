@@ -8,8 +8,8 @@
   their summed size, whatever the drawing collapses (a focus's input and output
   stubs are outside the module and not counted). A rolled draw also names the
   layers those ops form, and its size equals the unrolled header's.
-- Parameter counts carry thousands separators; every drawn size divides by
-  1024 and prints the released unit names (B, KB, MB, GB), never KiB or MiB.
+- Counts carry thousands separators; every drawn size divides by 1000, the
+  divisor its unit name (B, KB, MB, GB) means, never 1024 under a decimal name.
 - A focused draw opens with a scope line (model class, then each enclosing
   module, then the focus with its class), labels which line covers the drawn
   view and which the whole model, shows the key by default (the reading key is
@@ -41,9 +41,9 @@ from torchlens._visualization._header_block import (
     network_count_line,
     params_caption_detail,
 )
-from torchlens._visualization._label_format import binary_size, compact_count, format_memory
+from torchlens._visualization._label_format import compact_count, decimal_size, format_memory
 from torchlens._visualization.modes import _compact_size
-from torchlens._visualization.overlays import format_overlay_value
+from torchlens._visualization.overlays import format_overlay_value, legend_domain_text
 from torchlens._visualization.themes import (
     OKABE_ITO_SEMANTIC_PALETTE,
     RELEASED_SEMANTIC_PALETTE,
@@ -185,19 +185,32 @@ def test_a_disagreeing_file_format_refuses_on_both_doors(
 # -- header count and units (AGT-2536) ----------------------------------------
 
 
-def test_drawn_sizes_use_the_released_unit_names() -> None:
-    assert binary_size(0) == "0 B"
-    assert binary_size(1023) == "1023 B"
-    assert binary_size(1024) == "1 KB"
-    assert binary_size(1.5 * 1024**2) == "1.5 MB"
-    assert binary_size(3 * 1024**3) == "3 GB"
-    assert binary_size(1024**2 - 1) == "1024 KB"
-    assert format_memory(61440) == "60 KB"
-    assert _compact_size(61440) == "60KB"
-    assert format_overlay_value("bytes", 61440) == "bytes: 60 KB"
+def test_drawn_sizes_divide_by_the_divisor_their_unit_names_mean() -> None:
+    assert decimal_size(0) == "0 B"
+    assert decimal_size(999) == "999 B"
+    assert decimal_size(1000) == "1 KB"
+    assert decimal_size(1024) == "1 KB"
+    assert decimal_size(802_816) == "802.8 KB"
+    assert decimal_size(1.5e6) == "1.5 MB"
+    assert decimal_size(3e9) == "3 GB"
+    assert decimal_size(999_949) == "999.9 KB"
+    assert decimal_size(999_999) == "1 MB"
+    assert format_memory(60_000) == "60 KB"
+    assert _compact_size(60_000) == "60KB"
+    assert format_overlay_value("bytes", 60_000) == "bytes: 60 KB"
     assert format_memory(True) == "True"
     with pytest.raises(ValueError):
-        binary_size(-1)
+        decimal_size(-1)
+
+
+def test_drawn_counts_carry_thousands_separators() -> None:
+    assert compact_count(999) == "999"
+    assert compact_count(9999) == "9,999"
+    assert compact_count(147_968) == "148K"
+    assert compact_count(1024, full_below=1000) == "1.02K"
+    assert legend_domain_text(None, 200_704.0) == "200,704"
+    assert legend_domain_text(None, 42.0) == "42"
+    assert format_overlay_value("numel", 200_704) == "numel: 200,704"
 
 
 def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_path: Path) -> None:
@@ -207,7 +220,7 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     assert noun == "ops"
     assert int(count.replace(",", "")) == len(sized)
     labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
-    assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
+    assert size == decimal_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{compact_count(trace.num_params, full_below=1000)} params" in dot
     assert not re.search(r"\d (?:KiB|MiB|GiB)\b", dot)
 
@@ -243,7 +256,7 @@ def test_rolled_count_covers_every_pass_of_its_layers(tmp_path: Path) -> None:
         boundary = [loop.ops[label] for label in (*loop.input_layers, *loop.output_layers)]
         assert len(loop.ops) + len(boundary) == 11
         total = sum(int(op.activation_memory) for op in (*loop.ops.values(), *boundary))
-        assert binary_size(total) == "149 B"
+        assert decimal_size(total) == "149 B"
     finally:
         loop.cleanup()
 
@@ -339,7 +352,7 @@ def test_focus_count_skips_the_boundary_stubs(
     if not rolled:
         labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in drawn]
         expected = sum(int(trace.ops[label].activation_memory) for label in labels)
-        assert f"<br align='left'/>{count} ops ({binary_size(expected)})<br" in header
+        assert f"<br align='left'/>{count} ops ({decimal_size(expected)})<br" in header
 
 
 # -- focus scope line and reading key (AGT-2538) ------------------------------

@@ -366,7 +366,7 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     count = len(outermost)
     calls = sum(outermost.values())
     noun = "module" if count == 1 else "modules"
-    return f"{count} reused {noun} ({calls} calls); rolled=True draws the loop"
+    return f"{count:,} reused {noun} ({calls:,} calls); rolled=True draws the loop"
 
 
 def drawn_module_marks(
