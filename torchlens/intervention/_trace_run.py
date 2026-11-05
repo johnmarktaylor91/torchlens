@@ -55,6 +55,7 @@ from .._runnable.execution import (
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
 from .._runnable.verification import _run_fork_name
+from .._state import unregister_log
 from .._trace_state import TraceState
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
@@ -154,7 +155,7 @@ def try_guarded_fast_rerun(
     Parameters
     ----------
     trace:
-        Live trace carrying the staged spec; this door refreshes it in place on success.
+        Result fork carrying the staged spec; this door refreshes it in place on success.
     model:
         The model the caller passed (or the trace's retained live model).
     inputs:
@@ -182,7 +183,7 @@ def try_guarded_fast_rerun(
     try:
         session = _FastLiveSession(trace, model)
         session.poison_on_divergence = False
-        # The legacy door returns the refreshed Trace, not a run verdict; the
+        # The legacy door returns the new result Trace, not a run verdict; the
         # hooked-run ceiling belongs to the explicit run_transaction(inputs=, fast=True) door.
         session.reports_hooked_ceiling = False
         session.output_transform = output_transform
@@ -373,7 +374,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     """Body of ``Trace.run`` (``transaction=False``), ``Trace.run_transaction`` and ``Trace.append``.
 
     The methods carry the documented contracts: ``run`` reruns the live model
-    and returns the refreshed Trace; ``run_transaction`` returns a
+    and returns a new Trace, the source untouched; ``run_transaction`` returns a
     ``RunResult`` and leaves the source Trace unchanged; ``append=True``
     (``Trace.append``) stacks the new batch onto the Trace through the same gates.
     """
@@ -437,9 +438,9 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     )
     if use_unified_provider and not transaction:
         # Trace.run never returns a RunResult: a loaded artifact has no live
-        # model to rerun in place, so its fresh execution is run_transaction.
+        # model to rerun, so its fresh execution is run_transaction.
         raise RunCapabilityUnavailableError(
-            "trace.run(...) reruns the live model in place, and a loaded artifact "
+            "trace.run(...) reruns the live model into a new Trace, and a loaded artifact "
             "has no live model to rerun; its verified fresh execution is "
             "trace.run_transaction(inputs=...), which returns a RunResult.",
             code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
@@ -664,34 +665,42 @@ def _live_rerun_engine(
     chunk_paths: Any | None,
     output_transform: Callable[[Any], Any] | None,
 ) -> Trace:
-    """Run the guarded fast engine for a steered rerun, else the capture rerun.
+    """Run the guarded fast engine for a steered rerun, else the capture rerun, on a new Trace.
 
-    ``call`` is ``(model, transformed_input, user_input)``. The guarded fast
-    engine is a native forward with the staged spec applied at real module
-    boundaries, guarded by the sealed call fingerprint; any typed refusal falls
-    back to the capture rerun with the code in ``last_run``. A trace with
-    nothing staged keeps the capture rerun.
+    ``call`` is ``(model, transformed_input, user_input)``. Both engines run on
+    a fork of ``trace`` (the fast door's result fork, names.9): the source stays
+    untouched, and the fork carries its live-model weak reference and staged
+    edits. The guarded fast engine is a native forward with the staged spec
+    applied at real module boundaries, guarded by the sealed call fingerprint;
+    any typed refusal falls back to the capture rerun with the code in
+    ``last_run``. A trace with nothing staged keeps the capture rerun.
     """
 
     run_model, transformed_input, user_input = call
-    fast_refused: str | None = None
-    if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
-        fast_done, fast_refused = try_guarded_fast_rerun(
-            trace, run_model, transformed_input, output_transform=output_transform
+    close_fast_run_session(trace)  # no fast-door hook stays armed on the model
+    result = trace._fork_trace(name=_run_fork_name(trace))
+    try:
+        fast_refused: str | None = None
+        if chunk_paths is None and replay_options.chunk_size is None and stages_user_entries(trace):
+            fast_done, fast_refused = try_guarded_fast_rerun(
+                result, run_model, transformed_input, output_transform=output_transform
+            )
+            if fast_done:
+                result.input = user_input
+                refuse_unfired_fast_run(result)
+                return result
+        return _rerun_impl(
+            result,
+            run_model,
+            transformed_input,
+            replay=replay_options,
+            chunk_paths=chunk_paths,
+            output_transform=output_transform,
+            fast_refused=fast_refused,
         )
-        if fast_done:
-            trace.input = user_input
-            refuse_unfired_fast_run(trace)
-            return trace
-    return _rerun_impl(
-        trace,
-        run_model,
-        transformed_input,
-        replay=replay_options,
-        chunk_paths=chunk_paths,
-        output_transform=output_transform,
-        fast_refused=fast_refused,
-    )
+    except BaseException:
+        unregister_log(result)
+        raise
 
 
 def append(trace: Trace, inputs: Any, *, model: nn.Module | None = None) -> None:
