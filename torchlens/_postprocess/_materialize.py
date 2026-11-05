@@ -35,7 +35,7 @@ from .._ir.workspaces import _init_module_hierarchy_data
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils._tensor_label import get_buffer_address, get_tensor_label, get_tensor_meta
 from .._utils._torch_compat import tensor_version_or_none
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import _resolve_dtype
 from .._utils.display import _record_phase_timing
 from .._utils.introspection import get_vars_of_type_from_obj
 from ._buffer_addresses import (
@@ -45,6 +45,14 @@ from ._buffer_addresses import (
 )
 from ._ingest_contract import IngestInputs, JournalView, Step0Result
 from ._primitive_profile import _materialize_forward_primitive_profile
+from ._row_ingest import (
+    RowIngestPlan,
+    _drop_missing_buffer_sources,
+    _op_events_in_raw_order,
+    _output_versions_by_parent,
+    adopt_capture_row,
+    input_layer_labels,
+)
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -151,12 +159,16 @@ class _ModuleSideChannel:
     module_forward_args: dict[Any, Any]
 
 
-def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
+def build_ingest_inputs(
+    trace: Trace, events: CaptureEvents, capture_rows: Mapping[int, list[Any]] | None = None
+) -> IngestInputs:
     """Orchestrator-side construction of the frozen step-0 input bundle.
 
     Owns the lazy ``TraceCore``/``OpRowStore`` creation (ppdag v3 section 9.1
     orchestrator row) and the trace-backed ``timing_sink``; ingest itself
     reads nothing off the trace beyond this bundle (contract I7).
+    ``capture_rows`` maps ``id(record)`` to the capture row ingest adopts for
+    that record (``_row_ingest.hand_off_capture_rows``).
     """
 
     core = trace.__dict__.get("_trace_core")
@@ -204,6 +216,7 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         # touches the trace): structure-only captures strip buffer-write
         # payloads to declared geometry (W3, weightsfree memo defect L6).
         scatter_options={"structure_only": bool(trace._options_structure_only)},
+        capture_rows=capture_rows or {},
     )
 
 
@@ -224,7 +237,9 @@ def apply_step0_result(trace: Trace, result: Step0Result) -> None:
     trace._module_capture_ws.module_forward_args = side_channel.module_forward_args
 
 
-def materialize_from_events(trace: Trace, events: CaptureEvents) -> None:
+def materialize_from_events(
+    trace: Trace, events: CaptureEvents, capture_rows: Mapping[int, list[Any]] | None = None
+) -> None:
     """Materialize capture events into raw build-state logs.
 
     Compatibility composition of the frozen step-0 seam: build the
@@ -240,6 +255,8 @@ def materialize_from_events(trace: Trace, events: CaptureEvents) -> None:
         Trace whose transient build state was populated during capture.
     events
         Mutable event accumulator owned by the active capture session.
+    capture_rows
+        ``id(record) -> capture row`` for the records whose rows ingest adopts.
     Returns
     -------
     None
@@ -248,7 +265,7 @@ def materialize_from_events(trace: Trace, events: CaptureEvents) -> None:
 
     import torchlens._postprocess._materialize as _materialize_module
 
-    inputs = build_ingest_inputs(trace, events)
+    inputs = build_ingest_inputs(trace, events, capture_rows)
     result = _materialize_module.ingest_op_records(inputs, CELL_SOURCES)
     apply_step0_result(trace, result)
     _materialize_forward_primitive_profile(
@@ -281,14 +298,9 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
     )
     op_events = _op_events_in_raw_order(list(journal.op_events))
     output_version_lane = journal.output_version_events
-    input_layer_labels: list[str] = []
-    for event in op_events:
-        if (
-            event.layer_type == "input"
-            and event.label_raw not in inputs.input_layers_initial
-            and event.label_raw not in input_layer_labels
-        ):
-            input_layer_labels.append(event.label_raw)
+    input_labels = input_layer_labels(op_events, inputs.input_layers_initial)
+    capture_rows = inputs.capture_rows
+    plan = RowIngestPlan(op_store.layout) if capture_rows else None
     op_event_labels = {event.label_raw for event in op_events}
     children_by_parent = _children_by_parent(
         journal.buffer_write_events, op_events, op_event_labels
@@ -341,12 +353,8 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
 
     local_registrations: dict[str, Any] = {}
     for event in op_events:
-        if isinstance(event, OpRecord):
-            record, extras = event, _EMPTY_INGEST_EXTRAS
-        else:
-            record, extras = op_record_from_event(event)
-        fields_dict: dict[str, object] = dict.fromkeys(LAYER_PASS_LOG_FIELD_ORDER)
-        fields_dict.update(_scatter.scatter_record_to_cells(record, extras, inputs.owning_trace))
+        row = capture_rows.get(id(event)) if plan is not None else None
+        record, extras, fields_dict = _record_cells(event, row, plan, inputs.owning_trace)
         _apply_join_cells(
             fields_dict,
             record,
@@ -367,79 +375,42 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
             registered_buffer_names,
         )
         start = time.perf_counter()
-        op_log = materialize_log_from_fields(fields_dict, op_store)
+        op_log = (
+            materialize_log_from_fields(fields_dict, op_store)
+            if row is None
+            else adopt_capture_row(row, fields_dict, op_store, Op, plan)  # type: ignore[arg-type]
+        )
         inputs.timing_sink("object_construction_op", time.perf_counter() - start)
         local_registrations[event.label_raw] = op_log
     _drop_missing_buffer_sources(local_registrations)
     return Step0Result(
         raw_log_registrations=tuple(local_registrations.items()),
-        input_layer_labels=tuple(input_layer_labels),
+        input_layer_labels=tuple(input_labels),
         equivalence_class_map=equivalence_class_map,
         module_side_channel=side_channel,
     )
 
 
-def _op_events_in_raw_order(op_events: list[OpEvent]) -> list[OpEvent]:
-    """Return operation events sorted by their reserved raw index.
+def _record_cells(
+    event: Any, row: list[Any] | None, plan: RowIngestPlan | None, owning_trace: Any
+) -> tuple[Any, Any, dict[str, object]]:
+    """Return one entry's record, its extras and the cells the join starts from.
 
-    Parameters
-    ----------
-    op_events
-        Operation events in backend append order.
-
-    Returns
-    -------
-    list[OpEvent]
-        Events in graph raw-index order.
+    A record path entry starts from the ``None`` seed plus the record's
+    scatter; an adopted capture row already holds those cells, and the join
+    reads only ``annotations`` back, so its join dict starts from that cell.
     """
 
-    return sorted(op_events, key=lambda event: event.raw_index)
-
-
-def _drop_missing_buffer_sources(local_registrations: dict[str, Any]) -> None:
-    """Clear buffer source labels that are absent from raw materialized logs.
-
-    X2 resolution: consumes ingest's LOCAL registration map, never a
-    workspace read-back of state ingest itself created mid-loop.
-
-    Parameters
-    ----------
-    local_registrations
-        Ingest's local (label_raw -> op_log) registration map.
-
-    Returns
-    -------
-    None
-        Mutates buffer logs in place.
-    """
-
-    raw_labels = set(local_registrations)
-    for op_log in local_registrations.values():
-        buffer_source = getattr(op_log, "buffer_source", None)
-        if buffer_source is not None and buffer_source not in raw_labels:
-            op_log.buffer_source = None
-
-
-def _output_versions_by_parent(
-    output_version_events: tuple[Any, ...],
-) -> dict[str, dict[str, object]]:
-    """Return output-version payloads grouped by parent raw label.
-
-    Parameters
-    ----------
-    output_version_events
-        The journal's output-version lane.
-
-    Returns
-    -------
-    dict[str, dict[str, object]]
-        Mapping from parent raw label to child raw label to pre-child payload.
-    """
-
-    grouped: dict[str, dict[str, object]] = defaultdict(dict)
-    for event in output_version_events:
-        grouped[event.parent_raw_label][event.child_raw_label] = event.payload
-    return grouped
+    record, extras = (
+        (event, _EMPTY_INGEST_EXTRAS)
+        if isinstance(event, OpRecord)
+        else op_record_from_event(event)
+    )
+    if row is not None and plan is not None:
+        return record, extras, {"annotations": row[plan.fid_by_name["annotations"]]}
+    fields_dict: dict[str, object] = dict.fromkeys(LAYER_PASS_LOG_FIELD_ORDER)
+    fields_dict.update(_scatter.scatter_record_to_cells(record, extras, owning_trace))
+    return record, extras, fields_dict
 
 
 def _apply_join_cells(
@@ -1740,27 +1711,3 @@ def _event_io_role(event: OpEvent, input_io_role: str | None) -> str | None:
     if event.layer_type == "input":
         return input_io_role
     return None
-
-
-def _resolve_dtype(dtype: object | None) -> object | None:
-    """Convert serialized torch dtype names back to dtype objects.
-
-    Parameters
-    ----------
-    dtype
-        Dtype object or serialized dtype name from an event ref.
-
-    Returns
-    -------
-    object | None
-        Runtime dtype when resolvable, otherwise the original value.
-    """
-
-    if dtype is None or not isinstance(dtype, str):
-        return dtype
-    if dtype.startswith("torch."):
-        dtype_name = dtype.split(".", 1)[1]
-        # r47 secD_1: ``torch_attr`` reads ``torch.__dict__`` (no lazy ``torch.__getattr__``);
-        # fall back to the original string when the name is not a real top-level torch symbol.
-        return torch_attr(dtype_name) or dtype
-    return dtype

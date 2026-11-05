@@ -549,12 +549,12 @@ def _journal_interception(
     original_public = postprocess_module.materialize_from_events
     original_direct = materialize_module.materialize_from_events
 
-    def observing(trace: Any, events: Any) -> None:
+    def observing(trace: Any, events: Any, *rest: Any) -> None:
         if not snapshot.journal:
             if journal_mutator is not None:
                 journal_mutator(events)
             journal_snapshot(snapshot, events)
-        original_direct(trace, events)
+        original_direct(trace, events, *rest)
 
     postprocess_module.materialize_from_events = observing
     materialize_module.materialize_from_events = observing

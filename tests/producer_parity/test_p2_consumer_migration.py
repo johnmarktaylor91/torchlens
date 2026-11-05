@@ -30,7 +30,7 @@ def test_hash_reads_through_the_reducer(monkeypatch: pytest.MonkeyPatch) -> None
     seen: dict = {}
     original = materialize_module.materialize_from_events
 
-    def spy(trace, events):
+    def spy(trace, events, *rest):
         reads: list = []
         real = events.amended_op_records
 
@@ -43,7 +43,7 @@ def test_hash_reads_through_the_reducer(monkeypatch: pytest.MonkeyPatch) -> None
         seen["reducer_reads"] = len(reads)
         events.amended_op_records = real  # type: ignore[method-assign]
         seen["hash_raw"] = compute_raw_event_shape_hash(events)
-        original(trace, events)
+        original(trace, events, *rest)
 
     monkeypatch.setattr(postprocess_module, "materialize_from_events", spy)
     monkeypatch.setattr(materialize_module, "materialize_from_events", spy)
