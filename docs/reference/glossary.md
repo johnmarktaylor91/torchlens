@@ -6227,11 +6227,27 @@ drops a newly listed record from the keyword rows.
 | `tl.types.GradFnCall` | Runtime data for one execution of an autograd `grad_fn_handle` node |
 | `tl.types.GradFn` | Metadata and runtime ops for one autograd `grad_fn_handle` node |
 | `tl.types.InputSpec` | Explicit per-slot input override for the quickstart input grammar |
+| `tl.types.LayerAutograd` | Autograd facts of one Layer |
+| `tl.types.LayerCall` | How one Layer's function was called |
+| `tl.types.LayerControlFlow` | Conditional and branch facts of one Layer |
+| `tl.types.LayerCost` | Compute, memory and timing facts of one Layer |
+| `tl.types.LayerGraph` | Graph position of one Layer: relations, ancestry, per-pass edges and equivalence |
+| `tl.types.LayerModuleContext` | Module-nesting facts of one Layer: its nesting depth and the modules it is the output of |
+| `tl.types.LayerPayload` | Saved transformed payloads of one Layer, read from its single pass |
+| `tl.types.LayerSource` | Where one Layer's call sits in the user's source; per-pass members require a single-pass layer |
 | `tl.types.MergedFinding` | One structured merge finding |
 | `tl.types.MergedTrace` | N rank-local captures stitched at their collective boundaries |
 | `tl.types.ModuleCall` | Per-(module, call_index) data for one invocation of a module |
 | `tl.types.Module` | Aggregate metadata for one nn.Module across all its invocations |
 | `tl.types.NarrationEvent` | One immutable narration record |
+| `tl.types.OpAutograd` | Autograd facts and saved gradients of one Op |
+| `tl.types.OpCall` | How one Op's function was called |
+| `tl.types.OpControlFlow` | Conditional and branch facts of one Op |
+| `tl.types.OpCost` | Compute, memory and timing facts of one Op |
+| `tl.types.OpGraph` | Graph position of one Op: relations, ancestry, distances, buffers and equivalence |
+| `tl.types.OpModuleContext` | Module-nesting facts of one Op: the module calls around it, fed by it and output by it |
+| `tl.types.OpPayload` | Saved payloads of one Op: transformed output and gradient, and lazy materialization |
+| `tl.types.OpSource` | Where one Op's call sits in the user's source |
 | `tl.types.Param` | Metadata about a single model parameter (weight or bias) |
 | `tl.types.PartialTrace` | Thin wrapper around raw capture state from a failed forward pass |
 | `tl.types.PreHookEffect` | Immutable record of one executed user forward pre-hook transition |
