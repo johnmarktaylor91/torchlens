@@ -316,6 +316,8 @@ def replayed_storage_alias(
     shape, layout = geometry
 
     def matches(candidate: torch.Tensor | None) -> bool:
+        """Return whether ``candidate`` is on ``written``'s storage with the read geometry."""
+
         if candidate is None or tuple(candidate.shape) != shape:
             return False
         same_storage = (
