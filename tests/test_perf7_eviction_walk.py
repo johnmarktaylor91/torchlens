@@ -21,10 +21,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._trace_core import op_store
+from torchlens._trace_core import eviction_walk, op_store
 from torchlens.options import CaptureOptions
 
-_CEILING = op_store._EVICT_WALK_DEPTH_CEILING
+_CEILING = eviction_walk._EVICT_WALK_DEPTH_CEILING
 
 
 def _reference_evict(
@@ -213,6 +213,46 @@ class _ClaimsTensor:
         return torch.Tensor
 
 
+class _ClaimsTensorByLookup:
+    """An object whose attribute lookup answers ``__class__`` with the tensor type."""
+
+    def __getattribute__(self, name: str) -> Any:
+        """Claim the tensor class for ``__class__``; look anything else up normally."""
+
+        if name == "__class__":
+            return torch.Tensor
+        return object.__getattribute__(self, name)
+
+
+class _HolderClaimsTensor(_Holder):
+    """A subclass of an honest record type whose ``__class__`` claims a tensor."""
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:
+        """Claim the tensor class."""
+
+        return torch.Tensor
+
+
+class _SometimesClaimsTensor:
+    """An object whose ``__class__`` claims a tensor only when built with ``claims``.
+
+    The first instance a sweep meets is not a tensor; a walk that learned its
+    type as opaque from it would skip the later instance that claims a tensor.
+    """
+
+    def __init__(self, claims: bool) -> None:
+        """Record whether this instance claims the tensor class."""
+
+        self.claims = claims
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:
+        """Claim the tensor class when built to, else answer the real type."""
+
+        return torch.Tensor if self.claims else _SometimesClaimsTensor
+
+
 class _Bytes(int):
     pass
 
@@ -284,6 +324,21 @@ def _adversarial_cells() -> list[Any]:
         [_Holder(torch.ones(1)), _ClaimsTensor()],
         _ClaimsTensor(),
         (torch.float32, torch.device("cpu"), torch.ones(1).dtype),
+        # Types the walk learns as opaque, seen again later in the same sweep,
+        # next to look-alikes that must never be learned.
+        _Holder("first"),
+        (_Holder("in tuple"), _Bytes(1), "a"),
+        (_Holder("beside a tensor"), torch.ones(1)),
+        (_Bytes(2), _Label("x"), None),
+        _ClaimsTensorByLookup(),
+        (_ClaimsTensorByLookup(), 1),
+        (_ClaimsTensor(), "a"),
+        _HolderClaimsTensor(torch.ones(1)),
+        (_HolderClaimsTensor("x"), _Holder("y")),
+        [_Holder(torch.ones(1)), (_Holder(1), (_Holder(2), torch.ones(1)))],
+        _SometimesClaimsTensor(False),
+        _SometimesClaimsTensor(True),
+        (_SometimesClaimsTensor(True), "a"),
     ]
 
 
@@ -294,7 +349,7 @@ def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     _index_objects(cells, "cells", before)
     reference_before: dict[int, Any] = {}
     _index_objects(reference_cells, "cells", reference_before)
-    op_store._evict_payloads_in_list(cells, torch.Tensor)
+    eviction_walk._evict_payloads_in_list(cells, torch.Tensor)
     for index, value in enumerate(reference_cells):
         reference_cells[index] = _reference_evict(value, torch.Tensor)
     assert [_describe(c, before) for c in cells] == [
@@ -305,7 +360,7 @@ def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     before, reference_before = {}, {}
     _index_objects(mapping, "m", before)
     _index_objects(reference_mapping, "m", reference_before)
-    op_store._evict_payloads_in_mapping(mapping, torch.Tensor)
+    eviction_walk._evict_payloads_in_mapping(mapping, torch.Tensor)
     for key, value in reference_mapping.items():
         reference_mapping[key] = _reference_evict(value, torch.Tensor)
     assert _describe(mapping, before) == _describe(reference_mapping, reference_before)

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1605 modules, 683908 lines, 0 modules without a docstring.
+83 packages, 1606 modules, 684080 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -37,7 +37,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7268 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 3064 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
-| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 15 | 4507 |
+| `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 16 | 4636 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 57 | 19069 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6360 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 89 | 46767 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6501 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8512 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4473 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 123 | 58128 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 123 | 58171 |
 | `torchlens.bridge` | External-tool bridge namespace. | 28 | 8882 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 9162 |
@@ -846,7 +846,7 @@ Live narration for TorchLens captures (the torchsnooper niche, better). (10 modu
 
 ### `torchlens._trace_core`
 
-Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 4507 lines)
+Private per-trace semantic store substrate (trace_core_design.md). (16 modules, 4636 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -855,10 +855,11 @@ Private per-trace semantic store substrate (trace_core_design.md). (15 modules, 
 | `_fork_copy` | Structural value copies for fork-side isolation of shared row-store cells. | 159 |
 | `columns` | Typed chunked column builders and frozen columns. | 167 |
 | `core` | TraceCore: per-trace ownership and cross-domain coordination. | 365 |
+| `eviction_walk` | Payload eviction walk: replace every tensor reachable from a store cell with ''None''. | 302 |
 | `fact_blocks` | Shared-fact column blocks: the FunctionCall / ParamAlias group tables. | 224 |
 | `groups` | Label-membership group tables with cached immutable views. | 98 |
 | `label_cells` | Label-structure indexes shared by a trace and its forks, validated exactly. | 300 |
-| `op_store` | Columnar row store backing the ''Op'' facade (the seam). | 1843 |
+| `op_store` | Columnar row store backing the ''Op'' facade (the seam). | 1670 |
 | `overlays` | Sparse versioned row overlays and transactions. | 104 |
 | `payloads` | Identity-preserving payload arena. | 66 |
 | `pools` | Per-trace exact-type intern pools. | 92 |
@@ -1358,7 +1359,7 @@ tinygrad backend preview. (9 modules, 4473 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (123 modules, 58128 lines)
+Torch backend implementation package for TorchLens capture. (123 modules, 58171 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1452,7 +1453,7 @@ Torch backend implementation package for TorchLens capture. (123 modules, 58128 
 | `_tl_collective` | Unwrap a functional-collective async tensor for TorchLens tensor metadata. | 39 |
 | `_torch_ops_calls` | Record direct ''torch.ops.*'' calls made by user code as ordinary logged ops. | 513 |
 | `_trace_backward` | Trace backward-capture functions reached from the records through ''_data_classes._doors.backends_torch''. | 145 |
-| `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 356 |
+| `_tracing_pass` | Recognise torch's own fake-tensor tracing passes so the wrappers stay out of them. | 399 |
 | `_transform_wrappers` | Transform-boundary wrappers: torch.func builders and autograd.functional direct calls. | 587 |
 | `_user_grad_fn` | The user op's live autograd node, stamped on a logging copy for its op record. | 70 |
 | `_view_writeback` | Storage-alias helpers for view mutations. | 141 |
