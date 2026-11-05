@@ -21,8 +21,11 @@ Two further preconditions make the claim hold for the values validation itself s
 * running_mean is exactly zero in every channel with a non-zero weight. The CPU eval kernel
   folds the statistics into ``input * alpha + (bias - running_mean * alpha)`` with
   ``alpha = weight / sqrt(running_var + eps)``; the two ``running_mean * alpha`` terms cancel
-  exactly only when running_mean is zero, so at a non-zero mean the output moves by a few
-  ulps with running_var.
+  exactly only when running_mean is zero, so at a non-zero mean the x86 kernel's output moves
+  by a few ulps with running_var. Apple ARM's kernel cancels them exactly for an affine-free
+  call (``HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL`` is False there), so a live running_var edge at a
+  non-zero mean reads unchanged and validation refuses it fail-closed rather than widening
+  this exemption past the zero-mean case it can prove.
 * every running_var validation can substitute keeps ``running_var + eps`` positive and the
   per-channel scale finite. The perturbation of a running_var parent moves its saved minimum
   down by at most ``max(1.0, 0.1 * |min|, 0.1 * max|output|)`` (the near-constant widening in

@@ -264,7 +264,7 @@ class TinygradBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: Any = None,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -306,8 +306,8 @@ class TinygradBackend:
             Positional arguments for ``model``.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; tinygrad preview is full-save only for live traces.
+        save
+            ``"all"``, omitted, or a static ``tl.trace(save=)`` selector of ops to keep.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -375,13 +375,12 @@ class TinygradBackend:
             Captured tinygrad trace.
         """
 
-        save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
+        save_predicate = pop_static_label_save_predicate({"save": save}, backend_name="tinygrad")
         facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -464,7 +463,7 @@ class TinygradBackend:
             cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
-            layers_to_save=layers_to_save,
+            save=layers_to_save,
             input_kwargs=input_kwargs,
             output_device=output_device,
             activation_transform=activation_transform,
@@ -1585,11 +1584,10 @@ class TinygradBackend:
             layer_label = getattr(known_op, "layer_label", None)
             if isinstance(layer_label, str) and int(getattr(known_op, "num_passes", 1)) == 1:
                 final_to_raw[layer_label] = raw_label
+        arg_positions = record_member(op, "parent_arg_positions", {}).get("args", {})
         graph_positions = {
             position: (final_to_raw.get(label, label) if isinstance(label, str) else label)
-            for position, label in record_member(op, "parent_arg_positions", {})
-            .get("args", {})
-            .items()
+            for position, label in arg_positions.items()
         }
         parent_labels = tuple(
             final_to_raw.get(label, label) if isinstance(label, str) else label
@@ -2574,7 +2572,7 @@ class _observe_tensor_ops:
             return result
 
         # tinygrad deliberately exposes this as a method; preview capture replaces it temporarily.
-        Tensor._apply_uop = wrapped
+        setattr(Tensor, "_apply_uop", wrapped)
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
@@ -2598,7 +2596,7 @@ class _observe_tensor_ops:
         from tinygrad import Tensor
 
         # Restore the deliberately replaced tinygrad method after preview capture.
-        Tensor._apply_uop = self.original
+        setattr(Tensor, "_apply_uop", self.original)
 
 
 def _uop_signature(uop: Any) -> str:

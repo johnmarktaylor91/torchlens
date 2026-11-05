@@ -9,7 +9,7 @@ passes from the fires would hide a pass that fired nowhere. This module counts
 the passes at the capture door instead: every capture pass (``tl.trace``,
 ``trace.run``, a second capture) runs inside
 ``torchlens._capture.run_entry._run_resolved_request``, so the recorder wraps
-that function once and notes, for each call, whether its request references the
+that function while a cell records and notes, for each call, whether its request references the
 cell's hook (armed) and which of the hook's fires happened inside the call. A
 saved-DAG replay (``fork.do``, ``push``) is a pass too: it runs inside
 ``torchlens.intervention._replay._run_replay``, recomputes only the cone of its
@@ -18,15 +18,25 @@ origins, and is counted the same way with that cone as its scope.
 
 from __future__ import annotations
 
+import contextlib
 import functools
+import importlib
 import types
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 import torch
 
-__all__ = ["HookPass", "PassRecorder", "hook_pass_problems", "start_recording", "stop_recording"]
+__all__ = [
+    "HookPass",
+    "PassRecorder",
+    "hook_pass_problems",
+    "recording",
+    "restore_pass_doors",
+    "start_recording",
+    "stop_recording",
+]
 
 
 @dataclass(frozen=True)
@@ -66,25 +76,58 @@ class PassRecorder:
 
 _ACTIVE: list[PassRecorder | None] = [None]
 
+#: The doors the recorder wraps, as ``(module, attribute)``.
+_DOORS: tuple[tuple[str, str], ...] = (
+    ("torchlens._capture.run_entry", "_run_resolved_request"),
+    ("torchlens.intervention._replay", "_run_replay"),
+)
+
+#: The function each installed wrapper replaced, keyed like ``_DOORS``. The
+#: wrappers live only while a recorder is active: a wrapper left on a door adds
+#: a test-helper frame to every later capture on the worker, and the capture's
+#: call site then resolves into this file.
+_ORIGINALS: dict[tuple[str, str], Callable[..., Any]] = {}
+
 
 def start_recording(hook: Callable[..., Any], fire_states: list[Any]) -> PassRecorder:
-    """Install the pass-door wrappers (once per process) and record the passes of ``hook``.
+    """Install the pass-door wrappers and record the passes of ``hook``.
 
     ``fire_states`` is the list the hook appends ``ctx.run_state`` to on every
-    fire. A later call replaces the recorder, so a cell whose after-checks
-    never run leaves nothing a later cell would count.
+    fire. A later call replaces the recorder. :func:`stop_recording` (or
+    :func:`restore_pass_doors`, which the behaviour harness runs after every
+    cell) removes the wrappers, so nothing outlives the cell that armed them.
     """
 
-    from torchlens._capture import run_entry
-    from torchlens.intervention import _replay as replay
-
-    if not getattr(run_entry._run_resolved_request, "_behaviour_pass_counter", False):
-        run_entry._run_resolved_request = _counted_capture(run_entry._run_resolved_request)
-    if not getattr(replay._run_replay, "_behaviour_pass_counter", False):
-        replay._run_replay = _counted_replay(replay._run_replay)
+    wrappers = {_DOORS[0]: _counted_capture, _DOORS[1]: _counted_replay}
+    for door, wrap in wrappers.items():
+        module = importlib.import_module(door[0])
+        current = getattr(module, door[1])
+        if not getattr(current, "_behaviour_pass_counter", False):
+            _ORIGINALS[door] = current
+            setattr(module, door[1], wrap(current))
     recorder = PassRecorder(hook, fire_states)
     _ACTIVE[0] = recorder
     return recorder
+
+
+def restore_pass_doors() -> None:
+    """Remove every pass-door wrapper and forget the active recorder."""
+
+    _ACTIVE[0] = None
+    for door, original in list(_ORIGINALS.items()):
+        setattr(importlib.import_module(door[0]), door[1], original)
+        del _ORIGINALS[door]
+
+
+@contextlib.contextmanager
+def recording(hook: Callable[..., Any], fire_states: list[Any]) -> Iterator[PassRecorder]:
+    """Record the passes of ``hook`` for the ``with`` body; the doors are restored on any exit."""
+
+    recorder = start_recording(hook, fire_states)
+    try:
+        yield recorder
+    finally:
+        stop_recording(recorder)
 
 
 def _counted_capture(original: Callable[..., Any]) -> Callable[..., Any]:
@@ -136,10 +179,10 @@ def _replayed_labels(log: Any, origins: Any, preserve_origins: bool) -> frozense
 
 
 def stop_recording(recorder: PassRecorder) -> None:
-    """Stop recording into ``recorder`` (the wrapper stays and records nothing)."""
+    """Stop recording into ``recorder`` and restore the doors it armed."""
 
     if _ACTIVE[0] is recorder:
-        _ACTIVE[0] = None
+        restore_pass_doors()
 
 
 def _references(root: Any, target: Any, depth: int = 14) -> bool:

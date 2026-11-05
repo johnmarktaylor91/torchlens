@@ -204,11 +204,11 @@ def pop_static_label_save_predicate(
     Returns
     -------
     Callable[[Any], Any] | BaseSelector | None
-        Static-label save predicate, or ``None`` when no predicate was supplied.
+        Static-label save predicate, or ``None`` for save-all (omitted or ``"all"``).
     """
 
     save_value = kwargs.pop("save", None)
-    if save_value is None:
+    if save_value is None or (isinstance(save_value, str) and save_value == "all"):
         return None
     if not isinstance(save_value, BaseSelector):
         raise BackendUnsupportedError(

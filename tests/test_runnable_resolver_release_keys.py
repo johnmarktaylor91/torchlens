@@ -108,7 +108,7 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
 
     path = tmp_path / "model.tlspec"
     _capture(model, inputs).save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=inputs, seed=0)
+    result = tl.load(path).run_transaction(inputs=inputs, seed=0)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, model(inputs))
 

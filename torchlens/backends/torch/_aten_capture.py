@@ -28,6 +28,7 @@ from ..._ir.events import (
     _AtenValueCell,
     _ModePausedInteriorEvent,
 )
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ..._utils.tensor_utils import copy_tensor_payload
@@ -38,6 +39,8 @@ from ._function_boundary import _active_witness_state
 @dataclass(frozen=True, slots=True)
 class _PendingAtenCall:
     """Pre-dispatch value-free facts awaiting an outcome and output facts."""
+
+    __repr__ = short_dataclass_repr
 
     capture_phase: str
     forward_pass_index: int | None
@@ -791,3 +794,4 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
             yield
     finally:
         _ACTIVE_BACKWARD_GRAD_FN_REFS.reset(marker_token)
+        state.release()

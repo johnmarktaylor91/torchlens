@@ -24,6 +24,7 @@ from typing import Any
 
 import torch
 
+from .._semantic.recipes._helpers import relays_wrapped_core
 from .._semantic.tolerances import within_reconstruction_tolerance
 from .._utils._record_group_table import record_member
 from ._errors import refuse
@@ -50,12 +51,13 @@ def _facet_keys_or_none(module: Any) -> set[str] | None:
 
 
 def _attention_modules(trace: Any) -> list[Any]:
-    """Return attention module records (those exposing the head vocabulary)."""
+    """Return attention module records exposing the head vocabulary, one per layer."""
 
     modules = []
     for module in trace.modules:
         keys = _facet_keys_or_none(module)
-        if keys is not None and {"result", "attn_out", "n_q_heads", "d_head"} <= keys:
+        head_keys = keys is not None and {"result", "attn_out", "n_q_heads", "d_head"} <= keys
+        if head_keys and not relays_wrapped_core(module, "result"):
             modules.append(module)
     return modules
 

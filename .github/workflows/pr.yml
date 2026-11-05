@@ -341,6 +341,17 @@ jobs:
         with:
           cache-dependency-glob: "pyproject.toml"
 
+      # Two checks need more than the dev extra: known_failures_ledger collects
+      # tests/test_real_world_models.py (module-level importorskip of
+      # torchvision, so without it pytest collects no ids), and schema_lockstep
+      # re-renders docs/images/collapse (traces torchvision models, renders
+      # with dot). The collapse gallery is recorded against this apt Graphviz.
+      - name: Install Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          dot -V
+
       - name: Install dependencies
         run: |
           uv pip install --system \
@@ -348,7 +359,8 @@ jobs:
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
             -e ".[dev]" \
-            "torch==2.13.0+cpu"
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu"
           uv pip check
 
       - name: Run the repository checks

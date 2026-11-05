@@ -9,6 +9,9 @@ from typing import Any, ClassVar, Generic, TypeVar
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._display_collections import accessor_noun, collection_repr, collection_str
+from .._utils._display_errors import candidate_keys, lookup_message
+from .._utils.fail_open import fail_open
 
 T = TypeVar("T")
 
@@ -66,7 +69,8 @@ class Accessor(Generic[T]):
 
     Examples
     --------
-    >>> layers = tl.trace(model, x).layers
+    >>> trace = tl.trace(model, x)
+    >>> layers = trace.layers
     >>> isinstance(layers, Accessor), len(layers)
     (True, 5)
     >>> "relu_1_2" in layers, layers[2].func_name
@@ -139,8 +143,14 @@ class Accessor(Generic[T]):
             return resolved
         suggestions = self._suggest(key)
         if suggestions:
-            suggestion_str = ", ".join(repr(item) for item in suggestions)
-            raise KeyError(f"{self._item_kind} '{key}' not found. Did you mean {suggestion_str}?")
+            raise KeyError(
+                lookup_message(
+                    f"{self._item_kind} {key!r} not found.",
+                    candidate_keys(suggestions, self._dict),
+                    "pass an in-range integer or a key from this accessor.",
+                    query=key,
+                )
+            )
         raise KeyError(f"{self._item_kind} '{key}' not found.")
 
     def __contains__(self, key: object) -> bool:
@@ -337,29 +347,16 @@ class Accessor(Generic[T]):
         return None
 
     def __repr__(self) -> str:
-        """One-line composition card (F10; containers point, never dump)."""
+        """Count and composition only; member rendering belongs to ``str``."""
 
-        from ..stats._envelope import collection_line
-
-        noun = self._item_kind.lower() + ("s" if len(self) != 1 else "")
-        return collection_line(
-            type(self).__name__,
-            len(self),
-            noun,
-            composition=self._composition_note(),
-            exits=(".head()", ".search()", ".to_pandas()"),
-        )
+        noun = accessor_noun(self._item_kind.removeprefix("Trace"), len(self))
+        composition = fail_open(self._composition_note, lambda _error: None)
+        return collection_repr(type(self).__name__, len(self), noun, composition)
 
     def __str__(self) -> str:
-        """Bounded collection view: composition line + first members (F10)."""
+        """Render only the first five members, then an exact remainder."""
 
-        from ..stats._envelope import COLLECTION_MAX_CHILDREN
-
-        children = [repr(item) for item in self._list[:COLLECTION_MAX_CHILDREN]]
-        if len(self._list) > COLLECTION_MAX_CHILDREN:
-            children.append(f"... {len(self._list) - COLLECTION_MAX_CHILDREN} more")
-        lines = [self.__repr__()] + [f"  {child}" for child in children]
-        return "\n".join(lines)
+        return collection_str(repr(self), self)
 
     def head(self, n: int = 5) -> list[T]:
         """Return the first ``n`` records in order (a collection exit)."""

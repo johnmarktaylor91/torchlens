@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import RecordTuple
+from ._moe_views import _OpRouting
 from ._trace_aten import _require_aten_profile
 
 if TYPE_CHECKING:
     from .aten_op import AtenOp
 
 
-class OpAtenMixin:
+class OpAtenMixin(_OpRouting):
     """Adds ``aten_ops`` to :class:`Op`."""
 
     # Empty: Op is slotted (``_core``/``_row``); a slotless base would give every op a __dict__.
@@ -33,8 +35,12 @@ class OpAtenMixin:
         record: Any = self
         profile = _require_aten_profile(record.source_trace, what="Op.aten_ops")
         label = record.layer_label
-        return tuple(
-            row
-            for row in profile.primitive_ops
-            if any(ref.op_label == label for ref in row.parent_op_refs)
+        return RecordTuple(
+            (
+                row
+                for row in profile.primitive_ops
+                if any(ref.op_label == label for ref in row.parent_op_refs)
+            ),
+            "AtenOps",
+            "calls",
         )

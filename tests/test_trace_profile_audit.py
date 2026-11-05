@@ -139,7 +139,7 @@ def test_trace_audit_clean_model_reports_run_and_skipped_scope() -> None:
     assert "find_nan" in audit.checks_run
     assert "gradient_flow_audit" not in audit.checks_run
     assert any(check == "gradient_flow_audit" for check, _ in audit.skipped)
-    assert "no issues found" in repr(audit)
+    assert repr(audit).startswith("HealthReport: 0 findings,")
 
 
 def test_trace_audit_nan_finding_names_op_and_follow_up() -> None:

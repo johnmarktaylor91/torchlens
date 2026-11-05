@@ -17,11 +17,8 @@ import torchlens as tl
 import torchlens._visualization._condensed_flow as condensed_flow
 import torchlens._visualization.auto_collapse as auto_collapse
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
-from torchlens._utils._record_group_table import record_member
 from torchlens._visualization._render_common import format_collapsed_module_contents
-from torchlens._visualization._render_edges import (
-    _collapsed_module_should_show_remainder,
-)
+from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens._visualization._trace_collapse import (
     collapse_plan as _collapse_plan,
     collapse_schedule as _collapse_schedule,
@@ -52,6 +49,13 @@ tvs = pytest.importorskip("torchvision.models.segmentation")
 
 
 SVG_NODE_RE = re.compile(r'class="node"')
+
+
+@pytest.fixture(autouse=True)
+def _wall_clock_never_changes_plans(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disarm the collapse watchdog as CI does: host load must never change a plan."""
+
+    monkeypatch.setenv("TORCHLENS_DETERMINISTIC", "1")
 
 
 class ResidualBlock(torch.nn.Module):
@@ -1431,7 +1435,7 @@ def _module_contents_label(trace: tl.Trace, module: Any) -> str:
 
     return format_collapsed_module_contents(
         len(module.layer_labels),
-        sum(trace[label].graph.is_buffer for label in module.layer_labels),
+        sum(trace[label].is_buffer for label in module.layer_labels),
     )
 
 
@@ -1551,7 +1555,7 @@ def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) ->
             for op in trace.ops
             if op.func_name == "add_"
             and op.children
-            and all(trace.ops[child].graph.is_buffer for child in op.children)
+            and all(trace.ops[child].is_buffer for child in op.children)
         ]
         assert len(hidden_updates) == 2
 
@@ -1648,8 +1652,8 @@ def _atomic_own_output_ops(trace: tl.Trace, address: str) -> tuple[Any, ...]:
         if (
             modules
             and modules[-1].rsplit(":", 1)[0] == address
-            and record_member(op, "is_atomic_module", False)
-            and not record_member(op, "is_buffer", False)
+            and getattr(op, "is_atomic_module", False)
+            and not getattr(op, "is_buffer", False)
         ):
             surfaced.append(op)
     return tuple(surfaced)
@@ -1676,35 +1680,31 @@ def _has_run_fold_multiplicity_label(source: str, multiplicity: int) -> bool:
 def _select_first_stage_unit(module: object) -> bool:
     """Return whether ``module`` is the first unit inside a synthetic stage."""
 
-    return (
-        re.match(r"^stages\.\d+\.blocks\.0$", str(record_member(module, "address", ""))) is not None
-    )
+    return re.match(r"^stages\.\d+\.blocks\.0$", str(getattr(module, "address", ""))) is not None
 
 
 def _select_blocks_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``blocks`` container."""
 
-    return re.match(r"^blocks\.\d+$", str(record_member(module, "address", ""))) is not None
+    return re.match(r"^blocks\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
 def _select_features_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``features`` container."""
 
-    return re.match(r"^features\.\d+$", str(record_member(module, "address", ""))) is not None
+    return re.match(r"^features\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
 def _select_branches_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``branches`` container."""
 
-    return re.match(r"^branches\.\d+$", str(record_member(module, "address", ""))) is not None
+    return re.match(r"^branches\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
 def _select_backbone_stage(module: object) -> bool:
     """Return whether ``module`` is a direct stage child of ``backbone``."""
 
-    return (
-        re.match(r"^backbone\.stages\.\d+$", str(record_member(module, "address", ""))) is not None
-    )
+    return re.match(r"^backbone\.stages\.\d+$", str(getattr(module, "address", ""))) is not None
 
 
 def _edge_count(source: str, tail: str, head: str) -> int:
@@ -1935,7 +1935,7 @@ def test_adjacency_index_matches_forced_accessor_reference(
         if case_name == "recurrent":
             assert any(module.num_calls > 1 for module in trace.modules)
         if case_name == "batchnorm_buffer":
-            assert any(op.graph.is_buffer for op in trace._layer_list)
+            assert any(op.is_buffer for op in trace._layer_list)
         if case_name == "write_version":
             assert any(op.buffer_write_kind is not None for op in trace._layer_list)
 
@@ -2684,7 +2684,7 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         def collapse_block(module: Any) -> bool:
             """Select the fixture block as a v2 max collapsed module."""
 
-            return record_member(module, "address", None) == "block"
+            return getattr(module, "address", None) == "block"
 
         setattr(collapse_block, "_torchlens_v2_mode", "max")
         source = str(
@@ -2699,9 +2699,9 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         surfaced_ops = _atomic_own_output_ops(trace, "block")
         surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
         remainder_layers = len(module.layer_labels) - len(surfaced_ops)
-        remainder_buffers = sum(
-            trace[label].graph.is_buffer for label in module.layer_labels
-        ) - sum(op.graph.is_buffer for op in surfaced_ops)
+        remainder_buffers = sum(trace[label].is_buffer for label in module.layer_labels) - sum(
+            op.is_buffer for op in surfaced_ops
+        )
         remainder_params = module.num_params - surfaced_params
         block_line = _collapsed_node_line(source, "block")
 
@@ -2727,7 +2727,7 @@ def test_auto_plan_remainder_honesty_does_not_require_max_level() -> None:
         def collapse_block(module: Any) -> bool:
             """Select the fixture block as a collapsed module."""
 
-            return record_member(module, "address", None) == "block"
+            return getattr(module, "address", None) == "block"
 
         setattr(
             collapse_block,
@@ -3089,8 +3089,7 @@ def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
         first_segment_members = [trace.ops[label] for label in first_segment.ops]
         assert first_segment.owner is None
         assert any(
-            op.module_context.is_atomic_module and op.modules == ("stem:1",)
-            for op in first_segment_members
+            op.is_atomic_module and op.modules == ("stem:1",) for op in first_segment_members
         )
         assert any(
             op.modules and op.modules[0].startswith("blocks:") for op in first_segment_members
@@ -3165,7 +3164,7 @@ def test_max_child_segment_decomposes_ops_and_buffers(
         for segment in child_segments:
             # r21: descriptor ops are concrete pass-qualified labels (exact keys).
             covered = [trace.ops[label] for label in segment.ops]
-            expected_buffers = sum(op.graph.is_buffer for op in covered)
+            expected_buffers = sum(op.is_buffer for op in covered)
             expected_ops = len(covered) - expected_buffers
             expected_contents = format_collapsed_module_contents(len(covered), expected_buffers)
 

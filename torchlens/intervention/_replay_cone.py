@@ -10,10 +10,11 @@ scheduler only calls the per-call callback its caller passes.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from .._errors import InvalidArgumentError
+from .._trace_core.label_cells import PositionGroups, positions_of, shared_entry
 from ._replay_context import _func_call_groups, _replay_site_key
 from .errors import ReplayPreconditionError
 
@@ -81,6 +82,50 @@ def _final_label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     return {spelling: tuple(keys) for spelling, keys in mapping.items()}
 
 
+def _shared_label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
+    """Return :func:`_label_key_map`, built once per equal label snapshot across forks.
+
+    The map holds replay keys (strings) only, so the shared table answers any
+    trace whose label cells equal the snapshot it was built from; each caller
+    gets its own shallow copy.
+    """
+
+    return _shared_string_map(trace, "label_key_map", _label_key_map)
+
+
+def _shared_final_label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
+    """Return :func:`_final_label_key_map` through the shared table."""
+
+    return _shared_string_map(trace, "final_label_key_map", _final_label_key_map)
+
+
+def _shared_string_map(
+    trace: Trace, kind: str, build: Callable[[Trace], dict[str, tuple[str, ...]]]
+) -> dict[str, tuple[str, ...]]:
+    """Return one string-valued map from the shared table, building it on a miss."""
+
+    results = shared_entry(trace._layer_list)
+    if results is None:
+        return build(trace)
+    built = results.get(kind)
+    if built is None:
+        built = results[kind] = build(trace)
+    return dict(built)
+
+
+def _shared_func_call_groups(trace: Trace) -> Mapping[int | None, tuple[Op, ...]]:
+    """Return :func:`_func_call_groups` from shared positions, answered with ``trace``'s ops."""
+
+    ops = trace._layer_list
+    results = shared_entry(ops)
+    if results is None:
+        return _func_call_groups(trace)
+    positions = results.get("func_call_groups")
+    if positions is None:
+        positions = results["func_call_groups"] = positions_of(_func_call_groups(trace), ops)
+    return PositionGroups(positions, ops)
+
+
 def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
     """Refuse non-op cone origins typed (leverage B3), returning them listed."""
 
@@ -145,10 +190,36 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     """
 
     origins = _validated_cone_origins(origins)
+    return _cone_from_maps(
+        trace, origins, _shared_label_key_map(trace), _shared_func_call_groups(trace)
+    )
+
+
+def _replay_cone_and_maps(
+    trace: Trace, origins: Iterable[Op]
+) -> tuple[list[Op], dict[str, tuple[str, ...]], Mapping[int | None, tuple[Op, ...]]]:
+    """Return :func:`cone_of_effect` with the label map and call groups it walked.
+
+    Saved-DAG replay needs both maps for its own pass; taking them from the
+    cone walk keeps one replay at one build of each instead of two.
+    """
+
+    label_keys = _shared_label_key_map(trace)
+    call_groups = _shared_func_call_groups(trace)
+    cone = _cone_from_maps(trace, _validated_cone_origins(origins), label_keys, call_groups)
+    return cone, label_keys, call_groups
+
+
+def _cone_from_maps(
+    trace: Trace,
+    origins: Sequence[Op],
+    label_keys: dict[str, tuple[str, ...]],
+    call_groups: Mapping[int | None, tuple[Op, ...]],
+) -> list[Op]:
+    """Walk :func:`cone_of_effect` over prebuilt label map and call groups."""
+
     all_keys = trace._layer_dict_all_keys
-    label_keys = _label_key_map(trace)
-    final_keys = _final_label_key_map(trace)
-    call_groups = _func_call_groups(trace)
+    final_keys = _shared_final_label_key_map(trace)
     visited: set[str] = set()
     frontier: deque[str] = deque()
     for origin in origins:

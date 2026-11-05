@@ -29,9 +29,14 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens._capture_state_helpers", "_COMPILED_MODEL_UNWRAP_WARNED", False),
     ("torchlens._capture_state_helpers", "_COMPILED_FORCED_EAGER_WARNED", False),
     ("torchlens._io", "_LEGACY_THREAD_WARNING_EMITTED", {"flag": False}),
-    ("torchlens._io.bundle", "_NONPERSISTENT_DISCLOSURE_WARNED", False),
-    ("torchlens._io.bundle", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED", False),
+    ("torchlens._io._save_gates", "_NONPERSISTENT_DISCLOSURE_WARNED", False),
+    ("torchlens._io._save_gates", "_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED", False),
     ("torchlens._state", "_functorch_warning_emitted", False),
+    # Capture size guard: once per session.
+    ("torchlens._capture.finalize.epilogue", "_CAPTURE_MEMORY_WARNED", False),
+    # tl.errors.quiet state: a bare quiet() in one test must not quiet the next.
+    ("torchlens.errors._base", "_QUIET_CODES", frozenset()),
+    ("torchlens.errors._quiet", "_QUIET_ALL", False),
     ("torchlens._state", "_dynamo_warning_emitted", False),
     ("torchlens.backends.tf._tf_compat", "_warned_missing_capabilities", set()),
     ("torchlens.backends.torch._opaque_call_advisory", "_WARNED_CODES", set()),
@@ -380,3 +385,29 @@ def _reset_rng_state() -> Iterator[None]:
         torch.use_deterministic_algorithms(deterministic, warn_only=deterministic_warn_only)
         if mlx_random is not None and mlx_state is not None:
             mlx_random.state[:] = mlx_state
+
+
+@contextmanager
+def distribution_validation_restored() -> Iterator[None]:
+    """Put the ``torch.distributions`` argument-validation default back on exit.
+
+    Creating any ``torch.compile`` callable switches that process-wide default
+    off. Left off, a later test's distribution-building model loses its
+    batch-wide argument check and records a different graph.
+    """
+
+    from torch.distributions import Distribution
+
+    incoming = Distribution._validate_args
+    try:
+        yield
+    finally:
+        Distribution.set_default_validate_args(incoming)
+
+
+@pytest.fixture(autouse=True)
+def _restore_distribution_validation() -> Iterator[None]:
+    """Restore the distribution argument-validation default after each test."""
+
+    with distribution_validation_restored():
+        yield

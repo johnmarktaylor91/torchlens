@@ -51,6 +51,8 @@ from ._selection.selection import (
     _lift,
     _SelectionOperand,
 )
+from ._utils._display_errors import lookup_message
+from ._utils._display_keys import display_key
 
 __all__ = [
     "TraceSlice",
@@ -184,10 +186,12 @@ class TraceSlice(_SelectionOperand):
         if len(bare_hits) == 1:
             return self._graph.ops[bare_hits[0]]
         if len(bare_hits) > 1:
-            spellings = ", ".join(repr(member) for member in bare_hits)
             raise KeyError(
-                f"{label!r} names {len(bare_hits)} member passes of this slice; "
-                f"use a pass-qualified label ({spellings})."
+                lookup_message(
+                    f"{label!r} names {len(bare_hits)} member passes of this slice.",
+                    [display_key(self._graph.ops[member]) for member in bare_hits],
+                    "Use a pass-qualified label.",
+                )
             )
         if label in self._graph.ops or any(
             getattr(op, "layer_label", None) == label for op in self._graph.ops.values()
@@ -196,12 +200,12 @@ class TraceSlice(_SelectionOperand):
                 f"{label!r} is an op of the underlying trace but not a member of "
                 f"this slice ({self._source}); read it off the trace directly."
             )
-        preview = ", ".join(repr(member) for member in self._labels[:5])
-        if len(self._labels) > 5:
-            preview += f", ... ({len(self._labels)} members)"
         raise KeyError(
-            f"{label!r} is not an op of this slice's underlying trace; "
-            f"members: {preview or '(none)'}."
+            lookup_message(
+                f"{label!r} is not an op of this slice's underlying trace.",
+                [display_key(self._graph.ops[member]) for member in self._labels],
+                "Use a member label, or read a different op off the underlying trace.",
+            )
         )
 
     # Structure ---------------------------------------------------------------

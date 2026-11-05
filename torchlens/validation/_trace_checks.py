@@ -78,6 +78,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace._save_new_outs shell keeps 
     seed: int | None = None,
     backward_ready: bool | None = None,
     _run_until_plan: Any | None = None,
+    _staged_plan: Any | None = None,
 ) -> None:
     """Body of ``Trace._save_new_outs``; the method carries the documented contract."""
     # N3/N5: a live refresh re-drives the FULL native forward against the
@@ -97,6 +98,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace._save_new_outs shell keeps 
         seed=seed,
         backward_ready=backward_ready,
         _run_until_plan=_run_until_plan,
+        _staged_plan=_staged_plan,
     )
 
 

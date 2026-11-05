@@ -1,5 +1,6 @@
 """Argument templates, edge uses, and tensor provenance."""
 
+import types
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
@@ -10,8 +11,14 @@ from ..._ir.container import (
 )
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
-from ..._storage_bindings import STORAGE_CONTEXT_RECEIVER_FUNCS, copy_with_storage_context
+from ..._storage_bindings import (
+    VIEW_CONTEXT_RECEIVER_FUNCS,
+    copy_with_storage_context,
+    copy_with_view_context,
+    storage_context_arg_index,
+)
 from ..._utils._tensor_layout import CaptureLayout, layout_of
+from ..._utils._torch_compat import get_force_original_view_tracking
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     safe_copy,
@@ -42,6 +49,7 @@ from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+    from ..._ir.workspaces import RawGraphWorkspace
 
 
 __all__ = (
@@ -56,8 +64,26 @@ __all__ = (
 )
 
 
+def _peek_raw_graph_workspace(trace: "Trace | None") -> "RawGraphWorkspace | None":
+    """Read the trace's raw-graph workspace, if this capture still holds one.
+
+    ``_raw_graph_ws`` is a declared ``FieldPolicy.DROP`` Trace field that only
+    lives for one capture: postprocess pops it at its terminal consume and a
+    loaded trace never had it, and ``trace`` itself may be ``None``. This is a
+    direct private read guarded by ``AttributeError`` rather than a
+    string-literal ``getattr`` default, so a rename breaks loudly.
+    """
+
+    if trace is None:
+        return None
+    try:
+        return trace._raw_graph_ws
+    except AttributeError:
+        return None
+
+
 def _function_registry_key(
-    func: Callable[..., Any], func_name: str | None = None
+    func: Callable[..., Any], func_name: str | None = None, trace: "Trace | None" = None
 ) -> FunctionRegistryKey:
     """Build a portable registry key for a captured function.
 
@@ -68,6 +94,8 @@ def _function_registry_key(
     func_name
         TorchLens-recorded function name for property getter callables whose
         underlying C descriptor does not preserve the property name.
+    trace
+        Active trace; its raw-graph workspace memoizes C-callable keys per capture.
 
     Returns
     -------
@@ -75,10 +103,59 @@ def _function_registry_key(
         Best-effort function identity.
     """
 
-    from torchlens.intervention._resolver_registry import function_registry_key_from_callable
-
     if func_name in _SAFE_TENSOR_PROPERTY_NAMES:
         return FunctionRegistryKey("torch.Tensor", str(func_name), "method")
+    workspace = _peek_raw_graph_workspace(trace)
+    if workspace is None or not _is_permanent_c_callable(func):
+        return _derive_function_registry_key(func)
+    memo = workspace._function_key_memo
+    hit = memo.get(id(func))
+    if hit is not None and hit[0] is func:
+        namespace, qualname, dispatch_kind, version, import_path = hit[1]
+        return FunctionRegistryKey(namespace, qualname, dispatch_kind, version, import_path)
+    key = _derive_function_registry_key(func)
+    memo[id(func)] = (
+        func,
+        (key.namespace, key.qualname, key.dispatch_kind, key.version, key.import_path),
+    )
+    return key
+
+
+# The capture memoizes the portable identity of permanent C callables (torch
+# builtins, method and slot descriptors) in its raw-graph workspace, keyed by
+# ``id`` with the callable held so the id cannot be reused: every op of the same
+# function used to re-derive the same key (module and qualname reads, the
+# internal-builtin probe, the runnable alias table scan). The memo lives and dies
+# with one capture, so a torch namespace patched between captures is re-derived,
+# and each hit returns a NEW key object, so no two ops share a key instance.
+_PERMANENT_C_CALLABLE_TYPES = (
+    types.MethodDescriptorType,
+    types.WrapperDescriptorType,
+    types.ClassMethodDescriptorType,
+)
+
+
+def _is_permanent_c_callable(func: Any) -> bool:
+    """Return whether ``func`` is a C callable owned by a module or class, never an instance.
+
+    A static C function (``torch.sin``: ``METH_STATIC`` on ``_VariableFunctionsClass``)
+    is bound to nothing, so its ``__self__`` is ``None``.
+    """
+
+    func_type = type(func)
+    if func_type in _PERMANENT_C_CALLABLE_TYPES:
+        return True
+    if func_type is not types.BuiltinFunctionType:
+        return False
+    owner = getattr(func, "__self__", None)
+    return owner is None or isinstance(owner, (types.ModuleType, type))
+
+
+def _derive_function_registry_key(func: Callable[..., Any]) -> FunctionRegistryKey:
+    """Derive the portable registry key of ``func`` (no memo)."""
+
+    from torchlens.intervention._resolver_registry import function_registry_key_from_callable
+
     return function_registry_key_from_callable(func)
 
 
@@ -213,7 +290,7 @@ def _build_args_template(
     return CapturedArgTemplate(
         args=arg_components,
         kwargs=kwarg_components,
-        func_id=_function_registry_key(func, func_name),
+        func_id=_function_registry_key(func, func_name, trace),
         notes=tuple(notes),
     )
 
@@ -466,24 +543,47 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 def _copy_saved_call_args(
     func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], retained: bool = False
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
-    """Copy one call's arguments for ``save_arg_values``, receiver storage context included.
+    """Copy one call's arguments for ``save_arg_values``, storage and view context included.
 
-    The receiver (positional argument 0) of a
-    :data:`~torchlens._storage_bindings.STORAGE_CONTEXT_RECEIVER_FUNCS` call keeps
-    its whole storage; every other argument is copied as :func:`_copy_saved_arg_tree`
-    does.
+    The positional argument named by
+    :func:`~torchlens._storage_bindings.storage_context_arg_index` keeps its whole
+    storage, and the receiver (positional argument 0) of a
+    :data:`~torchlens._storage_bindings.VIEW_CONTEXT_RECEIVER_FUNCS` call keeps its
+    view relation; every other argument is copied as :func:`_copy_saved_arg_tree` does.
     """
 
-    storage_context = func_name in STORAGE_CONTEXT_RECEIVER_FUNCS
+    copiers = _context_copiers(func_name)
     arg_copies = tuple(
-        _copy_saved_arg_tree(arg, retained, storage_context=storage_context and index == 0)
+        _copy_saved_arg_tree(arg, retained, receiver_copy=copiers.get(index))
         for index, arg in enumerate(args)
     )
     kwarg_copies = {key: _copy_saved_arg_tree(value, retained) for key, value in kwargs.items()}
     return arg_copies, kwarg_copies
 
 
-def _copy_saved_arg_tree(arg: Any, retained: bool = False, *, storage_context: bool = False) -> Any:
+def _context_copiers(func_name: str) -> dict[int, Callable[[torch.Tensor], torch.Tensor]]:
+    """Map each positional argument of ``func_name`` saved with context to its copier."""
+
+    copiers: dict[int, Callable[[torch.Tensor], torch.Tensor]] = {}
+    if func_name in VIEW_CONTEXT_RECEIVER_FUNCS:
+        copiers[0] = _copy_receiver_with_view_context
+    index = storage_context_arg_index(func_name)
+    if index is not None:
+        copiers[index] = copy_with_storage_context
+    return copiers
+
+
+def _copy_receiver_with_view_context(tensor: torch.Tensor) -> torch.Tensor:
+    """Copy a view-function receiver with its view context, under original-view tracking."""
+    return copy_with_view_context(tensor, get_force_original_view_tracking())
+
+
+def _copy_saved_arg_tree(
+    arg: Any,
+    retained: bool = False,
+    *,
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
+) -> Any:
     """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
 
     Outside forward validation's own capture this is exactly
@@ -499,11 +599,14 @@ def _copy_saved_arg_tree(arg: Any, retained: bool = False, *, storage_context: b
 
     references = active_argument_references()
     if references is None:
-        if storage_context and isinstance(arg, torch.Tensor):
-            return _copy_tensor_with_storage_context(arg)
+        if receiver_copy is not None and isinstance(arg, torch.Tensor):
+            return _copy_receiver_with_context(receiver_copy, arg)
         return copy_arg_tree(arg)
+    if isinstance(arg, torch.Tensor) and receiver_copy is _copy_receiver_with_view_context:
+        # A parameter alias is not a view, so a view-function receiver is always copied.
+        return _copy_receiver_with_context(receiver_copy, arg)
     if isinstance(arg, torch.Tensor):
-        return _parameter_alias(references, arg, retained, storage_context=storage_context)
+        return _parameter_alias(references, arg, retained, receiver_copy=receiver_copy)
     if _is_flat_sequence(arg):
         return type(arg)(
             _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
@@ -521,15 +624,19 @@ def _is_flat_sequence(arg: Any) -> bool:
 
 
 def _parameter_alias(
-    references: Any, tensor: torch.Tensor, retained: bool = False, *, storage_context: bool = False
+    references: Any,
+    tensor: torch.Tensor,
+    retained: bool = False,
+    *,
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> torch.Tensor:
     """Alias a parameter-storage tensor (recording its version), else copy it as before.
 
     The guard decides and builds the alias (see
     ``ParameterArgumentReferences.alias``) and, for a ``retained`` snapshot,
     the offloaded copy (``ParameterArgumentReferences.offload``); anything it
-    declines is copied exactly as on the copy path (with its whole storage
-    when ``storage_context`` is set; an alias already shares the storage).
+    declines is copied exactly as on the copy path (through ``receiver_copy``
+    when it is set; an alias already shares the storage).
     """
 
     # Paused: the guard's storage and version reads, its alias and its copy are
@@ -540,16 +647,18 @@ def _parameter_alias(
             alias = references.offload(tensor)
     if alias is not None:
         return alias
-    if storage_context:
-        return _copy_tensor_with_storage_context(tensor)
+    if receiver_copy is not None:
+        return _copy_receiver_with_context(receiver_copy, tensor)
     return cast(torch.Tensor, copy_arg_tree(tensor))
 
 
-def _copy_tensor_with_storage_context(tensor: torch.Tensor) -> torch.Tensor:
-    """Copy a storage-geometry receiver with its whole storage, as TorchLens's own work."""
+def _copy_receiver_with_context(
+    receiver_copy: Callable[[torch.Tensor], torch.Tensor], tensor: torch.Tensor
+) -> torch.Tensor:
+    """Copy a receiver with its storage or view context, as TorchLens's own work."""
 
     with pause_logging():
-        return copy_with_storage_context(tensor)
+        return receiver_copy(tensor)
 
 
 def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.device]:

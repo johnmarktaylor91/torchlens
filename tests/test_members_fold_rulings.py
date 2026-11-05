@@ -24,6 +24,8 @@ from torchlens.errors import TorchLensError
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions, InterventionOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _identity_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     del ctx
@@ -156,7 +158,7 @@ def test_recipe_with_set_only_stages_one_sticky_hook_without_running(log: Any) -
     before = log[_relu_label(log)].out.clone()
     log.do(
         tl.when(tl.func("relu"), _double_hook),
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     assert len(log._intervention_spec.hook_specs) == 1
     assert log._spec_revision == revision + 1
@@ -171,12 +173,17 @@ def test_do_with_a_hook_and_set_only_stages_it_sticky(log: Any) -> None:
     log.do(
         tl.func("relu"),
         tl.scale(2.0),
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     assert len(log._intervention_spec.hook_specs) == 1
     assert not log._intervention_spec.target_value_specs
     torch.testing.assert_close(log[_relu_label(log)].out, before)
-    log.push()
+    # The next propagating do fires the staged hook (push folded into do).
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        intervention=InterventionOptions(),
+    )
     torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
 
 
@@ -184,7 +191,7 @@ def test_do_with_a_hook_propagates_at_once(log: Any) -> None:
     """``do(site, hook)`` attaches the sticky hook and replays in the same call."""
 
     before = log[_relu_label(log)].out.clone()
-    log.do(tl.func("relu"), _double_hook, intervention=InterventionOptions(confirm_mutation=True))
+    log.do(tl.func("relu"), _double_hook, intervention=InterventionOptions())
     assert len(log._intervention_spec.hook_specs) == 1
     torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
 
@@ -192,17 +199,17 @@ def test_do_with_a_hook_propagates_at_once(log: Any) -> None:
 def test_clear_edits_accepts_the_handle_tuple_do_staged(log: Any) -> None:
     """``clear_edits(handle=)`` takes one id or the tuple of ids one staging call made."""
 
-    first = log._attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    second = log._attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
+    first = log._attach_hooks(tl.func("relu"), _identity_hook)
+    second = log._attach_hooks(tl.func("__add__"), _identity_hook)
     assert isinstance(first, tuple) and len(first) == 1
     assert len(log._intervention_spec.hook_specs) == 2
 
-    log.clear_edits(handle=first, confirm_mutation=True)
+    log.clear_edits(handle=first)
     remaining = log._intervention_spec.hook_specs
     assert len(remaining) == 1
     assert remaining[0].handle in second
 
-    log.clear_edits(handle=list(second), confirm_mutation=True)
+    log.clear_edits(handle=list(second))
     assert log._intervention_spec.hook_specs == []
 
 
@@ -241,16 +248,18 @@ class _SignBranch(torch.nn.Module):
 
 
 def test_save_new_outs_redirect_names_the_graph_checked_refresh() -> None:
-    """The ``save_new_outs`` refusal names ``run(inputs=)``, and that door refuses a changed graph.
+    """The ``save_new_outs`` refusal names ``run_transaction(inputs=)``, and that door refuses a changed graph.
 
     ``save_new_outs`` refreshed payloads against the recorded graph and raised a
     ``ValueError`` when an input changed it. The legacy ``run(model, x)`` re-captures
     and only warns on divergence, so a redirect to it would drop the mismatch raise.
-    ``run(inputs=)`` refuses the training tutorial's shape-diverging input at the input
+    ``run_transaction(inputs=)`` refuses the training tutorial's shape-diverging input at the input
     contract and a same-shape input that changes the graph at the refresh compare.
     """
 
-    shape_model = _ShapeBranch()  # run(inputs=) needs the live model; the trace holds it weakly
+    shape_model = (
+        _ShapeBranch()
+    )  # run_transaction(inputs=) needs the live model; the trace holds it weakly
     trace = tl.trace(
         shape_model,
         torch.ones(2, 4, requires_grad=True),
@@ -259,9 +268,9 @@ def test_save_new_outs_redirect_names_the_graph_checked_refresh() -> None:
     try:
         with pytest.raises(FacadeTeachingError) as excinfo:
             _ = trace.save_new_outs
-        assert "run(inputs=" in str(excinfo.value)
+        assert "run_transaction(inputs=" in str(excinfo.value)
         with pytest.raises(ValueError, match="does not match"):
-            trace.run(inputs=torch.ones(2, 5, requires_grad=True), seed=7)
+            trace.run_transaction(inputs=torch.ones(2, 5, requires_grad=True), seed=7)
         assert trace.options.detach_saved_activations is True
     finally:
         trace.cleanup()
@@ -270,7 +279,7 @@ def test_save_new_outs_redirect_names_the_graph_checked_refresh() -> None:
     trace = tl.trace(sign_model, torch.ones(2, 4), capture=CaptureOptions(seed=7))
     try:
         with pytest.raises(ValueError) as mismatch:
-            trace.run(inputs=-torch.ones(2, 4), seed=7)
+            trace.run_transaction(inputs=-torch.ones(2, 4), seed=7)
         refusal: Any = mismatch.value
         assert refusal.fields["code"] == "call_structure_mismatch", refusal
     finally:

@@ -83,9 +83,10 @@ EAGER_SDPA_FACET_DIFF: dict[str, dict[str, dict[str, tuple[str, ...]]]] = {
     "llama": {"gqa_attention": dict(_EAGER_REAL_OPS)},
     "vit": {"gqa_attention": dict(_EAGER_REAL_OPS)},
     "distilbert": {"distilbert_attention": dict(_EAGER_REAL_OPS)},
-    # BERT's output projection lives OUTSIDE BertSelfAttention (in
-    # BertSelfOutput), so per-head result is structurally absent on both
-    # implementations and only the real-op trio differs.
+    # BERT's output projection lives OUTSIDE BertSelfAttention (in the
+    # BertAttention wrapper's output.dense). Both rows now read it for the
+    # per-head result, but BERT's floor does not list result, so only the
+    # real-op trio differs here.
     "bert": {"bert_self_attention": {"sdpa_only": (), "eager_only": ("pattern", "scores", "z")}},
     # qwen2 (forks.10) rides the Llama gqa recipe; clip has its own
     # clip_attention recipe on both towers. Both show the same honest
@@ -309,19 +310,6 @@ class DatedGap:
 
 
 DATED_GAPS: tuple[DatedGap, ...] = (
-    DatedGap(
-        gap_id="flash-attention-2-impl",
-        dated="2026-10-12",
-        ruling="U42.1",
-        owner="the GPU real-model leg (campaign 2)",
-        closes_when=(
-            "a GPU leg captures and validates a real-model family under"
-            " attn_implementation='flash_attention_2'"
-        ),
-        notes="FA2 kernels need CUDA and the flash-attn package; every real-model"
-        " leg today is CPU, so no family runs the flash_attention_2"
-        " implementation (FamilySpec.impls stays eager/sdpa)",
-    ),
     DatedGap(
         gap_id="vjepa2-full-clip-forward-validation",
         dated="2026-10-12",

@@ -142,9 +142,9 @@ def active_episode_step() -> int | None:
 def default_break_teaching(step: int, exogenous_positions: int | None) -> str:
     """The DEFAULT-arm teaching text (trace-verb verdict, verbatim draft).
 
-    ``tl.conversation(...)`` and ``split_episode()`` are the verdict's named
-    chain spellings (future surfaces); the naming sprint may polish the
-    wording, the semantics are pinned.
+    A chain is a ``tl.Bundle(...)`` of the per-segment traces (the sole Bundle
+    constructor); ``split_episode()`` is the verdict's named segment spelling
+    (a future surface). The semantics are pinned.
     """
 
     if exogenous_positions is not None:
@@ -158,8 +158,8 @@ def default_break_teaching(step: int, exogenous_positions: int | None) -> str:
         "this is not one replayable episode: it is chain-shaped at this "
         "join. Token-series reads and whole-episode replay are refused; "
         "ops, values, graph, and per-segment replay are unaffected. Express "
-        "the run as a chain: `tl.conversation(...)` with the exogenous span "
-        "at a tool join, or `split_episode()` for attested segments. To "
+        "the run as a chain: a `tl.Bundle(...)` of the per-segment traces with "
+        "the exogenous span at a tool join, or `split_episode()` for attested segments. To "
         "refuse at capture time instead, declare `feed='closed'`."
     )
 

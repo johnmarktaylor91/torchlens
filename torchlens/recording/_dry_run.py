@@ -1,79 +1,120 @@
-"""Dry-run tracing API for fastlog predicates."""
+"""The payload-free dry-run view of a predicate pass (``tl.recording.DryRun``)."""
 
 from __future__ import annotations
 
-from typing import Any
+__tl_layer__ = "L2"
 
-from torch import nn
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
-from .._input_coerce import _coerce_input_args
-from ..options import CaptureOptions
-from ._options import PredicateFn
-from ._recorder import Recorder
-from ._types import DryRun
+from .._ir.predicate import CaptureSpec, PredicateDecision, PredicateFailure, RecordContext
+
+if TYPE_CHECKING:
+    from ..viz._drawing import Drawing
+
+__all__ = ["DryRun"]
 
 
-def dry_run(
-    model: nn.Module,
-    inputs: Any,
-    input_kwargs: dict[str, Any] | None = None,
-    *,
-    save: PredicateFn | None = None,
-    history_size: int = 8,
-    include_source_events: bool = False,
-    seed: int | None = None,
-) -> DryRun:
-    """Run predicates over one forward pass without retaining tensor payloads.
-
-    Parameters
-    ----------
-    model:
-        PyTorch module to execute.
-    inputs:
-        Tensor, list, or tuple of positional model inputs.
-    input_kwargs:
-        Optional keyword arguments for the model call.
-    save, history_size, include_source_events, seed:
-        Fastlog dry-run options. Predicate exceptions propagate immediately.
-
-    Returns
-    -------
-    DryRun
-        Chronological event contexts, one capture decision per op event and any
-        accumulated predicate failures.
+@dataclass(frozen=True, slots=True)
+class DryRun:
+    """Predicate dry-run trace without retained tensor payloads.
 
     Examples
     --------
     >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
-    >>> type(plan).__name__, len(plan.contexts) > 0, plan.predicate_failures
-    ('DryRun', True, ())
+    >>> type(plan).__name__, len(plan.contexts) > 0
+    ('DryRun', True)
     """
 
-    inputs = _coerce_input_args(model, inputs)
-    recorder_kwargs: dict[str, Any] = {
-        "save": save,
-        "history_size": history_size,
-        "include_source_events": include_source_events,
-        "on_predicate_error": "fail-fast",
-    }
-    if seed is not None:
-        recorder_kwargs["capture"] = CaptureOptions(seed=seed)
-    recorder_cm = Recorder(
-        model,
-        **recorder_kwargs,
-    )
+    contexts: tuple[RecordContext, ...]
+    decisions: tuple[bool, ...] = ()
+    predicate_failures: tuple[PredicateFailure, ...] = ()
 
-    with recorder_cm as recorder:
-        if recorder._state is None:  # noqa: SLF001
-            raise RuntimeError("Recorder state was not initialized")
-        if recorder._capture_events is None:  # noqa: SLF001
-            raise RuntimeError("Recorder capture events were not initialized")
-        recorder._state.no_tensor_capture = True  # noqa: SLF001
-        recorder(inputs, input_kwargs)
-        contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
-        decisions = tuple(
-            bool(getattr(event, "predicate_matched", False))
-            for event in recorder._capture_events.op_events  # noqa: SLF001
+    @property
+    def events(self) -> tuple[RecordContext, ...]:
+        """Return chronological dry-run events."""
+
+        return self.contexts
+
+    def print_tree(self) -> str:
+        """Return a unicode-indented event tree for this trace."""
+
+        from .._visualization.fastlog_live import print_tree
+
+        return print_tree(self)
+
+    def to_pandas(self) -> Any:
+        """Return a pandas DataFrame representation of trace events."""
+
+        from .._visualization.fastlog_live import to_pandas
+
+        return to_pandas(self)
+
+    def draw(self, **kwargs: Any) -> Drawing:
+        """Render a flat Graphviz graph of trace operation events.
+
+        This is the dry run's flat event view: it accepts only ``vis_outpath``,
+        ``vis_save_only`` and ``vis_fileformat``. The full drawing options
+        (``vis_mode``, nesting depth, rolled recurrent views) belong to
+        ``Trace.draw``; record the model with ``tl.record`` and call
+        ``Recording.to_trace().draw(...)`` for them.
+
+        Returns
+        -------
+        Drawing
+            The picture; ``str()`` of it is the DOT source.
+        """
+
+        from .._visualization.fastlog_live import draw
+
+        return draw(self, **kwargs)
+
+    def summary(self) -> str:
+        """Return a concise human-readable dry-run summary."""
+
+        from .._visualization.fastlog_live import summary
+
+        return summary(self)
+
+    def timeline_html(self) -> Any:
+        """Return an IPython HTML timeline for this trace."""
+
+        from .._visualization.fastlog_live import timeline_html
+
+        return timeline_html(self)
+
+    def filter(
+        self,
+        other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
+    ) -> DryRun:
+        """Return a new trace with decisions from a new op predicate.
+
+        Parameters
+        ----------
+        other_keep_op:
+            Predicate for op, input, and buffer events. Module boundary
+            events have no predicate slot and are never re-selected.
+
+        Returns
+        -------
+        RecordingTrace
+            New trace sharing the same event tuple and predicate failures.
+        """
+
+        from .._capture.predicates import _normalize_capture_decision
+
+        decisions: list[bool] = []
+        for ctx in self.contexts:
+            predicate = None if ctx.kind in {"module_enter", "module_exit"} else other_keep_op
+            result = predicate(ctx) if predicate is not None else False
+            spec = _normalize_capture_decision(result, ctx, False)
+            if not isinstance(spec, CaptureSpec):
+                decisions.append(True)
+                continue
+            decisions.append(spec.save_out or spec.save_metadata)
+        return DryRun(
+            contexts=self.contexts,
+            decisions=tuple(decisions),
+            predicate_failures=self.predicate_failures,
         )
-        failures = tuple(recorder._state.predicate_failures)  # noqa: SLF001
-    return DryRun(contexts=contexts, decisions=decisions, predicate_failures=failures)

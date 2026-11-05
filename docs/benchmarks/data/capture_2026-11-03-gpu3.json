@@ -1,0 +1,1070 @@
+{
+ "measured_on": "2026-11-03",
+ "host": {
+  "name": "a 256-core AMD EPYC 7662 Linux GPU node with an NVIDIA L40 (46 GiB), one torch thread per process, load average 56 to 74 (a shared node)",
+  "cpu": "AMD EPYC 7662 64-Core Processor",
+  "cpus": 256,
+  "gpu": "NVIDIA L40",
+  "torch_threads": 1
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CUDA 12.6 build)",
+  "transformers": "5.18.0",
+  "torchlens": "development branch, 2026-11-03",
+  "nnsight": "0.8.1",
+  "transformer_lens": "4.3.0"
+ },
+ "harness": "TL_BENCH_DEVICE=cuda python -m benchmarks.capture.mi_workloads.matrix --model gpt2; benchmarks/capture/driver.py --device cuda --subjects lstm-tagger,resnet18; generation: tl.record(model, ids, save=<every block MLP and the final layer norm>, generate_kwargs={max_new_tokens: N, min_new_tokens: N, do_sample: False, use_cache: True}) on EleutherAI/pythia-70m float32",
+ "page_rows": [
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | forward hooks | 168 ms (167 ms to 173 ms) |",
+   "cell": "cache/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | nnsight 0.8.1 | 200 ms (194 ms to 200 ms) |",
+   "cell": "cache/nnsight"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 369 ms (368 ms to 376 ms) |",
+   "cell": "cache/tlens"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.record` | 8.35 s (8.07 s to 9.84 s) |",
+   "cell": "cache/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, cache every block's output for 256 sequences of 32 tokens in batches of 16 (16 forwards), n=3 | `tl.trace` (full trace) | 49.67 s (48.81 s to 49.85 s) |",
+   "cell": "cache/tl_trace"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | forward hooks | 120 ms (119 ms to 120 ms) |",
+   "cell": "steer_sweep/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | nnsight 0.8.1 | 135 ms (134 ms to 139 ms) |",
+   "cell": "steer_sweep/nnsight"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 259 ms (250 ms to 260 ms) |",
+   "cell": "steer_sweep/tlens"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.record` | 6.30 s (6.28 s to 6.39 s) |",
+   "cell": "steer_sweep/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.trace` (full trace) | 23.84 s (23.22 s to 24.57 s) |",
+   "cell": "steer_sweep/tl_trace"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | forward hooks | 447 ms (447 ms to 454 ms) |",
+   "cell": "patch_sweep/hooks"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | nnsight 0.8.1 | 524 ms (504 ms to 536 ms) |",
+   "cell": "patch_sweep/nnsight"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | TransformerLens 4.3.0 (its own GPT-2, hooks on `hook_resid_post`) | 1.11 s (1.08 s to 1.14 s) |",
+   "cell": "patch_sweep/tlens"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.record` | 26.29 s (26.03 s to 26.74 s) |",
+   "cell": "patch_sweep/tl_record"
+  },
+  {
+   "section": "gpt2_gpu",
+   "text": "| GPT-2 small, GPU, activation patching sweep, 50 patched forwards of 16 tokens, n=3 | `tl.trace` (full trace) | 92.10 s (91.33 s to 93.01 s) |",
+   "cell": "patch_sweep/tl_trace"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | plain forward, nothing attached | 0.36 ms (0.35 ms to 0.36 ms) |",
+   "cell": "A/single_module_output/raw/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | forward hook | 0.37 ms (0.37 ms to 0.38 ms) |",
+   "cell": "A/single_module_output/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | nnsight 0.8.1 | 0.44 ms (0.44 ms to 0.46 ms) |",
+   "cell": "A/single_module_output/nnsight/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.record(..., save=tl.module(site))` | 18.16 ms (17.96 ms to 19.11 ms) |",
+   "cell": "A/single_module_output/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.trace(..., save=tl.module(site))` | 35.26 ms (35.17 ms to 37.08 ms) |",
+   "cell": "A/single_module_output/tl_trace_sparse/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output, n=3 processes | `tl.extract` | 36.25 ms (35.57 ms to 38.38 ms) |",
+   "cell": "A/single_module_output/tl_extract/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | forward hook | 0.39 ms (0.39 ms to 0.41 ms) |",
+   "cell": "A/replacement_edit/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | nnsight 0.8.1 | 0.49 ms (0.48 ms to 0.50 ms) |",
+   "cell": "A/replacement_edit/nnsight/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.when(...).bind(model)` | 0.77 ms (0.75 ms to 0.79 ms) |",
+   "cell": "A/replacement_edit/tl_bind/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module replaced by zeros, n=3 processes | `tl.record(..., intervene=tl.when(...))` | 18.61 ms (18.60 ms to 19.79 ms) |",
+   "cell": "A/replacement_edit/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | forward hooks | 2.55 ms (2.49 ms to 2.67 ms) |",
+   "cell": "A/repeated_steering/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | nnsight 0.8.1 | 3.62 ms (3.49 ms to 3.73 ms) |",
+   "cell": "A/repeated_steering/nnsight/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.when(...).bind(model)` | 7.85 ms (7.45 ms to 8.21 ms) |",
+   "cell": "A/repeated_steering/tl_bind/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.record(..., intervene=...)` per strength | 150.25 ms (148.79 ms to 157.70 ms) |",
+   "cell": "A/repeated_steering/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 307.09 ms (306.43 ms to 324.52 ms) |",
+   "cell": "A/repeated_steering/tl_trace_sparse/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 1.46 ms (1.37 ms to 1.48 ms) |",
+   "cell": "A/ordered_dataset_features/hooks/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | nnsight 0.8.1 | 1.86 ms (1.76 ms to 1.91 ms) |",
+   "cell": "A/ordered_dataset_features/nnsight/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 72.40 ms (71.18 ms to 75.21 ms) |",
+   "cell": "A/ordered_dataset_features/tl_record/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.extract_dataset` | 159.69 ms (149.83 ms to 202.53 ms) |",
+   "cell": "A/ordered_dataset_features/tl_extract_dataset/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | plain forward | 0.35 ms (0.35 ms to 0.36 ms) |",
+   "cell": "B/raw_forward/reference/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 0.36 ms (0.36 ms to 0.38 ms) |",
+   "cell": "B/raw_forward_wrapped/torchlens/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | forward hooks on every module | 0.39 ms (0.39 ms to 0.39 ms) |",
+   "cell": "B/hooks_all_modules/reference/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | `tl.record` (sparse recorder) | 18.20 ms (18.06 ms to 19.07 ms) |",
+   "cell": "B/record/torchlens/lstm-tagger"
+  },
+  {
+   "section": "lstm_gpu",
+   "text": "| LSTM tagger, GPU, full forward, n=3 processes | `tl.trace(model, x)` (full trace) | 36.66 ms (36.39 ms to 38.00 ms) |",
+   "cell": "B/full_trace_default/torchlens/lstm-tagger"
+  }
+ ],
+ "gpt2_gpu": {
+  "cells": {
+   "cache/hooks": {
+    "median_s": 0.168,
+    "min_s": 0.167,
+    "max_s": 0.173,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1288.4,
+    "peak_device_mib": 1173.30859375,
+    "max_abs_diff_vs_hooks": null
+   },
+   "cache/nnsight": {
+    "median_s": 0.2,
+    "min_s": 0.194,
+    "max_s": 0.2,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1285.2,
+    "peak_device_mib": 1182.3203125,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "cache/tlens": {
+    "median_s": 0.369,
+    "min_s": 0.368,
+    "max_s": 0.376,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1385.1,
+    "peak_device_mib": 1700.96337890625,
+    "max_abs_diff_vs_hooks": 3.0517578125e-05
+   },
+   "cache/tl_record": {
+    "median_s": 8.354,
+    "min_s": 8.068,
+    "max_s": 9.842,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1287.0,
+    "peak_device_mib": 1766.62109375,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "cache/tl_trace": {
+    "median_s": 49.665,
+    "min_s": 48.814,
+    "max_s": 49.847,
+    "n": 3,
+    "n_forwards": 16,
+    "peak_rss_mib": 1355.1,
+    "peak_device_mib": 1364.5546875,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "steer_sweep/hooks": {
+    "median_s": 0.12,
+    "min_s": 0.119,
+    "max_s": 0.12,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1286.7,
+    "peak_device_mib": 715.50244140625,
+    "max_abs_diff_vs_hooks": null
+   },
+   "steer_sweep/nnsight": {
+    "median_s": 0.135,
+    "min_s": 0.134,
+    "max_s": 0.139,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1288.8,
+    "peak_device_mib": 717.51416015625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "steer_sweep/tlens": {
+    "median_s": 0.259,
+    "min_s": 0.25,
+    "max_s": 0.26,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1398.5,
+    "peak_device_mib": 1248.3154296875,
+    "max_abs_diff_vs_hooks": 9.918212890625e-05
+   },
+   "steer_sweep/tl_record": {
+    "median_s": 6.304,
+    "min_s": 6.275,
+    "max_s": 6.39,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1289.2,
+    "peak_device_mib": 1210.49072265625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "steer_sweep/tl_trace": {
+    "median_s": 23.835,
+    "min_s": 23.221,
+    "max_s": 24.573,
+    "n": 3,
+    "n_forwards": 12,
+    "peak_rss_mib": 1287.0,
+    "peak_device_mib": 991.73779296875,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "patch_sweep/hooks": {
+    "median_s": 0.447,
+    "min_s": 0.447,
+    "max_s": 0.454,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1285.1,
+    "peak_device_mib": 491.568359375,
+    "max_abs_diff_vs_hooks": null
+   },
+   "patch_sweep/nnsight": {
+    "median_s": 0.524,
+    "min_s": 0.504,
+    "max_s": 0.536,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1289.2,
+    "peak_device_mib": 491.61572265625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "patch_sweep/tlens": {
+    "median_s": 1.106,
+    "min_s": 1.082,
+    "max_s": 1.142,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1385.2,
+    "peak_device_mib": 1101.35498046875,
+    "max_abs_diff_vs_hooks": 1.52587890625e-05
+   },
+   "patch_sweep/tl_record": {
+    "median_s": 26.289,
+    "min_s": 26.03,
+    "max_s": 26.736,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1289.1,
+    "peak_device_mib": 506.8212890625,
+    "max_abs_diff_vs_hooks": 0.0
+   },
+   "patch_sweep/tl_trace": {
+    "median_s": 92.1,
+    "min_s": 91.326,
+    "max_s": 93.013,
+    "n": 3,
+    "n_forwards": 50,
+    "peak_rss_mib": 1287.2,
+    "peak_device_mib": 499.95458984375,
+    "max_abs_diff_vs_hooks": 0.0
+   }
+  },
+  "env": [
+   {
+    "kind": "env",
+    "tool": "hooks",
+    "host": "benchmark-host",
+    "python": "3.10.19",
+    "torch": "2.13.0+cu126",
+    "transformers": "5.18.0",
+    "threads": 1,
+    "loadavg": [
+     72.91748046875,
+     72.4990234375,
+     56.55224609375
+    ],
+    "cpus": 255,
+    "device": "cuda",
+    "gpu": "NVIDIA L40",
+    "torchlens": "2.36.3",
+    "model": "gpt2",
+    "workload": "cache",
+    "load_s": 4.285239779856056
+   }
+  ]
+ },
+ "lstm_gpu": {
+  "groups": {
+   "A/single_module_output/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.36,
+    "min_ms": 0.35,
+    "max_ms": 0.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/single_module_output/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.37,
+    "min_ms": 0.37,
+    "max_ms": 0.38,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/single_module_output/nnsight/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.44,
+    "min_ms": 0.44,
+    "max_ms": 0.46,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 35.26,
+    "min_ms": 35.17,
+    "max_ms": 37.08,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 18.16,
+    "min_ms": 17.96,
+    "max_ms": 19.11,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.25,
+    "min_ms": 35.57,
+    "max_ms": 38.38,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/matched_retained/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.36,
+    "min_ms": 0.35,
+    "max_ms": 0.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/matched_retained/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.4,
+    "min_ms": 0.39,
+    "max_ms": 0.4,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/matched_retained/nnsight/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.46,
+    "min_ms": 0.46,
+    "max_ms": 0.48,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 38.45,
+    "min_ms": 36.31,
+    "max_ms": 51.28,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 19.44,
+    "min_ms": 18.53,
+    "max_ms": 20.02,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 39.03,
+    "min_ms": 37.39,
+    "max_ms": 39.2,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/replacement_edit/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.36,
+    "min_ms": 0.35,
+    "max_ms": 0.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/replacement_edit/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.39,
+    "min_ms": 0.39,
+    "max_ms": 0.41,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/replacement_edit/nnsight/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.49,
+    "min_ms": 0.48,
+    "max_ms": 0.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 38.74,
+    "min_ms": 37.58,
+    "max_ms": 39.58,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 18.61,
+    "min_ms": 18.6,
+    "max_ms": 19.79,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_bind/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.77,
+    "min_ms": 0.75,
+    "max_ms": 0.79,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.92,
+    "min_ms": 1.92,
+    "max_ms": 2.05,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/repeated_steering/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.55,
+    "min_ms": 2.49,
+    "max_ms": 2.67,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/repeated_steering/nnsight/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.62,
+    "min_ms": 3.49,
+    "max_ms": 3.73,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 307.09,
+    "min_ms": 306.43,
+    "max_ms": 324.52,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 150.25,
+    "min_ms": 148.79,
+    "max_ms": 157.7,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_bind/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 7.85,
+    "min_ms": 7.45,
+    "max_ms": 8.21,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/same_site_gradient/raw/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/hooks/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/nnsight/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "A/same_site_gradient/captum/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "AssertionError: Given input is not a torch.Tensor"
+   },
+   "A/ordered_dataset_features/raw/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.27,
+    "min_ms": 1.21,
+    "max_ms": 1.3,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/ordered_dataset_features/hooks/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.46,
+    "min_ms": 1.37,
+    "max_ms": 1.48,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/ordered_dataset_features/nnsight/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1.86,
+    "min_ms": 1.76,
+    "max_ms": 1.91,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_trace_sparse/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 146.93,
+    "min_ms": 142.06,
+    "max_ms": 149.56,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_record/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 72.4,
+    "min_ms": 71.18,
+    "max_ms": 75.21,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 143.54,
+    "min_ms": 142.41,
+    "max_ms": 149.68,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract_dataset/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 159.69,
+    "min_ms": 149.83,
+    "max_ms": 202.53,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tv_fx/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "symbolic tracing refuses this model (data-dependent control flow)"
+   },
+   "A/ordered_dataset_features/thingsvision/lstm-tagger": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision has no release that installs beside this torch, torchvision and transformers (see peers.txt); thingsvision not importable: ModuleNotFoundError: No module named 'thingsvision'"
+   },
+   "B/raw_forward/reference/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.35,
+    "min_ms": 0.35,
+    "max_ms": 0.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/hooks_all_modules/reference/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.39,
+    "min_ms": 0.39,
+    "max_ms": 0.39,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/raw_forward_wrapped/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.36,
+    "min_ms": 0.36,
+    "max_ms": 0.38,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_default/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 36.66,
+    "min_ms": 36.39,
+    "max_ms": 38.0,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_declared/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 35.83,
+    "min_ms": 35.79,
+    "max_ms": 40.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/record/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 18.2,
+    "min_ms": 18.06,
+    "max_ms": 19.07,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/validate/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 372.44,
+    "min_ms": 371.58,
+    "max_ms": 415.72,
+    "processes": 3,
+    "samples_per_process": [
+     8,
+     11,
+     11
+    ]
+   },
+   "B/save_load/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 187.84,
+    "min_ms": 173.49,
+    "max_ms": 195.68,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/backward_capture/torchlens/lstm-tagger": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: cudnn RNN backward can only be called in training mode"
+   },
+   "B/draw/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 67.78,
+    "min_ms": 65.22,
+    "max_ms": 72.87,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/bundle_compare/torchlens/lstm-tagger": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 79.72,
+    "min_ms": 78.99,
+    "max_ms": 80.04,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   }
+  },
+  "meta": {
+   "environment": null,
+   "versions": null,
+   "protocol": null,
+   "aa_noise": null
+  },
+  "missing": [
+   "A/single_module_output/tv_fx: symbolic tracing refuses this model (data-dependent control flow)",
+   "A/ordered_dataset_features/tv_fx: symbolic tracing refuses this model (data-dependent control flow)",
+   "A/same_site_gradient/hooks: RuntimeError: cudnn RNN backward can only be called in training mode",
+   "A/same_site_gradient/captum: AssertionError: Given input is not a torch.Tensor",
+   "A/same_site_gradient/tl_trace_sparse: RuntimeError: cudnn RNN backward can only be called in training mode"
+  ]
+ }
+}

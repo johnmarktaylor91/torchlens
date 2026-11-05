@@ -230,7 +230,8 @@ def test_lstm_three_outputs_distinct_layers() -> None:
 def test_lstm_module_call_outputs_and_structure() -> None:
     """ModuleCall exposes output OpLogs and a container spec."""
 
-    call = _lstm_trace().module_calls["lstm:1"]
+    trace = _lstm_trace()
+    call = trace.module_calls["lstm:1"]
     assert len(call.output_ops) == 3
     assert call.output_structure is not None
     assert call.output_structure.kind == "tuple"
@@ -240,7 +241,8 @@ def test_lstm_module_call_outputs_and_structure() -> None:
 def test_lstm_module_out_raises_specific_error() -> None:
     """Ambiguous single-output access raises the new specific error."""
 
-    lstm = _lstm_trace().modules["lstm"]
+    trace = _lstm_trace()
+    lstm = trace.modules["lstm"]
     with pytest.raises(MultiOutputModuleError):
         _ = lstm.out
     with pytest.raises(TorchLensError):

@@ -54,14 +54,14 @@ nondeterministic-capture-context runs report `not_applicable`; `attested` always
 
 ### Sparse runnable execution
 
-`trace.run(inputs=x, seed=...)` is the provider-neutral execution spelling. A live Trace delegates
+`trace.run_transaction(inputs=x, seed=...)` is the provider-neutral execution spelling. A live Trace delegates
 on a fork to the existing `save_new_outs` fast capture path. The live refresh projector's
 buffer-sink refusal is TRAINING-MODE AWARE (D18, by design): eval-mode BatchNorm
 (every buffer sink carries derived write evidence `buffer_value_changed=False` with agreeing
 mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-sensitive norm
 call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
 advanced in that same module call) are refresh-eligible and runnable through
-`trace.run(inputs=...)`, on the DEFAULT path and under `until=`: a default capture is a pure
+`trace.run_transaction(inputs=...)`, on the DEFAULT path and under `until=`: a default capture is a pure
 observer and a default run restores the declared state it changed, so every run starts
 from the state the trace was captured from. The legacy `save_new_outs` refresh restores nothing
 and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a
@@ -78,7 +78,7 @@ and rolls back by default; `on_divergence="return"` is the sole opt-in and retur
 Trace refused by validation, export, faithful comparison, and path-assuming intervention chaining.
 Incomplete witness coverage is `unverifiable`, never `verified`; numeric attestation is
 `not_applicable` for sparse-only or ineligible activation-payload runs. Model outputs with ZERO
-tensor leaves remain subject to the output-container rules below. `trace.run(inputs=x, fast=True)`
+tensor leaves remain subject to the output-container rules below. `trace.run_transaction(inputs=x, fast=True)`
 is the explicit guarded static-loop exception to source immutability: live traces execute native
 `forward()` with targeted module hooks (and scoped functional collection only for the functional ops
 the capture saved: an explicit functional `save=` predicate or the save-all default); loaded traces perform one ordinary verified run, then reuse staged

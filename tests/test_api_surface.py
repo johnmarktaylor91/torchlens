@@ -103,7 +103,6 @@ CANONICAL_SUBMODULES = [
     "torchlens.errors",
     "torchlens.examples",
     "torchlens.experimental",
-    "torchlens.experimental.dagua",
     "torchlens.export",
     "torchlens.recording",
     "torchlens.fingerprint",

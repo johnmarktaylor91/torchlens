@@ -7,7 +7,6 @@ import from it.
 from __future__ import annotations
 
 import importlib
-import operator
 from collections.abc import Callable, Collection
 from typing import Any, Literal, cast
 
@@ -25,11 +24,14 @@ from .._utils._callable_safety import (
     real_callable_module,
     unsafe_callable_reason,
 )
-from .._utils._torch_compat import (
-    get_variable_functions_class,
-    resolve_runnable_torch_alias,
+from .._utils._runnable_alias_resolver import resolve_runnable_torch_alias
+from .._utils._torch_compat import get_variable_functions_class
+from .._utils._torch_symbols import (
+    ALLOWED_EXACT_ROOTS,
+    ENUMERATED_TORCH_NAMESPACES,
+    enumerated_torch_callable,
+    torch_attr,
 )
-from .._utils._torch_symbols import torch_attr
 from ._types import FunctionRegistryKey
 from .errors import (
     ReplayPreconditionError,
@@ -239,12 +241,6 @@ def resolve_function_registry_key(
         has not been explicitly trusted.
     """
 
-    _fixed_roots: dict[str, Any] = {
-        "torch": torch,
-        "torch.Tensor": torch.Tensor,
-        "torch.nn.functional": torch.nn.functional,
-        "operator": operator,
-    }
     try:
         internal_builtin = _resolve_internal_torch_builtin_key(key)
         if internal_builtin is not None:
@@ -257,37 +253,9 @@ def resolve_function_registry_key(
                     import_path=key.import_path,
                 )
             return internal_builtin
-        if key.namespace in _fixed_roots:
-            # r49 secF_1: the top-level ``torch`` root must resolve through ``torch_attr``
-            # (identifier-only ``torch.__dict__`` read) so an attacker qualname (``onnx`` /
-            # ``_dynamo`` / ``has_cuda``) cannot fire torch's PEP-562 lazy ``__getattr__``
-            # (unrequested submodule import / deprecated ``replacement()`` shim) BEFORE the
-            # purity gate below rejects it -- the co-located sibling of the runnable-load site.
-            # A genuinely-missing torch attr raises ``AttributeError`` exactly as the prior
-            # bare ``getattr`` did; non-torch fixed roots carry no lazy hazard.
-            _root = _fixed_roots[key.namespace]
-            if _root is torch:
-                _resolved = torch_attr(key.qualname)
-                if _resolved is None:
-                    raise AttributeError(f"module 'torch' has no attribute {key.qualname!r}")
-                resolved = cast(Callable[..., Any], _resolved)
-            else:
-                resolved = cast(Callable[..., Any], getattr(_root, key.qualname))
-            # SECURITY BOUNDARY (tripwire). These fixed namespaces also expose
-            # side-effecting callables -- above all torch.load / torch.save (both
-            # in torch.serialization), which unpickle attacker files (RCE) or
-            # write to arbitrary paths. A bundle-supplied key is UNTRUSTED, so
-            # only pure, side-effect-free forward/tensor ops may resolve. Gating
-            # on the wrapped-op inventory would NOT suffice (torch.load is in it).
-            if not is_pure_forward_callable(resolved):
-                raise UntrustedCallableError(
-                    "Refusing to resolve bundle-supplied callable "
-                    f"{key.namespace}.{key.qualname} ({unsafe_callable_reason(resolved)}); "
-                    "it is not a pure forward/tensor op and can execute side effects.",
-                    code="custom_callable_not_pure",
-                    import_path=f"{key.namespace}.{key.qualname}",
-                )
-            return resolved
+        allowlisted = _resolve_allowlisted_namespace_key(key)
+        if allowlisted is not None:
+            return allowlisted
         if key.namespace == "custom":
             if not key.import_path:
                 # SF-07: a malformed spec refusal is a typed configuration door
@@ -598,6 +566,65 @@ def resolve_function_registry_key(
         raise ReplayPreconditionError(f"Could not resolve function registry key {key!r}") from exc
 
     raise ReplayPreconditionError(f"Unknown function registry namespace {key.namespace!r}")
+
+
+def _resolve_allowlisted_namespace_key(key: FunctionRegistryKey) -> Callable[..., Any] | None:
+    """Resolve a non-custom key on the shared allowlisted roots, purity-gated.
+
+    The namespaces come from ONE table shared with the sparse-run resolver
+    (:data:`torchlens._utils._torch_symbols.ALLOWED_EXACT_ROOTS` and
+    :data:`~torchlens._utils._torch_symbols.ENUMERATED_TORCH_NAMESPACES`), and the lookup
+    follows the same ladder: one attribute on an exact root, else the dotted stock path on
+    an enumerated namespace. So load-time verification admits exactly the callables
+    ``runnable_load`` admits, never an arbitrary ``torch.*`` walk or an import by name.
+
+    Parameters
+    ----------
+    key:
+        Saved function registry key.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The resolved pure callable, or ``None`` when ``key.namespace`` is not listed.
+
+    Raises
+    ------
+    AttributeError
+        If the namespace is listed but holds no such callable.
+    UntrustedCallableError
+        If the resolved callable is not a pure forward/tensor op.
+    """
+
+    root = ALLOWED_EXACT_ROOTS.get(key.namespace)
+    if root is None and key.namespace not in ENUMERATED_TORCH_NAMESPACES:
+        return None
+    resolved: Any = None
+    if root is not None:
+        # r49 secF_1: the top-level ``torch`` root resolves through ``torch_attr``
+        # (identifier-only ``torch.__dict__`` read) so an attacker qualname (``onnx`` /
+        # ``_dynamo``) cannot fire torch's PEP-562 lazy ``__getattr__`` before the purity
+        # gate below rejects it. Other fixed roots carry no lazy hazard.
+        resolved = torch_attr(key.qualname) if root is torch else getattr(root, key.qualname, None)
+    if resolved is None:
+        hit = enumerated_torch_callable(f"{key.namespace}.{key.qualname}")
+        if hit is None:
+            raise AttributeError(f"{key.namespace!r} has no allowlisted callable {key.qualname!r}")
+        resolved = hit[0]
+    # SECURITY BOUNDARY (tripwire). These namespaces also expose side-effecting callables --
+    # above all torch.load / torch.save (both in torch.serialization), which unpickle attacker
+    # files (RCE) or write to arbitrary paths. A bundle-supplied key is UNTRUSTED, so only
+    # pure, side-effect-free forward/tensor ops may resolve. Gating on the wrapped-op
+    # inventory would NOT suffice (torch.load is in it).
+    if not is_pure_forward_callable(resolved):
+        raise UntrustedCallableError(
+            "Refusing to resolve bundle-supplied callable "
+            f"{key.namespace}.{key.qualname} ({unsafe_callable_reason(resolved)}); "
+            "it is not a pure forward/tensor op and can execute side effects.",
+            code="custom_callable_not_pure",
+            import_path=f"{key.namespace}.{key.qualname}",
+        )
+    return cast(Callable[..., Any], resolved)
 
 
 def _import_ref_registry_key(module_name: str, qualname: str) -> FunctionRegistryKey:

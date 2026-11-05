@@ -115,4 +115,4 @@ def test_audit_trace_on_failed_partial_reports_exception_with_context() -> None:
     assert "find_nan" in by_check
     assert audit.skipped  # partial audits disclose unrun full-trace checks
     text = repr(audit)
-    assert "issue(s)" in text and "skipped" in text
+    assert "2 findings" in text and "skipped" in text

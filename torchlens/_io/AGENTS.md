@@ -10,7 +10,9 @@ hostile input, and every load path here is fail-closed.
   remapped target is still gated through the allowlist.
 - `cleanup_tmp()` removes stale partial-save temp directories.
 - `_root_manifest.load_by_root_manifest()` routes merged, fastlog and extraction directories by
-  their root manifest (after the earlier-major refusal) before `load()` parses a trace manifest.
+  their root manifest before `load()` parses a trace manifest. Merged, fastlog and current-format
+  manifests first pass the release floor (`raise_if_saved_by_older_major`: a `torchlens_version`
+  stamp below `FIRST_FORMAT3_RELEASE` refuses); extraction takes it in `load_extraction`.
 
 ## _safe_unpickle.py
 - `SafeBundleUnpickler` is the restricted default-deny unpickler (class allowlist, mirrors
@@ -21,7 +23,7 @@ hostile input, and every load path here is fail-closed.
   `allowed_custom_callable_modules` allowlist, which stays enforced even alongside broad trust.
 - Trust keys on the resolved object's REAL module, never the pickled path; known-dangerous
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
-- `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
+- `format_contract.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
   module path only torchlens 2.x wrote, with `ArtifactTooOldError`; that includes any path at or
   below a public package's submodule 3.0 made private (the old types module of `tl.intervention`).
 - No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
@@ -56,6 +58,8 @@ hostile input, and every load path here is fail-closed.
 - `_TlSpecWriter` writes unified bundles; `coerce_tlspec_save_level()` validates save levels.
 
 ## scrub.py / rehydrate.py / accessor_rebuild.py
+
+`_scrub_identities.py` holds the pure metadata identity normalization and record joins used by `scrub.py`.
 - `scrub_for_save()` turns live trace state into portable state (tensor blobification via
   `BlobSpec`, policy-driven per-field handling).
 - `rehydrate_trace()` / `rehydrate_nested()` rebuild loaded state; `rebuild_trace_accessors()`
@@ -103,3 +107,19 @@ hostile input, and every load path here is fail-closed.
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.
+
+The 3.0 runnable writer uses `format3/runnable.py` and its `runnable_families.py` adapter.
+It shares the artifact tensor-key counter with `format3/payloads.py`; the descriptor and
+state families live under `runnable/`. The storage and persistence enums live in the
+leaf `_field_policy.py`, with the record package preserving its `StorageKind` re-export.
+Save preparation lives in `_save_gates.py`; runnable wire storage has no record or execution
+binding dependency. Runtime component attachment and family binding belong to
+`_format3_runnable_bind.py`, above the pure `format3/runnable.py` carrier.
+
+Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; it reads the frozen wire version names from the `_runnable` vocabulary through one deferred import in `component_versions()`.
+
+Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/_save.py` delegates decoding there.
+
+Lazy payload index derivation and BlobRef lookup live with `LazyActivationRef` in `lazy.py`. Resave and nested materialization derive the index from validated format 3 record cells, and resave uses the same codec/chunk writer as eager payloads.
+
+`format3/_record_refs.py` owns the closed row-reference resolution pass used by the reader.

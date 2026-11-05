@@ -1298,11 +1298,11 @@
   },
   "contract_schema": "torchlens.writer_contract.v1",
   "manifest_schema_ids": {
-   "tlspec_manifest_v1.json": "be0266e58ed12debf1e1964dc56838a48576c214fe32fdbc192e04ec66d19948",
-   "tlspec_manifest_v2.json": "b7b6604e74132fa580c708bf8dd63677cb14bab98a69806405af75ec93bc1286"
+   "tlspec_manifest_v1.json": "583398ee8527538be31bdca51861f5438c45ead7a99953529cf62283a0fc3f3f",
+   "tlspec_manifest_v2.json": "54f461249c41fb8ff64367b7dff0b6e2af66e2e2b833b9d9b8575adae7eebe59"
   },
   "min_tlspec_version": 11,
-  "min_torchlens_version": "3.0.0",
+  "min_torchlens_version": "2.38.0",
   "payload_codec_ids": [
    "torch_safetensors_v1",
    "numpy_safetensors_v1"
@@ -4012,5 +4012,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8cce475893a082b1310909d62d6972dada1c36b7a392c222e8b3c9e7da6a6d93"
+ "writer_contract_digest": "49a6cca44f1ec18d891d4465d54dd3dd4d7451e2fd70089ffe121ffc6cf1fc27"
 }

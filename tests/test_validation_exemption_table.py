@@ -106,6 +106,9 @@ _STRUCTURAL_MEMBERS: dict[str, frozenset[int]] = {
     "roi_pool": frozenset({1}),
     "ps_roi_align": frozenset({1}),
     "ps_roi_pool": frozenset({1}),
+    "_view_func": frozenset({0}),
+    "_view_func_unsafe": frozenset({0}),
+    "_rev_view_func_unsafe": frozenset({0}),
 }
 _KWARG_ALIAS_MEMBERS: dict[str, dict[int, frozenset[str]]] = {
     "_pack_padded_sequence": {1: frozenset({"lengths"})},
@@ -136,6 +139,8 @@ _CUSTOM_MEMBERS: dict[str, str] = {
     "rnn_tanh": "check_packed_rnn_batch_sizes_exempt",
     "rnn_relu": "check_packed_rnn_batch_sizes_exempt",
     "expand": "check_expand_pinned_size_exempt",
+    "autogradfunction": "check_foreign_kernel_dependence_exempt",
+    "_flash_attn_forward": "check_foreign_kernel_dependence_exempt",
     "interpolate": "_check_interpolate_exempt",
     "scatter": "_check_scatter_or_index_domain_exempt",
     "scatter_": "_check_scatter_or_index_domain_exempt",

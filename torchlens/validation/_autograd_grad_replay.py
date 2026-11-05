@@ -36,6 +36,7 @@ from ..backends.torch._autograd_grad_marker import (
     is_autograd_grad_recorder,
 )
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
+from ._replay_storage_context import check_view_context_receiver
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -522,6 +523,7 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
     if is_autograd_backward_recorder(layer.func):
         with torch.inference_mode(False):
             return _replay_backward_boundary(layer, input_args, layers_to_perturb, None)
+    check_view_context_receiver(layer, input_args)
     grad_enabled, inference_mode = captured_grad_modes(layer)
     with torch.inference_mode(inference_mode), torch.set_grad_enabled(grad_enabled):
         return execute_with_restored_rng_autocast(

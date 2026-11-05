@@ -96,8 +96,9 @@ SHADOWED = (
     "viz.feature_maps",
 )
 ALL_MOVED = MOVED + SHADOWED
-#: Private leaf names that are not ``_<leaf>`` (``receptive_field/_rules.py`` already exists).
-TARGET_LEAF = {"receptive_field.rules": "_builtin_rules"}
+#: Private leaf names that are not ``_<leaf>`` (``receptive_field/_rules.py`` and
+#: ``recording/_dry_run.py`` already exist).
+TARGET_LEAF = {"receptive_field.rules": "_builtin_rules", "recording.dry_run": "_dry_run_door"}
 ROOTS = (
     "torchlens",
     "tests",
@@ -126,7 +127,7 @@ EXCLUDES = (
     "docs/migration",
     "docs/reference/deprecations.md",
     "torchlens/_private_submodules.py",
-    "torchlens/_io/_pre3_module_paths.py",
+    "torchlens/_io/format_contract.py",
     # Demonstrates the old tl.viz.batch_summary spelling refusing typed.
     "notebooks/audit/11_visualization_in_workflow.ipynb",
     # Pickled module paths an earlier release wrote, kept as refusal inputs.

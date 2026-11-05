@@ -420,7 +420,7 @@ def test_fast_run_refuses_a_values_capture() -> None:
     x = torch.randn(2, 16)
     trace = tl.trace(model, x, capture=_VALUES)
     with pytest.raises(RunCapabilityUnavailableError) as refused:
-        trace.run(inputs=torch.randn(2, 16), fast=True)
+        trace.run_transaction(inputs=torch.randn(2, 16), fast=True)
     assert refused.value.fields["detection_stage"] == "fast_run_aten_values_unsupported"
     assert torch.equal(_rows(trace, "gelu")[0].out, _recompute(model, x)["gelu"])
 
@@ -431,7 +431,7 @@ def test_rows_capture_admits_the_fast_tier() -> None:
     torch.manual_seed(0)
     model = _BlockModel().eval()
     trace = tl.trace(model, torch.randn(2, 16), capture=_ROWS_ONLY)
-    fast = trace.run(inputs=torch.randn(2, 16), fast=True)
+    fast = trace.run_transaction(inputs=torch.randn(2, 16), fast=True)
     assert fast.trace is not trace
     assert fast.trace.has_aten_ops is True
     assert len(fast.trace.ops) == len(trace.ops)

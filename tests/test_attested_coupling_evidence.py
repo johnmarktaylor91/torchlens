@@ -180,7 +180,7 @@ def test_run_refuses_a_coupled_product_before_execution():
         refuse_coupled_replay(log)
     assert excinfo.value.fields["code"] == "episode_coupled_replay_underivable"
     with pytest.raises(EpisodeCaptureError):
-        log.run(inputs=torch.randn(2, 4))
+        log.run_transaction(inputs=torch.randn(2, 4))
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py, _selection/do_plan.py, _selection/selection.py.

@@ -13,18 +13,20 @@ ONE payload gate (3.7c), and aliased submodules are taught, never guessed
 from __future__ import annotations
 
 import dataclasses
-import pickle
+from types import SimpleNamespace
 
 import pytest
 import torch
+from _format3_envelope import read_record, write_record
 from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
-from torchlens._io._canonical_pickle import dump_canonical_metadata
+from torchlens._io.format3.decode import decode_value
+from torchlens._io.format3.values import ValueEncoder
 from torchlens._utils._record_group_table import record_member
 from torchlens.intervention._injection import attest_injected_ops, injected_ops
-from torchlens.intervention.errors import BindingPreflightError
+from torchlens.intervention.errors import BindingPreflightError, OpaqueCallableError
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 _READY = tl.options.CaptureOptions(replayable=True)
@@ -133,21 +135,27 @@ def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
 
 
 def _save_tamper_load(tmp_path, trace, tamper):
-    """Save, mutate the pickled metadata in place, and load back."""
+    """Mutate provenance cells of a real audit artifact and restamp its envelope."""
 
     path = tmp_path / "forged.tlspec"
-    trace.save(str(path))
-    metadata_path = path / "metadata.pkl"
-    with metadata_path.open("rb") as handle:
-        state = pickle.load(handle)
-    tamper(state)
-    with metadata_path.open("wb") as handle:
-        dump_canonical_metadata(state, handle)
+    trace.save(str(path), level="audit")
+    table = read_record(path, "op")
+    fields = ("annotations", "injection_provenance", "layer_label", "site_key", "pass_number")
+    rows = [
+        SimpleNamespace(**{name: decode_value(table["columns"][name][i]) for name in fields})
+        for i in range(table["rows"])
+    ]
+    tamper({"_layer_list": rows})
+    encoder = ValueEncoder()
+    for i, row in enumerate(rows):
+        for name in fields:
+            table["columns"][name][i] = encoder.encode(getattr(row, name), f"op[{i}].{name}")
+    write_record(path, "op", table)
     return tl.load(str(path))
 
 
 def _injected_rows(state):
-    """Injected op rows of a pickled artifact state."""
+    """Injected rows of the decoded provenance test view."""
 
     return [
         op
@@ -157,7 +165,7 @@ def _injected_rows(state):
 
 
 def _model_rows(state):
-    """Model op rows of a pickled artifact state."""
+    """Model rows of the decoded provenance test view."""
 
     return [
         op for op in state["_layer_list"] if record_member(op, "injection_provenance", None) is None
@@ -337,7 +345,7 @@ def test_honest_artifact_still_loads_and_attests(tmp_path) -> None:
 
     logged, spec = _logged_chain()
     path = tmp_path / "honest.tlspec"
-    logged.save(str(path))
+    logged.save(str(path), level="audit")
     loaded = tl.load(str(path))
     records = injected_ops(loaded)
     assert records and {record.provenance.spec_rule_id for record in records} == {
@@ -532,7 +540,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
         assert record.provenance.host_site_key == host.graph.site_key
         assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
-    logged.save(str(path))
+    logged.save(str(path), level="audit")
     loaded = tl.load(str(path))
     reloaded = injected_ops(loaded)
     assert [(r.label, r.provenance.host_site_key) for r in reloaded] == [
@@ -589,3 +597,12 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
     plain = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
     relu_rule = tl.when(tl.func("relu"), _sae_like).rules[0].rule_id
     assert {record.provenance.spec_rule_id for record in injected_ops(plain)} == {relu_rule}
+
+
+def test_callable_injection_refuses_a_portable_save(tmp_path) -> None:
+    """A callable injection can be archived, but a portable recipe requires built-in edits."""
+
+    logged, _ = _logged_chain()
+    with pytest.raises(OpaqueCallableError) as caught:
+        logged.save(tmp_path / "portable.tlspec", level="portable")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"

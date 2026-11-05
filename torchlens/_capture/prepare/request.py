@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ..._deprecations import MISSING, MissingType
+from ..._utils._display_bounded import short_dataclass_repr
 from ..stages import CaptureRequest
 
 if TYPE_CHECKING:
@@ -39,6 +40,8 @@ class _DoorArgs:
     and ``input_kwargs``, with the same defaults, so ``_DoorArgs(**options)`` refuses
     an unknown keyword exactly as the explicit signature did.
     """
+
+    __repr__ = short_dataclass_repr
 
     layers_to_save: str | list[Any] | None | MissingType = MISSING
     transform: Callable[[Any], Any] | None | MissingType = MISSING
@@ -117,6 +120,8 @@ class _DoorState:
     Values that are plain aliases of a ``capture_options`` or ``save_options`` field are
     read from those records; only values the door computes or rewrites live here.
     """
+
+    __repr__ = short_dataclass_repr
 
     args: _DoorArgs
     model: nn.Module

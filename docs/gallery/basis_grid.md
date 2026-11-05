@@ -7,19 +7,20 @@ says nothing about the scientific validity of a method.
 
 <!-- JMT review: plain factual prose, written for review. -->
 
-The six entries are being built. Until an entry lands, its verb cells come from its
-specification and its last two cells read "pending"; when it lands they are filled from its
-script: the number of load-bearing lines against the original repository, and the
-architectures the entry was rerun on.
+Entries 1, 2, 3 and 5 have landed (see the [Reproduction Gallery](index.md)); their verb
+cells come from each script's declared verbs, and their last two cells from its marked
+regions and runs. The line count is the script's load-bearing TorchLens lines beside its
+plain-hooks reimplementation; the original repositories' lengths were not counted. Entries 4
+and 6 moved to the next batch, so their verb cells still come from their specification.
 
 | Entry | capture | select | read | do | compare | validate | Load-bearing lines against the original repo | Rerun on |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1. Causal tracing, with a wrong-site control (Meng et al. 2022) | planned | planned | planned | planned | planned | planned | pending | pending |
-| 2. CNN receptive and projective fields, used as an intervention site | planned | planned | planned | planned | planned | planned | pending | pending |
-| 3. Neuro feature extraction to per-layer RDMs, with an order-error control | planned | planned | planned | | planned | planned | pending | pending |
-| 4. Jacobian lens, also on an architecture its reference repo cannot run | planned | planned | planned | | planned | planned | pending | pending |
-| 5. IOI circuit by edge attribution (Wang et al. 2022) | planned | planned | planned | planned | planned | planned | pending | pending |
-| 6. Bundles plus a two-model harness | planned | planned | planned | planned | planned | planned | pending | pending |
+| 1. Causal tracing, with a wrong-site control (Meng et al. 2022) | used | used | used | used | used |  | 37 TorchLens, 30 plain hooks | GPT-2 small |
+| 2. CNN receptive and projective fields, used as an intervention site | used | used | used | used | used |  | 233 TorchLens, 37 plain hooks | ResNet-18 |
+| 3. Neuro feature extraction to per-layer RDMs, with an order-error control | used | used | used |  | used |  | 252 TorchLens, 56 plain hooks | ResNet-18, ViT-B/16 |
+| 4. Jacobian lens, also on an architecture its reference repo cannot run | planned | planned | planned | | planned | planned | next batch | next batch |
+| 5. IOI circuit by edge attribution (Wang et al. 2022) | used |  | used |  |  |  | 55 TorchLens, 19 plain (scoring, not a reimplementation) | GPT-2 small |
+| 6. Bundles plus a two-model harness | planned | planned | planned | planned | planned | planned | next batch | next batch |
 
 ## The verbs
 

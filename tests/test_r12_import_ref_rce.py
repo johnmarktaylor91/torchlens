@@ -23,6 +23,7 @@ materialized ``LazyImportRef`` so the deferred resolution enforces the gate.
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import textwrap
 from collections.abc import Iterator
@@ -30,12 +31,19 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from example_models import TinyReluAdd as _ReluModel
 
 import torchlens as tl
+from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention._save import load_intervention_spec
 from torchlens.intervention._spec_values import LazyImportRef, _resolve_import_ref
-from torchlens.intervention.errors import UntrustedCallableError
+from torchlens.intervention._types import FunctionRegistryKey, InterventionSpec
+from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only")
 
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
@@ -60,10 +68,57 @@ def _save_import_ref_spec(tmp_path: Path, mod_name: str) -> Path:
 
     mod = importlib.import_module(mod_name)
     log = tl.trace(_ReluModel(), torch.ones(1, 3))
-    log._attach_hooks(tl.func("relu"), mod.hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), mod.hook)
     spec_path = tmp_path / "evil.tlspec"
     log.save_intervention(str(spec_path), level="executable_with_callables")
     return spec_path
+
+
+def _plant_import_key(spec_path: Path, mod_name: str) -> None:
+    """Swap the saved relu function key for a foreign ``custom`` key naming ``mod_name``.
+
+    The saved recipe keeps the user hook only as a placeholder, so the import
+    name an attacker can still plant is a function registry key's
+    ``import_path``. The rewritten ``intervention.json`` is re-listed in the
+    manifest so the forged key reaches the loader's key check.
+    """
+
+    recipe_path = spec_path / "intervention.json"
+    recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+    entries = recipe["function_registry_keys"]
+    assert entries, "the saved recipe carries no function key to forge"
+    entries[0]["key"] = {
+        "namespace": "custom",
+        "qualname": "hook",
+        "dispatch_kind": "function",
+        "version": 1,
+        "import_path": f"{mod_name}:hook",
+    }
+    recipe_path.write_text(
+        json.dumps(recipe, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+    )
+    redigest(spec_path, "intervention.json")
+
+
+def _forged_keys(spec: InterventionSpec, mod_name: str) -> list[FunctionRegistryKey]:
+    """Return the loaded spec's function keys that name ``mod_name``."""
+
+    keys = [
+        FunctionRegistryKey(**entry["key"]) for entry in spec.metadata["function_registry_keys"]
+    ]
+    return [key for key in keys if (key.import_path or "").startswith(f"{mod_name}:")]
+
+
+def _assert_inert_placeholder(spec: InterventionSpec, mod_name: str) -> None:
+    """The loaded hook is an audit-only placeholder that names, never resolves, the module."""
+
+    assert spec.metadata["executable"] is False
+    [placeholder] = spec.metadata["recipe_placeholders"]
+    assert placeholder["qualname"] == f"{mod_name}.hook"
+    edit = spec.hook_specs[0].helper
+    assert edit is not None
+    assert edit.portability == "opaque_audit"
+    assert edit.factory is None
 
 
 def _forget_module_and_sentinel(mod_name: str, sentinel: Path) -> None:
@@ -93,16 +148,25 @@ def test_default_trust_tl_load_denies_import_ref_rce(_evil_spec: tuple[Path, str
     """``tl.load`` (default trust) then applying the spec imports NOTHING + executes NO code."""
 
     spec_path, mod_name, sentinel = _evil_spec
+    _plant_import_key(spec_path, mod_name)
 
     spec = tl.load(str(spec_path))
-    # Load is lazy: the foreign module is not imported and the payload never runs.
+    # Load never resolves a foreign name: the module is not imported and the payload never runs.
     assert not sentinel.exists()
     assert mod_name not in sys.modules
+    _assert_inert_placeholder(spec, mod_name)
 
+    # The planted key default-denies at the execution boundary without importing.
+    [forged] = _forged_keys(spec, mod_name)
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(forged)
+
+    # Applying the loaded recipe cannot fire the placeholder: it refuses typed, with a remedy.
     fresh = tl.trace(_ReluModel(), torch.ones(1, 3))
     fresh._intervention_spec = spec
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(NonExecutableSpecError) as refused:
         fresh.run(_ReluModel(), torch.ones(1, 3))
+    assert refused.value.fields.get("remedy")
 
     # The attacker code never ran and the module was never imported.
     assert not sentinel.exists()
@@ -113,15 +177,22 @@ def test_load_intervention_spec_default_trust_denies(_evil_spec: tuple[Path, str
     """The lower-level loader defaults to deny-by-default just like ``tl.load``."""
 
     spec_path, mod_name, sentinel = _evil_spec
+    _plant_import_key(spec_path, mod_name)
 
     spec = load_intervention_spec(str(spec_path))
     assert not sentinel.exists()
     assert mod_name not in sys.modules
+    _assert_inert_placeholder(spec, mod_name)
+
+    [forged] = _forged_keys(spec, mod_name)
+    with pytest.raises(UntrustedCallableError):
+        resolve_function_registry_key(forged)
 
     fresh = tl.trace(_ReluModel(), torch.ones(1, 3))
     fresh._intervention_spec = spec
-    with pytest.raises(UntrustedCallableError):
+    with pytest.raises(NonExecutableSpecError) as refused:
         fresh.run(_ReluModel(), torch.ones(1, 3))
+    assert refused.value.fields.get("remedy")
     assert not sentinel.exists()
     assert mod_name not in sys.modules
 
@@ -208,7 +279,13 @@ def test_lazy_import_ref_carries_trust_context() -> None:
 
 
 def test_trusted_import_ref_round_trips_through_tl_load(tmp_path: Path) -> None:
-    """A trusted spec load resolves the import ref and applies the real hook."""
+    """A trusted load resolves an allowlisted import name but never resurrects a saved callable.
+
+    The saved format keeps no user callable (the hook is a placeholder naming
+    it), so trust cannot turn the saved hook back into code. What trust still
+    governs is the import name a function key carries: an allowlisted module
+    resolves to the real callable.
+    """
 
     mod_name = "r12_roundtrip_mod_test"
     (tmp_path / f"{mod_name}.py").write_text(
@@ -223,15 +300,24 @@ def test_trusted_import_ref_round_trips_through_tl_load(tmp_path: Path) -> None:
     try:
         mod = importlib.import_module(mod_name)
         log = tl.trace(_ReluModel(), torch.ones(1, 3))
-        log._attach_hooks(tl.func("relu"), mod.hook, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), mod.hook)
         spec_path = tmp_path / "trusted.tlspec"
         log.save_intervention(str(spec_path), level="executable_with_callables")
 
+        _plant_import_key(spec_path, mod_name)
+
         spec = load_intervention_spec(str(spec_path), allowed_custom_callable_modules={mod_name})
+        _assert_inert_placeholder(spec, mod_name)
+        [key] = _forged_keys(spec, mod_name)
+        assert (
+            resolve_function_registry_key(key, allowed_custom_callable_modules={mod_name})
+            is mod.hook
+        )
         fresh = tl.trace(_ReluModel(), torch.ones(1, 3))
         fresh._intervention_spec = spec
-        result = fresh.run(_ReluModel(), torch.ones(1, 3))
-        assert result is not None
+        with pytest.raises(NonExecutableSpecError) as refused:
+            fresh.run(_ReluModel(), torch.ones(1, 3))
+        assert refused.value.fields.get("remedy")
     finally:
         sys.path.remove(str(tmp_path))
         sys.modules.pop(mod_name, None)

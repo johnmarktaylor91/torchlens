@@ -9,7 +9,9 @@ Contract pinned here:
   size and modification time it had at capture. A changed or missing file
   shows a reason, never another line's text.
 - ``save_source_context=True`` snapshots the text at capture.
-- ``print(op)`` names the op's line (``file:line in function``) and its text.
+- ``print(op)`` names the op's line (``file:line in function``) on its
+  ``source`` row; the text stays on ``op.code_context`` (house style B8). When
+  a lazily read file changed or vanished since capture, the row says so.
 """
 
 from __future__ import annotations
@@ -28,7 +30,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._site_key import operation_witness
-from torchlens._data_classes.func_call_location import display_frame
+from torchlens._data_classes.func_call_location import display_frame, short_source_path
 
 _TOY_SOURCE = textwrap.dedent(
     """
@@ -60,6 +62,20 @@ def _load_toy(tmp_path: Path, name: str) -> tuple[ModuleType, Path]:
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module, path
+
+
+def _source_row(card: str) -> str:
+    """The card's one ``source`` row."""
+
+    rows = [row for row in card.splitlines() if row.startswith("  source    ")]
+    assert len(rows) == 1, card
+    return rows[0]
+
+
+def _function_name() -> str:
+    """The qualified name where ``co_qualname`` exists, else the bare function name."""
+
+    return "Toy.forward" if sys.version_info >= (3, 11) else "forward"
 
 
 def _line_of(path: Path, needle: str) -> int:
@@ -103,21 +119,24 @@ def test_default_capture_reads_source_lazily(toy) -> None:
     assert frame._call_line == ""  # nothing stored at capture
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
     assert "--->  " in frame.code_context_labeled
-    assert "z = torch.relu(y)" in repr(frame)
+    assert repr(frame).startswith("FuncCallLocation:")
+    assert "z = torch.relu(y)" not in repr(frame)
 
 
 def test_op_card_shows_location_and_text(toy) -> None:
     module, path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
-    relu = trace["relu_1"]
+    relu = trace.ops["relu_1"]  # a bare layer label at trace[...] names the Layer
     card = str(relu)
     line = _line_of(path, "the relu line")
     frame = relu.code_context[-1]
-    # ``co_qualname`` exists from Python 3.11; before it the card names the bare function.
-    function = "Toy.forward" if sys.version_info >= (3, 11) else "forward"
+    function = _function_name()
     assert (frame.func_qualname or frame.func_name) == function
-    assert f"{path.name}:{line} in {function}" in card
-    assert "  code   z = torch.relu(y)  # the relu line" in card
+    assert _source_row(card).endswith(f"{path.name}:{line} in {function}")
+    # The text left the card (B8); the card points at .code_context, which holds it.
+    assert "z = torch.relu(y)" not in card
+    assert ".code_context" in card.splitlines()[-1]
+    assert frame.call_line == "z = torch.relu(y)  # the relu line"
 
 
 def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
@@ -131,8 +150,11 @@ def test_op_card_skips_torch_frames_for_module_ops(toy) -> None:
     assert shown.file == str(path)
     assert shown.line_number == _line_of(path, "y = self.linear(x)")
     card = str(linear)
-    assert "where  module linear:1, " in card
-    assert "  code   y = self.linear(x)" in card
+    assert "\n  module    linear\n" in card
+    assert f"  source    {short_source_path(str(path))}:{shown.line_number} in " in card
+    line = _line_of(path, "y = self.linear(x)")
+    assert _source_row(card).endswith(f"{path.name}:{line} in {_function_name()}")
+    assert shown.call_line == "y = self.linear(x)"
 
 
 def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
@@ -143,19 +165,29 @@ def test_edited_file_shows_reason_not_wrong_text(toy) -> None:
     frame = relu.code_context[-1]
     assert frame.call_line == ""
     assert frame.code_context is None
-    assert repr(frame).endswith("code: source changed on disk since capture")
-    assert "  code   (source changed on disk since capture)" in str(relu)
+    assert frame._source_text_state()[1] == "source changed on disk since capture"
+    assert repr(frame).startswith("FuncCallLocation:")
+    card = str(relu)
+    line = _line_of(path, "the relu line") - 1  # the captured line, before the shift
+    assert _source_row(card).endswith(
+        f"{path.name}:{line} in {_function_name()} (source changed on disk since capture)"
+    )
+    assert "torch.relu(y)" not in card and "a new first line" not in card
 
 
 def test_missing_file_shows_reason(toy) -> None:
     module, path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
     relu = trace["relu_1"]
+    line = _line_of(path, "the relu line")
     path.unlink()
     frame = relu.code_context[-1]
     assert frame.call_line == ""
-    assert repr(frame).endswith("code: source file not found")
-    assert "  code   (source file not found)" in str(relu)
+    assert frame._source_text_state()[1] == "source file not found"
+    assert repr(frame).startswith("FuncCallLocation:")
+    assert _source_row(str(relu)).endswith(
+        f"{path.name}:{line} in {_function_name()} (source file not found)"
+    )
 
 
 def test_save_source_context_snapshots_at_capture(toy) -> None:
@@ -171,7 +203,10 @@ def test_save_source_context_snapshots_at_capture(toy) -> None:
     frame = relu.code_context[-1]
     assert frame.source_loading_enabled is True
     assert frame.call_line == "z = torch.relu(y)  # the relu line"
-    assert "  code   z = torch.relu(y)  # the relu line" in str(relu)
+    # The snapshot serves the text on .code_context; the card names the line, with no
+    # stale-file note, because the snapshot (not the edited file) is the authority.
+    line = _line_of(path, "the relu line") - 1
+    assert _source_row(str(relu)).endswith(f"{path.name}:{line} in {_function_name()}")
 
 
 def test_default_capture_stores_no_source_text(toy) -> None:

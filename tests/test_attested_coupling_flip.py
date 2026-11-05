@@ -252,7 +252,7 @@ def test_uncoupled_episode_replay_never_carries_the_ledger():
     # replay must not warn. The regression under test is the LEDGER.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        result = log.run(inputs=torch.tensor([[4, 5, 6]]))
+        result = log.run_transaction(inputs=torch.tensor([[4, 5, 6]]))
     assert not [w for w in caught if "Tensor shape changed" in str(w.message)]
     episode_key = result.trace.annotations.get("episode")
     assert episode_key is not None and episode_key.get("quarantined") is True
@@ -368,7 +368,7 @@ def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
     attestation = loaded.episode_coupling
     assert attestation.coupled is True and attestation.bound is True
     with pytest.raises(EpisodeCaptureError) as excinfo:
-        loaded.run(inputs=_ids())
+        loaded.run_transaction(inputs=_ids())
     assert excinfo.value.fields["code"] == "episode_coupled_replay_underivable"
 
 

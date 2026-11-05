@@ -14,6 +14,7 @@ from torchlens._private_submodules import (
     refuse_private_submodule as _refuse_private_submodule,
 )
 
+from .._entry_refusals import refuse_viz_shape
 from .._visualization.bundle_diff import bundle_diff
 from .._visualization.node_spec import NodeSpec
 from . import _batch_summary as _batch_summary, nodes
@@ -21,18 +22,21 @@ from ._batch_summary import montage
 from ._drawing import Drawing
 from ._feature_maps import feature_maps
 from ._node_plots import heatmap, image_scatter, lineplot
+from ._tensor_images import chans, rgb
 
 __all__ = [
     "Drawing",
     "NodeSpec",
     "bundle_diff",
     "causal_trace_heatmap",
+    "chans",
     "feature_maps",
     "heatmap",
     "image_scatter",
     "lineplot",
     "montage",
     "nodes",
+    "rgb",
     # Transformer and watch-history renderers, resolved by __getattr__ below.
     "ablation_grid",  # noqa: F822 -- resolved by __getattr__
     "attention",  # noqa: F822 -- resolved by __getattr__
@@ -150,7 +154,7 @@ def causal_trace_heatmap(
 
     data = torch.as_tensor(np.asarray(scores), dtype=torch.float32)
     if data.ndim != 2:
-        raise ValueError("causal_trace_heatmap expects a 2D score array.")
+        refuse_viz_shape("causal_trace_heatmap expects a 2D score array")
     data = _prepare_signed_data(data, signs=signs)  # type: ignore[arg-type]
     data = _clip_outliers(data, outlier_perc)
     if ax is None:

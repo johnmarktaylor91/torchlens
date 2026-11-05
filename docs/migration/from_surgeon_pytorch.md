@@ -50,7 +50,7 @@ RESULT = (list(act.shape), act.grad_fn is not None, model.conv1.weight.grad is n
 | `Inspect(model, layer=["layer1", "layer2"])` | `tl.extract(model, x, ["layer1", "layer2"])` | Returns a dict keyed by the lookups you passed. |
 | `get_layers(model)` | `[m.address for m in tl.trace(model, x).modules]` or `model.named_modules()` | |
 | `Extract(model, node_out="...")` and `get_nodes(model)` (FX graph nodes) | `tl.trace(model, x)` then any op label from `trace.layers` | Functional ops are lookups without FX tracing. |
-| `Extract(model, node_in=..., node_out=...)` (run a sub-graph) | `trace.run(inputs=x, until=...)` stops at a site | TorchLens never rebuilds the model; the full sub-graph rewrite stays in surgeon-pytorch. |
+| `Extract(model, node_in=..., node_out=...)` (run a sub-graph) | `trace.run_transaction(inputs=x, until=...)` stops at a site | TorchLens never rebuilds the model; the full sub-graph rewrite stays in surgeon-pytorch. |
 
 ### The gradient caveat
 
@@ -66,7 +66,7 @@ from them reaches the model's parameters. The TorchLens example above checks exa
   symbolic graph.
 - `tl.extract_dataset` runs the same lookups over a dataloader and writes the activations to
   disk; see [Multi-GPU extraction](multi_gpu_extraction.md).
-- `trace.run(inputs=x, until=...)` stops at a site, without building a new module.
+- `trace.run_transaction(inputs=x, until=...)` stops at a site, without building a new module.
 
 ## What surgeon-pytorch does that TorchLens does not
 

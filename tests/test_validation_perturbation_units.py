@@ -12,9 +12,16 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 from torchlens._utils.tensor_utils import tensor_nanequal
+from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation._core import _copy_validation_args, _deep_clone_tensors
+from torchlens.validation._core import (
+    _copy_validation_args,
+    _deep_clone_tensors,
+    validate_saved_outs,
+)
+from torchlens.validation._diagnostics import get_validation_failure
 from torchlens.validation._perturb import _perturb_layer_outs
 
 # =============================================================================
@@ -295,3 +302,67 @@ def test_copy_validation_args():
 
     copied["kwargs"]["key"][0] = 999.0
     assert input_args["kwargs"]["key"][0].item() == 5.0
+
+
+_WIDE_UNSIGNED = tuple(name for name in ("uint16", "uint32", "uint64") if hasattr(torch, name))
+_SIGNED_OF = {"uint16": torch.int16, "uint32": torch.int32, "uint64": torch.int64}
+
+
+@pytest.mark.parametrize("name", _WIDE_UNSIGNED)
+@pytest.mark.parametrize("values", ([7, 7], [7, -3, 0, 12]), ids=("constant", "spread"))
+def test_perturbation_changes_wide_unsigned_tensor(name: str, values: list[int]) -> None:
+    """A uint16/32/64 parent (a philox key) is perturbed as an integer, never through finfo."""
+
+    signed = _SIGNED_OF[name]
+    parent = torch.tensor(values, dtype=signed).view(getattr(torch, name))
+    perturbed = _perturb_layer_outs(parent, torch.zeros(2))
+    assert perturbed.dtype == parent.dtype and perturbed.shape == parent.shape
+    assert not torch.equal(perturbed.view(signed), parent.view(signed))
+
+
+class _Uint64KeyConsumer(nn.Module):
+    """Reads a uint64 key's bits as signed integers and adds them to ``x``."""
+
+    def forward(self, x: torch.Tensor, key: torch.Tensor) -> torch.Tensor:
+        return x + key.view(torch.int64).to(x.dtype)
+
+
+def _uint64_key_inputs(dtype_name: str) -> tuple[torch.Tensor, torch.Tensor]:
+    torch.manual_seed(0)
+    return torch.randn(2), torch.tensor([7, -3], dtype=torch.int64).view(getattr(torch, dtype_name))
+
+
+_UINT64 = tuple(name for name in _WIDE_UNSIGNED if name == "uint64")
+
+
+@pytest.mark.parametrize("dtype_name", _UINT64)
+def test_validation_perturbs_uint64_parent(dtype_name: str) -> None:
+    """A forward with a uint64 parent validates instead of crashing in the float branch."""
+
+    assert validate_forward_pass(_Uint64KeyConsumer(), _uint64_key_inputs(dtype_name)) is True
+
+
+@pytest.mark.parametrize("dtype_name", _UINT64)
+def test_planted_key_blind_uint64_consumer_fails_perturbation(dtype_name: str) -> None:
+    """A replay that ignores its uint64 parent is caught by perturbing that parent."""
+
+    model, inputs = _Uint64KeyConsumer(), _uint64_key_inputs(dtype_name)
+    ground_truth = model(*inputs)
+    trace = tl.trace(model, inputs, capture=CaptureOptions(save_args=True, seed=0), save="all")
+    try:
+        view_op = next(op for op in trace._layer_list if op.func_name == "view")
+        key_label = view_op.call.parent_arg_positions["args"][0]
+        frozen = view_op.out.detach().clone()
+
+        def key_blind_view(*args: object, **kwargs: object) -> torch.Tensor:
+            return frozen.clone()
+
+        key_blind_view.__name__ = view_op.func.__name__
+        view_op.func = key_blind_view
+        status = validate_saved_outs(trace, [ground_truth], validate_metadata=False)
+        assert status.state == "failed"
+        failure = get_validation_failure(trace)
+        assert failure is not None and failure.check_name == "perturbation"
+        assert key_label in failure.extra["perturbed_parents"]
+    finally:
+        trace.cleanup()

@@ -21,6 +21,7 @@ from typing import Any
 import torch
 
 from ..._debug_report import Report
+from ..._utils._display_errors import lookup_message
 from ._constants import MAX_FRACTION_DEFAULT, SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
 from ._errors import CheckConfigError
 from ._records import CHECK_REPORT_SCHEMA_VERSION, CheckFinding, severity_sorted
@@ -148,10 +149,12 @@ def _validate_names(
     requested = [str(name) for name in names]
     unknown = sorted(set(requested) - known)
     if unknown:
-        sample = ", ".join(sorted(known)[:8])
         raise CheckConfigError(
-            f"{kwarg} names not present in the audited target: {unknown}. "
-            f"Known names include: {sample}{', ...' if len(known) > 8 else ''}.",
+            lookup_message(
+                f"{kwarg} names not present in the audited target: {unknown}.",
+                sorted(known),
+                f"Use exact qualified names from the target (fix or drop {unknown[0]!r}).",
+            ),
             code=code,
             unknown_names=unknown,
             remedy=f"Use exact qualified names from the target (fix or drop {unknown[0]!r}).",

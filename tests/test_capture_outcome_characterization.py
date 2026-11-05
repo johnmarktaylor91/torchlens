@@ -250,7 +250,7 @@ def test_halted_trace_fast_run_refuses_typed() -> None:
     x = torch.ones(1, 3)
     trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        trace.run(inputs=x, fast=True)
+        trace.run_transaction(inputs=x, fast=True)
     assert exc_info.value.fields["code"] == "N5"
 
 

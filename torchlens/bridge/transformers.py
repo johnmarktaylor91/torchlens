@@ -7,6 +7,8 @@ The attention backend (``register_attention``, ``record_attention``) lives in
 from __future__ import annotations
 
 import contextlib
+import importlib.util
+import inspect
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -14,15 +16,18 @@ import torch
 
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
+from torchlens._input_coerce import _is_modality_input
 from torchlens.bridge._hf_attention import (
     AttentionCall,
     AttentionRecording,
     record_attention,
     register_attention,
 )
-from torchlens.bridge._hf_refusals import refuse_preprocessing_unresolved
+from torchlens.bridge._hf_processor import _make_multimodal_transform, _resolve_hf_processor
+from torchlens.bridge._hf_refusals import _is_hf_pretrained_model
+from torchlens.bridge._image_preprocessing import accept_image_resolution
 
-_MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
+from .._entry_refusals import refuse_processor_unresolved
 
 
 def _is_hf_chat_message(item: Any) -> bool:
@@ -49,35 +54,6 @@ def _is_hf_chat_message(item: Any) -> bool:
         and isinstance(item.get("role"), str)
         and isinstance(item.get("content"), (str, list))
     )
-
-
-def _is_plausible_media_value(value: Any) -> bool:
-    """Return whether ``value`` is a plausible audio/video modality payload.
-
-    Conservative acceptance so ``None`` and arbitrary objects decline the
-    multimodal auto-route. Accepts tensors, raw bytes, non-empty sequences (raw
-    waveforms, frame lists), and array-like objects (e.g. NumPy arrays exposing
-    ``__array__``); everything else -- ``None``, bare objects, empty containers,
-    scalars -- is rejected.
-
-    Parameters
-    ----------
-    value:
-        Candidate value for an ``audio`` or ``videos`` modality key.
-
-    Returns
-    -------
-    bool
-        True only for a plausibly media-bearing value.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return True
-    if isinstance(value, (bytes, bytearray)):
-        return True
-    if isinstance(value, (list, tuple)):
-        return bool(value)
-    return hasattr(value, "__array__")
 
 
 def _is_hf_text_input(value: Any) -> bool:
@@ -124,6 +100,7 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
 
     # hostile __getattr__ hooks on foreign model objects must never crash the
     # probe; any attribute-read failure simply declines the auto-route
+    model = _metadata_owner(model)
     direct = None
     with contextlib.suppress(Exception):
         direct = getattr(model, "name_or_path", None)
@@ -134,6 +111,38 @@ def _can_resolve_hf_tokenizer(model: Any) -> bool:
         config = getattr(model, "config", None)
         via_config = getattr(config, "name_or_path", None) if config is not None else None
     return isinstance(via_config, str) and bool(via_config)
+
+
+def _metadata_owner(model: Any) -> Any:
+    """Return the module behind a bound method of one (``model.generate``), else ``model``."""
+    owner = getattr(model, "__self__", None) if inspect.ismethod(model) else None
+    return owner if isinstance(owner, torch.nn.Module) else model
+
+
+def _attaches_output_tokenizer(model: Any, structure_only: bool) -> bool:
+    """Whether ``trace_text`` attaches its tokenizer for the ``hf_text`` output detector.
+
+    Not for a structure-only capture (no outputs to decode) nor a bound method such as
+    ``model.generate``, whose return is token ids rather than logits.
+    """
+    return not structure_only and _metadata_owner(model) is model
+
+
+def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
+    """Resolve image preprocessing through the neutral authority resolver.
+
+    Delegates to :func:`torchlens.preprocessing.resolve` (tvscope B2): the
+    model-attached no-network tiers first (a planted torchvision weights
+    handle, a torchvision model whose loaded state equals a cached preset
+    checkpoint, a timm ``default_cfg``), the network-gated HF processor fetch
+    last; a fetch failure yields ``unknown``, never a silently substituted
+    lower tier (memo D8). Nothing resolved refuses ``preprocessing_unresolved``
+    naming the explicit ImageNet-default opt-in.
+    """
+
+    from torchlens import preprocessing as _preprocessing
+
+    return accept_image_resolution(model, _preprocessing.resolve(model=model))
 
 
 def _is_hf_image_input(value: Any) -> bool:
@@ -173,33 +182,35 @@ def _is_hf_multimodal_input(value: Any) -> bool:
     -------
     bool
         True for a non-empty dict with modality keys and at least one plausible
-        modality value.
+        modality value (the shape test shared with input coercion).
     """
 
-    if not isinstance(value, dict) or not value:
-        return False
-    keys = set(value.keys())
-    if not (keys & _MODALITY_KEYS):
-        return False
-    for key, item in value.items():
-        if key in {"image", "images"}:
-            try:
-                from PIL.Image import Image as PILImage
-            except ImportError:
-                continue
-            if isinstance(item, PILImage):
-                return True
-            if isinstance(item, list) and item and isinstance(item[0], PILImage):
-                return True
-        if key == "text" and isinstance(item, str):
-            return True
-        if key in {"audio", "videos"} and _is_plausible_media_value(item):
-            return True
-    return False
+    return _is_modality_input(value)
+
+
+def _transformers_importable() -> bool:
+    """Return whether ``transformers`` is loaded or installed (no import, no I/O)."""
+
+    try:
+        return importlib.util.find_spec("transformers") is not None
+    except ValueError:
+        # Raised only for a module already loaded without a ``__spec__``
+        # (a test stub): loaded is importable.
+        return True
 
 
 def _can_resolve_hf_processor(model: Any) -> bool:
-    """Return whether a Hugging Face ``AutoProcessor`` resolves for ``model``.
+    """Return whether the multimodal auto-route can claim ``model``.
+
+    A ``transformers`` ``PreTrainedModel`` with a ``name_or_path`` is claimed
+    on shape alone, with no Hub or cache I/O, like the text route:
+    :func:`trace_multimodal` then resolves the ``AutoProcessor`` (cache first,
+    then the Hub unless offline) and refuses typed ``preprocessing_unresolved``
+    when it cannot, so a modality dict never reaches an HF forward as a
+    positional ``input_ids``. Any other model with a ``name_or_path`` is
+    claimed only when its processor is already in the local cache (never a
+    download); otherwise it keeps the plain path, since its own forward may
+    accept such a dict.
 
     Parameters
     ----------
@@ -209,22 +220,19 @@ def _can_resolve_hf_processor(model: Any) -> bool:
     Returns
     -------
     bool
-        True when ``transformers.AutoProcessor`` can load a processor for the
-        model name/path.
+        True when the route should claim the model.
     """
 
     name_or_path = _model_name_or_path(model)
-    if name_or_path is None:
+    if name_or_path is None or not _transformers_importable():
         return False
+    if _is_hf_pretrained_model(model):
+        return True
     try:
         from transformers import AutoProcessor
 
-        # Detection must never trigger live Hub network I/O (a plain offline
-        # trace would otherwise block through a multi-retry download loop inside
-        # routing). Probe the local cache only; an uncached model simply declines
-        # the auto-route, matching compat's offline-first stance.
         AutoProcessor.from_pretrained(name_or_path, local_files_only=True)
-    except Exception:
+    except Exception:  # a cache miss of any kind declines the route
         return False
     return True
 
@@ -305,18 +313,17 @@ def trace_text(
         capture=kwargs.pop("capture", None),
         input_transform=transform,
     )
-    # The attached tokenizer fires the automatic ``hf_text`` output detector; a
-    # structure-only capture holds no outputs to decode, so it stays detached.
-    had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
+    attach = _attaches_output_tokenizer(model, structure_only)
+    had_tokenizer = attach and hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-    if not structure_only:
+    if attach:
         model._torchlens_output_tokenizer = tok
     try:
         log = _trace_text_capture(model, text, capture, structure_only, kwargs)
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
-        elif not structure_only:
+        elif attach:
             delattr(model, "_torchlens_output_tokenizer")
     log._provenance_input_preprocessor = _tokenizer_preprocessing_record(
         tok,
@@ -384,6 +391,12 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
 
+    Raises
+    ------
+    InvalidArgumentError
+        ``preprocessing_unresolved`` when no ``AutoProcessor`` loads for the
+        model (uncached offline, no processor config).
+
     Examples
     --------
     >>> try:
@@ -393,31 +406,12 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     no processor resolvable
     """
 
-    from transformers import AutoProcessor
-
     import torchlens as tl
 
     name_or_path = _model_name_or_path(model)
     if name_or_path is None:
-        raise ValueError("Could not auto-resolve AutoProcessor for this model.")
-    processor = AutoProcessor.from_pretrained(name_or_path)
-
-    def transform(raw_dict: dict[str, Any]) -> Any:
-        """Apply the resolved multimodal processor.
-
-        Parameters
-        ----------
-        raw_dict:
-            User-provided modality dict.
-
-        Returns
-        -------
-        Any
-            Processor output, usually a mapping of tensors.
-        """
-
-        return processor(**raw_dict, return_tensors="pt")
-
+        refuse_processor_unresolved()
+    processor = _resolve_hf_processor(model, name_or_path)
     record = ResolvedPreprocessing(
         source="hf_auto_processor",
         identifier=name_or_path,
@@ -427,7 +421,7 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     )
     capture = tl.options.merge_capture_options(
         capture=kwargs.pop("capture", None),
-        input_transform=transform,
+        input_transform=_make_multimodal_transform(processor),
     )
     log = tl.trace(model, cast(Any, input_dict), capture=capture, **kwargs)
     log._provenance_input_preprocessor = record
@@ -606,6 +600,7 @@ def _model_name_or_path(model: Any) -> str | None:
         Non-empty model name/path, otherwise None.
     """
 
+    model = _metadata_owner(model)
     name_or_path = getattr(model, "name_or_path", None) or getattr(
         getattr(model, "config", None), "name_or_path", None
     )
@@ -658,69 +653,6 @@ def _tokenizer_preprocessing_record(
         verified=verified,
         config=config,
         description=f"AutoTokenizer: {identifier}",
-    )
-
-
-def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], ResolvedPreprocessing]:
-    """Resolve image preprocessing through the neutral authority resolver.
-
-    Delegates to :func:`torchlens.preprocessing.resolve` (tvscope B2), which
-    tries the model-attached no-network tiers first (a planted torchvision
-    weights handle, a timm ``default_cfg``) and the network-gated HF
-    processor fetch last, with the attempt disclosed on the record; a fetch
-    failure yields ``unknown``, never a silently substituted lower tier
-    (memo D8). Whatever the registry resolves is applied. When NOTHING
-    resolves the capture is refused typed: TorchLens never
-    applies a recipe the model was not shown to use. The refusal names the
-    explicit ImageNet-default opt-in.
-
-    Parameters
-    ----------
-    model:
-        Candidate image model.
-
-    Returns
-    -------
-    tuple[Callable[[Any], Any], ResolvedPreprocessing]
-        Transform and provenance record.
-
-    Raises
-    ------
-    InvalidArgumentError
-        ``preprocessing_unresolved`` when no authority resolves.
-    """
-
-    from torchlens import preprocessing as _preprocessing
-
-    resolution = _preprocessing.resolve(model=model)
-    record = resolution.preprocessing
-    if resolution.input_transform is not None and record.source != "unknown":
-        if record.source == "hf_image_processor":
-            # Legacy source token for the model-discovered HF tier (pinned by
-            # the autoroute contract tests since before the neutral resolver).
-            record.source = "hf_auto_image_processor"
-            record.description = f"AutoImageProcessor: {record.identifier}"
-        return resolution.input_transform, record
-    reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    refuse_preprocessing_unresolved(
-        model,
-        f"no preprocessing authority resolved for the PIL image input to "
-        f"{type(model).__name__} ({reason or 'nothing resolved'}). "
-        "TorchLens refuses to guess a recipe the model may not have been "
-        "trained with.",
-        remedy=(
-            "record the weights the model was built with, e.g. "
-            "torchlens.preprocessing.attach_authority(model, weights) (torchvision models "
-            "keep no handle to their weights preset); or pass your loader's own "
-            "transform, e.g. "
-            "capture=tl.options.CaptureOptions(input_transform=weights.transforms()); "
-            "or opt in to the ImageNet default (resize 256, center-crop 224, "
-            "ImageNet mean/std) with "
-            "capture=tl.options.CaptureOptions("
-            "input_transform=torchlens.preprocessing.imagenet_default()); "
-            "or pass an already-preprocessed tensor"
-        ),
-        resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
 
 

@@ -287,3 +287,101 @@ def test_bool_predicate_probe_catch_is_typed() -> None:
 
     object.__setattr__(target, "func", _benign_refusal)
     assert _bool_predicate_influence_probe(target, [parent_label]) is None
+
+
+# ---------------------------------------------------------------------------
+# Index refusals inside a collapsed torch.vmap boundary (transformers 4.57 masks)
+# ---------------------------------------------------------------------------
+
+
+class _VmapIndexMask(nn.Module):
+    """Bool mask built the transformers 4.57 way: nested vmap indexing by aranges.
+
+    The vmapped function reads ``tbl[batch_idx, q_idx]`` through ``aten.index``
+    (what ``masking_utils`` does under its getitem-to-index transform). TorchLens
+    records the outer vmap as ONE bool-output boundary op whose parents include
+    the batch and query aranges. With batch size 1 the batch arange has a one-value
+    domain: ``-1`` aliases ``0`` and every other value is out of bounds.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        batch, seq = x.shape[0], x.shape[1]
+        table = torch.arange(batch * seq).reshape(batch, seq)
+
+        def mask_fn(batch_idx: torch.Tensor, q_idx: torch.Tensor, tbl: torch.Tensor):
+            return torch.ops.aten.index(tbl, [batch_idx, q_idx]) > 1
+
+        rows = torch.vmap(mask_fn, in_dims=(None, 0, None))
+        batched = torch.vmap(rows, in_dims=(0, None, None))
+        mask = batched(torch.arange(batch), torch.arange(seq), table)
+        return x * mask.float()
+
+
+def _vmap_mask_trace():
+    trace, ground_truth = _capture(_VmapIndexMask(), torch.randn(1, 6))
+    vmap_op = next(op for op in trace._layer_list if op.func_name == "vmap")
+    aranges = [label for label in vmap_op.parents if trace[label].func_name == "arange"]
+    batch_arange = next(label for label in aranges if trace[label].out.numel() == 1)
+    query_arange = next(label for label in aranges if label != batch_arange)
+    return trace, ground_truth, vmap_op, batch_arange, query_arange
+
+
+def test_vmap_index_mask_model_validates() -> None:
+    """The out-of-range battery substitute settles "probe cannot run", not a crash.
+
+    Red before the fix: ``validate_forward_pass`` raised the IndexError that the
+    batch-arange substitute provoked inside the vmapped ``aten.index``.
+    """
+
+    assert _quiet_validate(_VmapIndexMask(), torch.randn(1, 6)) is True
+
+
+def test_bool_predicate_probe_treats_index_refusal_as_cannot_run() -> None:
+    """IndexError from an out-of-range substitute index is the same refusal as RuntimeError."""
+
+    from torchlens.validation._core import (
+        _check_whether_func_on_saved_parents_yields_saved_tensor,
+    )
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
+
+    trace, _ground_truth, vmap_op, batch_arange, _query = _vmap_mask_trace()
+    try:
+        assert _bool_predicate_influence_probe(vmap_op, [batch_arange]) is None
+        result = _check_whether_func_on_saved_parents_yields_saved_tensor(
+            trace, vmap_op.label, perturb=True, layers_to_perturb=[batch_arange]
+        )
+        assert (result.decision, result.reason) == ("exempted", "discrete_bool_output")
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.parametrize("parent", ["batch", "query"])
+def test_frozen_vmap_mask_callable_still_fails(parent: str) -> None:
+    """Negative: a dead edge on the vmap boundary op still fails as perturbation_insensitive."""
+
+    from torchlens.validation._core import (
+        _check_whether_func_on_saved_parents_yields_saved_tensor,
+    )
+
+    trace, _ground_truth, vmap_op, batch_arange, query_arange = _vmap_mask_trace()
+    try:
+        saved = vmap_op.out.detach().clone()
+        object.__setattr__(vmap_op, "func", lambda *args, **kwargs: saved.clone())
+        label = batch_arange if parent == "batch" else query_arange
+        result = _check_whether_func_on_saved_parents_yields_saved_tensor(
+            trace, vmap_op.label, perturb=True, layers_to_perturb=[label]
+        )
+        assert (result.decision, result.reason) == ("failed", "perturbation_insensitive")
+    finally:
+        trace.cleanup()
+
+
+def test_corrupted_vmap_mask_output_still_fails_validation() -> None:
+    """Negative: a corrupted saved mask on the same model fails validation."""
+
+    trace, ground_truth, vmap_op, _batch, _query = _vmap_mask_trace()
+    try:
+        vmap_op.out.logical_not_()
+        assert trace.validate_forward_pass(ground_truth) is False
+    finally:
+        trace.cleanup()

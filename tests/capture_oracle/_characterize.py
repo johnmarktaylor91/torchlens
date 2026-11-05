@@ -953,7 +953,7 @@ def _outcome_projection(product: Any, exception: BaseException | None) -> dict[s
             "failed": product.is_failed,
             "halted": product.is_stopped,
             "stop_reason": product.stop_reason,
-            "n_ops_completed": product.num_committed_ops,
+            "n_ops_committed": product.num_committed_ops,
             "last_successful_op_label": product.last_successful_op_label,
             "last_event_label": product.last_event_label,
             "last_event_func": product.last_event_func,
@@ -1148,14 +1148,15 @@ def _capture_once(case: CaseSpec) -> tuple[dict[str, Any], dict[str, float | int
     input_before = _tensor_fingerprint(input_tensor)
     input_version_before = int(input_tensor._version)
     rng_before = _rng_fingerprint()
-    instrumentation = _install_instrumentation()
 
     with tempfile.TemporaryDirectory(prefix="torchlens-capture-oracle-") as temp_dir:
         disk_path = Path(temp_dir) / "capture.tlspec"
-        tracemalloc.start()
-        started = time.perf_counter()
         product: Any | None = None
         exception: BaseException | None = None
+        # Installed last before the try so its finally always restores the observers.
+        instrumentation = _install_instrumentation()
+        tracemalloc.start()
+        started = time.perf_counter()
         try:
             try:
                 product, exception, _output = _run_capture(case, model, input_tensor, disk_path)

@@ -1,13 +1,10 @@
 """Columnar row store backing the ``Op`` facade (the M5 seam).
-
 One ``OpRowStore`` per captured trace holds every stored ``Op`` field cell;
 ``Op`` itself is a two-word ``(_core, _row)`` facade whose generated data
 descriptors read and write cells here. ``DetachedOpStore`` is the single-row
 twin used by ``Op._copy_with_shallow_fields()``, pickle restoration, fork shells, and preview
 backends that construct ops outside the event-materialize ingress.
-
 Storage phases:
-
 * BUILDING (postprocess steps 0-20): rows are plain Python lists (one
   ``[_MISSING] * n_fields`` allocation per op), so cell reads/writes are
   list indexing and the per-op footprint matches the former slot layout.
@@ -18,7 +15,6 @@ Storage phases:
   their exact public type); everything else stays an object column. Later
   writes land in a sparse overlay; deletes on object columns release the
   cell value in place so op removal keeps freeing payloads.
-
 An unset cell is ``_MISSING`` (never ``None`` -- ``None`` is a real stored
 value); facade descriptors translate ``_MISSING`` into the exact
 ``AttributeError`` an unset ``__slots__`` member raised.
@@ -34,6 +30,8 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from .._utils._display_bounded import RecordTuple
+from ._content_fingerprint import _cell_content_fingerprint, _value_fingerprint
 from ._fork_copy import (
     _COW_ATOMIC,
     _contains_mutable_container,
@@ -216,6 +214,8 @@ def _evict_payloads_in_tuple(
         return value
     if type(value) is tuple:
         return tuple(rebuilt)
+    if type(value) is RecordTuple:
+        return RecordTuple(rebuilt, value.title, value.noun, value.singular)
     try:
         # Named tuples and tuple subclasses reconstruct through their own
         # type; an unreconstructable subclass keeps the original (a
@@ -320,6 +320,7 @@ class OpRowStore:
         "_columns",
         "_compacted_singletons",
         "_cow_shared",
+        "_label_share",
         "_mutable_keys",
         "_n_rows",
         "_overlay",
@@ -334,6 +335,7 @@ class OpRowStore:
         "layout",
         "ref_labels",
     )
+    _label_share: list[Any]  # set lazily by ``label_cells.shared_entry``
 
     def __init__(self, layout: OpStoreLayout) -> None:
         """Create an empty building-phase store."""
@@ -1092,72 +1094,6 @@ def mark_op_row_released(store: Any, row: int) -> None:
     releases = _AUDIT_ROW_RELEASES.get(id(store))
     if releases is not None:
         releases.add(row)
-
-
-def _value_fingerprint(value: Any) -> int:
-    """Order-canonical recursive content fingerprint for audit snapshots.
-
-    Unordered containers (``set``/``frozenset``/``dict``) hash their
-    element fingerprints SORTED, so equal content always fingerprints
-    equal regardless of iteration order — a ``hash(repr(...))`` snapshot
-    was iteration-order sensitive (a mutate-and-revert that resized a
-    set's table, or reordered equal dict keys, false-positively read as a
-    write of the column). Ordered containers stay positional. Leaves keep
-    the ``repr`` basis (in-place mutation anywhere inside still changes
-    the fingerprint); mutables nested in NON-builtin custom objects remain
-    the audit's disclosed residual. Env-gated enforcement-leg cost only:
-    comparable to the former full-``repr`` walk (it recurses the same
-    content, minus container string building; leaf ``repr`` — including
-    tensor and record cells — still dominates).
-    """
-
-    cls = value.__class__
-    if cls is dict:
-        return hash(
-            (
-                1,
-                tuple(
-                    sorted(
-                        hash((_value_fingerprint(key), _value_fingerprint(item)))
-                        for key, item in value.items()
-                    )
-                ),
-            )
-        )
-    if cls is list:
-        return hash((2, tuple(_value_fingerprint(item) for item in value)))
-    if cls is set or cls is frozenset:
-        return hash((3, tuple(sorted(_value_fingerprint(item) for item in value))))
-    if cls is tuple:
-        return hash((4, tuple(_value_fingerprint(item) for item in value)))
-    try:
-        return hash((0, repr(value)))
-    except Exception:
-        # Fail CLOSED (R22-8): a shared sentinel here made every pair of
-        # fingerprint-refusing values compare EQUAL, collapsing a real write
-        # to "no effective write" and laundering the downstream read. The
-        # object id keeps same-object comparisons stable within the audit
-        # window while distinct refusing objects read as changed -- a false
-        # alarm at worst, never a laundering pass.
-        return id(value)
-
-
-def _cell_content_fingerprint(value: Any) -> int | None:
-    """Content fingerprint for one exact builtin mutable-container cell.
-
-    Non-container values (and immutable views) return ``None`` — cell
-    REPLACEMENT is already caught by the write interception. Containers
-    whose content cannot be fingerprinted (cycles) conservatively
-    fingerprint as their length so at least size changes are visible.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is list or cls is set:
-        try:
-            return _value_fingerprint(value)
-        except Exception:
-            return len(value)
-    return None
 
 
 class _AuditedOpRowStore(OpRowStore):

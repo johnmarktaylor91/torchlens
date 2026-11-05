@@ -259,6 +259,11 @@ exists.
 Episode/generation views: `EpisodeCoordinates` (step / role / completion /
 member) lands on the records from day one, so per-step sheets and the
 staircase render against the episode substrate without recomputation.
+Per-step attention is rendered now: a generation recorded with the softmax
+saved gives one `AttentionView` per layer per step, whose decode row
+`tl.viz.attention` outlines ([Attention at each generation
+step](../field-guide/generation_attention.md); the step door's spelling is
+pending).
 A value-site grid measures KV groups (a group is shared storage); kv-group
 receipts (above) render the disclosure ("kv group g of G, shared by query
 heads a-b"). Per-query-head value-site receipts come from the op-level

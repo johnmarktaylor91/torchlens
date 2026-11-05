@@ -155,7 +155,7 @@ from ._pickle_prescan import (
     prescan_stream,
     scan_opcodes,
 )
-from ._pre3_module_paths import refuse_pre_3_module_path
+from .format_contract import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
 
 __all__ = ["SafeBundleUnpickler"]
@@ -635,7 +635,7 @@ _Importer = Callable[[str, str], Any]
 class _BundleAllowlistPolicy:
     """The ``find_class`` policy shared by the C-backed and pure-Python unpicklers.
 
-    Refuses every global that only torchlens 2.x wrote with the one 2.x error, then
+    Refuses every global that only torchlens 2.37 and earlier wrote with the one pre-2.38 error, then
     gates every resolved global through the module allowlist. Anything outside the
     allowlist raises :class:`pickle.UnpicklingError` without importing or calling
     attacker-chosen code. ``_resolve_global`` is the policy; each concrete class wires
@@ -798,7 +798,7 @@ class _BundleAllowlistPolicy:
                 "Blocked torch.storage._load_from_bytes during bundle metadata "
                 "unpickle: this file embeds a raw tensor in its metadata, which no "
                 "writer of this format produces (only torchlens 2.36.2 and earlier "
-                "stored annotation tensors this way, and a file saved by torchlens 2.x "
+                "stored annotation tensors this way, and a file saved by torchlens 2.37 and earlier "
                 "refuses with ArtifactTooOldError before this point). The file is "
                 "corrupt or was not written by TorchLens; capture the model again with "
                 "this release and save that."

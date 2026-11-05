@@ -17,6 +17,7 @@ from ._base import (
     TorchLensWarning,
     TraceNotReproducibleWarning,
     ValidationError,
+    _QuietedWarning as _QuietedWarning,  # private marker base of a quieted warning
 )
 from ._episode import (
     BundleExperimentError,
@@ -28,6 +29,7 @@ from ._episode import (
     EpisodeLedgerError,
     ParamEvidenceMissingError,
 )
+from ._quiet import quiet
 from ._runnable import (
     BufferSinkRoutingError,
     CollectiveBoundaryReplayError,
@@ -109,23 +111,11 @@ _LEGACY_EXCEPTION_PATHS = {
         "OpaqueCallableError",
     ),
     "SpecPortabilityError": ("torchlens.intervention.errors", "SpecPortabilityError"),
-    "DirectWriteSaveError": (
-        "torchlens.intervention.errors",
-        "DirectWriteSaveError",
-    ),
+    "DirectWriteSaveError": ("torchlens.intervention.errors", "DirectWriteSaveError"),
     "NonExecutableSpecError": ("torchlens.intervention.errors", "NonExecutableSpecError"),
-    "UnserializableDictKeyError": (
-        "torchlens.intervention.errors",
-        "UnserializableDictKeyError",
-    ),
-    "AmbiguousBatchInputError": (
-        "torchlens.intervention.errors",
-        "AmbiguousBatchInputError",
-    ),
-    "ChunkedForwardConfigError": (
-        "torchlens.intervention.errors",
-        "ChunkedForwardConfigError",
-    ),
+    "UnserializableDictKeyError": ("torchlens.intervention.errors", "UnserializableDictKeyError"),
+    "AmbiguousBatchInputError": ("torchlens.intervention.errors", "AmbiguousBatchInputError"),
+    "ChunkedForwardConfigError": ("torchlens.intervention.errors", "ChunkedForwardConfigError"),
     "HelperMountError": ("torchlens.intervention.errors", "HelperMountError"),
     "GraphShapeMismatchError": ("torchlens.intervention.errors", "GraphShapeMismatchError"),
     "ControlFlowDivergenceWarning": (
@@ -152,10 +142,7 @@ _LEGACY_EXCEPTION_PATHS = {
         "AppendStateValidationWarning",
     ),
     "MultiOutputModuleError": ("torchlens.intervention.errors", "MultiOutputModuleError"),
-    "BatchNormTrainModeWarning": (
-        "torchlens.intervention.errors",
-        "BatchNormTrainModeWarning",
-    ),
+    "BatchNormTrainModeWarning": ("torchlens.intervention.errors", "BatchNormTrainModeWarning"),
     "SpecMutationError": ("torchlens.intervention.errors", "SpecMutationError"),
     "SelectionError": ("torchlens._selection.selection", "SelectionError"),
     "SiteResolutionError": ("torchlens.intervention.errors", "SiteResolutionError"),
@@ -471,5 +458,6 @@ __all__ = [
     "TorchLensWarning",
     "TraceNotReproducibleWarning",
     "ValidationError",
+    "quiet",
     *_LAZY_EXCEPTION_PATHS,
 ]

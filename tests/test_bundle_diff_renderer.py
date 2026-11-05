@@ -13,11 +13,14 @@ from xml.etree import ElementTree
 import numpy as np
 import pytest
 import torch
+from support.cairosvg_skip import require_cairosvg
 
 import torchlens as tl
 from torchlens._visualization.bundle_diff import _build_dot, _select_pairs
 from torchlens.bundle._deltas import SiteDeltas
 from torchlens.errors import MultiMatchWarning
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
 GOLDEN_SVG = SNAPSHOT_DIR / "bundle_diff_clean_vs_zero_relu.svg"
@@ -62,7 +65,7 @@ def _canonical_bundle() -> tl.Bundle:
         ablated_log.do(
             tl.module("layer1.0.relu"),
             tl.zero_ablate(),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     return tl.Bundle({"clean": trace, "ablated": ablated_log}, baseline="clean")
 
@@ -104,7 +107,7 @@ def _rasterize(svg_path: Path) -> np.ndarray[Any, np.dtype[np.uint8]]:
         RGB pixel data.
     """
 
-    cairosvg = pytest.importorskip("cairosvg")
+    cairosvg = require_cairosvg()
     from PIL import Image as pillow_image
 
     png_bytes = cairosvg.svg2png(url=str(svg_path), output_width=1200, output_height=800)
@@ -192,9 +195,9 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
     # convert a real regression into a skip (b10 R78-4: cairosvg is installed
     # nowhere, so the mid-test importorskip made every byte regression green-
     # adjacent on every environment that exists).
-    import importlib.util
+    from torchlens._visualization._cairosvg import get_cairosvg_support
 
-    if importlib.util.find_spec("cairosvg") is None:
+    if not get_cairosvg_support():
         pytest.fail(
             "bundle-diff SVG bytes diverged from the committed golden and cairosvg is "
             f"unavailable to run the pixel-similarity exoneration. {context}"
@@ -298,7 +301,7 @@ def _diff_bundle_with_marked_column() -> tl.Bundle:
     patched = clean.fork("patched").do(
         tl.module("1"),
         tl.scale(0.5),
-        intervention=tl.options.InterventionOptions(engine="replay", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="replay"),
     )
     return tl.Bundle({"clean": clean, "patched": patched}, baseline="clean")
 

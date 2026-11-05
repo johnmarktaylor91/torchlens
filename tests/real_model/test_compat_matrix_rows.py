@@ -1,4 +1,4 @@
-"""Compat matrix rows for the current releases: router logits, tensor parallelism, FlashAttention 4.
+"""Compat matrix rows for the current releases: router logits, tensor parallelism, FlashAttention.
 
 Each test is one row of ``docs/reference/compat_matrix.md``. The rows run on whatever torch and
 transformers the environment holds; the page records the versions and hosts each row was
@@ -20,8 +20,17 @@ measured on.
   ``autogradfunction`` boundary call (exit ``flash_attn.cute``) that validates through replay
   under ``torch.no_grad()``; a companion test pins that the armed completeness witness sees no
   gap. With autograd enabled the kernel also returns its log-sum-exp, a second output of the
-  same call that does not depend on v, and forward validation reports that edge as
-  insensitive (strict xfail until the per-output rule is decided).
+  same call that depends on q and k only; the kernel table declares that per-output
+  dependence (ruling: declare per-output dependence per kernel in a table) and the grad-enabled
+  row validates too, with the attention output's every edge still tested.
+* ``flash_attention_2``: capture on a CUDA device with the ``flash-attn`` package, whose
+  wheels pin a torch release; skipped elsewhere with the reason. ``_flash_attn_forward`` is a
+  torch custom op, so each attention call is four sibling ops of one call (attention output,
+  log-sum-exp, dropout mask, rng state) with no boundary op and no foreign-kernel warning;
+  the capture is exact, and forward validation passes: the kernel table declares the custom
+  op's per-output dependence (the log-sum-exp and dropout mask read q and k, the rng state
+  none of q, k, v), so the unconsumed siblings' undeclared edges are excused and the
+  attention output's every edge is still tested.
 """
 
 from __future__ import annotations
@@ -314,8 +323,8 @@ def test_flash_attention_4_capture_and_validate() -> None:
     from torchlens._utils._torch_compat import HAS_FLASH_ATTENTION_4_INTERFACE
     from torchlens.validation import last_validation_failure
 
-    assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     model, input_ids = _fa4_llama()
+    assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     with torch.no_grad():
         direct = model(input_ids=input_ids).logits
         with pytest.warns(tl.errors.TorchLensWarning, match="foreign-kernel boundary op"):
@@ -331,25 +340,19 @@ def test_flash_attention_4_capture_and_validate() -> None:
     assert last_validation_failure() is None
 
 
-_FA4_LSE_EDGE = (
-    "with autograd enabled FlashAttention 4 returns (out, lse); lse is a second output of the "
-    "same boundary call that depends on q and k only, and the perturbation check reports its "
-    "v edge (arg 2) as insensitive. A per-output or per-call rule for multi-output boundary "
-    "calls is a validation-integrity decision; until it is made this pins the failure."
-)
-
-
 @pytest.mark.cuda
 @pytest.mark.heavy
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason=_FA4_LSE_EDGE)
 def test_flash_attention_4_grad_enabled_validates() -> None:
-    """With autograd on, each call is two sibling ops (out, lse) and validation fails on lse.
+    """With autograd on, each call is two sibling ops (out, lse) and validation passes.
 
-    The capture itself is right: both siblings share one call with q, k and v at arg
-    positions 0 to 2, the attention output (index 0, bfloat16) feeds the next op and the
-    log-sum-exp (index 1, float32) feeds nothing. Forward validation fails only on the lse
-    sibling's v edge; when a rule for that edge lands this xfail must be dropped.
+    Both siblings share one call with q, k and v at arg positions 0 to 2, the attention
+    output (index 0, bfloat16) feeds the next op and the log-sum-exp (index 1, float32)
+    feeds nothing. The kernel table declares the log-sum-exp dependent on q and k only, so
+    its v edge is excused by declaration while every other edge of both outputs is
+    perturbation-tested (``tests/test_foreign_kernel_dependence.py`` pins the edges).
     """
+
+    from torchlens.validation import last_validation_failure
 
     model, input_ids = _fa4_llama()
     with torch.no_grad():
@@ -371,6 +374,7 @@ def test_flash_attention_4_grad_enabled_validates() -> None:
     finally:
         trace.cleanup()
     assert tl.validate(model, (), {"input_ids": input_ids}, scope="forward") is True
+    assert last_validation_failure() is None
 
 
 @pytest.mark.cuda
@@ -425,3 +429,263 @@ def test_flash_attention_4_boundary_owns_every_dispatch() -> None:
         trace.cleanup()
     gap_warnings = [w for w in caught if issubclass(w.category, tl.errors.CaptureGapWarning)]
     assert gap_warnings == [], [str(w.message)[:200] for w in gap_warnings]
+
+
+def _flash_attention_2_ready() -> str:
+    """Return ``""`` when FlashAttention 2 can run here, else the skip reason."""
+
+    if not torch.cuda.is_available():
+        return "flash_attention_2 needs a CUDA device"
+    available = getattr(transformers.utils, "is_flash_attn_2_available", None)
+    if available is None:
+        return f"transformers {transformers.__version__} has no flash_attention_2"
+    if not available():
+        return "the flash-attn package is not installed for this torch or does not support this GPU"
+    return ""
+
+
+def _fa2_llama() -> tuple[torch.nn.Module, torch.Tensor]:
+    """Build a bf16 two-layer Llama on ``flash_attention_2`` on CUDA, or skip with the reason."""
+
+    reason = _flash_attention_2_ready()
+    if reason:
+        pytest.skip(reason)
+    config = transformers.LlamaConfig(**(_TINY | {"hidden_size": 64}), intermediate_size=128)
+    torch.manual_seed(0)
+    model = transformers.LlamaForCausalLM._from_config(
+        config, attn_implementation="flash_attention_2", dtype=torch.bfloat16
+    )
+    model = model.to("cuda").eval()
+    assert model.config._attn_implementation == "flash_attention_2"
+    input_ids = torch.randint(0, 128, (1, 16), generator=torch.Generator().manual_seed(1))
+    return model, input_ids.to("cuda")
+
+
+def _fa2_kernel_ops(trace: tl.Trace) -> list[Any]:
+    """Return the ``_flash_attn_forward`` ops of a trace (four per attention call)."""
+
+    return [op for op in trace._layer_list if op.func_name == "_flash_attn_forward"]
+
+
+def _assert_fa2_capture_shape(trace: tl.Trace, direct: torch.Tensor, num_layers: int) -> None:
+    """Assert a ``flash_attention_2`` trace: exact output, four native siblings per call.
+
+    The kernel is a torch custom op, so TorchLens records it natively: every attention
+    call is one ``func_call_id`` with four sibling outputs whose parents are q, k and v,
+    the attention output (index 0, bfloat16) feeds the next op and the other three
+    (log-sum-exp, dropout mask, rng state) feed nothing. No boundary op and no
+    foreign-kernel disclosure are involved.
+    """
+
+    assert trace.outcome.status.name == "COMPLETE"
+    assert torch.equal(trace.output.logits, direct)
+    kernel_ops = _fa2_kernel_ops(trace)
+    calls = {op.call.call_id for op in kernel_ops}
+    assert len(calls) == num_layers, calls
+    assert len(kernel_ops) == 4 * num_layers, [op.label for op in kernel_ops]
+    for op in kernel_ops:
+        assert op.call.func_transform_kind != FOREIGN_FUNCTION_TRANSFORM_KIND, op.label
+        assert "self_attn" in str(op.module_context.call_stack), op.module_context.call_stack
+        assert len(op.parents) == 3, (op.label, op.parents)
+        if op.multi_output_index == 0:
+            assert op.dtype == torch.bfloat16 and op.children, op.label
+        else:
+            assert not op.children, op.label
+    assert [
+        op.label for op in trace._layer_list if op.func_name == FOREIGN_FUNCTION_FUNC_NAME
+    ] == []
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_2_captures_exactly() -> None:
+    """A Llama on ``attn_implementation="flash_attention_2"`` traces natively and exactly.
+
+    ``flash_attn.flash_attn_interface._flash_attn_forward`` is a torch custom op, so the
+    torch function layer sees it: no boundary op, no ``foreign_kernel_boundary`` warning and
+    no ``CaptureGapWarning``, under ``torch.no_grad()`` and with autograd enabled alike.
+    """
+
+    model, input_ids = _fa2_llama()
+    with torch.no_grad():
+        direct = model(input_ids=input_ids).logits
+    for grad_enabled in (False, True):
+        with torch.set_grad_enabled(grad_enabled), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+        try:
+            _assert_fa2_capture_shape(trace, direct, model.config.num_hidden_layers)
+        finally:
+            trace.cleanup()
+        disclosed = [
+            str(w.message)
+            for w in caught
+            if issubclass(w.category, tl.errors.CaptureGapWarning)
+            or "foreign-kernel boundary op" in str(w.message)
+        ]
+        assert disclosed == [], (grad_enabled, disclosed)
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_2_validates() -> None:
+    """Forward validation of a ``flash_attention_2`` Llama passes.
+
+    The capture is exact (``test_flash_attention_2_captures_exactly``). Each call's four
+    sibling ops carry q, k and v; the kernel table declares which of them each output reads
+    (``_foreign_data._KNOWN_NATIVE_CUSTOM_OPS``), so the log-sum-exp's and dropout mask's v
+    edge and the rng state's q, k, v edges are excused, and every other edge is tested.
+    """
+
+    from torchlens.validation import last_validation_failure
+
+    model, input_ids = _fa2_llama()
+    with torch.no_grad():
+        verdict = tl.validate(model, (), {"input_ids": input_ids}, scope="forward")
+    failure = last_validation_failure()
+    assert verdict is True, (verdict, failure)
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_2_witness_sees_no_gap() -> None:
+    """With the completeness witness armed, a ``flash_attention_2`` trace is verified.
+
+    The custom op's dispatches are owned by the ops TorchLens records for it, so the
+    witness accounts for the whole forward: no ``CaptureGapWarning``, ``verified`` is True
+    and the diagnostics are empty.
+    """
+
+    from torchlens import _state
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+    model, input_ids = _fa2_llama()
+    saved_escape_detector = _state._escape_detector_mode
+    saved_completeness_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(completeness_witness=True)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    finally:
+        unwrap_torch()
+        wrap_torch(
+            escape_detector=saved_escape_detector,
+            completeness_witness=saved_completeness_witness,
+        )
+    try:
+        provenance = trace.provenance
+        facts = (
+            provenance.verified,
+            provenance.verification_reason,
+            trace.completeness_diagnostics,
+        )
+        assert provenance.verified is True, facts
+        assert trace.completeness_diagnostics == [], facts
+        assert len(_fa2_kernel_ops(trace)) == 4 * model.config.num_hidden_layers
+    finally:
+        trace.cleanup()
+    gap_warnings = [w for w in caught if issubclass(w.category, tl.errors.CaptureGapWarning)]
+    assert gap_warnings == [], [str(w.message) for w in gap_warnings]
+
+
+_FA2_SEEN_MASKS: list[torch.Tensor] = []
+"""The ``S_dmask`` each ``_Fa2DropoutAttention`` forward received (module state is restored)."""
+
+
+class _Fa2DropoutAttention(torch.nn.Module):
+    """One bf16 projection into q, k, v and a FlashAttention 2 call with dropout and S_dmask."""
+
+    def __init__(self, seq: int) -> None:
+        super().__init__()
+        self.seq = seq
+        self.proj = torch.nn.Linear(32, 96).to("cuda", torch.bfloat16)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        from flash_attn import flash_attn_func
+
+        q, k, v = self.proj(x).view(1, self.seq, 3, 2, 16).unbind(2)
+        out, _lse, s_dmask = flash_attn_func(q, k, v, dropout_p=0.25, return_attn_probs=True)
+        _FA2_SEEN_MASKS.append(s_dmask)
+        return out.sum(-1)
+
+
+def _fa2_dropout_model(seq: int) -> tuple[_Fa2DropoutAttention, torch.Tensor]:
+    """A train-mode dropout attention on CUDA and its input, or skip with the reason."""
+
+    reason = _flash_attention_2_ready()
+    if reason:
+        pytest.skip(reason)
+    torch.manual_seed(0)
+    model = _Fa2DropoutAttention(seq).train()
+    x = torch.randn(1, seq, 32, device="cuda", dtype=torch.bfloat16)
+    return model, x
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+@pytest.mark.parametrize("seq", [8, 136])
+def test_flash_attention_2_dropout_replays_exactly(seq: int) -> None:
+    """With dropout_p > 0 every FA2 output replays bit for bit, the dropout mask included.
+
+    Replay restores the captured CUDA generator state, so the kernel redraws the same
+    dropout mask. The mask's padding beyond (seqlen_q, seqlen_k), which the kernel leaves
+    undefined, is zeroed where the recorded call returns, so the model, the saved value and
+    the replay hold the same bytes and validation compares the whole tensor.
+    """
+
+    from torchlens.options import CaptureOptions
+    from torchlens.validation import last_validation_failure
+    from torchlens.validation._core import (
+        _check_whether_func_on_saved_parents_yields_saved_tensor,
+    )
+
+    model, x = _fa2_dropout_model(seq)
+    with torch.no_grad():
+        verdict = tl.validate(model, (x,), scope="forward")
+    assert verdict is True, last_validation_failure()
+    with torch.no_grad():
+        trace = tl.trace(
+            model, (x,), capture=CaptureOptions(save_args=True, save_rng=True), save="all"
+        )
+    try:
+        kernel_ops = _fa2_kernel_ops(trace)
+        assert sorted(op.multi_output_index for op in kernel_ops) == [0, 1, 2, 3]
+        (mask_op,) = [op for op in kernel_ops if op.multi_output_index == 2]
+        saved, rounded = mask_op.out, -(-seq // 128) * 128
+        assert saved.shape == (1, 2, rounded, rounded)
+        assert torch.equal(saved, _FA2_SEEN_MASKS[-1])
+        assert not saved[..., seq:, :].any() and not saved[..., :seq, seq:].any()
+        assert (saved[..., :seq, :seq] < 0).any(), "dropped entries carry the sign bit"
+        for op in kernel_ops:
+            result = _check_whether_func_on_saved_parents_yields_saved_tensor(trace, op.label)
+            assert result.decision == "validated", (op.label, result.reason)
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.cuda
+@pytest.mark.heavy
+def test_flash_attention_2_dropout_without_padding_zeroing_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mutation proof on the real kernel: without the zeroing the dropout mask fails replay."""
+
+    from torchlens.backends.torch import _torch_ops_calls
+    from torchlens.validation import last_validation_failure
+
+    monkeypatch.setattr(_torch_ops_calls, "_zero_fa2_softmax_padding", lambda *_args: None)
+    model, x = _fa2_dropout_model(8)
+    with torch.no_grad():
+        verdict = tl.validate(model, (x,), scope="forward")
+    failure = last_validation_failure()
+    assert verdict is False and failure is not None, (verdict, failure)
+    assert failure.check_name == "forward_replay", failure
+    with torch.no_grad():
+        trace = tl.trace(model, (x,))
+    try:
+        (mask_op,) = [op for op in _fa2_kernel_ops(trace) if op.multi_output_index == 2]
+        assert failure.op_label == mask_op.label, failure
+    finally:
+        trace.cleanup()

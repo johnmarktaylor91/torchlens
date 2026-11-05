@@ -2,7 +2,9 @@
 
 The 2026-10-01 shim removal deleted the alias members outright (remove-and-
 rename, no alias), lane F12 deleted ``VisualizationTheme.legend_items``, and the
-1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names.
+1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names,
+the names rulings deleted ``set`` from ``Trace``, ``Layer`` and ``Op``, and the ``do``
+fold deleted ``attach_hooks`` from ``Trace``, ``Layer`` and ``Op``.
 A lookup of any of them must raise ``FacadeTeachingError`` (code
 ``facade_redirect``, ``AttributeError`` lineage) whose message names the
 replacement, never a bare ``AttributeError``. Every other missing name keeps
@@ -45,6 +47,8 @@ def owners():
         yield {
             "Trace": first,
             "Bundle": tl.Bundle({"a": first, "b": second}),
+            "Layer": first.layers["relu_1_2"],
+            "Op": first.layers["relu_1_2"].ops[0],
             "VisualizationOptions": VisualizationOptions(),
             "CaptureOptions": CaptureOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
@@ -56,12 +60,15 @@ def owners():
 
 #: (owner class, removed member, live replacement member)
 REMOVED_MEMBERS: list[tuple[str, str, str]] = [
-    ("Trace", "replay", "push"),
-    ("Trace", "replay_from", "push_from"),
+    ("Trace", "replay", "do"),
+    ("Trace", "replay_from", "do"),
+    ("Trace", "push", "do"),
+    ("Trace", "push_from", "do"),
+    ("Trace", "attach_hooks", "do"),
+    ("Trace", "remove", "clear_edits"),
     ("Trace", "rerun", "run"),
     ("Trace", "validate_saved_outs", "validate_forward_pass"),
     ("Trace", "save_new_outs", "run"),
-    ("Trace", "attach_hooks", "do"),
     ("Trace", "clear_hooks", "clear_edits"),
     ("Trace", "collapse_plan", "draw"),
     ("Trace", "collapse_schedule", "draw"),
@@ -73,6 +80,9 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "disarm_triggers", "autograd.disarm"),
     ("Trace", "log_backward", "backward"),
     ("Trace", "set", "do"),
+    ("Layer", "attach_hooks", "do"),
+    ("Op", "attach_hooks", "do"),
+    ("Op", "set", "do"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "rolled"),
@@ -141,16 +151,36 @@ def test_removed_module_name_raises_typed_redirect() -> None:
             target = importlib.import_module(walked)
 
 
-def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:
-    """``Layer.set`` was replaced by ``Layer.do`` with the ``set_only`` engine."""
+@pytest.mark.parametrize(
+    ("owner", "call"),
+    [
+        ("Trace", "trace.do(site, value, intervention="),
+        ("Layer", "layer.do(value, intervention="),
+        ("Op", "op.do(value, intervention="),
+    ],
+)
+def test_set_redirect_names_set_only_for_values_and_sticky_for_callables(
+    owners: dict[str, Any], owner: str, call: str
+) -> None:
+    """``set`` redirects to the ``set_only`` engine of ``do`` and says a callable stays sticky.
 
-    layer = next(iter(owners["Trace"].layers))
+    ``set(site, fn)`` applied the callable once; ``do(..., engine="set_only")`` stages it as a
+    sticky hook (walk ruling names.3), so the redirect names that change and the way to detach.
+    """
+
+    instance = owners[owner]
     with pytest.raises(FacadeTeachingError) as excinfo:
-        _ = layer.set
+        _ = instance.set
+    text = str(excinfo.value)
     assert excinfo.value.fields["code"] == "facade_redirect"
-    assert "set_only" in str(excinfo.value)
-    assert getattr(layer, "set", "absent") == "absent"
-    assert callable(layer.do)
+    assert f"use {call}tl.options.InterventionOptions(engine='set_only'))" in text
+    assert "to stage a value or tensor" in text
+    assert "a callable passed that way becomes a sticky hook" in text
+    assert "until trace.clear_edits(site) detaches it" in text
+    assert f"({owner}.set applied a callable once)" in text
+    assert getattr(instance, "set", "absent") == "absent"
+    assert callable(instance.do)
+    assert callable(owners["Trace"].clear_edits)
 
 
 def test_unknown_member_still_fails_plain(owners: dict[str, Any]) -> None:
@@ -159,6 +189,8 @@ def test_unknown_member_still_fails_plain(owners: dict[str, Any]) -> None:
     for owner in (
         "Trace",
         "Bundle",
+        "Layer",
+        "Op",
         "VisualizationOptions",
         "CaptureOptions",
         "VisualizationTheme",
@@ -181,6 +213,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/options.py", "VisualizationOptions"),
     ("torchlens/options.py", "CaptureOptions"),
     ("torchlens/_visualization/themes.py", "VisualizationTheme"),
+    ("torchlens/_data_classes/op.py", "Op"),
 ]
 
 

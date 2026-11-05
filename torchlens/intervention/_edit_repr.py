@@ -14,6 +14,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._display_constructor import clipped, value_text
+from .._utils.fail_open import fail_open
+
 if TYPE_CHECKING:
     from ._types import Edit
 
@@ -39,6 +42,13 @@ def render_edit_repr(spec: Edit) -> str:
         ``tl.<constructor>(args)`` for a builtin edit, else ``tl.Edit(...)``.
     """
 
+    return fail_open(lambda: clipped(_edit_repr(spec)), lambda _error: "tl.Edit(...)")
+
+
+def _edit_repr(spec: Edit) -> str:
+    """Render known public constructors or the bounded identity fallback."""
+
+    # Keep constructor/default ordering together; the inherited formatting branch set is cohesive.
     public = _public_constructor(spec)
     if public is not None:
         path, target = public
@@ -71,7 +81,9 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
 
     Only builtin edits qualify: their stored ``(args, kwargs)`` are exactly the
     constructor arguments the saved-spec loader re-invokes. A selection recipe
-    is not a constructor argument, so an edit carrying one never qualifies.
+    is not a constructor argument, so an edit carrying one never qualifies, and
+    neither does one whose stored keywords the constructor does not take (a
+    stored element mask).
 
     Parameters
     ----------
@@ -90,7 +102,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     from ._helpers import builtin_helper_constructor
 
     target = builtin_helper_constructor(spec.name)
-    if target is None:
+    if target is None or not _binds(target, spec):
         return None
     import importlib
 
@@ -134,31 +146,27 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
     return type(default) is type(value) and bool(default == value)
 
 
-def _render_value(value: Any) -> str:
-    """Render one constructor argument for the edit repr.
+_render_value = value_text
+
+
+def _binds(target: Callable[..., Any], spec: Edit) -> bool:
+    """Return whether ``spec``'s stored arguments are a call ``target`` accepts.
 
     Parameters
     ----------
-    value:
-        Stored constructor argument.
+    target:
+        Public constructor.
+    spec:
+        Edit whose ``args`` and ``kwargs`` are tried.
 
     Returns
     -------
-    str
-        Readable rendering; tensors print by shape and dtype, functions by name.
+    bool
+        ``False`` when printing the call would show a keyword it refuses.
     """
 
-    if isinstance(value, torch.Tensor):
-        return f"<tensor shape={tuple(value.shape)} dtype={value.dtype}>"
-    if (
-        callable(value)
-        and not isinstance(value, type)
-        and type(value).__name__ in {"function", "builtin_function_or_method", "method"}
-    ):
-        return f"<function {value.__qualname__}>"
-    if isinstance(value, tuple):
-        inner = ", ".join(_render_value(item) for item in value)
-        return f"({inner},)" if len(value) == 1 else f"({inner})"
-    if isinstance(value, list):
-        return f"[{', '.join(_render_value(item) for item in value)}]"
-    return repr(value)
+    try:
+        inspect.signature(target).bind(*spec.args, **dict(spec.kwargs))
+    except (TypeError, ValueError):
+        return False
+    return True

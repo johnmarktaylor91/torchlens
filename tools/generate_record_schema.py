@@ -44,7 +44,7 @@ generation, so hand edits cannot survive. The declared axes live in
 from __future__ import annotations
 
 from ._schema_bindings_trace import TRACE_BINDINGS
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 '''
 
@@ -59,7 +59,7 @@ generation, so hand edits cannot survive.
 
 from __future__ import annotations
 
-from .field_policy import StorageBinding, StorageKind
+from .._io._field_policy import StorageBinding, StorageKind
 
 '''
 
@@ -85,6 +85,12 @@ _GROUP_FIELDS = {"equivalent_ops", "recurrent_ops"}
 #: bitset pair they must classify before the property check or the
 #: result depends on whether the backend module is imported.
 _OVERLAY_EDGE_FIELDS = {"input_ancestors", "output_descendants"}
+
+#: Stored fields fronted by a property that reads the stored slot back (the
+#: ``Trace.transformed_output`` getter refuses a stale replay marker). The
+#: value is stored data, not derived, so it classifies by its policy like
+#: any stored field instead of as COMPUTED.
+_STORED_BEHIND_PROPERTY_FIELDS = {"transformed_output"}
 
 #: Copy-on-read alias-barrier fields (FORK-1 default: fresh copies).
 _COPY_ON_READ_FIELDS = {"equivalent_ops", "recurrent_ops"}
@@ -264,7 +270,8 @@ def _classify(
     if name in _GROUP_FIELDS:
         return "GROUP", "mutable_container"
     attr = _storage_attr_for(cls, name)
-    if _is_property(cls, attr) and name not in _OVERLAY_EDGE_FIELDS:
+    stored = name in _OVERLAY_EDGE_FIELDS or name in _STORED_BEHIND_PROPERTY_FIELDS
+    if _is_property(cls, attr) and not stored:
         return "COMPUTED", "immutable"
     if policy.portable_policy is FieldPolicy.DROP:
         return "RUNTIME", "immutable"

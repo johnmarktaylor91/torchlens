@@ -14,6 +14,7 @@ from ._exemption_schema import ExemptionRow
 _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
 _SLOTS = "tests/test_validation_structural_slots.py::"
+_KERNEL = "tests/test_foreign_kernel_dependence.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
 _EX = "torchlens.validation._exemptions:"
 _CORE = "torchlens.validation._core:"
@@ -244,6 +245,17 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         _SHAPE,
         _POSITION_NEGATIVE,
     ),
+    # Ruling Lead 3, 4 Nov 2026 2:31 PM PT (view-func-replay): torch reads only the receiver's
+    # view chain, never its values (view_func_impl / rev_view_func_impl in
+    # torch/csrc/autograd/python_variable.cpp); replay rebuilds that chain from the saved
+    # view context. The new base (or new view) at arg 1 stays perturbation-tested.
+    _structural(
+        ("_view_func", "_view_func_unsafe", "_rev_view_func_unsafe"),
+        frozenset({0}),
+        "the receiver at arg 0 supplies its view chain",
+        "view-chain template: the receiver's elements never reach the output; arg 1 stays tested",
+        "tests/test_view_func_replay.py::test_planted_new_base_blind_replay_fails_perturbation",
+    ),
     _structural(
         "resize_as_",
         (frozenset({1}), ((1, frozenset({"the_template"})),)),
@@ -442,6 +454,26 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         "the packed-sequence batch_sizes slot of a gru or rnn call",
         "batch_sizes is a structural length table the kernel indexes by, never a value input",
         _SLOTS + "test_packed_recurrence_data_slot_still_fails_when_frozen",
+    ),
+    _custom(
+        "autogradfunction",
+        "check_foreign_kernel_dependence_exempt",
+        "a perturbed parent of one output of a known foreign kernel's multi-output boundary "
+        "call, at a position the kernel table declares that output independent of",
+        "per-output dependence declared per kernel in a table (FlashAttention 4's log-sum-exp "
+        "depends on q and k, not v); undeclared kernels, outputs and positions stay strict",
+        _KERNEL + "test_undeclared_kernel_unmoved_sibling_output_still_fails",
+    ),
+    _custom(
+        "_flash_attn_forward",
+        "check_foreign_kernel_dependence_exempt",
+        "a perturbed parent of one output of FlashAttention 2's native custom op "
+        "flash_attn::_flash_attn_forward, at a position the kernel table declares that "
+        "output independent of",
+        "per-output dependence declared per kernel in a table (the log-sum-exp and dropout "
+        "mask depend on q and k, not v; the rng state on none of q, k, v); the attention "
+        "output, other operators and undeclared positions stay strict",
+        _KERNEL + "test_undeclared_custom_op_unmoved_sibling_output_still_fails",
     ),
     _custom(
         "expand",

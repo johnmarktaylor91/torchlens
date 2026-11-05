@@ -80,6 +80,36 @@ def probe_cpu_half_kernels() -> bool:
     return True
 
 
+def probe_eval_batch_norm_mean_residual() -> bool:
+    """Return whether eval batch_norm at a non-zero running mean still depends on running_var.
+
+    Returns
+    -------
+    bool
+        ``True`` when an eval-mode, affine-free ``torch.batch_norm`` whose input
+        equals a non-zero ``running_mean`` exactly changes its output when
+        ``running_var`` changes. The x86 CPU kernel folds the statistics into
+        ``input * alpha + (bias - running_mean * alpha)`` and the two
+        ``running_mean * alpha`` terms cancel only to within a few ulps, so a
+        live running_var edge moves the output; the Apple ARM kernel cancels
+        exactly and the output stays all-zero whatever ``running_var`` is. A
+        kernel property, not a TorchLens degradation: the running_var value
+        proof's tests read it to know whether a live running_var edge is
+        observable at a non-zero mean on this build.
+    """
+
+    generator = torch.Generator().manual_seed(2)
+    mean = torch.randn(64, generator=generator) * 3
+    var = torch.rand(64, generator=generator) + 1.5
+    x = mean.view(1, 64, 1, 1).expand(2, 64, 3, 3).contiguous()
+    try:
+        base = torch.batch_norm(x, None, None, mean, var, False, 0.1, 1e-5, False)
+        moved = torch.batch_norm(x, None, None, mean, var + 1.0, False, 0.1, 1e-5, False)
+    except RuntimeError:
+        return False
+    return not torch.equal(base, moved)
+
+
 def probe_cpu_float8_deterministic_fill() -> bool:
     """Return whether CPU tensor allocation fills Float8 dtypes under determinism.
 

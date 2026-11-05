@@ -111,7 +111,7 @@ def test_safe_tensor_properties_resolve_and_run_verified(
     path = tmp_path / f"{property_name}.tlspec"
     trace.save(path, level="runnable")
     loaded = tl.load(path)
-    result = loaded.run(x.clone(), seed=0, on_divergence="return")
+    result = loaded.run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
 
     assert loaded.readiness.status is ReadinessStatus.READY
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -161,7 +161,9 @@ def test_labeled_rhs_data_write_saves_and_runs_unverifiable(
         trace = tl.trace(model_factory(), x, capture=_CAPTURE)
     path = tmp_path / "data_write.tlspec"
     trace.save(path, level="runnable")
-    result = tl.load(path).run(torch.full((2, 3), 2.0), seed=0, on_divergence="return")
+    result = tl.load(path).run_transaction(
+        inputs=torch.full((2, 3), 2.0), seed=0, on_divergence="return"
+    )
 
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
     torch.testing.assert_close(result.output, torch.full((2, 3), 6.0))

@@ -140,18 +140,18 @@ def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     from torchlens._utils.hashing import sha256_file
     from torchlens.agent._artifacts import _sha256_of_file
 
-    target = clean / "metadata.pkl"
+    target = clean / "manifest.json"
     assert _sha256_of_file(target) == sha256_file(target)
 
 
 def test_corrupted_metadata_is_never_served_from_the_cache(clean: Path, tmp_path: Path) -> None:
-    """Same manifest, different metadata.pkl -> cache MISS -> the loader's integrity refusal."""
+    """Same manifest, different record bytes -> cache MISS -> the loader's integrity refusal."""
 
     healthy = call_tool("torchlens_overview", {"path": str(clean)})  # warms the cache
     assert healthy["status"] == "ok"
     corrupt = tmp_path / "corrupt.tlspec"
     shutil.copytree(clean, corrupt)
-    (corrupt / "metadata.pkl").write_bytes(b"garbage")
+    (corrupt / "records" / "trace.json").write_bytes(b"garbage")
     with pytest.raises(Exception) as exc:
         call_tool("torchlens_overview", {"path": str(corrupt)})
     assert exc.value.fields["code"] == "bundle_metadata_integrity_refused"

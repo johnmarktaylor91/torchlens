@@ -964,12 +964,12 @@ class ScoreDecomposition:
     tolerance: float = 1e-4
 
     def __post_init__(self) -> None:
-        """Enforce the hard sum-to-score invariant (refuse, never mislead)."""
+        """Enforce the sum-to-score invariant; a non-finite score closes only exactly."""
 
         total = self.total
-        error = abs(total - self.reference_score)
-        scale_ref = max(1.0, abs(self.reference_score))
-        if error > self.tolerance * scale_ref:
+        error = abs(total - self.reference_score)  # nan when both are the same infinity
+        scale_ref = max(1.0, abs(self.reference_score)) if math.isfinite(error) else 1.0
+        if total != self.reference_score and not error <= self.tolerance * scale_ref:
             refuse(
                 code="tv_decomposition_unclosed",
                 message=(

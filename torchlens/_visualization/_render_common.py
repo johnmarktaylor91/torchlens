@@ -67,6 +67,7 @@ from .._utils._record_group_table import record_member
 from .._utils.display import _timed_phase, _vprint, in_notebook, int_list_to_compact_str
 from .._utils.env_flags import closed_bool_env
 from ..errors._base import CompatibilityError
+from ._focus_stubs import BoundaryNode
 from ._label_format import (
     format_memory,
     format_module_kwargs,
@@ -82,7 +83,8 @@ from ._render_utils import (
     make_module_cluster_attrs,
     relativize_visualizer_image,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._rolled_edges import _SELF_LOOP_LABEL_HGAP  # noqa: F401  (spelling kept for importers)
+from ._typography import edge_annotation_pt
 from .code_panel import (
     CodePanelOption,
     compose_graph_with_code_panel,
@@ -236,83 +238,19 @@ class RollingAnnotation:
     buffer_versions: tuple[int, ...] = ()
 
 
-@dataclass
-class BoundaryNode:
-    """Synthetic node representing a focused module boundary.
-
-    Parameters
-    ----------
-    layer_label:
-        DOT-safe synthetic label.
-    display_label:
-        Human-readable label shown in the node.
-    boundary_kind:
-        ``"input"`` for external upstreams, ``"output"`` for external sinks.
-    children:
-        Outgoing rendered labels.
-    parents:
-        Incoming rendered labels.
-    modules:
-        Module path used for cluster placement.
-    """
-
-    layer_label: str
-    display_label: str
-    boundary_kind: str
-    children: list[str]
-    parents: list[str]
-    modules: list[str]
-    is_buffer: bool = False
-    has_input_ancestor: bool = True
-    is_final_output: bool = False
-    is_atomic_module: bool = False
-    output_of_modules: list[str] = field(default_factory=list)
-    is_input: bool = False
-    is_output: bool = False
-    is_terminal_bool: bool = False
-    has_params: bool = False
-    num_param_tensors: int = 0
-    _param_logs: list[Any] = field(default_factory=list)
-    param_shapes: list[tuple[Any, ...]] = field(default_factory=list)
-    num_calls: int = 1
-    call_index: int = 1
-    type_index: int = 1
-    step_index: int = 1
-    shape: tuple[Any, ...] = ()
-    activation_memory: str = "0 B"
-    io_role: str = ""
-    layer_type: str = "input"
-
-    def __post_init__(self) -> None:
-        """Fill mutable defaults and role flags."""
-
-        self.is_input = self.boundary_kind == "input"
-        self.is_output = self.boundary_kind == "output"
-        self.layer_type = self.boundary_kind
-        self.io_role = self.boundary_kind
-
-    @property
-    def graph(self) -> "BoundaryNode":
-        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
-
-        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
-        answers through its graph group, a boundary stub through its flat fields.
-        """
-
-        return self
-
-    @property
-    def module_context(self) -> "BoundaryNode":
-        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
-
-        return self
-
-
 GraphNode = BaseGraphNode | BoundaryNode | FocusNode
 CollapseFn = Callable[["Module"], bool]
 SkipFn = Callable[["Layer"], bool]
 InterveningClusterMode = Literal["upstream", "outside", "downstream", "own"]
 BackwardPassFilter = set[int] | None
+
+
+def _unwrap_focus_node(node: GraphNode) -> GraphNode:
+    """Return the source node behind a focus proxy, so an op renders as an op."""
+
+    if isinstance(node, FocusNode):
+        return node.original
+    return node
 
 
 def _render_node_label(node: GraphNode, vis_mode: str) -> str:
@@ -331,9 +269,10 @@ def _render_node_label(node: GraphNode, vis_mode: str) -> str:
     str
         Stable label used as the DOT node identifier before Graphviz escaping.
     """
-    if vis_mode == "unrolled" and isinstance(node, Op):
-        return node.label
-    return node.layer_label
+    source = _unwrap_focus_node(node)
+    if vis_mode == "unrolled" and isinstance(source, Op):
+        return source.label
+    return source.layer_label
 
 
 def _relation_label(node: GraphNode) -> str:
@@ -344,9 +283,26 @@ def _relation_label(node: GraphNode) -> str:
     bare layer label, so argument-label matching must compare against the same
     spelling. Non-Op nodes keep their layer label.
     """
-    if isinstance(node, Op) and int(getattr(node, "num_passes", 1) or 1) > 1:
-        return str(node.label)
-    return str(node.layer_label)
+    source = _unwrap_focus_node(node)
+    if isinstance(source, Op) and int(getattr(source, "num_passes", 1) or 1) > 1:
+        return str(source.label)
+    return str(source.layer_label)
+
+    @property
+    def graph(self) -> "BoundaryNode":
+        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
+
+        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
+        answers through its graph group, a boundary stub through its flat fields.
+        """
+
+        return self
+
+    @property
+    def module_context(self) -> "BoundaryNode":
+        """Answer ``node.module_context.<leaf>`` (``is_atomic_module``) from own fields."""
+
+        return self
 
 
 def _render_node_name(node: GraphNode, vis_mode: str) -> str:
@@ -377,13 +333,13 @@ OUTPUT_COLOR = "#ff9999"  # Light red/salmon
 PARAMS_NODE_BG_COLOR = "#E6E6E6"  # Generic param (no Param available)
 TRAINABLE_PARAMS_BG_COLOR = "#D9D9D9"  # Light gray for trainable params
 FROZEN_PARAMS_BG_COLOR = "#B0B0B0"  # Darker gray for frozen params
-GRADIENT_ARROW_COLOR = "#9197F6"  # Light blue/purple for backward edges
-BACKWARD_NODE_COLOR = "#F2F3FF"  # Very light blue/purple for backward grad_fn_handle nodes
+GRADIENT_ARROW_COLOR = "#B03A6A"  # Raspberry for backward edges (no blue in any skin)
+BACKWARD_NODE_COLOR = "#F8E1E7"  # Pale rose for backward grad_fn_handle nodes
 BACKWARD_NODE_BORDER_COLOR = GRADIENT_ARROW_COLOR
 BACKWARD_HIGHER_ORDER_COLOR = "#FFF4D6"
 BACKWARD_ACCUMULATION_EDGE_STYLE = "dotted"
 DEFAULT_BG_COLOR = "white"
-BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers
+BOOL_NODE_COLOR = "#F7D460"  # Yellow for terminal boolean layers (a True test)
 BUFFER_NODE_COLOR = "#E69F00"  # Orange for buffer layers (the palette buffer role)
 _NOISE_BUFFER_NAMES = frozenset({"running_mean", "running_var", "num_batches_tracked"})
 
@@ -811,11 +767,7 @@ _SVG_ROOT_RE = re.compile(r"<svg\b(?P<attrs>[^>]*)>", re.IGNORECASE | re.DOTALL)
 _SVG_VIEWBOX_RE = re.compile(r"""viewBox=(?P<quote>["'])(?P<value>[^"']+)(?P=quote)""")
 
 
-# Sourced from the one typography record (vizmech D29): the historical
-# literal 8 is now the record's annotation role.
-_EDGE_LABEL_FONT_SIZE = int(DEFAULT_TYPOGRAPHY.annotation_size)
 _EDGE_LABEL_PAD = 4  # points of transparent margin on every side of a head/tail label
-_SELF_LOOP_LABEL_HGAP = 8  # points of blank spacer left/right of a self-loop label
 
 __all__ = [
     "Any",
@@ -913,7 +865,6 @@ __all__ = [
     "VisualizationOverrides",
     "VisualizationTheme",
     "_CODE_PANEL_COMPOSED_FORMATS",
-    "_EDGE_LABEL_FONT_SIZE",
     "_EDGE_LABEL_PAD",
     "_RenderIRDecisionBuilder",
     "_GRAPHVIZ_ESCAPE_HINT",
@@ -926,6 +877,7 @@ __all__ = [
     "_SVG_VIEWBOX_RE",
     "_open_file_quietly",
     "_render_node_label",
+    "_unwrap_focus_node",
     "_relation_label",
     "_render_node_name",
     "_theme_annotation_ink",
@@ -946,6 +898,7 @@ __all__ = [
     "dataclass",
     "defaultdict",
     "direction_to_rankdir",
+    "edge_annotation_pt",
     "field",
     "format_memory",
     "format_collapsed_module_contents",

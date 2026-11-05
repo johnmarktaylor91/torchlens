@@ -12,7 +12,7 @@ while the site value had one (or when the site value has no graph to keep).
 The matrix of which verb keeps the graph under which door is
 ``docs/gradient_contract.md``.
 
-Differentiable replay (``push(replay=ReplayOptions(differentiable=True))``)
+Differentiable replay (``do(..., intervention=InterventionOptions(differentiable=True))``)
 re-leafs each edited site value as a fresh frontier leaf, so a graph-keeping
 edit passes the check there yet no parameter upstream of the site gets a
 gradient; ``keep_grad`` discloses that once per session with the warning code

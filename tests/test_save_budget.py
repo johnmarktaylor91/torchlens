@@ -86,12 +86,12 @@ def test_invalid_budget_raises_rather_than_silently_disabling(value: object) -> 
 def test_unmeasurable_device_is_unbudgeted_not_assumed_infinite() -> None:
     """An unmeasurable device warns when automatic budgeting is disabled."""
 
-    assert available_device_bytes(torch.device("mps")) is None
+    assert available_device_bytes(torch.device("meta")) is None
     budget = SaveBudget.from_option("auto")
     assert budget is not None
-    with pytest.warns(UserWarning, match="cannot measure.*mps"):
-        budget.admit("op", torch.device("mps"), 1)
-    ledger = budget.ledgers["mps"]
+    with pytest.warns(UserWarning, match="cannot measure.*meta"):
+        budget.admit("op", torch.device("meta"), 1)
+    ledger = budget.ledgers["meta"]
     assert ledger.measured is False
     assert ledger.limit_bytes is None
 

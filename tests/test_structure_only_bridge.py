@@ -98,7 +98,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     assert "replayable=True" in message
     assert runnable_exc.value.fields["flip_event"] == "L7b amendment lands"
     with pytest.raises(StructureOnlyCapabilityError) as replay_exc:
-        log.run(inputs=torch.randn(2, 3))
+        log.run_transaction(inputs=torch.randn(2, 3))
     assert "discharge_against" in str(replay_exc.value)
 
 

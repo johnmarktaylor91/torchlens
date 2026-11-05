@@ -187,6 +187,11 @@ _JOURNAL_TRACE_FIELDS = (
     "state_history",
     "intervention_audit",
 )
+# Journaled by their stored key, held by reference: the property in front of
+# ``transformed_output`` refuses a value a replay made stale, and a commit
+# rebinds ``_decoded_output`` to rows re-derived from the rewritten outputs; a
+# rollback restores both.
+_JOURNAL_RAW_TRACE_FIELDS = ("transformed_output", "_decoded_output")
 
 
 def _journal_copy(value: Any) -> Any:
@@ -230,6 +235,8 @@ def journal_replay_state(trace: Trace) -> tuple[list[tuple[Any, dict[str, Any]]]
         for name in _JOURNAL_TRACE_FIELDS
         if hasattr(trace, name)
     }
+    stored = trace.__dict__
+    fields.update({name: stored[name] for name in _JOURNAL_RAW_TRACE_FIELDS if name in stored})
     return ops, fields
 
 
@@ -244,6 +251,9 @@ def restore_replay_state(
             if not _journal_same(record_member(op, name, None), value):
                 op._internal_set(name, _journal_copy(value))
     for name, value in fields.items():
+        if name in _JOURNAL_RAW_TRACE_FIELDS:
+            trace.__dict__[name] = value
+            continue
         current = getattr(trace, name)
         if isinstance(value, list) and isinstance(current, list):
             current[:] = value

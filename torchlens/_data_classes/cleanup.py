@@ -20,7 +20,7 @@ This module provides the helper stack behind Trace cleanup operations:
 """
 
 from collections.abc import Iterable
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import fields, is_dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -35,6 +35,7 @@ from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
 from ..intervention._types import ParentRef, Unsupported
 from ._state_adapter import state_items
+from ._template_walk import map_template_leaves, template_has_leaf
 from .op import Op, _detach_op_husk, release_op_row
 
 if TYPE_CHECKING:
@@ -114,7 +115,7 @@ def cleanup(self: "Trace") -> None:
         _clear_entry_attributes(tensor_log_entry)
     # Then delete all Trace attributes listed in the canonical FIELD_ORDER.
     for attr in MODEL_LOG_FIELD_ORDER:
-        if hasattr(self, attr):
+        if attr in self.__dict__ or hasattr(self, attr):  # stored first: a getter may refuse
             delattr(self, attr)
     # GC-5/GC-12: Also clear internal containers not in MODEL_LOG_FIELD_ORDER.
     # These hold back-references (e.g. _module_logs -> Module -> _source_trace)
@@ -262,9 +263,7 @@ def _label_for_reference_removal(log_entry: Op, pass_finished: bool) -> str:
 
 
 def _map_removed_label(
-    label: str,
-    labels_to_remove: set[str],
-    replacements: dict[str, str] | None,
+    label: str, labels_to_remove: set[str], replacements: dict[str, str] | None
 ) -> str | None:
     """Return the surviving label for one reference, or ``None`` to drop it.
 
@@ -683,6 +682,7 @@ def _scrub_intervention_fields_after_removal(
         surviving_entries: Surviving entries to scrub in-place.
     """
 
+    field_cache: dict[type, Any] = {}  # dataclass field names, shared by the whole sweep
     for layer_entry in surviving_entries:
         layer_entry._edge_uses = [
             edge
@@ -690,11 +690,11 @@ def _scrub_intervention_fields_after_removal(
             if edge.parent_label not in labels_to_remove
             and edge.child_label not in labels_to_remove
         ]
-        layer_entry._call_args_template = _replace_removed_parent_refs(
-            record_member(layer_entry, "args_template", None), labels_to_remove
+        layer_entry._call_args_template = _scrub_template(
+            record_member(layer_entry, "args_template", None), labels_to_remove, field_cache
         )
-        layer_entry._call_kwargs_template = _replace_removed_parent_refs(
-            record_member(layer_entry, "kwargs_template", None), labels_to_remove
+        layer_entry._call_kwargs_template = _scrub_template(
+            record_member(layer_entry, "kwargs_template", None), labels_to_remove, field_cache
         )
         interventions = [
             record
@@ -705,7 +705,6 @@ def _scrub_intervention_fields_after_removal(
             layer_entry._internal_set("edits", interventions)
         else:
             layer_entry.edits = interventions
-
     self.state_history = [
         record
         for record in getattr(self, "state_history", [])
@@ -748,35 +747,32 @@ def _scrub_intervention_spec_after_removal(self: Any, labels_to_remove: set[str]
         self._mark_intervention_spec_mutated()
 
 
-def _replace_removed_parent_refs(value: Any, labels_to_remove: set[str]) -> Any:
-    """Replace template parent refs to removed labels with unsupported leaves.
+def _scrub_template(template: Any, labels_to_remove: set[str], cache: Any = None) -> Any:
+    """Return ``template`` with removed-parent refs replaced, rebuilt only if it names one.
 
-    Args:
-        value: Template or nested component.
-        labels_to_remove: Removed layer labels.
-
-    Returns:
-        Template value with stale parent refs replaced.
+    An untouched template keeps its object: every removal runs before the step-9
+    rename, which copies each template. ``cache``: the sweep's field-name cache.
     """
 
-    if isinstance(value, ParentRef) and value.parent_label in labels_to_remove:
-        return Unsupported(reason="removed_parent_ref", value_type="ParentRef")
-    if isinstance(value, tuple):
-        return tuple(_replace_removed_parent_refs(item, labels_to_remove) for item in value)
-    if isinstance(value, list):
-        return [_replace_removed_parent_refs(item, labels_to_remove) for item in value]
-    if isinstance(value, dict):
-        return {
-            key: _replace_removed_parent_refs(item, labels_to_remove) for key, item in value.items()
-        }
-    if is_dataclass(value) and not isinstance(value, type):
-        updates = {
-            field.name: _replace_removed_parent_refs(getattr(value, field.name), labels_to_remove)
-            for field in fields(value)
-            if hasattr(value, field.name)
-        }
-        return replace(value, **updates)
-    return value
+    def names_removed(leaf: Any) -> bool:
+        """Return whether ``leaf`` is a ``ParentRef`` to a removed parent."""
+        return isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove
+
+    if template_has_leaf(template, names_removed, cache):
+        return _replace_removed_parent_refs(template, labels_to_remove)
+    return template
+
+
+def _replace_removed_parent_refs(value: Any, labels_to_remove: set[str]) -> Any:
+    """Return ``value`` rebuilt with refs to removed parents as unsupported leaves."""
+
+    def replace_leaf(leaf: Any) -> Any:
+        """Return an ``Unsupported`` leaf for a removed-parent ``ParentRef``, else ``leaf``."""
+        if isinstance(leaf, ParentRef) and leaf.parent_label in labels_to_remove:
+            return Unsupported(reason="removed_parent_ref", value_type="ParentRef")
+        return leaf
+
+    return map_template_leaves(value, replace_leaf)
 
 
 def _record_mentions_removed_label(record: Any, labels_to_remove: set[str]) -> bool:

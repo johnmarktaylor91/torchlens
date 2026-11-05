@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
+from ..._utils._display_bounded import short_dataclass_repr
 from ..._utils._record_group_table import record_member
 from ...errors._base import TorchLensWarning
 from .._encoding_request import EncodingChannelRequest
@@ -444,6 +445,8 @@ def _warn_secondary(lens_name: str, member: str, why: str) -> str:
 @dataclass
 class _LensBuild:
     """Mutable build state one resolution's stage helpers share."""
+
+    __repr__ = short_dataclass_repr
 
     effective: dict[str, Any]
     user_kwargs: dict[str, Any]

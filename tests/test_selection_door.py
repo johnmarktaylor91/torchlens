@@ -34,7 +34,7 @@ def test_set_selector_returns_every_match_as_a_selection(trace: tl.Trace) -> Non
     assert selection.selector is not None
     elements = sum(row.num_selected for row in selection)
     assert elements == 3 * 4 + 3 * 2
-    assert repr(selection) == f"Selection[ACT](2 sites, {elements} elements)"
+    assert repr(selection) == f"Selection ACT: 2 sites, {elements} values, from tl.func('relu')"
     assert all(isinstance(row, tl.types.Site) for row in selection)
     assert all(row.num_selected == row.mask.numel() for row in selection)
 

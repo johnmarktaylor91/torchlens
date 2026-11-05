@@ -380,7 +380,7 @@ assert collisions == {
     "compat": ["lovely", "torchextractor", "torchshow"],
     "dataset_extraction": [], "debug": [], "distributed": [],
     "errors": [], "examples": [],
-    "experimental": ["dagua", "node_styles"], "export": [],
+    "experimental": ["node_styles"], "export": [],
     # Surface ruling surface.6: the child modules that shared a public export's
     # name (recording dry_run/recover, intervention compose/population,
     # receptive_field rules, viz feature_maps) are underscore-private now.

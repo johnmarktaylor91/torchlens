@@ -41,15 +41,15 @@ from ._param_fingerprint import (
 )
 from ._replay_cone import (
     _disclosure_label,
-    _label_key_map,
+    _replay_cone_and_maps,
     _resolve_single_origin,
+    _shared_label_key_map,
     cone_of_effect,
 )
 from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
-    _func_call_groups,
     _group_for_site,
     _group_representative,
     _record_capture_digest,
@@ -62,7 +62,6 @@ from ._replay_sites import (
     _keeps_captured_draw,
     _no_func_message,
     _parent_value,
-    _require_hook_origins,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -70,6 +69,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    refresh_output_derivatives,
     rollback_snapshot,
 )
 from ._runtime import _execute_hook
@@ -100,51 +100,6 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
     from .._selection.selectors import SelectorLike
-
-
-def push(
-    trace: Trace,
-    *,
-    replay: ReplayOptions | None = None,
-) -> Trace:
-    """Push the edit downstream through the recorded graph (DAG replay).
-
-    Parameters
-    ----------
-    trace:
-        Model log to mutate in place.
-    replay:
-        Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``).
-
-    Returns
-    -------
-    Trace
-        The same model log, mutated in place.
-    """
-
-    replay_options = merge_replay_options(replay=replay)
-    _preflight_log(trace)
-    _refuse_armed_gradient_rules(trace, replay_options.hooks)
-    _warn_if_direct_writes_will_be_overlaid(trace)
-    hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
-    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
-    origins = _require_hook_origins(found)
-    with changed_param_scope(replay_options.allow_changed_params):
-        if replay_options.differentiable:
-            return _run_differentiable_replay(
-                trace,
-                origins,
-                hook_entries=hook_entries,
-                strict=replay_options.strict,
-                preserve_origins=False,
-            )
-        return _run_replay(
-            trace,
-            origins,
-            hook_entries=hook_entries,
-            strict=replay_options.strict,
-            preserve_origins=False,
-        )
 
 
 def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
@@ -183,7 +138,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
 
     Replay recomputes forward values off the autograd graph, so a gradient
     rule could never fire there, whether the recipe arms it or the call
-    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    passes it as an explicit ``{tl.grad(site): edit}`` hook mapping; refusing
     keeps a push from returning a result that silently dropped it.
 
     Parameters
@@ -191,7 +146,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
     trace:
         Trace about to be pushed.
     hooks:
-        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+        Mapping of sites to edits (via ``Trace.do``; ``ReplayOptions`` has no hooks), or ``None``.
 
     Raises
     ------
@@ -210,11 +165,11 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
             message,
             code="replay_gradient_edit_unsupported",
             remedy=remedy,
-            argument="hooks_or_site",
+            argument="site",
         )
 
 
-def push_from(
+def replay_from_op(
     trace: Trace,
     site: SelectorLike | str | Op,
     *,
@@ -544,12 +499,12 @@ def _run_replay(
         run_ctx.pop("frontier", None)
     run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
     log.last_run = run_ctx
-    cone = cone_of_effect(log, origins)
+    cone, label_keys, call_groups = _replay_cone_and_maps(log, origins)
     state = _ReplayPass(
         log=log,
         origins=tuple(origins),
         origin_keys=frozenset(_replay_site_key(origin) for origin in origins),
-        label_keys=_label_key_map(log),
+        label_keys=label_keys,
         hook_targets=_hook_targets_by_label(log, hook_entries, strict=strict),
         preserve_origins=preserve_origins,
         strict=strict,
@@ -560,7 +515,6 @@ def _run_replay(
             state.overlay[_replay_site_key(origin)] = origin.out
 
     executed_call_ids: set[int] = set()
-    call_groups = _func_call_groups(log)
     cone_keys = {_replay_site_key(member) for member in cone}
     errors_non_fatal = 0
     loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
@@ -714,7 +668,7 @@ def _reconstruct_args_from_template(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     args = tuple(
         _resolve_arg_component(
             component,
@@ -814,7 +768,7 @@ def _boundary_slot_parent_op(
             f"{len(parents)} ({', '.join(repr(parent) for parent in parents)})."
         )
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
@@ -903,7 +857,7 @@ def _resolve_arg_component(
     """
 
     if label_keys is None:
-        label_keys = _label_key_map(trace)
+        label_keys = _shared_label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
         if parent_label not in trace._layer_dict_all_keys:
@@ -1276,12 +1230,8 @@ def _commit_replay_updates(
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
-                # This push re-derived the site's value from capture truth
-                # through exactly these fires, so they REPLACE the site's
-                # replay-minted node-hook records (chaining two edits yields
-                # two records, never three). Live-door records (capture
-                # facts), edge records (tier-(ii) corroboration), and
-                # records on sites this push did not fire at survive.
+                # These fires REPLACE the site's replay-minted node-hook records
+                # (docstring); live-door and edge records survive.
                 old_records = list(site.edits or ())
                 surviving = [
                     record
@@ -1310,6 +1260,9 @@ def _commit_replay_updates(
     if new_digests:
         # Rebind, never mutate: the run context may be shared with a fork.
         run_ctx[REPLAY_CAPTURE_DIGESTS_KEY] = {**known_digests, **new_digests}
+    from .._autoroute._decode_refresh import refresh_decoded_output  # deferred: import cycle
+
+    refresh_output_derivatives(log, snapshots, refresh_decoded_output)  # outputs may have changed
 
 
 def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
@@ -1719,8 +1672,7 @@ def _threaded_buffer_value(
 
 __all__ = [
     "cone_of_effect",
-    "push",
-    "push_from",
+    "replay_from_op",
     "_reconstruct_args_from_template",
     "_replay_container_path",
     "_slice_output_by_path",

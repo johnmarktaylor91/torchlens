@@ -2,8 +2,8 @@
 
 ``tl.bridge.sae.register("res", sae, site="fc1")`` makes the SAE's latents the
 facet family ``"res"`` at ``fc1``; ``tl.facet("res").latent(k)`` addresses
-latent ``k`` at the doors a ``tl.head`` selector serves (set_only ``Trace.do``,
-``attach_hooks``, ``Trace.do``, ``fork().do``) and
+latent ``k`` at the doors a ``tl.head`` selector serves (``Trace.do`` with a
+site or a mapping, on any engine, ``fork().do``) and
 ``trace["fc1"].facets["res[k]"]`` reads it. An edit adds the decoder-space
 change of the edited latents to the site and leaves the reconstruction error
 alone. ``tl.attribution.SiteTarget("fc1", sae=sae, unit=k)`` attributes latent
@@ -28,6 +28,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.errors import AttributionError
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 X = [[1.0, 2.0, -1.0, 3.0], [2.0, -1.0, 4.0, 0.0]]
 W_ENC = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, -0.5, 1.0], [0.0, 0.0, 0.5]]
@@ -126,7 +128,8 @@ def test_facet_read_door_returns_the_encoder_activation(setup) -> None:
     """``trace[site].facets`` serves every latent, one latent and a chosen set."""
 
     model, x, _sae = setup
-    facets = _trace(model, x)["fc1"].facets
+    trace = _trace(model, x)
+    facets = trace["fc1"].facets
     listed = facets.keys()
     assert "res" in listed
     torch.testing.assert_close(facets["res"].value, torch.tensor([_latents(r) for r in X]), **TOL)
@@ -143,18 +146,14 @@ def _recording_hook(seen: list[torch.Tensor]):
     return _hook
 
 
-_IN_PLACE = tl.options.InterventionOptions(confirm_mutation=True)
+_IN_PLACE = tl.options.InterventionOptions()
 
 _DOORS = {
-    "attach_hooks": lambda trace, site, hook: trace._attach_hooks(site, hook) and trace.push(),
+    "do_pairs": lambda trace, site, hook: trace.do([(site, hook)], intervention=_IN_PLACE),
     "trace_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
     "fork_do": lambda trace, site, hook: trace.fork("door").do(site, hook),
     "tl_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
-    "set": lambda trace, site, hook: (
-        trace.fork("door")
-        .do(site, hook, intervention=tl.options.InterventionOptions(engine="set_only"))
-        .push()
-    ),
+    "fork_do_pairs": lambda trace, site, hook: trace.fork("door").do([(site, hook)]),
 }
 
 
@@ -320,19 +319,10 @@ def test_a_latent_set_is_one_simultaneous_write(setup) -> None:
     torch.testing.assert_close(_site_out(edited), torch.tensor(expected), **TOL)
 
 
-def test_set_writes_a_latent_value(setup) -> None:
+def test_do_value_writes_a_latent_value(setup) -> None:
     model, x, _sae = setup
-    edited = (
-        _trace(model, x)
-        .fork("pin")
-        .do(
-            tl.facet("res").latent(1),
-            torch.full((2,), 4.0),
-            intervention=tl.options.InterventionOptions(engine="set_only"),
-        )
-    )
+    edited = _trace(model, x).fork("pin").do(tl.facet("res").latent(1), torch.full((2,), 4.0))
     expected = [[h[j] + (4.0 - _latents(h)[1]) * W_DEC[1][j] for j in range(4)] for h in X]
-    edited.push()
     torch.testing.assert_close(_site_out(edited), torch.tensor(expected), **TOL)
 
 

@@ -37,8 +37,10 @@ from .._io import (
 )
 from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import Bytes
+from .._utils._display_errors import short_name_message
 from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
+from ._lookup_kinds import converted, param_for_key
 from ._runtime_handles import source_model_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .op import GradientRecord, GradientRecordAccessor
@@ -751,12 +753,7 @@ class Param:
         self._grad_memory = Bytes(value)
 
     def __repr__(self) -> str:
-        """One live/versioned envelope+core line (F10; lovely D30).
-
-        Params are live records: the core is computed from the live
-        ``nn.Parameter`` and version-checked per render; a released ref
-        degrades to metadata with the explicit basis. Never raises.
-        """
+        """Live metadata and version-valid cached values; never scan a parameter."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import param_repr_line
@@ -767,17 +764,20 @@ class Param:
         )
 
     def __str__(self) -> str:
-        """Bounded Param card with tie disclosure (F10; lovely matrix).
-
-        Line 1 is the repr; the body adds module home, consuming sites
-        (tied params NAMED -- real gpt2's ``wte.weight`` feeds two sites),
-        grad/optimizer facts. Never raises.
-        """
+        """Bounded live-basis card, with parameter ties and captured gradient facts."""
 
         from .._utils.fail_open import fail_open
         from ._value_repr import param_card
 
         return fail_open(lambda: param_card(self), lambda _error: self.__repr__())
+
+    def _repr_html_(self) -> str:
+        """Render the same facts as the text card in safe notebook HTML."""
+
+        from ..report._notebook._value_cards import param_value_card
+        from ..report._notebook.cardtree import safe_card_html
+
+        return safe_card_html(lambda: param_value_card(self))
 
     def _release_param_ref(self) -> None:
         """Cache grad info, then null _param_ref to allow param GC."""
@@ -854,12 +854,12 @@ class Param:
             "resolver_status": "resolved",
             "_derived_grad_payload": None,
             "_derived_grad_record_path": None,
+            "_grad_records": [],  # DROP: a 3.0 row has no column; grads reads it
         }
         default_fill_state(state, defaults=param_setstate_defaults)
-        # Repair present-but-wrong-typed container fields from legacy states
-        # (e.g. `co_parent_params` serialized as a `set` where a `list` is now
-        # declared). `default_fill_state` only fills absent keys; this closes
-        # the same gap `Trace`/`Op` already close for their own fields.
+        # Repair present-but-wrong-typed legacy container fields (e.g. `co_parent_params` stored
+        # as a `set` where a `list` is now declared). `default_fill_state` only fills absent keys;
+        # this closes the same gap `Trace`/`Op` already close for their own fields.
         coerce_container_typed_state(state, param_setstate_defaults)
         if state.get("dtype_ref") is None:
             state["dtype_ref"] = DtypeRef.from_value(state.get("dtype"))
@@ -1033,14 +1033,9 @@ class ParamAccessor(Accessor["Param"]):
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
-            # Name the bounded candidate set (R65) like the merged-presenter
-            # sibling, instead of telling the user to guess the full address.
             candidates = tuple(address for match in matches for address in match.all_addresses)
-            raise AmbiguousOpLookupError(
-                f"Ambiguous short name '{key}' -- use a full address: {', '.join(candidates)}",
-                candidates=candidates,
-            )
-        return None
+            raise AmbiguousOpLookupError(short_name_message(key, candidates), candidates=candidates)
+        return converted(self, key, param_for_key)  # a module address or op label names one Param
 
     def _resolve_pass_qualified(self, key: str) -> "Param | None":
         """Resolve pass-qualified notation to the parent Param."""

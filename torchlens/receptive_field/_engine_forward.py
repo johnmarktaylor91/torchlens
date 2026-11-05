@@ -9,7 +9,9 @@ from fractions import Fraction
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
+from .._utils._display_bounded import short_dataclass_repr
 from ._engine import (
+    _TAINT_BY_KIND,
     _concatenation_offsets,
     _geometry_memo,
     _graph_revision,
@@ -19,6 +21,7 @@ from ._engine import (
     _rule_result,
     _topological_operations,
 )
+from ._engine_causal import local_result, transpose_causal
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
     _Affine,
@@ -50,6 +53,8 @@ _TARGET_SOLUTION_CACHE_SIZE = 8
 class _ProjectiveFieldSolution:
     """Immutable target-anchored projective descriptor solution."""
 
+    __repr__ = short_dataclass_repr
+
     registry_epoch: int
     graph_revision: tuple[object, ...]
     target_labels: tuple[str, ...]
@@ -60,19 +65,16 @@ class _ProjectiveFieldSolution:
 
 def solve_projective(trace: Trace, target_ops: Iterable[Op | str]) -> _ProjectiveFieldSolution:
     """Solve projective descriptors from every target ancestor into target space.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
     target_ops:
         Non-empty iterable of target operations or exact pass-qualified labels.
-
     Returns
     -------
     _ProjectiveFieldSolution
         Immutable solution containing one descriptor per source and reachable target.
-
     Raises
     ------
     ValueError
@@ -237,13 +239,9 @@ def _transpose_rule(
 ) -> _InputState:
     """Transpose one child's local rule onto one parent branch."""
 
-    notes = state.notes + ((f"{child.label}: {result.note}",) if result.note else ())
-    if result.kind in {"data_dependent", "unknown", "unsupported"}:
-        status = {
-            "data_dependent": ReceptiveFieldStatus.DATA_DEPENDENT,
-            "unknown": ReceptiveFieldStatus.UNKNOWN,
-            "unsupported": ReceptiveFieldStatus.UNSUPPORTED,
-        }[result.kind]
+    result, notes = local_result(child, parent, state, result)
+    if result.kind in _TAINT_BY_KIND:
+        status = _TAINT_BY_KIND[result.kind]
         if result.kind == "data_dependent":
             notes += (f"{child.label}: data-dependent forward routing has no static transpose",)
         return replace(state, axes=None, taint=status, notes=notes, rule=rule_name)
@@ -257,6 +255,8 @@ def _transpose_rule(
         return _transpose_full(child, parent, state, result, rule_name, notes)
     if result.kind == "axis_map":
         return _transpose_axis_map(child, parent, state, result, rule_name, notes)
+    if result.kind == "causal_window":
+        return transpose_causal(child, parent, state, result, rule_name, notes, _transpose_full)
     if result.kind == "dissolve":
         axes = tuple(
             replace(

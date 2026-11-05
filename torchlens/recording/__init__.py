@@ -11,7 +11,7 @@ from torchlens._private_submodules import (
     refuse_private_submodule as _refuse_private_submodule,
 )
 
-_LAZY_ATTRS = {
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "ActivationRecord": ("torchlens.recording._types", "ActivationRecord"),
     "CaptureSpec": ("torchlens.recording._types", "CaptureSpec"),
     "GradRecord": ("torchlens.recording._types", "GradRecord"),
@@ -19,11 +19,14 @@ _LAZY_ATTRS = {
     "StopSignal": ("torchlens.recording._halt", "StopSignal"),
     "ModuleStackFrame": ("torchlens.recording._types", "ModuleStackFrame"),
     "Recorder": ("torchlens.recording._recorder", "Recorder"),
-    "DryRun": ("torchlens.recording._types", "DryRun"),
+    "DryRun": ("torchlens.recording._dry_run", "DryRun"),
+    "GenerationOptions": ("torchlens.recording._generation_options", "GenerationOptions"),
+    "TokenSeries": ("torchlens.recording._generation_stream", "TokenSeries"),
+    "reducers": ("torchlens.recording.reducers", None),
     "RecordContext": ("torchlens.recording._types", "RecordContext"),
     "_DEFERRED_VALUE": ("torchlens._ir.predicate", "_DEFERRED_VALUE"),
     "cleanup_partial": ("torchlens.recording._cleanup", "cleanup_partial"),
-    "dry_run": ("torchlens.recording._dry_run", "dry_run"),
+    "dry_run": ("torchlens.recording._dry_run_door", "dry_run"),
     "stop": ("torchlens.recording._halt", "stop"),
     "recover": ("torchlens.recording._recover", "recover"),
 }
@@ -37,6 +40,8 @@ __all__ = [
     "ModuleStackFrame",
     "Recorder",
     "DryRun",
+    "GenerationOptions",
+    "TokenSeries",
     "RecordContext",
     "_DEFERRED_VALUE",
     "cleanup_partial",
@@ -104,7 +109,8 @@ def __getattr__(name: str) -> Any:
 
     if name in _LAZY_ATTRS:
         module_path, attr_name = _LAZY_ATTRS[name]
-        value = getattr(_importlib.import_module(module_path), attr_name)
+        module = _importlib.import_module(module_path)
+        value = module if attr_name is None else getattr(module, attr_name)
         globals()[name] = value
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

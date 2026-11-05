@@ -31,6 +31,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -76,7 +77,7 @@ def _roundtrip(
         include_weights=include_weights,
         include_activations=include_activations,
     )
-    return tl.load(path).run(inputs=x, seed=run_seed)
+    return tl.load(path).run_transaction(inputs=x, seed=run_seed)
 
 
 # ======================================================================================
@@ -343,7 +344,7 @@ def test_host_escape_changed_input_never_verified(
     path = tmp_path / "escape.tlspec"
     shutil.rmtree(path, ignore_errors=True)
     trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=run_x)
+    result = tl.load(path).run_transaction(inputs=run_x)
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
@@ -413,7 +414,7 @@ def test_live_opaque_output_never_verified(factory: Any) -> None:
         # torchlens UserWarnings) without weakening the verdict assertion.
         warnings.simplefilter("ignore")
         live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
-    result = live.run(inputs=x, on_divergence="return")
+    result = live.run_transaction(inputs=x, on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
     assert result.report.is_poisoned is True
 
@@ -432,7 +433,7 @@ def test_live_dict_output_stays_verified() -> None:
     x = torch.randn(2, 4)
     model = _DictOut()
     live = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
-    result = live.run(inputs=x)
+    result = live.run_transaction(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -457,15 +458,10 @@ def test_sparse_refuses_opaque_output_save(tmp_path: Path) -> None:
 def _tamper_context_field(bundle_path: Path) -> None:
     """Corrupt a persisted ambient context field to an out-of-vocabulary value."""
 
-    import json
+    def edit(descriptor: dict[str, Any]) -> None:
+        descriptor["ambient_context"]["float32_matmul_precision"] = "quantum_highest"
 
-    manifest_path = bundle_path / "manifest.json"
-    data = json.loads(manifest_path.read_text())
-    run_desc = data.get("run")
-    assert run_desc is not None, "no run descriptor in manifest"
-    ambient = run_desc.setdefault("ambient_context", {})
-    ambient["float32_matmul_precision"] = "quantum_highest"
-    manifest_path.write_text(json.dumps(data))
+    mutate_runnable_descriptor(bundle_path, edit)
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
@@ -513,7 +509,7 @@ def test_inexecutable_divergent_input_raises_path_divergence(tmp_path: Path) -> 
     trace.save(path, level="runnable", include_weights=True)
     loaded = tl.load(path)
     with pytest.raises(PathDivergenceError) as exc:
-        loaded.run(inputs=torch.randn(3, 5), on_divergence="return")
+        loaded.run_transaction(inputs=torch.randn(3, 5), on_divergence="return")
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")

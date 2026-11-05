@@ -52,7 +52,8 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
 
     model = EncoderBlock()
     x = torch.arange(8, dtype=torch.float32).reshape(2, 4)
-    expected = _saved_linear(tl.trace(model, x, save=tl.in_module("encoder"))).out
+    in_memory = tl.trace(model, x, save=tl.in_module("encoder"))
+    expected = _saved_linear(in_memory).out
 
     log = tl.trace(
         model,

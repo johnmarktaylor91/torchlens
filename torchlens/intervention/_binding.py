@@ -47,6 +47,7 @@ from .._utils._record_group_table import record_member
 from ._audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
 from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
+from ._display import bound_model_card, bound_model_repr
 from ._helper_fingerprint import helper_versions
 from ._model_door import resolve_model_operand
 from ._spec import Recipe
@@ -1278,16 +1279,8 @@ class BoundModel:
             )
         object.__setattr__(self, name, value)
 
-    def __repr__(self) -> str:
-        """Disclosure-first repr (read-only surface, lane, last status)."""
-
-        status = self._last_report.status if self._last_report is not None else "never called"
-        return (
-            f"<bound intervention executor: {len(self._spec.rules)} rule(s) "
-            f"{self._spec.digest} over {type(self._base_model).__name__}; "
-            f"capture-free live lane (values replaced after execution); "
-            f".recipe/.model read-only; last call: {status}>"
-        )
+    __repr__ = bound_model_repr
+    __str__ = bound_model_card
 
     # ------------------------------------------------------------------
     # refusal surfaces (items 7 and 9)

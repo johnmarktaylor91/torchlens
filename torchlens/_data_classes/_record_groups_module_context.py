@@ -40,9 +40,9 @@ class OpModuleContext(_RecordGroup):
         address = self.atomic_module_address
         if address is None:
             return None
-        trace = self._record._source_trace
-        if trace is None:
+        if self._record._slot("_source_trace_ref") is None:
             return None
+        trace = self._record.trace  # a collected Trace refuses typed (trace_reference_collected)
         try:
             return trace.modules[address]
         except (KeyError, TypeError):

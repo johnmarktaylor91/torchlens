@@ -202,7 +202,7 @@ def node_doc(entry: Any) -> str:
     location = ""
     file_name = str(getattr(frame, "file", "") or "")
     if file_name:
-        line = getattr(frame, "line", None)
+        line = getattr(frame, "line_number", None)
         base = file_name.replace("\\", "/").rsplit("/", 1)[-1]
         location = f"{base}:{line}" if line else base
     func = str(record_member(entry, "func_qualname", "") or getattr(entry, "func_name", ""))

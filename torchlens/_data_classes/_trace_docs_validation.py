@@ -73,40 +73,8 @@ DOCS: dict[str, str] = {
             pristine reading; otherwise ``True``.
         """
     ),
-    "push": (
-        """Push the edit downstream through the recorded graph (DAG replay).
-        
-        Parameters
-        ----------
-        replay:
-            Grouped replay options (``ReplayOptions``: ``strict``, ``hooks``,
-            ``differentiable``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
-    "push_from": (
-        """Push downstream from a pre-mutated site.
-        
-        Parameters
-        ----------
-        site:
-            Layer pass or selector resolving to one origin. The origin's
-            current out is preserved and used as the override.
-        replay:
-            Grouped replay options (``ReplayOptions``).
-        
-        Returns
-        -------
-        Trace
-            This model log, mutated in place.
-        """
-    ),
     "run": (
-        """Execute this Trace through its live or loaded provider.
+        """Rerun the live model on new input and refresh this Trace.
         
         Parameters
         ----------
@@ -116,42 +84,13 @@ DOCS: dict[str, str] = {
             available -- the trace holds it weakly, so this requires the
             caller to have kept a strong reference (see Raises).
         x:
-            Forward input. If ``model`` is omitted, the first positional argument
-            is treated as the new user input.
-        inputs:
-            Unified provider input tree. Supplying this keyword returns a
-            transactional :class:`RunResult` and leaves this Trace unchanged.
-            A tuple or list spreads as positional arguments, as ``tl.trace``
-            binds ``inputs``, on every provider and with ``fast=True``
-            (on a live trace a one-parameter forward takes a multi-element
-            sequence whole); any other value is the single argument, and
-            ``{"args": [...], "kwargs": {...}}`` binds both.
-        seed:
-            Optional deterministic live refresh, random-state, and runtime RNG seed.
-        fast:
-            Explicit stateful static-loop mode. The live provider runs native ``forward``
-            with targeted module/function collection and a per-call path/shape guard. The
-            loaded provider performs one ordinary verified run, then reuses staged state
-            and compiled argument binders. Both keep the source Trace untouched; unlike the
-            default transactional provider, later fast iterations refresh one result Trace.
-            With ``until=`` a live fast run cuts the native forward right after that saved site.
-        carry_state:
-            PROVISIONAL spelling (documented-unstable). Default ``False``: the
-            live provider snapshot-restores the model's declared state (named
-            parameters, registered buffers, alias topology preserved) around
-            the run, so repeated ``run()`` calls leave the model bit-identical.
-            ``True`` skips the restore: declared-state mutations persist on the
-            live model (episode/rollout state accumulation). The report
-            discloses the choice (``report.has_carried_state``); verification is
-            untouched -- the NEXT run from mutated state faces every gate as
-            usual. Refuses typed with ``fast=True`` and on loaded providers
-            (staged clones have no live model for state to carry into).
-        on_divergence:
-            Strict divergence behavior or the sole poison-return opt-in.
+            Forward input, in every form ``tl.trace`` takes: a tensor, a positional
+            list or tuple, and for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it. If ``model`` is omitted, the
+            first positional argument is treated as the new user input.
         chunk_paths:
             Optional explicit tensor leaf paths to split.
-        strict:
-            Whether graph-shape divergence should raise instead of warn.
+        replay:
+            Optional ``ReplayOptions`` for the rerun (append, chunking).
         input_transform:
             Stored-transform sentinel, ``False`` to bypass, or explicit input
             transform callable for this run.
@@ -170,17 +109,17 @@ DOCS: dict[str, str] = {
         
         Returns
         -------
-        Trace or RunResult
-            A unified transactional result for ``inputs=`` and loaded sparse
-            providers. Legacy ``run(model, x)`` intervention reruns retain their
-            compatibility return until that surface is migrated.
+        Trace
+            This Trace, refreshed by the rerun. For a verified fresh execution
+            with a report that leaves this Trace unchanged, use
+            ``run_transaction(inputs=...)``.
         
         Raises
         ------
         RunCapabilityUnavailableError
-            When no provider is available: an analysis-only loaded Trace, or a
-            live Trace whose source model has been garbage-collected (see
-            Notes).
+            For a loaded Trace (no live model to rerun; use
+            ``run_transaction(inputs=...)``), or a live Trace whose source
+            model has been garbage-collected (see Notes).
         InvalidArgumentError
             ``trace_option_unsupported`` for a Trace captured with ``storage=tl.to_disk(...)``: a
             run would re-capture every payload into RAM; capture again to a new path and run that.
@@ -196,6 +135,106 @@ DOCS: dict[str, str] = {
         any garbage-collection pass makes a later ``run()`` refuse typed with
         ``run_capability_unavailable``. Keep a reference to the model (or save
         and load a runnable artifact) when ``run()`` must stay available.
+        
+        TorchLens warns once when it detects training-mode BatchNorm
+        running-stat buffers, which the forward pass can mutate. Custom mutable
+        attributes such as caches and user counters cannot be detected
+        generically. Clone the model explicitly when isolated state is
+        required. Live-state mutation can also change the captured graph and
+        trigger the normal graph-change tripwire.
+        """
+    ),
+    "run_transaction": (
+        """Run a verified fresh execution with a report, leaving this Trace unchanged.
+        
+        Parameters
+        ----------
+        inputs:
+            Input tree for the fresh execution, on the live provider or a
+            loaded sparse artifact. A tuple or list spreads as positional arguments, as ``tl.trace``
+            binds ``inputs``, on every provider and with ``fast=True``
+            (on a live trace a one-parameter forward takes a multi-element
+            sequence whole); any other value is the single argument, and
+            ``{"args": [...], "kwargs": {...}}`` binds both.
+        seed:
+            Optional deterministic live refresh, random-state, and runtime RNG seed.
+        fast:
+            Explicit stateful static-loop mode. The live provider runs native ``forward``
+            with targeted module/function collection and a per-call path/shape guard. The
+            loaded provider performs one ordinary verified run, then reuses staged state
+            and compiled argument binders. Both keep the source Trace untouched; unlike the
+            default transactional provider, later fast iterations refresh one result Trace.
+            With ``until=`` a live fast run cuts the native forward right after that saved site.
+        carry_state:
+            PROVISIONAL spelling (documented-unstable). Default ``False``: the
+            live provider snapshot-restores the model's declared state (named
+            parameters, registered buffers, alias topology preserved) around
+            the run, so repeated ``run_transaction()`` calls leave the model bit-identical.
+            ``True`` skips the restore: declared-state mutations persist on the
+            live model (episode/rollout state accumulation). The report
+            discloses the choice (``report.has_carried_state``); verification is
+            untouched -- the NEXT run from mutated state faces every gate as
+            usual. Refuses typed with ``fast=True`` and on loaded providers
+            (staged clones have no live model for state to carry into).
+        until:
+            Optional saved site at which the execution stops.
+        save:
+            Optional run-time retention selection for the result Trace; every
+            check still runs over the whole execution.
+        on_divergence:
+            Strict divergence behavior or the sole poison-return opt-in.
+        input_transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit input
+            transform callable for this run.
+        output_transform:
+            Stored-transform sentinel, ``False`` to bypass, or explicit output
+            transform callable for this run.
+        on_zero_fire:
+            What a staged hook entry that fired at zero sites on this run does
+            after the fact is recorded (``last_run["hooks_unfired"]``):
+            ``"warn"`` (default) emits a ``rerun_zero_fire`` coded warning,
+            ``"error"`` raises ``rerun_zero_fire``, ``"disclose"`` records only.
+            The same knob as ``spec.bind`` and ``tl.trace``. Typed refusals for
+            an edit that cannot fire on a rerun (a post-capture-only predicate, a
+            same-input rerun that fired nowhere) come first, whatever the knob
+            says (spelling DOCUMENTED-UNSTABLE).
+        
+        Returns
+        -------
+        RunResult
+            ``RunResult(output, trace, report)``: the output, a new Trace of
+            this execution and the verification report. This Trace is never
+            edited.
+        
+        Raises
+        ------
+        RunCapabilityUnavailableError
+            When no provider is available: an analysis-only loaded Trace, or a
+            live Trace whose source model has been garbage-collected (see
+            Notes).
+        InvalidArgumentError
+            ``trace_option_unsupported`` for a Trace captured with ``storage=tl.to_disk(...)``: a
+            run would re-capture every payload into RAM; capture again to a new path and run that.
+        
+        Examples
+        --------
+        >>> model = torch.nn.Sequential(torch.nn.Linear(4, 2)).eval()
+        >>> trace = tl.trace(model, torch.randn(1, 4))
+        >>> result = trace.run_transaction(inputs=torch.randn(1, 4))
+        >>> type(result).__name__, result.trace is trace
+        ('RunResult', False)
+        
+        Notes
+        -----
+        A live-provider run re-executes the retained model object. The Trace
+        holds that model by WEAK reference (``tl.release_model()`` doctrine:
+        capturing never extends the model's lifetime), so live-provider
+        availability depends on the CALLER still holding the model. If the
+        caller's last strong reference is dropped -- including the inline
+        ``tl.trace(Model(), x)`` idiom, where the trace is the only holder --
+        any garbage-collection pass makes a later ``run_transaction()`` refuse typed with
+        ``run_capability_unavailable``. Keep a reference to the model (or save
+        and load a runnable artifact) when ``run_transaction()`` must stay available.
         
         TorchLens warns once when it detects training-mode BatchNorm
         running-stat buffers, which the forward pass can mutate. Custom mutable

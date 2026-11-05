@@ -51,7 +51,8 @@ class ReceptiveFieldRule(Protocol):
     >>> builtin = tl.receptive_field.rules()["conv2d"]
     >>> def delegating_rule(context):
     ...     return builtin(context)
-    >>> op = tl.trace(model, x)["conv2d_1_1"]
+    >>> trace = tl.trace(model, x)
+    >>> op = trace["conv2d_1_1"]
     >>> delegating_rule(tl.receptive_field.ReceptiveFieldRuleContext(op)) is not None
     True
     """
@@ -86,12 +87,29 @@ def _loaded_parent_shapes(op: Op) -> tuple[Any, ...]:
     return tuple(getattr(by_label.get(label), "shape", None) for label in tuple(op.parents or ()))
 
 
+def operand_shapes(op: Op) -> tuple[Any, ...]:
+    """Input shapes of ``op`` in ``parents`` order, ``None`` where unavailable.
+
+    A live op answers from ``Op.input_shapes``. An op of a loaded trace
+    refuses its live-trace accessors (it is detached by design); its parents'
+    recorded output shapes are the same metadata, read through the loaded
+    trace that owns it. Rules read operand shapes here, never from
+    ``Op.input_shapes`` directly, so a reloaded trace validates.
+    """
+
+    try:
+        return tuple(op.input_shapes)
+    except AttributeError:
+        return _loaded_parent_shapes(op)
+
+
 class ReceptiveFieldRuleContext:
     """Metadata and result constructors available to receptive-field rules.
 
     Examples
     --------
-    >>> context = ReceptiveFieldRuleContext(tl.trace(model, x)["conv2d_1_1"])
+    >>> trace = tl.trace(model, x)
+    >>> context = ReceptiveFieldRuleContext(trace["conv2d_1_1"])
     >>> context.in_shapes[0]
     (1, 3, 8, 8)
     >>> tl.receptive_field.rules()["conv2d"](context) is not None
@@ -110,17 +128,16 @@ class ReceptiveFieldRuleContext:
         self.op = op
 
     @property
+    def _parent_shapes(self) -> tuple[Any, ...]:
+        """Return input shapes in ``parents`` order, ``None`` where unavailable."""
+
+        return operand_shapes(self.op)
+
+    @property
     def in_shapes(self) -> tuple[tuple[int, ...], ...]:
         """Return captured input shapes, omitting unavailable inputs."""
 
-        try:
-            shapes = self.op.input_shapes
-        except AttributeError:
-            # An op of a loaded trace refuses its live-trace accessors (it is
-            # detached by design); its parents' recorded output shapes are the
-            # same metadata, read through the loaded trace that owns it.
-            shapes = _loaded_parent_shapes(self.op)
-        return tuple(tuple(shape) for shape in shapes if shape is not None)
+        return tuple(tuple(shape) for shape in self._parent_shapes if shape is not None)
 
     @property
     def out_shape(self) -> tuple[int, ...]:

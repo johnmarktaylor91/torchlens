@@ -452,7 +452,7 @@ def test_prepool_feed_in_capture_is_not_verified(
     )
     bundle = tmp_path / "prepool.tlspec"
     trace.save(str(bundle), level="runnable", include_weights=True)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
+    result = tl.load(str(bundle)).run_transaction(inputs=x.clone())
     assert result.report.path_faithfulness.value == "unverifiable"
 
 
@@ -517,9 +517,9 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
         assert not seam.rng_monitor_uncertain
         bundle = tmp_path / "flusher.tlspec"
         trace.save(str(bundle), level="runnable", include_weights=True)
-        assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == (
-            "verified"
-        )
+        assert tl.load(str(bundle)).run_transaction(
+            inputs=x.clone()
+        ).report.path_faithfulness.value == ("verified")
     finally:
         stop.set()
         hammer.join(timeout=30)

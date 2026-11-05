@@ -26,7 +26,7 @@ unaffected.
 | `ModuleAccessor` | none (no longer public) | removed |
 | `Module` | `torchlens.types.Module` | removed |
 | `ModuleCall` | `torchlens.types.ModuleCall` | removed |
-| `NodeSpec` | `torchlens.experimental.dagua.NodeSpec` | removed |
+| `NodeSpec` | `torchlens.viz.NodeSpec` | removed |
 | `Param` | `torchlens.types.Param` | removed |
 | `PostTraceParamUnavailable` | `torchlens.errors.ParamReleasedError` | removed |
 | `TraceState` | `torchlens.io.TraceState` | removed |
@@ -47,15 +47,13 @@ unaffected.
 | `get_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
 | `list_logs` | `torchlens.io.list_traces` | removed |
 | `log_model_metadata` | `torchlens.trace(model, x, save="none")` | removed |
-| `trace_to_dagua_graph` | `torchlens.experimental.dagua.trace_to_dagua_graph` | removed |
 | `preview_fastlog` | none (no longer public) | removed |
 | `rehydrate_nested` | `torchlens.io.materialize_nested` | removed |
 | `render_lines_to_html` | none (no longer public) | removed |
-| `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
 | `resolve_sites` | `torchlens.Trace` indexing (`trace[selector]` returns every matching site as a `torchlens.Selection`) | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
-| `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
+| `suppress_mutate_warnings` | `torchlens.errors.quiet()` | removed |
 | `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
 | `validate_batch_of_models_and_inputs` | none: call `torchlens.validate(model, x)` per model | removed |
 | `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | removed |
@@ -154,8 +152,15 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.conditional_elif_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.conditional_else_entry_edges` | `Trace.graph.conditional_arm_entry_edges` | removed |
 | `Trace.validate_saved_outs()` | `Trace.validate_forward_pass()` | removed |
-| `Trace.replay()` | `Trace.push()` | removed |
-| `Trace.replay_from()` | `Trace.push_from()` | removed |
+| `Trace.replay()` | `Trace.do(site, edit)` | removed |
+| `Trace.replay_from()` | `Trace.do(site, value)` | removed |
+| `Trace.push()` | `Trace.do(site, edit)`: one verb stages and propagates | removed |
+| `Trace.push_from()` | `Trace.do(site, value)` | removed |
+| `Trace.attach_hooks()`, `Op.attach_hooks()`, `Layer.attach_hooks()` | `Trace.do(site, hook)`; `InterventionOptions(engine="set_only")` stages without propagating | removed |
+| `Trace.set()`, `Layer.set()`, `Op.set()` | `Trace.do(site, value, intervention=InterventionOptions(engine="set_only"))` | removed |
+| `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)`; the scoped form stays as `with trace.fork() as scoped: scoped.do(...)`, which detaches the last `do` hooks on exit | removed |
+| `ReplayOptions(hooks=)` | a mapping of sites to edits on `Trace.do` | removed |
+| `ReplayOptions(differentiable=)` | `InterventionOptions(differentiable=True)` on `Trace.do` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |
 
 ## Record Members
@@ -450,7 +455,7 @@ Surface ruling surface.6 (31 Oct 2026): a submodule is a public import path only
 | `torchlens.intervention.compose` (the module) | `torchlens.intervention.compose` is the public function or object; the module is `torchlens.intervention._compose` | private |
 | `torchlens.intervention.population` (the module) | `torchlens.intervention.population` is the public function or object; the module is `torchlens.intervention._population` | private |
 | `torchlens.receptive_field.rules` (the module) | `torchlens.receptive_field.rules` is the public function or object; the module is `torchlens.receptive_field._builtin_rules` | private |
-| `torchlens.recording.dry_run` (the module) | `torchlens.recording.dry_run` is the public function or object; the module is `torchlens.recording._dry_run` | private |
+| `torchlens.recording.dry_run` (the module) | `torchlens.recording.dry_run` is the public function or object; the module is `torchlens.recording._dry_run_door` | private |
 | `torchlens.recording.recover` (the module) | `torchlens.recording.recover` is the public function or object; the module is `torchlens.recording._recover` | private |
 | `torchlens.viz.feature_maps` (the module) | `torchlens.viz.feature_maps` is the public function or object; the module is `torchlens.viz._feature_maps` | private |
 
@@ -458,8 +463,8 @@ Surface ruling surface.6 (31 Oct 2026): a submodule is a public import path only
 
 | Old name | New name | Status |
 | --- | --- | --- |
-| `replay()` | `push()` | removed |
-| `replay_from()` | `push_from()` | removed |
+| `replay()` | `do(site, edit)` | removed |
+| `replay_from()` | `do(site, value)` | removed |
 | `rerun()` | `run()` | removed |
 | `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |

@@ -77,7 +77,7 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
     runnable_trace.save(path, level="runnable")
     loaded = tl.load(path)
     with pytest.warns(TorchLensWarning, match="RANDOM") as record:
-        result = loaded.run(inputs=input_ids, seed=0)
+        result = loaded.run_transaction(inputs=input_ids, seed=0)
     assert result.report.state_source is StateSource.RANDOM_INITIALIZATION
     warnings_seen = [w.message for w in record if issubclass(w.category, TorchLensWarning)]
     # S-18 contract: consumers branch on fields["code"], never message text.
@@ -141,7 +141,7 @@ def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             trace = tl.trace(model, input_ids, capture=options)
-        result = trace.run(inputs=input_ids)
+        result = trace.run_transaction(inputs=input_ids)
         if result.report.path_faithfulness is PathFaithfulness.VERIFIED:
             continue
         checks = [

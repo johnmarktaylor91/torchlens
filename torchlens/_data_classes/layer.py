@@ -66,7 +66,7 @@ from .._utils._record_group_table import (
     op_attr,
     op_spelling,
 )
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 from . import _doors
 
 # LayerAccessor is re-exported (not used here) so every historical
@@ -116,14 +116,16 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-# Typed container defaults for every non-Optional container field Layer
-# stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
-# class as ``Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`` /
-# ``Trace._MODEL_LOG_CONTAINER_DEFAULTS``: without this,
-# ``coerce_container_typed_state`` cannot repair a present-but-wrong-typed
-# legacy value (e.g. ``equivalent_ops`` serialized as a ``list`` where a
-# ``set`` is now declared), and an absent field crashes instead of restoring
-# an empty typed container. Plain builtin types are used deliberately.
+#: Public Layer members removed by the do fold (remove-and-rename, no alias).
+_REMOVED_LAYER_MEMBERS: dict[str, str] = {
+    "attach_hooks": "use layer.do(site_or_hooks, ...) -- do stages the hooks",
+    "set": removed_set_remedy("Layer", "layer", "value"),
+}
+
+# Typed container defaults for every non-Optional container field Layer stores
+# directly (same fix as ``Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS``): plain builtin
+# types let ``coerce_container_typed_state`` repair a wrong-typed legacy value,
+# and an absent field restores as an empty typed container instead of crashing.
 _LAYER_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
     "arg_names": (),
     "param_shapes": [],
@@ -325,7 +327,8 @@ class Layer(_SelectionOperand):
 
     Examples
     --------
-    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> trace = tl.trace(model, x)
+    >>> layer = trace.layers["relu_1_2"]
     >>> type(layer).__name__, layer.func_name
     ('Layer', 'relu')
     >>> tuple(layer.out.shape)
@@ -800,9 +803,9 @@ class Layer(_SelectionOperand):
         obj = ref()
         if obj is None:
             raise RecordBindingError(
-                "Trace has been garbage-collected",
+                "Trace has been garbage-collected; a Layer does not keep its Trace alive",
                 code="trace_reference_collected",
-                remedy="keep the owning Trace alive while reading its records",
+                remedy="keep the Trace in a variable (t = tl.trace(...)) while reading its records",
             )
         return cast("Trace", obj)
 
@@ -1022,7 +1025,7 @@ class Layer(_SelectionOperand):
             spelled, label = op_spelling(field_name), self.layer_label
             raise InvalidArgumentError(
                 f"Layer '{label}' has {self.num_passes} ops. Access '{field_name}' on one pass: "
-                f"trace['{label}:1'].{spelled} or trace.layers['{label}'].ops[0].{spelled}",
+                f"trace['{label}:1'].{spelled} or trace['{label}:last'].{spelled}",
                 code="layer_pass_ambiguous",
                 remedy=f"access {spelled!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,
@@ -1356,19 +1359,17 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __getattr__(self, name: str) -> Any:
-        """Fallback attribute lookup: delegates to ops[0] for single-pass layers.
+        """Fallback lookup: a removed member redirects typed, else delegate to ops[0].
 
-        Only called when normal attribute lookup has already failed (Python's
-        ``__getattr__`` protocol).  For single-pass layers, transparently
-        forwards to the underlying Op, enabling code like
-        ``layer_log.func_rng_states`` without needing an explicit property.
-
-        Private attributes (starting with '_') are never delegated — they
-        raise AttributeError immediately to avoid infinite recursion with
-        ``self.__dict__`` access.
+        Runs only after normal lookup failed. Single-pass layers forward to the
+        underlying Op (``layer_log.func_rng_states`` needs no property); private
+        names never delegate, so ``self.__dict__`` reads cannot recurse.
         """
         if name.startswith("_"):
             raise AttributeError(name)
+        # Before delegating: FacadeTeachingError is an AttributeError, so an Op
+        # redirect caught below would otherwise fall through to a bare miss.
+        refuse_removed_member("Layer", name, _REMOVED_LAYER_MEMBERS)
         refuse_removed_member(type(self).__name__, name, LAYER_MOVED_MEMBERS)
         if name in {
             "param_memory",
@@ -1385,16 +1386,6 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
-        refuse_removed_member(
-            type(self).__name__,
-            name,
-            {
-                "set": (
-                    "use layer.do(value, intervention=tl.options.InterventionOptions("
-                    "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
-                )
-            },
-        )
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ********************************************
@@ -1476,7 +1467,8 @@ class Layer(_SelectionOperand):
 
     def do(
         self,
-        input_transform: Any,
+        edit: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1486,12 +1478,10 @@ class Layer(_SelectionOperand):
 
         Parameters
         ----------
-        input_transform:
-            Transform or hook to apply to this layer's output.
-        model:
-            Model required when ``intervention.engine="rerun"``.
-        inputs:
-            Input required when ``intervention.engine="rerun"``.
+        edit:
+            Value, hook or helper applied to this layer's output, as in ``Trace.do``.
+        model, inputs:
+            Required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
 
@@ -1502,11 +1492,7 @@ class Layer(_SelectionOperand):
         """
 
         return self._source_trace_or_error().do(
-            self._intervention_site(),
-            input_transform,
-            model=model,
-            inputs=inputs,
-            intervention=intervention,
+            self._intervention_site(), edit, model=model, inputs=inputs, intervention=intervention
         )
 
     def to_pandas(self) -> "pd.DataFrame":
@@ -1537,28 +1523,9 @@ class Layer(_SelectionOperand):
     # ********************************************
 
     def __str__(self) -> str:
-        """Return the bounded Layer card (F10; lovely D15/4.3).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        Data-model contract: never raises. A Layer detached from its Trace
-        (collected, standalone-pickled, or husked by cleanup) degrades to a
-        one-line placeholder instead of propagating the typed relation
-        refusal out of ``repr()``/``print()``/f-string interpolation
-        (r4 b7-opus R52-A). The historical numberless five-line summary is
-        replaced by the card: line 1 is the envelope+core repr, multi-pass
-        layers show per-pass cores (never a pooled statistic, D32), and
-        exits are named on the ``More:`` line.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_card(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_card(self)
 
     def _describe_bound(self) -> str:
         """Build the full summary; relation reads require a live Trace."""
@@ -1590,23 +1557,9 @@ class Layer(_SelectionOperand):
         return s
 
     def __repr__(self) -> str:
-        """Return ONE nestable envelope+core line (F10; lovely D15).
+        """Render a bounded Layer display from captured metadata and cached values."""
 
-        The lovely demo moment: ``log['label']`` at a REPL answers with
-        dtype/shape/device, distribution, and health in one line. Never
-        raises; detached layers keep the placeholder contract.
-        """
-
-        if not self._tracing_finished:
-            return f"Layer({self.layer_label}) (pass not finished)"
-        if self._detached_from_trace():
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
-        try:
-            return layer_repr_line(self)
-        except RecordBindingError:
-            label = getattr(self, "layer_label", None) or "<unbound>"
-            return f"<Layer {label}: detached from its Trace>"
+        return layer_repr_line(self)
 
     def _detached_from_trace(self) -> bool:
         """Whether this Layer lost its owning Trace (R52-A placeholder gate).

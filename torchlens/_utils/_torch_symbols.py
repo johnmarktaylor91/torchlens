@@ -33,9 +33,11 @@ submodule that a same-named package attribute hides from attribute resolution.
 
 from __future__ import annotations
 
+import operator
 import sys
 import types
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, cast
 
 import torch
 
@@ -85,6 +87,27 @@ def torch_dtype_named(name: str) -> torch.dtype | None:
     return value if isinstance(value, torch.dtype) else None
 
 
+def torch_dtype_from_string(dtype_name: str | None) -> torch.dtype | None:
+    """Return a ``torch.dtype`` for canonical dtype strings when possible."""
+
+    if dtype_name is None:
+        return None
+    if dtype_name.startswith("torch."):
+        return torch_dtype_named(dtype_name.removeprefix("torch."))
+    return None
+
+
+def torch_device_from_string(device_name: Any) -> torch.device | None:
+    """Return a ``torch.device`` from a string-like field when possible."""
+
+    if device_name is None:
+        return None
+    try:
+        return torch.device(str(device_name))
+    except (TypeError, RuntimeError):
+        return None
+
+
 def shadowed_torch_submodule(namespace_name: str, resolved: Any) -> types.ModuleType | None:
     """Return the imported submodule that a same-named package attribute shadows.
 
@@ -115,3 +138,122 @@ def shadowed_torch_submodule(namespace_name: str, resolved: Any) -> types.Module
     ):
         return submodule
     return None
+
+
+# SECURITY BOUNDARY: the one table of in-memory roots a saved callable key may name. The
+# sparse-run resolver (``torchlens._io.runnable_load``) and the load-time function-key
+# verifier (``torchlens.intervention._resolver_registry``) both read these, so the loader
+# never admits a namespace the replay resolver refuses or the reverse. Every hit is still
+# held to ``is_pure_forward_callable`` by the caller; nothing here imports by name.
+ALLOWED_EXACT_ROOTS: Mapping[str, Any] = {
+    "torch": torch,
+    "torch.Tensor": torch.Tensor,
+    "torch.nn.functional": torch.nn.functional,
+    "operator": operator,
+}
+ENUMERATED_TORCH_NAMESPACES = frozenset(
+    {
+        "torch.fft",
+        "torch.linalg",
+        "torch.nested",
+        "torch.special",
+        "torch.nn.functional",
+        "torch.Tensor",
+        "torch._C._nn",
+        # ``torch.fft.<name>`` / ``torch.linalg.<name>`` ARE ``torch._C._fft.fft_<name>`` /
+        # ``torch._C._linalg.linalg_<name>`` (bound by ``_add_docstr``), so captured keys
+        # record the private module. Enumerating it resolves the recorded callable itself
+        # on every torch version, instead of relying on the producer-version-bounded
+        # private-to-public alias rows.
+        "torch._C._fft",
+        "torch._C._linalg",
+        "torch._C._special",
+        "torch._C._VariableFunctions",
+        "torch._C._VariableFunctionsClass",
+        "torch._C._TensorBase",
+        "torch._C.TensorBase",
+        "torch._VF",
+    }
+)
+
+
+def torch_namespace(namespace: str) -> Any | None:
+    """Traverse an enumerated torch namespace without importing modules.
+
+    Parameters
+    ----------
+    namespace:
+        Dotted ``torch.<...>`` namespace from :data:`ENUMERATED_TORCH_NAMESPACES`.
+
+    Returns
+    -------
+    Any | None
+        The namespace object, or ``None`` when a hop is absent.
+    """
+
+    parts = namespace.removeprefix("torch.").split(".")
+    # r49 secF_1: the FIRST hop is off the TOP-LEVEL torch module, whose PEP-562
+    # ``__getattr__`` can fire a lazy submodule import; resolve it through ``torch_attr``.
+    # Later hops are off submodule/class roots that carry no lazy-import hazard.
+    current: Any = torch_attr(parts[0])
+    for part in parts[1:]:
+        if current is None:
+            return None
+        current = getattr(current, part, None)
+    return current
+
+
+def getattr_allowlisted(namespace: str, qualname: str) -> Callable[..., Any] | None:
+    """Read a callable from one explicitly allowlisted in-memory namespace.
+
+    Parameters
+    ----------
+    namespace:
+        A key of :data:`ALLOWED_EXACT_ROOTS` or a member of
+        :data:`ENUMERATED_TORCH_NAMESPACES`; any other namespace returns ``None``.
+    qualname:
+        One attribute name on that namespace.
+
+    Returns
+    -------
+    Callable[..., Any] | None
+        The callable, or ``None`` when absent, not callable, or the namespace is not listed.
+    """
+
+    if namespace in ALLOWED_EXACT_ROOTS:
+        root = ALLOWED_EXACT_ROOTS[namespace]
+    elif namespace in ENUMERATED_TORCH_NAMESPACES:
+        root = torch_namespace(namespace)
+    else:
+        return None
+    if root is None:
+        return None
+    # r42 secC_1: the PEP-562 lazy-submodule hazard lives ONLY on the top-level ``torch``
+    # module, so it is read through its ``__dict__``; class roots and the proxying
+    # ``torch._VF`` module expose inherited/proxied callables only through ``getattr``.
+    value = torch_attr(qualname) if root is torch else getattr(root, qualname, None)
+    return cast(Callable[..., Any], value) if callable(value) else None
+
+
+def enumerated_torch_callable(stock_path: str) -> tuple[Callable[..., Any], str] | None:
+    """Resolve a dotted ``torch.<namespace>.<name>`` path on an enumerated namespace.
+
+    Parameters
+    ----------
+    stock_path:
+        Dotted stock torch path; its owner (left of the last dot) must be listed in
+        :data:`ENUMERATED_TORCH_NAMESPACES`.
+
+    Returns
+    -------
+    tuple[Callable[..., Any], str] | None
+        The callable and its resolved dotted name, or ``None``.
+    """
+
+    namespace, _, qualname = stock_path.rpartition(".")
+    if namespace not in ENUMERATED_TORCH_NAMESPACES:
+        return None
+    func = getattr_allowlisted(namespace, qualname)
+    if func is None:
+        return None
+    return func, f"{namespace}.{qualname}"

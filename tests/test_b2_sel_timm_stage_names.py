@@ -5,7 +5,7 @@ Executed with timm installed (it is in the ``test`` and ``hf`` extras): resnet18
 builds a ``FeatureGetterNet`` (3 stages, names relative to its ``model`` child), and
 resnet50's ``fc`` is the classifier whose output is the model output. Each name
 resolves to the module's own forward output at ``tl.extract``, ``tl.pluck``,
-``trace[...]``, ``tl.trace(save=[...])`` and ``trace.run(until=...)``.
+``trace[...]``, ``tl.trace(save=[...])`` and ``trace.run_transaction(inputs=..., until=...)``.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ def _until_outcome(trace: tl.Trace, x: torch.Tensor, site: str) -> tuple:
     """
 
     try:
-        truncation = trace.run(inputs=x, until=site).report.truncation
+        truncation = trace.run_transaction(inputs=x, until=site).report.truncation
     except (RuntimeError, TypeError, ValueError) as exc:  # the outcome under comparison
         return ("refused", type(exc).__name__, getattr(exc, "fields", {}).get("code"))
     if truncation is None:
@@ -103,4 +103,4 @@ def test_resnet50_fc_resolves_to_the_classifier_output(source: str) -> None:
     torch.testing.assert_close(tl.trace(model, x, save=["fc"])["fc"].out, expected)
     trace = tl.trace(model, x)
     torch.testing.assert_close(trace["fc"].out, expected)
-    assert _until_outcome(trace, x, "fc") == _until_outcome(trace, x, trace["fc"].layer_label)
+    assert _until_outcome(trace, x, "fc") == _until_outcome(trace, x, trace.ops["fc"].layer_label)

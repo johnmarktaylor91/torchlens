@@ -139,9 +139,10 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     assert records2[0].derived_seed == records2[1].derived_seed
     assert records2[0].draw_indices == records2[1].draw_indices
 
-    # Byte-stability across a re-push (idempotent logical coordinates).
+    # Byte-stability across a later replay that re-fires both passes (idempotent
+    # logical coordinates): an identity edit at the first pass replays from there.
     before = [r.derived_seed for r in sampling_draws(fork)]
-    fork.push()
+    fork.do(f"{layer}:1", tl.scale(1.0))
     after = [r.derived_seed for r in sampling_draws(fork) if r.share_draw == "per_firing"]
     assert after[-2:] == before[-2:]
 

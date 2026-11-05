@@ -180,7 +180,7 @@ def _ablation_bundle(model_key: str):
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            fork.do(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+            fork.do(tl.func("relu"), tl.zero_ablate())
         return tl.Bundle({"clean": trace, "ablated": fork}, baseline="clean")
 
     return _build
@@ -312,7 +312,7 @@ def _spec_highlight_relu(layer_log, spec):
 
 def _collapsed_spec_tag(module_log, spec):
     """collapsed_node_spec_fn demo: tag every collapsed box."""
-    spec.fillcolor = "#D0E8FF"
+    spec.fillcolor = "#FFE8CC"
     spec.lines = [*spec.lines, "<-- collapsed_node_spec_fn hit"]
     return spec
 
@@ -445,7 +445,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         "vis_module_overrides",
         "demo_model",
         {},
-        {"module_overrides": {"color": "blue", "style": "dashed"}},
+        {"module_overrides": {"color": "#D55E00", "style": "dashed"}},
     ),
     VacuousDemoGuard(
         "vis_intervention_mode",
@@ -741,8 +741,6 @@ AXES: dict[str, str] = {
 # Axes that are deliberately NOT given a page, with the honest reason.
 NA_AXES: dict[str, str] = {
     "vis_mode:none": "a trace with no picture requested draws nothing by definition.",
-    "vis_renderer:dagua": "Experimental opt-in backend (torchlens.experimental.dagua); "
-    "not part of the stable visual language.",
     "placement:auto": "'auto' just selects dot or rank by cost estimate; both concrete "
     "engines are shown on the placement page.",
     "code_panel:forward_class": "code_panel='forward' and 'class' use the same panel "
@@ -897,7 +895,7 @@ SECTIONS: list[Section] = [
                     "show_legend=True appends a legend box decoding the node color/shape vocabulary.\n"
                     "CHECK: the legend does not overlap the graph. KNOWN NIT (FINDINGS F10): several legend "
                     "swatches have drifted from the actual node styling -- e.g. the legend draws "
-                    "'parameterized' as a blue rounded box while real parameter ops are grey rectangles, "
+                    "'parameterized' as a rounded box while real parameter ops are rectangles, "
                     "and swatch shapes are uniform rounded-rects while real nodes are ellipses/rectangles. "
                     "Trust the graph, not the legend, until the legend is re-synced."
                 ),
@@ -1210,7 +1208,7 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Power-user escape hatches passing attributes straight to Graphviz: "
                     "vis_graph_overrides (whole-graph attrs; here a tinted background), vis_edge_overrides "
-                    "(every edge; here thick red), vis_module_overrides (module boxes; here dashed blue). "
+                    "(every edge; here thick red), vis_module_overrides (module boxes; here dashed vermillion). "
                     "vis_grad_edge_overrides styles gradient edges through the same machinery.\n"
                     "CHECK: overrides apply globally and verbatim -- these are raw attrs, no validation."
                 ),
@@ -1226,9 +1224,9 @@ SECTIONS: list[Section] = [
                         kwargs={"edge_overrides": {"color": "red", "penwidth": "2"}},
                     ),
                     Panel(
-                        "vis_module_overrides: dashed blue module boxes",
+                        "vis_module_overrides: dashed vermillion module boxes",
                         "demo_model",
-                        kwargs={"module_overrides": {"color": "blue", "style": "dashed"}},
+                        kwargs={"module_overrides": {"color": "#D55E00", "style": "dashed"}},
                     ),
                 ],
                 covers=["overrides:graph", "overrides:edge", "overrides:module"],

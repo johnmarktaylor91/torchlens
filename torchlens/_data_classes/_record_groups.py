@@ -167,13 +167,13 @@ class OpCost(_RecordGroup):
     def bytes_read(self) -> Bytes | None:
         """Theoretical ideal read-once memory traffic for this operation, in bytes."""
 
-        return theoretical_op_bytes(self._record)[0]
+        return _op_cost.checked_bytes(self._record, theoretical_op_bytes(self._record)[0])
 
     @property
     def bytes_written(self) -> Bytes | None:
         """Theoretical ideal write-once memory traffic for this operation, in bytes."""
 
-        return theoretical_op_bytes(self._record)[1]
+        return _op_cost.checked_bytes(self._record, theoretical_op_bytes(self._record)[1])
 
     @property
     def arithmetic_intensity(self) -> float | None:

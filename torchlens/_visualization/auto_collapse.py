@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
 from .._literals import CollapseLiteral, FoldRepeatsLiteral, VisModeLiteral
-from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensWarning
 
 # Condensed-flow-graph construction: split to _condensed_flow.py under the R43
@@ -1997,7 +1996,7 @@ def _rendered_module_hidden_counts(trace: Trace, context: RenderContext) -> dict
         if node.graph.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         modules = list(getattr(node, "modules", ()) or ())
-        if record_member(node, "is_atomic_module", False) and modules:
+        if getattr(getattr(node, "module_context", None), "is_atomic_module", False) and modules:
             modules = modules[:-1]
         addresses = tuple(dict.fromkeys(str(module).rsplit(":", 1)[0] for module in modules))
         for address in addresses:

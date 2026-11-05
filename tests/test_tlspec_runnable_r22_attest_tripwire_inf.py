@@ -97,7 +97,7 @@ def test_masked_mha_nonfinite_attention_mask_saves_loads_runs(tmp_path: Path) ->
         include_activations=True,
     )
 
-    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
+    result = tl.load(path).run_transaction(inputs=x.clone(), seed=0, on_divergence="return")
 
     assert result.output.shape == x.shape
     assert result.report.numeric_attestation in {

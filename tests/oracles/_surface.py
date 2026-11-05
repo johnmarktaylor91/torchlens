@@ -67,7 +67,7 @@ CLASS_SURFACE_COUNTED_SET = (
     "module-level torchlens attribute or as a public class of the "
     "CLASS_WALK_NAMESPACES (tl.types, tl.errors), keyed by reachable name, with every "
     "public top-level filesystem submodule imported first (import-state "
-    "normalization: opt-in installers like kernel_telemetry always counted); "
+    "normalization); "
     "each member carries a source-witnessed license from the closed 5-way "
     "vocabulary CLASS_MEMBER_LICENSES"
 )
@@ -176,12 +176,13 @@ def walk_module_surface(
 def _normalize_import_state(namespace: types.ModuleType) -> None:
     """Import every public top-level submodule so ``dir(cls)`` is stable.
 
-    Opt-in submodules may install documented members on public classes at
-    import time, so a raw ``dir(cls)`` walk counts differently depending on
-    which tests ran first -- green alone, red in a session.
+    A public submodule may install documented members on public classes at
+    import time, so a raw ``dir(cls)`` walk could count differently
+    depending on which tests ran first -- green alone, red in a session.
     Importing the deterministic filesystem submodule set pins the walk to
     ONE canonical maximal state; installers are idempotent by contract
-    (re-import is a module-cache hit).
+    (re-import is a module-cache hit). Private modules are not imported here:
+    a documented member must exist on its class without them.
 
     Parameters
     ----------

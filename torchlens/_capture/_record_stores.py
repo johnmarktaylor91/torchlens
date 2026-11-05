@@ -8,6 +8,7 @@ storage backend implements. Both are leaf definitions: they import torch only.
 from __future__ import annotations
 
 import weakref
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Protocol
 
 import torch
@@ -80,3 +81,36 @@ class _StorageBackend(Protocol):
 
     def abort(self, reason: str) -> None:
         """Abort storage."""
+
+
+class _RetainedRecordKeys:
+    """``(raw_label, pass_number)`` keys of the retained records, kept across reads.
+
+    The module-boundary retention step needs this set on every module exit; a
+    fresh comprehension over the record list made it quadratic in model size.
+    ``sync`` keys only the records appended since the last call, so the set
+    equals the fresh comprehension at every read. A shorter list than last
+    seen means the list was rebuilt, and the keys are rebuilt with it.
+    """
+
+    __slots__ = ("_count", "keys")
+
+    def __init__(self) -> None:
+        self.keys: set[tuple[str, int]] = set()
+        self._count = 0
+
+    def sync(self, records: Sequence[Any]) -> set[tuple[str, int]]:
+        """Extend the keys over ``records`` and return the live set."""
+
+        count = len(records)
+        start = self._count
+        keys = self.keys
+        if count < start:
+            keys.clear()
+            start = 0
+        for index in range(start, count):
+            ctx = records[index].ctx
+            if ctx.raw_label is not None:
+                keys.add((ctx.raw_label, ctx.pass_number))
+        self._count = count
+        return keys

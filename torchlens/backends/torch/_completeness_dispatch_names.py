@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import inspect
 import sys
 from collections.abc import Iterator
@@ -14,6 +15,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ..._utils._record_group_table import record_member
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
+from ._consumer_kind import _classify_consumer_kind
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -24,9 +26,14 @@ from .escape_detection import (
     ExpectedOriginalToken,
 )
 
+#: Resolved path of stdlib ``contextlib``, whose ``__exit__`` frames sit between
+#: a TorchLens context manager and the caller (see ``_external_warning_stacklevel``).
+_CONTEXTLIB_FILE = Path(contextlib.__file__).resolve()
+
 __all__ = (
     "_resolved_dispatch_origins",
     "_record_escape_source_tensor",
+    "_tally_plain_scalar_escape",
     "_operator_name",
     "_operator_base_name",
     "_is_aten_operator",
@@ -475,6 +482,41 @@ def _first_scalar_escape_source() -> tuple[str | None, int | None]:
     return None, None
 
 
+#: Branch-test consumer kinds postprocess step 5 records as conditionals
+#: (``_postprocess.control_flow._BRANCH_CONTEXT_KINDS``; a test pins the two equal).
+_RECORDED_CONDITIONAL_TEST_KINDS = frozenset({"if_test", "elif_test", "ifexp"})
+
+
+def _tally_plain_scalar_escape(state: Any, tensor: torch.Tensor, name: str) -> None:
+    """Count one labelled plain-capture scalar escape unless step 5 records it.
+
+    A 0-dim ``torch.bool`` read by ``__bool__`` at an ``if`` / ``elif`` test or a
+    conditional expression is not a lost dependence: step 5 records it as a
+    ``Conditional`` (same receiver rule, ``is_scalar_bool``, and the same AST
+    lookup). Every other read counts, including ``if x.sum():`` truthiness,
+    ``while`` and ``assert`` tests, and reads the lookup cannot tie to one test.
+
+    Parameters
+    ----------
+    state:
+        Per-capture ``_PlainScalarEscapeState`` aggregate.
+    tensor:
+        Labelled receiver of the escape method.
+    name:
+        Scalar-protocol method name.
+    """
+
+    if name == "__bool__" and tensor.dtype is torch.bool and tensor.ndim == 0:
+        filename, line = _first_scalar_escape_source()
+        if filename is not None and line is not None:
+            kind = _classify_consumer_kind(filename, line)
+            if kind in _RECORDED_CONDITIONAL_TEST_KINDS:
+                return
+    state.count += 1
+    if state.first_file is None:
+        state.first_file, state.first_line = _first_scalar_escape_source()
+
+
 def _external_warning_stacklevel() -> int:
     """Return a warning stack level that resolves outside the TorchLens package.
 
@@ -488,15 +530,39 @@ def _external_warning_stacklevel() -> int:
     try:
         frame = frame.f_back if frame is not None else None
         while frame is not None:
-            try:
-                Path(frame.f_code.co_filename).resolve().relative_to(_TORCHLENS_ROOT)
-            except ValueError:
+            # A ``contextlib`` frame is the ``__exit__`` of a TorchLens context
+            # manager, never the caller's line: skip it like a package frame,
+            # or every advisory would point at ``contextlib.py``.
+            if not _is_package_or_contextlib_frame(frame.f_code.co_filename):
                 return level
             level += 1
             frame = frame.f_back
     finally:
         del frame
     return level
+
+
+def _is_package_or_contextlib_frame(filename: str) -> bool:
+    """Return whether a frame's file is inside TorchLens or is stdlib ``contextlib``.
+
+    Parameters
+    ----------
+    filename:
+        The frame's ``co_filename``.
+
+    Returns
+    -------
+    bool
+        ``True`` for a TorchLens source file or the ``contextlib`` module file.
+    """
+    path = Path(filename).resolve()
+    if path == _CONTEXTLIB_FILE:
+        return True
+    try:
+        path.relative_to(_TORCHLENS_ROOT)
+    except ValueError:
+        return False
+    return True
 
 
 def _iter_dispatch_tensors(

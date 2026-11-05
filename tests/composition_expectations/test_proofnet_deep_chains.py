@@ -69,7 +69,7 @@ def test_chain_structure_only_save_load_capability_doors(tmp_path: Any) -> None:
         "the loaded structure-only trace's explain() no longer discloses the hypothesis ladder"
     )
     with pytest.raises(Exception) as excinfo:
-        loaded.run(inputs=_x())
+        loaded.run_transaction(inputs=_x())
     code = (
         getattr(excinfo.value, "fields", {}).get("code")
         if hasattr(excinfo.value, "fields")

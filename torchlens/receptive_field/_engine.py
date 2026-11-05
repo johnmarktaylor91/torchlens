@@ -1,5 +1,4 @@
 """Whole-graph geometric receptive-field solver.
-
 The engine deliberately contains no operation-family registrations.  It interprets the
 local geometry emitted by :mod:`torchlens.receptive_field._rules` and composes that geometry
 over the captured DAG using exact rational arithmetic.
@@ -23,8 +22,9 @@ from .._capture.arg_positions import (
     _schema_arg_is_parent_candidate,
 )
 from .._record_type import record_type
-from .._utils._record_group_table import record_member
+from .._utils._display_bounded import short_dataclass_repr
 from ..backends import TORCH_BACKEND_NAME
+from ._engine_causal import apply_causal, local_result
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
     _Affine,
@@ -42,6 +42,7 @@ from ._engine_geometry import (
     _select_full_axes,
     _unique_notes,
 )
+from ._engine_revision import _graph_revision, _operation_is_live
 from ._errors import ReceptiveFieldConfigurationError
 from ._rules import _RF_RULES, ReceptiveFieldRuleContext, _rf_rules_epoch, _RuleResult
 from ._types import (
@@ -53,6 +54,15 @@ if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
 
+
+_TAINT_BY_KIND: Mapping[str, ReceptiveFieldStatus] = MappingProxyType(
+    {
+        "data_dependent": ReceptiveFieldStatus.DATA_DEPENDENT,
+        "unknown": ReceptiveFieldStatus.UNKNOWN,
+        "unsupported": ReceptiveFieldStatus.UNSUPPORTED,
+    }
+)
+"""Local rule kinds that taint a branch instead of mapping it, with their status."""
 
 _TAINT_ORDER = {
     ReceptiveFieldStatus.UNKNOWN: 0,
@@ -67,6 +77,8 @@ _SOURCE_SOLUTION_CACHE_SIZE = 8
 class _ReceptiveFieldSolution:
     """Immutable whole-trace geometric solution and its cache identity."""
 
+    __repr__ = short_dataclass_repr
+
     registry_epoch: int
     graph_revision: tuple[object, ...]
     descriptors: Mapping[tuple[str, str], ReceptiveField]
@@ -77,6 +89,8 @@ class _ReceptiveFieldSolution:
 @dataclass(frozen=True)
 class _BranchState:
     """Geometry state plus whether ancestry reaches only through a control edge."""
+
+    __repr__ = short_dataclass_repr
 
     state: _InputState
     geometry_neutral: bool
@@ -128,12 +142,10 @@ def _is_input_seed(op: Op) -> bool:
 
 def solve(trace: Trace) -> _ReceptiveFieldSolution:
     """Solve geometric receptive fields for every operation and reachable model input.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
-
     Returns
     -------
     _ReceptiveFieldSolution
@@ -159,14 +171,12 @@ def solve(trace: Trace) -> _ReceptiveFieldSolution:
 
 def solve_from(trace: Trace, source: Op) -> _ReceptiveFieldSolution:
     """Solve geometric receptive fields seeded at one captured source operation.
-
     Parameters
     ----------
     trace:
         Captured TorchLens trace.
     source:
         Operation whose output grid is the receptive-field source.
-
     Returns
     -------
     _ReceptiveFieldSolution
@@ -552,14 +562,11 @@ def _apply_rule(
         Child-coordinate branch state.
     """
 
-    notes = state.notes + ((f"{op.label}: {result.note}",) if result.note else ())
-    if result.kind in {"data_dependent", "unknown", "unsupported"}:
-        status = {
-            "data_dependent": ReceptiveFieldStatus.DATA_DEPENDENT,
-            "unknown": ReceptiveFieldStatus.UNKNOWN,
-            "unsupported": ReceptiveFieldStatus.UNSUPPORTED,
-        }[result.kind]
-        return replace(state, axes=None, taint=status, notes=notes, rule=rule_name)
+    result, notes = local_result(op, parent, state, result)
+    if result.kind in _TAINT_BY_KIND:
+        return replace(
+            state, axes=None, taint=_TAINT_BY_KIND[result.kind], notes=notes, rule=rule_name
+        )
 
     if state.taint is not None:
         if result.kind == "full" and _select_full_axes(
@@ -591,6 +598,8 @@ def _apply_rule(
         return _apply_full(op, parent, state, result, rule_name, notes)
     if result.kind == "axis_map":
         return _apply_axis_map(op, parent, state, result, rule_name, notes)
+    if result.kind == "causal_window":
+        return apply_causal(op, parent, state, result, rule_name, notes, _apply_full)
     if result.kind == "dissolve":
         axes = tuple(
             replace(
@@ -797,7 +806,7 @@ def _concatenation_starts_by_position(op: Op, raw_axis: int) -> tuple[int, ...]:
     -------
     tuple[int, ...]
         Slice start at each ``op.parents`` position, truncated to the shorter of
-        ``op.parents`` and ``op.input_shapes`` exactly as the per-parent scan was.
+        ``op.parents`` and the operand shapes exactly as the per-parent scan was.
     """
 
     scope = _active_geometry_memo()
@@ -809,7 +818,7 @@ def _concatenation_starts_by_position(op: Op, raw_axis: int) -> tuple[int, ...]:
             return cached[1]
     positions: list[int] = []
     offset = 0
-    for _label, shape in zip(op.parents, op.input_shapes, strict=False):
+    for shape in ReceptiveFieldRuleContext(op)._parent_shapes[: len(op.parents)]:
         positions.append(offset)
         if shape is None:
             continue
@@ -1565,91 +1574,6 @@ def _topological_operations(
     seen = {op.label for op in result}
     result.extend(op for op in operations if op.label not in seen)
     return tuple(result)
-
-
-def _snapshot_value(value: object) -> str:
-    """Return a mutation-proof, type-tagged token for one recorded argument value."""
-
-    try:
-        return f"{type(value).__name__}:{value!r}"
-    except Exception:
-        # Best-effort fallback: identity keeps the token stable for the same
-        # object and still invalidates when the object is replaced outright.
-        return f"{type(value).__name__}:@{id(value):x}"
-
-
-def _snapshot_mapping(mapping: object) -> object:
-    """Return an order-insensitive by-value token for one recorded mapping field."""
-
-    if isinstance(mapping, Mapping):
-        return tuple(sorted((str(key), _snapshot_value(value)) for key, value in mapping.items()))
-    return _snapshot_value(mapping)
-
-
-def _geometry_args_snapshot(op: Op) -> tuple[object, ...]:
-    """Snapshot the recorded operation arguments that RF rules consume, by value.
-
-    Geometry rules read kernel/stride/padding/dilation/output-size/etc. from
-    ``op.func_config`` (``RuleContext.cfg``) with fallbacks into the captured
-    non-tensor arguments (``RuleContext.arg``). The staleness fingerprint must
-    capture BOTH surfaces by value: holding live references would compare a
-    mutated dict against itself and never invalidate, so an in-place geometry
-    change that preserves shape and topology would keep serving stale frozen
-    descriptors from the trace-level solution cache while per-unit ``.at()``
-    queries recompute fresh from the live values -- the two public RF paths
-    would disagree.
-    """
-
-    return (
-        _snapshot_mapping(record_member(op, "func_config", None)),
-        tuple(
-            _snapshot_value(value) for value in record_member(op, "non_tensor_pos_args", ()) or ()
-        ),
-        _snapshot_mapping(record_member(op, "non_tensor_kwargs", None)),
-    )
-
-
-def _edge_uses_snapshot(op: Op) -> tuple[str, ...]:
-    """Snapshot semantic edge records consumed by control-branch classification."""
-
-    return tuple(_snapshot_value(record) for record in getattr(op, "edge_uses", ()) or ())
-
-
-def _graph_revision(trace: Trace) -> tuple[object, ...]:
-    """Build a stable structural fingerprint that invalidates cache after graph edits.
-
-    Includes topology (parents/children), shape, role, function identity, and a
-    by-value snapshot of the geometry arguments RF rules read, so an argument
-    change with unchanged shape+topology still bumps the revision.
-
-    ``op.shape`` is legitimately ``None`` for a non-tensor-valued op -- e.g. a
-    JAX region boundary/projection pseudo-op, whose captured ``output`` is a
-    tuple of values rather than one tensor (``_tensor_ref`` reports
-    ``shape=None`` for exactly this "not a tensor" case). ``None`` is itself a
-    stable, hashable fingerprint component, so it is included as-is instead of
-    calling ``tuple()`` on it.
-    """
-
-    return tuple(
-        (
-            op.label,
-            tuple(op.parents),
-            tuple(op.children),
-            tuple(op.shape) if op.shape is not None else None,
-            op.graph.io_role,
-            op.func_name,
-            _geometry_args_snapshot(op),
-            _edge_uses_snapshot(op),
-        )
-        for op in trace._layer_list
-        if _operation_is_live(op)
-    )
-
-
-def _operation_is_live(op: Op) -> bool:
-    """Return whether an operation has not been cleared by trace removal."""
-
-    return isinstance(getattr(op, "label", None), str)
 
 
 __all__: list[str] = []

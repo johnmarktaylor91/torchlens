@@ -27,9 +27,19 @@ from pathlib import Path
 
 import pytest
 
-from tests.behaviour.cases import Case, _draws_random_numbers, all_cases, smoke_cases
+from tests.behaviour.cases import Case, _draws_random_numbers, all_cases, case_by_name, smoke_cases
 from tests.behaviour.features import FEATURES, Feature, feature
-from tests.behaviour.harness import BASE_ORACLES, CellResult, Outcome, cell_id
+from tests.behaviour.harness import (
+    _PORTABLE_REFUSAL,
+    BASE_ORACLES,
+    CellResult,
+    OracleFailure,
+    Outcome,
+    _save,
+    cell_id,
+    run_cell,
+)
+from torchlens.errors import OpaqueCallableError
 
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "interaction_matrix.json"
 
@@ -175,8 +185,10 @@ def test_cell(cell_result: CellResult) -> None:
 
     The base oracles: capture finishes with ops and the outcome the features
     declare (``trace``), default forward validation with metadata invariants
-    passes (``validate``), a portable save succeeds (``save``), the artifact
-    loads (``load``), the loaded trace equals the live one through the public
+    passes (``validate``), a portable save succeeds, or refuses with
+    ``intervention_spec_not_portable`` on a recipe holding a user callable and
+    the ``executable_with_callables`` save stands in (format.5) (``save``), the
+    artifact loads (``load``), the loaded trace equals the live one through the public
     surface (``equality``), and the output equals a plain forward or the replay
     a feature declares (``forward_match``). Then each active feature's own
     promise on the live and loaded traces (``feature:<name>``).
@@ -231,6 +243,68 @@ def test_cell_verdict_names_every_unsatisfied_oracle() -> None:
         "forward_match: not_run: the cell did not reach this oracle",
         "feature:a: fail: promise broken",
     ]
+
+
+def test_callable_free_intervene_cell_still_saves_portably(tmp_path: Path) -> None:
+    """A built-in edit recipe saves portably: the format.5 callable-level path stays unused."""
+
+    result = run_cell(case_by_name("toy:simple_ff"), (feature("intervene"),), tmp_path / "cell")
+    assert result.outcomes["save"] == Outcome("pass")
+    assert result.outcomes["load"] == Outcome("pass")
+    assert result.outcomes["equality"] == Outcome("pass")
+
+
+def test_user_callable_hooks_cell_asserts_the_portable_refusal(tmp_path: Path) -> None:
+    """A hooks cell's user callable refuses portable (format.5); load and equality still run."""
+
+    result = run_cell(case_by_name("toy:simple_ff"), (feature("hooks"),), tmp_path / "cell")
+    assert result.outcomes["save"].status == "pass"
+    assert result.outcomes["save"].code == _PORTABLE_REFUSAL
+    assert result.outcomes["load"] == Outcome("pass")
+    assert result.outcomes["equality"] == Outcome("pass")
+
+
+class _RefusingTrace:
+    """A trace double: portable refuses with ``code``; other levels write a bare manifest."""
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+
+    def save(self, path: Path, *, level: str) -> None:
+        if level == "portable":
+            raise OpaqueCallableError("refused", code=self.code)
+        path.mkdir()
+        (path / "manifest.json").write_text(json.dumps({"intervention": None}))
+
+
+class _SaveCell:
+    """The parts of a harness cell ``_save`` touches."""
+
+    def __init__(self, tmp: Path, code: str) -> None:
+        self.tmp, self.trace, self.portable_refusal = tmp, _RefusingTrace(code), ""
+
+    def require_trace(self) -> _RefusingTrace:
+        return self.trace
+
+    def expect(self, condition: bool, detail: str) -> None:
+        if not condition:
+            raise OracleFailure(detail)
+
+
+def test_portable_refusal_without_a_user_callable_fails_the_save_oracle(tmp_path: Path) -> None:
+    """The format.5 code on a callable-free recipe is a finding, never a callable-level fallback."""
+
+    with pytest.raises(OracleFailure, match="holds no user callable"):
+        _save(_SaveCell(tmp_path, _PORTABLE_REFUSAL))
+
+
+def test_any_other_portable_refusal_still_refuses_the_save_oracle(tmp_path: Path) -> None:
+    """Only ``intervention_spec_not_portable`` takes the callable-level path; other codes propagate."""
+
+    cell = _SaveCell(tmp_path, "some_other_refusal")
+    with pytest.raises(OpaqueCallableError):
+        _save(cell)
+    assert not (tmp_path / "cell.tlspec").exists() and cell.portable_refusal == ""
 
 
 def test_stochastic_tag_names_samplers_not_training_gated_ops() -> None:
