@@ -3314,13 +3314,13 @@ docs-md	docs/maintainers/where.md	3147
 docs-md	docs/maintainers/where.md	316
 docs-md	docs/maintainers/where.md	317
 docs-md	docs/maintainers/where.md	318
-docs-md	docs/maintainers/where.md	31807
 docs-md	docs/maintainers/where.md	319
 docs-md	docs/maintainers/where.md	32
 docs-md	docs/maintainers/where.md	320
 docs-md	docs/maintainers/where.md	321
 docs-md	docs/maintainers/where.md	322
 docs-md	docs/maintainers/where.md	323
+docs-md	docs/maintainers/where.md	32312
 docs-md	docs/maintainers/where.md	324
 docs-md	docs/maintainers/where.md	326
 docs-md	docs/maintainers/where.md	327
@@ -3590,7 +3590,6 @@ docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
 docs-md	docs/maintainers/where.md	615
 docs-md	docs/maintainers/where.md	62
-docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	623
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	626
@@ -3615,9 +3614,11 @@ docs-md	docs/maintainers/where.md	6498
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	653
+docs-md	docs/maintainers/where.md	655
 docs-md	docs/maintainers/where.md	656
 docs-md	docs/maintainers/where.md	66
 docs-md	docs/maintainers/where.md	660
+docs-md	docs/maintainers/where.md	663
 docs-md	docs/maintainers/where.md	667
 docs-md	docs/maintainers/where.md	67
 docs-md	docs/maintainers/where.md	670
@@ -3633,8 +3634,8 @@ docs-md	docs/maintainers/where.md	689
 docs-md	docs/maintainers/where.md	69
 docs-md	docs/maintainers/where.md	690
 docs-md	docs/maintainers/where.md	691
-docs-md	docs/maintainers/where.md	691800
 docs-md	docs/maintainers/where.md	692
+docs-md	docs/maintainers/where.md	692438
 docs-md	docs/maintainers/where.md	694
 docs-md	docs/maintainers/where.md	695
 docs-md	docs/maintainers/where.md	6957
@@ -3748,9 +3749,9 @@ docs-md	docs/maintainers/where.md	86
 docs-md	docs/maintainers/where.md	860
 docs-md	docs/maintainers/where.md	862
 docs-md	docs/maintainers/where.md	866
-docs-md	docs/maintainers/where.md	8660
 docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	870
+docs-md	docs/maintainers/where.md	8793
 docs-md	docs/maintainers/where.md	88
 docs-md	docs/maintainers/where.md	885
 docs-md	docs/maintainers/where.md	8859
@@ -9275,6 +9276,7 @@ package-docstrings	torchlens/validation/_crossing_perturbations.py	0..10
 package-docstrings	torchlens/validation/_destination_coverage.py	256
 package-docstrings	torchlens/validation/_destination_coverage.py	43
 package-docstrings	torchlens/validation/_domain_perturbations.py	17
+package-docstrings	torchlens/validation/_domain_perturbations.py	32,
 package-docstrings	torchlens/validation/_edge_boundary.py	2.9
 package-docstrings	torchlens/validation/_edge_boundary.py	4.3
 package-docstrings	torchlens/validation/_grad_flags.py	64
