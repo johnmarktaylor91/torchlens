@@ -41,6 +41,19 @@ def _pointer_is_valid(indptr: torch.Tensor, num_segments: int) -> bool:
     return len(ptr) == num_segments + 1 and ptr[0] == 0 and monotone
 
 
+def _segment_pointer_is_valid(indptr: torch.Tensor, num_rows: int) -> bool:
+    """A segment reduction's pointer splits all ``num_rows`` source rows, in order."""
+
+    ptr = torch._C.TensorBase.tolist(indptr)
+    monotone = all(left <= right for left, right in zip(ptr[:-1], ptr[1:], strict=True))
+    return len(ptr) >= 2 and ptr[0] == 0 and ptr[-1] == num_rows and monotone
+
+
+def _segment_ids(indptr: torch.Tensor) -> torch.Tensor:
+    num_segments = indptr.shape[0] - 1
+    return _VF.repeat_interleave(_VF.arange(num_segments), _VF.diff(indptr), 0)
+
+
 if _HAS_CUSTOM_OP:
 
     @torch.library.custom_op("tltest_native_index::gather_csr", mutates_args=())
@@ -56,6 +69,24 @@ if _HAS_CUSTOM_OP:
     def _gather_csr_ignoring_pointer(src: torch.Tensor, indptr: torch.Tensor) -> torch.Tensor:
         # A planted capture bug: the pointer is passed but never read.
         return _VF.repeat_interleave(src, _VF.clone(_FIXED_COUNTS), 0)
+
+    # Stand-ins for torch_scatter's segment_csr kernels (same operator names, so the same
+    # registered index-pointer slot): an empty segment reduces to 0, as there.
+    @torch.library.custom_op("tltest_native_index::segment_sum_csr", mutates_args=())
+    def _segment_sum_csr(src: torch.Tensor, indptr: torch.Tensor) -> torch.Tensor:
+        if not _segment_pointer_is_valid(indptr, src.shape[0]):
+            _POINTER_VIOLATIONS.append(torch._C.TensorBase.tolist(indptr))
+            raise ValueError("index pointer out of domain")
+        out = _VF.zeros([indptr.shape[0] - 1, *src.shape[1:]], dtype=src.dtype)
+        return _VF.index_add(out, 0, _segment_ids(indptr), src)
+
+    @torch.library.custom_op("tltest_native_index::segment_max_csr", mutates_args=())
+    def _segment_max_csr(src: torch.Tensor, indptr: torch.Tensor) -> torch.Tensor:
+        if not _segment_pointer_is_valid(indptr, src.shape[0]):
+            _POINTER_VIOLATIONS.append(torch._C.TensorBase.tolist(indptr))
+            raise ValueError("index pointer out of domain")
+        out = _VF.zeros([indptr.shape[0] - 1, *src.shape[1:]], dtype=src.dtype)
+        return _VF.index_reduce(out, 0, _segment_ids(indptr), src, "amax", include_self=False)
 
     @torch.library.custom_op("tltest_native_index::take_rows", mutates_args=())
     def _take_rows(src: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
@@ -174,24 +205,28 @@ def test_unregistered_native_index_slot_fails_closed_without_running() -> None:
 
 
 class _ScatterCsrModel(nn.Module):
+    """torch_scatter's ``segment_csr(gather_csr(...))`` chain on the stand-in kernels."""
+
     def __init__(self, reduce: str) -> None:
         super().__init__()
         self.fc = nn.Linear(4, 4)
         self.reduce = reduce
 
     def forward(self, x: torch.Tensor, counts: torch.Tensor) -> torch.Tensor:
-        import torch_scatter
-
         indptr = torch.cat([counts.new_zeros(1), counts.cumsum(0)])
-        gathered = torch_scatter.gather_csr(self.fc(x), indptr)
-        return torch_scatter.segment_csr(gathered * 2.0, indptr, reduce=self.reduce)
+        gathered = torch.ops.tltest_native_index.gather_csr(self.fc(x), indptr)
+        if self.reduce == "max":
+            return torch.ops.tltest_native_index.segment_max_csr(gathered * 2.0, indptr)
+        return torch.ops.tltest_native_index.segment_sum_csr(gathered * 2.0, indptr)
 
 
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
 @pytest.mark.parametrize("reduce", ["sum", "max"])
-def test_torch_scatter_csr_ops_validate_without_crashing(reduce: str) -> None:
-    """torch_scatter's unchecked CSR kernels get only valid pointers (process used to abort)."""
+def test_scatter_csr_chain_validates_in_domain(reduce: str) -> None:
+    """Unchecked CSR gather and segment kernels in a chain get only valid pointers."""
 
-    pytest.importorskip("torch_scatter")
+    _POINTER_VIOLATIONS.clear()
     counts = torch.tensor([3, 1, 4, 2, 5, 1, 2, 6] * 8)
     x = torch.randn(counts.numel(), 4)
     assert _validate(_ScatterCsrModel(reduce), (x, counts)), last_validation_failure()
+    assert _POINTER_VIOLATIONS == []
