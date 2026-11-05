@@ -44,59 +44,37 @@ from torchlens.backends.torch import rescue, wrappers
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
-_HOP_NAMES = ("cond", "while_loop", "map", "scan")
-_HOPS_PRESENT = all(
-    importlib.util.find_spec(f"torch._higher_order_ops.{name}") is not None for name in _HOP_NAMES
-)
-pytestmark = pytest.mark.skipif(
-    not _HOPS_PRESENT, reason="this torch has no cond, while_loop, map and scan operators"
-)
+_Mul = Callable[[torch.Tensor, object], torch.Tensor]
+
+_TRACING_TENSOR_NAMES = frozenset({"FakeTensor", "FunctionalTensor"})
 
 
-def _hop(name: str) -> Callable[..., Any]:
-    """Return torch's user-facing higher-order operator ``name``.
+def _hop(module: str) -> Callable[..., Any]:
+    """Return ``torch._higher_order_ops.<module>.<module>``, or skip the test.
 
     Parameters
     ----------
-    name:
-        Operator, also the name of its ``torch._higher_order_ops`` submodule.
+    module:
+        Submodule name, which is also its entry point's name.
 
     Returns
     -------
     Callable[..., Any]
-        The operator, or :func:`_absent_hop` when this torch lacks the
-        operators (every test in the module is then skipped).
+        The higher-order operator's entry point.
     """
 
-    if not _HOPS_PRESENT:
-        return _absent_hop
-    return vars(importlib.import_module(f"torch._higher_order_ops.{name}"))[name]
-
-
-def _absent_hop(*args: Any, **kwargs: Any) -> Any:
-    """Stand in for an operator this torch lacks; never called, the module is skipped.
-
-    Parameters
-    ----------
-    *args:
-        Ignored.
-    **kwargs:
-        Ignored.
-
-    Returns
-    -------
-    Any
-        Never returns.
-    """
-
-    raise AssertionError("higher-order operator called on a torch that lacks it")
-
-
-_hop_cond, _hop_while, _hop_map, _hop_scan = (_hop(name) for name in _HOP_NAMES)
-
-_Mul = Callable[[torch.Tensor, object], torch.Tensor]
-
-_TRACING_TENSOR_NAMES = frozenset({"FakeTensor", "FunctionalTensor"})
+    qualname = f"torch._higher_order_ops.{module}"
+    # Presence is probed with ``find_spec`` (parent package first, so a torch
+    # without the package answers None instead of raising), never by catching
+    # ImportError: a HOP module that exists but fails to import must fail
+    # loudly rather than skip. Only the tests that build this op's model skip.
+    if (
+        importlib.util.find_spec("torch._higher_order_ops") is None
+        or importlib.util.find_spec(qualname) is None
+    ):
+        pytest.skip(f"torch {torch.__version__} has no {qualname}")
+    entry: Callable[..., Any] = getattr(importlib.import_module(qualname), module)
+    return entry
 
 
 def _clean_mul(tensor: torch.Tensor, factor: object) -> torch.Tensor:
@@ -132,6 +110,7 @@ class _CondModel(nn.Module):
 
         super().__init__()
         self.take_true = take_true
+        self.cond = _hop("cond")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Double (true branch) or decrement (false branch), then add one.
@@ -148,11 +127,13 @@ class _CondModel(nn.Module):
         """
 
         pred = x.sum() > 0 if self.take_true else x.sum() < -1e9
-        return _hop_cond(pred, lambda t: t * 2, lambda t: t - 1, (x,)) + 1
+        return self.cond(pred, lambda t: t * 2, lambda t: t - 1, (x,)) + 1
 
 
 class _WhileModel(nn.Module):
     """``while_loop`` that scales its carry three times."""
+
+    hop_module = "while_loop"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the loop body runs.
@@ -165,6 +146,7 @@ class _WhileModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run three doubling iterations, then add one.
@@ -181,12 +163,14 @@ class _WhileModel(nn.Module):
         """
 
         start = torch.zeros((), dtype=torch.int64)
-        out = _hop_while(lambda i, t: i < 3, lambda i, t: (i + 1, self.mul(t, 2.0)), (start, x))
+        out = self.hop(lambda i, t: i < 3, lambda i, t: (i + 1, self.mul(t, 2.0)), (start, x))
         return out[1] + 1
 
 
 class _MapModel(nn.Module):
     """``map`` over the leading dimension."""
+
+    hop_module = "map"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the mapped function runs.
@@ -199,6 +183,7 @@ class _MapModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Map each row to ``2 * row + 1``.
@@ -214,11 +199,13 @@ class _MapModel(nn.Module):
             The stacked mapped rows.
         """
 
-        return _hop_map(lambda row: self.mul(row, 2.0) + 1, x)
+        return self.hop(lambda row: self.mul(row, 2.0) + 1, x)
 
 
 class _ScanModel(nn.Module):
     """``scan`` computing a scaled running sum."""
+
+    hop_module = "scan"
 
     def __init__(self, mul: _Mul = _clean_mul) -> None:
         """Store the multiply the combine step runs.
@@ -231,6 +218,7 @@ class _ScanModel(nn.Module):
 
         super().__init__()
         self.mul = mul
+        self.hop = _hop(self.hop_module)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Return the summed running sums plus the final carry.
@@ -265,7 +253,7 @@ class _ScanModel(nn.Module):
             new = carry + row
             return new, self.mul(new, 2.0)
 
-        carry, ys = _hop_scan(combine, torch.zeros(4), x)
+        carry, ys = self.hop(combine, torch.zeros(4), x)
         return ys.sum(0) + carry
 
 
@@ -655,10 +643,10 @@ class _UserCompiledCond(nn.Module):
         """Compile the region as a plain attribute, which capture cannot unwrap."""
 
         super().__init__()
-        self.region = torch.compile(_UserCompiledCond._branch, backend="eager")
+        self.cond = _hop("cond")
+        self.region = torch.compile(self._branch, backend="eager")
 
-    @staticmethod
-    def _branch(x: torch.Tensor) -> torch.Tensor:
+    def _branch(self, x: torch.Tensor) -> torch.Tensor:
         """Run the ``cond``.
 
         Parameters
@@ -672,7 +660,7 @@ class _UserCompiledCond(nn.Module):
             ``2 * x`` for a positive sum, else ``x - 1``.
         """
 
-        return _hop_cond(x.sum() > 0, lambda t: t * 2, lambda t: t - 1, (x,))
+        return self.cond(x.sum() > 0, lambda t: t * 2, lambda t: t - 1, (x,))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Call the compiled region.

@@ -25,10 +25,12 @@ Hosts without ``sched_setaffinity`` or a readable ``/proc/self/stat`` just unmap
 
 from __future__ import annotations
 
+import functools
 import mmap
 import os
 
 import numpy as np
+import pytest
 
 PLANT_BYTES = 64 * 2**20
 _PAGE = mmap.PAGESIZE
@@ -113,3 +115,28 @@ def touch_fresh_plant() -> FreshPlant:
     region = mmap.mmap(-1, PLANT_BYTES, flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS)
     np.frombuffer(region, dtype=np.uint8)[:: mmap.PAGESIZE] = 1
     return FreshPlant(region)
+
+
+#: Skip reason for a host whose kernel cannot reset the resident high-water mark.
+VMHWM_RESET_UNSUPPORTED = (
+    "VmHWM reset unsupported on this kernel (writing 5 to /proc/self/clear_refs fails)"
+)
+
+
+@functools.lru_cache(maxsize=1)
+def vmhwm_reset_supported() -> bool:
+    """Return whether the product's resident high-water reset works on this host.
+
+    The probe is :func:`torchlens._capture.peak_memory.reset_peak_rss` itself:
+    a writable ``/proc/self/clear_refs`` is not enough, because older kernels
+    accept the open and reject the write. Probing resets this process's mark
+    once, which no test reads across a bracket.
+    """
+
+    from torchlens._capture import peak_memory
+
+    return peak_memory.reset_peak_rss()
+
+
+#: Guard for tests that measure a per-bracket resident peak.
+needs_vmhwm_reset = pytest.mark.skipif(not vmhwm_reset_supported(), reason=VMHWM_RESET_UNSUPPORTED)
