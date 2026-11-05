@@ -22,7 +22,6 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
-from torchlens.backends.torch import _bool_check_records
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 
@@ -198,6 +197,8 @@ def test_unrecorded_clone_falls_back_and_still_fails(
     monkeypatch: pytest.MonkeyPatch, positive_input: torch.Tensor
 ) -> None:
     """Planted bug: without the per-test record the shared bool still fails validation."""
+
+    from torchlens.backends.torch import _bool_check_records
 
     monkeypatch.setattr(_bool_check_records, "_log_clone_label", lambda trace, source: None)
     trace = _trace(TwoIfsOneBool(), positive_input)
