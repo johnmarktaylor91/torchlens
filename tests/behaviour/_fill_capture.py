@@ -359,13 +359,19 @@ def _after_fast_run(cell: Cell) -> None:
 
 
 def _after_rerun(cell: Cell) -> None:
-    """A rerun keeps the op structure and, without an edit, equals eager."""
+    """A rerun keeps the op structure of the run before it and, without an edit, equals eager.
+
+    The base check's rerun is the run before it: a model that caches state on its
+    first forward (a lazily built tensor attribute) takes a shorter path on every
+    later forward than the capture recorded, so the capture is not the reference.
+    """
 
     _base_after("rerun")(cell)
     trace = cell.require_trace()
     labels = [op.label for op in _order(trace)]
     torch.manual_seed(SEED)
     trace = trace.run(cell.model, cell.fresh_inputs())
+    cell.trace = trace
     cell.expect([op.label for op in _order(trace)] == labels, "rerun changed the op labels")
     eager = _eager_reference(cell)
     if eager is not None:
