@@ -101,10 +101,12 @@ def transposed_convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
         )
 
     exact = all(stride == 1 for stride in strides)
-    return context.window_edges(
-        edges,
-        exact=exact,
-        note=None if exact else "stride > 1 uses a sub-pixel descriptor envelope",
+    # Every input channel feeds every output channel (groups == 1): the per-unit
+    # walks must widen the channel axis, as the descriptor engine already does.
+    return _RuleResult(
+        "window_edges",
+        {"per_axis_edges": edges, "exact": exact, "channel_dependency": "full_exact"},
+        None if exact else "stride > 1 uses a sub-pixel descriptor envelope",
         map_index_set=map_index_set,
     )
 
