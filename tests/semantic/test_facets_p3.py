@@ -58,14 +58,9 @@ class LlamaSdpaAttention(nn.Module):
         v = self.v_proj(x).view(batch, seq, self.num_key_value_heads, self.head_dim).transpose(1, 2)
         q = q + 0.125
         k = k - 0.25
-        z = F.scaled_dot_product_attention(
-            q,
-            k,
-            v,
-            is_causal=self.causal,
-            dropout_p=0.0,
-            enable_gqa=self.num_heads != self.num_key_value_heads,
-        )
+        # ``enable_gqa`` only when the head counts differ: the torch floor's SDPA lacks the kwarg.
+        gqa = {"enable_gqa": True} if self.num_heads != self.num_key_value_heads else {}
+        z = F.scaled_dot_product_attention(q, k, v, is_causal=self.causal, dropout_p=0.0, **gqa)
         return self.o_proj(z.transpose(1, 2).reshape(batch, seq, -1))
 
 
