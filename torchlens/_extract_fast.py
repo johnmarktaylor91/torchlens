@@ -109,7 +109,10 @@ def try_module_output_extract(
     calls: dict[str, list[Any]] = {name: [] for name in set(plan.values())}
 
     def recorder(name: str) -> Any:
+        """Return a forward hook that appends module ``name``'s detached output."""
+
         def hook(_module: nn.Module, _inputs: Any, output: Any) -> None:
+            """Record one call's output, or ``None`` when it is not a plain tensor."""
             calls[name].append(output.detach().clone() if type(output) is torch.Tensor else None)
 
         return hook

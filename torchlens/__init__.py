@@ -709,9 +709,8 @@ def extract(
 
     from ._extract_fast import extract_outputs  # deferred: init stays torch-free
 
-    return extract_outputs(
-        model, inputs, layers, _extract_layers_with_trace, detach=detach_saved_activations
-    )
+    full = _extract_layers_with_trace  # the full-capture path the fast path falls back to
+    return extract_outputs(model, inputs, layers, full, detach=detach_saved_activations)
 
 
 __all__ = [
