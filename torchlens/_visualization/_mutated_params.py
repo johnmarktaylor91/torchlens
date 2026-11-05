@@ -78,6 +78,12 @@ class _ParamNodeStub:
     modules: list[str]
     is_atomic_module: bool = False
 
+    @property
+    def module_context(self) -> _ParamNodeStub:
+        """Answer ``module_context.is_atomic_module`` the way an Op's group does."""
+
+        return self
+
 
 def _is_inplace_func_name(func_name: object) -> bool:
     """Return whether ``func_name`` names an in-place tensor operation.

@@ -99,7 +99,7 @@ def _vmap_op(trace: Any) -> Any:
 def _parent_at(op: Any, position: int) -> str:
     """Return the parent label at positional argument ``position`` of ``op``."""
 
-    return op.parent_arg_positions["args"][position]
+    return op.call.parent_arg_positions["args"][position]
 
 
 def _edge(trace: Any, op: Any, parent: str) -> tuple[str, str]:
@@ -231,7 +231,7 @@ def test_wrong_tensor_wired_into_a_non_excused_position_fails() -> None:
     try:
         op = _vmap_op(trace)
         head, query = _parent_at(op, 1), _parent_at(op, 2)
-        op.parent_arg_positions["args"][2] = head
+        op.call.parent_arg_positions["args"][2] = head
         assert not check_mask_builder_unread_exempt(trace, op, [head])
         assert not check_mask_builder_unread_exempt(trace, op, [query])
         assert not _validate(trace, ground_truth)
