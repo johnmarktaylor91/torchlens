@@ -32,7 +32,7 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
-from ._utils._package_frames import is_torchlens_code
+from ._utils._package_frames import external_warning_stacklevel, is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
@@ -313,7 +313,7 @@ def _warn_compiled_model_unwrapped_once() -> None:
         "TorchLens: compiled model detected; tracing the eager source module it wraps "
         "(torch.compile semantics such as fusion are not traced).",
         UserWarning,
-        stacklevel=3,
+        stacklevel=external_warning_stacklevel(),
     )
 
 
