@@ -115,9 +115,9 @@ def test_bracket_never_writes_onto_the_forward_exception() -> None:
             raise AttributeError("locked")
 
     trace = SimpleNamespace(measure_host_peak_memory=False, measure_python_peak_memory=False)
-    with pytest.raises(_LockedError):
-        with capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cpu")):
-            raise _LockedError("boom")
+    bracket = capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cpu"))
+    with pytest.raises(_LockedError), bracket:
+        raise _LockedError("boom")
     assert trace._provenance_forward_memory_backend == "cpu"
 
 
@@ -154,7 +154,6 @@ def test_transparent_contextmanager_keeps_contextlib_exit_semantics() -> None:
         assert value == "value"
     with _bracket(True):
         raise _Locked("swallowed")
-    with pytest.raises(_Locked):
-        with _bracket(False):
-            raise _Locked("passes through")
+    with pytest.raises(_Locked), _bracket(False):
+        raise _Locked("passes through")
     assert events == ["enter", "exit", "enter", "caught", "exit", "enter", "caught", "exit"]
