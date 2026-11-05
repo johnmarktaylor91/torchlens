@@ -11,6 +11,7 @@ from ... import _state
 from ..._entry_refusals import refuse_aliasing_parent_not_in_call_args
 from ..._ir.intervention import FunctionEventInput
 from ..._ir.semantics import BackendSemantics
+from ..._utils._torch_symbols import tensor_read
 from ..._utils.collections import index_nested
 from ..._utils.tensor_utils import tensor_nanequal
 
@@ -349,10 +350,10 @@ def _tensors_alias(left: torch.Tensor, right: torch.Tensor) -> bool:
         with _state.pause_logging():
             if logging_enabled:
                 _state.next_func_call_id()
-            left_ptr = left.untyped_storage().data_ptr()
+            left_ptr = tensor_read(left, "untyped_storage")(left).data_ptr()
             if logging_enabled:
                 _state.next_func_call_id()
-            right_ptr = right.untyped_storage().data_ptr()
+            right_ptr = tensor_read(right, "untyped_storage")(right).data_ptr()
         return left_ptr == right_ptr
     except RuntimeError:
         return False
