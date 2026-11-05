@@ -325,16 +325,17 @@ Key entry points:
   trust gate. `_io/injection_codec.py` is the separate bundle-row envelope.
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
-  (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
-  the tri-state `show_legend` (`None`=AUTO channel-only legend, plus the key on a `module=` focus; `True`/`False` historical; explicit
+  (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), keyed via
+  the tri-state `show_legend` (`None`=AUTO plain channel key, method details in the graph
+  `comment` via `_encoding_key`, plus the key on a `module=` focus; `True`/`False` historical; explicit
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
-  legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
+  method-record note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
   Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`
-  (size refuses where color degrades); `total_*` sums encode + aggregation legend line; the
+  (size refuses where color degrades); `total_*` sums encode + aggregation method-record line; the
   funnel drops NodeSpec width/height on image nodes; `scale=` without `size_by` refuses
   `scale_requires_size_by`. Wave-1 rank channel `Trace.draw(stack_by=...)` (UNSTABLE,
   strictly opt-in): annotation -> `rank=same` groups (`newrank=true`); `True`/`"auto"` is

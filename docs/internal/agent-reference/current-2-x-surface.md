@@ -594,17 +594,20 @@ expert contributions from routing indices alone.
 - `Trace.draw(color_by=...)` (UNSTABLE spelling, keyword-only, no deprecation shim owed until
   the naming session ratifies it) is the v1 encoding channel: a record field name, scalar
   builtin (`time`/`flops`/`bytes`/`magnitude`/`grad_norm`), or callable `node -> value` fills
-  eligible op nodes from a colorblind-safe sequential ramp (linear min-max, legend-disclosed).
+  eligible op nodes from a colorblind-safe sequential ramp (OKLab-blended stop list, default
+  YlOrBr, `_ramps.DEFAULT_RAMP_FAMILY`; linear min-max). The drawn key is plain (a colour bar
+  labelled at both ends with units, one `size: ...` line); method details go to the graph
+  `comment` (`_encoding_key.record_encoding_method`), never drawn.
   Channels are dot-layout-only (AUTO forces dot with a notice; explicit `layout="rank"` refuses
   `encoding_requires_dot_layout`) and presentation-only (collapse plan and Trace untouched).
   On rolled multi-pass layers, field sources resolve through the name-keyed rolled-aggregate
   allowlist in `torchlens/_visualization/_encoding.py`: marker-varying and mirrored
   first-pass-only numerics (`raw_index`, `step_index`, `ordinal_index`, `grad_fn_object_id`,
   `buffer_pass`, `transformed_gradient_memory`, `conditional_depth`) stay UNENCODED with a
-  legend note — an encoding must never imply uniformity it cannot prove (tripwire class);
+  method-record note — an encoding must never imply uniformity it cannot prove (tripwire class);
   exact cross-pass totals (`total_*`, the autograd trio) encode with a mandatory aggregation
-  legend line; unclassified sources refuse `encoding_source_invalid`. `show_legend` is now
-  tri-state: `None` (default, AUTO) draws a channel-only disclosure legend iff a channel is
+  method-record line; unclassified sources refuse `encoding_source_invalid`. `show_legend` is now
+  tri-state: `None` (default, AUTO) draws the channel key iff a channel is
   active; `True`/`False` keep their historical meanings, and explicit `False` is honored even
   with channels active. Typed refusals: `encoding_source_invalid`, `encoding_value_invalid`
   (bools and non-scalar tensors refuse — a bool is not a magnitude), `encoding_callable_error`
@@ -625,7 +628,7 @@ expert contributions from routing indices alone.
   single-valued (marker-varying reconciled fields, mirrored/per-pass projections, varying
   shape under `"dims"` — the refusal fires BEFORE dims resolution, so the honest-aggregate
   range strings are unreachable). Summed-family sources (`total_*`) encode with a mandatory
-  aggregation legend line. The spec funnel DROPS NodeSpec width/height when `spec.image` is
+  aggregation method-record line. The spec funnel DROPS NodeSpec width/height when `spec.image` is
   set (an image node's size is pixel-derived); `extra_attrs` stays the power-valve override
   and wins on key conflicts by merge order. `scale=` without `size_by` refuses
   `scale_requires_size_by`; unknown scale tokens refuse `encoding_scale_invalid`.

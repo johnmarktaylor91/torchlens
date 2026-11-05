@@ -62,7 +62,7 @@ from ._svg_compose import (
     _write_composed_code_panel,
 )
 from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
-from .overlays import resolve_overlay_request
+from .overlays import legend_domain_text, resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
     build_render_geometry_record,
@@ -776,14 +776,13 @@ def _forward_header_label(
     """Return the graph label with the key under the header, or ``None`` for no key.
 
     ``show_legend`` is tri-state (L5 channel core): ``None`` (AUTO) shows the
-    channel disclosure when a channel is active and, on a ``module=`` focused
-    draw, the swatches; ``True`` adds the reading key (the notes explaining
-    the picture's notation); ``False`` is honoured (the docs state the
-    encoding is then undisclosed). The key sits inside the header label so
-    both stay top left on every engine. A ``vis_graph_overrides``
-    label (or a lens caption) stays the header.
+    channel key when a channel is active and, on a ``module=`` focused draw,
+    the swatches; ``True`` adds the reading key; ``False`` draws no key. The
+    channel method details always go to the graph comment. The key sits in
+    the header label (top left on every engine); a label override stays the header.
     """
 
+    from ._encoding_key import record_encoding_method
     from ._header_block import (
         caption_from_label,
         header_block_label,
@@ -808,8 +807,9 @@ def _forward_header_label(
         if request.show_legend is True:
             notes = reading_notes(node_attrs, request.module)
     sections: tuple[LegendSection, ...] = ()
-    if request.encoding is not None and request.show_legend is not False:
-        sections = encoding_sections(request.encoding)
+    if request.encoding is not None:
+        record_encoding_method(context.dot, request.encoding, legend_domain_text)
+        sections = encoding_sections(request.encoding) if request.show_legend is not False else ()
     if not swatches and not sections and not notes:
         return None
     caption = context.graph_caption
