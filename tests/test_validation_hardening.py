@@ -1738,9 +1738,19 @@ def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
     assert lifted[0, 1].item() == 5.0 + 7.0
     constant = torch.zeros(3)
     assert _directional_step_perturb(constant, "lift_min_entry").tolist() == [1.0, 0.0, 0.0]
-    # Non-floating parents and unrepresentable lifts take the minimal step.
+    # Integer parents lift the same way and bool parents flip one entry;
+    # unrepresentable lifts take the minimal step.
     integers = torch.tensor([1, 2])
-    assert torch.equal(_directional_step_perturb(integers, "lift_min_entry"), integers + 1)
+    assert _directional_step_perturb(integers, "lift_min_entry").tolist() == [3, 2]
+    saturated = torch.tensor([0, 200], dtype=torch.uint8)
+    assert torch.equal(
+        _directional_step_perturb(saturated, "lift_min_entry"),
+        _directional_step_perturb(saturated, "step_up"),
+    )
+    flags = torch.tensor([True, False])
+    assert _directional_step_perturb(flags, "lift_min_entry").tolist() == [True, True]
+    all_true = torch.tensor([True, True])
+    assert _directional_step_perturb(all_true, "lift_min_entry").tolist() == [False, True]
     huge = torch.tensor([-3.0e38, 3.0e38])
     assert torch.equal(
         _directional_step_perturb(huge, "lift_min_entry"),

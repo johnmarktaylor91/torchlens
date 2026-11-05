@@ -112,7 +112,7 @@ from ._saved_outs_steps import (
     _reset_run_diagnostics,
 )
 from ._script_metadata_proof import script_metadata_only_proof
-from ._shift_probe import LIFT_MIN_ENTRY_STRATEGY, VALUE_STEP_STRATEGIES, lift_min_entry_values
+from ._shift_probe import NON_UNIFORM_STRATEGIES, non_uniform_probe_values, value_step_strategies
 from ._source_provenance import check_source_provenance
 from .exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
@@ -3513,7 +3513,7 @@ def _value_retry_strategies(layer: Op) -> list[str]:
         Minimal steps, unit steps and the lift, then the bool or discretizing ladders.
     """
 
-    strategies = list(VALUE_STEP_STRATEGIES)
+    strategies = value_step_strategies(layer)
     if getattr(layer, "dtype", None) == torch.bool:
         # R08: a bool-output child is a THRESHOLD op — small steps routinely
         # fail to cross it, which the blanket ``discrete_bool_output``
@@ -3602,8 +3602,8 @@ def _directional_step_perturb(tensor: torch.Tensor, strategy: str) -> torch.Tens
             return torch.full_like(tensor, float("nan"))
         return _directional_step_perturb(tensor, "step_up")
 
-    if strategy == LIFT_MIN_ENTRY_STRATEGY:
-        return lift_min_entry_values(tensor, fallback=_directional_step_perturb)
+    if strategy in NON_UNIFORM_STRATEGIES:
+        return non_uniform_probe_values(tensor, strategy, fallback=_directional_step_perturb)
     if strategy.startswith(("unit_step_up", "unit_step_down")):
         base_strategy, _, magnitude_text = strategy.partition(":")
         magnitude = float(magnitude_text) if magnitude_text else 1.0
