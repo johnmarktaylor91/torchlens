@@ -3,7 +3,6 @@
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import prod
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -53,10 +52,8 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext, RetroactiveCaptureDecision
 from ..._ir.refs import ParamRef
 from ..._ir.selector_eval import module_union_matches
-from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils._call_site import call_site_class
-from ..._utils._torch_symbols import tensor_reads
 from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
@@ -370,61 +367,23 @@ def _build_graph_relationship_fields(
             ]
     parent_arg_positions = _locate_parent_tensors_in_args(self, parent_layer_entries, args, kwargs)
     input_ancestors, internal_source_ancestors = _get_ancestors_from_parents(parent_layer_entries)
-    internal_parent_layer_labels = [
-        label
-        for label in parent_layer_labels
-        if self.capture_events.live_index.require_event(label).has_internal_source_ancestor
-    ]
 
+    # Only the keys the freeze (``_op_record_from_log``) reads are written. The
+    # graph placeholders postprocess sets (children, output and distance flags,
+    # buffer and conditional fields, ``internal_source_parents``) come from the
+    # records and the op defaults, never from this dict.
     fields_dict["parents"] = parent_layer_labels
     fields_dict["parent_arg_positions"] = parent_arg_positions
     fields_dict["_edge_uses"] = []
     fields_dict["root_ancestors"] = input_ancestors.union(internal_source_ancestors)
-    fields_dict["children"] = []
-    fields_dict["has_children"] = False
     fields_dict["is_input"] = False
     fields_dict["input_was_parameter"] = False
-    fields_dict["has_input_ancestor"] = len(input_ancestors) > 0
     fields_dict["input_ancestors"] = input_ancestors
-    fields_dict["min_distance_from_input"] = None
-    fields_dict["max_distance_from_input"] = None
-    fields_dict["is_output"] = False
     fields_dict["is_output_parent"] = False
-    fields_dict["is_final_output"] = False
-    fields_dict["has_output_descendant"] = False
-    fields_dict["output_descendants"] = set()
-    fields_dict["is_orphan"] = False
-    fields_dict["min_distance_to_output"] = None
-    fields_dict["max_distance_to_output"] = None
-    fields_dict["io_role"] = None
     fields_dict["is_buffer"] = False
-    fields_dict["address"] = None
-    fields_dict["buffer_pass"] = None
-    fields_dict["buffer_source"] = None
-    fields_dict["buffer_write_kind"] = None
-    fields_dict["buffer_value_changed"] = None
-    fields_dict["buffer_replay_validated"] = None
-    fields_dict["buffer_source_func_name"] = None
     fields_dict["is_internal_source"] = len(parent_layer_labels) == 0
     fields_dict["has_internal_source_ancestor"] = len(internal_source_ancestors) > 0
-    fields_dict["internal_source_parents"] = internal_parent_layer_labels
     fields_dict["internal_source_ancestors"] = internal_source_ancestors
-    fields_dict["is_internal_sink"] = False
-    fields_dict["is_terminal_bool"] = False
-    fields_dict["is_terminal_conditional_bool"] = False
-    fields_dict["conditional_context_kind"] = None
-    fields_dict["conditional_wrapper_kind"] = None
-    fields_dict["terminal_conditional_id"] = None
-    fields_dict["in_conditionals"] = []
-    fields_dict["terminal_bool_for"] = None
-    fields_dict["is_in_conditional_body"] = False
-    fields_dict["conditional_branch_stack"] = []
-    fields_dict["conditional_branch_depth"] = 0
-    fields_dict["conditional_entry_children"] = []
-    fields_dict["conditional_then_children"] = []
-    fields_dict["conditional_elif_children"] = {}
-    fields_dict["conditional_else_children"] = []
-    fields_dict["conditional_arm_children"] = {}
 
     in_multi_output = any(issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set])
     fields_dict["in_multi_output"] = in_multi_output
@@ -440,12 +399,6 @@ def _extract_through_dynamic_spec(
     if isinstance(cached, ArgSpec) and dynamic_spec_covers_call(cached, args, kwargs):
         return promote_mutated_parameters(*extract_tensors_and_params(cached, args, kwargs))
     return None
-
-
-def _param_bytes(param: Any) -> int:
-    """Return ``nelement() * element_size()`` of one parameter through the routed reads."""
-    nelement, element_size = tensor_reads(param, "nelement", "element_size")
-    return int(nelement(param) * element_size(param))
 
 
 def _extract_arg_tensors_and_params(
@@ -527,7 +480,6 @@ def _build_param_fields(
     Unresolved parameters fall through unprovenanced (the honest path: break
     marker via ``_tensor_has_known_provenance``).
     """
-    _param_logs: list[Any] = []
     resolved_parameters: list[torch.nn.Parameter] = []
     for param in arg_parameters:
         if _is_uninitialized_param(param):
@@ -551,26 +503,16 @@ def _build_param_fields(
                 rebinds = getattr(self, "_offload_param_rebinds", None)
                 if rebinds is None or rebinds.get(addr) is not param:
                     continue
-            _param_logs.append(param_log)
             resolved_parameters.append(param)
 
+    # Runs for its side effect too: assigns each parameter's barcode on first sight
+    # and advances its per-parameter call index. The parameter totals, memory,
+    # barcode list and parent-param map are not stored here: materialize
+    # recomputes them from the record.
     parent_param_ops = _process_parent_param_ops(resolved_parameters)
-    indiv_param_barcodes = list(parent_param_ops.keys())
 
     fields_dict["parent_params"] = resolved_parameters
-    fields_dict["_param_barcodes"] = indiv_param_barcodes
-    fields_dict["parent_param_ops"] = parent_param_ops
-    fields_dict["_param_logs"] = _param_logs
     fields_dict["param_shapes"] = [tuple(param.shape) for param in resolved_parameters]
-    fields_dict["num_params"] = sum(prod(shape) for shape in fields_dict["param_shapes"])
-    fields_dict["num_params_trainable"] = sum(
-        pl.num_params for pl in _param_logs if pl.is_trainable
-    )
-    fields_dict["num_params_frozen"] = sum(
-        pl.num_params for pl in _param_logs if not pl.is_trainable
-    )
-    with pause_logging():
-        fields_dict["param_memory"] = sum(_param_bytes(p) for p in resolved_parameters)
     return parent_param_ops
 
 
