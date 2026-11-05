@@ -231,6 +231,30 @@ refused in this build (module addresses work). The first capture in a process to
 on ResNet-18, 1.3 to 2.7 s on the LSTM tagger and 4.9 to 5.5 s on GPT-2 small (one call each,
 installing the torch wrappers).
 
+### Stopping a rerun early
+
+`trace.run_transaction(inputs=new_x, fast=True, until=<saved module>)` stops the fast rerun once
+that module has run. The stopped module's output equalled a fresh `tl.trace` of the new input
+exactly on all three models. Without `fast=True` the same `until=` still costs about a full trace.
+Same worker and build as above; each row is the median of up to 15 samples (GPT-2: 5) in one
+process.
+
+| Workload (model, device, repeats) | Tool | Median |
+| --- | --- | --- |
+| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 13.65 ms |
+| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 20.30 ms |
+| ResNet-18, CPU, one 64x64 image, one process | the same with `until="layer1"` | 6.16 ms |
+| ResNet-18, CPU, one 64x64 image, one process | the same with `until="layer2"` | 8.43 ms |
+| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, until="layer1")`, without `fast=True` | 434.31 ms |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 1.62 s |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 1.51 s |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | the same with `until="transformer.h.1"` | 161.36 ms |
+| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until="transformer.h.1")`, without `fast=True` | 3.40 s |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.01 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 3.36 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | the same with `until="embed"` | 0.77 ms |
+| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until="embed")`, without `fast=True` | 51.97 ms |
+
 ## Edit sweeps with a recording per edit
 
 What it does: one `tl.record(..., intervene=tl.when(...))` or one
@@ -368,7 +392,8 @@ What this means in practice:
 
 ## Not measured yet
 
-- Stopping the forward early with `stop_after=`.
+- Stopping a fresh capture early with `stop_after=` (stopping a fast rerun early is in
+  [Stopping a rerun early](#stopping-a-rerun-early)).
 - A fast rerun of a trace on new inputs on the 3 Nov workloads (the 5 Nov reruns are in
   [Reruns of a finished trace](#reruns-of-a-finished-trace)).
 - A trace of metadata only, saving no activations.

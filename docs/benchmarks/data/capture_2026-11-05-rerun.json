@@ -429,6 +429,62 @@
   {
    "section": "rerun_lstm-tagger",
    "text": "| LSTM tagger, CPU, one sequence of 32 tokens, n=3 processes | `trace.run_transaction(inputs=new_x, fast=True)` with a staged edit | 3.32 ms (3.30 ms to 3.75 ms) |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | plain forward, nothing attached | 13.65 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 20.30 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | the same with `until=\"layer1\"` | 6.16 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | the same with `until=\"layer2\"` | 8.43 ms |"
+  },
+  {
+   "section": "until_resnet18",
+   "text": "| ResNet-18, CPU, one 64x64 image, one process | `trace.run_transaction(inputs=new_x, until=\"layer1\")`, without `fast=True` | 434.31 ms |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | plain forward, nothing attached | 1.62 s |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 1.51 s |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | the same with `until=\"transformer.h.1\"` | 161.36 ms |"
+  },
+  {
+   "section": "until_gpt2-small",
+   "text": "| GPT-2 small (random weights), CPU, one forward of 16 sequences of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until=\"transformer.h.1\")`, without `fast=True` | 3.40 s |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | plain forward, nothing attached | 1.01 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, fast=True)`, whole forward | 3.36 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | the same with `until=\"embed\"` | 0.77 ms |"
+  },
+  {
+   "section": "until_lstm-tagger",
+   "text": "| LSTM tagger, CPU, one sequence of 32 tokens, one process | `trace.run_transaction(inputs=new_x, until=\"embed\")`, without `fast=True` | 51.97 ms |"
   }
- ]
+ ],
+ "early_stop": {
+  "equality": "the stopped site equals a fresh tl.trace of the new input (max abs diff 0) on all three models",
+  "engine": "guarded_fast with fast=True"
+ }
 }
