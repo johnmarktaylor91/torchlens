@@ -92,7 +92,7 @@ def test_tinygrad_validation_fails_wrong_parent_wiring() -> None:
 
     trace = _trace()
     cmplt = _first_op(trace, "cmplt")
-    args = cmplt.parent_arg_positions["args"]
+    args = cmplt.call.parent_arg_positions["args"]
     first_parent = args[0]
     args[1] = first_parent
     cmplt.parents = (first_parent,)
@@ -140,7 +140,7 @@ def _failed_reasons(trace: Any) -> set[str]:
     return {
         str(record["reason"])
         for record in status.decisions
-        if record["verdict"] == "failed" and record.get("reason") is not None
+        if record["decision"] == "failed" and record.get("reason") is not None
     }
 
 

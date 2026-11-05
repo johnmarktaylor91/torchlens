@@ -269,7 +269,7 @@ def test_tf_duplicate_trace_signature_group_is_ambiguous() -> None:
         if op.num_passes == 1:
             label_to_raw[op.layer_label] = op._label_raw
     signature = TFIntermediateSignature(
-        func_call_id=relu_ops[0].func_call_id,
+        func_call_id=relu_ops[0].call.call_id,
         op_name=relu_ops[0].func_name,
         parent_labels=tuple(
             dict.fromkeys(label_to_raw.get(parent, parent) for parent in relu_ops[0].parents)
