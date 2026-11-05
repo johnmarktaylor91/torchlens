@@ -12,6 +12,10 @@ under the internal-read marker). After the capture returns, TorchLens's postproc
 reads storage pointers unmarked, so exports there are not intercepted: a foreign
 write into a live tensor after capture can still reach a saved out that aliases it,
 as can a write through a pointer the model took before the payload was deferred.
+Exports inside a live ``autograd.Function`` forward are left to the Function boundary
+(``_function_boundary``): a forward that leaves torch is collapsed into one boundary
+op recorded after the kernel's write, and an ordinary Function's interior keeps the
+census tripwire, so a foreign write there still reaches the interior's saved outs.
 """
 
 from __future__ import annotations
@@ -19,11 +23,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from ... import _state
 from ..._utils._internal_read import _internal_read_state
 from ..._utils.tensor_utils import _DEFER_PENDING, materialize_deferred_for_call
+from ._function_boundary import inside_function_apply
 
-__all__ = ["STORAGE_EXPORT_FUNC_NAMES", "materialize_deferred_for_export"]
+__all__ = ("STORAGE_EXPORT_FUNC_NAMES", "materialize_deferred_for_export")
 
 STORAGE_EXPORT_FUNC_NAMES: frozenset[str] = frozenset(
     {
@@ -46,11 +50,12 @@ def materialize_deferred_for_export(args: Sequence[Any]) -> None:
     Parameters
     ----------
     args:
-        Positional arguments of the export call; the receiver is ``args[0]``.
+        Positional arguments of the export call; the receiver is ``args[0]``. The
+        caller has already checked that the owner thread's forward is being logged.
     """
 
-    if not _DEFER_PENDING or not args or not _state._logging_enabled or _state._pause_depth:
+    if not _DEFER_PENDING or not args or getattr(_internal_read_state, "depth", 0):
         return
-    if getattr(_internal_read_state, "depth", 0):
+    if inside_function_apply():
         return
     materialize_deferred_for_call(args[:1])

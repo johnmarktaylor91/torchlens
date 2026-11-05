@@ -1221,8 +1221,6 @@ def torch_func_decorator(
         fingerprint = _state._call_fingerprint
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
-        if exports_storage and _COW_PENDING:
-            _storage_exports.materialize_deferred_for_export(args)
         # ---- Fast path ---- (logging off: pass through; DeviceContext injection still runs for
         # torch.device('meta') contexts). r43 hon2_4: op-logging is OWNER-thread-scoped, so a
         # NON-owner thread's ops are never logged; its host escapes still meet the method belt.
@@ -1274,6 +1272,8 @@ def torch_func_decorator(
             return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
+        if exports_storage and _COW_PENDING:
+            _storage_exports.materialize_deferred_for_export(args)
         if has_inplace_signature and not args:
             # ``torch.clamp_(input=p)``: an in-place receiver passed by keyword.
             args, kwargs = _receiver_kwarg_as_positional(args, kwargs)
