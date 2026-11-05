@@ -157,10 +157,12 @@ def rebind_rebased_view_producers(trace: Any, receiver: Any) -> None:
     orphaned = _orphaned_view_nodes(handles.get(label), copy_slices)
     if not orphaned:
         return
-    # Deferred: ``backward`` imports this package's wrappers at module load.
-    from .backward import _register_forward_grad_fn
-
+    rebound = False
     for raw_label, handle in list(handles.items()):
         if any(handle is node for node in orphaned):
             handles[raw_label] = copy_slices
-            _register_forward_grad_fn(trace, copy_slices, raw_label)
+            rebound = True
+    if rebound:
+        # Pin the node for the trace's lifetime, as ``backward._strong_grad_fn_refs``
+        # pins every recorded node, so its ``id()`` (the GradFn key) is never reused.
+        trace.__dict__.setdefault("_backward_gradfn_refs", []).append(copy_slices)
