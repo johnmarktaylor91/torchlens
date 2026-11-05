@@ -186,6 +186,26 @@ class TestDerivedCacheCensus:
             "factory references"
         )
 
+    def test_decoration_retry_keeps_device_constructor_cache_on_originals(self):
+        # A decoration retry (#138) re-runs the pre-wrap warm while the slots the
+        # failed pass replaced still hold wrappers. The warm must still key the
+        # set by originals, or every later test in the process inherits it.
+        from torch.utils._device import _device_constructors
+
+        from torchlens.backends.torch.wrappers import decorate_all_once, wrap_torch
+
+        _ensure_wrapped()
+        _state._is_decorated = False
+        try:
+            decorate_all_once()
+        finally:
+            wrap_torch()
+        wrapper_ids = set(_state._decorated_to_orig.keys())
+        assert id(torch.zeros) in wrapper_ids, "the retry must leave torch wrapped"
+        assert not [fn for fn in _device_constructors() if id(fn) in wrapper_ids]
+        with torch.device("meta"):
+            assert _resolve(torch.zeros)(2).is_meta
+
     # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_dynamo_rule_map_built_mid_epoch_does_not_survive_unwrap(self):
         # b8-opus-R56-1: a rule map materialized while wrapped is keyed by

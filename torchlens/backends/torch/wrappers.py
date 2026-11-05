@@ -62,6 +62,7 @@ from ..._utils.tensor_utils import (
     materialize_deferred_for_call,
     print_override,
 )
+from . import _tracing_pass
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -123,6 +124,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     transform_builder_decorator,
 )
 from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
+from ._warm_originals import originals_exposed
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
@@ -1206,21 +1208,21 @@ def torch_func_decorator(
     @wraps(func)
     def wrapped_func(*args: Any, **kwargs: Any) -> Any:
         """Dispatch a decorated torch callable through the logging gate."""
+        # Dynamo tracing a lifted operator entry compile sees data-free values (_tracing_pass).
+        if _tracing_pass.hop_compile_depth and _tracing_pass.inside_hop_internal_compile():
+            return func(*args, **kwargs)
         # Ordered call fingerprint, counted identically with and without capture
         # (unpaused owner-thread calls only; see ``_state.CallFingerprint``).
         fingerprint = _state._call_fingerprint
         if fingerprint is not None and fingerprint_token is not None:
             fingerprint.note(fingerprint_token)
         # ---- Fast path ----
-        # When logging is off, pass through with minimal overhead.
-        # DeviceContext injection is still needed even when not logging,
-        # because the user's model may rely on torch.device('meta') context.
-        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread running torch ops
-        # during a capture (a worker formatting ``str(tensor)``, a DataLoader thread) must NOT
-        # be logged into the owner's Trace -- doing so tags its temporaries with capture labels
-        # (a false cross-thread ceiling) and corrupts owner-op attribution (an observed crash).
-        # Cross-thread tensor->host escapes are still observed by the mode-independent belt
-        # (tensor-method patches), which is independent of this wrapper.
+        # When logging is off, pass through with minimal overhead; DeviceContext injection
+        # is still needed, because the user's model may rely on torch.device('meta') context.
+        # r43 hon2_4: op-logging is OWNER-thread-scoped. A NON-owner thread's torch ops during a
+        # capture (``str(tensor)`` in a worker, a DataLoader thread) are never logged into the
+        # owner's Trace (false cross-thread ceiling, corrupt owner-op attribution, a crash);
+        # cross-thread tensor->host escapes are still seen by the tensor-method belt.
         if not _state._logging_enabled:
             # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
             # so the fast path carries the SAME pre-execution interception as the logging path:
@@ -1276,8 +1278,7 @@ def torch_func_decorator(
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
-        # A higher-order op's Autograd kernel fake-traces its branches before the
-        # eager run that is recorded; that pass is not the model's (_tracing_pass).
+        # A HOP Autograd kernel's fake-tensor pass over its branches is not the model's.
         if inside_tracing_tensor_pass(args, kwargs):
             return call_inside_tracing_pass(func, args, kwargs)
         # Skip logging inside vmap/functorch transforms — internal TorchLens
@@ -2004,10 +2005,9 @@ def decorate_all_once() -> None:
     """
     if _state._is_decorated:
         return  # already fully decorated
-    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty here.
-    # A prior partial failure may have populated the dict without completing
-    # decoration. Using _is_decorated (set at end of this function) ensures
-    # retry after partial failure (#138).
+    # NOTE: Do NOT guard on `_orig_to_decorated` being non-empty: a prior partial
+    # failure may have populated it without completing decoration; guarding on
+    # _is_decorated (set at the end) lets that retry run (#138).
 
     _warm_derived_identity_caches()
 
@@ -2089,14 +2089,14 @@ def _install_fork_capture_hygiene() -> None:
 _DYNAMO_IDENTITY_RULE_CACHE_NAMES = ("get_torch_obj_rule_map", "get_tensor_method")
 
 
+@originals_exposed(_setattr_ignoring_advisories, TRANSFORM_BUILDER_SITES + DIRECT_TRANSFORM_SITES)
 def _warm_derived_identity_caches() -> None:
     """Warm torch's identity-keyed DERIVED caches while the namespace holds originals.
 
     B8-4 invariant: no torchlens path may FIRST-call a cached torch
-    introspection table while wrappers are installed. Called by BOTH install
-    paths -- full decoration (``decorate_all_once``) and re-install after a
-    prior ``unwrap_torch()`` -- BEFORE any wrapper setattr, so every covered
-    table stays keyed by originals for the whole wrapped epoch. Covered:
+    introspection table while wrappers are installed. Both install paths call
+    this before their setattr loop; ``originals_exposed`` also shows originals
+    on slots a failed decoration pass left wrapped (the #138 retry). Covered:
 
     - the two ``torch.overrides`` tables (the original B8-4 pair);
     - torch's ``_device_constructors()`` set -- ``DeviceContext.__torch_function__``
