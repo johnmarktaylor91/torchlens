@@ -4995,3 +4995,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 3d5c6e98de5955622875d73138a367e660299778 (dirty)
 recorded: 2026-11-05T01:10:19.598630+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: find-nan-warning-noise: _op_by_any_label and _unsaved_ancestors moved verbatim from debug/_nan.py to debug/_common.py (debug/_nan_labels.py dropped to keep the import cycle at the train size); parents read sites re-keyed, no site added or removed
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ea7248ed5298b2c6b7612f29e35d0d8fbde874fe (dirty)
+recorded: 2026-11-05T01:31:09.168625+00:00
