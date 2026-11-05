@@ -2012,7 +2012,7 @@
   "field": "output",
   "file": "torchlens/_ir/_row_journal.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -2036,7 +2036,7 @@
   "field": "policy",
   "file": "torchlens/_ir/_row_journal.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -2820,7 +2820,7 @@
   "field": "is_output_parent",
   "file": "torchlens/_ir/op_record_scatter.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -2884,7 +2884,7 @@
   "field": "output",
   "file": "torchlens/_ir/op_record_scatter.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -2916,7 +2916,7 @@
   "field": "policy",
   "file": "torchlens/_ir/op_record_scatter.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
