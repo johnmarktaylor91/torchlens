@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import io
 import threading
+import types
 from typing import Any
 
 import numpy as np
@@ -121,24 +122,35 @@ class SlotsState:
         self.lock = threading.RLock()
 
 
-class Node:
-    """Object that points back at itself through its instance dict."""
+class Group:
+    """Group whose elements point back at it (an equivariant-library idiom)."""
 
     def __init__(self) -> None:
-        """Make the cycle."""
+        """Make two elements that reference the group."""
 
-        self.me = self
+        self.order = 2
+        self.elements = [Element(self, index) for index in range(2)]
+
+
+class Element:
+    """Group element holding a back-reference to its group."""
+
+    def __init__(self, group: Group, index: int) -> None:
+        """Store the group and the index."""
+
+        self.group = group
+        self.index = index
 
 
 def _module_with_opaque_state() -> tuple[nn.Module, set[str]]:
-    """C-level, object-array and self-referencing values stay unsupported."""
+    """C-level values, object arrays and objects used as dict keys stay unsupported."""
 
     module = nn.Module()
     module.stream = io.BytesIO(b"state")
     module.table = np.array([object()], dtype=object)
-    module.node = Node()
+    module.by_config = {PlainConfig(): 1}
     module.ok_slots = SlotsState()
-    return module, {"Module[0].node", "Module[0].stream", "Module[0].table"}
+    return module, {"Module[0].by_config", "Module[0].stream", "Module[0].table"}
 
 
 @pytest.mark.parametrize(
@@ -151,9 +163,9 @@ def test_unsupported_plain_attribute_state_is_still_refused(
 ) -> None:
     """The deepcopy-fallback snapshot names what it cannot restore instead of copying it.
 
-    A structured ``np.void``, slot-backed and C-level objects, object arrays and
-    self-referencing objects are reported as unsupported paths; a silent
-    by-reference copy would hide in-place writes the forward makes to them.
+    A structured ``np.void``, C-level objects, object arrays and objects used
+    as dict keys are reported as unsupported paths; a silent by-reference copy
+    would hide in-place writes the forward makes to them.
     """
 
     module, expected = build()
@@ -415,3 +427,21 @@ def test_slots_state_is_restored_through_its_slots() -> None:
     snapshot.restore_changed_attrs()
     assert module.state is state and state.size == 0 and state.items == []
     assert state.lock is lock and not hasattr(state, "spare")
+
+
+def test_cyclic_objects_and_simple_namespaces_are_restored() -> None:
+    """Back-references inside an object graph and ``SimpleNamespace`` configs restore."""
+
+    module = nn.Module()
+    group = module.group = Group()
+    config = module.config = types.SimpleNamespace(depth=2, names=["a"])
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert snapshot.is_complete, snapshot.unsupported_attr_paths
+    group.elements[1].index = 9
+    group.elements[0].group = Group()
+    config.depth = 5
+    config.names.append("b")
+    snapshot.restore_changed_attrs()
+    assert module.group is group and [e.index for e in group.elements] == [0, 1]
+    assert all(element.group is group for element in group.elements)
+    assert module.config is config and vars(config) == {"depth": 2, "names": ["a"]}

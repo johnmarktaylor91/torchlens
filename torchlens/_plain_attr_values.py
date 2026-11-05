@@ -10,13 +10,14 @@ models commonly keep as plain attributes and that used to refuse validation:
   immutable values, kept as themselves;
 * Python module objects and enum members, tracked by identity (they are
   process-wide singletons: reaching one through an attribute is the same as
-  reaching it through a global name), and thread locks, whose only state (held
-  or free) is not a model value and is free again once a forward returns;
+  reaching it through a global name);
 * tensors of any size, cloned whole (host memory for dense accelerator
   tensors), compared byte for byte and restored in place so other references
   to the same tensor see the restored value;
 * NumPy arrays of non-object dtype, copied and restored the same way;
-* torch, NumPy and ``random`` generators, through their own state APIs;
+* torch, NumPy and ``random`` generators, through their own state APIs, and
+  thread locks, through their held/free state (a lock whose state changed
+  cannot be put back, so its restore raises instead);
 * ``collections.deque`` values, item by item;
 * instances of Python-defined classes whose whole state is their instance dict
   and ``__slots__`` (config objects, namespaces, buffers, helper objects),
@@ -38,6 +39,7 @@ import enum
 import fractions
 import pathlib
 import random
+import re
 import threading
 import types
 from collections.abc import Callable
@@ -62,12 +64,10 @@ _IMMUTABLE_VALUE_TYPES: tuple[type, ...] = (
     decimal.Decimal,
     pathlib.PurePath,
 )
-_IDENTITY_VALUE_TYPES: tuple[type, ...] = (
-    types.ModuleType,
-    enum.Enum,
-    type(threading.Lock()),
-    type(threading.RLock()),
-)
+_IDENTITY_VALUE_TYPES: tuple[type, ...] = (types.ModuleType, enum.Enum)
+_LOCK_TYPE = type(threading.Lock())
+_RLOCK_TYPE = type(threading.RLock())
+_RLOCK_STATE = re.compile(r"^<(locked|unlocked) .* owner=(\d+) count=(\d+)")
 
 
 _HEAPTYPE_FLAG = 1 << 9  # Py_TPFLAGS_HEAPTYPE: the class was defined by a class statement
@@ -274,8 +274,19 @@ def _restore_array(snapshot: PlainAttrArraySnapshot) -> np.ndarray:
     return saved.copy()
 
 
+def _lock_state(value: Any) -> Any:
+    """Return a thread lock's held/free state, or ``None`` for any other value."""
+
+    if isinstance(value, _LOCK_TYPE):
+        return ("lock", value.locked())
+    if isinstance(value, _RLOCK_TYPE):
+        match = _RLOCK_STATE.match(repr(value))
+        return None if match is None else ("rlock", *match.groups())
+    return None
+
+
 def _generator_state(value: Any) -> Any:
-    """Return a detached copy of a supported generator's state, or ``None``."""
+    """Return a detached copy of a supported generator's or lock's state, or ``None``."""
 
     if isinstance(value, torch.Generator):
         return value.get_state().clone()
@@ -285,12 +296,24 @@ def _generator_state(value: Any) -> Any:
         return value.bit_generator.state
     if isinstance(value, random.Random):
         return value.getstate()
-    return None
+    return _lock_state(value)
 
 
 def _set_generator_state(value: Any, state: Any) -> None:
-    """Restore a supported generator's state."""
+    """Restore a supported generator's state; a changed lock cannot be restored.
 
+    Raises
+    ------
+    RuntimeError
+        If ``value`` is a thread lock: releasing or taking it on the forward's
+        behalf could break whoever holds it, so the fallback fails closed.
+    """
+
+    if _lock_state(value) is not None:
+        raise RuntimeError(
+            "TorchLens validation deepcopy fallback cannot restore a thread lock "
+            "whose held/free state changed during the forward."
+        )
     if isinstance(value, (torch.Generator, np.random.RandomState)):
         value.set_state(state)
     elif isinstance(value, np.random.Generator):
@@ -358,10 +381,55 @@ def _slot_descriptors(kind: type) -> dict[str, Any] | None:
     return descriptors if probe.__basicsize__ == kind.__basicsize__ else None
 
 
+def _object_descriptors(kind: type) -> dict[str, Any] | None:
+    """Return the slot descriptors of a snapshottable object class, or ``None``.
+
+    ``types.SimpleNamespace`` keeps its whole state in its instance dict, so it
+    is snapshotted like a dict-only Python class.
+    """
+
+    if kind is types.SimpleNamespace:
+        return {}
+    return _slot_descriptors(kind)
+
+
+def is_snapshot_object(value: Any) -> bool:
+    """Return whether ``value`` is snapshotted entry by entry and restored in place.
+
+    A second reference to such an object inside its own snapshot (a cycle, such
+    as an element that points back at its group) is tracked by identity: the
+    enclosing snapshot already holds, compares and restores its entries.
+    """
+
+    return not isinstance(value, (list, tuple, dict, set, frozenset)) and (
+        _object_descriptors(type(value)) is not None
+    )
+
+
+def hashable_snapshot(snapshot: Any) -> Any:
+    """Return a dict-key or set-item snapshot, refusing one that compares by identity.
+
+    Raises
+    ------
+    TypeError
+        If the snapshot is (or contains) a whole-value snapshot from this module:
+        those compare entry by entry, not by hash, so two snapshots of one key
+        would never match as keys.
+    """
+
+    if isinstance(snapshot, RICH_SNAPSHOT_TYPES):
+        raise TypeError("a whole-value snapshot cannot serve as a dict key or set item")
+    if isinstance(snapshot, (tuple, frozenset)):
+        for item in snapshot:
+            hashable_snapshot(item)
+    hash(snapshot)
+    return snapshot
+
+
 def _snapshot_object(value: Any, attr_path: str, snapshot_item: Snapshotter) -> Any:
     """Snapshot a Python object entry by entry, or return ``NotImplemented``."""
 
-    descriptors = _slot_descriptors(type(value))
+    descriptors = _object_descriptors(type(value))
     if descriptors is None:
         return NotImplemented
     namespace = getattr(value, "__dict__", None) if type(value).__dictoffset__ else {}
@@ -488,7 +556,7 @@ def _restore_object(
             namespace[name], saved, name, snapshot_item, compare_item
         ):
             namespace[name] = restore_item(saved)
-    descriptors = _slot_descriptors(type(value)) or {}
+    descriptors = _object_descriptors(type(value)) or {}
     for name, saved in snapshot.slots.items():
         descriptor = descriptors[name]
         try:

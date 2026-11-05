@@ -35,8 +35,10 @@ from ._plain_attr_fidelity import (
 )
 from ._plain_attr_values import (
     RICH_SNAPSHOT_TYPES,
+    hashable_snapshot,
     is_identity_value,
     is_immutable_value,
+    is_snapshot_object,
     restore_rich_value,
     rich_values_equal,
     snapshot_rich_value,
@@ -840,6 +842,8 @@ def _snapshot_plain_attr_value(
     if value is not None and not isinstance(value, (bool, int, float, complex, str, bytes)):
         value_id = id(value)
         if value_id in _seen:
+            if is_snapshot_object(value):  # a back-reference: the ancestor holds its state
+                return _PlainAttrIdentitySnapshot(value=value, value_type_name=type(value).__name__)
             raise RuntimeError(
                 "TorchLens validation deepcopy fallback cannot snapshot cyclic plain "
                 f"attribute '{attr_path}'."
@@ -946,7 +950,7 @@ def _snapshot_plain_attr_value(
                     f"attribute '{attr_path}' because one of its dict keys is unsupported."
                 ) from exc
             try:
-                hash(key_snapshot)
+                hashable_snapshot(key_snapshot)
             except TypeError as exc:
                 raise RuntimeError(
                     "TorchLens validation deepcopy fallback cannot snapshot plain "
@@ -971,7 +975,7 @@ def _snapshot_plain_attr_value(
             for item in value
         ]
         try:
-            return type(value)(snapshot_items)
+            return type(value)(hashable_snapshot(item) for item in snapshot_items)
         except TypeError as exc:
             raise RuntimeError(
                 "TorchLens validation deepcopy fallback cannot snapshot plain "
