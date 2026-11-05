@@ -6,9 +6,11 @@ intermediate view node too). The op that produced the view recorded that dropped
 node, so no backward pass ever reached it and the metadata invariant reported a
 missing GradFn backpointer, inside an ``autograd.grad`` region and after a managed
 backward alike. Capture now moves such an op onto the ``CopySlices`` node that took
-its place. The backward-graph invariant's dead-branch carve-out is narrower too: it no
-longer excuses an in-place op recorded on a view backward node while backward visited
-a ``CopySlices`` that no op records.
+its place, and moves the op of every other live view of the same base onto the
+view node autograd regenerates for it over ``CopySlices``. The backward-graph
+invariant's dead-branch carve-out is narrower too: it no longer excuses an in-place op
+recorded on a view backward node while backward visited a ``CopySlices`` that no op
+records.
 """
 
 from __future__ import annotations
@@ -283,13 +285,16 @@ class _TwoViewsWritten(nn.Module):
         return second.mul_(2.0).sum()
 
 
-def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A view taken before an earlier write of its base is not moved by its own write.
+def test_second_write_by_another_view_is_bound_through_its_sibling_rebind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A view taken before an earlier write of its base is bound by its own write.
 
-    The second view's node reads the base's node from before the first write, so
-    the second write's ``CopySlices`` (which reads the first write's) did not take
-    its place; the rebind proves nothing and leaves the record alone. The handle
-    index is read during capture, right after each rebind.
+    The first write moves the second view's op onto the view node autograd
+    regenerates for it over the first ``CopySlices``; that node reads the base's
+    prior node of the second write, so the second write is proven and its view op
+    joins its ``CopySlices``. No op keeps a pre-write ``SliceBackward0``. The
+    handle index is read during capture, right after each rebind.
     """
 
     rebind = param_mutation.rebind_rebased_view_producers
@@ -309,11 +314,19 @@ def test_second_write_by_another_view_is_not_rebound(monkeypatch: pytest.MonkeyP
         warnings.simplefilter("ignore")
         tl.trace(_TwoViewsWritten(), _input().requires_grad_(True))
     first_write, second_write = after_each_write
-    assert writer_nodes == ["CopySlices", "NoneType"]
+    assert writer_nodes == ["CopySlices", "CopySlices"]
     assert first_write.count("CopySlices") == 1
-    # The first write's CopySlices: its view op and (after the label move) its writer.
-    assert second_write.count("CopySlices") == 2
-    assert second_write.count("SliceBackward0") == 1
+    assert first_write.count("SliceBackward0") == 0
+    # Both view ops and the first writer; the second writer is recorded after the spy.
+    assert second_write.count("CopySlices") == 3
+    assert second_write.count("SliceBackward0") == 0
+
+
+def test_two_views_written_keep_both_entry_points() -> None:
+    """The model with two written views passes the managed invariant and validation."""
+
+    _check_backward_graph_invariants(_traced_backward(_TwoViewsWritten()))
+    assert _backward_verdict(_TwoViewsWritten()) is True
 
 
 def _write_then_handles(
@@ -542,18 +555,161 @@ def test_view_write_then_alias_read_keeps_invariants(read: str) -> None:
     assert _backward_verdict(_AliasRead(_ALIAS_READS[read])) is True
 
 
-def test_sibling_view_read_after_a_view_write_fails_backward_validation_closed() -> None:
-    """An open capture gap stays rejected: the sibling view's op holds a node backward skips.
+def _disjoint_sibling_view(y: torch.Tensor) -> torch.Tensor:
+    """Take a sibling view, write a column view it does not overlap, read the sibling."""
 
-    ``sibling`` is taken before the write, so its op recorded the pre-write
-    ``SliceBackward0``; reading ``sibling`` after the write goes through a view
-    node autograd regenerates over ``CopySlices``, which no op records. Backward
-    validation's capture (no base-label move) keeps the sibling op as the
-    reader's parent and rejects the record. Binding the sibling op to the
-    regenerated node is the postprocess rebind proposed by the view-write-2 lane.
+    sibling = y[:, 0:2]
+    y[:, 5:6].add_(0.25)
+    return sibling
+
+
+def _dead_sibling_view(y: torch.Tensor) -> torch.Tensor:
+    """Hold an overlapping sibling view across the write, then read only the written view."""
+
+    sibling = y[:, 4:7]
+    written = y[:, 5:6].add_(0.25)
+    del sibling
+    return written
+
+
+def _written_twice(y: torch.Tensor) -> torch.Tensor:
+    """Write the same column view twice, then read only the base."""
+
+    col = y[:, 5:6]
+    col.add_(0.25)
+    col.mul_(3.0)
+    return y
+
+
+_SIBLING_READS: dict[str, Callable[[torch.Tensor], torch.Tensor]] = {
+    "overlapping": _sibling_view,
+    "disjoint": _disjoint_sibling_view,
+}
+
+
+def _sibling_layer(trace: tl.Trace) -> tl.Layer:
+    """Return the sibling view's op: the first ``__getitem__`` (taken before the write)."""
+
+    return [layer for layer in trace._layer_list if layer.func_name == "__getitem__"][0]
+
+
+@pytest.mark.parametrize("read", sorted(_SIBLING_READS))
+def test_sibling_view_read_after_a_view_write_passes_both_entry_points(read: str) -> None:
+    """A sibling view read after the write is bound to the node its read goes through.
+
+    ``sibling`` is taken before the write, so its op first records the pre-write
+    ``SliceBackward0``. The write rebases the whole base: the sibling's next read
+    goes through a view node autograd regenerates over ``CopySlices``. Capture
+    moves the sibling's op onto that node, so the reader's edge lands on it, the
+    managed backward's invariant passes, and backward validation passes.
     """
 
+    trace = _traced_backward(_AliasRead(_SIBLING_READS[read]))
+    _check_backward_graph_invariants(trace)
+    sibling = _sibling_layer(trace)
+    reader = _only_layer(trace, ("__mul__", "mul"))
+    assert sibling.autograd.grad_fn is not None
+    assert is_view_backward_class(sibling.autograd.grad_fn.class_name)
+    assert sibling.autograd.grad_fn.grad_fn_object_id in reader.autograd.grad_fn.next_grad_fn_ids
+    assert _only_layer(trace, ("add_",)).autograd.grad_fn.class_name == "CopySlices"
+    assert _backward_verdict(_AliasRead(_SIBLING_READS[read])) is True
+
+
+def _keep_siblings_on_pre_write_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Plant a wrong binding: undo the sibling rebind, leaving the pre-write view node."""
+
+    rebind = param_mutation.rebind_rebased_view_producers
+
+    def _undo_sibling_rebind(trace: tl.Trace, receiver: torch.Tensor) -> object:
+        handles = trace.capture_events.grad_fn_handles_by_label_raw
+        before = dict(handles)
+        writer_node = rebind(trace, receiver)
+        for raw_label, handle in list(handles.items()):
+            old = before.get(raw_label)
+            if old is not None and handle is not old and type(handle).__name__ != "CopySlices":
+                handles[raw_label] = old
+        return writer_node
+
+    monkeypatch.setattr(param_mutation, "rebind_rebased_view_producers", _undo_sibling_rebind)
+
+
+def test_a_pre_write_disjoint_sibling_handle_fails_both_entry_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both entry points reject a disjoint sibling's op left on its pre-write node.
+
+    The write does not overlap the sibling, so no label moves and the sibling's
+    reader is its forward child in both captures; the pre-write node is never
+    visited, so the missing backpointer raises in both.
+    """
+
+    _keep_siblings_on_pre_write_nodes(monkeypatch)
+    _assert_both_entry_points_reject(lambda: _AliasRead(_disjoint_sibling_view), "getitem")
+
+
+def test_a_pre_write_overlapping_sibling_handle_fails_backward_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward validation rejects an overlapping sibling's op left on its pre-write node.
+
+    Validation's capture keeps the historical topology (no base-label move), so
+    the sibling's reader is its forward child and the unvisited pre-write node
+    raises.
+    """
+
+    _keep_siblings_on_pre_write_nodes(monkeypatch)
     assert _backward_verdict(_AliasRead(_sibling_view)) == "MetadataInvariantError"
+
+
+def test_managed_backward_blind_spot_accepts_a_pre_write_overlapping_sibling_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Known blind spot of the managed check, pinned; not desired behaviour.
+
+    The managed capture moves an overlapping alias's label to the in-place op, so
+    the sibling's reader becomes the writer's child and the sibling's op has no
+    forward children. The dead-branch carve-out then excuses whatever unvisited
+    node the op records, so the managed invariant cannot reject this planted wrong
+    binding (backward validation does, see the test above). A stricter carve-out
+    would also reject a correct capture: an overlapping sibling held across the
+    write but never read again while the written view is read
+    (``test_a_dead_overlapping_sibling_passes_both_entry_points``).
+    """
+
+    _keep_siblings_on_pre_write_nodes(monkeypatch)
+    trace = _traced_backward(_AliasRead(_sibling_view))
+    _check_backward_graph_invariants(trace)
+    assert _sibling_layer(trace).autograd.grad_fn is None
+
+
+def test_a_dead_overlapping_sibling_passes_both_entry_points() -> None:
+    """An overlapping sibling that is never read after the write is a correct dead branch.
+
+    Its op moves onto its regenerated node, which backward never visits, and has
+    no forward children in either capture, so both entry points excuse it.
+    """
+
+    trace = _traced_backward(_AliasRead(_dead_sibling_view))
+    _check_backward_graph_invariants(trace)
+    assert _sibling_layer(trace).autograd.grad_fn is None
+    assert _backward_verdict(_AliasRead(_dead_sibling_view)) is True
+
+
+def test_same_view_written_twice_binds_each_write_to_its_copy_slices() -> None:
+    """The second write of one view is bound to its own ``CopySlices``.
+
+    The view carries the first write's label, whose node is the first
+    ``CopySlices``; the second write's ``CopySlices`` reads it as the base's
+    prior node. Reading only the base reaches both writes through those nodes.
+    """
+
+    trace = _traced_backward(_AliasRead(_written_twice))
+    _check_backward_graph_invariants(trace)
+    first, second = (_only_layer(trace, (name,)) for name in ("add_", "mul_"))
+    assert first.autograd.grad_fn.class_name == "CopySlices"
+    assert second.autograd.grad_fn.class_name == "CopySlices"
+    assert first.autograd.grad_fn.grad_fn_object_id in second.autograd.grad_fn.next_grad_fn_ids
+    assert _backward_verdict(_AliasRead(_written_twice)) is True
 
 
 @pytest.mark.parametrize(
@@ -729,21 +885,3 @@ def test_an_unowned_copy_slices_leaves_a_dead_non_view_write_excused() -> None:
     assert _view_write_gradient_runs_through_copy_slices(trace, dead) is False
     _check_backward_graph_invariants(trace)
     assert _backward_verdict(_BufferWriteBesideDeadInplace()) is True
-
-
-def test_sibling_view_read_gap_is_accepted_by_the_managed_backward() -> None:
-    """Open gap, pinned on the managed entry point: it accepts what validation rejects.
-
-    The managed capture moves the base's label to the in-place op, so the
-    sibling view's op has no forward children and the dead-branch carve-out
-    excuses its pre-write ``SliceBackward0``, which backward never visits (the
-    read goes through a view node regenerated over ``CopySlices``). Backward
-    validation rejects the same model (see the test above). The fix is the
-    capture-side rebind of regenerated view nodes; when it lands, this test
-    must change to assert that both entry points pass.
-    """
-
-    trace = _traced_backward(_AliasRead(_sibling_view))
-    _check_backward_graph_invariants(trace)
-    sibling = [layer for layer in trace._layer_list if layer.func_name == "__getitem__"][0]
-    assert sibling.autograd.grad_fn is None
