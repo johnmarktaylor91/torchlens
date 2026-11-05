@@ -13,7 +13,8 @@ from torch.nn import functional as F
 import torchlens as tl
 from torchlens._semantic import facets as facets_mod
 from torchlens._semantic.recipes import activate_entrypoint_recipes
-from torchlens.errors import MissingFacetError
+from torchlens._utils._torch_compat import HAS_SDPA_GQA
+from torchlens.errors import MissingFacetError, TraceCaptureError
 from torchlens.facets import MissingFacet
 from torchlens.intervention.errors import SiteResolutionError
 
@@ -158,6 +159,7 @@ def test_reconstructed_sdpa_validation_is_non_vacuous_after_corruption() -> None
     assert "validation failed" in value.reason
 
 
+@pytest.mark.skipif(not HAS_SDPA_GQA, reason="SDPA enable_gqa postdates the torch 2.1 floor (2.5+)")
 def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     """GQA expansion and causal masking reconstruct against fused SDPA output."""
 
@@ -263,3 +265,19 @@ def test_entrypoint_activation_unknown_name_warns_coded(
     assert coded, "the unknown-name warning must carry a machine-readable code"
     assert coded[0].fields["code"] == "recipes_unknown_provider"
     assert coded[0].fields["unknown_names"] == ["nonexistent_provider"]
+
+
+def test_grouped_query_sdpa_without_enable_gqa_refuses_typed() -> None:
+    """Graceful floor test for ``HAS_SDPA_GQA``: a GQA model traces only where SDPA has it.
+
+    On a torch without the keyword the model's own call fails and capture reports it as
+    a ``TraceCaptureError`` naming ``enable_gqa``; on newer torch the same model traces.
+    """
+
+    model = _AttentionWrapper(LlamaSdpaAttention(n_heads=4, n_kv_heads=2, causal=True))
+    if HAS_SDPA_GQA:
+        log = tl.trace(model, torch.randn(1, 4, 8))
+        assert tuple(_sdpa_op(log).out.shape) == (1, 4, 4, 2)
+        return
+    with pytest.raises(TraceCaptureError, match="enable_gqa"):
+        tl.trace(model, torch.randn(1, 4, 8))

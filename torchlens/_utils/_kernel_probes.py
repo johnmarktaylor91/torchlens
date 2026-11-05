@@ -386,3 +386,44 @@ def probe_roll_tensor_shifts() -> bool:
     except (RuntimeError, TypeError):
         return False
     return True
+
+
+def probe_sdpa_gqa() -> bool:
+    """Return whether ``scaled_dot_product_attention`` accepts ``enable_gqa`` (torch 2.5+).
+
+    Older torch rejects the keyword with ``TypeError``; the probe runs one call with
+    two query heads over one key/value head.
+
+    Returns
+    -------
+    bool
+        ``True`` when the grouped-query call executes.
+    """
+
+    query, key_value = torch.ones(1, 2, 1, 1), torch.ones(1, 1, 1, 1)
+    sdpa: Any = torch.nn.functional.scaled_dot_product_attention
+    try:
+        sdpa(query, key_value, key_value, enable_gqa=True)
+    except TypeError:
+        return False
+    return True
+
+
+def probe_sdpa_empty_row_zero() -> bool:
+    """Return whether SDPA writes zero, not NaN, for a query row with no admissible key.
+
+    Torch 2.5+ softmax leaves such a row all zero, so the output row is zero; older
+    torch returns NaN. Both spellings of an empty row are probed: a fully masked row
+    and a row whose only key scores ``-inf``.
+
+    Returns
+    -------
+    bool
+        ``True`` when both empty rows come out zero over a zero value.
+    """
+
+    sdpa = torch.nn.functional.scaled_dot_product_attention
+    query, value = torch.ones(1, 1, 1, 1), torch.zeros(1, 1, 1, 1)
+    masked = sdpa(query, query, value, attn_mask=torch.zeros(1, 1, dtype=torch.bool))
+    non_finite = sdpa(query, torch.full((1, 1, 1, 1), float("-inf")), value)
+    return bool((masked == 0).all()) and bool((non_finite == 0).all())

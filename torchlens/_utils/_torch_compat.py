@@ -66,6 +66,9 @@ __all__ = [
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
+    "HAS_REV_VIEW_FUNC_UNSAFE",
+    "HAS_SDPA_GQA",
+    "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_DYNAMO_EXPLAIN",
     "apply_ambient_execution_context",
     "restore_fp32_precision_controls",
@@ -314,6 +317,7 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_CURRENT_AUTOGRAD_NODE": ("torch:_C._current_autograd_node",),
     "HAS_ORIGINAL_VIEW_TRACKING": ("torch:autograd._force_original_view_tracking",),
     "HAS_VIEW_FUNC_UNSAFE": ("torch:Tensor._view_func_unsafe",),
+    "HAS_REV_VIEW_FUNC_UNSAFE": ("torch:Tensor._rev_view_func_unsafe",),
     "HAS_FX_GRAPH_MODULE": ("torch:fx.GraphModule",),
     "HAS_NAMED_TENSOR_API": (
         "torch:Tensor.names",
@@ -1240,6 +1244,9 @@ HAS_CURRENT_GRAPH_TASK_ID: bool = _probe_attribute_paths("HAS_CURRENT_GRAPH_TASK
 HAS_CURRENT_AUTOGRAD_NODE: bool = _probe_attribute_paths("HAS_CURRENT_AUTOGRAD_NODE")
 HAS_ORIGINAL_VIEW_TRACKING: bool = _probe_attribute_paths("HAS_ORIGINAL_VIEW_TRACKING")
 HAS_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_VIEW_FUNC_UNSAFE")
+HAS_REV_VIEW_FUNC_UNSAFE: bool = _probe_attribute_paths("HAS_REV_VIEW_FUNC_UNSAFE")
+HAS_SDPA_GQA: bool = _real_op_probe_leaf().probe_sdpa_gqa()
+HAS_SDPA_EMPTY_ROW_ZERO: bool = _real_op_probe_leaf().probe_sdpa_empty_row_zero()
 HAS_FX_GRAPH_MODULE: bool = _probe_attribute_paths("HAS_FX_GRAPH_MODULE")
 HAS_NAMED_TENSOR_API: bool = _probe_attribute_paths("HAS_NAMED_TENSOR_API")
 HAS_CACHED_UNTYPED_STORAGE_WRAPPER: bool = _probe_cached_untyped_storage_wrapper()
@@ -1440,6 +1447,9 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CURRENT_AUTOGRAD_NODE",
     "HAS_ORIGINAL_VIEW_TRACKING",
     "HAS_VIEW_FUNC_UNSAFE",
+    "HAS_REV_VIEW_FUNC_UNSAFE",
+    "HAS_SDPA_GQA",
+    "HAS_SDPA_EMPTY_ROW_ZERO",
     "HAS_FX_GRAPH_MODULE",
     "HAS_NAMED_TENSOR_API",
     "HAS_CACHED_UNTYPED_STORAGE_WRAPPER",
@@ -1660,6 +1670,10 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # Torch 2.1 names the unchecked view replay ``_view_func``: the documented
         # fallback of get_view_func_replay, not a degradation.
         "HAS_VIEW_FUNC_UNSAFE",
+        # Newer-torch SDPA and view surfaces: absent means a model cannot call them.
+        "HAS_REV_VIEW_FUNC_UNSAFE",
+        "HAS_SDPA_GQA",
+        "HAS_SDPA_EMPTY_ROW_ZERO",
         # PEP 657 / 3.11 code-object surfaces: an interpreter feature, not a
         # torch-private degradation -- CPython 3.10 installs are healthy.
         "HAS_CODE_POSITIONS",

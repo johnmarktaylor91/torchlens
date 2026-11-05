@@ -417,6 +417,10 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
         # The unchecked view replay; older torch spells it ``_view_func``.
         "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
+        # Newer-torch surfaces a model may call (torch 2.3+ and 2.5+): absence is healthy.
+        "HAS_REV_VIEW_FUNC_UNSAFE": tc.HAS_REV_VIEW_FUNC_UNSAFE,
+        "HAS_SDPA_GQA": tc.HAS_SDPA_GQA,
+        "HAS_SDPA_EMPTY_ROW_ZERO": tc.HAS_SDPA_EMPTY_ROW_ZERO,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
