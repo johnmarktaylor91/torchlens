@@ -22,7 +22,7 @@ import math
 import re
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 from ._bool_outcomes import BOOL_FALSE_NODE_COLOR
 from ._edit_change import CHANGED_NODE_CLASS
@@ -308,7 +308,9 @@ def build_legend_table_label(
     for section in sections:
         if section.title:
             title = f"<B>{html_escape(section.title)}</B>"
-            cell, extent = _text_cell(title, section.title, theme, span=True, bold=True, fit=fit)
+            cell, extent = _text_cell(
+                title, section.title, theme, _CellLayout(span=True, bold=True, fit=fit)
+            )
             cells.append(f"<TR>{cell}</TR>")
             extents.append(extent)
         for row in section.rows:
@@ -361,9 +363,11 @@ def _legend_row(
     if not titled:
         # An untitled section (the encoding key) has no swatch column: the
         # line spans the table, so a stretched table cannot push it right.
-        cell, extent = _text_cell(text, plain, theme, span=True, bold=False, fit=fit)
+        cell, extent = _text_cell(text, plain, theme, _CellLayout(span=True, bold=False, fit=fit))
         return f"<TR>{cell}</TR>", extent
-    cell, (_, text_w, text_h) = _text_cell(text, plain, theme, span=False, bold=False, fit=fit)
+    cell, (_, text_w, text_h) = _text_cell(
+        text, plain, theme, _CellLayout(span=False, bold=False, fit=fit)
+    )
     if row.swatch_fill is None:
         swatch, swatch_w, swatch_h = "<TD></TD>", 2 * _LEGEND_PADDING, 2 * _LEGEND_PADDING
     else:
@@ -376,21 +380,29 @@ def _legend_row(
     return f"<TR>{swatch}{cell}</TR>", (swatch_w, text_w, max(swatch_h, text_h))
 
 
+class _CellLayout(NamedTuple):
+    """How one legend text cell is laid out: spanning both columns, bold, fixed size."""
+
+    span: bool
+    bold: bool
+    fit: bool
+
+
 def _text_cell(
-    text: str, plain: str, theme: VisualizationTheme, *, span: bool, bold: bool, fit: bool
+    text: str, plain: str, theme: VisualizationTheme, layout: _CellLayout
 ) -> tuple[str, tuple[int, int, int]]:
     """Return a left-aligned text ``<TD>`` and its (0, width, height) extent.
 
     ``text`` is the escaped markup and ``plain`` the same words unescaped for
-    measuring; under ``fit`` the cell is fixed to the measured size.
+    measuring; under ``layout.fit`` the cell is fixed to the measured size.
     """
 
     size = theme.typography.secondary_size
     pad = 2 * _LEGEND_PADDING
-    width = math.ceil(_text_width(plain, size, bold) * 1.06 + 2.0) + pad
+    width = math.ceil(_text_width(plain, size, layout.bold) * 1.06 + 2.0) + pad
     height = math.ceil(size * 1.25) + pad
-    attrs = ' COLSPAN="2"' if span else ""
-    if fit:
+    attrs = ' COLSPAN="2"' if layout.span else ""
+    if layout.fit:
         attrs += f' FIXEDSIZE="TRUE" WIDTH="{width}" HEIGHT="{height}"'
     cell = (
         f'<TD{attrs} ALIGN="LEFT"><FONT POINT-SIZE="{theme.typography.secondary_pt}" '

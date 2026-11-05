@@ -1085,92 +1085,18 @@ class VisualizationOptions(_OptionsDisplay):
     ) -> None:
         """Initialize a frozen visualization option bundle."""
 
+        supplied = locals().copy()  # every parameter is named after its field
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "graph": _resolve_option_value("graph", graph, "forward", specified_fields),
-            "rolled": _resolve_option_value("rolled", rolled, False, specified_fields),
-            "depth": _resolve_option_value("depth", depth, 1000, specified_fields),
-            "container_path": _resolve_option_value(
-                "container_path", container_path, "graph.gv", specified_fields
-            ),
-            "open_viewer": _resolve_option_value(
-                "open_viewer", open_viewer, False, specified_fields
-            ),
-            "file_format": _resolve_option_value(
-                "file_format", file_format, "pdf", specified_fields
-            ),
-            "show_edge_shapes": _resolve_option_value(
-                "show_edge_shapes", show_edge_shapes, False, specified_fields
-            ),
-            "show_arg_labels": _resolve_option_value(
-                "show_arg_labels", show_arg_labels, True, specified_fields
-            ),
-            "show_buffers": _resolve_option_value(
-                "show_buffers", show_buffers, "meaningful", specified_fields
-            ),
-            "direction": _resolve_option_value(
-                "direction", direction, "bottomup", specified_fields
-            ),
-            "graph_overrides": _resolve_option_value(
-                "graph_overrides", graph_overrides, None, specified_fields
-            ),
-            "node_style": _resolve_option_value(
-                "node_style", node_style, "default", specified_fields
-            ),
-            "node_spec_fn": _resolve_option_value(
-                "node_spec_fn", node_spec_fn, None, specified_fields
-            ),
-            "collapsed_node_spec_fn": _resolve_option_value(
-                "collapsed_node_spec_fn", collapsed_node_spec_fn, None, specified_fields
-            ),
-            "collapse_fn": _resolve_option_value(
-                "collapse_fn", collapse_fn, None, specified_fields
-            ),
-            "collapse": _resolve_option_value("collapse", collapse, "none", specified_fields),
-            "fold_repeats": _resolve_option_value(
-                "fold_repeats", fold_repeats, None, specified_fields
-            ),
-            "skip_fn": _resolve_option_value("skip_fn", skip_fn, None, specified_fields),
-            "edge_overrides": _resolve_option_value(
-                "edge_overrides", edge_overrides, None, specified_fields
-            ),
-            "grad_edge_overrides": _resolve_option_value(
-                "grad_edge_overrides", grad_edge_overrides, None, specified_fields
-            ),
-            "module_overrides": _resolve_option_value(
-                "module_overrides", module_overrides, None, specified_fields
-            ),
-            "layout": _normalize_layout(
-                _resolve_option_value("layout", layout, "auto", specified_fields)
-            ),
-            "renderer": _resolve_option_value("renderer", renderer, "graphviz", specified_fields),
-            "theme": _resolve_option_value("theme", theme, "torchlens", specified_fields),
-            "intervention_mode": _resolve_option_value(
-                "intervention_mode", intervention_mode, "node_mark", specified_fields
-            ),
-            "show_cone": _resolve_option_value("show_cone", show_cone, False, specified_fields),
-            "node_overlay": _resolve_option_value(
-                "node_overlay", node_overlay, None, specified_fields
-            ),
-            "node_label_fields": _resolve_option_value(
-                "node_label_fields", node_label_fields, None, specified_fields
-            ),
-            "show_legend": _resolve_option_value(
-                "show_legend", show_legend, None, specified_fields
-            ),
-            "color_by": _resolve_option_value("color_by", color_by, None, specified_fields),
-            "size_by": _resolve_option_value("size_by", size_by, None, specified_fields),
-            "size_scale": _resolve_option_value("size_scale", size_scale, None, specified_fields),
-            "stack_by": _resolve_option_value("stack_by", stack_by, None, specified_fields),
-            "show_redundant_args": _resolve_option_value(
-                "show_redundant_args", show_redundant_args, False, specified_fields
-            ),
-            "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
-            "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
-            "order_siblings": _resolve_option_value(
-                "order_siblings", order_siblings, True, specified_fields
-            ),
+            field_name: _resolve_option_value(
+                field_name,
+                supplied[field_name],
+                _VISUALIZATION_DEFAULTS[field_name],
+                specified_fields,
+            )
+            for field_name in _VISUALIZATION_FIELDS
         }
+        values["layout"] = _normalize_layout(values["layout"])
         _validate_visualization_values(values)
         _set_frozen_fields(self, _VISUALIZATION_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified_fields))
@@ -1210,6 +1136,14 @@ class VisualizationOptions(_OptionsDisplay):
         _set_frozen_fields(instance, _VISUALIZATION_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
+
+
+# The public default of each visualization field is its dataclass declaration above.
+_VISUALIZATION_DEFAULTS: Final[Mapping[str, Any]] = {
+    option_field.name: option_field.default
+    for option_field in fields(VisualizationOptions)
+    if option_field.name in _VISUALIZATION_FIELDS
+}
 
 
 @dataclass(frozen=True, init=False, repr=False)

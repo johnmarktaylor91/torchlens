@@ -222,6 +222,45 @@ def _clamp_equal_bounds_decision(
     )
 
 
+def _spmm_empty_sparse_out(sparse: Any, dense: Any, out: Any) -> torch.Tensor | None:
+    """Return ``spmm``'s saved output when its operands are an empty sparse and a strided dense.
+
+    The saved output must also be a non-empty strided tensor; otherwise return None.
+    """
+
+    if not isinstance(sparse, torch.Tensor) or not isinstance(dense, torch.Tensor):
+        return None
+    if not isinstance(out, torch.Tensor):
+        return None
+    if sparse.layout == torch.strided or dense.layout != torch.strided:
+        return None
+    if sparse._nnz() != 0 or out.layout != torch.strided or out.numel() == 0:
+        return None
+    return out
+
+
+def _masked_scatter_covered_operands(
+    mask: Any, source: Any, out: Any
+) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """Return ``(source, out)`` when a saved boolean ``masked_scatter`` mask covers the output.
+
+    The mask must be True at every output element and the source must hold at least one
+    element per output element; otherwise return None.
+    """
+
+    if not isinstance(mask, torch.Tensor) or not isinstance(source, torch.Tensor):
+        return None
+    if not isinstance(out, torch.Tensor):
+        return None
+    if mask.dtype != torch.bool or out.numel() == 0 or source.numel() < out.numel():
+        return None
+    try:
+        full_mask = torch.broadcast_to(mask, out.shape)
+    except RuntimeError:
+        return None
+    return (source, out) if bool(full_mask.all().item()) else None
+
+
 def _spmm_empty_sparse_decision(
     layer: Op, keys: set[Any], args: tuple[Any, ...]
 ) -> PosthocPerturbDecision:
@@ -229,16 +268,8 @@ def _spmm_empty_sparse_decision(
 
     if keys != {1} or len(args) < 2:
         return _NOT_PROVED
-    sparse, dense, out = args[0], args[1], getattr(layer, "out", None)
-    if not isinstance(sparse, torch.Tensor) or not isinstance(dense, torch.Tensor):
-        return _NOT_PROVED
-    if not isinstance(out, torch.Tensor):
-        return _NOT_PROVED
-    if sparse.layout == torch.strided or dense.layout != torch.strided:
-        return _NOT_PROVED
-    if sparse._nnz() != 0 or out.layout != torch.strided or out.numel() == 0:
-        return _NOT_PROVED
-    if not bool(torch.all(torch.eq(out, 0)).item()):
+    out = _spmm_empty_sparse_out(args[0], args[1], getattr(layer, "out", None))
+    if out is None or not bool(torch.all(torch.eq(out, 0)).item()):
         return _NOT_PROVED
     return PosthocPerturbDecision(
         True,
@@ -255,19 +286,10 @@ def _masked_scatter_all_true_decision(
 
     if keys != {0} or len(args) < 3:
         return _NOT_PROVED
-    mask, source, out = args[1], args[2], getattr(layer, "out", None)
-    if not isinstance(mask, torch.Tensor) or not isinstance(source, torch.Tensor):
+    operands = _masked_scatter_covered_operands(args[1], args[2], getattr(layer, "out", None))
+    if operands is None:
         return _NOT_PROVED
-    if not isinstance(out, torch.Tensor):
-        return _NOT_PROVED
-    if mask.dtype != torch.bool or out.numel() == 0 or source.numel() < out.numel():
-        return _NOT_PROVED
-    try:
-        full_mask = torch.broadcast_to(mask, out.shape)
-    except RuntimeError:
-        return _NOT_PROVED
-    if not bool(full_mask.all().item()):
-        return _NOT_PROVED
+    source, out = operands
     expected = source.reshape(-1)[: out.numel()].reshape(out.shape).to(out.device)
     if expected.dtype != out.dtype or not tensor_nanequal(out, expected, allow_tolerance=False):
         return _NOT_PROVED
