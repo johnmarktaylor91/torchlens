@@ -38,7 +38,6 @@ from ..options import ReplayOptions, merge_replay_options
 from ._audit import _hook_name, _replay_fire_record
 from ._edge_substitution import require_depth1_arg_path
 from ._param_fingerprint import (
-    CHANGED_PARAMS_RUN_KEY,
     changed_param_scope,
     checked_param_value,
     record_changed_params,
@@ -54,6 +53,7 @@ from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
+    _fresh_replay_run_ctx,
     _group_for_site,
     _group_representative,
     _record_capture_digest,
@@ -455,14 +455,13 @@ def _run_replay(
     """
 
     started_at = time.monotonic()
-    # The flag says what THIS replay does, never what an earlier one did: hooks
-    # firing here read it (keep_grad discloses the frontier only under
-    # differentiable replay). Rebind, never mutate: a fork may share the dict.
-    is_differentiable = differentiable_frontier is not None
-    run_ctx = {**_ensure_replay_run_ctx(log), "differentiable": is_differentiable}
-    if not is_differentiable:
-        run_ctx.pop("frontier", None)
-    run_ctx.pop(CHANGED_PARAMS_RUN_KEY, None)
+    # A replay is its own run: its context starts fresh (only the capture-digest
+    # ledger and the trace seed carry), never the previous run's hook scratch or
+    # summary, and is rebound, never mutated, since a fork may share the old dict.
+    # The flag says what THIS replay does: keep_grad discloses the frontier only
+    # under differentiable replay.
+    run_ctx = _fresh_replay_run_ctx(log)
+    run_ctx["differentiable"] = differentiable_frontier is not None
     log.last_run = run_ctx
     cone, label_keys, call_groups = _replay_cone_and_maps(log, origins)
     state = _ReplayPass(
