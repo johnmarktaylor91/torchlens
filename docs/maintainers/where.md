@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1730 modules, 701837 lines, 0 modules without a docstring.
+85 packages, 1730 modules, 701840 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 85 | 35259 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 85 | 35262 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 7 | 1527 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -101,7 +101,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35259 lines)
+TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35262 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -178,7 +178,7 @@ TorchLens - extract outs and metadata from PyTorch models. (85 modules, 35259 li
 | `_user_public_impls` | Private implementations for public user-facing utility commands. | 1518 |
 | `_validation_argument_references` | Parameter arguments that forward validation's own capture keeps by reference. | 762 |
 | `_validation_divergence` | First-divergence hints between two validation traces of one model. | 52 |
-| `_validation_retrace_saves` | Which outputs validation's reproducibility re-trace saves, and the check that it saved enough. | 162 |
+| `_validation_retrace_saves` | Which outputs validation's reproducibility re-trace saves, and the check that it saved enough. | 165 |
 | `_validation_state_snapshot` | Restore snapshots and copy-failure reporting for forward validation. | 421 |
 | `_validation_status` | Replay-validation status objects. | 770 |
 | `dataset_extraction` | Batched dataset extraction with a self-describing, resumable disk artifact. | 787 |
