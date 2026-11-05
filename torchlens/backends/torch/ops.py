@@ -537,16 +537,9 @@ class ExhaustiveOpDraft:
         return self.fields_dict["grad_fn_handle"]
 
     def freeze(self) -> Any:
-        """Construct the journal record ONCE from the final draft state."""
+        """Commit the final draft ONCE as a row-backed journal handle (capture C2b)."""
 
-        return _op_record_from_log(
-            self.trace,
-            self.fields_dict,
-            self.tensor,
-            self.fire_results,
-            module_stack=self.module_stack,
-            call_ref_box=self.call_ref_box,
-        )
+        return commit_row_record(self)
 
 
 # Canonical set lives in ``torchlens._utils._callable_safety`` so this capture-side
@@ -598,6 +591,4 @@ setattr(
 for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
     register_row_release_property(_ancestor_field_name)
 del _ancestor_field_name
-from ._ops_container_base import (  # noqa: E402
-    _op_record_from_log,
-)
+from ._ops_row_journal import commit_row_record  # noqa: E402

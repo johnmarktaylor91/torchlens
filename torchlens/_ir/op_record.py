@@ -702,15 +702,15 @@ def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]])
 
 
 def apply_patch_items(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
-    """Apply ordered ``(facet path, value)`` pairs to either journal shape.
-    The dual-leg amendment fold primitive (DoR 4.4): decomposed ``OpRecord``s
-    fold via facet ``dataclasses.replace`` (:func:`record_with_path_updates`);
-    compat ``OpEvent``s fold via the 1:1 ``PATH_TO_FLAT`` table. The table
-    outlives P7 only as the preview-journal fold guard and dies in S15.
+    """Apply ordered ``(facet path, value)`` pairs to any journal shape (DoR 4.4).
+    ``OpRecord``s fold via :func:`record_with_path_updates`, row handles via their
+    overlay (``with_patch``), compat ``OpEvent``s via ``PATH_TO_FLAT`` (dies in S15).
     """
 
     if isinstance(event, OpRecord):
         return record_with_path_updates(event, items)
+    if hasattr(event, "with_patch"):
+        return event.with_patch(items)
     return dataclass_replace(event, **{PATH_TO_FLAT[path]: value for path, value in items})
 
 

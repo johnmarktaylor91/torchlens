@@ -33,6 +33,7 @@ import torch
 
 from .._capture.session import capture_session_for_events
 from .._data_classes._compaction import compact_op_metadata as _compact_op_metadata
+from .._ir._row_journal import journal_record
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
 from .._utils.hashing import (
@@ -224,7 +225,7 @@ def _postprocess_body(
         sealed_op_events = (
             [_clone_op_event_for_replay(event) for event in capture_session.seal().events]
             if capture_session is not None
-            else list(capture_events.amended_op_records())
+            else list(map(journal_record, capture_events.amended_op_records()))
         )
         working_events = capture_events._copy_for_replay(projected_op_events=sealed_op_events)
         self._capture_events = working_events

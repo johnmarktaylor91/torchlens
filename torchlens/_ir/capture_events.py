@@ -11,6 +11,7 @@ from types import MappingProxyType
 from typing import Any
 
 from ..errors._base import TorchLensWarning
+from ._row_journal import journal_record
 from .events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -212,6 +213,7 @@ def _clone_op_event_for_replay(event: Any) -> Any:
         Event/record whose reachable mutable dicts are independent copies.
     """
 
+    event = journal_record(event)
     if isinstance(event, OpRecord):
         record_changes: dict[str, Any] = {"core": _clone_frozen_record(event.core)}
         graph = event.graph
@@ -270,14 +272,13 @@ class CaptureEvents:
     ] = field(default_factory=list)
     aten_events: list[_AtenCallEvent | _ModePausedInteriorEvent] = field(default_factory=list)
     aten_recording_enabled: bool = False
-    # Typed post-commit knowledge lane (producer unification P4): the op lane
-    # is genuinely append-only and every post-commit mutation is an
-    # ``OpAmendment`` folded by the canonical reducer. Amendments are stamped
-    # from their OWN per-journal monotone counter (``amendment_seq``), NOT the
-    # shared event counter: their seq domain is lane-local so that appending
-    # an amendment never shifts the Tier-F ``seq`` facts on subsequent events
-    # (the temporal byte-identity baselines pin those), while the watermark
-    # filter and fold order only ever need lane-local monotonicity.
+    # Typed post-commit knowledge lane (producer unification P4): the op lane is
+    # append-only and every post-commit mutation is an ``OpAmendment`` folded by
+    # the canonical reducer. Amendments are stamped from their OWN per-journal
+    # counter (``amendment_seq``), NOT the shared event counter: appending one
+    # never shifts the Tier-F ``seq`` facts on later events (the temporal
+    # byte-identity baselines pin those); watermark and fold order need only
+    # lane-local monotonicity.
     op_amendments: list[OpAmendment] = field(default_factory=list)
     amendment_seq: int = 0
     # Highest amendment seq folded into this journal's sealed core, stamped by
@@ -286,8 +287,7 @@ class CaptureEvents:
     # already-folded events seed the copy, filters the carried lane to
     # ``seq > core_seal_watermark`` so double-application is impossible.
     core_seal_watermark: int | None = None
-    # A sealed SOURCE journal refuses further amendment appends fail-closed;
-    # working projections reset this and accept appends.
+    # A sealed SOURCE journal refuses amendment appends; working projections accept.
     amendments_sealed: bool = False
     # False only for projections seeded from multiple concatenated seq
     # domains (multi-pass fastlog); gates the target_seq cross-check (O-N6).
@@ -301,6 +301,7 @@ class CaptureEvents:
     func_call_id_counter: int = 0
     recent_events: deque[RecordContext] = field(default_factory=deque)
     backend_session: object | None = None
+    row_journal: Any = field(default=None, repr=False)
     live_index: LiveIndex = field(default_factory=LiveIndex)
     grad_fn_handles_by_label_raw: dict[str, Any] = field(default_factory=dict)
     # ONE run-monotonic sequence counter spanning every event kind and phase
@@ -316,17 +317,16 @@ class CaptureEvents:
     # projections of the SAME run (``_copy_for_replay``) preserve the nonce;
     # detached streams and fresh captures get their own.
     run_nonce: int = field(default_factory=lambda: next(_RUN_NONCE_COUNTER))
-    # Detached-stream baseline: event streams never serialize and forks never
-    # share a stream, so a stream installed on a trace that ALREADY carries a
-    # materialized backward projection records the projection it extends.
-    # ``pass_index_base`` is the number of backward passes materialized before
-    # this stream existed; every event appended here carries a strictly
-    # greater pass index, and the projection/invariant layers treat passes at
-    # or below the base as preserved facts outside this stream's window. The
-    # ``base_*`` constants seed the cumulative counters a full scratch rebuild
-    # would otherwise recompute from the (dropped) pre-detach events. All five
-    # are written only by :meth:`detached_from` at the two detach sites
-    # (pickle restore and fork) and stay 0/empty for live capture streams.
+    # Detached-stream baseline: streams never serialize and forks never share one,
+    # so a stream installed on a trace that ALREADY carries a materialized backward
+    # projection records the projection it extends. ``pass_index_base`` is the
+    # number of backward passes materialized before this stream existed; every
+    # event appended here carries a strictly greater pass index, and the
+    # projection/invariant layers treat passes at or below the base as preserved
+    # facts outside this stream's window. The ``base_*`` constants seed the
+    # cumulative counters a scratch rebuild would recompute from the (dropped)
+    # pre-detach events. All five are written only by :meth:`detached_from` at the
+    # two detach sites (pickle restore, fork); 0/empty for live capture streams.
     pass_index_base: int = 0
     base_total_gradient_memory: int = 0
     base_total_backward_memory: int = 0
@@ -560,7 +560,7 @@ class CaptureEvents:
         # lane after stripping would smuggle payloads past the release
         # boundary; the folded facts ARE the amended structural truth.
         structural_events: list[JournalOp] = []
-        for event in self.amended_op_records():
+        for event in map(journal_record, self.amended_op_records()):
             tensor = replace(event.output.tensor, payload=None)
             transformed = event.output.transformed_tensor
             if transformed is not None:
@@ -641,7 +641,7 @@ class CaptureEvents:
         ]
         self.live_index.clear()
         self.live_index.by_raw_label = {event.label_raw: event for event in structural_events}
-        self.backend_session = None
+        self.backend_session = self.row_journal = None
         self.grad_fn_handles_by_label_raw.clear()
         self.recent_events.clear()
 

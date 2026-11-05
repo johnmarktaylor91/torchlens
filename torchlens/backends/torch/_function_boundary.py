@@ -386,18 +386,16 @@ def _active_witness_state(trace: Any) -> Any | None:
 
 
 def _event_label(event: Any) -> str | None:
-    """Return a journal op's raw label (``OpRecord.core`` or a flat ``OpEvent``)."""
+    """Return a journal op's raw label (every journal shape answers ``label_raw``)."""
 
-    core = getattr(event, "core", None)
-    label = getattr(core if core is not None else event, "label_raw", None)
+    label = getattr(event, "label_raw", None)
     return label if isinstance(label, str) else None
 
 
 def _event_parents(event: Any) -> tuple[Any, ...]:
-    """Return a journal op's parent edges (``OpRecord.core`` or a flat ``OpEvent``)."""
+    """Return a journal op's parent edges (every journal shape answers ``parents``)."""
 
-    core = getattr(event, "core", None)
-    return tuple(getattr(core if core is not None else event, "parents", ()) or ())
+    return tuple(getattr(event, "parents", ()) or ())
 
 
 def _host_entry_ops(events: Iterable[Any], already_collapsed: set[str]) -> tuple[str, ...]:

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from .._errors import CaptureNotActiveError
+from .._ir._row_journal import journal_record
 from .._ir.op_record import OpRecord
 from .._ir.predicate import ModuleStackFrame, RecordContext
 
@@ -306,6 +307,7 @@ def _relabel_record(
     original (see ``_relabeled_context``).
     """
 
+    event = journal_record(event)
     if not isinstance(event, OpRecord):
         raise _unconvertible(
             f"record {event.label_raw!r} is a {type(event).__name__}, not an OpRecord", code=_CODE
