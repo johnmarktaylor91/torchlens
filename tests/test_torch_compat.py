@@ -347,6 +347,7 @@ def test_private_torch_capability_flags_present_on_supported_range() -> None:
         "HAS_FUNCTORCH_INTERPRETER_STACK_API",
         "HAS_FUNCTORCH_WRAPPED_TENSOR_API",
         "HAS_JIT_BUILTIN_TABLE",
+        "HAS_COND_HIGHER_ORDER_OP",
         "HAS_JIT_BOOLEAN_DISPATCH_TABLE",
         "HAS_JIT_OVERLOAD_RESOLVER",
         "HAS_DEVICE_CONTEXT_DISPATCH",
@@ -518,6 +519,9 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_DISABLE_TORCH_FUNCTION": True,
         "HAS_VARIABLE_FUNCTIONS_CLASS": True,
         "HAS_FAKE_TENSOR_MODE": tc.HAS_FAKE_TENSOR_MODE,
+        # cond_op, or on torch 2.1 the bare cond operator: present on every supported
+        # torch, hardcoded True as a tripwire for the completeness witness cond rule.
+        "HAS_COND_HIGHER_ORDER_OP": True,
         "HAS_DTENSOR_SHARD_GEOMETRY": tc.HAS_DTENSOR_SHARD_GEOMETRY,
         # L8/C2 funcol boundary capture degrades independently when group
         # resolution or dispatcher-level wait interposition is unavailable.

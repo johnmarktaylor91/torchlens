@@ -236,3 +236,46 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
             return False
         raise
     return True
+
+
+def probe_gradient_edge() -> bool:
+    """Return whether torch's GradientEdge surface actually WORKS end to end.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.autograd.graph`` exposes both ``GradientEdge``
+        and ``get_gradient_edge`` -- the ``(node, output slot)`` addressing
+        pair the one-backward read engine seeds ``autograd.grad`` with -- AND
+        a real ``autograd.grad`` call seeding an OUTPUT ``GradientEdge`` with
+        an explicit cotangent succeeds. Attribute presence alone is
+        insufficient: torch 2.2-2.3 ships the ``GradientEdge`` class, but its
+        own internal ``torch.autograd._make_grads`` calls ``out.is_nested`` on
+        every output -- including a bare ``GradientEdge``, which has no such
+        attribute -- and raises ``AttributeError`` (fixed upstream by 2.4,
+        matching this read's long-documented "2.4+" remedy text). Absent on
+        older torch or broken on this intermediate band is a healthy old
+        install either way, not a TorchLens degradation: the read refuses
+        typed.
+    """
+
+    from torch.autograd import graph
+
+    gradient_edge = getattr(graph, "GradientEdge", None)
+    if gradient_edge is None or getattr(graph, "get_gradient_edge", None) is None:
+        return False
+
+    try:
+        x = torch.randn(1, requires_grad=True)
+        h = x * 2
+        if h.grad_fn is None:
+            # Never happens for a requires_grad leaf's product, but the
+            # static annotation is ``Node | None``; treat an impossible-in-
+            # practice None the same as any other probe failure below.
+            return False
+        torch.autograd.grad(
+            [gradient_edge(h.grad_fn, h.output_nr)], [x], grad_outputs=[torch.ones(1)]
+        )
+    except Exception:
+        return False
+    return True
