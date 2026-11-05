@@ -59,7 +59,7 @@ def _resolution_candidate(layer: Any) -> Any:
 
     # A bundle-supplied pointer keyword leaves the op unresolved, so the entry
     # check refuses the bundle by name: the call is never armed.
-    pointer = raw_pointer_keyword_name(getattr(layer, "saved_kwargs", None) or ())
+    pointer = raw_pointer_keyword_name(record_member(layer, "saved_kwargs", None) or ())
     if _is_resolution_exempt(layer) or pointer is not None:
         return None
     func_name = str(getattr(layer, "func_name", "none"))
