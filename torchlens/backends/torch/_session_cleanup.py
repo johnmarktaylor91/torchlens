@@ -12,6 +12,7 @@ under their original names.
 
 import functools
 import gc
+import logging
 import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable, Iterator
@@ -43,6 +44,13 @@ _LRU_CACHE_WRAPPER_TYPE: type | None = getattr(functools, "_lru_cache_wrapper", 
 _METHOD_DESCRIPTOR_TYPES = frozenset({staticmethod, classmethod})
 #: Referents of a cache wrapper the sweep never walks: its type and the wrapped function.
 _LRU_REFERENT_SKIP_TYPES = frozenset({type, types.FunctionType})
+#: The process logging registry. A reachable ``Logger`` or ``Handler`` leads through
+#: ``manager.loggerDict`` to every logger and handler in the process, so the walk's size
+#: followed which packages had been imported (``import accelerate`` alone added container
+#: builds to every capture of a transformers model). Logging objects are process plumbing,
+#: not model state: the walk stops at them, as it never recurses out of a module namespace.
+#: ``nn.Module`` instances stop the object walk too, as before.
+_OBJECT_WALK_STOP_TYPES = (nn.Module, logging.Filterer, logging.Manager, logging.PlaceHolder)
 # Exact types a module namespace holds that can never be a tensor or a
 # container: skipping them by ``type()`` avoids the ``isinstance`` (and the
 # reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
@@ -265,7 +273,7 @@ def _clear_reachable_tensor_metadata(
             if item is not None and type(item) not in _scalar_leaves:
                 _clear_session_tensor_metadata(item, seen, depth + 1, visit)
         return
-    if isinstance(value, nn.Module):
+    if isinstance(value, _OBJECT_WALK_STOP_TYPES):
         return
     if _LRU_CACHE_WRAPPER_TYPE is not None and type(value) is _LRU_CACHE_WRAPPER_TYPE:
         for entry in _lru_cache_entries(value):
