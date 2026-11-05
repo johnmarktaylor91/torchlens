@@ -187,10 +187,7 @@ def resolve_budget(
             if channel_active
             else None
         )
-        lines = [
-            f'detail dial: collapse="none" ({full_visible} visible units; '
-            f"band {BAND_FLOOR}-{BAND_CEILING})"
-        ]
+        lines = [f"detail: every op shown ({full_visible} nodes)"]
         if coverage is not None:
             lines.append(
                 f"coverage: encoded {int(round(coverage * full_visible))} of {full_visible}"
@@ -265,17 +262,16 @@ def resolve_budget(
 def _float_resolution(step: Any, coverage: float | None, *, in_band: bool) -> BudgetResolution:
     """Build the resolution record for one float-schedule step."""
 
-    lines = [
-        f"detail dial: collapse={step.t:g} (float schedule; {step.visible_count} "
-        f"visible units; band {BAND_FLOOR}-{BAND_CEILING})"
-    ]
+    lines = [f"detail: modules collapsed to {step.visible_count} nodes (collapse={step.t:g})"]
     if coverage is not None:
         lines.append(
             f"coverage: encoded {int(round(coverage * step.visible_count))} of "
             f"{step.visible_count} visible units"
         )
     if not in_band:
-        lines.append("band missed: nearest schedule point served (see warning)")
+        lines.append(
+            f"no collapse level gives {BAND_FLOOR} to {BAND_CEILING} nodes; the nearest is shown"
+        )
     return BudgetResolution(
         dial=f"collapse={step.t:g} (float schedule)",
         draw_kwargs={"collapse": step.t},
@@ -328,12 +324,11 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
         depth, estimate = chosen
         in_band = True
     lines = [
-        f"detail dial: depth={depth} (above the "
-        f"{COLLAPSE_OPTIMIZER_MAX_OPS}-op optimizer ceiling on {op_count} ops; "
-        f"~{estimate} visible units, estimate)"
+        f"detail: module depth {depth} (about {estimate} nodes; {op_count} ops is past "
+        f"the {COLLAPSE_OPTIMIZER_MAX_OPS}-op collapse limit)"
     ]
     if channel_active:
-        lines.append("coverage floor: not measurable above the ceiling (estimate basis disclosed)")
+        lines.append("colour coverage is not measured at this size")
     return BudgetResolution(
         dial=f"depth={depth} (above-ceiling estimate)",
         draw_kwargs={"collapse": "none", "depth": depth},

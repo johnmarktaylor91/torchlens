@@ -147,10 +147,10 @@ SENTINELS: tuple[Sentinel, ...] = (
             _panel(
                 "b",
                 "ResidualNorm",
-                'draw(highlight="interventions")',
+                'draw(lens="interventions")',
                 call="surgery",
                 capture=_EDIT,
-                kwargs={"highlight": "interventions"},
+                kwargs={"lens": "interventions"},
             ),
             _panel(
                 "c", "ResidualNorm", "surgery_diff(...).draw()", call="surgery_diff", capture=_EDIT

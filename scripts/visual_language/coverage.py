@@ -169,7 +169,6 @@ def _module_vocab() -> list[VocabValue]:
         ("modes.COLLAPSED_MODE_REGISTRY", modes.COLLAPSED_MODE_REGISTRY),
         ("themes.THEME_PRESETS", themes.THEME_PRESETS),
         ("lenses", lenses),
-        ("lenses._roster.COMPOSITIONS", _roster.COMPOSITIONS),
         ("lenses._filter.FILTER_TOKENS", _filter.FILTER_TOKENS),
         ("collapse_patterns.IDIOMATIC_PATTERNS", collapse_patterns.IDIOMATIC_PATTERNS),
         ("overlays.SUPPORTED_OVERLAYS", overlays.SUPPORTED_OVERLAYS),

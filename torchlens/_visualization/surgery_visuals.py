@@ -15,7 +15,7 @@ Shape rules (normative, from the fold):
 
 - **One mark family, never a new view kind**: the marks ride the standard
   ``Trace.draw`` node-spec funnel through C05's lens registry (the
-  ``"surgery"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
+  ``"interventions"`` :class:`~torchlens._visualization.theme_registry.LensPreset`
   row registered below); there is no separate surgery picture type.
 - **Per-lane splice-box disclosure**: each transaction's disclosure box
   carries the wording of ITS recorded lane -- a recorded
@@ -28,11 +28,12 @@ Shape rules (normative, from the fold):
   wording here (marks, boxes, census) ever uses the banned
   execution-removal verbs -- that vocabulary is unrepresentable by construction
   (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
-- **The census travels with exported figures**: the per-lane census renders
-  into the figure's disclosure caption (C05's rendered-artifact rule) and
-  ``Trace.draw(highlight="interventions")`` (:func:`draw_interventions`)
+- **The census travels with exported figures**: a short form of the census
+  (one line per edit, in its own lane's wording) renders under the figure's
+  header, and ``Trace.draw(lens="interventions")`` (:func:`draw_interventions`)
   writes the full text beside every saved figure.
-- **CREDIT rows** ride the census (D01's acknowledgment list).
+- **CREDIT rows** ride the full census text (D01's acknowledgment list), not
+  the figure.
 
 Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 """
@@ -484,6 +485,8 @@ class SurgeryCensus:
     box_lines: tuple[str, ...]
     mark_totals: tuple[str, ...]
     credit_rows: tuple[str, ...]
+    caption_rows: tuple[str, ...] = ()
+    injected_ops: int = 0
 
     def lines(self) -> tuple[str, ...]:
         """Every census line, in render order."""
@@ -494,6 +497,21 @@ class SurgeryCensus:
             + self.box_lines
             + self.mark_totals
             + self.credit_rows
+        )
+
+    def caption_lines(self) -> tuple[str, ...]:
+        """The short form drawn on the figure; the full census is the sidecar.
+
+        One line per recorded edit with its own lane's wording, plus the
+        injected-op count when there is one. Lane and door names, site keys
+        and acknowledgment rows stay in :meth:`to_text`.
+        """
+
+        injected = () if self.injected_ops == 0 else (f"injected ops: {self.injected_ops}",)
+        return (
+            ("edit record (full text in the .census.txt file beside the figure)",)
+            + self.caption_rows
+            + injected
         )
 
     def to_text(self) -> str:
@@ -530,7 +548,32 @@ def surgery_census(trace: Trace) -> SurgeryCensus:
         box_lines=splice_box_lines(facts),
         mark_totals=mark_totals,
         credit_rows=CREDIT_ROWS,
+        caption_rows=_caption_rows(facts),
+        injected_ops=sum(facts.injected_host_counts.values()),
     )
+
+
+def _caption_rows(facts: SurgeryFacts) -> tuple[str, ...]:
+    """One plain line per recorded edit for the figure caption.
+
+    Each line keeps its own lane's effect wording (the replay and live texts
+    are mutually false, so a line never borrows the other's); the node marks
+    already show where each edit sits.
+    """
+
+    rows: list[str] = []
+    for transaction in facts.transactions:
+        wording, _source = effect_wording(transaction.lane, transaction.execution_effect)
+        edits = ", ".join(transaction.edit_names) or "edit"
+        rows.append(f"{edits}: {wording}")
+        rows.extend(
+            f"rule {rule_id} was declared and never fired"
+            for rule_id in transaction.zero_fire_rule_ids
+        )
+    for region_fact in facts.regions:
+        wording, _source = effect_wording("replay", region_fact.execution_effect)
+        rows.append(f"region {region_fact.edit} ({len(region_fact.members)} ops): {wording}")
+    return tuple(rows)
 
 
 def make_surgery_mark_spec_fn(trace: Trace, facts: SurgeryFacts | None = None) -> NodeSpecFn:
@@ -604,13 +647,13 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
             code="surgery_evidence_missing",
             remedy=(
                 "run an edit first (fork.do(...), tl.trace(..., intervene=...), "
-                "spec.bind(model), or a region do), or use theme='overview' "
+                "spec.bind(model), or a region do), or leave lens= unset "
                 "for an un-operated picture"
             ),
             argument="lens",
         )
     census = surgery_census(trace)
-    lines = census.lines()
+    lines = census.caption_lines()
     if len(lines) > _MAX_CAPTION_LINES:
         lines = lines[: _MAX_CAPTION_LINES - 1] + (
             f"+{len(lines) - (_MAX_CAPTION_LINES - 1)} more census line(s): "
@@ -622,7 +665,7 @@ def surgery_stage(trace: Trace) -> tuple[NodeSpecFn, tuple[str, ...]]:
 def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
     """Draw ``trace`` under the surgery lens; the census travels with it.
 
-    The body of ``Trace.draw(highlight="interventions")``: a thin door over
+    The body of ``Trace.draw(lens="interventions")``: a thin door over
     the standard lens resolution (never a new view kind). The marks and the
     caption census render through ``Trace.draw``, and when a figure lands on
     disk the full census text is written beside it as
@@ -635,7 +678,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
         The trace to draw.
     user_kwargs:
         The ``Trace.draw`` keywords the caller passed explicitly (never
-        ``highlight``); they win over the lens members.
+        ``lens``); they win over the lens members.
 
     Returns
     -------
@@ -645,7 +688,7 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
 
     from .lenses._resolve import draw_with_lens
 
-    result = draw_with_lens(trace, "surgery", **user_kwargs)
+    result = draw_with_lens(trace, "interventions", **user_kwargs)
     # Nothing was written when the draw wrote no file; a census then would
     # sit beside a stale figure.
     if getattr(result, "path", None) is not None:
@@ -669,15 +712,11 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
 #: :func:`surgery_stage`; absence refuses ``surgery_evidence_missing``).
 SURGERY_LENS = register_lens(
     LensPreset(
-        name="surgery",
-        question="what did surgery change on this capture, and on what recorded authority?",
+        name="interventions",
+        question="what did the edits change?",
         members={"show_legend": True},
         surface=GRAPHVIZ_DRAW_SURFACE,
         headline_evidence="intervention_audit",
-        disclosure=(
-            "marks cite audit entries: solid border = recorded fact, "
-            "dashed border = heuristic attribution",
-            "edits replace values or substitute exits; execution removal exists in no lane",
-        ),
+        disclosure=("solid border: recorded edit; dashed border: inferred site",),
     )
 )

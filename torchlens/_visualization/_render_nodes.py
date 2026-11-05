@@ -746,7 +746,14 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
-    node_args.update(segment_encoding_attrs(encoding, segment.name))
+    encoded_attrs = segment_encoding_attrs(encoding, segment.name)
+    if "fillcolor" in encoded_attrs:
+        from .themes import ink_on_fill
+
+        encoded_attrs["fontcolor"] = (
+            ink_on_fill(encoded_attrs["fillcolor"], node_args.get("fontcolor")) or "#000000"
+        )
+    node_args.update(encoded_attrs)
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)

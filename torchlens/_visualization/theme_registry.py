@@ -260,17 +260,12 @@ OVERVIEW_LENS = register_lens(
         members={
             "vis_mode": "rolled",
             "collapse": "auto",
-            "fold_repeats": None,
+            "fold_repeats": True,
             "node_mode": "default",
             "show_buffer_layers": "meaningful",
-            "show_containers": "collapsed",
             "show_legend": None,
         },
-        disclosure=(
-            "visible/hidden counts",
-            "fallback policy BY NAME",
-            "the blueprint escape",
-        ),
+        disclosure=('lens="blueprint" draws every op',),
     )
 )
 
@@ -287,9 +282,6 @@ BLUEPRINT_LENS = register_lens(
             "show_containers": False,
             "show_buffer_layers": "meaningful",
         },
-        disclosure=(
-            "full detail at every scale; a graph too large to draw is refused "
-            "with instructions, never silently simplified",
-        ),
+        disclosure=("every op drawn; nothing collapsed",),
     )
 )

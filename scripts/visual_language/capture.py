@@ -195,7 +195,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         lens = kwargs.pop("lens")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
     if panel.call == "surgery":
-        # The panel's kwargs carry highlight="interventions"; the edit is made here.
+        # The panel's kwargs carry lens="interventions"; the edit is made here.
         fork = _fork_edit(trace)
         graph = fork.draw(**kwargs)
         return str(getattr(graph, "source", graph))

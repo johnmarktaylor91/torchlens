@@ -1,36 +1,32 @@
-"""The lens roster v1: nine registry rows, tiers, subjects, compositions.
+"""The lens roster: registry rows, tiers and subjects.
 
-The inclusion rule (themes memo section 3, the standing arbiter): a preset
-earns a registry ROW iff it has (a) its own HEADLINE evidence requirement
--- a capture-time field whose absence makes the picture answer a different
-question -- AND (b) its own mandatory disclosure text a composition would
-not inherit. Applied uniformly this rule produced exactly nine rows; a
-separate vision lens and a combined perf lens both fail it and survive as
-tested COMPOSITIONS.
+The public door is ``Trace.draw(lens=...)`` (``_visualization/_lens_door.py``),
+whose allowed values are spelled in ``torchlens._literals.DrawLensLiteral``.
 
-Tiers: CORE-6 (release blocks on each) = overview, blueprint, debug, speed,
-dims, transformer. EXTENDED-3 (ship iff their strata pass; a failure drops
-that row alone to wave 2 with the mandatory named promotion path in the
-memo, never a silent disappearance) = memory, sequence, compute.
+The inclusion rule (themes memo section 3): a preset earns a registry ROW
+iff it has (a) its own HEADLINE evidence requirement -- a capture-time field
+whose absence makes the picture answer a different question -- AND (b) its
+own disclosure text. Combinations (a lens plus extra draw keywords, such as
+``lens="debug", show_edge_shapes=True``) are spelled with keywords, not rows.
+
+Tiers: CORE-6 = overview, blueprint, debug, speed, dims, transformer.
+EXTENDED-3 = memory, sequence, compute. The tenth row, ``interventions``,
+registers in ``surgery_visuals``.
 
 ``overview`` and ``blueprint`` were registered by the C05 substrate
 (``theme_registry``); this module registers the remaining seven and the
 roster-level tables. Import is idempotent per process (the registry refuses
 double registration; this module registers once at first import).
-
-Every spelling here is DOCUMENTED-UNSTABLE pending the naming session.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any
 
 from ..theme_registry import LensPreset, register_lens
 
 __all__ = [
-    "COMPOSITIONS",
     "CORE_LENSES",
     "EXTENDED_LENSES",
     "LENS_SUBJECTS",
@@ -59,17 +55,6 @@ LENS_SUBJECTS: Mapping[str, str] = MappingProxyType(
     {"transformer": "attention_structure", "sequence": "multi_pass"}
 )
 
-#: Named compositions (gallery recipes with full evaluation strata and
-#: pre-authorized promotion; memo section 3).
-COMPOSITIONS: Mapping[str, Mapping[str, Any]] = MappingProxyType(
-    {
-        "runtime_storage": MappingProxyType({"lens": "speed", "size_by": "bytes", "scale": "sqrt"}),
-        "vision": MappingProxyType({"lens": "dims", "direction": "leftright", "color_by": "flops"}),
-        "debug_edge_shapes": MappingProxyType({"lens": "debug", "show_edge_shapes": True}),
-    }
-)
-
-
 DEBUG_LENS = register_lens(
     LensPreset(
         name="debug",
@@ -85,10 +70,7 @@ DEBUG_LENS = register_lens(
             "show_orphans": True,
         },
         secondary_members=("show_orphans",),
-        disclosure=(
-            "six-state nonfinite status channel (SECONDARY; two-mode degrade)",
-            "hue left FREE for the session's own color_by",
-        ),
+        disclosure=("ops whose output holds NaN or Inf are marked",),
     )
 )
 
@@ -102,9 +84,9 @@ SPEED_LENS = register_lens(
         },
         headline_evidence="time",
         disclosure=(
-            "rank mapping: ordinal, not ratio",
-            "instrumented capture: ~14x a plain forward; never quote as production latency",
-            "aggregation line mandatory on rolled views",
+            "colour shows rank order, not proportion",
+            "times come from an instrumented run: compare ops with each other, "
+            "not with production latency",
         ),
     )
 )
@@ -120,7 +102,7 @@ MEMORY_LENS = register_lens(
         },
         headline_evidence="bytes",
         secondary_members=("show_saved_for_backward",),
-        disclosure=("output-storage bytes, not live/allocator/peak memory",),
+        disclosure=(),
     )
 )
 
@@ -133,7 +115,7 @@ COMPUTE_LENS = register_lens(
             "show_legend": True,
         },
         headline_evidence="flops",
-        disclosure=("FLOP convention: 2 FLOPs per multiply-accumulate (as measured)",),
+        disclosure=(),
     )
 )
 
@@ -153,10 +135,8 @@ DIMS_LENS = register_lens(
         },
         headline_evidence="dims",
         disclosure=(
-            "AREA encodes total non-batch element count; it does NOT encode "
-            "individual axes -- a 1x512x7x7 and a 1x64x28x28 tensor draw the "
-            "same size",
-            "encoded area clamped to 4.0x the default node area",
+            "box area shows the element count per batch item, not the shape: "
+            "512x7x7 and 64x28x28 draw the same size (capped at 4x a plain box)",
         ),
     )
 )
@@ -176,8 +156,8 @@ SEQUENCE_LENS = register_lens(
         },
         secondary_members=("stack_by",),
         disclosure=(
-            "same rank = the licensed same execution window, not parallelism",
-            "pass_number encodes linearly (the one field uniform by construction)",
+            "colour shows the pass number; side-by-side boxes ran in the same pass, "
+            "not in parallel",
         ),
     )
 )
@@ -187,18 +167,13 @@ TRANSFORMER_LENS = register_lens(
         name="transformer",
         question="how is attention wired?",
         members={
-            "collapse": "auto",
+            # One block drawn in full, the repeats folded behind it: the
+            # attention wiring is visible instead of hidden in a module box.
+            "collapse": "none",
             "fold_repeats": True,
-            "show_containers": "labels",
-            "direction": "leftright",
             "show_legend": True,
         },
-        disclosure=(
-            "attention role rows attach where the facts are (per-layer, never "
-            "trace classification)",
-            "no display filter: masks/positions/casts can be causal to the "
-            "failure under inspection",
-        ),
+        disclosure=("attention rows come from module names and op types",),
     )
 )
 

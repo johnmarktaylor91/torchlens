@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
 from ..._utils._display_bounded import short_dataclass_repr
+from ..._vocab.node_spec import LENS_CAPTION_KEY
 from ...errors._base import TorchLensWarning
 from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
@@ -102,6 +103,20 @@ _ATTENTION_ROLE_SUFFIXES = {
     "out_proj": "attention role: output projection",
     "o_proj": "attention role: output projection",
     "qkv": "attention role: fused q/k/v projection",
+    # Hugging Face spellings: BERT/ViT-style self-attention and GPT-2's
+    # fused Conv1D projection.
+    "query": "attention role: query projection",
+    "key": "attention role: key projection",
+    "value": "attention role: value projection",
+    "c_attn": "attention role: fused q/k/v projection",
+}
+
+#: Suffixes that name an attention role only inside an attention module
+#: (GPT-2's ``attn.c_proj`` and BERT/ViT's ``attention.output.dense``; the
+#: same names occur in the MLP).
+_SCOPED_ATTENTION_ROLE_SUFFIXES = {
+    "c_proj": ("attn", "attention role: output projection"),
+    "dense": ("attention", "attention role: output projection"),
 }
 
 #: Op types that are themselves attention facts.
@@ -187,9 +202,17 @@ def _has_attention_subject(trace: Trace) -> bool:
 
 
 def _has_multipass_subject(trace: Trace) -> bool:
-    """Return whether any layer runs more than one pass."""
+    """Return whether a parameterised layer runs more than one pass.
 
-    return any(getattr(op, "num_passes", 1) > 1 for op in trace._layer_list)
+    A loop reuses weights (an RNN cell, a tied block); a feed-forward model
+    that calls one stateless ``nn.ReLU`` twice has nothing to sequence, so
+    reused parameter-free ops alone do not count.
+    """
+
+    return any(
+        getattr(op, "num_passes", 1) > 1 and bool(getattr(op, "has_params", False))
+        for op in trace._layer_list
+    )
 
 
 def _check_subject(trace: Trace, lens: LensPreset) -> None:
@@ -203,14 +226,14 @@ def _check_subject(trace: Trace, lens: LensPreset) -> None:
             "no attention structure detected in this trace; the transformer "
             "lens never draws an ordinary graph under a domain name",
             code="lens_attention_subject_absent",
-            remedy="use theme='overview' for a domain-neutral picture",
+            remedy="leave lens= unset, or pass lens='overview', for a domain-neutral picture",
             argument="lens",
         )
     if subject == "multi_pass" and not _has_multipass_subject(trace):
         raise InvalidArgumentError(
-            "this trace has a single pass; nothing to sequence",
+            "no layer with weights runs more than once in this trace; nothing to sequence",
             code="lens_single_pass_no_sequence",
-            remedy="use theme='overview' for a domain-neutral picture",
+            remedy="leave lens= unset, or pass lens='overview', for a domain-neutral picture",
             argument="lens",
         )
 
@@ -297,7 +320,9 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
     """Return the internal top-5 callout preset fn for the speed lens."""
 
     total = sum(values.values())
-    top = sorted(values.items(), key=lambda pair: pair[1], reverse=True)[:5]
+    # Zero-time records (model inputs and outputs) never rank.
+    timed = [(label, value) for label, value in values.items() if value > 0]
+    top = sorted(timed, key=lambda pair: pair[1], reverse=True)[:5]
     ranks = {label: index + 1 for index, (label, _) in enumerate(top)}
     shares = {label: (value / total if total else 0.0) for label, value in top}
     del unit_wording  # units ride the legend; the callout stays compact
@@ -309,31 +334,73 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
 
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:
-                spec.lines.append(f"top-{ranks[candidate]} of 5 ({shares[candidate]:.0%} of total)")
+                spec.lines.append(
+                    f"top-{ranks[candidate]} of {len(top)} ({shares[candidate]:.0%} of total)"
+                )
                 break
         return spec
 
     return _apply
 
 
-def _debug_label_spec_fn() -> Any:
-    """Return the debug preset fn adding dtype/device label rows."""
+def _dtype_device(record: Any) -> tuple[str | None, str | None]:
+    """Return one record's output dtype and device as display strings."""
+
+    dtype = getattr(record, "dtype", None)
+    device = getattr(record, "device_ref", None)
+    return (
+        None if dtype is None else str(dtype).replace("torch.", ""),
+        None if device is None else str(device),
+    )
+
+
+def _usual_dtype_device(trace: Trace) -> tuple[str | None, str | None]:
+    """Return the trace's most common (dtype, device) pair over its ops."""
+
+    counts: dict[tuple[str | None, str | None], int] = {}
+    for op in trace._layer_list:
+        pair = _dtype_device(op)
+        counts[pair] = counts.get(pair, 0) + 1
+    if not counts:
+        return None, None
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def _debug_label_spec_fn(usual: tuple[str | None, str | None]) -> Any:
+    """Return the debug preset fn marking ops whose dtype or device is unusual.
+
+    The usual pair goes in the caption once; a node gets a row only where it
+    differs (a cast, a device move), which is what a debugging reader is
+    looking for.
+    """
 
     def _apply(layer: Any, spec: Any) -> Any:
-        """Append dtype/device label rows where the layer carries them."""
+        """Append a dtype/device row when the layer differs from the usual pair."""
 
-        dtype = getattr(layer, "dtype", None)
-        device = getattr(layer, "output_device", None)
+        dtype, device = _dtype_device(layer)
         parts = []
-        if dtype is not None:
-            parts.append(f"dtype: {str(dtype).replace('torch.', '')}")
-        if device:
+        if dtype is not None and dtype != usual[0]:
+            parts.append(f"dtype: {dtype}")
+        if device is not None and device != usual[1]:
             parts.append(f"device: {device}")
         if parts:
             spec.lines.append(", ".join(parts))
         return spec
 
     return _apply
+
+
+def _attention_role_row(address: str) -> str | None:
+    """Return the attention-role row a module address names, if any."""
+
+    parts = address.lower().split(".")
+    row = _ATTENTION_ROLE_SUFFIXES.get(parts[-1])
+    if row is not None:
+        return row
+    scoped = _SCOPED_ATTENTION_ROLE_SUFFIXES.get(parts[-1])
+    if scoped is not None and any(scoped[0] in part for part in parts[:-1]):
+        return scoped[1]
+    return None
 
 
 def _attention_role_spec_fn() -> Any:
@@ -347,8 +414,7 @@ def _attention_role_spec_fn() -> Any:
             spec.lines.append("attention: scaled dot-product (observed)")
             return spec
         for address in getattr(layer, "modules", ()) or ():
-            tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
-            row = _ATTENTION_ROLE_SUFFIXES.get(tail)
+            row = _attention_role_row(str(address).split(":", 1)[0])
             if row is not None:
                 spec.lines.append(row)
                 break
@@ -521,12 +587,10 @@ def _perf_stage(
         )
     coverage = source_coverage(trace, source.member)
     build.disclosure.append(
-        # The reconciling phrase: the encoding legend counts VISIBLE nodes,
-        # this line counts ops -- two denominators, one picture (D03 AMBER).
-        f"coverage: encoded {coverage.encoded} of {coverage.total} ops ({source.member}); "
-        "the legend counts visible nodes, which can each aggregate several ops"
+        # Ops, not visible nodes: one visible node can aggregate several ops.
+        f"coverage: encoded {coverage.encoded} of {coverage.total} ops; "
+        f"colour: {source.family.unit_wording}"
     )
-    build.disclosure.append(source.family.unit_wording)
     if source.aggregation_line is not None:
         build.disclosure.append(source.aggregation_line)
     if lens.name == "speed":
@@ -562,7 +626,10 @@ def _debug_stage(trace: Trace, lens: LensPreset, build: _LensBuild) -> Nonfinite
 
     if lens.name != "debug":
         return None
-    build.preset_fns.append(_debug_label_spec_fn())
+    usual = _usual_dtype_device(trace)
+    build.preset_fns.append(_debug_label_spec_fn(usual))
+    if usual[0] is not None and usual[1] is not None:
+        build.disclosure.append(f"ops are {usual[0]} on {usual[1]} unless a node says otherwise")
     nonfinite = derive_nonfinite_channel(trace)
     build.disclosure.extend(nonfinite.legend_lines)
     if nonfinite.zero_coverage:
@@ -595,8 +662,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
             _warn_secondary(
                 lens.name,
                 "stack_by",
-                "the lockstep license does not hold on this trace "
-                "(pass indexes are not globally non-decreasing)",
+                "the passes are not in order on this trace, so they are not stacked",
             )
         )
 
@@ -612,7 +678,7 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
                 _warn_secondary(
                     lens.name,
                     "show_saved_for_backward",
-                    "no autograd-memory evidence on this capture",
+                    "this capture has no saved-for-backward sizes",
                 )
             )
 
@@ -671,13 +737,11 @@ def _finalize_draw_kwargs(build: _LensBuild, passthrough: dict[str, Any]) -> dic
     if composed is not None:
         build.effective["node_spec_fn"] = composed
 
-    # -- Rendered disclosure caption (never a tooltip). ---------------------
-    caption = "\\n".join(line.replace("\n", " ") for line in build.disclosure)
+    # -- Rendered disclosure caption (never a tooltip), under the header. ---
     graph_overrides = dict(build.effective.get("graph_overrides") or {})
-    existing_label = graph_overrides.get("label")
-    graph_overrides["label"] = f"{existing_label}\\n{caption}" if existing_label else caption
-    graph_overrides.setdefault("labelloc", "b")
-    graph_overrides.setdefault("fontsize", "10")
+    graph_overrides[LENS_CAPTION_KEY] = "\n".join(
+        line.replace("\n", " ") for line in build.disclosure
+    )
     build.effective["graph_overrides"] = graph_overrides
 
     draw_kwargs: dict[str, Any] = {}
@@ -734,10 +798,18 @@ def resolve_lens(
 
     effective = resolve_lens_request(resolved_lens, request_kwargs, resolved_lens.surface)
     effective.pop("preset_spec_fn", None)
+    if (
+        effective.get("vis_mode") == "rolled"
+        and "vis_mode" not in request_kwargs
+        and not _has_multipass_subject(trace)
+    ):
+        # Rolling a feed-forward model only folds reused stateless ops (one
+        # nn.ReLU called twice) into loops that are not there.
+        effective["vis_mode"] = "unrolled"
     build = _LensBuild(
         effective=effective,
         user_kwargs=request_kwargs,
-        view=_effective_view(resolved_lens, request_kwargs),
+        view=str(effective.get("vis_mode", _effective_view(resolved_lens, request_kwargs))),
         disclosure=[f"lens: {resolved_lens.name} -- {resolved_lens.question}"],
     )
     if resolved_lens.preset_spec_fn is not None:
@@ -746,7 +818,7 @@ def resolve_lens(
     source, channel_values = _perf_stage(trace, resolved_lens, build)
     budget = _budget_stage(trace, build, channel_values)
     nonfinite = _debug_stage(trace, resolved_lens, build)
-    if resolved_lens.name == "surgery":
+    if resolved_lens.name == "interventions":
         # Surgery lens (lane F43): headline check + mark family + census
         # disclosure resolve in the surgery module; this stage only mounts
         # them on the build (missing evidence refuses surgery_evidence_missing).

@@ -756,7 +756,7 @@ SLIDES: tuple[Slide, ...] = (
     ),
     Slide(
         id="surgery",
-        title="What an edit did: surgery lens",
+        title="What an edit did: interventions lens",
         rule="Solid magenta cites a recorded fire; dashed marks a declared target that did not "
         "fire here.",
         panels=(
@@ -764,7 +764,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
-                kwargs={"highlight": "interventions"},
+                kwargs={"lens": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -1362,8 +1362,8 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Edits",
-        "intervention_mode, highlight",
-        ("intervention_mode", "show_cone", "highlight"),
+        "intervention_mode, lens='interventions'",
+        ("intervention_mode", "show_cone", "lens"),
     ),
     (
         "Measurements",

@@ -20,6 +20,7 @@ from .._vocab.node_spec import (  # noqa: F401
     INTERVENTION_HOOK_FILL_COLOR,
     INTERVENTION_OVERRIDE_KEYS,
     INTERVENTION_SITE_COLOR,
+    LENS_CAPTION_KEY,
     BackwardNodeSpecFn,
     CollapsedNodeSpecFn,
     NodeSpec,
@@ -42,6 +43,7 @@ __all__ = [
     "INTERVENTION_HOOK_BORDER_COLOR",
     "INTERVENTION_HOOK_FILL_COLOR",
     "INTERVENTION_OVERRIDE_KEYS",
+    "LENS_CAPTION_KEY",
     "INTERVENTION_SITE_COLOR",
     "NodeSpec",
     "NodeSpecFn",
@@ -161,7 +163,7 @@ def intervention_graph_override(
 
 
 def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str, Any]:
-    """Return graph overrides excluding TorchLens intervention style keys.
+    """Return graph overrides excluding TorchLens intervention style and caption keys.
 
     Parameters
     ----------
@@ -179,7 +181,7 @@ def graphviz_graph_overrides(graph_overrides: dict[str, Any] | None) -> dict[str
     return {
         key: value
         for key, value in graph_overrides.items()
-        if key not in INTERVENTION_OVERRIDE_KEYS
+        if key not in INTERVENTION_OVERRIDE_KEYS and key != LENS_CAPTION_KEY
     }
 
 

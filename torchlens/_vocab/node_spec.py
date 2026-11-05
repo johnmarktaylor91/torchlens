@@ -40,6 +40,9 @@ INTERVENTION_OVERRIDE_KEYS = frozenset(
         "intervention_hook_penwidth",
     }
 )
+#: ``graph_overrides`` key carrying a lens's disclosure lines; the header
+#: block renders them under the model header, and Graphviz never sees it.
+LENS_CAPTION_KEY = "lens_caption"
 
 
 @dataclass

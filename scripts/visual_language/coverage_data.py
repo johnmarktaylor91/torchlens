@@ -400,10 +400,7 @@ ROWS: Mapping[str, Row] = {
             "memory",
             "sequence",
             "compute",
-            "surgery",
-            "runtime_storage",
-            "vision",
-            "debug_edge_shapes",
+            "interventions",
         ),
     ),
     "VK10": _R(

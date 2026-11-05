@@ -179,7 +179,7 @@ def resolve_source_family(family: str, view: str) -> ResolvedSource:
             family=row,
             member=row.summed_member,
             view=view,
-            aggregation_line=f"{row.summed_member}: total across passes on rolled nodes",
+            aggregation_line="rolled nodes show the total across their passes",
         )
     return ResolvedSource(family=row, member=row.per_pass_member, view=view, aggregation_line=None)
 

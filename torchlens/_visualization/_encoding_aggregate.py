@@ -254,7 +254,9 @@ def box_channel_spec(state: Any, name: str, spec: Any) -> Any:
     key = aggregate_key(name)
     fill = state.colors.get(key)
     if fill is not None:
-        spec = spec.replace(fillcolor=fill)
+        from .themes import ink_on_fill
+
+        spec = spec.replace(fillcolor=fill, fontcolor=ink_on_fill(fill, spec.fontcolor))
     size = state.sizes.get(key)
     if size is not None:
         spec = spec.replace(width=size[0], height=size[1], fixedsize="false")

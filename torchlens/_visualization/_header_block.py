@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._vocab.node_spec import LENS_CAPTION_KEY
 from ._focus_scope import scope_caption_head
 from ._frame_penwidth import MODULE_PENWIDTH
 from ._label_format import format_memory
@@ -266,7 +267,26 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     reuse_note = module_reuse_note(trace, request)
     if reuse_note is not None:
         caption_body += f"{html_escape(reuse_note)}<br align='left'/>"
-    return caption_body
+    return caption_body + _lens_caption_rows(request)
+
+
+def _lens_caption_rows(request: ResolvedRenderRequest) -> str:
+    """Return a lens's disclosure lines, in the key's text size, for under the header.
+
+    A lens draw passes its caption in ``graph_overrides`` under
+    :data:`LENS_CAPTION_KEY`, so the model header stays and the caption adds
+    to it instead of replacing it.
+    """
+
+    caption = (getattr(request, "graph_overrides", None) or {}).get(LENS_CAPTION_KEY)
+    if not caption:
+        return ""
+    size = resolve_theme(request.theme).typography.secondary_size
+    return "".join(
+        f"<FONT POINT-SIZE=\"{size:g}\">{html_escape(line)}</FONT><br align='left'/>"
+        for line in str(caption).split("\n")
+        if line
+    )
 
 
 def _caption_head(trace: Trace, count_line: str, module: Any) -> str:
