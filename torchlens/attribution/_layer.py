@@ -13,6 +13,7 @@ from torch.utils.hooks import RemovableHandle
 
 from torchlens._plots import node_plots
 from torchlens._utils._display_errors import lookup_message
+from torchlens._utils._numpy_bridge import tensor_to_numpy
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -867,13 +868,12 @@ def _cam_base_image(spatial_reference: Tensor, image: Image.Image | None) -> Ima
         channels = data[:3]
         if channels.shape[0] == 1:
             channels = channels.expand(3, -1, -1)
-        low = channels.amin()
-        high = channels.amax()
+        low, high = channels.amin(), channels.amax()
         normalized = torch.zeros_like(channels) if high == low else (channels - low) / (high - low)
-        array = (normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8).numpy()
+        array = tensor_to_numpy((normalized.permute(1, 2, 0).clamp(0, 1) * 255).to(torch.uint8))
         return Image.fromarray(array, mode="RGB")
     reduced = data.abs().mean(dim=0) if data.ndim == 3 else data.abs()
-    return node_plots.heatmap(reduced.numpy(), width=width, height=height, cmap="gray")
+    return node_plots.heatmap(tensor_to_numpy(reduced), width=width, height=height, cmap="gray")
 
 
 def _cam_overlay(
@@ -908,8 +908,8 @@ def _cam_overlay(
     if not 0.0 <= alpha <= 1.0:
         raise AttributionError("alpha must be between 0 and 1")
     base = _cam_base_image(spatial_reference, image)
-    data = native_cam.detach().float().cpu().mean(dim=(0, 1))
-    heatmap = node_plots.heatmap(data.numpy(), width=base.width, height=base.height, cmap=cmap)
+    data = tensor_to_numpy(native_cam.detach().float().cpu().mean(dim=(0, 1)))
+    heatmap = node_plots.heatmap(data, width=base.width, height=base.height, cmap=cmap)
     native_height, native_width = (int(value) for value in native_cam.shape[-2:])
     disclosure = f"CAM native map: {native_height}x{native_width}; display interpolated"
     return _blend_heatmap(base, heatmap, alpha=alpha, disclosure=disclosure)

@@ -6,6 +6,7 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._utils.display import ensure_trace_visualizer_dir
 from ..viz import batch_summary
 from ._bool_outcomes import bool_node_fill, bool_value_line
@@ -1071,12 +1072,9 @@ def _tensor_batch_to_images(tensor: torch.Tensor, *, max_items: int) -> list[Ima
     images = []
     for item in shown:
         item = _normalize_image_tensor(item)
-        if item.shape[0] == 1:
-            array = (item.squeeze(0).numpy() * 255).astype("uint8")
-            images.append(Image.fromarray(array, mode="L").convert("RGB"))
-        else:
-            array = (item.permute(1, 2, 0).numpy() * 255).astype("uint8")
-            images.append(Image.fromarray(array, mode="RGB"))
+        item = item.expand(3, -1, -1) if item.shape[0] == 1 else item  # grey to RGB, like convert
+        array = (tensor_to_numpy(item.permute(1, 2, 0)) * 255).astype("uint8")
+        images.append(Image.fromarray(array, mode="RGB"))
     return images
 
 

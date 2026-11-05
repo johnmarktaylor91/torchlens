@@ -240,6 +240,31 @@ def _solves_identity_system(spsolve: Callable[..., torch.Tensor], device: str) -
     return True
 
 
+def probe_numpy_bridge() -> bool:
+    """Return whether torch's C-level NumPy bridge works in this process.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.from_numpy`` and ``Tensor.numpy()`` both round-trip
+        a one-element array. torch wheels compiled against NumPy 1.x (torch 2.1
+        and 2.2) import under NumPy 2 with a "Failed to initialize NumPy"
+        warning, after which every bridge call raises ``RuntimeError: Numpy is
+        not available``. Measured 2026-10-31: torch 2.1.2 + NumPy 2.2.6 fails;
+        torch 2.3.1 and 2.4.1 + NumPy 2.2.6 pass. Feature-detected, never parsed
+        from version strings.
+    """
+
+    try:
+        import numpy as np
+
+        torch.from_numpy(np.zeros(1, dtype=np.float32))
+        torch.zeros(1).numpy()
+    except (ImportError, RuntimeError):
+        return False
+    return True
+
+
 def probe_gradient_edge() -> bool:
     """Return whether torch's GradientEdge surface actually WORKS end to end.
 

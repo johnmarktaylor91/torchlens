@@ -4692,7 +4692,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
-  "sites": 16,
+  "sites": 15,
   "via_getattr": false
  },
  {
@@ -4700,7 +4700,7 @@
   "field": "modules",
   "file": "torchlens/_utils/_torch_symbols.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {

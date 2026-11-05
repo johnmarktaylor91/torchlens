@@ -9,6 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._plots import node_plots
+from .._utils._numpy_bridge import tensor_to_numpy
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..errors import InvalidArgumentError
 from ..preprocessing._card import declared_from_record
@@ -484,7 +485,7 @@ def _tensor_image(
     if data.ndim == 1:
         data = data.unsqueeze(0)
     return node_plots.heatmap(
-        data.numpy(),
+        tensor_to_numpy(data),
         width=max(1, int(descriptor.input_shape[axes[-1]])),
         height=32 if len(axes) == 1 else max(1, int(descriptor.input_shape[axes[0]])),
     )
@@ -514,7 +515,7 @@ def _gradient_image(
         data = data.mean(dim=axis)
     if data.ndim == 1:
         data = data.unsqueeze(0)
-    return node_plots.heatmap(data.numpy(), width=size[0], height=size[1], cmap=cmap)
+    return node_plots.heatmap(tensor_to_numpy(data), width=size[0], height=size[1], cmap=cmap)
 
 
 def _draw_box(

@@ -53,7 +53,7 @@ import torch
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
-from ._torch_symbols import shadowed_torch_submodule, torch_attr
+from ._torch_symbols import probe_attention_causal_bias, shadowed_torch_submodule, torch_attr
 
 __all__ = [
     "torch_structseq_field_names",
@@ -152,6 +152,7 @@ __all__ = [
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
+    "HAS_NUMPY_BRIDGE",
     "tensor_any_over_dims",
     "get_mha_fastpath_enabled",
     "set_mha_fastpath_enabled",
@@ -203,6 +204,7 @@ __all__ = [
     "get_optional_torch_namespace",
     "get_disabled_torch_function_impl",
     "get_torch_capability_snapshot",
+    "get_numpy_bridge_support",
     "kineto_events_from_profiler",
     "memory_profile_from_profiler",
     "probe_c10d_capabilities",
@@ -799,48 +801,6 @@ def _probe_transformer_activation_fastpath_flag() -> bool:
     return hasattr(layer, "activation_relu_or_gelu")
 
 
-def _probe_attention_causal_bias() -> bool:
-    """Return whether ``torch.nn.attention.bias.CausalBias`` is discoverable.
-
-    NEVER executes ``torch.nn.attention.bias`` (r45/r49 lazy-import belt): that
-    module's top level calls ``torch._dynamo.allow_in_graph(...)``, dragging the
-    whole ``_dynamo``/``_inductor`` tree into every ``import torchlens``. When
-    the USER has already imported the module, the class is inspected exactly;
-    otherwise ``find_spec`` proves existence without execution (the parent
-    ``torch.nn.attention`` package body is dynamo-free) and the exact
-    ``__torch_function__`` site check is deferred to causal-bias shim install,
-    which resolves only through ``sys.modules``.
-
-    Returns
-    -------
-    bool
-        ``True`` when the module is already imported and the class defines its
-        own ``__torch_function__`` (the identity-dispatch site the causal-bias
-        identity shim normalizes), or when the module exists but has not been
-        imported yet (the shim installer re-reads ``sys.modules`` at each wrap).
-        Absent on torch builds predating the ``torch.nn.attention`` namespace.
-
-    Notes
-    -----
-    This probe NEVER imports ``torch.nn.attention.bias``: on torch 2.13 its
-    module body reaches ``torch._dynamo``, whose import tree also drags in
-    ``torch.distributed.fsdp`` -- breaking the W21 cold-start guarantee that a
-    plain eager capture pays neither import. ``find_spec`` imports only the
-    parent ``torch.nn.attention`` package (verified dynamo-free), and a process
-    that never imported the module cannot hold a ``CausalBias`` instance, so
-    the deferred read is exact, not heuristic.
-    """
-
-    module = sys.modules.get("torch.nn.attention.bias")
-    if module is not None:
-        causal_bias = getattr(module, "CausalBias", None)
-        return causal_bias is not None and "__torch_function__" in vars(causal_bias)
-    try:
-        return importlib.util.find_spec("torch.nn.attention.bias") is not None
-    except (ImportError, AttributeError, ValueError):
-        return False
-
-
 def torch_module_exists_without_importing(module_path: str) -> bool:
     """Return whether ``module_path`` exists without importing it or any missing ancestor.
 
@@ -1096,6 +1056,30 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
     return HAS_META_ITEM_GUARD
 
 
+def get_numpy_bridge_support(*, force_probe: bool = False) -> bool:
+    """Return whether torch can exchange arrays with the installed NumPy, lazily.
+
+    Cached result of ``_kernel_probes.probe_numpy_bridge``; ``force_probe`` (set by
+    diagnostic surfaces) reruns it. A failed probe flips ``HAS_NUMPY_BRIDGE`` through
+    :func:`mark_torch_capability_missing`, so the degradation warns once and shows
+    in the capability snapshot and the doctor report.
+    """
+
+    global HAS_NUMPY_BRIDGE, _NUMPY_BRIDGE_PROBED
+
+    if not _NUMPY_BRIDGE_PROBED or force_probe:
+        HAS_NUMPY_BRIDGE = bool(_real_op_probe_leaf().probe_numpy_bridge())
+        _NUMPY_BRIDGE_PROBED = True
+        if not HAS_NUMPY_BRIDGE:
+            mark_torch_capability_missing(
+                "HAS_NUMPY_BRIDGE",
+                "this torch build cannot exchange arrays with the installed NumPy "
+                "(compiled against NumPy 1.x, running under NumPy 2); tensor/array "
+                "conversions fall back to a byte copy; install 'numpy<2' or torch>=2.3",
+            )
+    return HAS_NUMPY_BRIDGE
+
+
 def get_mha_fastpath_switch_support(*, force_probe: bool = False) -> bool:
     """Return whether ``torch.backends.mha`` exposes the fastpath switch, lazily.
 
@@ -1151,7 +1135,7 @@ def _probe_nn_attention_module() -> bool:
         ``True`` when the ``torch.nn.attention`` namespace exposes
         ``SDPBackend`` and ``sdpa_kernel``. The parent package body is
         dynamo-free (unlike ``torch.nn.attention.bias``, see
-        :func:`_probe_attention_causal_bias`), so it is safe to import
+        :func:`._torch_symbols.probe_attention_causal_bias`), so it is safe to import
         directly. Absent on torch 2.1-2.2 (the namespace postdates the 2.1
         floor), a healthy old install, not a degradation.
 
@@ -1273,7 +1257,7 @@ HAS_CODE_QUALNAME: bool = _probe_code_qualname()
 _FORWARD_CALLERS = tuple(getattr(torch.nn.Module, n, None) for n in ("_call_impl", "_slow_forward"))
 HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD_CALLERS)
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
-HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
+HAS_ATTENTION_CAUSAL_BIAS: bool = probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
 HAS_LAZY_MODULE_ALLOWED_METHODS: bool = _probe_attribute_paths("HAS_LAZY_MODULE_ALLOWED_METHODS")
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
@@ -1300,6 +1284,8 @@ HAS_SPARSE_SPSOLVE_CUDA: bool = False
 _SPARSE_SPSOLVE_CUDA_PROBED: bool = False
 HAS_META_ITEM_GUARD: bool = False
 _META_ITEM_GUARD_PROBED: bool = False
+HAS_NUMPY_BRIDGE: bool = False
+_NUMPY_BRIDGE_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
 _DYNAMO_OPTIMIZED_MODULE_PROBED: bool = False
 _DYNAMO_ORIG_CALLABLE_MARKER_PROBED: bool = False
@@ -1511,6 +1497,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
+    "HAS_NUMPY_BRIDGE",
 )
 
 
@@ -1534,6 +1521,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_NUMPY_BRIDGE_PROBED": ("HAS_NUMPY_BRIDGE",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (
@@ -1840,11 +1828,11 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dtensor_type(force_probe=True)
     get_gradient_edge_support(force_probe=True)
     _force_real_op_probes()
-    # Both getters document that diagnostic surfaces force them; without this
-    # the doctor reported them "unprobed" on every install that had not yet
-    # consumed them, hiding a real absence on torch 2.1-2.2.
+    # Getters documented as forced by diagnostic surfaces; unforced, the doctor called
+    # them "unprobed" on installs not yet consuming them, hiding real torch 2.1-2.2 gaps.
     get_meta_item_guard_support(force_probe=True)
     get_mha_fastpath_switch_support(force_probe=True)
+    get_numpy_bridge_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)
