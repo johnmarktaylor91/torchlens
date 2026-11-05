@@ -10,6 +10,7 @@ correct capture.
 from __future__ import annotations
 
 import copy
+import importlib
 
 import pytest
 import torch
@@ -90,7 +91,8 @@ def test_reinit_on_copy_model_validates() -> None:
 def test_torchvision_feature_extractor_validates() -> None:
     """A torchvision feature extractor over a batch-norm network validates in eval mode."""
 
-    feature_extraction = pytest.importorskip("torchvision.models.feature_extraction")
+    pytest.importorskip("torchvision")
+    feature_extraction = importlib.import_module("torchvision.models.feature_extraction")
     torch.manual_seed(0)
     net = nn.Sequential(
         nn.Conv2d(3, 4, 3, padding=1),
