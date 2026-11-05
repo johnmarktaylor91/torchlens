@@ -1,19 +1,8 @@
-# Editing generation and the KV cache
+# Generation and the KV cache
 
 During generation a decoder reads the keys and values of earlier positions from its KV cache
-instead of recomputing them. That gives three different things you might mean by "intervene
-during generation", and they cost very different amounts:
-
-| You want to | Use | Cost |
-| --- | --- | --- |
-| Hold an edit on every decoding step, new tokens included | `spec.bind(model).generate(ids, ...)` | close to a plain forward hook per token; see [the fast-path guide](fast_paths.md#generation-with-hf-generate) |
-| Edit what the cache holds for the prompt, then let generation read it unedited | the bound spec on the prefill call only (recipe below) | one prefill forward |
-| Record every step of a generation as one inspectable product | `tl.trace(..., episode=tl.options.EpisodeOptions(...))` | diagnostic tier: superlinear in the number of steps, so tens of steps, not hundreds ([episode capture](../reference/episode_capture.md)) |
-
-A bound `generate` never traces: it runs the model's real `generate()` with the edit installed as a
-hook, so the edit fires once per forward call (`result.report.num_fires`), and the keys and values
-it writes into the cache already carry the edit. Use a trace or an episode capture only when you
-need the recorded graph, and then for a few steps.
+instead of recomputing them. This page shows how to trace a generation loop, how to edit what
+the cache holds, and what the cache is to TorchLens.
 
 ## Trace a generation loop
 
@@ -52,6 +41,21 @@ long generation, use `tl.record(model, ids, save=..., generate_kwargs={...})`, w
 the sites you select at each step.
 
 ## Recipe: edit the cached past
+
+"Intervene during generation" can mean three different things, and they cost very different
+amounts:
+
+| You want to | Use | Cost |
+| --- | --- | --- |
+| Hold an edit on every decoding step, new tokens included | `spec.bind(model).generate(ids, ...)` | close to a plain forward hook per token; see [the fast-path guide](fast_paths.md#generation-with-hf-generate) |
+| Edit what the cache holds for the prompt, then let generation read it unedited | the bound spec on the prefill call only (recipe below) | one prefill forward |
+| Record every step of a generation as one inspectable product | `tl.trace(..., episode=tl.options.EpisodeOptions(...))` | cost grows faster than the number of steps, so tens of steps, not hundreds ([episode capture](../reference/episode_capture.md)) |
+
+A bound model runs the model's real `generate()` with the edit installed as a hook and records
+no graph; `bound.last_report.num_fires` counts the edit's firings, so an edit on a projection
+that runs once per decoder forward fires once per step, and the keys and values it writes into
+the cache already carry the edit. Use a trace or an episode capture only when you need the
+recorded graph, and then for a few steps.
 
 To change what later tokens see of the prompt without touching the new tokens, apply the edit to
 the key or value projection during the prefill call only. The edited values are written into the
@@ -114,11 +118,10 @@ clean = decode_after(lm)
 RESULT = [torch.allclose(edited, reference, atol=1e-6), not torch.allclose(edited, clean)]
 ```
 
-Keep a retention plan when you also trace these calls: a decoder's whole-graph default saves
-every op's activation, and the attention matrix alone grows with the square of the sequence
-length. Pass a `save=` selector naming the sites you will read (as above, `tl.module(...)`), and
-see [long sequences](../performance.md#long-sequences-and-long-contexts) in the performance
-guide.
+When you also trace these calls, remember that the whole-graph default saves every op's
+activation, and the attention matrix alone grows with the square of the sequence length. Pass
+`save=tl.module(...)` naming the sites you will read, and see
+[long sequences](../performance.md#long-sequences-and-long-contexts) in the performance guide.
 
 ## What the cache is to TorchLens
 
