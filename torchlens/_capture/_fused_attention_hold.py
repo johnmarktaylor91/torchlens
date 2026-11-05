@@ -11,7 +11,6 @@ ceiling); ``prepare_compiled_capture`` records the held addresses on
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import Any
 
 from torch import nn
@@ -21,6 +20,7 @@ from .._utils._torch_compat import (
     get_mha_fastpath_switch_support,
     set_mha_fastpath_enabled,
 )
+from ..errors._base import transparent_contextmanager
 
 _FUSED_ATTENTION_FASTPATH_MODULES: tuple[type[nn.Module], ...] = (
     nn.MultiheadAttention,
@@ -53,7 +53,7 @@ def fused_attention_fastpath_module_addresses(model: Any) -> tuple[str, ...]:
     )
 
 
-@contextmanager
+@transparent_contextmanager
 def hold_fused_attention_fastpath_off(model: Any) -> Iterator[tuple[str, ...]]:
     """Hold torch's fused attention fast path off for one forward of ``model``.
 

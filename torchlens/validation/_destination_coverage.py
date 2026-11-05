@@ -6,7 +6,9 @@ original destination values cannot reach the output. ``exemptions.py`` combines
 these facts with the perturbed-parent slot checks in its custom exemption checks
 and posthoc overwrite decision; the checks themselves stay there. The pure ``out=``
 destination predicate (registry 2 of ``core._check_perturbation_exemptions``) lives here
-too: a write-only ``out=`` target is the same overwrite-destination contract.
+too: a write-only ``out=`` target is the same overwrite-destination contract. So do the
+destination-identity comparison and the parentless uninitialized-allocation fact the
+uninitialized-destination decision reads.
 
 Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
@@ -21,6 +23,67 @@ import torch
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
+
+
+# Parentless allocation factories whose result is uninitialized memory. They take no
+# tensor input, so they are never validated as children and are absent from the
+# skip-validation registry; as the DESTINATION parent of an in-place write they carry
+# no meaningful value to perturb, exactly like ``empty_like``.
+UNINITIALIZED_ALLOCATION_FACTORIES = frozenset(
+    {"empty", "empty_strided", "emptystrided", "empty_permuted", "emptypermuted"}
+)
+
+
+def is_uninitialized_allocation_factory(op: Any) -> bool:
+    """Return whether ``op`` is a parentless uninitialized-memory allocation.
+
+    Parameters
+    ----------
+    op:
+        Candidate operation record.
+
+    Returns
+    -------
+    bool
+        True when the op is ``torch.empty``/``empty_strided``/``empty_permuted``
+        and recorded no tensor parent, so its saved bytes are allocation garbage.
+    """
+
+    if getattr(op, "func_name", None) not in UNINITIALIZED_ALLOCATION_FACTORIES:
+        return False
+    return not (getattr(op, "parents", ()) or ())
+
+
+def same_saved_values(perturbed_tensor: torch.Tensor, destination: torch.Tensor) -> bool:
+    """Return whether a perturbed parent's saved value IS the write's saved destination.
+
+    ``torch.equal`` treats every NaN as unequal to itself, so a destination born
+    uninitialized (``torch.empty`` garbage often holds NaN bit patterns) never
+    matched its own producer and every overwrite proof failed closed on it. This
+    comparison is still exact: same shape and dtype, every element bit-equal
+    except that NaN matches NaN at the same position.
+
+    Parameters
+    ----------
+    perturbed_tensor:
+        Saved output of the parent selected for perturbation.
+    destination:
+        Saved destination argument (``args[0]``) of the write.
+
+    Returns
+    -------
+    bool
+        True when the two tensors hold the same values, NaN positions included.
+    """
+
+    candidate = perturbed_tensor.to(destination.device)
+    if torch.equal(candidate, destination):
+        return True
+    if candidate.shape != destination.shape or candidate.dtype != destination.dtype:
+        return False
+    if not (destination.is_floating_point() or destination.is_complex()):
+        return False
+    return bool(torch.isclose(candidate, destination, rtol=0.0, atol=0.0, equal_nan=True).all())
 
 
 def _setitem_index_targets_are_unique(index: Any) -> bool:
@@ -188,7 +251,7 @@ def _index_put_destination_is_fully_overwritten(
     if not isinstance(destination, torch.Tensor) or not isinstance(values, torch.Tensor):
         return False
     # Narrow: the perturbed parent must be the DESTINATION, never the values/index.
-    if not torch.equal(perturbed_tensor.to(destination.device), destination):
+    if not same_saved_values(perturbed_tensor, destination):
         return False
     # accumulate=True adds the value to the prior destination, so the prior value
     # is NOT irrelevant -- never exempt that case. accumulate may arrive as a

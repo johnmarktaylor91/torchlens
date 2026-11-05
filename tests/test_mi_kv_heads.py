@@ -32,6 +32,7 @@ import torchlens as tl  # noqa: E402
 import torchlens.errors
 import torchlens.mechinterp as mi  # noqa: E402
 import torchlens.transformer as tviz  # noqa: E402
+from tests.support.hf_capabilities import sdpa_attention_passes_enable_gqa  # noqa: E402
 from torchlens._semantic.patching import _trace_kwargs  # noqa: E402
 from torchlens.errors import MechInterpError  # noqa: E402
 from torchlens.errors._base import TorchLensWarning  # noqa: E402
@@ -233,6 +234,15 @@ def test_one_fire_per_cell_and_clean_into_clean_moves_nothing(
 def test_sdpa_gqa_refuses_kv_expansion_unavailable() -> None:
     """SDPA with enable_gqa expands inside the kernel: no query head's copy exists."""
 
+    if not sdpa_attention_passes_enable_gqa():
+        # Without ``enable_gqa`` transformers' sdpa path repeats the KV heads itself,
+        # so each query head's copy exists and the grid is measurable.
+        grid = mi.patch_query_heads_grid(_llama("sdpa"), CLEAN, CORRUPTED, logit_diff)
+        assert grid.axes == ("layer", "head")
+        assert grid.coordinates == {"layer": LAYERS, "head": (0, 1, 2, 3)}
+        assert grid.receipts["fires"] == 8
+        assert grid.receipts["n_kv_heads"] == 2
+        return
     with pytest.raises(MechInterpError) as excinfo:
         mi.patch_query_heads_grid(_llama("sdpa"), CLEAN, CORRUPTED, logit_diff)
     fields = excinfo.value.fields

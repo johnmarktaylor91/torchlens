@@ -9,7 +9,10 @@ tool skips when that tool is not installed, except in the peer-recipe leg: there
 ``TORCHLENS_RECIPE_PEERS=1`` is set, the pinned peers are installed, and a missing
 tool fails instead of skipping. A fence without a header fails the lint below, so
 no example on these pages goes unexecuted. Notebook recipes run the same way, cell
-by cell, with the header on each code cell.
+by cell, with the header on each code cell. A page that needs a torch surface the
+running build lacks (one-backward reads without GradientEdge) stops at that capability's
+named refusal (``tests/support/capability_routes.py``); where the surface exists the
+same refusal fails the page.
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ from typing import Any
 
 import pytest
 import torch
+
+from tests.support.capability_routes import capability_route
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -366,7 +371,12 @@ def test_recipe_page_runs(page: str, tmp_path: Path, monkeypatch: pytest.MonkeyP
             filename = f"{page}:python-block-{index}"
             linecache.cache[filename] = (len(code), None, code.splitlines(True), filename)
             namespace["RESULT"] = _UNSET
-            exec(compile(code, filename, "exec"), namespace)
+            with capability_route() as route:
+                exec(compile(code, filename, "exec"), namespace)
+            if route.refusal is not None:
+                # This torch lacks a surface the page needs and the fence refused
+                # typed; every later fence builds on what it would have returned.
+                return
             expected = ast.literal_eval(header.group("expected"))
             assert namespace["RESULT"] == expected, (page, index, namespace["RESULT"])
     finally:

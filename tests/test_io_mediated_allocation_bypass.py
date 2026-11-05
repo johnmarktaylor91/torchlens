@@ -383,7 +383,9 @@ def test_inline_tensor_storage_is_never_resizable() -> None:
     for dtype in (torch.uint8, torch.float32):
         itemsize = torch.empty((), dtype=dtype).element_size()
         loaded = rebuild_inline_tensor(bytes(4 * itemsize), str(dtype), (4,))
-        assert not loaded.untyped_storage().resizable(), f"{dtype} stayed growable"
+        with pytest.raises(RuntimeError, match="not resizable"):
+            loaded.untyped_storage().resize_(8 * itemsize)
+        assert loaded.untyped_storage().nbytes() == 4 * itemsize, f"{dtype} grew"
 
 
 def test_rebuild_tensor_v2_cannot_amplify_an_inline_tensor() -> None:
