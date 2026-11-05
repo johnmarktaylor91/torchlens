@@ -21,7 +21,7 @@ def child_module(module: Any, child_name: str) -> Any | None:
     module:
         Parent TorchLens Module record.
     child_name:
-        Child attribute name.
+        Child attribute name, or a dotted path to a deeper descendant.
     """
 
     trace = getattr(module, "_source_trace", None)
@@ -34,8 +34,25 @@ def child_module(module: Any, child_name: str) -> Any | None:
         return None
     if isinstance(module, CallBoundModule):
         # One call of a reused module: read the child's call made inside it.
-        return bound_child(module, child)
+        return _bound_path(module, child_name)
     return child
+
+
+def _bound_path(subject: CallBoundModule, child_name: str) -> Any | None:
+    """Return the descendant at ``child_name`` bound call by call under ``subject``.
+
+    A call records only its direct child calls, so a dotted path (an HF
+    wrapper's ``self.query``) is bound one level at a time. ``None`` when a
+    level ran no call inside its parent's call.
+    """
+
+    node: Any = subject
+    for part in child_name.split("."):
+        child = child_module(node._module, part)
+        node = None if child is None else bound_child(node, child)
+        if node is None:
+            return None
+    return node
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
@@ -210,21 +227,38 @@ def relays_wrapped_core(module: Any, facet_name: str) -> bool:
         return False
 
 
+#: Remedy for a whole-module listing that meets a module called more than once.
+_PER_CALL_PATCH_REMEDY = (
+    "patching sweeps patch whole modules; patch one call's facet home op "
+    "(module.calls[N].facets) as an explicit op site via fork.do()"
+)
+
+
 def modules_with_facet(trace: Any, facet_name: str) -> list[str]:
     """Return module addresses with a facet available, one per attention layer.
 
-    Modules come from ``trace.modules_with_facet``, which skips a reused module
-    without the facet and refuses a shared layer that has it. The root
-    (``self``) is excluded, and so is a wrapper whose core serves the
-    same facet (:func:`relays_wrapped_core`).
+    Modules come from ``trace.modules_with_facet``. The root (``self``) is
+    excluded, and so is a wrapper whose core serves the same facet
+    (:func:`relays_wrapped_core`). The callers patch or read whole modules, so
+    a module called more than once is refused here (code
+    ``module_call_ambiguous``), before any patched forward runs and before the
+    wrapper dedup, which cannot read a reused core's view.
+
+    Raises
+    ------
+    InvalidArgumentError
+        Code ``module_call_ambiguous``: a module carrying the facet was called
+        more than once.
     """
 
-    return [
-        str(module.address)
-        for module in trace.modules_with_facet(facet_name)
-        if record_member(module, "address", None) != "self"
-        and not relays_wrapped_core(module, facet_name)
-    ]
+    addresses: list[str] = []
+    for module in trace.modules_with_facet(facet_name):
+        if record_member(module, "address", None) == "self":
+            continue
+        module._single_call_or_error(remedy=_PER_CALL_PATCH_REMEDY)
+        if not relays_wrapped_core(module, facet_name):
+            addresses.append(str(module.address))
+    return addresses
 
 
 def output_projection_child(module: Any) -> Any | None:
