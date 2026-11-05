@@ -57,9 +57,7 @@ from ._exemptions_arg_slots import (
     _perturbed_parent_is_arg_position,
     _perturbed_parent_occupies_arg_slot,
 )
-from ._foreign_kernel_dependence import (  # noqa: F401  (resolved through globals())
-    check_foreign_kernel_dependence_exempt,
-)
+from ._foreign_kernel_dependence import check_foreign_kernel_dependence_exempt  # noqa: F401
 from ._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _index_domain_size,
