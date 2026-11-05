@@ -25,8 +25,8 @@ An input detector receives the model, the raw input and the rest of the
 handle, and TorchLens carries on as if it were not registered. To claim the
 input, it converts it and calls `tl.trace` again with the converted value,
 passing `**kwargs` through so the caller's `capture=`, `save=` and other options
-still apply. The converted value is a tensor the detector itself declines, so
-the second call takes the ordinary path.
+still apply. The detector returns `None` for a tensor, so the second `tl.trace`
+call takes the ordinary path.
 
 ```python
 import torch
@@ -72,7 +72,7 @@ Detectors run in ascending `priority=` order (default 100); the built-in Hugging
 Face text, multimodal and image routes sit at 10, 20 and 30, so a priority
 below 10 goes first. A call that already chooses its own input handling skips
 every detector: an explicit `capture=tl.options.CaptureOptions(input_transform=...)`,
-a `backend=` or a `chunk_size=`.
+a `backend=`, or a chunked forward (`CaptureOptions(chunk_size=...)`).
 
 ## A custom output decoder
 
@@ -128,8 +128,7 @@ def pet_labels(outputs, meta):
 
 
 trace = tl.trace(PetClassifier(), torch.randn(2, 4))
-for row in trace.decode_output(k=1)["rows"]:
-    print(row["batch_item"], row["label"], round(row["prob"], 3))
+print(trace.output_table(k=1))  # one row per batch item: batch_item, label, prob
 print(trace.provenance.output_postprocessor.identifier)  # pet_labels
 
 tl.postprocessing.unregister("pet_labels")
@@ -269,7 +268,7 @@ def mood_heads(module):
 
 
 trace = tl.trace(MoodClassifier(), "what a lovely day")
-print(trace.decode_output(k=1)["rows"][0]["label"])  # one of calm, cheerful, grumpy
+print(trace.output_table(k=1)["label"][0])  # one of calm, cheerful, grumpy
 print(trace.modules["attn"].facets["q_heads"].shape)
 
 tl.preprocessing.unregister("mood_text")

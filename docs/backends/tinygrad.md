@@ -18,9 +18,13 @@ label flips to `stable`.
 
 Trace a pure tinygrad callable, read the recorded ops, and validate the trace by replay.
 The capture evaluates the forward's lazy graph once, after the forward returns, and every
-payload comes from that one evaluation.
+payload comes from that one evaluation. Run this in a fresh process with `DEV=PYTHON`.
 
 ```python
+import os
+
+os.environ["DEV"] = "PYTHON"
+
 from tinygrad import Tensor
 import torchlens as tl
 

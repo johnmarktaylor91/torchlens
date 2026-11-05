@@ -56,7 +56,10 @@ T = (V, E, attr, shape)
   record per output slot, each with its own shape.
 
 **Definition 2 (sites and elements).** A *site* is a record `v ∈ V` with a defined `shape(v)`.
-Write `V_T` for the set of sites. The *index space* of a site is
+Write `V_T` for the set of sites. Standing hypothesis for Theorems B and C: every record is a
+site with a nonempty index space (no zero-sized dimension). A zero-sized site has `Idx(s) = ∅`,
+so even its full mask is empty; it stays touched but can never seed a closure producer. The
+*index space* of a site is
 
 ```text
 Idx(v) = [0, d_1) × ... × [0, d_n)   where shape(v) = (d_1, ..., d_n).
@@ -90,7 +93,7 @@ El(S)    = { (s, i) : s ∈ F, i ∈ m(s) }   (the element set)
 
 A selection is *whole-site* when every mask is either all of `Idx(s)` or empty, and
 *family-clean* when every mask is all of `Idx(s)`; for family-clean selections
-`Fam(S) = Sites(S)`.
+`Fam(S) = Sites(S)` whenever every touched site has a nonempty index space.
 
 **Definition 4 (query and resolution).** A *selector sentence* (class `tl.Selector`) is a finite
 syntax tree built by the grammar of Section 1.3. It contains no reference to any capture. The
@@ -108,9 +111,11 @@ build larger sentences.
 - *Attribute selectors*, written `lift(σ)` for a structural selector `σ`: `tl.label(name)`,
   `tl.func(name)`, `tl.func_transform(kind)`, `tl.module(address)`, `tl.in_module(address)`,
   `tl.label_contains(text)`, `tl.label_matches(regex)`, `tl.all_sites()`, `tl.site(...)`,
-  `tl.model_input(...)`, `tl.model_output(...)`, the backward-graph family (`tl.grad_fn`,
-  `tl.grad_input`, `tl.grad_output`, `tl.in_backward_pass`), `tl.at_step`, `tl.facet`,
-  `tl.head`, `tl.without_op`. Structural selectors form their own boolean algebra (`σ & σ'`,
+  `tl.model_input(...)`, `tl.model_output(...)`, `tl.at_step`, `tl.facet`, `tl.head`,
+  `tl.without_op`. The backward-graph family (`tl.grad_fn`, `tl.grad_input`, `tl.grad_output`,
+  `tl.in_backward_pass`) addresses the backward node universe, which shares no site with `V`,
+  and `tl.grad(...)` is refused at lifting (`grad_selection_unsupported`); neither is a generator
+  here. Structural selectors form their own boolean algebra (`σ & σ'`,
   `σ | σ'`, `~σ`, `σ - σ'`) *before* lifting; `~σ` there is predicate negation. Lifting is
   `σ.__selection__()`; `trace[σ]` lifts and resolves in one step.
 - *Handle lifts*: `op.__selection__()` (one record, one pass), `layer.__selection__()` (one
@@ -184,7 +189,8 @@ whose family is all of `V_T` and whose sites are `V_T \ Sites(A)` when `A` is wh
 
 Two facts about these rules carry the proof. First, the seed of a closure producer is the set of
 sites of its operand that carry at least one element: a site with a partial mask seeds its whole
-node, and a touched site whose mask is empty seeds nothing. Second, the result is always
+node, and a touched site whose mask is empty seeds nothing (a zero-sized site, whose full mask
+is empty, therefore never seeds). Second, the result is always
 family-clean. If a reached record has no `shape`, resolution refuses rather than dropping it. The
 graph view `trace.between(A, B)` and `trace.subgraph(X)` use the same member sets.
 
@@ -220,23 +226,28 @@ capture, a reference capture, or a sample set). A full query is a pair `(q, e)`.
 pair `(F, m)` with `F ⊆ V_T` and `m(s) ⊆ Idx(s)`, there is a kernel sentence `S` with
 `[[S]]_T = (F, m)`.
 
-**Theorem B (relative completeness, uniform in the capture).** Assume every attribute predicate
-`α ∈ P` is realized by a structural selector `σ_α` (Assumption GA, Section 4). Then for every
-site query `q ∈ Q` there is a kernel sentence `tr(q)`, containing no reference to any capture,
-such that for every finished capture `T` satisfying the standing assumptions,
-`Sites([[tr(q)]]_T) = [[q]]_T`, with two caveats:
+**Theorem B (relative completeness).** Assume GA (every attribute predicate `α ∈ P` is realized
+by a structural selector `σ_α`, Section 4) and Definition 2's standing hypothesis. Every site
+query in `Q` containing no unbounded `Reach_both^{*}` has a capture-independent kernel
+translation `tr(q)` satisfying `Sites([[tr(q)]]_T) = [[q]]_T` on every capture satisfying these
+assumptions. For each fixed non-negative integer `N`, every query in `Q` has such a translation
+on the restricted class of captures with `|V| ≤ N + 1`. Two caveats:
 
-- (Caveat 1, complement) `¬q` uses the universal sentence `U = lift(tl.all_sites())`, which selects
-  the same sites as `lift(tl.label_matches(".*"))`; it resolves to all of `V_T` exactly when
-  every record in `V` has a shape, and refuses otherwise.
-- (Caveat 2, unbounded reach) `Reach^{*}` is translated with a concrete hop count `N`; the translation
-  is exact on every capture with `|V| ≤ N + 1`. No sentence expresses it uniformly for all
-  captures, because `hops` must be an integer.
+- **Caveat 1 (complement).** `¬q` uses the universal sentence `U = lift(tl.all_sites())`, which selects
+  the same sites as `lift(tl.label_matches(".*"))`; it resolves to all of `V_T`, with every site
+  carrying elements, exactly when every record in `V` has a shape with a nonempty index space,
+  and refuses when a record has no shape.
+- **Caveat 2 (unbounded reach).** Directed unbounded reach has the uniform translations
+  `tl.between(tr(q), U)` downstream and `tl.between(U, tr(q))` upstream. For unbounded undirected
+  reach, use `tl.neighborhood(tr(q), hops=N, direction="both")` on the size-bounded class above.
+  No uniform translation or impossibility result for unbounded undirected reach is established
+  here.
 
 For element queries, every boolean combination of element predicates realized by producers is
-expressible over a fixed site family (fiberwise completeness). Element-granularity closure of a
-region (the cone of a set of elements, not of a site) is not expressible today except for
-single-element seeds.
+expressible over a fixed site family (fiberwise completeness). Element-granularity regions come
+from the geometry producers: receptive and projective `.of(units, within=...)` return regions at
+the requested sites, bounded by geometry availability and provenance (Lemma R); exact
+element-level reachability for an arbitrary element set is not proved here.
 
 **Theorem C (necessity of the closure producers).** No sentence of `K0` (atoms and booleans, no
 closure producers) expresses `Reach_fwd^{≤1}(α)`: there are two captures with identical `V`,
@@ -245,9 +256,14 @@ identically while `Reach_fwd^{≤1}(α)` differs. Moreover, no first-order formu
 however many quantifiers it uses, defines `Reach^{*}`; so reachability must be a primitive at
 whatever granularity the algebra addresses.
 
-**Theorem D (what is out of the fragment).** The following are not expressible in `K` as
-capture-independent sentences: reachability restricted to paths inside or avoiding a region,
-path counting, graded or soft membership, and any statement about magnitude of influence.
+**Theorem D (limits established here).** Selection membership is Boolean: a selection denotes a
+touched family and an element mask at each touched site, not a path-count table, fuzzy membership
+function, or numerical influence map. This output-type restriction does not establish that Boolean
+predicates about counts or influence magnitudes are inexpressible. No general nondefinability
+result for those predicates is proved here. Relativized reachability has no dedicated closure
+producer. Subtracting forbidden sites after ordinary reachability is insufficient; finite iteration
+constructs relativized reachability on a capture with a known size bound. Uniform expressibility in
+`K` is left open.
 
 ## 3. Proofs
 
@@ -259,14 +275,14 @@ path counting, graded or soft membership, and any statement about magnitude of i
    by the `-` rule (subtraction keeps the site).
 2. Let `S = t_{s_1} | ... | t_{s_n}` over an enumeration of `F`. By the `|` rule the family is the
    union `F` and the masks are the per-site masks, because the `t_s` touch pairwise different
-   sites. If `F = ∅`, take two different sites `v ≠ w` and `S = L_v & L_w`, whose family is
-   `{v} ∩ {w} = ∅` (a capture with one site only has the empty family unreachable this way;
-   `tl.between(v, v) & L_w` with a second record is the same idea).
+   sites. If `F = ∅`, take `S = lift(σ & ~σ)` for any structural selector `σ` (for example
+   `tl.all_sites() & ~tl.all_sites()`): the negation is applied to the predicate before lifting,
+   so the selector matches no record and the lifted family is empty, on a one-site capture too.
 3. Hence `[[S]]_T = (F, m)`. The sentence depends on `T` (it names `T`'s sites and coordinates),
    which is why this is "absolute, one capture" and not uniform. ∎
 
-Example 1 in Section 5 checks this on every one of the 64 site subsets of the six-op model and
-on their complements.
+Example 1 in Section 5 exercises this on one subset of the six-op model, its complement and the
+empty family.
 
 ### 3.2 Proof of Theorem B
 
@@ -301,7 +317,9 @@ tr(q1 ∩ q2)           = tr(q1) & tr(q2)
 tr(q1 \ q2)           = tr(q1) - tr(q2)
 tr(¬q)                = U - tr(q),  U = lift(tl.all_sites())                [caveat 1]
 tr(Reach_d^{≤k}(q))   = tl.neighborhood(tr(q), hops=k, direction=D(d))
-tr(Reach_d^{*}(q))    = tl.neighborhood(tr(q), hops=N, direction=D(d))      [caveat 2]
+tr(Reach_fwd^{*}(q))  = tl.between(tr(q), U)
+tr(Reach_bwd^{*}(q))  = tl.between(U, tr(q))
+tr(Reach_both^{*}(q)) = tl.neighborhood(tr(q), hops=N, direction='both')     [caveat 2]
 ```
 
 Two shortcuts give family-clean results where they apply and may replace the general clauses:
@@ -311,8 +329,9 @@ Two shortcuts give family-clean results where they apply and may replace the gen
 whole-site, and `Sites([[tr(q)]]_T) = [[q]]_T` on every capture satisfying the standing
 assumptions.
 
-1. *Atoms.* `Sites([[lift(σ_α)]]_T) = {v : σ_α(v)} = [[α]]_T` by Assumption GA and the atom rule;
-   the value is family-clean. For the shortcut `lift(~σ_α)`, the structural selector `~σ_α`
+1. *Atoms.* `Sites([[lift(σ_α)]]_T) = {v : σ_α(v)} = [[α]]_T` by Assumption GA, the atom rule and
+   the nonempty-index-space hypothesis (a full mask on a zero-sized site would be empty); the
+   value is family-clean. For the shortcut `lift(~σ_α)`, the structural selector `~σ_α`
    matches exactly the records not matching `σ_α`, so `Sites = V_T \ [[α]]_T` provided every
    record has a shape (otherwise refusal, caveat 1 again).
 2. *Union, intersection, difference.* By Lemma B1 the result is whole-site; by Lemma B2 and the
@@ -328,12 +347,14 @@ assumptions.
    family-clean. The code's `_n_hop_labels` starts from the seed set, performs `k` rounds of "add
    all parents, children, or both of the current frontier", stops early when the frontier is
    empty, and returns seeds plus everything added. This is the inductive definition of
-   `Reach_d^{≤k}`. The result is family-clean with `Sites = Reach_d^{≤k}([[q]]_T)`. (Checked on
-   the example model for every singleton seed, every direction and every hop count from 0 to
-   `|V|`.)
-5. *Unbounded reach.* On a finite graph, `Reach^{*}(X) = Reach^{≤|V|-1}(X)`, since a simple path
-   has at most `|V| - 1` edges. So `hops=N` with `N ≥ |V| - 1` is exact. The sentence fixes `N`
-   before the capture is known, hence caveat 2.
+   `Reach_d^{≤k}`. The result is family-clean with `Sites = Reach_d^{≤k}([[q]]_T)`.
+5. *Unbounded reach.* Directed: by the closure rule, `tl.between(X, U)` has
+   `Sites = Desc(Sites(X)) ∩ Anc(V_T)`, and `Anc(V_T) = V` because every record is its own
+   ancestor at zero hops, so `Sites = Desc([[q]]_T) = Reach_fwd^{*}([[q]]_T)`; symmetrically
+   `tl.between(U, X)` is `Reach_bwd^{*}`. Both are uniform in the capture. Undirected: on a
+   finite graph `Reach_both^{*}(X) = Reach_both^{≤|V|-1}(X)`, since a simple path has at most
+   `|V| - 1` edges, so `hops=N` with `N ≥ |V| - 1` is exact; the sentence fixes `N` before the
+   capture is known, hence caveat 2.
 6. *Complement and difference under a reach.* Steps 3 and 4 compose with no restriction on where
    `¬` and `\` occur. The operand `U - tr(q)` of step 3 touches all of `V_T` but carries elements
    only on `V_T \ [[q]]_T`, and a closure producer reads only the sites that carry elements, so
@@ -344,16 +365,18 @@ assumptions.
    in which `|`, `&`, `-`, `~` are union, intersection, difference and complement (Section 1.4).
    Every element predicate realized by a producer is an atom; boolean combinations are
    translated verbatim, and restricting an element query `e` to a site query `q` is
-   `tr(e) & tr(q)`. Element-granularity cones for regions have no producer today (only
-   `op.receptive_field.at(unit, ...)` for single elements), so `Cone(e)` for a general element
-   set is outside what ships. ∎
+   `tr(e) & tr(q)`. Element-granularity regions are what the geometry producers return:
+   `op.receptive_field.of(units, within=...)` and `op.projective_field.of(units, within=...)`
+   give regions at the requested sites, each labelled by Lemma R with how it relates to the true
+   support; an exact `Cone(e)` for an arbitrary element set is not proved here. ∎
 
 **Remark (conservativity).** The converse also holds for the portable kernel: every `K`-sentence
 built without `tl.where` denotes a query in `Q` extended by the element predicates its producers
 realize, because each atom is an attribute, coordinate or value predicate and each combinator
 and closure producer maps to the corresponding `Q` construct (`tl.between(A, B)` is
-`Reach_fwd^{*}(A) ∩ Reach_bwd^{*}(B)`). So, on whole-site sentences, the kernel and `Q` define
-the same site sets.
+`Reach_fwd^{*}(A) ∩ Reach_bwd^{*}(B)`). So, on whole-site sentences, the kernel defines exactly
+the site sets of the translated fragment of Theorem B: every `Q` query without unbounded
+undirected reach, and every query on the size-bounded class.
 
 ### 3.3 Proof of Theorem C
 
@@ -375,9 +398,10 @@ M:  a = relu(x);  h = a * 2;  d = h + 1;  b = d + a
 M': a = relu(x);  h = x * 2;  d = h + 1;  b = d + a
 ```
 
+Run both on the same strictly positive input, so that `relu(x) = x` and every saved value agrees.
 Both execute the same functions in the same order on tensors of the same shape, so their records
-carry the same labels (`relu_1_1:1`, `mul_1_2:1`, `add_1_3:1`, `add_2_4:1`) and the same `attr`;
-they differ only in whether `h` consumes `a` or `x`. With `α = {relu_1_1:1}`, `Reach_fwd^{≤1}(α)`
+carry the same labels (`relu_1_1:1`, `mul_1_2:1`, `add_1_3:1`, `add_2_4:1`), the same `attr` and
+the same saved values; they differ only in whether `h` consumes `a` or `x`. With `α = {relu_1_1:1}`, `Reach_fwd^{≤1}(α)`
 is `{a, h, b}` on `M` and `{a, b}` on `M'`. By Lemma C.1 no `K0` sentence separates them, so none
 expresses `Reach_fwd^{≤1}(α)`. ∎
 
@@ -414,17 +438,21 @@ A4).
 
 1. *Relativized reach.* "Sites on a path from `A` to `B` that avoids the region `H`" is not
    `tl.between(A, B) - H`: on the example model `between(a, b) - {h}` has sites `{a, d, b}`,
-   while the only `h`-avoiding path is the direct edge, giving `{a, b}` (Example 2). It is
-   expressible on one capture by iterating `X ← X | (neighborhood(X, 1, 'downstream') & R)` at
-   most `|V|` times inside the allowed region `R` (Example 2), which is a sentence whose length
-   grows with `|V|`, not a uniform sentence.
-2. *Counting, soft membership, magnitude.* Queries such as "sites with at least three
-   vertex-disjoint paths to `B`", weighted or fuzzy regions, and "how much `A` influences `B`"
-   are not sets definable in `Q`, and the algebra's contract is sets: numbers are reads (tables
-   keyed by site or element), and a read re-enters the algebra only through a disclosed threshold
-   or rank producer (`tl.threshold`, `tl.top_k`). ∎
+   while the only `h`-avoiding path is the direct edge, giving `{a, b}` (Example 2). Let `R` be
+   the whole-site allowed region. Start with `X_0 = A & R` and `Y_0 = B & R`. Iterate
+   `X_{i+1} = X_i | (tl.neighborhood(X_i, hops=1, direction="downstream") & R)` and
+   `Y_{i+1} = Y_i | (tl.neighborhood(Y_i, hops=1, direction="upstream") & R)`. For `N ≥ |V| - 1`,
+   `Sites(X_N & Y_N)` is exactly the set of sites on directed `A`-to-`B` paths contained in `R`.
+   Each iteration admits one more allowed edge; intersecting the stabilized restricted
+   descendants and ancestors gives the claimed paths on a DAG (Example 2). The expression's size
+   depends on `N`; this establishes neither uniform expressibility nor uniform inexpressibility.
+2. *Counting, soft membership, and magnitude.* The resolved-selection contract supplies sets, not
+   numerical weights: numbers are reads (tables keyed by site or element), and numerical evidence
+   determines Boolean membership where a suitable producer exists (`tl.threshold`, `tl.top_k`).
+   Proving that a particular counting or influence predicate is undefinable requires a separate
+   expressiveness argument; the output contract alone does not prove it. ∎
 
-### 3.5 Lemma R (the honesty labels survive composition)
+### 3.5 Lemma R (relation labels survive composition)
 
 Each resolved site carries a relation `rel(s) ∈ {exact, upper_bound, lower_bound, unknown}`
 between its mask `m(s)` and the semantic support `sem(s)` the producer meant (a receptive-field
@@ -468,8 +496,8 @@ repository root).
   Capture completeness, that every realized dependence is a recorded parent, is TorchLens's
   validation claim and is assumed, not proved here.
 - **A3 (pass-qualified unrolling).** Graph nodes are pass-qualified labels; a cell executed twice
-  yields two nodes, and upstream closure from the second pass reaches the first but downstream
-  closure does not.
+  yields two nodes. Pass qualification distinguishes executions; one pass reaches another only
+  when recorded dataflow connects them.
 - **A4 (no attribute generator reads edges).** The structural selectors of Section 1.3 read
   graph-free record fields (the selector classes in `torchlens/_selection/selectors.py`; every
   internal selector kind behind spec loading reads record attributes too). Two exceptions are
@@ -570,33 +598,45 @@ assert sites(trace[subset]) == family(trace[subset]) == {h, b}
 complement = U - subset
 assert family(trace[complement]) == {inp, a, h, d, b, out}
 assert sites(trace[complement]) == {inp, a, d, out}
+
+empty = (tl.all_sites() & ~tl.all_sites()).__selection__()  # the empty family (Theorem A)
+assert family(trace[empty]) == set()
 ```
 
 **Example 2 (reach and between).** `tl.neighborhood(a, hops=1, direction='downstream')` resolves
 to `{a, h, b}`; with `hops=6` to `{a, h, d, b, out}` (the unbounded reach, since
-`|V| - 1 = 5 ≤ 6`). `tl.between(a, b)` resolves to `Desc(a) ∩ Anc(b) = {a, h, d, b}`. The query
+`|V| - 1 = 5 ≤ 6`), and so does `tl.between(a, U)`, the uniform spelling of unbounded downstream
+reach; `tl.between(U, b)` is the unbounded upstream reach of `b`. `tl.between(a, b)` resolves to
+`Desc(a) ∩ Anc(b) = {a, h, d, b}`. The query
 "sites on an `h`-avoiding path from `a` to `b`" is `{a, b}`; the surrogate
 `tl.between(a, b) - lift(h)` has `Sites = {a, d, b}`, which keeps `d` although every path through
-`d` passes through `h`. The bounded iteration inside the allowed region
-`R = between(a, b) - lift(h)` recovers `{a, b}` in at most `|V|` steps.
+`d` passes through `h`. The iteration of Theorem D inside the allowed region
+`R = between(a, b) - lift(h)` (restricted descendants of `a` intersected with restricted
+ancestors of `b`) recovers `{a, b}` after `|V| - 1 = 5` rounds.
 
 ```python
 assert sites(trace[tl.neighborhood(a, hops=1, direction="downstream")]) == {a, h, b}
 assert sites(trace[tl.neighborhood(a, hops=6, direction="downstream")]) == {a, h, d, b, out}
+assert sites(trace[tl.between(a, U)]) == {a, h, d, b, out}
+assert sites(trace[tl.between(U, b)]) == {inp, a, h, d, b}
 assert sites(trace[tl.between(a, b)]) == {a, h, d, b}
 
 allowed = tl.between(a, b) - lift(h)
 assert sites(trace[allowed]) == {a, d, b}
 
-region = lift(a)
-for _ in range(6):
-    region = region | (tl.neighborhood(region, hops=1, direction="downstream") & allowed)
-assert sites(trace[region]) == {a, b}
+forward = lift(a) & allowed
+backward = lift(b) & allowed
+for _ in range(5):  # |V| - 1
+    forward = forward | (tl.neighborhood(forward, hops=1, direction="downstream") & allowed)
+    backward = backward | (tl.neighborhood(backward, hops=1, direction="upstream") & allowed)
+assert sites(trace[forward]) == {a, b}
+assert sites(trace[backward]) == {a, d, b}
+assert sites(trace[forward & backward]) == {a, b}
 ```
 
 **Example 3 (complement under reach).** Query: one hop downstream of the sites not downstream of
 `a`. Mathematically `¬Reach_fwd^{*}(a) = {in}` and the answer is `{in, a}`. The kernel sentence
-`tl.neighborhood(U - tl.neighborhood(a, hops=6, 'downstream'), hops=1, 'downstream')` resolves
+`tl.neighborhood(U - tl.neighborhood(a, hops=6, direction="downstream"), hops=1, direction="downstream")` resolves
 to `{in, a}`. Its operand still touches all six sites, with empty masks on the five downstream of
 `a`, and no boolean operator removes an element-empty site from the family (`x & x`, `~~x`,
 `x | x` and `x - (x - x)` all keep the six-site family of `x = U - lift(a)`); the closure
@@ -623,14 +663,18 @@ for same_family in (x & x, ~~x, x | x, x - (x - x)):
   `ACT`.
 - **Tiers of influence.** Structural reachability is an upper bound on gradient support and on
   interventional influence (every dependence travels along recorded edges, Assumption A2).
-  Gradient supports (`op.receptive_field.gradient(unit)`) and interventional effects
+  Gradient supports (`op.receptive_field.of(units, method="gradient")`) and interventional effects
   (`fork.do(...)` followed by `tl.changed(reference=...)`) are different relations with their own
   semantics; the completeness theorems are about the structural relation `E` and say nothing
   about how much influence flows.
-- **Element-granularity cones for regions.** Not shipped; see Theorem B, step 7.
+- **Element-granularity cones.** Receptive and projective `.of(units, within=...)` return regions
+  at requested sites with Lemma R labels; an exact cone of an arbitrary element set is not
+  proved (Theorem B, step 7).
 - **Relativized closure** (`within=` or `avoiding=` on the closure producers). Not shipped;
-  expressible per capture only (Theorem D, item 1).
-- **Unbounded `hops`.** Not shipped; caveat 2 stands.
+  expressible by finite iteration with a known capture-size bound; uniform expressibility is
+  unresolved here (Theorem D, item 1).
+- **Unbounded `hops`.** Not shipped. Directed unbounded reach needs none (`tl.between` with the
+  universal sentence); undirected unbounded reach needs a hop count (caveat 2).
 - **Subspace selections.** `tl.subspace` resolves to a support *set*, so the boolean laws of
   Section 1.4 hold for it as for any mask; the non-distributive lattice of linear subspaces never
   enters the set algebra (editing through a composed subspace is refused instead).
