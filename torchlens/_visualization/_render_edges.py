@@ -3,7 +3,7 @@
 # ruff: noqa: F403, F405
 
 from .._record_type import record_type
-from .._utils._record_group_table import record_member
+from ._atomic_scope import _enclosing_module_calls
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -640,9 +640,9 @@ def _surfaced_own_output_ops(
                 op = trace.ops[label]
         else:
             op = trace.ops[label]
-        if record_member(op, "is_buffer", False):
+        if getattr(op.graph, "is_buffer", False):
             continue
-        if not record_member(op, "is_atomic_module", False):
+        if not getattr(op.module_context, "is_atomic_module", False):
             continue
         modules = list(getattr(op, "modules", ()) or ())
         if not modules:
@@ -762,9 +762,7 @@ def _raw_render_node_owner_key(node: GraphNode, vis_mode: str) -> str | None:
         Innermost owning cluster, or ``None`` for a top-level node.
     """
 
-    modules = [str(module) for module in getattr(node, "modules", ()) or ()]
-    if record_member(node, "is_atomic_module", False) and modules:
-        modules = modules[:-1]
+    modules = [str(module) for module in _enclosing_module_calls(node)]
     if not modules:
         return None
     owner = modules[-1]

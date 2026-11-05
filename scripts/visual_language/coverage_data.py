@@ -346,7 +346,7 @@ ROWS: Mapping[str, Row] = {
         "channel.unencoded_reasons",
         "unencoded",
         C,
-        "_encoding:_varying_marker",
+        "_encoding_rolled_marks:_varying_marker",
         caption_variants=(
             "reconciled_aggregate",
             "summed_aggregate",

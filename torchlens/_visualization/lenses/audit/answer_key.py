@@ -187,6 +187,47 @@ def _reachable(trace: Trace, source_label: str, target_label: str) -> bool:
     return False
 
 
+def _io_questions(trace: Trace) -> list[KeyQuestion]:
+    """Return the input/output identification and path-reachability questions.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose model inputs and final outputs are asked about.
+
+    Returns
+    -------
+    list[KeyQuestion]
+        Both questions, or an empty list when the trace lacks inputs or outputs.
+    """
+
+    questions: list[KeyQuestion] = []
+    inputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_input", False)]
+    outputs = [
+        op.layer_label for op in trace._layer_list if getattr(op.graph, "is_final_output", False)
+    ]
+    if inputs and outputs:
+        questions.append(
+            KeyQuestion(
+                id="io-1",
+                kind="io_identification",
+                question="Where does information enter and leave this graph?",
+                answer={"inputs": inputs, "outputs": outputs},
+            )
+        )
+        questions.append(
+            KeyQuestion(
+                id="path-1",
+                kind="path_reachability",
+                question=(
+                    f"Is there a path from {inputs[0]!r} to {outputs[0]!r} following the arrows?"
+                ),
+                answer=_reachable(trace, inputs[0], outputs[0]),
+            )
+        )
+    return questions
+
+
 def generate_answer_key(
     trace: Trace,
     *,
@@ -213,29 +254,7 @@ def generate_answer_key(
     questions: list[KeyQuestion] = []
     lens_name = resolution.lens.name if resolution is not None else "bare"
 
-    inputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_input", False)]
-    outputs = [
-        op.layer_label for op in trace._layer_list if record_member(op, "is_final_output", False)
-    ]
-    if inputs and outputs:
-        questions.append(
-            KeyQuestion(
-                id="io-1",
-                kind="io_identification",
-                question="Where does information enter and leave this graph?",
-                answer={"inputs": inputs, "outputs": outputs},
-            )
-        )
-        questions.append(
-            KeyQuestion(
-                id="path-1",
-                kind="path_reachability",
-                question=(
-                    f"Is there a path from {inputs[0]!r} to {outputs[0]!r} following the arrows?"
-                ),
-                answer=_reachable(trace, inputs[0], outputs[0]),
-            )
-        )
+    questions.extend(_io_questions(trace))
 
     if resolution is not None and resolution.source is not None:
         values = _channel_values(trace, resolution.source.member)

@@ -26,6 +26,7 @@ from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
 from ._graph_shell import build_graphviz_shell
 from ._header_block import graph_caption_html
+from ._orphan_islands import _orphan_island_logs, _warn_render_omission
 from ._pass_label_placement import forward_sources
 from ._render_common import *
 from ._render_edges import *
@@ -1461,49 +1462,6 @@ def _write_overview_expansion_manifest(
         ),
         stacklevel=user_stacklevel(),
     )
-
-
-def _warn_render_omission(message: str) -> None:
-    """Disclose that a requested render element is not in the output.
-
-    Parameters
-    ----------
-    message:
-        What was left out and how to get it back.
-    """
-
-    warnings.warn(message, TorchLensWarning, stacklevel=user_stacklevel())
-
-
-def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
-    """Return the orphan ops a ``show_orphans=True`` render draws.
-
-    Warns when the capture kept only dropped orphan husks, which have nothing to
-    draw (re-trace with ``keep_orphans=True``).
-
-    Parameters
-    ----------
-    self:
-        Trace whose ``_orphan_logs`` are inspected.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Labelled orphan ops, in capture order.
-    """
-
-    orphan_husks = getattr(self, "_orphan_logs", ())
-    orphan_logs = tuple(
-        op
-        for op in orphan_husks
-        if bool(record_member(op, "is_orphan", False))
-        and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
-    )
-    if not orphan_logs and (orphan_husks or self._orphan_labels):  # dropped: labels, no husks
-        _warn_render_omission(
-            "orphans were dropped from this capture; re-trace with keep_orphans=True"
-        )
-    return orphan_logs
 
 
 def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderContext) -> None:
