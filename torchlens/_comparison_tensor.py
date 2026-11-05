@@ -7,6 +7,8 @@ from typing import Any
 import numpy as np
 import torch
 
+from ._utils._numpy_bridge import tensor_from_numpy
+
 
 def _comparison_tensor(value: Any, codec: Any) -> torch.Tensor | None:
     """Read a backend payload as a host tensor, preserving torch tensors unchanged.
@@ -36,11 +38,11 @@ def _comparison_tensor(value: Any, codec: Any) -> torch.Tensor | None:
             array = array.reshape(shape)
         # TF and Paddle encode bf16 as storage bits, not integer values.
         if str(encoded.logical_dtype) in {"tf.bfloat16", "paddle.bfloat16"}:
-            tensor = torch.from_numpy(np.array(array, copy=True, order="C")).view(torch.bfloat16)
+            tensor = tensor_from_numpy(np.array(array, copy=True, order="C")).view(torch.bfloat16)
         else:
             if str(array.dtype) == "bfloat16":
                 array = array.astype(np.float32)
-            tensor = torch.from_numpy(np.array(array, copy=True, order="C"))
+            tensor = tensor_from_numpy(np.array(array, copy=True, order="C"))
         return tensor
     except (TypeError, ValueError):
         return None

@@ -157,6 +157,7 @@ __all__ = [
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
+    "HAS_NUMPY_BRIDGE",
     "tensor_any_over_dims",
     "get_mha_fastpath_enabled",
     "set_mha_fastpath_enabled",
@@ -208,6 +209,7 @@ __all__ = [
     "get_optional_torch_namespace",
     "get_disabled_torch_function_impl",
     "get_torch_capability_snapshot",
+    "get_numpy_bridge_support",
     "kineto_events_from_profiler",
     "memory_profile_from_profiler",
     "probe_c10d_capabilities",
@@ -538,43 +540,9 @@ def _probe_flash_attention_4_interface() -> bool:
 
 
 def _probe_safe_weights_only_load() -> bool:
-    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe.
-
-    CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
-    2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
-    even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
-    bypassed. TorchLens no longer hands file bytes to ``torch.load`` (the metadata
-    unpickler refuses ``torch.storage._load_from_bytes`` by name; plain metadata
-    tensors use its own inline reduction); ``.pt`` extraction shards and pyreft weight
-    files, the last artifact bytes handed to ``torch.load``, refuse when it is false.
-
-    The patched behavior is internal to the unpickler and has NO version-string-
-    free *behavioral* signature we can cheaply exercise, so -- consistent with this
-    module's feature-detect convention (never parse ``torch.__version__`` for a
-    behavioral branch) -- we probe the 2.6.0 serialization-hardening SURFACE that
-    shipped *in* the fix release: the public
-    ``torch.serialization.get_unsafe_globals_in_checkpoint`` inspection API plus the
-    rewritten ``torch._weights_only_unpickler.get_globals_in_pkl`` GLOBAL-opcode
-    handler. Both are ABSENT on every affected version (<= 2.5.1) and PRESENT on
-    2.6.0+ (verified against the v2.5.1 and v2.6.0 sources). Requiring BOTH is the
-    conservative, fail-closed direction: a false negative merely refuses an
-    embedded load on a safe torch, whereas admitting it on a vulnerable torch would
-    reopen the RCE.
-
-    Returns
-    -------
-    bool
-        ``True`` only when the running torch carries the CVE-2025-32434 fix.
-    """
-
-    try:
-        import torch._weights_only_unpickler as _weights_only_unpickler
-        import torch.serialization as _serialization
-    except Exception:  # pragma: no cover - defensive; both import on supported torch.
-        return False
-    return hasattr(_serialization, "get_unsafe_globals_in_checkpoint") and hasattr(
-        _weights_only_unpickler, "get_globals_in_pkl"
-    )
+    """Return whether ``torch.load(..., weights_only=True)`` is CVE-2025-32434-safe (see the leaf)."""
+    handler = _import_module_attr_or_none("torch._weights_only_unpickler", "get_globals_in_pkl")
+    return bool(_real_op_probe_leaf().probe_safe_weights_only_load(handler))
 
 
 def _probe_parameter_as_subclass_in_dispatch_mode() -> bool:
@@ -694,36 +662,9 @@ def _probe_code_qualname() -> bool:
 
 
 def _probe_saved_tensors_hooks_patchable() -> bool:
-    """Return whether the saved-tensors-hooks context class accepts an init patch.
+    """Return whether the saved-tensors-hooks context class accepts an init patch (see the leaf)."""
 
-    ``torch.autograd.graph.saved_tensors_hooks`` is the public context manager that installs user
-    pack/unpack hooks (``save_on_cpu`` and the non-reentrant checkpoint hook subclass it).
-    TorchLens scopes user hook bodies as autograd-internal during an active capture by patching the
-    class ``__init__`` (construction-time scoping) AND ``__enter__`` (use-time re-scoping, covering
-    contexts constructed before the first capture) at wrap time, so the patch needs a plain-Python
-    ``__init__`` with the ``(self, pack_hook, unpack_hook)`` shape and a plain-Python ``__enter__``
-    taking only ``self``. Probe the shape behaviorally; never parse ``torch.__version__``.
-
-    Returns
-    -------
-    bool
-        ``True`` when the class exists and both ``__init__`` and ``__enter__``
-        are patchable Python functions with the expected shapes.
-    """
-
-    hooks_cls = getattr(getattr(torch.autograd, "graph", None), "saved_tensors_hooks", None)
-    if not isinstance(hooks_cls, type):
-        return False
-    init = hooks_cls.__dict__.get("__init__")
-    enter = hooks_cls.__dict__.get("__enter__")
-    if not isinstance(init, types.FunctionType) or not isinstance(enter, types.FunctionType):
-        return False
-    try:
-        init_params = list(inspect.signature(init).parameters)
-        enter_params = list(inspect.signature(enter).parameters)
-    except (TypeError, ValueError):
-        return False
-    return init_params == ["self", "pack_hook", "unpack_hook"] and enter_params == ["self"]
+    return bool(_real_op_probe_leaf().probe_saved_tensors_hooks_patchable())
 
 
 def _probe_torch_function_stack_surgery() -> bool:
@@ -1067,6 +1008,30 @@ def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
     return HAS_META_ITEM_GUARD
 
 
+def get_numpy_bridge_support(*, force_probe: bool = False) -> bool:
+    """Return whether torch can exchange arrays with the installed NumPy, lazily.
+
+    Cached result of ``_kernel_probes.probe_numpy_bridge``; ``force_probe`` (set by
+    diagnostic surfaces) reruns it. A failed probe flips ``HAS_NUMPY_BRIDGE`` through
+    :func:`mark_torch_capability_missing`, so the degradation warns once and shows
+    in the capability snapshot and the doctor report.
+    """
+
+    global HAS_NUMPY_BRIDGE, _NUMPY_BRIDGE_PROBED
+
+    if not _NUMPY_BRIDGE_PROBED or force_probe:
+        HAS_NUMPY_BRIDGE = bool(_real_op_probe_leaf().probe_numpy_bridge())
+        _NUMPY_BRIDGE_PROBED = True
+        if not HAS_NUMPY_BRIDGE:
+            mark_torch_capability_missing(
+                "HAS_NUMPY_BRIDGE",
+                "this torch build cannot exchange arrays with the installed NumPy "
+                "(compiled against NumPy 1.x, running under NumPy 2); tensor/array "
+                "conversions fall back to a byte copy; install 'numpy<2' or torch>=2.3",
+            )
+    return HAS_NUMPY_BRIDGE
+
+
 def get_torch_cpp_extension_support(*, force_probe: bool = False) -> bool:
     """Return whether ``torch.utils.cpp_extension`` imports cleanly, lazily (see the leaf).
 
@@ -1293,6 +1258,8 @@ HAS_SPARSE_SPSOLVE_CUDA: bool = False
 _SPARSE_SPSOLVE_CUDA_PROBED: bool = False
 HAS_META_ITEM_GUARD: bool = False
 _META_ITEM_GUARD_PROBED: bool = False
+HAS_NUMPY_BRIDGE: bool = False
+_NUMPY_BRIDGE_PROBED: bool = False
 HAS_TORCH_CPP_EXTENSION: bool = False
 _TORCH_CPP_EXTENSION_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
@@ -1510,6 +1477,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
+    "HAS_NUMPY_BRIDGE",
 )
 
 
@@ -1533,6 +1501,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
+    "_NUMPY_BRIDGE_PROBED": ("HAS_NUMPY_BRIDGE",),
     "_TORCH_CPP_EXTENSION_PROBED": ("HAS_TORCH_CPP_EXTENSION",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
@@ -1844,11 +1813,11 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_dtensor_type(force_probe=True)
     get_gradient_edge_support(force_probe=True)
     _force_real_op_probes()
-    # Both getters document that diagnostic surfaces force them; without this
-    # the doctor reported them "unprobed" on every install that had not yet
-    # consumed them, hiding a real absence on torch 2.1-2.2.
+    # Getters documented as forced by diagnostic surfaces; unforced, the doctor called
+    # them "unprobed" on installs not yet consuming them, hiding real torch 2.1-2.2 gaps.
     get_meta_item_guard_support(force_probe=True)
     get_mha_fastpath_switch_support(force_probe=True)
+    get_numpy_bridge_support(force_probe=True)
     get_device_mesh_type(force_probe=True)
     get_pipelining_module_types(force_probe=True)
     get_tracing_tensor_types(force_probe=True)

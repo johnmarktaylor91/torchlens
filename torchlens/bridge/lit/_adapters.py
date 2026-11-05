@@ -21,6 +21,7 @@ import torch
 from lit_nlp.api import dtypes as lit_dtypes, model as lit_model, types as lit_types
 from torch import nn
 
+from ..._utils._numpy_bridge import tensor_to_numpy
 from . import _pooling, _refusals, _runtime, _sites
 
 
@@ -445,7 +446,7 @@ class _TorchLensLitModel(lit_model.BatchedModel):
 
         rows: list[Any] = []
         for i, tokens in enumerate(tokens_rows):
-            values = salience[i, : lengths[i]].detach().cpu().to(torch.float64).numpy()
+            values = tensor_to_numpy(salience[i, : lengths[i]].detach().cpu().to(torch.float64))
             rows.append(lit_dtypes.TokenSalience(tokens=tokens, salience=values))
         return rows
 
@@ -612,12 +613,9 @@ class TorchLensLitClassifier(_TorchLensLitModel):
         )
         rows: list[dict[str, Any]] = []
         for i in range(len(id_lists)):
-            row: dict[str, Any] = {
-                "probas": probas[i].cpu().numpy(),
-                "tokens": tokens_rows[i],
-            }
+            row: dict[str, Any] = {"probas": tensor_to_numpy(probas[i]), "tokens": tokens_rows[i]}
             for field, column in pooled.items():
-                row[field] = column[i].detach().cpu().to(torch.float64).numpy()
+                row[field] = tensor_to_numpy(column[i].detach().cpu().to(torch.float64))
             if salience_rows is not None:
                 row[_SALIENCE_FIELD] = salience_rows[i]
             rows.append(row)
@@ -932,7 +930,7 @@ class TorchLensLitCausalLM(_TorchLensLitModel):
                 "top_tokens": products.top_k_rows[i],
             }
             for field, column in products.pooled.items():
-                row[field] = column[i].detach().cpu().to(torch.float64).numpy()
+                row[field] = tensor_to_numpy(column[i].detach().cpu().to(torch.float64))
             if salience_rows is not None:
                 row[_SALIENCE_FIELD] = salience_rows[i]
             rows.append(row)

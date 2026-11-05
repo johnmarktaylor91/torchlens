@@ -37,7 +37,7 @@ from typing import Any
 import torch
 
 from .._utils._torch_symbols import torch_attr
-from .._utils.tensor_leaves import flat_byte_view
+from .._utils.tensor_leaves import copy_host_bytes, flat_byte_view
 
 __all__ = [
     "INLINE_TENSOR_GLOBAL",
@@ -134,7 +134,7 @@ def reduce_inline_tensor(tensor: torch.Tensor) -> tuple[Any, tuple[Any, ...]] | 
         return None
     with torch.no_grad():
         flat = tensor.detach().cpu().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        data = flat_byte_view(flat).numpy().tobytes() if flat.numel() else b""
+        data = copy_host_bytes(flat_byte_view(flat)) if flat.numel() else b""
     return (
         rebuild_inline_tensor,
         (

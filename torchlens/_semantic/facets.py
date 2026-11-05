@@ -926,8 +926,8 @@ class MissingGrad:
                 arg.raise_error()
         raise RuntimeError("MissingGradient used as a torch value.")
 
-    def __array__(self, dtype: Any | None = None) -> Any:
-        """Raise when NumPy tries to coerce the sentinel."""
+    def __array__(self, dtype: Any | None = None, copy: bool | None = None) -> Any:
+        """Raise when NumPy coerces the sentinel (``copy``: NumPy 2's protocol keyword)."""
 
         self.raise_error()
 

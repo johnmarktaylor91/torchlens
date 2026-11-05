@@ -17,6 +17,7 @@ from typing import Any, ClassVar, Protocol
 import numpy as np
 import torch
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
 from ._numpy_payload_codec import (
@@ -1175,10 +1176,8 @@ def _transport_tensor_to_numpy(tensor: torch.Tensor, entry: Any) -> np.ndarray:
 
     transport = to_cpu_contiguous(tensor)
     logical_dtype = str(_entry_field(entry, "logical_dtype") or "")
-    if logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}:
-        array = transport.to(torch.float32).numpy()
-    else:
-        array = transport.numpy()
+    bf16 = logical_dtype in {"bfloat16", "jax.numpy.bfloat16"}
+    array = tensor_to_numpy(transport.to(torch.float32) if bf16 else transport)
     if _entry_has_typed_jax_prng_key(entry):
         return array
     logical_shape = _logical_shape_from_metadata(_entry_field(entry, "codec_metadata"))

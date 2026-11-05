@@ -8,6 +8,7 @@ from typing import Any
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._input_route import _apply_hf_processor, _owner_of, _route_claims, _route_input, _RoutedInputs
+from ._utils._numpy_bridge import tensor_from_numpy
 from ._utils.arg_handling import rebuild_tuple_like
 
 # Hugging Face processor keyword spellings a modality dict is keyed by
@@ -98,9 +99,7 @@ def _coerce_array_like(model: Any, x: Any) -> Any:
         import numpy as np
 
         if isinstance(x, np.ndarray):
-            import torch
-
-            return torch.from_numpy(x)
+            return tensor_from_numpy(x)
     except ImportError:
         pass
 
