@@ -993,6 +993,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_data_classes/_annotation_image.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_data_classes/_call_tree.py",
   "has_default": false,
@@ -5156,7 +5164,7 @@
   "field": "kind",
   "file": "torchlens/_visualization/_header_block.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -5166,6 +5174,14 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_header_block.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": false,

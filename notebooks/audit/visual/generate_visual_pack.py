@@ -2355,10 +2355,11 @@ SECTIONS: list[Section] = [
                 caption=(
                     "color_by fills eligible op nodes from a colorblind-safe sequential ramp, "
                     "normalized linear min-max over visible nodes. Sources: a record field, a scalar "
-                    "builtin (time/flops/bytes/magnitude/grad_norm), or a callable. The AUTO legend "
-                    "(show_legend=None) discloses the source, the transform, and min/mid/max swatches.\n"
-                    "CHECK: fills vary across nodes; the encoding legend block is present and names the "
-                    "source; unencoded nodes (missing values) keep their role fill."
+                    "builtin (time/flops/bytes/magnitude/grad_norm), or a callable. The AUTO key "
+                    "(show_legend=None) is a colour bar labelled with the quantity and units at both "
+                    "ends; the transform and coverage sit in the DOT graph comment, never drawn.\n"
+                    "CHECK: fills vary across nodes; the key bar is present and names the quantity; "
+                    "unencoded nodes (missing values) keep their role fill."
                 ),
                 panels=[
                     Panel(
@@ -2384,7 +2385,8 @@ SECTIONS: list[Section] = [
                     "labels never truncate, fonts never scale, and encoded area is clamped to 4x the "
                     "default node area. On text-heavy nodes the label's natural size dominates -- the "
                     "motif reads on compact nodes (ellipses, small labels).\n"
-                    "CHECK: the legend states 'size ~ sqrt(dims)' (left) / 'linear(dims)' (right); "
+                    "CHECK: the key reads 'size: output elements, <low> ... <high>'; the DOT comment "
+                    "states 'size ~ sqrt(dims)' (left) / 'linear(dims)' (right); "
                     "larger-activation nodes are never SMALLER than smaller-activation ones."
                 ),
                 panels=[
@@ -2409,7 +2411,7 @@ SECTIONS: list[Section] = [
                     "(globally monotone execution windows -- non-monotone traces refuse "
                     "stack_by_auto_underivable and an explicit field/callable bypasses). Nodes sharing "
                     "an annotation value pin to one rank; with direction='leftright' the ranks read as "
-                    "timestep columns. The graph caption and legend disclose the annotation used.\n"
+                    "timestep columns. The graph caption discloses the annotation used.\n"
                     "CHECK: each recurrent pass forms one column; the stem/head ops hang free (not "
                     "pinned to column 1); the caption line 'stacked by: pass_number (auto)' is present."
                 ),

@@ -550,7 +550,7 @@ torchlens/_visualization/_bundle_graph.py::render_bundle_graph	62
 torchlens/_visualization/_condensed_flow.py	814
 torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	77
 torchlens/_visualization/_condensed_flow.py::_condensed_edges	65
-torchlens/_visualization/_encoding.py	1816
+torchlens/_visualization/_encoding.py	1732
 torchlens/_visualization/_encoding.py::_coerce_scalar	69
 torchlens/_visualization/_encoding.py::resolve_color_by	91
 torchlens/_visualization/_encoding.py::resolve_size_by	72
@@ -562,8 +562,8 @@ torchlens/_visualization/_rank_layout_internal/layout.py	1142
 torchlens/_visualization/_rank_layout_internal/layout.py::_compute_topological_layout	159
 torchlens/_visualization/_rank_layout_internal/layout.py::_run_neato_with_fallbacks	84
 torchlens/_visualization/_rank_layout_internal/layout.py::render_rank_layout	392
-torchlens/_visualization/_render_common.py	906
-torchlens/_visualization/_render_dot.py	1850
+torchlens/_visualization/_render_common.py	882
+torchlens/_visualization/_render_dot.py	1849
 torchlens/_visualization/_render_dot.py::_emit_and_finish_forward	183
 torchlens/_visualization/_render_dot.py::_finalize_forward_ir	88
 torchlens/_visualization/_render_dot.py::_populate_forward_ir	158
@@ -591,10 +591,10 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2081
+torchlens/_visualization/_render_nodes.py	2042
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
-torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	236
-torchlens/_visualization/_render_nodes.py::_build_layer_node	168
+torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	226
+torchlens/_visualization/_render_nodes.py::_build_layer_node	151
 torchlens/_visualization/_render_nodes.py::_get_node_address_shape_color	66
 torchlens/_visualization/_render_nodes.py::_render_raw_input	63
 torchlens/_visualization/_render_nodes.py::compute_default_node_lines	89

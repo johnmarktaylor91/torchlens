@@ -294,8 +294,8 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
     A focused draw's first line is the scope: the model class, then each
     enclosing module down to the focused one with its class
     (``GPT2LMHeadModel › transformer › h.5 › mlp (GPT2MLP)``); the frames of
-    the enclosing modules are not drawn. Its second line counts the drawn
-    view (``8 ops (480.0 KB)``), with no label: the count line of a
+    the enclosing modules are not drawn. Its second line counts the focused
+    module's ops whatever the drawing collapses (``8 ops (480 KB)``), with no label: the count line of a
     whole-model draw carries none either. Steps are joined by a single
     right-pointing angle quotation mark (U+203A, in the bundled font) between
     non-breaking spaces, so a long scope never wraps at a separator. The whole

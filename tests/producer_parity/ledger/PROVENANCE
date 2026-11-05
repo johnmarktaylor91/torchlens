@@ -5252,6 +5252,14 @@ torch: 2.13.0+cpu
 source: 52696d3648ba53af4c35ef573933899af2d3cd7e (dirty)
 recorded: 2026-11-05T06:46:44.004314+00:00
 ---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: input-photo-land: the input-photo follow-up reads op.modules and trace.modules in _visualization/_header_block.py (focus address match; whole-network module count), the static scan also sees sys.modules in _data_classes/_annotation_image.py (lazy PIL lookup), and the header drops three unit.kind reads in _header_block.py (5 to 2) with the node-unit census it replaced; no producer moved; reviewed against the 9080f922cf merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0a99743dc0d8f69a827246e4c89474b04af91be2 (dirty)
+recorded: 2026-11-05T07:40:10.447692+00:00
+---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: validation deepcopy fallback: plain-attribute snapshots read their own value fields and the validation copy reads sys.modules

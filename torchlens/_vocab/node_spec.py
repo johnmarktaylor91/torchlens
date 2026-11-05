@@ -49,6 +49,9 @@ LENS_CAPTION_KEY = "lens_caption"
 #: ``graph_overrides`` key carrying header-banner prefixes a view moves to its
 #: own record (the interventions census); Graphviz never sees it.
 LENS_BANNER_OMIT_KEY = "lens_banner_omit"
+#: Header-banner prefixes an edited trace's drawing leaves out: its header
+#: edit line already says the trace is edited (the census keeps the lines).
+EDITED_HEADER_OMITTED_BANNERS = ("capture outcome: unattested", "INTERVENED capture")
 
 
 @dataclass
