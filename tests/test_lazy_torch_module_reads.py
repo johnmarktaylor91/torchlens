@@ -5,21 +5,24 @@ On torch 2.1, importing ``torch._higher_order_ops.cond`` imports
 ``functional_tensor`` is not. TorchLens registered its witness HOP rules at
 import through an importing lookup (so a plain ``import torchlens`` imported
 Dynamo), and its tracing-tensor probe imported every candidate once one was
-loaded (an import inside the first capture's RNG window). These tests pin the
-read-only behaviour and the later pickup of a module imported afterwards.
+loaded (an import inside the first capture's RNG window), and its Dynamo
+"is compiling" probe imported ``torch._dynamo`` mid-capture. These tests pin
+the read-only behaviour and the later pickup of a module imported afterwards.
 """
 
 from __future__ import annotations
 
-import importlib
 import importlib.abc
 import importlib.machinery
 import sys
 import types
+import warnings
 from collections.abc import Sequence
 from typing import Any
 
 import pytest
+import torch
+from torch._ops import HigherOrderOperator
 
 import torchlens._utils._torch_compat as tc
 from torchlens.backends.torch import _completeness_hop as hop
@@ -99,19 +102,18 @@ def test_higher_order_operator_lookup_never_imports_its_module(
     assert recorder.seen == []
 
 
-def _resolvable_rule_module() -> str:
-    """Return the module of a witness HOP rule that resolves once imported."""
+class _ProbeOperator(HigherOrderOperator):
+    """A higher-order operator private to this test, with an identity eager kernel."""
 
-    candidates = [("cond", "cond_op"), ("scan", "scan_op"), *hop._DENSE_UNDER_MODE]
-    for module, attribute in candidates:
-        try:
-            importlib.import_module(f"torch._higher_order_ops.{module}")
-        except ImportError:
-            continue
-        op = tc.get_higher_order_operator(module, attribute)
-        if op is not None and any(rule_op is op for rule_op, _ in hop._witness_hop_rules()):
-            return module
-    raise AssertionError("no witness HOP rule resolves on this torch")
+    def __init__(self) -> None:
+        """Name the operator uniquely so it never collides with torch's own."""
+
+        super().__init__("torchlens_test_lazy_probe")
+
+    def __call__(self, *args: Any) -> Any:
+        """Dispatch like any higher-order operator."""
+
+        return super().__call__(*args)
 
 
 def test_a_hop_rule_whose_module_loads_later_registers_on_mode_entry(
@@ -119,19 +121,48 @@ def test_a_hop_rule_whose_module_loads_later_registers_on_mode_entry(
 ) -> None:
     """Registration skips an unloaded operator and picks it up when the mode is entered."""
 
-    module = f"torch._higher_order_ops.{_resolvable_rule_module()}"
-    loaded = sys.modules[module]
+    operator = _ProbeOperator()
+    operator.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(lambda x: x)
+    module = types.ModuleType("torch._higher_order_ops._torchlens_test_probe")
+    module.probe_op = operator  # type: ignore[attr-defined]
+    monkeypatch.setattr(hop, "_DENSE_UNDER_MODE", (("_torchlens_test_probe", "probe_op"),))
+    monkeypatch.delitem(sys.modules, module.__name__, raising=False)
     probe_mode = type("_ProbeMode", (_TorchLensDispatchMode,), {})
-    monkeypatch.delitem(sys.modules, module)
-    hidden = {str(op.name()) for op, _ in hop._witness_hop_rules()}
-    registered = set(hop.register_witness_hop_rules(probe_mode))
 
-    assert registered == hidden
+    assert "torchlens_test_lazy_probe" not in hop.register_witness_hop_rules(probe_mode)
+    assert probe_mode not in operator.python_key_table
     assert probe_mode._hop_rules_pending is hop.register_witness_hop_rules
 
-    monkeypatch.setitem(sys.modules, module, loaded)
-    ops = [op for op, _ in hop._witness_hop_rules()]
-    assert any(probe_mode not in op.python_key_table for op in ops)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
     with probe_mode():
         pass
-    assert all(probe_mode in op.python_key_table for op in ops)
+    assert probe_mode in operator.python_key_table
+
+
+def test_dynamo_probe_never_imports_while_dynamo_is_not_loaded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With Dynamo unloaded nothing compiles: ``False``, no import, no warning, no latch."""
+
+    first, second = "_tl_test_compiler_probe", "_tl_test_dynamo_probe"
+    monkeypatch.setattr(
+        tc, "_DYNAMO_IS_COMPILING_CANDIDATES", ((first, "is_compiling"), (second, "is_compiling"))
+    )
+    monkeypatch.setattr(tc, "_DYNAMO_IS_COMPILING_FN", None)
+    monkeypatch.setattr(tc, "_DYNAMO_IS_COMPILING_PROBED", False)
+    monkeypatch.setattr(tc, "HAS_DYNAMO_IS_COMPILING", False)
+    for name in (first, second, "torch._dynamo"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    recorder = _record_imports(monkeypatch, first, second)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert tc.dynamo_is_compiling() is False
+    assert recorder.seen == []
+    assert tc._DYNAMO_IS_COMPILING_PROBED is False
+
+    module = types.ModuleType(first)
+    module.is_compiling = lambda: False  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, first, module)
+    assert tc.dynamo_is_compiling() is False
+    assert tc.HAS_DYNAMO_IS_COMPILING is True and tc._DYNAMO_IS_COMPILING_PROBED is True

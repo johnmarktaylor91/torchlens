@@ -1909,7 +1909,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_variable_functions_class()
     get_fake_tensor_mode_class()
     get_dtensor_shard_geometry_fn()
-    dynamo_is_compiling()
+    dynamo_is_compiling(force_probe=True)
     _ensure_dynamo_orig_callable_marker_probed()
     get_dynamo_explain()
     # L8/C2 + L9 privately-probed surfaces (fix/private-probe-routing): resolve
@@ -3211,33 +3211,39 @@ _DYNAMO_IS_COMPILING_CANDIDATES: tuple[tuple[str, str], ...] = (
 )
 
 
-def dynamo_is_compiling() -> bool:
+def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     """Return whether Dynamo is currently tracing this frame.
+
+    Parameters
+    ----------
+    force_probe:
+        Import the probe modules even when ``torch._dynamo`` is not imported.
 
     Returns
     -------
     bool
-        True while a ``torch.compile`` region is being traced. False when the
-        capability is structurally ABSENT (no probe resolved), so an absent
+        True while a ``torch.compile`` region is being traced. False, without an
+        import, while ``torch._dynamo`` is not imported (torch 2.1 has no
+        ``torch.compiler.is_compiling``) or when no probe resolved, so an absent
         probe degrades to "not compiling" rather than disabling capture. True
-        when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated
-        as possibly-compiling so the wrapper takes the disclosed dynamo-region
+        when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated as
+        possibly-compiling so the wrapper takes the disclosed dynamo-region
         bypass (``capture_verified=False`` + ``dynamo_region_not_logged``)
-        instead of silently logging data-free FakeTensors -- the documented
-        crash class the guard exists to prevent. Both degraded paths flip
-        ``HAS_DYNAMO_IS_COMPILING``.
+        instead of silently logging data-free FakeTensors, the crash class the
+        guard exists to prevent. Both degraded paths flip ``HAS_DYNAMO_IS_COMPILING``.
 
     Notes
     -----
-    Probed once and cached as a bound callable, because this is consulted on the
-    capture logging path once per operation. Measured at ~0.5 us per call, which
-    is under 1% of the per-op logging cost.
+    Probed once and cached as a bound callable: it runs once per logged operation,
+    ~0.5 us per call, under 1% of the per-op logging cost.
     """
 
     global HAS_DYNAMO_IS_COMPILING, _DYNAMO_IS_COMPILING_FN, _DYNAMO_IS_COMPILING_PROBED
 
     if not _DYNAMO_IS_COMPILING_PROBED:
-        for module_name, attr_name in _DYNAMO_IS_COMPILING_CANDIDATES:
+        candidates = _DYNAMO_IS_COMPILING_CANDIDATES
+        loaded = [pair for pair in candidates if force_probe or pair[0] in sys.modules]
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3246,8 +3252,10 @@ def dynamo_is_compiling() -> bool:
                 _DYNAMO_IS_COMPILING_FN = candidate
                 break
         HAS_DYNAMO_IS_COMPILING = _DYNAMO_IS_COMPILING_FN is not None
-        _DYNAMO_IS_COMPILING_PROBED = True
+        _DYNAMO_IS_COMPILING_PROBED = HAS_DYNAMO_IS_COMPILING or len(loaded) == len(candidates)
     probe = _DYNAMO_IS_COMPILING_FN
+    if probe is None and "torch._dynamo" not in sys.modules:
+        return False
     if probe is None:
         mark_torch_capability_missing(
             "HAS_DYNAMO_IS_COMPILING",
