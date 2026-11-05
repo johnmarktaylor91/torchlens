@@ -158,6 +158,44 @@ def _layer_postdates_all_backward_triggers(trace: Trace, layer: Layer | Op) -> b
     return bool(trigger_positions) and layer_step_index > max(trigger_positions)
 
 
+def _backward_op_index(trace: Trace) -> tuple[dict[str, list[Any]], set[str]]:
+    """Index a trace's op records by every label spelling and collect the visited labels.
+
+    Parameters
+    ----------
+    trace:
+        Trace with materialized backward projections.
+
+    Returns
+    -------
+    tuple[dict[str, list[Any]], set[str]]
+        ``label spelling -> op records`` and the spellings of ops autograd
+        visited (those retaining a live ``grad_fn`` backpointer).
+    """
+
+    # Children reference bare layer labels while op records carry
+    # pass-qualified labels, so index every spelling. A bare label shared by
+    # several passes maps to the UNION of their records: traversing any extra
+    # pass only widens reachability, which widens the no-exemption (True)
+    # side — the fail-closed direction.
+    ops_by_label: dict[str, list[Any]] = {}
+    visited_labels: set[str] = set()
+    for trace_layer in trace._layer_list or ():
+        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
+            spellings = [
+                spelling
+                for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
+                if isinstance(spelling, str)
+            ]
+            if not spellings:
+                continue
+            for spelling in spellings:
+                ops_by_label.setdefault(spelling, []).append(op)
+            if record_member(op, "grad_fn", None) is not None:
+                visited_labels.update(spellings)
+    return ops_by_label, visited_labels
+
+
 def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> bool:
     """Return whether a layer's output can transmit gradient to the backward walk.
 
@@ -195,26 +233,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
         through ops that carry a ``grad_fn_object_id``.
     """
 
-    # Children reference bare layer labels while op records carry
-    # pass-qualified labels, so index every spelling. A bare label shared by
-    # several passes maps to the UNION of their records: traversing any extra
-    # pass only widens reachability, which widens the no-exemption (True)
-    # side — the fail-closed direction.
-    ops_by_label: dict[str, list[Any]] = {}
-    visited_labels: set[str] = set()
-    for trace_layer in trace._layer_list or ():
-        for op in getattr(trace_layer, "ops", None) or (trace_layer,):
-            spellings = [
-                spelling
-                for spelling in (getattr(op, "label", None), getattr(op, "layer_label", None))
-                if isinstance(spelling, str)
-            ]
-            if not spellings:
-                continue
-            for spelling in spellings:
-                ops_by_label.setdefault(spelling, []).append(op)
-            if record_member(op, "grad_fn", None) is not None:
-                visited_labels.update(spellings)
+    ops_by_label, visited_labels = _backward_op_index(trace)
     if not visited_labels:
         return True
 

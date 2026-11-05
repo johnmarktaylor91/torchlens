@@ -30,7 +30,6 @@ from typing import TYPE_CHECKING, Any
 from .._utils._display_bounded import short_dataclass_repr
 from .._utils._display_keys import display_key
 from .._utils._display_numbers import plural
-from .._utils._record_group_table import record_member
 from ._factcore import factcore
 from ._summary_columns import (
     ATTENTION_FULL_SQUARE_FUNCS,
@@ -402,7 +401,7 @@ def _module_facts(
     """Build the module-fact table, including declared-unexecuted modules."""
 
     facts: dict[str, _ModuleFact] = {}
-    root_address = str(record_member(getattr(trace, "root_module", None), "address", "self"))
+    root_address = str(getattr(getattr(trace, "root_module", None), "address", "self"))
     for record in getattr(trace, "modules", ()) or ():
         for address in getattr(record, "all_addresses", None) or [record.address]:
             address = str(address)

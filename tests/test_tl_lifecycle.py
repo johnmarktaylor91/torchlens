@@ -20,7 +20,7 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
 from torchlens.errors import TraceCaptureError
-from torchlens.intervention._runtime import _copy_tl_replacement_attrs
+from torchlens.intervention._runtime_hook_copy import _copy_tl_replacement_attrs
 from torchlens.options import CaptureOptions
 from torchlens.types import PartialTrace
 

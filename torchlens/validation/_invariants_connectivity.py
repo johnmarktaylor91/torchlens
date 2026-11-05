@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Literal
 
+from ._invariants_distance_messages import _distance_order_message
 from ._invariants_parentless import (
     _consumed_unattributed_data_operand,
     _op_follows_recorded_backward_trigger,
@@ -56,28 +57,14 @@ def _check_distance_invariants(ml: Trace) -> None:
         label = lpl.layer_label
 
         # min <= max for input distances
-        if (
-            lpl.graph.min_distance_from_input is not None
-            and lpl.graph.max_distance_from_input is not None
-        ):
-            if lpl.graph.min_distance_from_input > lpl.graph.max_distance_from_input:
-                raise MetadataInvariantError(
-                    name,
-                    f"Layer '{label}': min_distance_from_input="
-                    f"{lpl.graph.min_distance_from_input} > max={lpl.graph.max_distance_from_input}",
-                )
+        message = _distance_order_message(label, lpl.graph, toward_output=False)
+        if message is not None:
+            raise MetadataInvariantError(name, message)
 
         # min <= max for output distances
-        if (
-            lpl.graph.min_distance_to_output is not None
-            and lpl.graph.max_distance_to_output is not None
-        ):
-            if lpl.graph.min_distance_to_output > lpl.graph.max_distance_to_output:
-                raise MetadataInvariantError(
-                    name,
-                    f"Layer '{label}': min_distance_to_output="
-                    f"{lpl.graph.min_distance_to_output} > max={lpl.graph.max_distance_to_output}",
-                )
+        message = _distance_order_message(label, lpl.graph, toward_output=True)
+        if message is not None:
+            raise MetadataInvariantError(name, message)
 
         # Input layers: distance from input == 0
         if label in input_set:

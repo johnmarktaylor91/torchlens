@@ -15,7 +15,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._io._durability import fsync_dir, fsync_tree
+from .._io._durability import fsync_tree
 from .._io._json import read_bounded
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
@@ -28,7 +28,6 @@ from .._io.format3.recipe import (
 from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
 from .._io.format_contract import below_floor_error
 from .._io.format_errors import ArtifactError
-from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._selection.resolver import _resolve_sites
@@ -39,6 +38,7 @@ from ..intervention._resolver_registry import (
 )
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_predicate import spec_from_recipe
+from ._save_fs_guards import _fsync_directory, _reject_symlink_path
 from ._spec_codec import _target_spec_to_json, _validate_format_version
 from ._spec_compat import (
     SpecCompat,
@@ -64,19 +64,6 @@ from .errors import (
     SiteResolutionError,
     UntrustedCallableError,
 )
-
-
-def _reject_symlink_path(path: Path, *, context: str) -> None:
-    """Reject symlink paths using the intervention replay error contract."""
-
-    reject_symlink_path(
-        path,
-        context=context,
-        exc_type=ReplayPreconditionError,
-        message_prefix="Refusing to use symlink",
-        trailing_period=False,
-    )
-
 
 _MANIFEST_FILE = "manifest.json"
 #: The 2.x spec document; its presence without ``intervention.json`` marks a 2.x spec.
@@ -753,7 +740,7 @@ def _function_key_for_layer(layer: Any) -> FunctionRegistryKey | None:
     """
 
     template = record_member(layer, "args_template", None)
-    key = record_member(template, "func_id", None)
+    key = getattr(template, "func_id", None)
     if isinstance(key, FunctionRegistryKey):
         return key
     func = getattr(layer, "func", None)
@@ -836,21 +823,6 @@ def _read_json_file(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ReplayPreconditionError(f"{path} must contain a JSON object")
     return data
-
-
-def _fsync_directory(path: Path) -> None:
-    """Fsync a directory when the platform allows it.
-
-    Failures propagate where directory handles exist; Windows has none and is
-    skipped (``fsync_dir(strict=True)``).
-
-    Parameters
-    ----------
-    path:
-        Directory path.
-    """
-
-    fsync_dir(path, strict=True)
 
 
 __all__ = [

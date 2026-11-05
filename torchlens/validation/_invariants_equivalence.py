@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
 from .._utils._record_group_table import record_member
+from ._invariants_equivalence_index import (
+    _equivalence_key_by_op_label,
+    _expected_equivalence_group,
+    _param_barcode_groups,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -151,16 +155,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     verified_keepalive: list[object] = []
     group_by_member, key_by_member = _equivalence_members(ml)
     for op in ml._layer_list:
-        equivalence_class = record_member(op, "equivalence_class", None)
-        expected_group = None
-        if isinstance(equivalence_class, str):
-            member_key = key_by_member.get(op.label)
-            if isinstance(member_key, str) and equivalence_class.startswith(member_key):
-                expected_group = group_by_member[op.label]
-            else:
-                expected_group = ml._graph_op_equivalence_classes.get(equivalence_class)
-        if expected_group is None:
-            expected_group = group_by_member.get(op.label)
+        expected_group = _expected_equivalence_group(ml, op, group_by_member, key_by_member)
         canonical = _canonical_equivalent_ops(op)
         op_pair_key: tuple[int, int] | None = None
         if canonical is not _EQUIVALENT_OPS_UNAVAILABLE:
@@ -584,11 +579,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # from being collapsed into one logical layer.
     # Under callsite_v1 call-site contract (ii) replaces it (shared weights are
     # not evidence, rows 18, 19, 25, 59); see the docstring.
-    param_groups: dict[tuple[str, tuple[str, ...], str], list[Op]] = defaultdict(list)
-    for lpl in [] if call_site_grouped else ml._layer_list:
-        if lpl.has_params and lpl._param_barcodes:
-            key = (lpl.func_name, tuple(sorted(lpl._param_barcodes)), lpl.graph.equivalence_class)
-            param_groups[key].append(lpl)
+    param_groups = _param_barcode_groups(ml, call_site_grouped)
 
     for param_key, layers in param_groups.items():
         if len(layers) > 1:
@@ -606,10 +597,7 @@ def _check_loop_detection_invariants(ml: Trace) -> None:
     # (from loop_detection), while per-layer equivalence_class has
     # a module suffix appended by control_flow.py. So we check group membership
     # consistency, not exact key matching.
-    op_label_to_equiv_key: dict[str, str] = {}
-    for eq_type, equiv_set in ml._graph_op_equivalence_classes.items():
-        for label in equiv_set:
-            op_label_to_equiv_key[label] = eq_type
+    op_label_to_equiv_key = _equivalence_key_by_op_label(ml)
 
     for group_key in groups_seen:
         slo = list(group_key)

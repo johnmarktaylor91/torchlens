@@ -124,7 +124,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # validation/_replay_live_params.py and cohesive helper groups moved to
     # sibling modules; re-keyed to the next 50-line step above the
     # merged-tree measurement 3795.
-    "torchlens/validation/_core.py": 3800,
+    "torchlens/validation/_core.py": 3700,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -429,7 +429,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     "torchlens/_visualization/auto_collapse.py": 2150,
     # 2850 -> 2650: the bool influence probes moved to validation/_influence_probes.py
     # (2615 measured); the ceiling follows down.
-    "torchlens/validation/_exemptions.py": 2650,
+    "torchlens/validation/_exemptions.py": 2550,
     # 2700 -> 2800 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
     # conditional relabel epilogue plus intervention/halt predicate
@@ -461,7 +461,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # Re-keyed down 2300 -> 2200 (r7 R43-F2 slack rule): the branch-label text
     # helpers moved to _branch_label_text.py; measured 2198.
     "torchlens/_visualization/_render_leaf.py": 2200,
-    "torchlens/debug/_infer_input_shape.py": 2250,
+    "torchlens/debug/_infer_input_shape.py": 2100,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,
     "torchlens/_visualization/_render_flow.py": 2100,
