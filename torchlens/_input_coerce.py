@@ -8,7 +8,7 @@ from typing import Any
 
 from ._errors import ArgumentTypeError, InvalidArgumentError
 from ._input_route import _apply_hf_processor, _owner_of, _route_claims, _route_input, _RoutedInputs
-from ._options_removed import REMOVED_CAPTURE_MEMBERS
+from ._utils.arg_handling import rebuild_tuple_like
 
 # Hugging Face processor keyword spellings a modality dict is keyed by
 # (``processor(text=..., images=..., audio=..., videos=...)``).
@@ -105,59 +105,6 @@ def _coerce_array_like(model: Any, x: Any) -> Any:
         pass
 
     return x
-
-
-def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
-    """Refuse unknown ``trace()`` keywords with a typed routing remedy.
-
-    Typed recovery on the natural HF spelling (agent memo 3.10 item 5):
-    ``tl.trace(model, input_ids=...)`` used to die with a bare CPython
-    TypeError. Unknown keywords are NEVER silently absorbed as forward
-    kwargs (a typo'd option must not become a model input); the refusal
-    names both working spellings instead.
-
-    Parameters
-    ----------
-    forward_kwargs:
-        The unknown keyword arguments ``trace()`` collected. Empty means
-        nothing to refuse and the function returns silently.
-
-    Raises
-    ------
-    ArgumentTypeError
-        With code ``trace_forward_kwargs_unrouted`` when any unknown
-        keyword is present.
-    """
-
-    if not forward_kwargs:
-        return
-
-    unknown = ", ".join(sorted(forward_kwargs))
-    removed = [key for key in sorted(forward_kwargs) if key in REMOVED_CAPTURE_MEMBERS]
-    if removed:
-        # A removed capture option is never a model input: name its replacement.
-        message = f"trace() got removed capture option keyword(s): {', '.join(removed)}" + (
-            f" (and unrouted keyword(s): {unknown})" if len(removed) < len(forward_kwargs) else ""
-        )
-        remedy = "; ".join(f"{key}: {REMOVED_CAPTURE_MEMBERS[key]}" for key in removed)
-    else:
-        message = (
-            f"trace() got model-input keyword(s) it does not route: {unknown}. "
-            "Forward keyword arguments travel through input_kwargs="
-        )
-        remedy = (
-            "pass them as tl.trace(model, (), input_kwargs={"
-            + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
-            + "}); for HuggingFace text models, "
-            "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
-            "inputs for you"
-        )
-    raise ArgumentTypeError(
-        message,
-        code="trace_forward_kwargs_unrouted",
-        remedy=remedy,
-        unrouted_keywords=sorted(forward_kwargs),
-    )
 
 
 def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
@@ -270,8 +217,6 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         arg_type = type(input_args)
         if arg_type is tuple:
             return tuple(coerced_items)
-        from ._utils.arg_handling import rebuild_tuple_like
-
         rebuilt = rebuild_tuple_like(arg_type, coerced_items)
         if rebuilt is not None:
             return rebuilt
