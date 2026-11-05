@@ -201,25 +201,56 @@ def ramp_row_html(
         f'<TD FIXEDSIZE="TRUE" WIDTH="{width}" HEIGHT="{height}" BGCOLOR="{fill}"></TD>'
         for fill in row.ramp
     )
-    bar_width = width * len(row.ramp) + 2  # plus the 1 pt outline each side
+    bar_width = _bar_width(row)
     bar = (
         f'<TD FIXEDSIZE="TRUE" WIDTH="{bar_width}" HEIGHT="{height + 2}">'
         f'<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="0" '
         f'COLOR="{border_color}"><TR>{segments}</TR></TABLE></TD>'
     )
     texts = (row.text, row.hint or "")
-    # Graphviz takes whole points for WIDTH and HEIGHT.
-    widths = [math.ceil(text_width(text) * 1.06 + 2.0) for text in texts]
-    row_height = max(height + 2, math.ceil(float(size) * 1.25))
+    widths = _label_widths(row, text_width)
+    row_height = _row_height(size)
     cells = [
         f'<TD FIXEDSIZE="TRUE" WIDTH="{cell_width}" HEIGHT="{row_height}" ALIGN="LEFT">'
         f'<FONT POINT-SIZE="{size}" COLOR="{font_color}">{html_escape(text)}</FONT></TD>'
         for text, cell_width in zip(texts, widths, strict=True)
     ]
-    table_width = sum(widths) + bar_width + _ROW_SPACING * 4
+    table_width, table_height = ramp_row_extent(row, size, text_width)
     return (
         f'<TR><TD COLSPAN="2" ALIGN="LEFT"><TABLE BORDER="0" CELLBORDER="0" '
         f'CELLSPACING="{_ROW_SPACING}" CELLPADDING="0" FIXEDSIZE="TRUE" ALIGN="LEFT" '
-        f'WIDTH="{table_width}" HEIGHT="{row_height + 2 * _ROW_SPACING}">'
+        f'WIDTH="{table_width}" HEIGHT="{table_height}">'
         f"<TR>{cells[0]}{bar}{cells[1]}</TR></TABLE></TD></TR>"
     )
+
+
+def ramp_row_extent(
+    row: LegendRow, size: str, text_width: Callable[[str], float]
+) -> tuple[int, int]:
+    """Return the colour-bar row's fixed table width and height, in whole points.
+
+    The key table that holds the row is sized from this extent so it can be
+    fixed to its content too (``build_legend_table_label(fit=True)``).
+    """
+
+    widths = _label_widths(row, text_width)
+    width = sum(widths) + _bar_width(row) + _ROW_SPACING * 4
+    return width, _row_height(size) + 2 * _ROW_SPACING
+
+
+def _bar_width(row: LegendRow) -> int:
+    """Return the colour bar's width: its segments plus the 1 pt outline each side."""
+
+    return KEY_BAR_SEGMENT_PT[0] * len(row.ramp) + 2
+
+
+def _label_widths(row: LegendRow, text_width: Callable[[str], float]) -> list[int]:
+    """Return the low and high label cells' widths (Graphviz takes whole points)."""
+
+    return [math.ceil(text_width(text) * 1.06 + 2.0) for text in (row.text, row.hint or "")]
+
+
+def _row_height(size: str) -> int:
+    """Return the colour-bar row's cell height for text of point size ``size``."""
+
+    return max(KEY_BAR_SEGMENT_PT[1] + 2, math.ceil(float(size) * 1.25))
