@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1626 modules, 684284 lines, 0 modules without a docstring.
+85 packages, 1626 modules, 684293 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._plots` | Pixel plotting helpers (PIL, numpy) shared by the reads packages and ''viz''. | 3 | 2120 |
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 40 | 18532 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
-| `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
+| `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 556 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 20 | 14991 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10570 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 14 | 7264 |
@@ -73,7 +73,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.errors` | Public TorchLens exception classes. | 6 | 1474 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2034 |
-| `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 370 |
+| `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 372 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5534 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 80 | 38043 |
@@ -756,12 +756,12 @@ TorchLens quickstart: one input ladder, one provenance record, one render door. 
 
 ### `torchlens._registry`
 
-Private registry kernel package (architecture ; never public API). (3 modules, 549 lines)
+Private registry kernel package (architecture ; never public API). (3 modules, 556 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Private registry kernel package (architecture ; never public API). | 35 |
-| `_facet_snapshot` | Facet-snapshot slot: the engine asks for a trace's recipe snapshot without importing facets. | 76 |
+| `_facet_snapshot` | Facet-snapshot slot: the engine asks for a trace's recipe snapshot without importing facets. | 83 |
 | `kernel` | The ONE private registry kernel behind every typed public domain door. | 438 |
 
 ### `torchlens._runnable`
@@ -1726,11 +1726,11 @@ torchlens.experiment: multi-run experiments as first-class objects. (5 modules, 
 
 ### `torchlens.experimental`
 
-Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 370 lines)
+Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 372 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Experimental TorchLens APIs with unstable naming and behavior. | 363 |
+| `__init__` | Experimental TorchLens APIs with unstable naming and behavior. | 365 |
 | `node_styles` | Experimental domain-specific visualization node-style recipes. | 7 |
 
 ### `torchlens.export`
