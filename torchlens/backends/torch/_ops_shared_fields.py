@@ -1,6 +1,6 @@
 """Shared operation fields and tensor variation tracking."""
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -241,34 +241,6 @@ def _rebound_buffer_receiver_label(
     return label
 
 
-def _log_unlabeled_arg_sources(
-    self: "Trace",
-    func_name: str,
-    args: tuple[Any, ...],
-    tensors_to_resolve: Iterable[torch.Tensor],
-) -> None:
-    """Source-log each unlabeled argument as a buffer or closure constant."""
-
-    for tensor in tensors_to_resolve:
-        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
-            continue
-        rebound_label = _rebound_buffer_receiver_label(self, func_name, args, tensor)
-        if rebound_label is not None:
-            # Re-pin the receiver's own pre-call label to the storage this call bound.
-            set_tensor_label(tensor, rebound_label)
-            continue
-        # r81: never source-log a "buffer" off the raw static stamp -- a stale
-        # cross-capture stamp (F1) or a legitimately stamped receiver whose
-        # storage was rebound to input data mid-forward (F2) would re-root an
-        # input-derived value as internal state. The session belt validates
-        # object + storage identity; the tracker fallback is storage-anchored.
-        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
-        if buffer_address is not None:
-            log_source_tensor(self, tensor, "buffer", buffer_address)
-        else:
-            log_closure_constant_if_known(self, tensor)
-
-
 def _build_shared_fields_dict(
     self: "Trace",
     func: Callable[..., Any],
@@ -297,7 +269,27 @@ def _build_shared_fields_dict(
     # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
     arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
-    _log_unlabeled_arg_sources(self, func_name, args, tensors_to_resolve)
+    # Inline, not a helper: this loop runs once per op (the per-op call pins in
+    # tests/test_capture_row_commit_cost.py count every call into TorchLens).
+    for tensor in tensors_to_resolve:
+        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+            continue
+        if func_name in _RECEIVER_REBIND_NAMES:
+            rebound_label = _rebound_buffer_receiver_label(self, func_name, args, tensor)
+            if rebound_label is not None:
+                # Re-pin the receiver's own pre-call label to the storage this call bound.
+                set_tensor_label(tensor, rebound_label)
+                continue
+        # r81: never source-log a "buffer" off the raw static stamp -- a stale
+        # cross-capture stamp (F1) or a legitimately stamped receiver whose
+        # storage was rebound to input data mid-forward (F2) would re-root an
+        # input-derived value as internal state. The session belt validates
+        # object + storage identity; the tracker fallback is storage-anchored.
+        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
+        if buffer_address is not None:
+            log_source_tensor(self, tensor, "buffer", buffer_address)
+        else:
+            log_closure_constant_if_known(self, tensor)
 
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
@@ -424,7 +416,8 @@ def _tag_tensor_and_track_variations(
     fields_dict_onetensor: dict[str, Any],
     arg_copies: tuple[Any, ...],
     kwarg_copies: dict[str, Any],
-    live_args: tuple[tuple[Any, ...], dict[str, Any]],
+    live_args: tuple[Any, ...],
+    live_kwargs: dict[str, Any],
 ) -> None:
     """Tag the output tensor with its label, add backward hook, and track parent content variations.
 
@@ -432,7 +425,7 @@ def _tag_tensor_and_track_variations(
     tensor's value at function-call time (from arg_copies) differs from its
     saved out, the pre-mutation value is recorded in
     ``out_versions_by_child``.  This is critical for validation replay,
-    which needs the actual input values each child operation saw; ``live_args`` feed its marks.
+    which needs the actual input values each child operation saw; ``live_args`` and ``live_kwargs`` feed its foreign-write marks.
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
@@ -475,7 +468,12 @@ def _tag_tensor_and_track_variations(
             )
             if not parent_label_has_alias_contract(parent_label, positions, contract_positions):
                 note_foreign_written_snapshot(
-                    self, parent_label, new_layer_entry._label_raw, positions, live_args
+                    self,
+                    parent_label,
+                    new_layer_entry._label_raw,
+                    positions,
+                    live_args,
+                    live_kwargs,
                 )
 
 

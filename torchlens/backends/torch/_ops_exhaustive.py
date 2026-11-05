@@ -316,7 +316,8 @@ def _emit_exhaustive_operation_events(
             fields_dict_onetensor,
             arg_copies,
             kwarg_copies,
-            (args, kwargs),
+            args,
+            kwargs,
         )
         # Round-31 H1: the member entry was logged against a minted safe copy (pass-through
         # protection), but for a list-returning in-place op the LIVE member is the mutated
