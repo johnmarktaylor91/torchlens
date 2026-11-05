@@ -131,7 +131,7 @@ def test_color_by_moves_the_endpoint_roles_to_rings(mlp_log: tl.Trace, tmp_path:
 def test_color_by_key_lists_the_endpoints_as_rings(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """The drawn key names input and output, and its entries are the rings."""
 
-    dot = _draw(mlp_log, tmp_path, color_by="bytes")
+    dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
     header = _header(dot)
     assert ">input<" in header and ">output<" in header
     theme = resolve_theme("torchlens")
