@@ -80,6 +80,14 @@ class _CsrModel(nn.Module):
         return gathered * 2.0
 
 
+class _IntegerSourceModel(nn.Module):
+    """Integer rows (per-node ids) gathered into segments: the source slot is plain data."""
+
+    def forward(self, ids: torch.Tensor, counts: torch.Tensor) -> torch.Tensor:
+        indptr = torch.cat([counts.new_zeros(1), counts.cumsum(0)])
+        return torch.ops.tltest_native_index.gather_csr(ids * 3, indptr) + 1
+
+
 class _TakeRowsModel(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -126,6 +134,17 @@ def test_live_csr_pointer_edge_validates_in_domain() -> None:
     counts = torch.tensor([2, 1, 3, 1, 2, 3])
     x = torch.randn(counts.numel(), 4)
     assert _validate(_CsrModel(), (x, counts)), last_validation_failure()
+    assert _POINTER_VIOLATIONS == []
+
+
+@pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
+def test_integer_source_slot_keeps_generic_draw() -> None:
+    """An integer value slot of a registered operator is perturbed as usual and validates."""
+
+    _POINTER_VIOLATIONS.clear()
+    counts = torch.tensor([2, 1, 3, 1, 2, 3])
+    ids = torch.arange(counts.numel())
+    assert _validate(_IntegerSourceModel(), (ids, counts)), last_validation_failure()
     assert _POINTER_VIOLATIONS == []
 
 

@@ -10,9 +10,10 @@ be able to crash the user's process.
 
 The rule: when the perturbed parent is an integer tensor in an argument slot of a native
 extension operator, its perturbed value comes only from this module. A registered slot gets
-an in-domain value (:func:`csr_pointer_shift_values` or :func:`index_left_shift_values`);
-any other integer slot of such an operator gets none, and the caller records the edge
-``unverified`` with :data:`UNCHECKED_NATIVE_INDEX_REASON` instead of running the kernel. The
+an in-domain value (:func:`csr_pointer_shift_values` or :func:`index_left_shift_values`), a
+slot the kernel reads only as data keeps the generic draw, and any other integer slot of such
+an operator gets none: the caller records the edge ``unverified`` with
+:data:`UNCHECKED_NATIVE_INDEX_REASON` instead of running the kernel. The
 perturbation check itself is unchanged: an in-domain value still has to move the replayed
 output, so a dead edge still fails. Bounds-checked ``aten``/``prims`` operators are untouched.
 """
@@ -115,41 +116,46 @@ _Builder = Callable[[torch.Tensor, bool], torch.Tensor | None]
 
 _CSR = csr_pointer_shift_values
 _INDEX = index_left_shift_values
+_VALUE = "value"
+"""Slot marker: the kernel copies or reduces the slot's values as data, or its forward never
+reads the slot (torch_sparse saves those for backward), so no draw can address memory and
+the generic perturbation runs unchanged."""
 
+_SCATTER_CSR = {0: _VALUE, 1: _CSR, 2: _VALUE}
+_SCATTER_COO = {0: _VALUE, 1: _INDEX, 2: _VALUE}
 
-_NATIVE_INDEX_SLOTS: dict[str, dict[int, _Builder]] = {
-    # torch_scatter CSR family: (src, indptr, out); indptr is a CSR pointer over src.
+_NATIVE_INDEX_SLOTS: dict[str, dict[int, _Builder | str]] = {
+    # torch_scatter CSR family (src, indptr, out): indptr is a CSR pointer over src.
     **dict.fromkeys(
-        (
-            "gather_csr",
-            "segment_sum_csr",
-            "segment_mean_csr",
-            "segment_min_csr",
-            "segment_max_csr",
-        ),
-        {1: _CSR},
+        ("gather_csr", "segment_sum_csr", "segment_mean_csr", "segment_min_csr"),
+        _SCATTER_CSR,
     ),
-    # torch_scatter COO family: (src, index, out[, dim_size]); index sorted, in range.
+    "segment_max_csr": _SCATTER_CSR,
+    # torch_scatter COO family (src, index, out[, dim_size]): index sorted, in range.
     **dict.fromkeys(
-        (
-            "gather_coo",
-            "segment_sum_coo",
-            "segment_mean_coo",
-            "segment_min_coo",
-            "segment_max_coo",
-        ),
-        {1: _INDEX},
+        ("gather_coo", "segment_sum_coo", "segment_mean_coo", "segment_min_coo"),
+        _SCATTER_COO,
     ),
+    "segment_max_coo": _SCATTER_COO,
     # torch_scatter (src, index, dim, out, dim_size): index entries address the output dim.
-    **dict.fromkeys(("scatter_mul", "scatter_min", "scatter_max"), {1: _INDEX}),
-    # torch_sparse spmm: (row, rowptr, col, value, colptr, csr2csc, mat) and the mean form
-    # with rowcount; the min/max forms are (rowptr, col, value, mat). rowptr is a CSR
-    # pointer over the edges, col indexes rows of mat. The remaining integer slots (row,
-    # rowcount, colptr, csr2csc) have no proven in-domain move and fail closed.
-    **dict.fromkeys(("spmm_sum", "spmm_mean"), {1: _CSR, 2: _INDEX}),
-    **dict.fromkeys(("spmm_min", "spmm_max"), {0: _CSR, 1: _INDEX}),
+    **dict.fromkeys(
+        ("scatter_mul", "scatter_min", "scatter_max"), {0: _VALUE, 1: _INDEX, 3: _VALUE}
+    ),
+    # torch_sparse spmm_sum (row, rowptr, col, value, colptr, csr2csc, mat) and spmm_mean
+    # (row, rowptr, col, value, rowcount, colptr, csr2csc, mat): the forward kernel reads
+    # rowptr (a CSR pointer over the edges), col (rows of mat), value and mat; row,
+    # rowcount, colptr and csr2csc are saved for backward only. spmm_min/spmm_max are
+    # (rowptr, col, value, mat).
+    "spmm_sum": {0: _VALUE, 1: _CSR, 2: _INDEX, 3: _VALUE, 4: _VALUE, 5: _VALUE, 6: _VALUE},
+    "spmm_mean": {
+        **dict.fromkeys((0, 3, 4, 5, 6, 7), _VALUE),
+        1: _CSR,
+        2: _INDEX,
+    },
+    **dict.fromkeys(("spmm_min", "spmm_max"), {0: _CSR, 1: _INDEX, 2: _VALUE, 3: _VALUE}),
 }
-"""Recorded operator name -> {positional slot: in-domain builder} for native index slots."""
+"""Recorded operator name -> {positional slot: in-domain builder or ``_VALUE``}. An integer
+slot with no entry has no proven-safe perturbation and fails closed."""
 
 
 @dataclass(frozen=True)
@@ -213,8 +219,9 @@ def native_index_perturbation(
     Returns
     -------
     NativeIndexPerturbation or None
-        ``None`` when the rule does not apply (not an integer tensor, or not a native
-        extension operator), so the generic perturbation runs. Otherwise the in-domain
+        ``None`` when the rule does not apply (not an integer tensor, not a native
+        extension operator, or a slot the table marks ``_VALUE``), so the generic
+        perturbation runs. Otherwise the in-domain
         value for a registered slot (the alternate move on the first retry rung), or a
         result with ``values=None`` when no proven-safe value exists.
     """
@@ -225,7 +232,9 @@ def native_index_perturbation(
     if name is None:
         return None
     builder = _NATIVE_INDEX_SLOTS.get(name, {}).get(key) if arg_type == "args" else None
-    if builder is None or parent_values.is_sparse:
+    if builder == _VALUE:
+        return None
+    if builder is None or isinstance(builder, str) or parent_values.is_sparse:
         return NativeIndexPerturbation(None)
     if perturb_strategy == _DEFAULT_STRATEGY:
         return NativeIndexPerturbation(builder(parent_values, False))
