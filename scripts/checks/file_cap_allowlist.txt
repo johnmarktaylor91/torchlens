@@ -337,7 +337,7 @@ torchlens/_postprocess/ast_branches.py	2214
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
 torchlens/_postprocess/ast_branches.py::get_file_index	91
-torchlens/_postprocess/control_flow.py	1278
+torchlens/_postprocess/control_flow.py	1140
 torchlens/_postprocess/control_flow.py::_classify_bool_layers	95
 torchlens/_postprocess/control_flow.py::_fix_buffer_layers	82
 torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
@@ -353,9 +353,9 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	68
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	79
-torchlens/_postprocess/graph_traversal.py	903
+torchlens/_postprocess/graph_traversal.py	874
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	293
-torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	90
+torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	70
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
 torchlens/_postprocess/labeling.py	935
 torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	118

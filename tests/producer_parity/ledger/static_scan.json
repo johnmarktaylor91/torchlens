@@ -3144,6 +3144,22 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "is_scalar_bool",
+  "file": "torchlens/_postprocess/_column_passes_graph.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_postprocess/_column_passes_graph.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_postprocess/_conditional_records.py",
@@ -3524,7 +3540,7 @@
   "field": "parents",
   "file": "torchlens/_postprocess/control_flow.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 8,
   "via_getattr": false
  },
  {
@@ -3600,14 +3616,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "is_scalar_bool",
-  "file": "torchlens/_postprocess/graph_traversal.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_postprocess/graph_traversal.py",
@@ -3638,14 +3646,6 @@
   "has_default": true,
   "sites": 2,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_postprocess/graph_traversal.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
