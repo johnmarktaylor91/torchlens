@@ -33,7 +33,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _runnable | 9 | 0 |
 | _save_budget | 1 | 0 |
 | _selection | 53 | 0 |
-| _semantic | 24 | 0 |
+| _semantic | 27 | 0 |
 | _snoop | 3 | 0 |
 | _state | 1 | 0 |
 | _trace_slice | 1 | 0 |
@@ -65,6 +65,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | intervention | 94 | 0 |
 | inventory | 5 | 0 |
 | io | 7 | 0 |
+| mechinterp | 51 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
 | options | 6 | 0 |
@@ -73,12 +74,12 @@ and how many lack a runnable `Examples` section. Regenerate with
 | recording | 21 | 0 |
 | repgeom | 20 | 0 |
 | report | 45 | 0 |
-| stats | 25 | 0 |
+| stats | 27 | 0 |
 | trackers | 42 | 0 |
 | transformer | 39 | 0 |
 | transforms | 37 | 0 |
 | validation | 10 | 0 |
 | viz | 11 | 0 |
-| **total** | **1023** | **0** |
+| **total** | **1079** | **0** |
 
-Public callable members of those classes (methods and properties): 1611.
+Public callable members of those classes (methods and properties): 1661.
