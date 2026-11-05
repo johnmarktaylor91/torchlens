@@ -251,6 +251,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG"),
     _row("HAS_VARIABLE_FUNCTIONS"),
     _row("HAS_VARIABLE_FUNCTIONS_CLASS"),
+    _row("HAS_VIEW_FUNC_UNSAFE", absent_on=("2.1.2",)),
 )
 
 CAPABILITY_ROWS: dict[str, CapabilityRow] = {row.flag: row for row in _ROWS}

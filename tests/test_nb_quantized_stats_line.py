@@ -9,6 +9,7 @@ prints the line: ``glance``, the record repr and the notebook card.
 from __future__ import annotations
 
 import torch
+from support.fp8_guard import permit_cpu_float8_allocation
 from torch import nn
 
 import torchlens as tl
@@ -21,8 +22,9 @@ TOKEN = "quantized: stats not computed"
 def test_other_unsupported_dtypes_keep_their_reason() -> None:
     """Only quantized payloads change; other unsupported dtypes say why."""
 
-    fp8 = torch.zeros(4).to(torch.float8_e4m3fn)
-    line = glance(fp8)
+    with permit_cpu_float8_allocation():
+        fp8 = torch.zeros(4).to(torch.float8_e4m3fn)
+        line = glance(fp8)
     assert "unsupported dtype torch.float8_e4m3fn" in line
     assert TOKEN not in line
 
