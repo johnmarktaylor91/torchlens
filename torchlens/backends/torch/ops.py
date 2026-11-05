@@ -400,10 +400,11 @@ active label session; writes go through :func:`_record_label_version_snapshot`.
 _VIEW_MUTATION_RELABELS: WeakIdKeyDictionary = WeakIdKeyDictionary()
 """Storage aliases whose label advanced because an in-place op wrote through a view.
 
-Entries are ``(label_session_token, prior_label, mutation_label, id(view))``, written by
-:func:`_record_label_version_snapshot` (``mutated_via=``) and read by
-:func:`_bind_writeback_receiver_label`, which honours an entry only in its own label
-session, only while the alias still carries ``mutation_label`` and only for that view.
+Entries are ``(label_session_token, prior_label, mutation_label, id(view), previous)``,
+written by :func:`_record_label_version_snapshot` (``mutated_via=``); ``previous`` is the
+alias's earlier entry when that advance produced ``prior_label`` in the same session, else
+``None``. Read by :func:`_resolve_call_alias_labels`, which honours an entry only in its own
+label session and only while the alias still carries ``mutation_label``.
 Capture-transient, kept off the Trace field schema, dropped on tensor GC.
 """
 
