@@ -17,11 +17,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._data_classes.module import Module
 from .._utils._multipass_access import get_multipass_attr
-from .._visualization._render_names import _SPEC_SLOT_BOX_OPS, _SPEC_SLOT_RENDERED_NODE
+from .._utils._render_slots import _SPEC_SLOT_BOX_OPS, _SPEC_SLOT_RENDERED_NODE
 
 __tl_layer__ = "L6"
+
+#: Where the Module record class is defined. Identified by name and module
+#: along the MRO (as ``_utils._record_group_table`` does for Op and Layer), so
+#: this L6 module never imports the record layer, which reaches the renderer.
+_MODULE_RECORD = ("Module", "torchlens._data_classes.module")
+
+
+def _is_module_record(node: Any) -> bool:
+    """Return whether ``node`` is a ``Module`` record (or a subclass of one)."""
+
+    return any((klass.__name__, klass.__module__) == _MODULE_RECORD for klass in type(node).__mro__)
 
 
 def node_source_trace(node: Any) -> Any | None:
@@ -38,7 +48,7 @@ def node_source_trace(node: Any) -> Any | None:
         Owning Trace, or ``None`` when it is gone or unknown.
     """
 
-    if isinstance(node, Module):
+    if _is_module_record(node):
         return node.trace
     return getattr(node, "source_trace", None)
 
@@ -59,7 +69,7 @@ def node_caption(node: Any, key: str) -> str:
         Module address for a collapsed box, else the layer (or op) label.
     """
 
-    if isinstance(node, Module):
+    if _is_module_record(node):
         return str(node.address)
     layer_label = get_multipass_attr(node, "layer_label", None, multipass=None)
     if layer_label is not None:
@@ -84,7 +94,7 @@ def node_shape(node: Any, spec: Any) -> str:
         else ``"box"``.
     """
 
-    if isinstance(node, Module):
+    if _is_module_record(node):
         return str(spec.shape or "box3d")
     return "box"
 
@@ -103,7 +113,7 @@ def annotation_key_candidates(node: Any) -> list[str]:
         Unique ``op:`` / ``layer:`` keys without the blob-kind prefix.
     """
 
-    if isinstance(node, Module):
+    if _is_module_record(node):
         return _unique(_module_box_candidates(node))
     candidates: list[str] = []
     rendered = _SPEC_SLOT_RENDERED_NODE.get()
@@ -136,7 +146,7 @@ def _same_layer(rendered: Any, node: Any) -> bool:
     return rendered_layer is not None and rendered_layer == node_layer
 
 
-def _module_box_candidates(module: Module) -> list[str]:
+def _module_box_candidates(module: Any) -> list[str]:
     """Return the keys stored on the output ops of the one call a box draws.
 
     A box drawing several calls (a rolled multi-call module) has no single
