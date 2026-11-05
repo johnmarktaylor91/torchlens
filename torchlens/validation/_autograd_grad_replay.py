@@ -399,7 +399,7 @@ class _SubgraphReplay:
                 layout = slot_capture_layout(op, arg_domain, key)
                 key_path = key if isinstance(key, tuple) else (key,)
                 saved = _read_path(input_args[arg_domain], key_path)
-                replayed = self._written_alias(op, parent_label, replayed, (saved, layout))
+                replayed = self._written_alias(parent_label, replayed, (saved, layout))
                 if is_inplace and replayed.is_leaf:
                     # An in-place op on a replay leaf would raise (and corrupt the
                     # leaf). Every other receiver is written in place, as capture
@@ -414,7 +414,6 @@ class _SubgraphReplay:
 
     def _written_alias(
         self,
-        op: Op,
         parent_label: str,
         replayed: torch.Tensor,
         slot: tuple[Any, CaptureLayout | None],
@@ -428,10 +427,11 @@ class _SubgraphReplay:
         the shape read) and its recorded layout (``None`` for a row-major contiguous
         read). The replay writes in place as capture did, so the alias the slot read
         is a replayed tensor on the same storage with that geometry, searched along
-        the in-place op's receiver lineage first (``replayed_storage_alias``). An alias the replay never built (a sibling view read
-        only after the write) is rebuilt on the written storage when its full layout
-        was recorded and the written view sits where capture's did. Any other read
-        of another shape cannot be replayed.
+        the in-place op's receiver lineage first (``replayed_storage_alias``). An
+        alias the replay never built (a sibling view read only after the write) is
+        rebuilt on the written storage when its full layout was recorded and the
+        written view sits where capture's did. Otherwise the parent's output stands,
+        so a read of another shape fails the replay.
         """
 
         saved, layout = slot
@@ -453,11 +453,8 @@ class _SubgraphReplay:
                 # of the tensor it is called on, and the written view covers fewer.
                 base = replayed._base if replayed._base is not None else replayed
                 return base.as_strided(*layout)
-        if tuple(replayed.shape) != shape:
-            raise AutogradGradReplayError(
-                f"subgraph op {op.label!r} reads a storage alias written by "
-                f"{parent.label!r} that the replay cannot locate"
-            )
+        # No alias found: the parent's own output stands, and a read of another
+        # shape then fails the replay (shape error or the root value check).
         return replayed
 
     def _receiver_lineage(self, op: Op) -> list[str]:
