@@ -2767,6 +2767,7 @@ docs-md	docs/maintainers/where.md	1121
 docs-md	docs/maintainers/where.md	113
 docs-md	docs/maintainers/where.md	1136
 docs-md	docs/maintainers/where.md	114
+docs-md	docs/maintainers/where.md	1140
 docs-md	docs/maintainers/where.md	115
 docs-md	docs/maintainers/where.md	1152
 docs-md	docs/maintainers/where.md	1153
@@ -6364,6 +6365,8 @@ package-docstrings	torchlens/_postprocess/__init__.py	20
 package-docstrings	torchlens/_postprocess/__init__.py	20,
 package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_buffer_addresses.py	83
+package-docstrings	torchlens/_postprocess/_column_passes_graph.py	15
+package-docstrings	torchlens/_postprocess/_column_passes_graph.py	52
 package-docstrings	torchlens/_postprocess/_conditional_records.py	24
 package-docstrings	torchlens/_postprocess/_conditional_records.py	60
 package-docstrings	torchlens/_postprocess/_grouping_stamp.py	4.3
@@ -6407,7 +6410,6 @@ package-docstrings	torchlens/_postprocess/finalization.py	52
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78
 package-docstrings	torchlens/_postprocess/graph_traversal.py	5.0
-package-docstrings	torchlens/_postprocess/graph_traversal.py	52
 package-docstrings	torchlens/_postprocess/graph_traversal.py	53
 package-docstrings	torchlens/_postprocess/labeling.py	1,3
 package-docstrings	torchlens/_postprocess/labeling.py	10
