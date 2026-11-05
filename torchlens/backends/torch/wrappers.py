@@ -82,7 +82,7 @@ from ._function_boundary import (
     print_funcs,
     unlogged_wrapper_name,
 )
-from ._logged_arguments import logged_args
+from ._logged_arguments import logged_args, logged_receiver_output
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1536,17 +1536,11 @@ def torch_func_decorator(
             # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
             _adopt_minted_parameter_label(trace, out_orig, args)
 
-        # __setitem__, zero_, __delitem__ modify in-place and return None;
-        # treat the first arg (the modified tensor) as the output. Mutating
-        # property setters (``t.real = rhs`` and friends, round-31 M6) have the
-        # exact same shape: real dataflow, ``None`` return, mutated receiver.
-        if reconstructs_receiver_output or (
-            is_mutating_property_setter
-            and out_orig is None
-            and len(args) > 0
-            and isinstance(args[0], torch.Tensor)
-        ):
-            out_orig = args[0]
+        # A receiver-mutating call that returns ``None`` (or always, for __setitem__,
+        # zero_, __delitem__) logs its mutated receiver(s) as the output.
+        out_orig = logged_receiver_output(
+            out_orig, args, func_name, reconstructs_receiver_output, is_mutating_property_setter
+        )
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
