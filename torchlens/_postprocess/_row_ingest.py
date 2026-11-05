@@ -28,7 +28,7 @@ from typing import Any
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir._op_row_seed import layout_keys, seed_op_values
-from .._ir._row_journal import _RowOpRecord
+from .._ir._row_journal import _ROW_TAKE_PATHS, _RowOpRecord
 from .._ir.op_record_scatter import _write_overlay_cells
 from .._ir.refs import journal_record
 from .._trace_core.op_store import _MISSING
@@ -75,7 +75,7 @@ def hand_off_capture_rows(
         return list(map(journal_record, source.amended_op_records())), {}
     projected: list[Any] = []
     capture_rows: dict[int, list[Any]] = {}
-    overlaid: list[tuple[list[Any], Any, Any]] = []
+    overlaid: list[tuple[list[Any], _RowOpRecord, Any]] = []
     for event in session.seal().events:
         taken = event.take_row() if type(event) is _RowOpRecord else None
         if taken is None:
@@ -85,23 +85,37 @@ def hand_off_capture_rows(
         capture_rows[id(record)] = row
         projected.append(record)
         if event._patch:
-            overlaid.append((row, event._journal.fids, record))
+            overlaid.append((row, event, record))
     if capture_rows:
-        # Ingest writes into the taken rows: build any other handle over one
-        # first (a raw-lane or live-index entry that is not the sealed entry).
-        taken_ids = {id(row) for row in capture_rows.values()}
-        for event in (*source.op_events, *source.live_index.by_raw_label.values()):
-            if (
-                type(event) is _RowOpRecord
-                and event._row is not None
-                and id(event._row) in taken_ids
-            ):
-                event.materialize()
-        # Only now, with every other handle over the row built from the row as
-        # committed, fold each amended row's overlay into its cells.
-        for row, fids, record in overlaid:
-            _write_overlay_cells(row, fids, record)
+        _settle_aliases(source, capture_rows, overlaid)
     return projected, capture_rows
+
+
+def _settle_aliases(
+    source: Any,
+    capture_rows: dict[int, list[Any]],
+    overlaid: list[tuple[list[Any], _RowOpRecord, Any]],
+) -> None:
+    """Build every other handle over a taken row, then fold each overlay into its row.
+
+    Ingest writes into the taken rows, so a raw-lane or live-index entry over
+    one is built first. An alias of an amended row is built from the taken
+    handle's record (no row build); any other alias builds from its row.
+    """
+
+    taken_ids = {id(row) for row in capture_rows.values()}
+    amended = {id(row): taken for row, taken, _ in overlaid}
+    for event in (*source.op_events, *source.live_index.by_raw_label.values()):
+        if type(event) is not _RowOpRecord or event._row is None:
+            continue
+        row_id = id(event._row)
+        taken = amended.get(row_id)
+        if taken is not None and _ROW_TAKE_PATHS.issuperset(event._patch):
+            event.settle_alias(taken)
+        elif row_id in taken_ids:
+            event.materialize()
+    for row, taken, record in overlaid:
+        _write_overlay_cells(row, taken._journal.fids, record)
 
 
 class RowIngestPlan:

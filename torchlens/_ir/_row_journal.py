@@ -25,6 +25,7 @@ equal to ``record_with_path_updates`` on the eager record.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace as dataclass_replace
 from typing import Any, cast
 
 from .events import ArgTemplateRef, ParentEdge
@@ -217,6 +218,26 @@ class _RowOpRecord:
         if row is None or not _ROW_TAKE_PATHS.issuperset(self._patch):
             return None
         return row, self.materialize()
+
+    def settle_alias(self, taken: _RowOpRecord) -> None:
+        """Build this alias of ``taken``'s row from ``taken``'s record, with no row build.
+
+        ``taken`` is another handle over the same row that ingest took (both
+        overlays lie within ``_ROW_TAKE_PATHS``), so the two records differ
+        only on overlay paths: this record is ``taken``'s with each of its
+        paths set back to the row build's value, then this handle's own
+        overlay. Runs before ingest rewrites the row's overlay cells.
+        """
+
+        record = cast(OpRecord, taken._record)
+        if self._patch != taken._patch:
+            record = _without_overlay(self, record, taken._patch)
+            if self._patch:
+                record = record_with_path_updates(record, self._patch.items())
+        self._record = record
+        self._row = None
+        self._rest = None
+        self._parents = None
 
     def with_patch(self, items: Iterable[tuple[str, Any]]) -> Any:
         """Return the handle (or record) with ordered facet-path updates folded on."""
@@ -458,6 +479,33 @@ _FAST_READS: dict[str, Any] = {
     "source_trace": _constant_reader(None),
     "source_trace_id": _constant_reader(None),
 }
+
+
+def _without_overlay(handle: _RowOpRecord, record: OpRecord, paths: Iterable[str]) -> OpRecord:
+    """Return ``record`` with each taken-row overlay path at ``handle``'s row-build value.
+
+    The values are ``_record_from_row``'s: the output and policy from the
+    residual, ``is_output_parent`` from the row as committed, a matched
+    predicate, and no recording facet.
+    """
+
+    rest = cast(_RowResidual, handle._rest)
+    items: list[tuple[str, Any]] = []
+    drop_recording = False
+    for path in paths:
+        if path == "core.output":
+            items.append((path, rest.output))
+        elif path == "policy.policy":
+            items.append((path, rest.policy))
+        elif path == "policy.predicate_matched":
+            items.append((path, True))
+        elif path == "graph.is_output_parent":
+            row = cast(list[Any], handle._row)
+            items.append((path, row[handle._journal.fids["is_output_parent"]]))
+        else:
+            drop_recording = True
+    record = record_with_path_updates(record, items)
+    return dataclass_replace(record, recording=None) if drop_recording else record
 
 
 def _patched_read(handle: _RowOpRecord, name: str) -> Any:
