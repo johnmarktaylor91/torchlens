@@ -3560,6 +3560,14 @@
   "via_getattr": true
  },
  {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_postprocess/_orphan_seeds.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/_postprocess/_primitive_profile.py",

@@ -5307,3 +5307,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: bd6482c4452c0ea46f2ea96ff427155aedebf845 (dirty)
 recorded: 2026-11-05T09:40:47.632708+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: corpus-w2-small: producer-parity static ledger regenerated for the orphan-seed sibling flood (unused multi-output siblings logged as internal sinks)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7c5a8ccae64354b20f996ea30fd3c09e395ee89b (dirty)
+recorded: 2026-11-05T11:21:02.339820+00:00
