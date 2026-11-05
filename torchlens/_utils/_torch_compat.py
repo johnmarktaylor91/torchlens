@@ -1909,7 +1909,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_variable_functions_class()
     get_fake_tensor_mode_class()
     get_dtensor_shard_geometry_fn()
-    dynamo_is_compiling()
+    dynamo_is_compiling(force_probe=True)
     _ensure_dynamo_orig_callable_marker_probed()
     get_dynamo_explain()
     # L8/C2 + L9 privately-probed surfaces (fix/private-probe-routing): resolve
@@ -3211,13 +3211,19 @@ _DYNAMO_IS_COMPILING_CANDIDATES: tuple[tuple[str, str], ...] = (
 )
 
 
-def dynamo_is_compiling() -> bool:
+def dynamo_is_compiling(*, force_probe: bool = False) -> bool:
     """Return whether Dynamo is currently tracing this frame.
+
+    Parameters
+    ----------
+    force_probe:
+        Import the probe modules even when ``torch._dynamo`` is not imported.
 
     Returns
     -------
     bool
-        True while a ``torch.compile`` region is being traced. False when the
+        True while a ``torch.compile`` region is being traced. False, without
+        an import, while ``torch._dynamo`` is not imported. False when the
         capability is structurally ABSENT (no probe resolved), so an absent
         probe degrades to "not compiling" rather than disabling capture. True
         when a resolved probe RAISES (r-b4 R26-3): "cannot answer" is treated
@@ -3237,7 +3243,11 @@ def dynamo_is_compiling() -> bool:
     global HAS_DYNAMO_IS_COMPILING, _DYNAMO_IS_COMPILING_FN, _DYNAMO_IS_COMPILING_PROBED
 
     if not _DYNAMO_IS_COMPILING_PROBED:
-        for module_name, attr_name in _DYNAMO_IS_COMPILING_CANDIDATES:
+        # Loaded modules only: torch 2.1 has no torch.compiler.is_compiling, and
+        # importing torch._dynamo mid-capture breaks; unloaded Dynamo compiles nothing.
+        candidates = _DYNAMO_IS_COMPILING_CANDIDATES
+        loaded = [pair for pair in candidates if force_probe or pair[0] in sys.modules]
+        for module_name, attr_name in loaded:
             try:
                 candidate = _import_module_attr_or_none(module_name, attr_name)
             except RuntimeError:
@@ -3246,8 +3256,10 @@ def dynamo_is_compiling() -> bool:
                 _DYNAMO_IS_COMPILING_FN = candidate
                 break
         HAS_DYNAMO_IS_COMPILING = _DYNAMO_IS_COMPILING_FN is not None
-        _DYNAMO_IS_COMPILING_PROBED = True
+        _DYNAMO_IS_COMPILING_PROBED = HAS_DYNAMO_IS_COMPILING or len(loaded) == len(candidates)
     probe = _DYNAMO_IS_COMPILING_FN
+    if probe is None and "torch._dynamo" not in sys.modules:
+        return False
     if probe is None:
         mark_torch_capability_missing(
             "HAS_DYNAMO_IS_COMPILING",
