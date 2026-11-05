@@ -219,126 +219,126 @@ def _build_shared_fields_dict(
 ) -> tuple[dict[str, Any], list[Op], list[torch.Tensor], dict[str, int]]:
     """Build the fields_dict shared by all output tensors of a single function call.
 
-    When a function produces multiple output tensors (e.g. ``torch.split``),
-    many metadata fields are identical across outputs (function info, parent
-    relationships, module context).  This function computes those shared fields
-    once; per-tensor fields (shape, label, equivalence type) are added later
-    in ``_log_output_tensor_info``.
-
-    Returns:
-        (fields_dict, parent_layer_entries, arg_tensors, parent_param_ops)
+    Fields identical across a call's outputs (``torch.split``) are computed once here:
+    function info, parent relationships, module context; per-tensor fields come later in
+    ``_log_output_tensor_info``. Returns ``(fields_dict, parent_layer_entries,
+    arg_tensors, parent_param_ops)``.
     """
-    bound_aliases = _bind_call_alias_labels(args, kwargs)
     # Canonical layer_type: lowercase with underscores stripped (e.g. "conv2d").
     layer_type = _normalize_func_name(func_name)
-
-    # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
-    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
-    tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
-    for tensor in tensors_to_resolve:
-        if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
-            continue
-        # r81: never source-log a "buffer" off the raw static stamp -- a stale
-        # cross-capture stamp (F1) or a legitimately stamped receiver whose
-        # storage was rebound to input data mid-forward (F2) would re-root an
-        # input-derived value as internal state. The session belt validates
-        # object + storage identity; the tracker fallback is storage-anchored.
-        buffer_address = resolve_or_late_index_buffer_address(self, tensor)
-        if buffer_address is not None:
-            log_source_tensor(self, tensor, "buffer", buffer_address)
-        else:
-            log_closure_constant_if_known(self, tensor)
-
     # Non-tensor args (metadata, equivalence hashing) are op-time snapshots.
     non_tensor_args, non_tensor_kwargs = split_non_tensor_args(args, kwargs, _check_if_tensor_arg)
-    call = _SlotCall(func, func_name, args, kwargs)
-    slots = snapshot_arg_slots(self, call, arg_tensors)
-    # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
-    parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
-    parent_layer_entries = [
-        cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
-        for label in parent_layer_labels
-    ]
+    bound_aliases = _bind_call_alias_labels(args, kwargs) if _VIEW_MUTATION_RELABELS else ()
+    try:
+        # O(1) tensor/param extraction via lookup table (replaces BFS crawl)
+        arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+        tensors_to_resolve = get_arg_tensors_for_resolution(args, kwargs)
+        for tensor in tensors_to_resolve:
+            if isinstance(tensor, torch.nn.Parameter) or get_tensor_label(tensor) is not None:
+                continue
+            # r81: never source-log a "buffer" off the raw static stamp -- a stale
+            # cross-capture stamp (F1) or a legitimately stamped receiver whose
+            # storage was rebound to input data mid-forward (F2) would re-root an
+            # input-derived value as internal state. The session belt validates
+            # object + storage identity; the tracker fallback is storage-anchored.
+            buffer_address = resolve_or_late_index_buffer_address(self, tensor)
+            if buffer_address is not None:
+                log_source_tensor(self, tensor, "buffer", buffer_address)
+            else:
+                log_closure_constant_if_known(self, tensor)
 
-    fields_dict: dict[str, Any] = {}
+        call = _SlotCall(func, func_name, args, kwargs)
+        slots = snapshot_arg_slots(self, call, arg_tensors)
+        # One entry per distinct parent: a repeat's multiplicity is its parent_arg_positions.
+        parent_layer_labels = list(dict.fromkeys(parents_from_slots(self, slots, arg_tensors)))
+        parent_layer_entries = [
+            cast(Op, LiveOpView(self, self.capture_events.live_index.require_event(label)))
+            for label in parent_layer_labels
+        ]
 
-    # General info
-    fields_dict["type"] = layer_type
-    fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
-    fields_dict["output_device"] = self._options_output_device
-    fields_dict["_construction_done"] = False
-    _set_arg_template_fields(self, fields_dict, call)
-    fields_dict["container_path"] = ()
-    fields_dict["container_spec"] = None
+        fields_dict: dict[str, Any] = {}
 
-    _set_grad_info_fields(self, fields_dict)
+        # General info
+        fields_dict["type"] = layer_type
+        fields_dict["detach_saved_activations"] = self._options_detach_saved_activations
+        fields_dict["output_device"] = self._options_output_device
+        fields_dict["_construction_done"] = False
+        _set_arg_template_fields(self, fields_dict, call)
+        fields_dict["container_path"] = ()
+        fields_dict["container_spec"] = None
 
-    # Function call info
-    fields_dict["func"] = func
-    fields_dict["func_call_id"] = func_call_id
-    fields_dict["func_name"] = func_name
-    fields_dict["func_qualname"] = getattr(func, "__qualname__", None)
-    code_context_cache = getattr(self, "_code_context_cache", None)
-    if code_context_cache is None:
-        code_context_cache = {}
-        self._code_context_cache = code_context_cache
-    call_site_out: list[Any] = []
-    fields_dict["code_context"] = _get_code_context(
-        self.num_context_lines,
-        source_loading_enabled=self._options_save_source_context,
-        disable_col_offset=False,
-        context_cache=code_context_cache,
-        call_site_out=call_site_out,
-    )
-    self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
-    fields_dict["func_duration"] = exec_ctx.time_elapsed
-    fields_dict["func_rng_states"] = exec_ctx.rng_states
-    fields_dict["func_autocast_state"] = exec_ctx.autocast_state
-    fields_dict["arg_names"] = _call_arg_names(func_name)
-    fields_dict["num_args_total"] = len(args) + len(kwargs)
-    fields_dict["num_pos_args"] = len(args)
-    fields_dict["num_kwargs"] = len(kwargs)
-    fields_dict["non_tensor_pos_args"] = non_tensor_args
-    fields_dict["non_tensor_kwargs"] = non_tensor_kwargs
-    fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
+        _set_grad_info_fields(self, fields_dict)
 
-    _build_graph_relationship_fields(
-        self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
-    )
-    parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
-    _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
-    is_transform = bool(getattr(func, "__tl_is_transform_boundary__", False)) or (
-        func_name in TRANSFORM_FUNC_NAMES
-    )
-    fields_dict["is_transform"] = is_transform
-    fields_dict["transform_kind"] = getattr(func, "__tl_transform_kind__", None) or (
-        func_name if is_transform else None
-    )
-    fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
-    config = getattr(func, _TRANSFORM_CONFIG, _NO_CONFIG)
-    fields_dict["transform_config"] = {} if config is _NO_CONFIG else snapshot_mutable_arg(config)
-    fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
-    fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
-    fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
-    (
-        fields_dict["unattributed_tensor_args"],
-        fields_dict["dropped_edge_tensor_args"],
-    ) = witness_from_slots(
-        self, call, fields_dict["parent_arg_positions"], fields_dict["parent_params"]
-    )
+        # Function call info
+        fields_dict["func"] = func
+        fields_dict["func_call_id"] = func_call_id
+        fields_dict["func_name"] = func_name
+        fields_dict["func_qualname"] = getattr(func, "__qualname__", None)
+        code_context_cache = getattr(self, "_code_context_cache", None)
+        if code_context_cache is None:
+            code_context_cache = {}
+            self._code_context_cache = code_context_cache
+        call_site_out: list[Any] = []
+        fields_dict["code_context"] = _get_code_context(
+            self.num_context_lines,
+            source_loading_enabled=self._options_save_source_context,
+            disable_col_offset=False,
+            context_cache=code_context_cache,
+            call_site_out=call_site_out,
+        )
+        self._raw_graph_ws._pending_call_site = (func_call_id, call_site_out[0])
+        fields_dict["func_duration"] = exec_ctx.time_elapsed
+        fields_dict["func_rng_states"] = exec_ctx.rng_states
+        fields_dict["func_autocast_state"] = exec_ctx.autocast_state
+        fields_dict["arg_names"] = _call_arg_names(func_name)
+        fields_dict["num_args_total"] = len(args) + len(kwargs)
+        fields_dict["num_pos_args"] = len(args)
+        fields_dict["num_kwargs"] = len(kwargs)
+        fields_dict["non_tensor_pos_args"] = non_tensor_args
+        fields_dict["non_tensor_kwargs"] = non_tensor_kwargs
+        fields_dict["func_non_tensor_args"] = non_tensor_args + list(non_tensor_kwargs.values())
 
-    # Function config — lightweight hyperparameter extraction, always on.
-    param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
-    fields_dict["func_config"] = extract_salient_args(
-        layer_type,
-        func_name,
-        args,
-        kwargs,
-        param_shapes,
-    )
+        _build_graph_relationship_fields(
+            self, fields_dict, parent_layer_labels, parent_layer_entries, args, kwargs, out_orig
+        )
+        parent_param_ops = _build_param_fields(self, fields_dict, arg_parameters)
+        _build_module_context_fields(self, fields_dict, arg_tensors, parent_layer_entries)
+        is_transform = bool(getattr(func, "__tl_is_transform_boundary__", False)) or (
+            func_name in TRANSFORM_FUNC_NAMES
+        )
+        fields_dict["is_transform"] = is_transform
+        fields_dict["transform_kind"] = getattr(func, "__tl_transform_kind__", None) or (
+            func_name if is_transform else None
+        )
+        fields_dict["transform_chain"] = tuple(getattr(func, "__tl_transform_tags__", ()))
+        config = getattr(func, _TRANSFORM_CONFIG, _NO_CONFIG)
+        fields_dict["transform_config"] = (
+            {} if config is _NO_CONFIG else snapshot_mutable_arg(config)
+        )
+        fields_dict["transform_fn_name"] = getattr(func, "__tl_transform_fn_name__", None)
+        fields_dict["transform_fn_qualname"] = getattr(func, "__tl_transform_fn_qualname__", None)
+        fields_dict["transform_fn_source"] = getattr(func, "__tl_transform_fn_source__", None)
+        (
+            fields_dict["unattributed_tensor_args"],
+            fields_dict["dropped_edge_tensor_args"],
+        ) = witness_from_slots(
+            self, call, fields_dict["parent_arg_positions"], fields_dict["parent_params"]
+        )
 
-    _restore_call_alias_labels(bound_aliases)
-    return fields_dict, parent_layer_entries, arg_tensors, parent_param_ops
+        # Function config — lightweight hyperparameter extraction, always on.
+        param_shapes = cast(list[tuple[int, ...]] | None, fields_dict.get("param_shapes"))
+        fields_dict["func_config"] = extract_salient_args(
+            layer_type,
+            func_name,
+            args,
+            kwargs,
+            param_shapes,
+        )
+
+        return fields_dict, parent_layer_entries, arg_tensors, parent_param_ops
+    finally:
+        if bound_aliases:
+            _restore_call_alias_labels(bound_aliases)
 
 
 def _call_arg_names(func_name: str) -> tuple[str, ...]:
@@ -643,5 +643,6 @@ from ._ops_predicate_events import (  # noqa: E402
     _extract_arg_tensors_and_params,
 )
 from .ops import (  # noqa: E402
+    _VIEW_MUTATION_RELABELS,
     TRANSFORM_FUNC_NAMES,
 )

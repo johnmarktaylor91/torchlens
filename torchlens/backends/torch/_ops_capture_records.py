@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import contextlib
-from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -252,12 +251,14 @@ def _call_alias_tensors(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[t
 def _resolve_call_alias_labels(tensors: list[torch.Tensor]) -> dict[int, str]:
     """Return the label each colliding argument of one call binds to, by tensor id.
 
-    An argument whose label another argument also carries, and which holds it only
-    because an in-place op wrote through a view of it (a live relabel entry of this
-    session naming that label), steps back to its label before that write; the step
-    repeats along the alias's chained relabels while a collision remains. A tensor
-    that produced its label itself never moves, so the written view keeps the
-    mutation's label. A collision no relabel explains is left as is (fail closed).
+    An argument that holds its label only because an in-place op wrote through a view
+    of it (a live relabel entry of this session naming that label) steps back to its
+    label before that write when that written view is also an argument of the call,
+    still holding the label; the step repeats along the alias's chained relabels. A
+    tensor that produced its label itself never moves, so the written view keeps the
+    mutation's label. When the written view is not in the call, every holder keeps
+    the mutation's label (the in-place op keeps its consumer edge; a collision left
+    this way fails closed).
 
     Parameters
     ----------
@@ -283,11 +284,13 @@ def _resolve_call_alias_labels(tensors: list[torch.Tensor]) -> dict[int, str]:
         cursor[id(tensor)] = entry if live else None
     moved: dict[int, str] = {}
     while True:
-        holders = Counter(bound.values())
+        # entry[3] is id(view the write went through): step only while it holds the label.
         steps = [
             tensor_id
             for tensor_id, label in bound.items()
-            if holders[label] > 1 and cursor[tensor_id] is not None and cursor[tensor_id][1]
+            if (entry := cursor[tensor_id]) is not None
+            and entry[1]
+            and bound.get(entry[3]) == label
         ]
         if not steps:
             return moved
@@ -309,10 +312,11 @@ def _bind_call_alias_labels(
     label for two different values, which a per-(parent, child) version snapshot cannot
     carry, so argument logging failed. Here the base binds to its pre-write label (its
     actual content reaches replay through the per-child version snapshot) and the view
-    keeps the mutation's label; see :func:`_resolve_call_alias_labels`. The caller hands
-    the result to :func:`_restore_call_alias_labels` once the call's argument reads are
-    recorded, so the base's later consumers still bind to the mutation. A capture with
-    no live view-write relabel pays one emptiness check per call.
+    keeps the mutation's label; see :func:`_resolve_call_alias_labels`. The caller calls
+    this only while ``_VIEW_MUTATION_RELABELS`` is non-empty (a capture with no
+    view-write relabel pays that one check per call) and hands a non-empty result to
+    :func:`_restore_call_alias_labels` in a ``finally`` once the call's argument reads
+    are recorded, so the base's later consumers still bind to the mutation.
 
     Parameters
     ----------
@@ -327,8 +331,6 @@ def _bind_call_alias_labels(
         ``(tensor, live_label, bound_label)`` for every argument that moved.
     """
 
-    if not _VIEW_MUTATION_RELABELS:
-        return []
     tensors = _call_alias_tensors(args, kwargs)
     moved = _resolve_call_alias_labels(tensors) if len(tensors) > 1 else {}
     bound = []
@@ -340,7 +342,7 @@ def _bind_call_alias_labels(
     return bound
 
 
-def _restore_call_alias_labels(bound: list[tuple[torch.Tensor, str | None, str]]) -> None:
+def _restore_call_alias_labels(bound: Sequence[tuple[torch.Tensor, str | None, str]]) -> None:
     """Give every argument :func:`_bind_call_alias_labels` moved its live label back.
 
     Parameters
