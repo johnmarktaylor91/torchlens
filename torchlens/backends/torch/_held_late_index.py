@@ -64,14 +64,16 @@ def late_index_model_owned_tensor(trace: Trace, tensor: torch.Tensor) -> str | N
         pre-forward model-owned tensor.
     """
 
+    # Snapshot membership first: it is one dict probe, and the wrapper ladder asks
+    # about every non-buffer tensor argument, almost all of them labeled activations.
+    build_data = trace._module_capture_ws.module_build_data
+    if (build_data.get("model_owned_tensor_ids_at_entry") or {}).get(id(tensor)) is not tensor:
+        return None
     if isinstance(tensor, nn.Parameter) or get_tensor_label(tensor) is not None:
         return None
     if getattr(trace, "_raw_transform_escape_detected", False) or getattr(
         trace, "_raw_dynamo_region_detected", False
     ):
-        return None
-    build_data = trace._module_capture_ws.module_build_data
-    if (build_data.get("model_owned_tensor_ids_at_entry") or {}).get(id(tensor)) is not tensor:
         return None
     if id(tensor) in (build_data.get("forward_outside_tensor_ids_at_entry") or ()):
         return None
