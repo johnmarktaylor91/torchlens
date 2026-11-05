@@ -1209,12 +1209,10 @@ def _format_batch_topk_output_lines(value: Mapping[str, Any]) -> list[str]:
         if len(batch_items) > 1:  # one input needs no "item 0" heading
             lines.append(f"item {batch_item}")
         lines.extend(
-            [
-                f"{int(row.get('rank', 0))}. "
-                f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
-                f"{float(row.get('prob', 0.0)):.0%}"
-                for row in item_rows
-            ]
+            f"{int(row.get('rank', 0))}. "
+            f"{_truncate_raw_input_text(str(row.get('label')), limit=36)} "
+            f"{float(row.get('prob', 0.0)):.0%}"
+            for row in item_rows
         )
     if not rows:
         lines.append("no decoded rows")
