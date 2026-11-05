@@ -3172,6 +3172,7 @@ docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	369
 docs-md	docs/maintainers/where.md	37
 docs-md	docs/maintainers/where.md	370
+docs-md	docs/maintainers/where.md	37092
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
 docs-md	docs/maintainers/where.md	372
@@ -3447,6 +3448,7 @@ docs-md	docs/maintainers/where.md	675
 docs-md	docs/maintainers/where.md	676
 docs-md	docs/maintainers/where.md	677
 docs-md	docs/maintainers/where.md	678
+docs-md	docs/maintainers/where.md	679961
 docs-md	docs/maintainers/where.md	68
 docs-md	docs/maintainers/where.md	683
 docs-md	docs/maintainers/where.md	687
@@ -3580,6 +3582,7 @@ docs-md	docs/maintainers/where.md	891
 docs-md	docs/maintainers/where.md	90
 docs-md	docs/maintainers/where.md	900
 docs-md	docs/maintainers/where.md	903
+docs-md	docs/maintainers/where.md	9064
 docs-md	docs/maintainers/where.md	91
 docs-md	docs/maintainers/where.md	9166
 docs-md	docs/maintainers/where.md	92
@@ -6029,6 +6032,7 @@ package-docstrings	torchlens/_io/format3/container.py	3.0
 package-docstrings	torchlens/_io/format3/contract.py	2.38
 package-docstrings	torchlens/_io/format3/decode.py	3.0
 package-docstrings	torchlens/_io/format3/decode.py	64
+package-docstrings	torchlens/_io/format3/inventory.py	256
 package-docstrings	torchlens/_io/format3/inventory.py	3.0
 package-docstrings	torchlens/_io/format3/payloads.py	256
 package-docstrings	torchlens/_io/format3/payloads.py	3.0
@@ -10799,6 +10803,7 @@ test-docstrings	tests/test_tlspec_envelope_ceiling.py	10
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2.13
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2026
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	3.0
+test-docstrings	tests/test_tlspec_envelope_state_contract.py	3.0
 test-docstrings	tests/test_tlspec_intervention_transitional.py	11.0
 test-docstrings	tests/test_tlspec_intervention_transitional.py	3.0
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	10,000
@@ -11486,6 +11491,7 @@ test-names	tests/test_stoch_edits_population.py	32
 test-names	tests/test_surgery_live_bind.py	68
 test-names	tests/test_surgery_live_regions.py	50_
 test-names	tests/test_surgery_visuals_realism.py	50_
+test-names	tests/test_tlspec_envelope_state_contract.py	3_0_
 test-names	tests/test_tlspec_runnable_escape_matrix.py	14_
 test-names	tests/test_tlspec_runnable_escape_witness.py	10_
 test-names	tests/test_tlspec_runnable_io_tree_contract.py	64_
