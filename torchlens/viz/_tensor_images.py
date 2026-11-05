@@ -17,6 +17,7 @@ from __future__ import annotations
 import torch
 from PIL import Image
 
+from .._utils._numpy_bridge import tensor_to_numpy
 from ._node_visualizers import channel_grid
 from ._rgb_scale import RgbNormalize, rgb_unit_hwc
 
@@ -111,7 +112,7 @@ def rgb(
     if max_size < 1:
         raise ValueError("rgb() max_size must be at least 1.")
     image = rgb_unit_hwc(_rgb_chw(tensor, channels_last=channels_last), normalize=normalize)
-    pixels = (image * 255.0).round().to(torch.uint8).numpy()
+    pixels = tensor_to_numpy((image * 255.0).round().to(torch.uint8))
     return _fit(Image.fromarray(pixels, mode="RGB"), max_size)
 
 

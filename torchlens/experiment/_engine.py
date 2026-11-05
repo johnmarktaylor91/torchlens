@@ -34,6 +34,7 @@ from .._selection.resolver import _resolve_sites
 from .._selection.selection import Selection, Selector
 from .._selection.selectors import FacetSelector, site as site_selector
 from .._utils._display_bounded import short_dataclass_repr
+from .._utils.tensor_leaves import tensor_payload_bytes
 from ..bundle import Bundle
 from ..bundle._bytes import preflight_retention_projection
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
@@ -275,8 +276,7 @@ def _unit_digest_part(entry: Any) -> Any:
     mask = entry.mask
     if bool(mask.all()):
         return label
-    packed = mask.reshape(-1).cpu().numpy().tobytes()
-    return (label, tuple(mask.shape), hashlib.sha256(packed).hexdigest())
+    return (label, tuple(mask.shape), hashlib.sha256(tensor_payload_bytes(mask)).hexdigest())
 
 
 def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) -> Any:

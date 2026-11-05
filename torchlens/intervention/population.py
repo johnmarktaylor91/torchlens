@@ -42,6 +42,7 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils.tensor_leaves import tensor_payload_bytes
 
 __all__ = [
     "OneDatum",
@@ -100,9 +101,9 @@ def _update_tensor_hash(hasher: hashlib._Hash, tensor: torch.Tensor) -> None:
     hasher.update(str(tuple(tensor.shape)).encode())
     hasher.update(str(tensor.dtype).encode())
     hasher.update(
-        tensor.detach().to("cpu").contiguous().numpy().tobytes()
+        tensor_payload_bytes(tensor.detach().to("cpu").contiguous())
         if tensor.dtype not in (torch.bfloat16,)
-        else tensor.detach().to("cpu", torch.float32).contiguous().numpy().tobytes()
+        else tensor_payload_bytes(tensor.detach().to("cpu", torch.float32).contiguous())
     )
 
 

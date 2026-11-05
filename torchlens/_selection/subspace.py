@@ -61,6 +61,7 @@ from typing import Any
 
 import torch
 
+from .._utils.tensor_leaves import tensor_payload_bytes
 from .selection import (
     Selection,
     Selector,
@@ -178,7 +179,7 @@ def _basis_digest(canonical: torch.Tensor) -> str:
 
     digest = hashlib.sha256()
     digest.update(repr(tuple(canonical.shape)).encode())
-    digest.update(canonical.numpy().tobytes())
+    digest.update(tensor_payload_bytes(canonical))
     return digest.hexdigest()
 
 
