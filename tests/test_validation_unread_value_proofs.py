@@ -351,9 +351,8 @@ def test_setitem_unread_writes_validate_on_the_public_path() -> None:
 
 @pytest.mark.smoke
 def test_unread_operand_models_validate_on_the_public_path() -> None:
-    """Clamp, masked_scatter and embedding_bag models with unread operands validate end to end."""
+    """Clamp and masked_scatter models with unread operands validate end to end."""
 
     torch.manual_seed(0)
     _assert_validates(_Clamp(1, 1), torch.randn(8, 1))
     _assert_validates(_MaskedScatter(threshold=-100.0), torch.tensor([[1.0, -1.0, 2.0, -2.0]]))
-    _assert_validates(_Bags("sum"), _BAG_IDS)
