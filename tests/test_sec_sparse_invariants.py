@@ -37,7 +37,7 @@ from torchlens._runnable import (
 from torchlens._utils import _torch_compat
 from torchlens._utils._sparse_invariant_guard import call_with_sparse_invariants
 from torchlens.errors import RunPreconditionError
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.validation._autograd_grad_replay import execute_replay_func
 from torchlens.validation._influence_probes import _ProbeCall, _substitutes_move_output
 from torchlens.validation._loaded_callables import resolve_loaded_callables

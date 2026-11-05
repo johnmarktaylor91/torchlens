@@ -66,7 +66,7 @@ from torchlens.errors import (
     UntrustedCallableError,
 )
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.validation._autograd_grad_replay import execute_replay_func
 from torchlens.validation._influence_probes import _ProbeCall, _substitutes_move_output
 from torchlens.validation._loaded_callables import resolve_loaded_callables

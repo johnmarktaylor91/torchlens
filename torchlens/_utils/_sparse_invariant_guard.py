@@ -26,7 +26,7 @@ from typing import Any, TypeVar
 
 import torch
 
-from ..errors.runnable import RunPreconditionError
+from ..errors._runnable import RunPreconditionError
 from . import _torch_compat
 
 __tl_layer__ = "L1"  # reads the _torch_compat capability flags at import
