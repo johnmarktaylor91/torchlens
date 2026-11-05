@@ -776,6 +776,10 @@ _PROCESS_CACHES = frozenset(
     {
         # tl.errors.quiet: one quieted subclass per warning class, built on first use.
         ("torchlens/errors/_base.py", "_QUIETED_CLASSES"),
+        # Routed tensor reads: last resolution per routed name (ten keys), held with the
+        # class attribute it came from and re-resolved when that attribute changes, so
+        # it needs no epoch.
+        ("torchlens/_utils/_torch_symbols.py", "_RESOLVED"),
         # Call-site grouping per-code memos (content token, instruction map),
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),

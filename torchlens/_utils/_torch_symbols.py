@@ -48,8 +48,8 @@ wrapper on the receiver's class, only when that wrapper's fast path would be a p
 
 Otherwise the callable is ``operator.methodcaller(name)``, the exact spelling the call site used
 before (``t.untyped_storage()``), so the wrapper runs as it always did. The class attribute is
-re-read on every call, so a re-wrap, an unwrap or a peer patch over the wrapper is honoured
-immediately. Callers keep their ``pause_logging`` scope.
+compared by identity on every call, so a re-wrap, an unwrap or a peer patch over the wrapper is
+honoured immediately. Callers keep their ``pause_logging`` scope.
 """
 
 from __future__ import annotations
@@ -323,27 +323,41 @@ def register_internal_reads(
     _INTERNAL_READS = (pass_through, ledger)
 
 
-def _route_ledger(tensor: Any) -> Mapping[int, Callable[..., Any]] | None:
-    """Return the unwrap ledger when a routed read on ``tensor`` would pass through, else None.
+def _resolve(name: str, attr: Any, ledger: Mapping[int, Callable[..., Any]]) -> Callable[..., Any]:
+    """Resolve and remember the callable for class attribute ``attr`` under routed ``name``.
 
     Parameters
     ----------
-    tensor:
-        The receiver of the read.
+    name:
+        A name in :data:`ROUTED_TENSOR_READS`.
+    attr:
+        The receiver class's current attribute for ``name``.
+    ledger:
+        The unwrap ledger.
 
     Returns
     -------
-    Mapping[int, Callable[..., Any]] | None
-        The ledger when the wrapper's fast path would only call the original.
+    Callable[..., Any]
+        The ledger's original for ``attr``, else the method-call spelling.
     """
 
-    bound = _INTERNAL_READS
-    if bound is None:
-        return None
-    cls = type(tensor)
-    if (cls is _TENSOR or cls is _PARAMETER) and bound[0]():
-        return bound[1]
-    return None
+    original = ledger.get(id(attr))
+    resolved = _SPELLED[name] if original is None else original
+    _RESOLVED[name] = (attr, resolved)
+    return resolved
+
+
+# Last resolution per name, keyed by the class attribute it was resolved from (held by
+# identity, so a re-wrap, unwrap or peer patch misses and resolves again). Reads stay free
+# of calls on a hit: the receiver class is read as ``__class__`` and the attribute through
+# the class ``__dict__``, which is what ``getattr`` on these two classes returns for a
+# patched name; a name absent from ``torch.Tensor.__dict__`` is not wrapped, so it keeps
+# the method call.
+_RESOLVED: dict[str, tuple[Any, Callable[..., Any]]] = {
+    name: (None, spelled) for name, spelled in _SPELLED.items()
+}
+_TENSOR_ATTRS = _TENSOR.__dict__
+_PARAMETER_ATTRS = _PARAMETER.__dict__
 
 
 def tensor_read(tensor: Any, name: str) -> Callable[[Any], Any]:
@@ -362,16 +376,23 @@ def tensor_read(tensor: Any, name: str) -> Callable[[Any], Any]:
         The saved original when the wrapper would pass through, else the method call.
     """
 
-    spelled = _SPELLED[name]
-    ledger = _route_ledger(tensor)
-    if ledger is None:
-        return spelled
-    original = ledger.get(id(getattr(type(tensor), name, None)))
-    return spelled if original is None else original
+    bound = _INTERNAL_READS
+    cls = tensor.__class__
+    if bound is None or (cls is not _TENSOR and cls is not _PARAMETER) or not bound[0]():
+        return _SPELLED[name]
+    attrs = _PARAMETER_ATTRS if name in _PARAMETER_ATTRS and cls is _PARAMETER else _TENSOR_ATTRS
+    if name not in attrs:
+        return _SPELLED[name]
+    attr = attrs[name]
+    seen = _RESOLVED[name]
+    return seen[1] if seen[0] is attr else _resolve(name, attr, bound[1])
 
 
 def tensor_reads(tensor: Any, *names: str) -> tuple[Callable[[Any], Any], ...]:
     """Return the callables for several routed reads of ``tensor``, in ``names`` order.
+
+    One gate check covers every name, so a site reading several properties of one tensor
+    fetches them once per scope.
 
     Parameters
     ----------
@@ -386,12 +407,21 @@ def tensor_reads(tensor: Any, *names: str) -> tuple[Callable[[Any], Any], ...]:
         One callable per name, each as :func:`tensor_read` would return it.
     """
 
-    ledger = _route_ledger(tensor)
-    if ledger is None:
-        return tuple(_SPELLED[name] for name in names)
-    cls = type(tensor)
-    resolved = []
+    bound = _INTERNAL_READS
+    cls = tensor.__class__
+    resolved: tuple[Callable[[Any], Any], ...] = ()
+    if bound is None or (cls is not _TENSOR and cls is not _PARAMETER) or not bound[0]():
+        for name in names:
+            resolved += (_SPELLED[name],)
+        return resolved
     for name in names:
-        original = ledger.get(id(getattr(cls, name, None)))
-        resolved.append(_SPELLED[name] if original is None else original)
-    return tuple(resolved)
+        attrs = (
+            _PARAMETER_ATTRS if name in _PARAMETER_ATTRS and cls is _PARAMETER else _TENSOR_ATTRS
+        )
+        if name not in attrs:
+            resolved += (_SPELLED[name],)
+            continue
+        attr = attrs[name]
+        seen = _RESOLVED[name]
+        resolved += (seen[1] if seen[0] is attr else _resolve(name, attr, bound[1]),)
+    return resolved

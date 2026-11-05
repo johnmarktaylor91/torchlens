@@ -179,7 +179,7 @@ def test_capture_python_calls_per_op_drop_with_routing(monkeypatch: pytest.Monke
     from torchlens._utils import _torch_symbols
 
     paused_on, calls_on, ops_on = _capture_census(_chain(), torch.zeros(2, 4))
-    monkeypatch.setattr(_torch_symbols, "_route_ledger", lambda tensor: None)
+    monkeypatch.setattr(_torch_symbols, "_INTERNAL_READS", None)
     paused_off, calls_off, ops_off = _capture_census(_chain(), torch.zeros(2, 4))
     assert ops_on == ops_off
     skipped = sum(paused_off[name] for name in _EXPECTED_ROUTED)
@@ -361,7 +361,7 @@ def test_logged_ops_identical_with_and_without_routing(
 
     build = dict(_corpus())[spec]
     with monkeypatch.context() as closed:
-        closed.setattr(_torch_symbols, "_route_ledger", lambda tensor: None)
+        closed.setattr(_torch_symbols, "_INTERNAL_READS", None)
         base_a = _op_fields(build)
         base_b = _op_fields(build)
     routed = _op_fields(build)
