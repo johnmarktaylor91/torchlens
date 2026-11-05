@@ -14,6 +14,7 @@ from collections.abc import Callable
 from typing import Any, ParamSpec, TypeVar
 
 from .autocast import AutocastRestore
+from .explicit_generators import explicit_generators_at
 from .streams import log_current_rng_states, set_rng_from_saved_states
 
 _T = TypeVar("_T")
@@ -93,7 +94,9 @@ def execute_with_restored_rng_autocast(
         Keyword arguments for ``func``.
     rng_states:
         RNG states captured before the original operation. ``None`` or an empty
-        dict leaves the current RNG state untouched until final restoration.
+        dict leaves the current RNG state untouched until final restoration. A
+        generator passed as an argument is set to its recorded pre-call state
+        for the call (see :mod:`.explicit_generators`).
     autocast_state:
         Autocast state captured before the original operation.
 
@@ -115,5 +118,8 @@ def execute_with_restored_rng_autocast(
     with RngStreamsRestore():
         if rng_states:
             set_rng_from_saved_states(rng_states)
-        with AutocastRestore(autocast_state or {}):
+        with (
+            AutocastRestore(autocast_state or {}),
+            explicit_generators_at(rng_states, args, kwargs),
+        ):
             return func(*args, **kwargs)
