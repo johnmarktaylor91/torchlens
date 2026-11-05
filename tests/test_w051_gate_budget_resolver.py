@@ -56,7 +56,7 @@ def test_two_point_schedule_serves_the_compacting_stop(tiny_log: Any, monkeypatc
     assert budget.draw_kwargs == {"collapse": 1.0}
     assert not budget.in_band
     assert "lens_budget_band_missed" in codes
-    assert any("band missed" in line for line in budget.disclosure)
+    assert any("the nearest is shown" in line for line in budget.disclosure)
 
 
 def test_nearest_compacting_stop_wins_among_compacting_stops(

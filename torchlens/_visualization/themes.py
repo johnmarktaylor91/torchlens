@@ -613,6 +613,32 @@ def ink_on_fill(fill: str | None, ink: str | None) -> str | None:
     return _legible_ink(fill, ink or "#000000")
 
 
+def fill_with_ink(spec: NodeSpec, fill: str) -> NodeSpec:
+    """Return ``spec`` filled with ``fill`` and its text colour rechecked.
+
+    Parameters
+    ----------
+    spec:
+        The node's spec so far.
+    fill:
+        The fill a colour channel chose.
+
+    Returns
+    -------
+    NodeSpec
+        A copy with ``fillcolor=fill`` and a legible ``fontcolor``.
+
+    Examples
+    --------
+    >>> from torchlens._visualization.themes import fill_with_ink
+    >>> from torchlens._vocab.node_spec import NodeSpec
+    >>> fill_with_ink(NodeSpec(lines=["relu"], fontcolor="#111111"), "#993404").fontcolor
+    '#FFFFFF'
+    """
+
+    return spec.replace(fillcolor=fill, fontcolor=ink_on_fill(fill, spec.fontcolor))
+
+
 def _theme_line_ink(theme: VisualizationTheme, color: str | None) -> str | None:
     """Return the skin's edge colour for the renderer's default black edge ink."""
 

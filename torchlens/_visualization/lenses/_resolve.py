@@ -30,12 +30,12 @@ from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Any
 
 from ..._errors import InvalidArgumentError
-from ..._record_type import record_type
 from ..._utils._display_bounded import short_dataclass_repr
 from ..._vocab.node_spec import LENS_CAPTION_KEY
 from ...errors._base import TorchLensWarning
 from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
+from ._attention import attention_role_spec_fn, first_attention_block, has_attention_subject
 from ._budget import BudgetResolution, resolve_budget
 from ._families import ResolvedSource, resolve_source_family, scalar_or_none, source_coverage
 from ._filter import CompiledDisplayFilter, DisplayFilter, compile_display_filter
@@ -92,45 +92,6 @@ def _request_dialect(user_kwargs: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-#: Attention role rows: module-address suffix -> per-layer fact wording.
-#: These are per-LAYER facts (the module tree's own names plus op types),
-#: never trace classification -- a hybrid gets rows exactly where the facts
-#: are.
-_ATTENTION_ROLE_SUFFIXES = {
-    "q_proj": "attention role: query projection",
-    "k_proj": "attention role: key projection",
-    "v_proj": "attention role: value projection",
-    "out_proj": "attention role: output projection",
-    "o_proj": "attention role: output projection",
-    "qkv": "attention role: fused q/k/v projection",
-    # Hugging Face spellings: BERT/ViT-style self-attention and GPT-2's
-    # fused Conv1D projection.
-    "query": "attention role: query projection",
-    "key": "attention role: key projection",
-    "value": "attention role: value projection",
-    "c_attn": "attention role: fused q/k/v projection",
-}
-
-#: Suffixes that name an attention role only inside an attention module
-#: (GPT-2's ``attn.c_proj`` and BERT/ViT's ``attention.output.dense``; the
-#: same names occur in the MLP).
-_SCOPED_ATTENTION_ROLE_SUFFIXES = {
-    "c_proj": ("attn", "attention role: output projection"),
-    "dense": ("attention", "attention role: output projection"),
-}
-
-#: Op types that are themselves attention facts.
-_ATTENTION_OP_TYPES = frozenset(
-    {
-        "scaled_dot_product_attention",
-        "scaleddotproductattention",
-        "sdpa",
-        "multi_head_attention_forward",
-        "multiheadattentionforward",
-    }
-)
-
-
 @dataclass(frozen=True)
 class LensResolution:
     """One resolved lens draw: parameters plus mandatory disclosure.
@@ -163,44 +124,6 @@ class LensResolution:
     notices: tuple[str, ...] = dataclass_field(default=())
 
 
-def _module_facets_say_attention(trace: Trace) -> bool:
-    """The facet leg of the attention-subject probe.
-
-    ``Module.facets`` is single-call and refuses ``module_call_ambiguous``
-    on any reused module; that per-module accessor limitation is never the
-    TRACE-level fact and must not surface as the user's refusal (D03-R1)
-    -- the op scan in :func:`_has_attention_subject` still probes those
-    modules' calls.
-    """
-
-    try:
-        for module in trace.modules:
-            try:
-                if module.facets.has("q"):
-                    return True
-            except InvalidArgumentError as error:
-                if error.fields.get("code") != "module_call_ambiguous":
-                    raise
-    except (AttributeError, TypeError):
-        pass
-    return False
-
-
-def _has_attention_subject(trace: Trace) -> bool:
-    """Return whether the trace factually contains attention structure."""
-
-    if _module_facets_say_attention(trace):
-        return True
-    for op in trace._layer_list:
-        if str(record_type(op, "")) in _ATTENTION_OP_TYPES:
-            return True
-        for address in getattr(op, "modules", ()) or ():
-            tail = str(address).split(":", 1)[0].rsplit(".", 1)[-1].lower()
-            if tail in _ATTENTION_ROLE_SUFFIXES:
-                return True
-    return False
-
-
 def _has_multipass_subject(trace: Trace) -> bool:
     """Return whether a parameterised layer runs more than one pass.
 
@@ -221,7 +144,7 @@ def _check_subject(trace: Trace, lens: LensPreset) -> None:
     subject = LENS_SUBJECTS.get(lens.name)
     if subject is None:
         return
-    if subject == "attention_structure" and not _has_attention_subject(trace):
+    if subject == "attention_structure" and not has_attention_subject(trace):
         raise InvalidArgumentError(
             "no attention structure detected in this trace; the transformer "
             "lens never draws an ordinary graph under a domain name",
@@ -385,39 +308,6 @@ def _debug_label_spec_fn(usual: tuple[str | None, str | None]) -> Any:
             parts.append(f"device: {device}")
         if parts:
             spec.lines.append(", ".join(parts))
-        return spec
-
-    return _apply
-
-
-def _attention_role_row(address: str) -> str | None:
-    """Return the attention-role row a module address names, if any."""
-
-    parts = address.lower().split(".")
-    row = _ATTENTION_ROLE_SUFFIXES.get(parts[-1])
-    if row is not None:
-        return row
-    scoped = _SCOPED_ATTENTION_ROLE_SUFFIXES.get(parts[-1])
-    if scoped is not None and any(scoped[0] in part for part in parts[:-1]):
-        return scoped[1]
-    return None
-
-
-def _attention_role_spec_fn() -> Any:
-    """Return the transformer preset fn attaching per-layer role rows."""
-
-    def _apply(layer: Any, spec: Any) -> Any:
-        """Append the observed attention-role row for recognized layers."""
-
-        layer_type = str(record_type(layer, ""))
-        if layer_type in _ATTENTION_OP_TYPES:
-            spec.lines.append("attention: scaled dot-product (observed)")
-            return spec
-        for address in getattr(layer, "modules", ()) or ():
-            row = _attention_role_row(str(address).split(":", 1)[0])
-            if row is not None:
-                spec.lines.append(row)
-                break
         return spec
 
     return _apply
@@ -682,9 +572,17 @@ def _secondary_stages(trace: Trace, lens: LensPreset, build: _LensBuild) -> None
                 )
             )
 
-    # -- Transformer: per-layer role rows. ---------------------------------
+    # -- Transformer: per-layer role rows, one block in full. --------------
     if lens.name == "transformer":
-        build.preset_fns.append(_attention_role_spec_fn())
+        build.preset_fns.append(attention_role_spec_fn())
+        block = None if build.user_kwargs.get("module") else first_attention_block(trace)
+        if block is not None:
+            address, class_name, count = block
+            build.effective["module"] = address
+            build.disclosure.append(
+                f"showing {address}, the first of {count} {class_name} blocks; "
+                "pass module= to draw another"
+            )
 
 
 def _filter_stage(
@@ -754,6 +652,30 @@ def _finalize_draw_kwargs(build: _LensBuild, passthrough: dict[str, Any]) -> dic
     return draw_kwargs
 
 
+def _start_build(trace: Trace, lens: LensPreset, request_kwargs: dict[str, Any]) -> _LensBuild:
+    """Merge the lens members under the explicit kwargs into a fresh build."""
+
+    effective = resolve_lens_request(lens, request_kwargs, lens.surface)
+    effective.pop("preset_spec_fn", None)
+    if (
+        effective.get("vis_mode") == "rolled"
+        and "vis_mode" not in request_kwargs
+        and not _has_multipass_subject(trace)
+    ):
+        # Rolling a feed-forward model only folds reused stateless ops (one
+        # nn.ReLU called twice) into loops that are not there.
+        effective["vis_mode"] = "unrolled"
+    build = _LensBuild(
+        effective=effective,
+        user_kwargs=request_kwargs,
+        view=str(effective.get("vis_mode", _effective_view(lens, request_kwargs))),
+        disclosure=[f"lens: {lens.name} -- {lens.question}"],
+    )
+    if lens.preset_spec_fn is not None:
+        build.preset_fns.append(lens.preset_spec_fn)
+    return build
+
+
 def resolve_lens(
     trace: Trace,
     lens: str | LensPreset,
@@ -795,25 +717,7 @@ def resolve_lens(
     resolved_lens = lens if isinstance(lens, LensPreset) else get_lens(lens)
     _check_subject(trace, resolved_lens)
     _entry_gates(trace, resolved_lens, request_kwargs)
-
-    effective = resolve_lens_request(resolved_lens, request_kwargs, resolved_lens.surface)
-    effective.pop("preset_spec_fn", None)
-    if (
-        effective.get("vis_mode") == "rolled"
-        and "vis_mode" not in request_kwargs
-        and not _has_multipass_subject(trace)
-    ):
-        # Rolling a feed-forward model only folds reused stateless ops (one
-        # nn.ReLU called twice) into loops that are not there.
-        effective["vis_mode"] = "unrolled"
-    build = _LensBuild(
-        effective=effective,
-        user_kwargs=request_kwargs,
-        view=str(effective.get("vis_mode", _effective_view(resolved_lens, request_kwargs))),
-        disclosure=[f"lens: {resolved_lens.name} -- {resolved_lens.question}"],
-    )
-    if resolved_lens.preset_spec_fn is not None:
-        build.preset_fns.append(resolved_lens.preset_spec_fn)
+    build = _start_build(trace, resolved_lens, request_kwargs)
 
     source, channel_values = _perf_stage(trace, resolved_lens, build)
     budget = _budget_stage(trace, build, channel_values)

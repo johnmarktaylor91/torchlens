@@ -60,6 +60,7 @@ from ._encoding_size_layout import (
     SIZE_SCALE_VOCABULARY,
     non_batch_numel,
 )
+from .themes import fill_with_ink
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1618,30 +1619,9 @@ def populate_encoding_state(
 def _format_domain_value(spec: EncodingChannelSpec | None, value: float) -> str:
     """Format a domain endpoint for the legend (builtin-aware, with units)."""
 
-    if spec is not None and spec.source_kind == "builtin":
-        from .overlays import format_overlay_value
+    from .overlays import legend_domain_text
 
-        formatted = format_overlay_value(spec.source, value)
-        return formatted.split(": ", 1)[-1]
-    unit = _FIELD_UNITS.get(str(getattr(spec, "source", ""))) if spec is not None else None
-    if unit is not None:
-        from .overlays import format_overlay_value
-
-        return format_overlay_value(unit, value).split(": ", 1)[-1]
-    if value == int(value) and abs(value) < 1e15:
-        return str(int(value))
-    return f"{value:.4g}"
-
-
-#: Record fields with a physical unit -> the overlay formatter that prints it.
-_FIELD_UNITS = {
-    "func_duration": "time",
-    "total_func_duration": "time",
-    "activation_memory": "bytes",
-    "total_activation_memory": "bytes",
-    "flops_forward": "flops",
-    "total_flops_forward": "flops",
-}
+    return legend_domain_text(spec, value)
 
 
 def _color_legend_rows(state: EncodingState) -> list[Any]:
@@ -1820,11 +1800,7 @@ def channel_wrapped_node_spec_fn(
         """Apply the channel fill/size, then let the user callback override them."""
 
         if channel_fill is not None:
-            from .themes import ink_on_fill
-
-            spec = spec.replace(
-                fillcolor=channel_fill, fontcolor=ink_on_fill(channel_fill, spec.fontcolor)
-            )
+            spec = fill_with_ink(spec, channel_fill)
         if channel_size is not None:
             # Minimums only: fixedsize=false means the box can only GROW
             # from the label's natural size (a label can never be truncated

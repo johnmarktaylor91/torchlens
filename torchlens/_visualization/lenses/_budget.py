@@ -324,7 +324,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
         depth, estimate = chosen
         in_band = True
     lines = [
-        f"detail: module depth {depth} (about {estimate} nodes; {op_count} ops is past "
+        f"detail: module depth {depth} (about {estimate} nodes, estimated; {op_count} ops is past "
         f"the {COLLAPSE_OPTIMIZER_MAX_OPS}-op collapse limit)"
     ]
     if channel_active:

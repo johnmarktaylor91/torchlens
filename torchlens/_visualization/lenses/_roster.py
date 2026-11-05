@@ -167,8 +167,9 @@ TRANSFORMER_LENS = register_lens(
         name="transformer",
         question="how is attention wired?",
         members={
-            # One block drawn in full, the repeats folded behind it: the
-            # attention wiring is visible instead of hidden in a module box.
+            # The resolver focuses the draw on the first repeated block that
+            # holds attention (module=), so its wiring is drawn in full
+            # instead of hidden in a folded module box.
             "collapse": "none",
             "fold_repeats": True,
             "show_legend": True,
