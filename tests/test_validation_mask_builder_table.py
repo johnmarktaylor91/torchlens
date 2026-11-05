@@ -105,7 +105,7 @@ def _parent_at(op: Any, position: int) -> str:
 def _edge(trace: Any, op: Any, parent: str) -> tuple[str, str]:
     """Return (decision, reason) of the perturbation check on one parent edge."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
