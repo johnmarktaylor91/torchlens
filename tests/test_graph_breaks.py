@@ -56,3 +56,26 @@ def test_graph_breaks_unknown_runtime_shape_is_typed(
     with pytest.raises(GraphBreaksNormalizationError, match="unsupported") as excinfo:
         tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
     assert excinfo.value.fields["code"] == "graph_breaks_normalization_failed"
+
+
+def test_checks_session_step_checks_fire_after_graph_breaks() -> None:
+    """A dynamo probe never silences a later checks session's step-boundary checks.
+
+    torch 2.1's dynamo, on its first use in a process, rebinds every optimizer
+    class's ``step`` so step hooks stop running for optimizers built afterwards;
+    the nonfinite-gradient check (a step-family check) must still raise after
+    ``graph_breaks`` has run dynamo, on every torch.
+    """
+
+    tl.debug.graph_breaks(_BreakFreeModel(), torch.ones(2, 3))
+    net = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+    session = tl.debug.ChecksSession(net, optimizer)
+    session.register_nonfinite_grad_check()
+    session.attach()
+    try:
+        with pytest.raises(tl.errors.CheckViolationError):
+            (net(torch.randn(3, 4)) * float("nan")).sum().backward()
+            optimizer.step()
+    finally:
+        session.detach()
