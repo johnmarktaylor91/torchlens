@@ -383,9 +383,7 @@ def _tag_tensor_and_track_variations(
     tensor's value at function-call time (from arg_copies) differs from its
     saved out, the pre-mutation value is recorded in
     ``out_versions_by_child``.  This is critical for validation replay,
-    which needs the actual input values each child operation saw. A snapshot whose
-    live slot (``live_args``) sits on a storage exported zero-copy is marked as a
-    possible foreign write (``_storage_exports.note_foreign_written_snapshot``).
+    which needs the actual input values each child operation saw; ``live_args`` feed its marks.
     """
     out_label = fields_dict_onetensor["_label_raw"]
     set_tensor_label(out, out_label)
