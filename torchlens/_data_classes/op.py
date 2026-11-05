@@ -82,7 +82,7 @@ from .._trace_core.relation_views import (
 from .._trace_state import TraceState
 from .._utils._record_group_table import OP_STORAGE_ATTRS, op_attr, record_member
 from .._utils.arg_handling import copy_arg_tree
-from .._utils.facade import refuse_removed_member, removed_set_remedy
+from .._utils.facade import refuse_removed_member
 from .._utils.tensor_utils import (
     concatenate_batch_tensors,
     get_memory_amount_from_metadata,
@@ -1104,13 +1104,6 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-#: Public Op members removed by the do fold (remove-and-rename, no alias).
-_REMOVED_OP_MEMBERS: dict[str, str] = {
-    "attach_hooks": "use op.do(hook, ...) -- do stages the hook",
-    "set": removed_set_remedy("Op", "op", "value"),
-}
-
-
 def _warn_synthesized_out_read(source_trace: Any) -> None:
     """Fire the once-per-trace synthesized-value warning for an ``Op.out`` read when due."""
 
@@ -1677,7 +1670,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             """Miss hook: a removed public member redirects typed (``facade_redirect``)."""
 
             if not name.startswith("_"):
-                refuse_removed_member("Op", name, _REMOVED_OP_MEMBERS)
+                refuse_removed_member("Op", name, _removed_members.REMOVED_MEMBERS["Op"])
                 _refuse_read_without_trace(self, member=name)
             raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 

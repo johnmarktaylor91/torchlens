@@ -293,7 +293,7 @@ class FuncCallLocation:
     >>> where.func_name, where.line_number
     ('forward', 12)
     >>> trace = tl.trace(model, x)
-    >>> location = trace.ops[1].code_context[0]
+    >>> location = trace.ops[1].source.frames[0]
     >>> isinstance(location, FuncCallLocation), isinstance(location.line_number, int)
     (True, True)
     """
