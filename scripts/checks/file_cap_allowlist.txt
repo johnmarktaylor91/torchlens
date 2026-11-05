@@ -838,11 +838,11 @@ torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_grad_pro
 torchlens/backends/torch/_completeness_patches.py::_make_input_metadata_wrapper	75
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes	401
 torchlens/backends/torch/_completeness_patches.py::_observe_invisible_host_escapes._restore_installed	108
-torchlens/backends/torch/_completeness_storage.py	870
+torchlens/backends/torch/_completeness_storage.py	866
 torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_method	65
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
-torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
+torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	146
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
 torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
