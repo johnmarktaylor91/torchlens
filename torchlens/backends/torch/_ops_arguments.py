@@ -178,6 +178,13 @@ def _capture_layout(value: Any) -> CaptureLayout | None:
         return layout_of(value)
 
 
+#: Exact builtin types whose instances take no attributes, so carry no TorchLens stamp:
+#: their label read is always ``None`` and the template walk skips it.
+_UNSTAMPABLE_TYPES = frozenset(
+    {int, float, bool, complex, str, bytes, type(None), list, tuple, dict, slice, type(...)}
+)
+
+
 def _classify_arg_component(
     value: Any,
     notes: list[str],
@@ -194,7 +201,7 @@ def _classify_arg_component(
         Accumulator for unsupported-value notes.
     known
         The op's snapshot labels by tensor id (read once per op); tensors not in it
-        are read live.
+        are read live, and plain builtin values are not read.
 
     Returns
     -------
@@ -203,8 +210,8 @@ def _classify_arg_component(
     """
 
     label = None
-    if known is not None and id(value) in known:
-        label = known[id(value)]
+    if known is not None and (id(value) in known or type(value) in _UNSTAMPABLE_TYPES):
+        label = known.get(id(value))
     # A Parameter mutated in place earlier in the pass replays from its mutation op.
     elif not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
         if trace is None:
