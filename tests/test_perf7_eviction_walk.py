@@ -213,6 +213,27 @@ class _ClaimsTensor:
         return torch.Tensor
 
 
+class _ClaimsTensorByLookup:
+    """An object whose attribute lookup answers ``__class__`` with the tensor type."""
+
+    def __getattribute__(self, name: str) -> Any:
+        """Claim the tensor class for ``__class__``; look anything else up normally."""
+
+        if name == "__class__":
+            return torch.Tensor
+        return object.__getattribute__(self, name)
+
+
+class _HolderClaimsTensor(_Holder):
+    """A subclass of an honest record type whose ``__class__`` claims a tensor."""
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:
+        """Claim the tensor class."""
+
+        return torch.Tensor
+
+
 class _Bytes(int):
     pass
 
@@ -284,6 +305,18 @@ def _adversarial_cells() -> list[Any]:
         [_Holder(torch.ones(1)), _ClaimsTensor()],
         _ClaimsTensor(),
         (torch.float32, torch.device("cpu"), torch.ones(1).dtype),
+        # Types the walk learns as opaque, seen again later in the same sweep,
+        # next to look-alikes that must never be learned.
+        _Holder("first"),
+        (_Holder("in tuple"), _Bytes(1), "a"),
+        (_Holder("beside a tensor"), torch.ones(1)),
+        (_Bytes(2), _Label("x"), None),
+        _ClaimsTensorByLookup(),
+        (_ClaimsTensorByLookup(), 1),
+        (_ClaimsTensor(), "a"),
+        _HolderClaimsTensor(torch.ones(1)),
+        (_HolderClaimsTensor("x"), _Holder("y")),
+        [_Holder(torch.ones(1)), (_Holder(1), (_Holder(2), torch.ones(1)))],
     ]
 
 
