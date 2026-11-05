@@ -232,7 +232,7 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
     (replaying the owner replays its internals); a host-return witnessed by the exact
     escape net (``HOST_ESCAPE_OPERATORS``) is discharged (post-hon2_1 the net is
     total: every operand records a positive attribution or a fail-closed flag). A
-    ``returned_tensor`` event -- the class -- is NEVER implicitly discharged:
+    ``returned_tensor`` event is NEVER implicitly discharged:
     an unowned mutating dispatch records ``opaque_side_effect`` and an unowned
     non-mutating value-producing dispatch records ``unmodeled_tensor_return`` (its
     product can bake into a later traced call as an unwitnessed constant). An
@@ -367,9 +367,8 @@ def _sample_writeback_at_consumption(
     A mutable zero-copy alias (``numpy`` / ``__array__`` / a storage handle) can be written,
     consumed by a downstream traced op, then byte-exactly RESTORED before forward end -- so the
     single end-of-forward compare (:func:`_check_writeback_watch`) sees ``before == after`` and
-    would falsely VERIFY (a TOCTOU window). Sampling the watched source's WHOLE-STORAGE
-    bytes at each CONSUMPTION catches the write while it is live in a traced op's input,
-    then rolls it back.
+    would falsely VERIFY (a TOCTOU window). Sampling the watched source's WHOLE-STORAGE bytes at
+    each CONSUMPTION catches the write while it is live in a traced op's input, then rolls it back.
 
     Soundness (no over-trigger). Only a byte difference with the source's version UNCHANGED since
     the exposure is flagged:

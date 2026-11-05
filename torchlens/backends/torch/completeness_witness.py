@@ -1278,11 +1278,10 @@ class _CompletenessDispatchMode(_TorchLensDispatchMode):
                     state_view_accessor,
                 )
                 self.state.events.append(event)
-            # Per-consumption host write-back sample (closes a TOCTOU window): if a mutable
-            # zero-copy alias is live and THIS traced op consumes a watched source whose bytes
-            # were transiently written, catch it now -- BEFORE redispatch reads the mutated
-            # input -- rather than only at forward end where a byte-exact restore would have
-            # already hidden it.
+            # Per-consumption host write-back sample (a TOCTOU window): if a mutable zero-copy
+            # alias is live and THIS traced op consumes a watched source whose bytes were
+            # transiently written, catch it now -- BEFORE redispatch reads the mutated input --
+            # rather than only at forward end where a byte-exact restore would have hidden it.
             if in_scope:
                 _sample_writeback_at_consumption(self.state, args, kwargs)
             # A resize-family receiver must be sized BEFORE dispatch --

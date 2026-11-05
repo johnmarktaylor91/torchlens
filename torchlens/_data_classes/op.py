@@ -3386,8 +3386,7 @@ class _FactField(_OpField):
     the first read hydrates the field's exact public container type for THIS
     row and caches it back, so identity is stable across reads, per-row
     in-place mutation stays isolated (a fresh container per row, exactly the
-    earlier per-row semantics), and uninspected rows retain no per-row
-    container. A
+    earlier per-row semantics), and uninspected rows retain no per-row container. A
     direct write replaces the sentinel with a per-row cell value and never
     mutates the shared block.
     """

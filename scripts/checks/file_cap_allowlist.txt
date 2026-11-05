@@ -915,7 +915,7 @@ torchlens/backends/torch/collectives.py::_build_payload	102
 torchlens/backends/torch/collectives.py::_emit_boundary_op	111
 torchlens/backends/torch/collectives.py::_make_collective_wrap	174
 torchlens/backends/torch/collectives.py::_make_collective_wrap.wrapped_collective	164
-torchlens/backends/torch/completeness_witness.py	1620
+torchlens/backends/torch/completeness_witness.py	1619
 torchlens/backends/torch/completeness_witness.py::_CompletenessDispatchMode.__torch_dispatch__	168
 torchlens/backends/torch/completeness_witness.py::_storage_disposition_rows	79
 torchlens/backends/torch/escape_detection.py	946
