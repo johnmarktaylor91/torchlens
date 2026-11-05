@@ -657,3 +657,38 @@ def test_owner_thread_scalar_only_stale_escape_is_shadow_reported() -> None:
     assert trace.provenance.verification_reason == "callable_escape_shadow_report"
     assert trace.escape_diagnostics
     assert _gap_warnings(caught)
+
+
+def test_thread_count_warning_blames_the_caller_not_a_torchlens_frame() -> None:
+    """The guard's teardown warning points at the user's line under any context manager.
+
+    The suite errors on warnings attributed to the torchlens package; a fixed
+    ``stacklevel`` from inside the guard's generator lands on whichever frame drives
+    the context manager, so the warning must find the first frame outside torchlens.
+    """
+
+    release = threading.Event()
+    workers: list[threading.Thread] = []
+
+    class Model(nn.Module):
+        """Leave a live worker behind so the guard sees a thread-count change."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Start one daemon worker, then do the tensor work on the owner thread."""
+
+            worker = threading.Thread(target=release.wait, daemon=True)
+            worker.start()
+            workers.append(worker)
+            return torch.relu(x)
+
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            tl.trace(Model(), torch.randn(3))
+    finally:
+        release.set()
+        for worker in workers:
+            worker.join(timeout=2)
+    gap = [w for w in caught if "thread-count change" in str(w.message)]
+    assert len(gap) == 1
+    assert Path(gap[0].filename).resolve() == Path(__file__).resolve()

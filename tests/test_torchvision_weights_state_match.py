@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -169,6 +170,27 @@ def test_planted_handle_still_wins_over_the_state_match(
     resolution = pp.resolve(model=model)
     assert resolution.preprocessing.config["resolution_method"] == "model_metadata"
     assert called == []
+
+
+def test_checkpoint_read_shows_no_torch_internal_typed_storage_warning(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reading a cached checkpoint surfaces none of torch's own storage deprecations."""
+
+    import torch.storage as torch_storage
+
+    setter = getattr(torch_storage, "_set_always_warn_typed_storage_removal", None)
+    if setter is not None:
+        getter = torch_storage._get_always_warn_typed_storage_removal
+        monkeypatch.setattr(torch_storage, "_always_warn_typed_storage_removal", getter())
+        setter(True)
+    path = tmp_path / "state.pth"
+    torch.save(_Fake().state_dict(), path)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        state = tvw._load_checkpoint(str(path))
+    assert set(state) == {"fc.weight", "fc.bias", "scale"}
+    assert not [w for w in caught if "TypedStorage" in str(w.message)]
 
 
 @pytest.mark.slow

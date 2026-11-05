@@ -548,6 +548,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/_utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_NUMPY_BRIDGE"),
         ("torchlens/_utils/_torch_compat.py", "_NUMPY_BRIDGE_PROBED"),
+        # torch.utils.cpp_extension import probe (torch 2.1 imports pkg_resources,
+        # which current setuptools no longer ships): lazy so a plain import never
+        # loads setuptools; same shape as every other row in this class.
+        ("torchlens/_utils/_torch_compat.py", "HAS_TORCH_CPP_EXTENSION"),
+        ("torchlens/_utils/_torch_compat.py", "_TORCH_CPP_EXTENSION_PROBED"),
         # ratchet2 ci-fix (2026-10-01): the MHA fastpath-switch probe joined
         # the lazy pattern (was eager at import, tripping the import-hygiene
         # duration budget on the torch>=2.1 floor's py3.10 leg); same shape
@@ -602,6 +607,10 @@ last-run slots are overwritten per run and never steer a verdict.
 
 _WEAK_SUBJECT_TABLES = frozenset(
     {
+        # Instance step-hook bindings keyed weakly by the optimizer: a hold per
+        # TorchLens session, the entry deleted with the last hold (torch 2.1
+        # compile strip fallback); dies with the optimizer.
+        ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         # Call-site grouping side table per live Trace (WeakKeyDictionary keyed
         # by the Trace), so re-validation of a fresh capture can re-check it.
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
@@ -822,6 +831,10 @@ _PROCESS_CACHES = frozenset(
         # the version counter it was hashed at, so a dead or edited tensor
         # never hits.
         ("torchlens/intervention/_content_identity.py", "_TENSOR_TOKEN_MEMO"),
+        # Intervention fire results of tensors that reject dynamic attributes,
+        # keyed by id(tensor); each entry's tensor weakref callback evicts it and
+        # readers check the referent, so a dead or recycled id never hits.
+        ("torchlens/backends/torch/_ops_interventions.py", "_OUT_OF_BAND_FIRE_RESULTS"),
         # Weightsfree (F33) process-lifetime memos: the per-code-object
         # decomposition-frame classification (bounded by loaded code) and the
         # one-per-process D20 meta identity self-test verdict.
@@ -971,6 +984,7 @@ when its entries are session-scoped (see ``_module_class_metadata_cache``).
 
 _WEAKLY_HELD = frozenset(
     {
+        ("torchlens/_utils/_optimizer_hooks.py", "_BINDINGS"),
         ("torchlens/_postprocess/_call_site_contract.py", "_CALL_SITE_CLASSES"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),

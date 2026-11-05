@@ -1166,18 +1166,14 @@ IGNORED_FUNCS = [
     ("torch.nn.functional", "sigmoid"),
     ("torch.nn.functional", "hardsigmoid"),
     ("torch.nn.functional", "tanh"),
-    ("torch.nn.init", "calculate_gain"),
-    ("torch.nn.init", "uniform"),
-    ("torch.nn.init", "normal"),
-    ("torch.nn.init", "constant"),
-    ("torch.nn.init", "eye"),
-    ("torch.nn.init", "dirac"),
-    ("torch.nn.init", "xavier_uniform"),
-    ("torch.nn.init", "xavier_normal"),
-    ("torch.nn.init", "kaiming_uniform"),
-    ("torch.nn.init", "kaiming_normal"),
-    ("torch.nn.init", "orthogonal"),
-    ("torch.nn.init", "sparse"),
+    *(
+        ("torch.nn.init", _init_name)
+        for _init_name in (
+            *("calculate_gain", "uniform", "normal", "constant", "eye", "dirac"),
+            *("xavier_uniform", "xavier_normal", "kaiming_uniform", "kaiming_normal"),
+            *("orthogonal", "sparse"),
+        )
+    ),
     ("torch.nn.functional", "hardswish"),
     ("torch.Tensor", "__delitem__"),
     ("torch.Tensor", "__iter__"),
@@ -1228,6 +1224,9 @@ IGNORED_FUNCS = [
     # snapshots read ``torch.default_generator.get_state()``, so they never record.
     ("torch", "get_rng_state"),
     ("torch.random", "get_rng_state"),
+    # Dtype queries dispatch an aten op but return a dtype or bool. Unwrapped, the census counted
+    # that dispatch as a dropped op; wrapped, it is owned and records no op (like torch.equal).
+    *(("torch", _name) for _name in ("promote_types", "can_cast", "result_type")),
     # ``torch.load`` (both spellings) is wrapped only so the provenance warning names it; its result
     # stays sourceless (replay never reloads files). Excluded: ``torch.empty_quantized``
     # (uninitialized, no validation exemption), ``to_padded_tensor`` (nested), wrapper subclasses.

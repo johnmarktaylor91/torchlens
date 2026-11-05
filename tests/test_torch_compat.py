@@ -418,6 +418,10 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_ORIGINAL_VIEW_TRACKING": tc.HAS_ORIGINAL_VIEW_TRACKING,
         # The unchecked view replay; older torch spells it ``_view_func``.
         "HAS_VIEW_FUNC_UNSAFE": tc.HAS_VIEW_FUNC_UNSAFE,
+        # Newer-torch surfaces a model may call (torch 2.3+ and 2.5+): absence is healthy.
+        "HAS_REV_VIEW_FUNC_UNSAFE": tc.HAS_REV_VIEW_FUNC_UNSAFE,
+        "HAS_SDPA_GQA": tc.HAS_SDPA_GQA,
+        "HAS_SDPA_EMPTY_ROW_ZERO": tc.HAS_SDPA_EMPTY_ROW_ZERO,
         "HAS_FX_GRAPH_MODULE": True,
         "HAS_NAMED_TENSOR_API": tc.HAS_NAMED_TENSOR_API,
         "HAS_CACHED_UNTYPED_STORAGE_WRAPPER": tc.HAS_CACHED_UNTYPED_STORAGE_WRAPPER,
@@ -489,6 +493,7 @@ def test_torch_capability_snapshot_contract() -> None:
         # torch<->numpy bridge under NumPy 2. Every CI row pairs a working
         # build, but the value is environment-dependent: mirror it.
         "HAS_NUMPY_BRIDGE": tc.HAS_NUMPY_BRIDGE,
+        "HAS_TORCH_CPP_EXTENSION": tc.HAS_TORCH_CPP_EXTENSION,
         # W21 cold-start: FSDP wrapper detection is lazily probed (never imports
         # torch.distributed.fsdp on plain captures); distributed availability is
         # build-dependent, so mirror the live post-snapshot capability.

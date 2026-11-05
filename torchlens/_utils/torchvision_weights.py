@@ -15,6 +15,7 @@ forbids inferring weights from the model type.
 from __future__ import annotations
 
 import os
+import warnings
 from typing import Any
 from urllib.parse import urlparse
 
@@ -101,12 +102,22 @@ def _sample_keys(keys: list[str]) -> list[str]:
 
 
 def _load_checkpoint(path: str) -> Any:
-    """Load a cached checkpoint for reading only (memory-mapped when supported)."""
+    """Load a cached checkpoint for reading only (memory-mapped when supported).
 
-    try:
-        return torch.load(path, map_location="cpu", weights_only=True, mmap=True)
-    except TypeError:  # torch without the mmap keyword
-        return torch.load(path, map_location="cpu", weights_only=True)
+    Older torch's own loader reads ``dtype`` off its legacy typed storage
+    classes for every stored tensor and so emits torch's TypedStorage
+    deprecation warning from inside ``torch.load``; no caller code touched a
+    typed storage, so that one torch-internal warning is not shown.
+    """
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message="TypedStorage is deprecated", category=UserWarning
+        )
+        try:
+            return torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+        except TypeError:  # torch without the mmap keyword
+            return torch.load(path, map_location="cpu", weights_only=True)
 
 
 def _state_matches(model_state: dict[str, torch.Tensor], checkpoint: Any) -> bool:
