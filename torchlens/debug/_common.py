@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -9,6 +10,7 @@ import torch
 
 from .._comparison_tensor import _comparison_tensor
 from .._data_classes._lookup_kinds import op_at
+from .._data_classes._module_edit_sites import edited_stand_in, is_mapped_replacement
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
@@ -132,6 +134,35 @@ def _compute_ops(trace: Trace) -> list[Op]:
     """
 
     return [op for op in _ordered_ops(trace) if int(getattr(op, "step_index", 0) or 0) > 0]
+
+
+def _compared_site_ops(trace: Trace) -> dict[str, Any]:
+    """Return the compute ops a cross-trace comparison pairs, keyed by pass-qualified label.
+
+    A module edit records its edited value in a replacement op after the
+    module's last op (``_data_classes._module_edit_sites``); the unedited
+    trace has no such op. The edited site is therefore compared at the last
+    op's label with the replacement's value, so the row names the edited
+    module's op and the edited value, and the replacement gets no row of its
+    own. A replacement that does not record its parent keeps its own row.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace.
+
+    Returns
+    -------
+    dict[str, Any]
+        Label to the op whose value the comparison reads, in execution order.
+    """
+
+    ops = _compute_ops(trace)
+    return {
+        _op_label(op): edited_stand_in(op, trace)
+        for op in ops
+        if not is_mapped_replacement(op, trace)
+    }
 
 
 def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
@@ -426,3 +457,69 @@ def _module_address(op: Op) -> str | None:
     if isinstance(module, str):
         return module.rsplit(":", 1)[0]
     return None
+
+
+def _op_by_any_label(trace: Trace) -> dict[str, Op]:
+    """Build a lookup of final and raw labels to trace ops.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose graph labels should be indexed.
+
+    Returns
+    -------
+    dict[str, Op]
+        Label lookup for parent traversal.
+    """
+
+    lookup: dict[str, Op] = {}
+    for op in _ordered_ops(trace):
+        for label in (
+            getattr(op, "label", None),
+            getattr(op, "layer_label", None),
+            getattr(op, "_label_raw", None),
+        ):
+            if isinstance(label, str):
+                lookup[label] = op
+    return lookup
+
+
+def _unsaved_ancestors(trace: Trace, op: Op, label_of: Callable[[Op], str]) -> tuple[str, ...]:
+    """Return unsaved computational ancestors of an op in execution order.
+
+    Parameters
+    ----------
+    trace:
+        Trace containing ``op``.
+    op:
+        First saved non-finite op.
+    label_of:
+        Renders an op's public label; ancestors are keyed and returned by it.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Labels of ancestor ops that do not retain output payloads.
+    """
+
+    by_label = _op_by_any_label(trace)
+    pending = list(getattr(op, "parents", ()) or ())
+    visited: set[str] = set()
+    unsaved: set[str] = set()
+    while pending:
+        parent_label = pending.pop()
+        if parent_label in visited:
+            continue
+        visited.add(parent_label)
+        parent = by_label.get(parent_label)
+        if parent is None:
+            continue
+        pending.extend(getattr(parent, "parents", ()) or ())
+        if not bool(getattr(parent, "is_input", False)) and not bool(
+            getattr(parent, "has_saved_activation", False)
+        ):
+            unsaved.add(label_of(parent))
+    return tuple(
+        label_of(candidate) for candidate in _ordered_ops(trace) if label_of(candidate) in unsaved
+    )

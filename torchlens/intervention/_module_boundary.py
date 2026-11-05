@@ -31,6 +31,7 @@ from .._ir.selector_eval import selector_contains_kind
 from .._selection.selectors import BaseSelector
 from .._state import pause_logging
 from .._utils._tensor_label import clear_tensor_label, get_tensor_label
+from .._utils._torch_symbols import tensor_read
 from ._rule_match import _match_rules, _rule_decision
 from ._zero_fire import note_capture_rule_fired
 from .hooks import make_live_site_proxy, normalize_hook_plan
@@ -427,7 +428,7 @@ def _peek_tensor_live_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
     intervention_state = _ops_interventions()
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
         records = getattr(storage, intervention_state._LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
     except Exception:
         return ()

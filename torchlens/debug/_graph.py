@@ -19,6 +19,7 @@ from .._debug_report import Report, at_source, table_report, trace_subject
 from .._io.payload_codec import get_payload_codec
 from ..backends._backend_names import TORCH_BACKEND_NAME
 from ._common import (
+    _compared_site_ops,
     _compute_ops,
     _op_from_label,
     _op_label,
@@ -351,8 +352,8 @@ def _compare_rows(
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")
-    ops_a = {_op_label(op): op for op in _compute_ops(trace_a)}
-    ops_b = {_op_label(op): op for op in _compute_ops(trace_b)}
+    ops_a = _compared_site_ops(trace_a)
+    ops_b = _compared_site_ops(trace_b)
     # EXECUTION order, never alphabetical (observe memo item 2): the published
     # first-diverging-op recipe reads the first row, and a sorted() walk named
     # whichever op sorts first (op 67 of 70 on resnet18). Rows follow trace_a's

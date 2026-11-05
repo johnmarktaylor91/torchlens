@@ -87,6 +87,7 @@ from .._runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
+from .._runnable.seam import carries_intervened_values
 from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
 from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
@@ -2964,10 +2965,8 @@ def _store_readiness(
 
     trace._runnable.descriptor = descriptor
     trace._runnable.readiness = report
-    if attachments is None:
-        trace._runnable.callables_by_call_id = None
-    else:
-        trace._runnable.callables_by_call_id = dict(attachments)
+    trace._runnable.loaded_values_intervened = carries_intervened_values(trace)
+    trace._runnable.callables_by_call_id = None if attachments is None else dict(attachments)
 
 
 def _diagnostic(

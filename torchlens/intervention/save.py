@@ -50,6 +50,7 @@ from .errors import (
     SiteResolutionError,
     UntrustedCallableError,
 )
+from .hooks import _rebound_facet_request
 from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
@@ -342,26 +343,18 @@ def _refuse_2x_spec_layout(spec_path: Path) -> None:
     )
 
 
-def _load_trace_recipe_spec(path: str | Path) -> InterventionSpec:
+def _load_trace_recipe_spec(path: str | Path, trace: Any = None) -> InterventionSpec:
     """Return the staged spec a saved trace's ``intervention.json`` describes.
 
-    The trace reader attaches it as the loaded trace's ``_intervention_spec``,
-    so the rerun guard can tell a replayable recipe from one with
-    placeholders.
-
-    Parameters
-    ----------
-    path:
-        Trace artifact directory holding ``intervention.json``.
-
-    Returns
-    -------
-    InterventionSpec
-        The spec, with ``metadata["recipe_placeholders"]`` and
-        ``metadata["executable"]`` set.
+    The trace reader attaches it as the loaded trace's ``_intervention_spec``. A facet
+    write is rebound on ``trace`` and refuses typed when it no longer reproduces there;
+    ``trace=None`` leaves it unbound, so it refuses to fire.
     """
 
-    return load_intervention_spec(path)
+    spec = load_intervention_spec(path)
+    if trace is not None:
+        spec.hook_specs = [_rebound_facet_request(trace, hook, path) for hook in spec.hook_specs]
+    return spec
 
 
 def _spec_with_recipe_metadata(recipe: Mapping[str, Any], root: Path) -> InterventionSpec:

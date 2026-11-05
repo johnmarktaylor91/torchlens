@@ -1278,10 +1278,8 @@ def _attach_live_fire_results(
 
     fire_results = _pop_tensor_live_fire_results(tensor)
     if fire_results:
+        # The record's ``edits`` derive from ``fire_results`` at scatter.
         fields_dict["fire_results"] = fire_results
-        fields_dict["edits"] = [
-            result.fire_record for result in fire_results if result.fire_record is not None
-        ]
         fields_dict["is_edited"] = any(result.replaced for result in fire_results)
         # Fire results only mint replacement-event evidence when the live-fire
         # machinery is actually armed for THIS capture; a stale

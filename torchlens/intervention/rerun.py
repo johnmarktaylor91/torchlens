@@ -58,7 +58,6 @@ from .errors import (
     AppendMismatchError,
     AppendStreamingUnsupportedError,
     BatchNormTrainModeWarning,
-    ChunkedForwardConfigError,
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
     DirectActivationWriteWarning,
@@ -102,8 +101,7 @@ def run(
         Optional explicit tensor leaf paths to split when multiple batched
         tensor leaves are present.
     replay:
-        Grouped replay options (``ReplayOptions``: ``append``, ``chunk_size``,
-        ``strict``).
+        Grouped replay options (``ReplayOptions``: ``chunk_size``, ``strict``).
     output_transform:
         Optional callable applied to the fresh model output for raw-output
         metadata storage.
@@ -119,10 +117,6 @@ def run(
 
     replay_options = merge_replay_options(replay=replay)
     if replay_options.chunk_size is not None:
-        if replay_options.append:
-            raise ChunkedForwardConfigError(
-                "rerun(chunk_size=...) cannot be combined with append=True."
-            )
         return _chunked_rerun(
             trace,
             model,
@@ -132,8 +126,6 @@ def run(
             strict=replay_options.strict,
             output_transform=output_transform,
         )
-    if replay_options.append:
-        return _append_rerun(trace, model, inputs, strict=replay_options.strict)
     _preflight(trace, model, inputs)
     model = _unwrap_compiled_model(model)
     _warn_if_direct_writes_will_be_overlaid(trace)
@@ -366,7 +358,7 @@ def _chunked_rerun(
             log,
             model,
             x,
-            replay=ReplayOptions(append=False, strict=strict),
+            replay=ReplayOptions(strict=strict),
             output_transform=output_transform,
         )
     chunks = iter_chunked_inputs(x, plan)
@@ -374,7 +366,7 @@ def _chunked_rerun(
         log,
         model,
         chunks[0],
-        replay=ReplayOptions(append=False, strict=strict),
+        replay=ReplayOptions(strict=strict),
         output_transform=output_transform,
     )
     initial_record = {
@@ -386,13 +378,7 @@ def _chunked_rerun(
         "chunk_paths": normalize_chunk_paths(chunk_paths),
     }
     for chunk in chunks[1:]:
-        result = run(
-            result,
-            model,
-            chunk,
-            replay=ReplayOptions(append=True, strict=strict),
-            output_transform=output_transform,
-        )
+        result = _append_rerun(result, model, chunk, strict=strict)
     result._append_history = [initial_record, *result._append_history]
     result._options_chunk_size = True
     result.last_run = dict(result.last_run or {})

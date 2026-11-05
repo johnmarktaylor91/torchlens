@@ -28,6 +28,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.support.gradient_edge_guard import requires_gradient_edge
 
 torchvision = pytest.importorskip("torchvision")
 
@@ -181,6 +182,7 @@ def _key(model, transcoders, graph) -> torch.Tensor:
 class TestVisionTransformerPooledHead:
     """Image input (no token ids) and a pooled class-token head."""
 
+    @requires_gradient_edge
     def test_edges_match_leaf_linearisation_key(self) -> None:
         model = _model()
         transcoders = _transcoders()
@@ -195,6 +197,7 @@ class TestVisionTransformerPooledHead:
         gap = (graph.adjacency_matrix.double() - key).abs().max().item()
         assert gap <= EDGE_FRAC * scale, (gap, scale)
 
+    @requires_gradient_edge
     def test_pooled_head_and_imageless_tokens_are_disclosed(self) -> None:
         graph = _build(_model(), _transcoders())
         assert graph.input_token_ids.numel() == 0
@@ -207,6 +210,7 @@ class TestVisionTransformerPooledHead:
         assert "pooled (1, classes) head" in notes
         assert "token nodes carry no id" in notes
 
+    @requires_gradient_edge
     def test_neuronpedia_export_refuses_idless_tokens(self) -> None:
         graph = _build(_model(), _transcoders())
         tokenizer = SimpleNamespace(decode=lambda ids: " ".join(str(i) for i in ids))

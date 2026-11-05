@@ -35,7 +35,7 @@ from ._torch_compat import (
     get_functorch_wrapped_tensor_checker,
     get_tracing_tensor_types,
 )
-from ._torch_symbols import torch_attr
+from ._torch_symbols import tensor_read, tensor_reads, torch_attr
 from .env_flags import closed_bool_env
 
 
@@ -434,10 +434,7 @@ def _quantized_tensor_equal(tensor_a: torch.Tensor, tensor_b: torch.Tensor) -> b
     return (
         tensor_a.q_per_channel_axis() == tensor_b.q_per_channel_axis()
         and torch.equal(tensor_a.q_per_channel_scales(), tensor_b.q_per_channel_scales())
-        and torch.equal(
-            tensor_a.q_per_channel_zero_points(),
-            tensor_b.q_per_channel_zero_points(),
-        )
+        and torch.equal(tensor_a.q_per_channel_zero_points(), tensor_b.q_per_channel_zero_points())
     )
 
 
@@ -1034,7 +1031,7 @@ def _deferred_storage_key(x: torch.Tensor) -> tuple[int, int, str] | None:
     if tracing_types and isinstance(x, tracing_types):
         return None
     try:
-        storage = x.untyped_storage()
+        storage = tensor_read(x, "untyped_storage")(x)
         ptr = storage.data_ptr()
         nbytes = storage.nbytes()
     except Exception:
@@ -1109,10 +1106,11 @@ def _try_defer_payload_alias(
         return None
     if x.layout is not torch.strided or x.is_quantized:
         return None
-    if x.device.type == "meta" or x.numel() == 0:
+    numel, conj, neg, inference = tensor_reads(x, "numel", "is_conj", "is_neg", "is_inference")
+    if x.device.type == "meta" or numel(x) == 0:
         return None
     try:
-        if x.is_conj() or x.is_neg() or x.is_inference():
+        if conj(x) or neg(x) or inference(x):
             return None
     except Exception:
         return None
@@ -1237,8 +1235,9 @@ def materialize_deferred_for_call(tensors: Iterable[Any]) -> None:
 
 def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> bool:
     """Return whether ``alias`` spans its storage end to end (offset 0)."""
+    storage_offset, element_size = tensor_reads(alias, "storage_offset", "element_size")
     try:
-        if alias.storage_offset() != 0:
+        if storage_offset(alias) != 0:
             return False
         span_elems = 1
         # len(shape) == len(stride) is a torch invariant (both are the rank).
@@ -1246,7 +1245,7 @@ def _alias_covers_whole_storage(alias: torch.Tensor, storage_nbytes: int) -> boo
             if size == 0:
                 return False
             span_elems += (size - 1) * abs(stride)
-        return span_elems * alias.element_size() == storage_nbytes
+        return span_elems * element_size(alias) == storage_nbytes
     except Exception:
         return False
 
@@ -1272,8 +1271,8 @@ def _drop_dead_deferred_alias(key: tuple[int, int, str], _ref: Any) -> None:
     _defer_dead_alias_count += 1
     entries = _DEFER_PENDING.get(key)
     if entries is not None:
-        live = [e for e in entries if e.ref() is not None]
-        if not live:
+        live = entries if len(entries) < 2 else [e for e in entries if e.ref() is not None]
+        if not live or live[0].ref() is None:  # a lone entry is tested in place, no list built
             _DEFER_PENDING.pop(key, None)
         elif len(live) != len(entries):
             _DEFER_PENDING[key] = live

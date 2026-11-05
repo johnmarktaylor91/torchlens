@@ -15,6 +15,7 @@ import torch
 from .._data_classes._lookup_kinds import _record_view
 from .._data_classes.trace import Trace
 from .._errors import AmbiguousOpLookupError
+from .._extract_fast import extract_outputs
 from .._extract_refusals import (
     CaptureOptions,
     TorchLensError,
@@ -336,7 +337,8 @@ def extract(
     ``layers`` and ``detach_saved_activations``. Every other capture option
     (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
     ``episode=``, storage) belongs to ``tl.trace``; call it and read
-    ``trace[label].out`` when you need one of them.
+    ``trace[label].out`` when you need one of them. Exact module addresses on an
+    eval-mode model with one tensor input take one hooked forward, not a capture.
 
     Parameters
     ----------
@@ -365,7 +367,5 @@ def extract(
     [('head', (1, 2, 8, 8)), ('stem', (1, 4, 8, 8))]
     """
 
-    _trace, outputs, _views = _extract_layers_with_trace(
-        model, inputs, layers, detach_saved_activations=detach_saved_activations
-    )
-    return outputs
+    full = _extract_layers_with_trace  # the full-capture path the fast path falls back to
+    return extract_outputs(model, inputs, layers, full, detach=detach_saved_activations)

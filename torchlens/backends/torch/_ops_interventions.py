@@ -29,9 +29,8 @@ from ..._selection.selectors import (
     label as make_label_selector,
 )
 from ..._state import pause_logging
-from ..._utils._tensor_label import (
-    get_label_list,
-)
+from ..._utils._tensor_label import get_label_list
+from ..._utils._torch_symbols import tensor_read
 from ...errors._base import CompatibilityError
 from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
 from ...intervention.runtime import active_intervention_context
@@ -89,7 +88,7 @@ def _store_out_of_band_fire_results(
     tensor_id = id(tensor)
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
         records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
         if records is None:
             records = {}
@@ -115,7 +114,7 @@ def _take_out_of_band_fire_results(tensor: torch.Tensor) -> tuple[FireResult, ..
 
     try:
         with pause_logging():
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
         records = getattr(storage, _LIVE_FIRE_RESULTS_STORAGE_ATTR, None)
     except (AttributeError, RuntimeError, TypeError):
         return ()

@@ -45,6 +45,7 @@ from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read 
 )
 from ._state import pause_logging
 from ._utils._display_bounded import short_dataclass_repr
+from ._utils._torch_symbols import tensor_read
 from .errors._base import CaptureError
 
 #: A retained payload the accountant charges: a tensor, or a storage kept as a
@@ -894,13 +895,9 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
                     )
                     for component in sparse_component_tensors(tensor)
                 ]
-            storage = tensor.untyped_storage()
+            storage = tensor_read(tensor, "untyped_storage")(tensor)
             num_bytes = int(storage.nbytes())
-            identity: tuple[Any, ...] = (
-                str(tensor.device),
-                int(storage.data_ptr()),
-                num_bytes,
-            )
+            identity: tuple[Any, ...] = (str(tensor.device), int(storage.data_ptr()), num_bytes)
             return [(identity, num_bytes)]
         except Exception:
             num_bytes = int(tensor.numel() * tensor.element_size())

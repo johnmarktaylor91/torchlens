@@ -235,15 +235,14 @@ def _log_output_tensor_info(
     if site_class is not None:
         self._raw_graph_ws._call_site_classes[_label_raw] = site_class
 
-    # equivalent_ops is a DIRECT reference to the Trace-level set —
-    # all entries sharing this equivalence type point to the same set object.
-    # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
-    # tensor through intervention/raw-hook with a fresh hash), create the
-    # set on demand rather than crashing with KeyError.
+    # Register the label in the Trace-level equivalence side table (read after
+    # the forward). Defensive: if equivalence_class isn't yet registered (e.g.
+    # user-injected tensor through intervention/raw-hook with a fresh hash),
+    # create the set on demand rather than crashing with KeyError. The op's
+    # ``equivalent_ops`` is not stored here: materialize recomputes it.
     if base_equivalence_class not in self._graph_op_equivalence_classes:
         self._graph_op_equivalence_classes[base_equivalence_class] = set()
     self._graph_op_equivalence_classes[base_equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self._graph_op_equivalence_classes[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label -- but so
     # does a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()`` on a
@@ -332,12 +331,10 @@ def _log_output_tensor_info(
     fields_dict["grad_fn_class_qualname"] = (
         None if grad_fn_cls is None else f"{grad_fn_cls.__module__}.{grad_fn_cls.__qualname__}"
     )
-    fields_dict["grad_fn_object_id"] = id(op_grad_fn) if op_grad_fn is not None else None
     # Autograd Function objects do not consistently support weak references.
     # Keep the object only until explicit backward capture has registered hooks;
     # the backward finalizer clears these strong refs to avoid pinning graphs.
     fields_dict["grad_fn_handle"] = op_grad_fn
-    fields_dict["grad_fn"] = None
 
     if fields_dict["in_multi_output"]:
         fields_dict["multi_output_index"] = i
@@ -363,25 +360,15 @@ def _log_output_tensor_info(
 
     # General info
     fields_dict["_label_raw"] = _label_raw
-    fields_dict["step_index"] = None
-    fields_dict["recurrent_ops"] = []
     fields_dict["raw_index"] = raw_index
     fields_dict["step_index"] = None
-    fields_dict["source_trace"] = self
     fields_dict["_tracing_finished"] = False
 
-    # Other labeling info
-    fields_dict["layer_label"] = None
-    fields_dict["short_layer_label"] = None
-    fields_dict["label"] = None
-    fields_dict["short_label"] = None
-    fields_dict["layer_label"] = None
-    fields_dict["short_layer_label"] = None
+    # Other labeling info. The final labels, ``recurrent_ops``, ``num_passes``,
+    # ``lookup_keys`` and ``source_trace`` are set by postprocess, not stored here.
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
-    fields_dict["num_passes"] = 1
-    fields_dict["lookup_keys"] = []
 
     # Saved tensor info
     fields_dict["out"] = None
@@ -455,14 +442,12 @@ def _log_output_tensor_info(
     )
 
     # Child tensor variation tracking
-    fields_dict["has_out_variations"] = False
     fields_dict["out_versions_by_child"] = {}
 
     # If internally initialized, fix this information:
     if len(fields_dict["parents"]) == 0:
         fields_dict["is_internal_source"] = True
         fields_dict["has_internal_source_ancestor"] = True
-        fields_dict["internal_source_parents"] = []
         fields_dict["internal_source_ancestors"] = {_label_raw}
 
 

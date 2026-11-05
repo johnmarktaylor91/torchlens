@@ -4,6 +4,11 @@ A leaf by design: the tensor-label helpers (``_tl``) and the shared tensor
 utilities wrap their own bookkeeping reads in :func:`internal_scalar_read`,
 so this marker must import nothing from the completeness package that those
 modules feed.
+
+At import it registers the wrapper pass-through predicate and the unwrap ledger
+with :func:`torchlens._utils._torch_symbols.register_internal_reads`, so the
+low-level routed tensor reads can reach the saved originals without importing
+this layer.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ import threading
 from typing import Any
 
 from .. import _state
+from ._torch_symbols import register_internal_reads
 
 __all__ = ("internal_scalar_read", "_internal_read_state")
 
@@ -67,3 +73,6 @@ def internal_scalar_read() -> _InternalScalarRead:
     """
 
     return _InternalScalarRead()
+
+
+register_internal_reads(_state.internal_reads_pass_through, _state.wrap_epoch_ledgers()[0])

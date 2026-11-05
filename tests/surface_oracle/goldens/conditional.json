@@ -5340,7 +5340,7 @@
       "\"count\"": 1,
       "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
-      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; what Python computed or decided with the value has no edge back to the tensor, and a branch it decided is not in trace.graph.conditionals"
      }
     ],
     "\"health_facts\"": {
@@ -10891,7 +10891,7 @@
       "\"count\"": 1,
       "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
-      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; what Python computed or decided with the value has no edge back to the tensor, and a branch it decided is not in trace.graph.conditionals"
      }
     ]
    },
@@ -16443,7 +16443,7 @@
       "\"count\"": 1,
       "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
-      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; what Python computed or decided with the value has no edge back to the tensor, and a branch it decided is not in trace.graph.conditionals"
      }
     ],
     "\"health_facts\"": {
@@ -21988,7 +21988,7 @@
       "\"count\"": 1,
       "\"first_location\"": "<repo>/tests/capture_oracle/_models.py:176",
       "\"kind\"": "scalar_escape",
-      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; what Python computed or decided with the value has no edge back to the tensor, and a branch it decided is not in trace.graph.conditionals"
      }
     ],
     "\"health_facts\"": {
@@ -27432,7 +27432,7 @@
       "\"count\"": 1,
       "\"first_location\"": "_models.py:176",
       "\"kind\"": "scalar_escape",
-      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; the dependence is not captured"
+      "\"message\"": "tensor-to-Python scalar escape(s) observed during capture; what Python computed or decided with the value has no edge back to the tensor, and a branch it decided is not in trace.graph.conditionals"
      }
     ],
     "\"health_facts\"": {

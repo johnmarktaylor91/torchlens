@@ -361,7 +361,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._autoroute._builtin_output",
         "DecodeStyleUnknownError",
     ),
-    "AmbiguousLabelError": ("torchlens.bundle", "AmbiguousLabelError"),
+    "AmbiguousLabelError": ("torchlens.bundle._labels", "AmbiguousLabelError"),
     "DatasetExtractionResumeError": (
         "torchlens._extraction.resume",
         "DatasetExtractionResumeError",

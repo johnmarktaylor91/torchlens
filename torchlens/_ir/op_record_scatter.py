@@ -546,3 +546,37 @@ def _resolve_dtype(dtype: object) -> object:
 
         _MATERIALIZE_RESOLVE_DTYPE = materialize_resolve_dtype
     return materialize_resolve_dtype(dtype)
+
+
+def _function_ref_cells(function: Any) -> dict[str, Any]:
+    """Return the function-call cells of a present ``FunctionCallRef``.
+
+    The row-direct writer (``backends/torch/_ops_row_cells.py``) reads these
+    cells from the shared call ref without a record; the values and container
+    copies match :func:`scatter_record_to_cells` for a record whose function
+    facet is ``function``.
+    """
+
+    return {
+        "func": function.func,
+        "func_id": function.func_id,
+        "func_call_id": function.func_call_id,
+        "func_name": function.func_name,
+        "func_qualname": function.func_qualname,
+        "code_context": list(function.code_context),
+        "var_names": [],
+        "func_duration": function.func_duration or 0,
+        "flops_forward": function.flops_forward,
+        "flops_backward": function.flops_backward,
+        "func_rng_states": function.func_rng_states,
+        "func_autocast_state": function.func_autocast_state,
+        "arg_names": tuple(function.arg_names),
+        "num_args_total": function.num_args_total,
+        "num_pos_args": function.num_pos_args,
+        "num_kwargs": function.num_kwargs,
+        "non_tensor_pos_args": list(function.non_tensor_pos_args),
+        "non_tensor_kwargs": dict(function.non_tensor_kwargs),
+        "func_non_tensor_args": list(function.func_non_tensor_args),
+        "is_inplace": function.is_inplace,
+        "func_config": dict(function.func_config),
+    }

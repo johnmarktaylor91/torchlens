@@ -271,13 +271,14 @@ def test_set_only_engine_ignores_differentiable(monkeypatch: pytest.MonkeyPatch)
 
 
 # ---------------------------------------------------------------------------
-# 4. ReplayOptions lost hooks= and differentiable=; InterventionOptions gained it
+# 4. ReplayOptions lost hooks=, differentiable= and append=; InterventionOptions gained
+#    differentiable=, and trace.append(inputs) is the append door
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("removed", ["hooks", "differentiable"])
+@pytest.mark.parametrize("removed", ["hooks", "differentiable", "append"])
 def test_replay_options_refuse_the_removed_fields(removed: str) -> None:
-    """``ReplayOptions(hooks=...)`` / ``(differentiable=...)`` refuse, naming the field."""
+    """``ReplayOptions(hooks=...)`` / ``(differentiable=...)`` / ``(append=...)`` refuse, naming the field."""
 
     assert removed not in _REPLAY_FIELDS
     assert removed not in ReplayOptions().as_dict()

@@ -19,6 +19,7 @@ from ._edge_multiplicity import (
     _bump_deduped_edge_multiplicity,
     _html_argument_edge_label,
     _merge_parallel_arg_midpoint,
+    _parent_occurrence_labels,
     _register_arg_midpoint_edge,
     _register_deduped_edge,
     _set_argument_edge_label,
@@ -29,10 +30,12 @@ from ._render_common import *
 from ._render_leaf import *
 from ._render_module_scope import (
     _get_lowest_module_for_two_nodes,
+    _lowest_common_rendered_owner_key,
     _place_rolled_endpoints_in_pass_scope,
 )
 from ._render_utils import html_escape
 from ._rolled_edges import _html_combined_recurrence_label
+from ._segment_descriptors import _is_recorded_module_key
 from .collapse_plan import OpSegment
 
 if TYPE_CHECKING:
@@ -679,12 +682,12 @@ def _collapsed_module_owner_key(
     if "." not in address:
         return None
     parent_address = address.rsplit(".", 1)[0]
-    if parent_address == "self" or parent_address not in trace.modules:
+    if parent_address == "self" or not _is_recorded_module_key(trace, parent_address):
         return None
     if vis_mode == "rolled":
         return parent_address
     parent_key = f"{parent_address}:{call_index}"
-    return parent_key if parent_key in trace.modules else None
+    return parent_key if _is_recorded_module_key(trace, parent_key) else None
 
 
 def _run_fold_ellipsis_owner_key(
@@ -809,53 +812,6 @@ def _rendered_endpoint_owner_key(
         address, _, call_index = collapsed_address.partition(":")
         return _collapsed_module_owner_key(trace, address, call_index or "1", vis_mode)
     return _raw_render_node_owner_key(node, vis_mode)
-
-
-def _lowest_common_rendered_owner_key(
-    owner1: str | None,
-    owner2: str | None,
-    vis_mode: str,
-) -> str | int:
-    """Return the lowest common cluster for two rendered endpoint owners.
-
-    Parameters
-    ----------
-    owner1:
-        Owning cluster of the first rendered endpoint.
-    owner2:
-        Owning cluster of the second rendered endpoint.
-    vis_mode:
-        ``"unrolled"`` or ``"rolled"`` visualization mode.
-
-    Returns
-    -------
-    str | int
-        Lowest common cluster key, or ``-1`` for top-level emission.
-    """
-
-    if owner1 is None or owner2 is None:
-        return -1
-    address1, separator1, call1 = owner1.rpartition(":")
-    address2, separator2, call2 = owner2.rpartition(":")
-    if not separator1:
-        address1 = owner1
-    if not separator2:
-        address2 = owner2
-    parts1 = address1.split(".")
-    parts2 = address2.split(".")
-    common_parts: list[str] = []
-    for part1, part2 in zip(parts1, parts2, strict=False):
-        if part1 != part2:
-            break
-        common_parts.append(part1)
-    if not common_parts:
-        return -1
-    common_address = ".".join(common_parts)
-    if vis_mode == "rolled":
-        return common_address
-    if call1 != call2:
-        return -1
-    return f"{common_address}:{call1}" if separator1 and separator2 else common_address
 
 
 def _queue_run_fold_ellipsis_node(
@@ -1179,7 +1135,7 @@ def _add_edges_for_node(
                 hidden_fold=child_hidden_fold,
                 vis_mode=vis_mode,
             )
-            module = _lowest_common_rendered_owner_key(parent_owner, child_owner, vis_mode)
+            module = _lowest_common_rendered_owner_key(self, parent_owner, child_owner, vis_mode)
             edge_module_key = module
 
         edge_is_self_loop = tail_name == head_name
@@ -1700,20 +1656,14 @@ def _visible_parent_count_unrolled(
         child_node: The child Op node whose incoming edge is being considered.
         show_buffer_layers: Buffer visibility mode.
     """
-    num_parents_shown = len(child_node.parents)
-
-    if show_buffer_layers != "always":
-        num_parents_shown -= sum(
-            [
-                int(
-                    self.layers[parent].is_buffer
-                    and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
-                )
-                for parent in child_node.parents
-            ]
-        )
-
-    return num_parents_shown
+    parents = _parent_occurrence_labels(child_node)  # one entry per drawn edge occurrence
+    if show_buffer_layers == "always":
+        return len(parents)
+    return len(parents) - sum(
+        bool(self.layers[parent].is_buffer)
+        and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
+        for parent in parents
+    )
 
 
 def _visible_parent_count_rolled(

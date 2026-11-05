@@ -23,6 +23,7 @@ from ..._capture_state_helpers import (
     _unwrap_data_parallel,
     unwrap_compiled_model,
 )
+from ..._data_classes import _doors
 from ..._data_classes.trace import (
     Trace,
 )
@@ -66,7 +67,6 @@ from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
     CaptureOptions,
-    ReplayOptions,
     _SaveTransforms,
     merge_capture_options,
     merge_streaming_options,
@@ -1019,11 +1019,11 @@ def _run_chunked_capture(state: _DoorState, request: CaptureRequest) -> Trace:
         "append_sequence_id": 0,
         "chunk_paths": normalize_chunk_paths(state.chunk_paths_value),
     }
-    append = ReplayOptions(append=True)
+    trace_run = _doors.intervention()._trace_run
     for chunk_index, chunk in enumerate(chunks[1:], start=1):
         with _typed_chunk_forward(chunk_index, normalized_chunk_size, chunk_plan) as rows:
             if state.save_predicate is None:
-                trace.run(state.model, chunk, replay=append, input_transform=False)
+                trace_run.append_chunk(trace, state.model, chunk)
                 continue
             new_trace = _trace_torch_model(
                 state.model,
