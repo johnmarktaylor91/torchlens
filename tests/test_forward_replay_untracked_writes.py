@@ -12,13 +12,21 @@ Two capture bugs made isolated replay disagree with the saved out:
 * The same deferred alias of a buffer that code outside torch dispatch then filled
   through a zero-copy export (``data_ptr``, a storage handle, a NumPy view, DLPack),
   as warp kernels do, showed the later write; exports now copy out pending aliases.
+
+The consumer of a foreign-filled buffer reads a value no recorded op produced, so its
+per-child version snapshot differs from the buffer producer's saved out. Forward
+validation accepts that snapshot only because capture marked it as a foreign write for
+the exact argument slots the buffer was bound to; a planted swap of operands involving
+a foreign-filled buffer still fails.
 """
 
 from __future__ import annotations
 
 import contextlib
 import ctypes
+import dataclasses
 from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
 import pytest
@@ -27,9 +35,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torchlens as tl
+import torchlens.backends.torch._ops_shared_fields as _shared_fields
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
 from torchlens._utils.arg_handling import copy_arg_tree
+from torchlens._utils.tensor_utils import tensor_nanequal
+from torchlens.validation._core import _op_for_validation_label
 
 
 @contextlib.contextmanager
@@ -206,3 +217,180 @@ def test_foreign_fill_validates(route: str) -> None:
     torch.manual_seed(0)
     with _payload_clone_mode(defer=True):
         assert tl.validate(_ForeignKernelFill(route), torch.randn(5), seed=0)
+
+
+class _TwoForeignFills(nn.Module):
+    """Subtract two buffers that were each filled outside torch."""
+
+    def __init__(self, route: str) -> None:
+        super().__init__()
+        self.route = route
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        first = torch.full((x.shape[0], 4), -1.0)
+        second = torch.full((x.shape[0], 4), -1.0)
+        _foreign_fill(first.detach(), x[:, None] * torch.arange(4.0), self.route)
+        _foreign_fill(second.detach(), x[:, None] + torch.arange(4.0), self.route)
+        return torch.sub(first, second)
+
+
+class _ForeignFillAndProduct(nn.Module):
+    """Subtract an ordinary product from a buffer filled outside torch."""
+
+    def __init__(self, route: str) -> None:
+        super().__init__()
+        self.route = route
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        buffer = torch.full((x.shape[0], 4), -1.0)
+        _foreign_fill(buffer.detach(), x[:, None] * torch.arange(4.0), self.route)
+        return torch.sub(buffer, x[:, None] * torch.ones(4))
+
+
+def _swap_sub_operands(trace: tl.Trace) -> None:
+    """Swap the parents of ``sub``'s two slots, recording snapshots as capture would."""
+
+    (child,) = [op for op in trace._layer_list if op.func_name == "sub"]
+    positions = child.call.parent_arg_positions["args"]
+    positions[0], positions[1] = positions[1], positions[0]
+    child.parents = type(child.parents)(dict.fromkeys(positions.values()))
+    for key, label in positions.items():
+        parent = _op_for_validation_label(trace, label)
+        versions = parent.out_versions_by_child
+        versions.pop(child.label, None)
+        versions.pop(child.layer_label, None)
+        value = child.call.saved_args[key]
+        if not (value.shape == parent.out.shape and tensor_nanequal(value, parent.out)):
+            versions[child.layer_label] = value.detach().clone()
+
+
+def _validate_foreign(model: nn.Module, defer: bool, planted: bool) -> bool:
+    """Capture under a payload clone mode, optionally swap ``sub``'s operands, validate."""
+
+    torch.manual_seed(0)
+    x = torch.randn(5)
+    with _payload_clone_mode(defer=defer):
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True))
+    if planted:
+        _swap_sub_operands(trace)
+    with _payload_clone_mode(defer=defer):
+        return bool(trace.validate_forward_pass(model(x.clone()), validate_metadata=False))
+
+
+_FOREIGN_MODELS = {
+    "two_foreign_fills": _TwoForeignFills,
+    "foreign_and_product": _ForeignFillAndProduct,
+}
+
+
+@pytest.mark.parametrize("defer", [True, False], ids=["deferred", "eager"])
+@pytest.mark.parametrize("model_name", sorted(_FOREIGN_MODELS))
+@pytest.mark.parametrize("route", _ROUTES)
+def test_foreign_fill_consumer_validates(route: str, model_name: str, defer: bool) -> None:
+    """A two-parent consumer of foreign-filled buffers validates as captured."""
+
+    assert _validate_foreign(_FOREIGN_MODELS[model_name](route), defer, planted=False)
+
+
+@pytest.mark.parametrize("defer", [True, False], ids=["deferred", "eager"])
+@pytest.mark.parametrize("model_name", sorted(_FOREIGN_MODELS))
+@pytest.mark.parametrize("route", _ROUTES)
+def test_foreign_fill_swapped_operands_fail(route: str, model_name: str, defer: bool) -> None:
+    """Swapping operands that involve a foreign-filled buffer fails forward validation.
+
+    With two foreign-filled buffers both swapped snapshots carry a foreign-write mark,
+    and replaying them reproduces the saved out, so only the mark's exact-slot rule
+    catches the swap.
+    """
+
+    assert not _validate_foreign(_FOREIGN_MODELS[model_name](route), defer, planted=True)
+
+
+#: Set by the planted model just before its ``sub``; the patched slot snapshot swaps that
+#: call's two positional parents while capture is running, then clears it.
+_PLANT_SWAP = [False]
+
+
+class _PlantedSwapForeignFills(_TwoForeignFills):
+    """``_TwoForeignFills`` that asks the patched slot snapshot to swap ``sub``'s parents."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        first = torch.full((x.shape[0], 4), -1.0)
+        second = torch.full((x.shape[0], 4), -1.0)
+        _foreign_fill(first.detach(), x[:, None] * torch.arange(4.0), self.route)
+        _foreign_fill(second.detach(), x[:, None] + torch.arange(4.0), self.route)
+        _PLANT_SWAP[0] = True
+        return torch.sub(first, second)
+
+
+def _swapping_slot_snapshot(real: Any) -> Any:
+    """Wrap the argument-slot snapshot so the planted call's two slots trade their labels.
+
+    Each slot takes the other slot's label and provenance labels together, so the parent
+    recorder and the capture witness both read one consistent (wrong) binding.
+    """
+
+    def snapshot(trace: Any, call: Any, arg_tensors: Any) -> Any:
+        slots = real(trace, call, arg_tensors)
+        index = {(slot.kind, slot.key): i for i, slot in enumerate(slots)}
+        pair = (index.get(("args", 0)), index.get(("args", 1)))
+        if not _PLANT_SWAP[0] or None in pair or slots[pair[0]].label == slots[pair[1]].label:
+            return slots
+        _PLANT_SWAP[0] = False
+        first, second = slots[pair[0]], slots[pair[1]]
+        swapped = list(slots)
+        swapped[pair[0]] = dataclasses.replace(
+            first, label=second.label, session_parent_labels=second.session_parent_labels
+        )
+        swapped[pair[1]] = dataclasses.replace(
+            second, label=first.label, session_parent_labels=first.session_parent_labels
+        )
+        workspace = _shared_fields._peek_raw_graph_workspace(trace)
+        context = workspace._pending_arg_slots
+        by_key = {(slot.kind, slot.key): slot for slot in swapped}
+        workspace._pending_arg_slots = type(context)(call.args, call.kwargs, tuple(swapped), by_key)
+        return tuple(swapped)
+
+    return snapshot
+
+
+@pytest.mark.parametrize("defer", [True, False], ids=["deferred", "eager"])
+@pytest.mark.parametrize("route", _ROUTES)
+def test_capture_time_swap_of_exported_storages_fails(
+    route: str, defer: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A wrong binding made AT capture onto exported storages that are not the parent's fails.
+
+    Both slots hold tensors on exported, foreign-written storages, and capture binds each
+    slot to the other buffer's producer, so the marks would be recorded from the wrong
+    binding itself. A mark needs the slot to hold the parent's own tensor on that
+    exported storage, so neither swapped snapshot is marked and validation fails.
+    """
+
+    model = _PlantedSwapForeignFills(route)
+    torch.manual_seed(0)
+    x = torch.randn(5)
+    real = _shared_fields.snapshot_arg_slots
+    monkeypatch.setattr(_shared_fields, "snapshot_arg_slots", _swapping_slot_snapshot(real))
+    try:
+        with _payload_clone_mode(defer=defer):
+            trace = tl.trace(
+                model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True)
+            )
+    finally:
+        monkeypatch.undo()
+        _PLANT_SWAP[0] = False
+    (child,) = [op for op in trace._layer_list if op.func_name == "sub"]
+    order = [op.label for op in trace._layer_list]
+    bound = [
+        _op_for_validation_label(trace, child.call.parent_arg_positions["args"][k]) for k in (0, 1)
+    ]
+    assert order.index(bound[0].label) > order.index(bound[1].label), "the plant did not swap"
+    assert all(
+        child.layer_label in p.out_versions_by_child or child.label in p.out_versions_by_child
+        for p in bound
+    )
+    with _payload_clone_mode(defer=defer):
+        ground_truth = model(x.clone())
+        _PLANT_SWAP[0] = False
+        assert not trace.validate_forward_pass(ground_truth, validate_metadata=False)

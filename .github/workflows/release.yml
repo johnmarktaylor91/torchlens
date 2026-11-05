@@ -2,8 +2,9 @@ name: Release
 
 # A release is cut by pushing a version tag (vX.Y.Z) that the maintainer
 # creates by hand on a commit of main whose pyproject.toml and
-# torchlens/_version.py already carry that version. Nothing in CI computes,
-# bumps or commits a version: the tag is the only trigger that publishes.
+# torchlens/_vocab/_package_version.py already carry that version. Nothing
+# in CI computes, bumps or commits a version: the tag is the only trigger
+# that publishes.
 # Pull requests to main run the same build as a dry run (no token, no
 # upload), so a broken build or lock is caught before a tag is ever pushed.
 on:
@@ -77,11 +78,14 @@ jobs:
 
           tag = os.environ["TAG"].removeprefix("v")
           toml_version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
-          init_text = Path("torchlens/_version.py").read_text()
-          init_version = re.search(r'^__version__ = "([^"]+)"', init_text, re.M).group(1)
-          print(f"tag {tag}, pyproject {toml_version}, _version {init_version}")
-          if not tag == toml_version == init_version:
-              raise SystemExit("tag, pyproject.toml and torchlens/_version.py disagree; refusing to publish")
+          package_text = Path("torchlens/_vocab/_package_version.py").read_text()
+          package_version = re.search(r'^__version__ = "([^"]+)"', package_text, re.M).group(1)
+          print(f"tag {tag}, pyproject {toml_version}, _package_version {package_version}")
+          if not tag == toml_version == package_version:
+              raise SystemExit(
+                  "tag, pyproject.toml and torchlens/_vocab/_package_version.py disagree; "
+                  "refusing to publish"
+              )
           PY
           git fetch --no-tags origin main
           git merge-base --is-ancestor HEAD origin/main || {

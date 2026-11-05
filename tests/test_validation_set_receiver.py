@@ -399,3 +399,71 @@ def test_restore_rebinds_moved_or_reshaped_state_before_loading_values(
         failing_model_deepcopy.append(model_cls)
         assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
         _assert_restored(model, objects, values)
+
+
+@pytest.mark.parametrize("model_cls", [_GrowBuffer, _SetToNothing, _SetToStorageView])
+def test_set_receiver_binds_to_the_buffer_value_it_held_before_the_call(
+    model_cls: type[nn.Module],
+) -> None:
+    """The receiver slot of ``set_`` reads the buffer source saved before the call.
+
+    The rebind moves the receiver to another storage, so the post-call label
+    gate refuses its stamp; the receiver must keep its own pre-call source
+    rather than gain a second buffer source holding the post-call value.
+    """
+
+    torch.manual_seed(0)
+    model = model_cls()
+    before = model.b.detach().clone()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, torch.rand(4), capture=CaptureOptions(save_args=True), save="all")
+    try:
+        set_op = next(op for op in trace._layer_list if op.func_name == "set_")
+        receiver_label = set_op.call.parent_arg_positions["args"][0]
+        source = trace[receiver_label]
+        assert torch.equal(source.out, before)
+        assert [label for label in set_op.parents if label.startswith("buffer")] == [receiver_label]
+    finally:
+        trace.cleanup()
+
+
+class _DataRebindThenSet(nn.Module):
+    """An untraced ``.data=`` rebind of a buffer to input data, then ``set_`` on it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+        self.register_buffer("other", torch.rand(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.data = x * 3
+            self.b.set_(self.other)
+        return x + self.b
+
+
+def test_data_rebind_then_set_does_not_bind_the_receiver_to_its_old_value() -> None:
+    """A ``set_`` receiver rebound by ``.data=`` earlier is not re-pinned to its old buffer source.
+
+    The receiver held the input-derived ``x * 3`` when ``set_`` read it, so binding its
+    slot to the buffer source saved before the ``.data=`` rebind would hide input data
+    behind state; either the slot is not bound to that value or validation fails.
+    """
+
+    torch.manual_seed(0)
+    model = _DataRebindThenSet()
+    before = model.b.detach().clone()
+    x = torch.rand(4)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model, x, capture=CaptureOptions(save_args=True), save="all")
+    try:
+        set_op = next(op for op in trace._layer_list if op.func_name == "set_")
+        receiver_label = set_op.call.parent_arg_positions["args"].get(0)
+        stale = receiver_label is not None and torch.equal(trace[receiver_label].out, before)
+        assert not stale, "set_ receiver bound to the buffer value from before the .data= rebind"
+    finally:
+        trace.cleanup()
+    torch.manual_seed(0)
+    assert isinstance(_quiet_validate(_DataRebindThenSet(), x), bool)

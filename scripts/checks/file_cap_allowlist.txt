@@ -862,7 +862,7 @@ torchlens/backends/torch/_ops_emission.py::_emit_operation_events	62
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	170
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	291
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	290
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	120
@@ -877,7 +877,7 @@ torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
 torchlens/backends/torch/_ops_retention.py::_save_predicate_activation_fields	91
-torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	132
+torchlens/backends/torch/_ops_shared_fields.py::_build_shared_fields_dict	126
 torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snapshot	75
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	107
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	71

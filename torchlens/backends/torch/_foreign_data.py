@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -65,7 +65,7 @@ FOREIGN_DATA_RESOLUTION_ATTR = "__tl_foreign_data_resolution__"
 """Resolution of the round trip on its callable: ``view``, ``copy``, ``constant``, ``unresolved``."""
 
 FOREIGN_DATA_DEPARTURES_ATTR = "_foreign_departures"
-"""Session-time Trace attribute: the departure journal, popped in postprocess step 3."""
+"""Trace attribute: the :class:`ForeignJournal`; step 3 keeps only its slot marks."""
 
 FOREIGN_DATA_REPLAY_REASON = "foreign_data_roundtrip_unreplayable"
 """Validation reason of an unresolved round trip: the foreign step cannot be re-run."""
@@ -108,14 +108,49 @@ class HostEntry:
     resolution: str
 
 
-def departures(trace: Any) -> list[Departure]:
-    """Return the capture's departure journal (created on first use)."""
+@dataclass
+class ForeignJournal:
+    """What capture records about data leaving torch (``trace._foreign_departures``).
+
+    ``departures`` lists the tensors that left in plain forward code, for host
+    constructors. ``exported`` maps ``(device, storage pointer)`` of every zero-copy
+    export to a weak reference to that storage (``StorageWeakRef``): it keeps nothing
+    alive, and an expired reference never lets a reused pointer fake an export.
+    ``written_slots`` maps ``(parent raw label, child raw label)`` of a by-value
+    snapshot whose slots held the parent's own tensor on an exported storage to the
+    parent's bound argument slots; ``alias_slots`` likewise marks slots holding an alias
+    a view write relabeled onto the parent; ``unrecorded_writes`` holds the raw labels a
+    disclosed unrecordable mutating call received. Forward validation reads the marks;
+    postprocess step 3 keeps only them.
+    """
+
+    departures: list[Departure] = field(default_factory=list)
+    exported: dict[tuple[str, int], Any] = field(default_factory=dict)
+    written_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
+    alias_slots: dict[tuple[str, str], frozenset[tuple[str, Any]]] = field(default_factory=dict)
+    unrecorded_writes: set[str] = field(default_factory=set)
+
+    def end_capture(self) -> ForeignJournal | None:
+        """Return the journal postprocess keeps: the marks only, or ``None``."""
+
+        marks = (self.written_slots, self.alias_slots, self.unrecorded_writes)
+        return ForeignJournal([], {}, *marks) if any(marks) else None
+
+
+def foreign_journal(trace: Any) -> ForeignJournal:
+    """Return the capture's foreign journal (created on first use)."""
 
     journal = trace.__dict__.get(FOREIGN_DATA_DEPARTURES_ATTR)
-    if not isinstance(journal, list):
-        journal = []
+    if not isinstance(journal, ForeignJournal):
+        journal = ForeignJournal()
         trace.__dict__["_foreign_departures"] = journal  # literal: the ownership census reads it
     return journal
+
+
+def departures(trace: Any) -> list[Departure]:
+    """Return the capture's departure list (created on first use)."""
+
+    return foreign_journal(trace).departures
 
 
 def is_foreign_data_recorder(func: Any) -> bool:
