@@ -185,6 +185,22 @@ _UNSTAMPABLE_TYPES = frozenset(
 )
 
 
+def _label_free(value: Any) -> bool:
+    """Return whether ``value`` is a non-tensor the label gate would answer ``None`` for.
+
+    Tensors go through the snapshot or a live read. Any other value has a label only
+    through a stamped meta, so one meta read (which raises on a foreign stamp exactly
+    as the gate does) replaces the gated label read.
+    """
+
+    if type(value) in _UNSTAMPABLE_TYPES:
+        return True
+    if isinstance(value, torch.Tensor):
+        return False
+    meta = get_tensor_meta(value)
+    return meta is None or meta.label_raw is None
+
+
 def _classify_arg_component(
     value: Any,
     notes: list[str],
@@ -201,7 +217,7 @@ def _classify_arg_component(
         Accumulator for unsupported-value notes.
     known
         The op's snapshot labels by tensor id (read once per op); tensors not in it
-        are read live, and plain builtin values are not read.
+        are read live, and non-tensor values without a stamped label are not read.
 
     Returns
     -------
@@ -210,7 +226,7 @@ def _classify_arg_component(
     """
 
     label = None
-    if known is not None and (id(value) in known or type(value) in _UNSTAMPABLE_TYPES):
+    if known is not None and (id(value) in known or _label_free(value)):
         label = known.get(id(value))
     # A Parameter mutated in place earlier in the pass replays from its mutation op.
     elif not isinstance(value, torch.nn.Parameter) or mutated_parameter_label(value) is not None:
