@@ -62,7 +62,9 @@ def _aten_view_op_names() -> frozenset[str]:
     )
 
 
-@functools.cache
+# Keyed on autograd class names from the user's graph (custom ``Function``
+# subclasses included), so the cache is bounded.
+@functools.lru_cache(maxsize=512)
 def is_view_backward_class(class_name: str) -> bool:
     """Return whether ``class_name`` is the backward node of an aten view op.
 
