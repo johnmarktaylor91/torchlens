@@ -51,7 +51,6 @@ def _validate(model: nn.Module) -> bool:
         return tl.validate(model, torch.randn(2, 3), scope="forward") is True
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", ("promote_types", "can_cast", "result_type"))
 def test_dtype_query_is_decorated(name: str) -> None:
     """The dtype query is in TorchLens's decorated set."""
