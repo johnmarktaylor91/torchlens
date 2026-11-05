@@ -76,9 +76,9 @@ from ._foreign_data import FOREIGN_DATA_FUNC_NAME, HOST_CONSTRUCTOR_FUNC_NAMES, 
 from ._foreign_wrappers import rebase_buried_wrapper, warn_buried_sites
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
-    PLAIN_EXPORT_FUNC_NAMES,
+    BOUNDARY_NOTE_FUNC_NAMES,
     funcs_not_to_log,
-    note_function_export,
+    note_function_boundary,
     print_funcs,
     unlogged_wrapper_name,
 )
@@ -107,6 +107,7 @@ from ._tl import (
     propagate_detached_saved_activation,
     set_tensor_label,
 )
+from ._tracing_pass import call_inside_tracing_pass, inside_tracing_tensor_pass
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
     TRANSFORM_BUILDER_SITES,
@@ -1140,7 +1141,7 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
-    is_export_func = func_name in PLAIN_EXPORT_FUNC_NAMES
+    is_boundary_func = func_name in BOUNDARY_NOTE_FUNC_NAMES  # an export or a file load
     is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
@@ -1275,6 +1276,10 @@ def torch_func_decorator(
         if needs_device_injection:
             kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
 
+        # A higher-order op's Autograd kernel fake-traces its branches before the
+        # eager run that is recorded; that pass is not the model's (_tracing_pass).
+        if inside_tracing_tensor_pass(args, kwargs):
+            return call_inside_tracing_pass(func, args, kwargs)
         # Skip logging inside vmap/functorch transforms — internal TorchLens
         # operations (safe_copy, torch.equal, .item()) don't have vmap batching
         # rules and will crash. The original function is already vmap-compatible.
@@ -1283,18 +1288,12 @@ def torch_func_decorator(
         if _is_inside_functorch_transform():
             return _call_inside_functorch_transform(func, func_name, wrapped_func, args, kwargs)
 
-        # Skip logging inside a Dynamo-traced region, for the same reason as the
-        # functorch guard above: TorchLens' internal operations (safe_copy,
-        # torch.equal, .item(), memory accounting) read tensor VALUES, and the
-        # tensors flowing through a compiled region are data-free FakeTensors.
-        # Tracing through the wrapper used to die with a raw, unexplained
-        # ``InternalTorchDynamoError: 'FakeTensor' object has no attribute
-        # 'fake_mode'``. TorchLens already unwraps compiled *submodules* before
-        # capture (see _capture_state_helpers.unwrap_compiled_submodules), but a
-        # compiled *callable* held as a plain attribute or called as a free
-        # function cannot be swapped out, so this is the boundary for those.
-        # Degrading to a pass-through matches the documented contract: log the
-        # eager source module; torch.compile internals are not traced.
+        # Skip logging inside a Dynamo-traced region, as the functorch guard above:
+        # TorchLens' internal operations read tensor VALUES and a compiled region's
+        # tensors are data-free FakeTensors (a raw ``'FakeTensor' object has no
+        # attribute 'fake_mode'``). Compiled *submodules* are unwrapped before
+        # capture; a compiled plain-attribute or free *callable* cannot be, so this
+        # is its boundary: log the eager source; torch.compile internals untraced.
         if _is_inside_dynamo_compilation():
             return _call_inside_dynamo_region(trace, func, args, kwargs)
 
@@ -1326,8 +1325,8 @@ def torch_func_decorator(
             trace._wrapper_runtime_ws.current_func_barcode if is_barcode_transparent else 0
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
-        if is_export_func:
-            note_function_export(func_name, args)
+        if is_boundary_func:
+            note_function_boundary(func_name, args)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
                 wrapper_name = unlogged_wrapper_name(func_name)
