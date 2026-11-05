@@ -271,10 +271,10 @@ def test_loaded_resolution_leaves_a_switch_off_op_unresolved(
     saved = {_SWITCH: False} if switch_off else {}
     trace = _replay_trace()
     target = next(op for op in trace._layer_list if op.func_name == "relu")
-    target.func_name = "sparse_coo_tensor"
-    target.func_id = FunctionRegistryKey("torch", "sparse_coo_tensor", "function")
-    target.saved_kwargs = dict(saved)
-    target.non_tensor_kwargs = dict(saved)
+    target._internal_set("func_name", "sparse_coo_tensor")
+    target._internal_set("func_id", FunctionRegistryKey("torch", "sparse_coo_tensor", "function"))
+    target._internal_set("saved_kwargs", dict(saved))
+    target._internal_set("non_tensor_kwargs", dict(saved))
     path = tmp_path / "switch.tlz"
     trace.save(path, level="executable_with_callables")
     loaded = tl.load(path)
@@ -295,7 +295,7 @@ def test_replay_and_probe_belts_refuse_the_switch() -> None:
     calls: list[Any] = []
     op.func = lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(3, 4)
     with pytest.raises(RunPreconditionError) as refusal:
-        execute_replay_func(op, {"args": list(op.saved_args), "kwargs": {_SWITCH: False}}, [])
+        execute_replay_func(op, {"args": list(op.call.saved_args), "kwargs": {_SWITCH: False}}, [])
     assert refusal.value.fields["code"] == RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value
     layer = SimpleNamespace(
         func=lambda *args, **kwargs: calls.append(kwargs) or torch.zeros(2),
@@ -451,12 +451,12 @@ def test_validate_path_rejects_indices_beyond_the_declared_shape(tmp_path: Path)
         warnings.simplefilter("ignore")
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True, save_rng=True))
     target = next(op for op in trace._layer_list if op.func_name == "mul")
-    indices, values = target.saved_args[0], target.saved_args[1]
+    indices, values = target.call.saved_args[0], target.call.saved_args[1]
     assert indices.dtype == torch.int64 and values.dtype == torch.float32
-    target.func_name = "sparse_coo_tensor"
-    target.func_id = FunctionRegistryKey("torch", "sparse_coo_tensor", "function")
-    target.saved_args = (indices, values, (1, 1))
-    target.saved_kwargs = {}
+    target._internal_set("func_name", "sparse_coo_tensor")
+    target._internal_set("func_id", FunctionRegistryKey("torch", "sparse_coo_tensor", "function"))
+    target._internal_set("saved_args", (indices, values, (1, 1)))
+    target._internal_set("saved_kwargs", {})
     path = tmp_path / "crafted.tlz"
     trace.save(path, level="executable_with_callables")
     torch.save(model(x).detach(), tmp_path / "ref.pt")

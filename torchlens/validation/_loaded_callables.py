@@ -61,7 +61,7 @@ def _resolution_candidate(layer: Any) -> Any:
     # A bundle-supplied pointer keyword leaves the op unresolved, so the entry
     # check refuses the bundle by name: the call is never armed.
     # So does a sparse ``check_invariants`` keyword that turns index validation off.
-    saved_kwargs = getattr(layer, "saved_kwargs", None) or {}
+    saved_kwargs = record_member(layer, "saved_kwargs", None) or {}
     pointer = raw_pointer_keyword_name(saved_kwargs)
     switch_off = isinstance(saved_kwargs, dict) and mapping_disables_invariants(saved_kwargs)
     if _is_resolution_exempt(layer) or pointer is not None or switch_off:
