@@ -72,8 +72,8 @@ lig = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, "layer4"))
 attribution = tl.bridge.captum.attribute(trace, lig, target=0, n_steps=4)
 print(tuple(attribution.shape))
 
-# A functional op: the residual add inside the last basic block.
-add_label = trace["layer4.1.relu:2"].parents[0]
+# A functional op: the residual add inside the last basic block (the input of its second relu call).
+add_label = trace["layer4.1.relu:2"].input_ops[0]
 lig_add = LayerIntegratedGradients(model, tl.bridge.captum.layer(trace, add_label))
 print(tuple(tl.bridge.captum.attribute(trace, lig_add, target=0, n_steps=4).shape))
 ```

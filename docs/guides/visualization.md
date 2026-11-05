@@ -407,7 +407,7 @@ adds the norm and largest absolute value of each captured gradient.
 
 | `trace.draw(theme='paper')` | `trace.draw(theme='dark')` | `trace.draw(theme='high_contrast')` |
 |---|---|---|
-| <a href="../images/visualization/theme_paper.png"><img src="../images/visualization/theme_paper.png" width="240" alt="paper"></a> | <a href="../images/visualization/theme_dark.png"><img src="../images/visualization/theme_dark.png" width="240" alt="dark"></a> | <a href="../images/visualization/theme_high_contrast.png"><img src="../images/visualization/theme_high_contrast.png" width="240" alt="high contrast"></a> |
+| [<img src="../images/visualization/theme_paper.png" width="240" alt="paper">](../images/visualization/theme_paper.png) | [<img src="../images/visualization/theme_dark.png" width="240" alt="dark">](../images/visualization/theme_dark.png) | [<img src="../images/visualization/theme_high_contrast.png" width="240" alt="high contrast">](../images/visualization/theme_high_contrast.png) |
 
 `"colorblind"` uses a palette that stays distinct under color-vision deficiencies; the default
 palette does not (its frozen grey and input green, for example, can look alike):
