@@ -29,6 +29,7 @@ from torch import Tensor
 import torchlens as tl
 import torchlens.attribution as attribution
 import torchlens.mechinterp
+from tests.support.gradient_edge_guard import requires_gradient_edge
 
 PAIR_CLEAN, PAIR_CORRUPT = torch.tensor([[0], [0]]), torch.tensor([[1], [1]])
 _CAPTURE = tl.options.CaptureOptions(replayable=True)
@@ -103,6 +104,7 @@ def _shuffled(table: Any) -> Any:
 # ----------------------------------------------------------------------------------------------
 
 
+@requires_gradient_edge
 def test_fixture_sets_into_one_receiver_or_several_are_measured() -> None:
     """A set into one receiver is patched together, and so is a set across receivers."""
 
@@ -142,6 +144,7 @@ def _names(audit: Any, item: Any) -> list[str]:
     return [name_of[unit] for unit in item.indices]
 
 
+@requires_gradient_edge
 def test_fixture_rows_without_a_score_are_reported_apart() -> None:
     """A row the scores could not reach (status not ok) is listed, never patched."""
 
@@ -308,6 +311,7 @@ def _misaligned_refusal_runs_its_remedy(model: Any, table: Any, call: dict[str, 
 
 
 # One family per cause, each well inside the 5s tier's aggregate family budget.
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["no_corrupted", "no_metric"])
 def test_edge_missing_corrupted_or_metric_refuses_and_the_remedy_runs(kind: str) -> None:
     """No corrupted inputs, or no metric."""
@@ -318,6 +322,7 @@ def test_edge_missing_corrupted_or_metric_refuses_and_the_remedy_runs(kind: str)
     _misaligned_refusal_runs_its_remedy(model, _table(model), call)
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize(
     "kind", ["corrupted_other_shape", "metric_not_per_example", "target_given"]
 )
@@ -335,6 +340,7 @@ def test_edge_misaligned_audit_settings_refuse_and_the_remedy_runs(kind: str) ->
     _misaligned_refusal_runs_its_remedy(model, _table(model), call)
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["other_inputs", "unresolvable_edge"])
 def test_edge_misaligned_claim_tables_refuse_and_the_remedy_runs(kind: str) -> None:
     """A table built on other inputs, a table naming an edge the model does not have."""
@@ -356,6 +362,7 @@ def test_edge_misaligned_claim_tables_refuse_and_the_remedy_runs(kind: str) -> N
     )
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["mixed_rows", "other_reduction", "edge_inputs_on_a_read"])
 def test_edge_unsupported_tables_and_settings_refuse_and_the_remedy_runs(kind: str) -> None:
     """A table mixing ACT and EDGE rows, a foreign reduction, edge keywords on a read table."""
@@ -390,6 +397,7 @@ def test_edge_unsupported_tables_and_settings_refuse_and_the_remedy_runs(kind: s
     assert isinstance(fixed, attribution.CausalAudit)
 
 
+@requires_gradient_edge
 @pytest.mark.parametrize("kind", ["edit", "unknown_edges", "k_too_large"])
 def test_edge_bad_settings_refuse_and_the_remedy_runs(kind: str) -> None:
     """edit= on an EDGE table, edges= naming no ok row, k above the audited edges."""
@@ -410,6 +418,7 @@ def test_edge_bad_settings_refuse_and_the_remedy_runs(kind: str) -> None:
     assert isinstance(fixed, attribution.CausalAudit)
 
 
+@requires_gradient_edge
 def test_many_edges_warn_once_and_the_named_spelling_runs(monkeypatch) -> None:
     """Past the per-unit guard an EDGE audit warns and names edges= (and per_unit=False)."""
 
