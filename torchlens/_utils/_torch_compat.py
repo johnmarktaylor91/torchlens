@@ -539,8 +539,8 @@ def _probe_safe_weights_only_load() -> bool:
     even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
     bypassed. TorchLens no longer hands file bytes to ``torch.load`` (the metadata
     unpickler refuses ``torch.storage._load_from_bytes`` by name; plain metadata
-    tensors use its own inline reduction), so this flag gates no TorchLens code
-    path; it stays a reported capability in the capability snapshot and ``doctor()``.
+    tensors use its own inline reduction); ``.pt`` extraction shards and pyreft weight
+    files, the last artifact bytes handed to ``torch.load``, refuse when it is false.
 
     The patched behavior is internal to the unpickler and has NO version-string-
     free *behavioral* signature we can cheaply exercise, so -- consistent with this

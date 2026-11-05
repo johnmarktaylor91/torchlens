@@ -62,6 +62,8 @@ from typing import Any, cast
 
 import torch
 
+__tl_layer__ = "L0"
+
 
 def torch_attr(name: str) -> Any | None:
     """Resolve one top-level ``torch`` attribute without firing ``torch.__getattr__``.

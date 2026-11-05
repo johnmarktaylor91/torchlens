@@ -95,15 +95,24 @@ def _isolated_torchlens_cache(tmp_path_factory: pytest.TempPathFactory):
     first-capture cache-miss assertion into a phantom failure. Every test session
     gets its own empty cache root instead; the prior environment is restored on
     teardown so the suite never leaks state into the invoking shell.
+
+    ``XDG_STATE_HOME`` gets the same treatment: the capture-cache HMAC secret lives
+    in the per-user state directory (outside every cache directory), and the suite
+    must neither create nor reuse the invoking user's real secret.
     """
 
-    prior = os.environ.get("TORCHLENS_CACHE_DIR")
-    os.environ["TORCHLENS_CACHE_DIR"] = str(tmp_path_factory.mktemp("torchlens_cache"))
+    isolated = {
+        "TORCHLENS_CACHE_DIR": str(tmp_path_factory.mktemp("torchlens_cache")),
+        "XDG_STATE_HOME": str(tmp_path_factory.mktemp("xdg_state")),
+    }
+    prior = {name: os.environ.get(name) for name in isolated}
+    os.environ.update(isolated)
     yield
-    if prior is None:
-        os.environ.pop("TORCHLENS_CACHE_DIR", None)
-    else:
-        os.environ["TORCHLENS_CACHE_DIR"] = prior
+    for name, value in prior.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
 
 
 def _copy_sentinel_value(value: object) -> object:

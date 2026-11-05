@@ -239,7 +239,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	487
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3711
+torchlens/_io/runnable_load.py	3710
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -248,7 +248,6 @@ torchlens/_io/runnable_load.py::_parse_required_witness_inventory	63
 torchlens/_io/runnable_load.py::_parse_slot	66
 torchlens/_io/runnable_load.py::_resolve_registry_entry	167
 torchlens/_io/runnable_load.py::_resolved_callable	125
-torchlens/_io/runnable_load.py::_validate_call_arity	62
 torchlens/_io/runnable_load.py::_validate_call_references	67
 torchlens/_io/runnable_load.py::_validate_input_boundary_metadata_agreement	85
 torchlens/_io/runnable_load.py::_validate_input_structure_witnesses	85
@@ -497,7 +496,7 @@ torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
 torchlens/_utils/_tensor_label.py	1748
-torchlens/_utils/_torch_compat.py	4267
+torchlens/_utils/_torch_compat.py	4265
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	62
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69

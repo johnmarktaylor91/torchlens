@@ -8,6 +8,10 @@ from typing import Any, cast
 
 import torch
 
+from .._utils._raw_pointer_denial import (
+    pointer_keyword_refusal_detail,
+    raw_pointer_keyword_name,
+)
 from ..errors import (
     RunCapabilityUnavailableError,
     RunPreconditionError,
@@ -553,6 +557,18 @@ def _write_argument(
             f"Invalid sparse argument path {path!r}.",
             code=RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value,
         )
+    if path[0] == "kwargs":
+        # r50 (raw-pointer family): defense in depth for an in-memory descriptor that
+        # never went through the loader's parse-time refusal. A keyword naming a raw
+        # memory address (the legacy constructors' keyword-only ``cdata`` overload and
+        # its siblings) is refused BEFORE the value is written, so no call can hand
+        # torch an attacker-chosen address.
+        offending = raw_pointer_keyword_name([path[1]] if isinstance(path[1], str) else [])
+        if offending is not None:
+            raise RunPreconditionError(
+                pointer_keyword_refusal_detail(offending, "Sparse call"),
+                code=RunnableErrorCode.CALL_STRUCTURE_MISMATCH.value,
+            )
     root: Any = args if path[0] == "args" else kwargs
     _write_path(root, path[1:], value)
 
