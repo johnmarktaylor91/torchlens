@@ -426,6 +426,7 @@ def key_swatches(
     has_module: bool,
     mutated_parameter: bool = False,
     module_marks: frozenset[str] = frozenset(),
+    endpoint_rings: bool = False,
 ) -> tuple[KeySwatch, ...]:
     """Return the key entries for the marks this picture draws, in display order.
 
@@ -434,7 +435,9 @@ def key_swatches(
     entry, nor does an oval mark the skin fills like one. Each module mark in ``module_marks`` (``drawn_module_marks``) gets
     an entry drawn like it; ``has_module=True`` alone means a module frame.
     An edited node adds ``edited`` (the ringed oval) and, with the downstream
-    highlighter drawn, ``changed by the edit``.
+    highlighter drawn, ``changed by the edit``. ``endpoint_rings=True`` (a
+    colour scale owns the fills) draws the input and output entries as the
+    rings the picture draws, not as filled ovals.
     """
 
     has_weights = "parameterized" in drawn
@@ -457,6 +460,10 @@ def key_swatches(
         for swatch in (_entry_swatch(theme, *entry[:3]) for entry in entries if entry[3])
         if swatch is not None
     ]
+    if endpoint_rings:
+        from ._endpoint_rings import endpoint_ring_swatch
+
+        swatches = [endpoint_ring_swatch(theme, swatch) for swatch in swatches]
     swatches.extend(_edit_swatches(theme, drawn))
     return tuple(swatches)
 

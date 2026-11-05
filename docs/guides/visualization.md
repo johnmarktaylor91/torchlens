@@ -335,6 +335,10 @@ high values (slow, big) on a light page.
 
 `trace.draw(color_by='time', size_by='bytes')`
 
+Under `color_by=` the fill belongs to the scale, so the input and output keep their colours as
+a ring instead: a pale green or salmon outline around the page fill, or around their own scale
+colour when they carry a value. The key shows the same rings. `size_by=` alone changes no fill.
+
 Nodes with no value for the source are left unfilled. `size_scale=` chooses how values map
 to area. The smallest value draws at the drawing's typical node size and the largest at twice
 that area, so a sized drawing stays close to its plain size; a node whose text needs more room

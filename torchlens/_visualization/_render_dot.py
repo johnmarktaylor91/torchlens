@@ -22,6 +22,7 @@ from ._edit_highlighter import (
     render_highlighted,
 )
 from ._encoding import resolve_color_by, resolve_size_by, resolve_size_scale
+from ._endpoint_rings import color_scale_active
 from ._expansion_manifest import build_expansion_manifest, write_expansion_manifest
 from ._focus_relabel import strip_focus_ancestors
 from ._focus_scope import focus_address, focus_relative_depth, reading_notes
@@ -805,6 +806,7 @@ def _forward_header_label(
             has_module=False,
             module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
+            endpoint_rings=color_scale_active(request.encoding),
         )
         if request.show_legend is True:
             notes = reading_notes(node_attrs, request.module)

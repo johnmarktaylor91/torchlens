@@ -264,15 +264,17 @@ def test_auto_large_graph_forces_dot_with_notice(
 # Kept: Kept: the slices removed this test; the stack's Okabe-Ito default-skin work
 # added the new role fills to its assertion.
 def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    # color_by="bytes" repaints every node, inputs and outputs included, so no
-    # role fill is drawn and the key lists no input or output: the header
-    # block carries the encoding section and only the marks still drawn.
+    # color_by="bytes" owns every fill, inputs and outputs included, so no
+    # role fill is drawn; the endpoints keep their role as a ring (the input
+    # green and output salmon as a 2.5 pt border) and the key lists input and
+    # output as those rings beside the encoding section and the marks drawn.
     dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=True)
     label = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
     drawn = "\n".join(line for line in dot.splitlines() if not line.strip().startswith("graph ["))
     for role_fill in ('"#98FB98"', '"#ff9999"', '"#009E73"', '"#D55E00"'):
-        assert role_fill not in drawn, role_fill  # no input/output role fill
-    assert ">input<" not in label and ">output<" not in label
+        assert f"fillcolor={role_fill}" not in drawn, role_fill  # no input/output role fill
+    assert 'color="#98FB98"' in drawn and 'color="#ff9999"' in drawn  # the rings
+    assert ">input<" in label and ">output<" in label
     # The plain key: "output bytes: <low>", a 16-segment colour bar, "<high>".
     assert "output bytes: " in label
     assert label.count('FIXEDSIZE="TRUE" WIDTH="5" HEIGHT="10" BGCOLOR=') == 16
