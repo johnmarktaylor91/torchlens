@@ -88,6 +88,25 @@ overlay = armed_op.receptive_field.show(armed_unit, grad=True)
 # take CaptureOptions' values and defaults and apply to the forward/saved/intervention scopes.
 # Saved function arguments other than parameters go to host memory too and replay moves each
 # back to its op's device, so the GPU keeps only the parameters and one forward's transients.
+# Read the validation trace itself (forward/saved scopes, torch only): trace_observer= is
+# called once with the Trace after replay and before cleanup (None at a precondition refusal);
+# num_threads= pins torch intra-op threads for the run and restores them afterwards.
+seen = {}
+
+
+def observe(validation_trace):
+    if validation_trace is not None:
+        status = validation_trace.validation_replay_status
+        seen.update(
+            num_ops=len(validation_trace.ops),
+            fingerprint=validation_trace.provenance.fingerprint,
+            state=status.state,
+            reason=status.reason,
+            num_failed_ops=status.num_failed_ops,
+        )
+
+
+passed = tl.validate(model, x, scope="forward", num_threads=1, trace_observer=observe)
 ```
 
 Use the unified predicate surface for selective capture, windowed saves, interventions, and
