@@ -17,7 +17,10 @@ saved co-arguments, and returns non-exempt for anything else:
   the lone softmax weight is exactly one whatever the additive float mask
   (``args[3]``) holds (the query and key edges are the ``_sdpa_value_proofs``);
 - ``__setitem__``: the perturbed parent is an integer index component that
-  addresses a destination dim of size 1, where every valid index is position 0.
+  addresses a destination dim of size 1, where every valid index is position 0;
+- ``scatter_add``/``index_add``: the saved source is all zero, so the index
+  (``args[2]``) only says where zeros are added, and the saved output already
+  equals the saved destination.
 
 Zero einsum operands, eval-mode batch norm at its running mean, unread
 ``scatter_reduce`` destinations and empty split chunks or matmul products are
@@ -35,6 +38,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from .._utils.tensor_utils import tensor_nanequal
 from ._posthoc_decision import PosthocPerturbDecision
 from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
@@ -378,6 +382,45 @@ def _key_is_integer_index_into_singleton_dim(
     return bool(destination.shape[dim] == 1)
 
 
+#: Accumulating index writes whose source is added at the indexed positions.
+ZERO_SOURCE_ADD_FUNC_NAMES = frozenset(
+    {"scatter_add", "scatter_add_", "scatteradd", "index_add", "index_add_"}
+)
+_ACCUMULATE_INDEX_SLOT = 2
+_ACCUMULATE_SOURCE_SLOT = 3
+
+
+def _zero_source_add_decision(
+    layer: Op, keys: set[Any], args: tuple[Any, ...]
+) -> PosthocPerturbDecision:
+    """Exempt the index of a ``scatter_add``/``index_add`` whose saved source is all zero.
+
+    Adding zero changes no element, so for ANY valid index the output is the
+    destination; the proof also requires the saved output to equal the saved
+    destination exactly (NaN matching NaN), so a replay that drops the add
+    entirely and a non-zero source both fall through. A recurrent graph cell's
+    zero initial state propagated along edges is the common case.
+    """
+
+    if keys != {_ACCUMULATE_INDEX_SLOT} or len(args) <= _ACCUMULATE_SOURCE_SLOT:
+        return _NOT_PROVED
+    if getattr(layer, "saved_kwargs", None) and "alpha" in layer.saved_kwargs:
+        return _NOT_PROVED
+    destination, source, out = args[0], args[_ACCUMULATE_SOURCE_SLOT], layer.out
+    if not all(isinstance(value, torch.Tensor) for value in (destination, source, out)):
+        return _NOT_PROVED
+    if source.numel() == 0 or not _is_all_zero_value(source):
+        return _NOT_PROVED
+    if not tensor_nanequal(out, destination.to(out.device), allow_tolerance=False):
+        return _NOT_PROVED
+    return PosthocPerturbDecision(
+        True,
+        "zero_source_index_irrelevant",
+        "the saved source is all zero, so adding it at any valid index leaves the "
+        "destination unchanged, and the saved output equals the saved destination",
+    )
+
+
 _DECISIONS_BY_FAMILY = (
     (DIVISION_FUNC_NAMES, _division_decision),
     (CONJUNCTION_FUNC_NAMES, _conjunction_decision),
@@ -385,6 +428,7 @@ _DECISIONS_BY_FAMILY = (
     (POW_FUNC_NAMES, _pow_decision),
     (frozenset({"__setitem__"}), _setitem_singleton_index_decision),
     (frozenset({"scaled_dot_product_attention"}), _sdpa_singleton_key_decision),
+    (ZERO_SOURCE_ADD_FUNC_NAMES, _zero_source_add_decision),
 )
 
 
