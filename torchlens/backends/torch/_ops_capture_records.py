@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from collections import Counter
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
@@ -281,21 +282,19 @@ def _resolve_call_alias_labels(tensors: list[torch.Tensor]) -> dict[int, str]:
         bound[id(tensor)] = label
         cursor[id(tensor)] = entry if live else None
     moved: dict[int, str] = {}
-    changed = True
-    while changed:
-        changed = False
-        holders: dict[str, list[int]] = {}
-        for tensor_id, label in bound.items():
-            holders.setdefault(label, []).append(tensor_id)
-        for tensor_ids in holders.values():
-            for tensor_id in tensor_ids if len(tensor_ids) > 1 else ():
-                entry = cursor[tensor_id]
-                if entry is None or entry[1] is None:
-                    continue
-                bound[tensor_id] = moved[tensor_id] = entry[1]
-                cursor[tensor_id] = entry[4]
-                changed = True
-    return moved
+    while True:
+        holders = Counter(bound.values())
+        steps = [
+            tensor_id
+            for tensor_id, label in bound.items()
+            if holders[label] > 1 and cursor[tensor_id] is not None and cursor[tensor_id][1]
+        ]
+        if not steps:
+            return moved
+        for tensor_id in steps:
+            entry = cursor[tensor_id]
+            bound[tensor_id] = moved[tensor_id] = entry[1]
+            cursor[tensor_id] = entry[4]
 
 
 def _bind_call_alias_labels(
